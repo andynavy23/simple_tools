@@ -1,5 +1,5 @@
-# artale-lucky-channel
-Artale lucky channel calculator
+# simple_tools
+Simple tools for personal
 
 ## License
 The MIT License (MIT)
