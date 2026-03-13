@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/楓葉.png" />
+    <meta property="og:title" content="Artale - 五子棋小遊戲" />
+    <meta property="og:description" content="aespaaa 公會製作, 參照楓之谷五子棋" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/artale-gobang.html" />
+    <title>Artale - 五子棋小遊戲</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --ms-dark-blue: #336699;
+            --ms-yellow: #ffcc00;
+            --ms-border: #555555;
+            --ms-bg: #ececec;
+            --ms-content-bg: #f4dcb1; /* Wooden background */
+            --ms-wz-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+            --ms-btn-gradient: linear-gradient(to bottom, #fdfdfd 0%, #dcdcdc 100%);
+            --ms-btn-hover-gradient: linear-gradient(to bottom, #fff7cc 0%, #ffcc00 100%);
+            --board-size: 15;
+            --cell-size: 30px;
+        }
+
+        body {
+            font-family: "Microsoft JhengHei", Arial, sans-serif;
+            background-color: #332211;
+            background-image: radial-gradient(#443322 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        .container {
+            background-color: var(--ms-bg);
+            border: 3px solid var(--ms-border);
+            border-radius: 8px;
+            width: 95%;
+            max-width: 600px;
+            box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .header {
+            background-color: var(--ms-dark-blue);
+            color: white;
+            padding: 10px 15px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--ms-border);
+        }
+
+        .header .title {
+            font-size: 15px;
+            text-shadow: var(--ms-wz-shadow);
+        }
+
+        .header .guild {
+            font-size: 11px;
+            color: var(--ms-yellow);
+            text-shadow: var(--ms-wz-shadow);
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .content {
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .panel {
+            background: #fff;
+            border: 2px solid #bbb;
+            border-radius: 6px;
+            padding: 10px;
+            font-size: 14px;
+            box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .nickname-box {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px dashed #ccc;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .nickname-box input {
+            font-weight: bold;
+            color: var(--ms-dark-blue);
+            flex: 1;
+            min-width: 100px;
+            padding: 8px 10px;
+            border: 2px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .ms-btn {
+            background: var(--ms-btn-gradient);
+            border: 2px solid var(--ms-border);
+            border-radius: 4px;
+            padding: 6px 14px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #333;
+            box-shadow: inset 1px 1px 0px #fff;
+            text-shadow: 1px 1px 1px rgba(255, 255, 255, 0.9);
+            transition: all 0.1s;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            white-space: nowrap;
+        }
+
+        .ms-btn:hover:not(:disabled) {
+            background: var(--ms-btn-hover-gradient);
+            border-color: #775500;
+        }
+
+        .ms-btn.primary {
+            background: linear-gradient(to bottom, #77aadd 0%, #336699 100%);
+            color: white;
+            border-color: #224466;
+            text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.5);
+        }
+
+        .game-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            background: var(--ms-content-bg);
+            border: 4px solid #8b4513;
+            border-radius: 4px;
+            box-shadow: inset 4px 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        #gobang-board {
+            display: grid;
+            grid-template-columns: repeat(var(--board-size), var(--cell-size));
+            grid-template-rows: repeat(var(--board-size), var(--cell-size));
+            background-color: #d2b48c;
+            border: 1px solid #5d4037;
+            position: relative;
+        }
+
+        .cell {
+            width: var(--cell-size);
+            height: var(--cell-size);
+            position: relative;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+
+        /* Drawing lines on the board */
+        .cell::before, .cell::after {
+            content: "";
+            position: absolute;
+            background-color: #5d4037;
+            z-index: 1;
+        }
+
+        /* Horizontal line */
+        .cell::before {
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            transform: translateY(-50%);
+        }
+
+        /* Vertical line */
+        .cell::after {
+            left: 50%;
+            top: 0;
+            width: 1px;
+            height: 100%;
+            transform: translateX(-50%);
+        }
+
+        .piece {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+            box-shadow: 1px 2px 3px rgba(0, 0, 0, 0.4);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .piece.black {
+            background: #111;
+            color: white;
+            border: 1px solid #000;
+        }
+
+        .piece.white {
+            background: #fff;
+            color: black;
+            border: 1px solid #ddd;
+        }
+
+        .status-panel {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #443322;
+            text-align: center;
+        }
+
+        .log-section {
+            margin-top: 5px;
+        }
+
+        .log-header {
+            font-size: 12px;
+            font-weight: bold;
+            color: #666;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        #btn-log-toggle {
+            font-size: 10px;
+            height: 18px;
+            padding: 0 6px;
+        }
+
+        .log-panel {
+            background: #111;
+            color: #00ff00;
+            font-family: 'Consolas', monospace;
+            font-size: 11px;
+            height: 80px;
+            overflow-y: auto;
+            padding: 8px;
+            border: 2px solid #444;
+            border-radius: 4px;
+            display: none; /* Changed to hidden by default */
+            flex-direction: column-reverse;
+        }
+
+        .scoreboard {
+            display: flex;
+            justify-content: space-around;
+            padding: 5px;
+            background: #fff;
+            border: 2px solid #bbb;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .score-val { color: var(--ms-dark-blue); font-size: 18px; }
+
+        .log-entry {
+            margin-bottom: 2px;
+        }
+
+        #loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.7);
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .spinner {
+            width: 30px;
+            height: 30px;
+            border: 4px solid #eee;
+            border-top: 4px solid var(--ms-dark-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .participant-list {
+            margin-top: 8px;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            min-height: 24px;
+        }
+
+        .participant-tag {
+            font-size: 11px;
+            background: #e8f4f8;
+            color: #336699;
+            padding: 2px 8px;
+            border-radius: 10px;
+            border: 1px solid #abd2e0;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .participant-tag.host { background: #fff3cd; color: #856404; border-color: #ffeeba; }
+
+        .hidden { display: none !important; }
+
+        .footer-tools {
+            display: flex;
+            gap: 8px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <div id="loading">
+            <div class="spinner"></div>
+            <b id="load-msg" style="color: var(--ms-dark-blue)">系統連線中...</b>
+        </div>
+
+        <div class="header">
+            <span class="title">MapleStory Gobang - 楓之谷五子棋</span>
+            <span class="guild">aespaaa 公會製作</span>
+        </div>
+
+        <div class="content">
+            <div class="panel">
+                <div class="nickname-box" id="nick-box">
+                    <input type="text" id="nick-input" maxlength="10" placeholder="輸入暱稱 (中英數)...">
+                    <div class="action-group">
+                        <button class="ms-btn" onclick="saveNick()" id="btn-save-nick">確定暱稱</button>
+                        <button class="ms-btn hidden" onclick="editNick()" id="btn-edit-nick">修改暱稱</button>
+                        <button class="ms-btn hidden" onclick="copyInvite()" id="btn-copy">邀請連結</button>
+                        <button class="ms-btn hidden" onclick="leaveRoom()" id="btn-leave" style="background: #ffcccc;">離開</button>
+                    </div>
+                </div>
+
+                <div id="conn-panel" class="hidden">
+                    <div id="init-actions" style="display: flex; gap: 8px;">
+                        <button class="ms-btn primary" id="btn-host" onclick="startHost()" style="flex: 1;">建立房間</button>
+                        <input type="text" id="join-id" placeholder="貼上房號..." style="width: 120px; padding: 6px;">
+                        <button class="ms-btn" id="btn-join" onclick="startJoin()">加入</button>
+                    </div>
+                </div>
+
+                <div class="participant-list" id="participant-list"></div>
+
+                <div class="scoreboard" id="scoreboard">
+                    <div>房主贏: <span class="score-val" id="score-host">0</span></div>
+                    <div>訪客贏: <span class="score-val" id="score-guest">0</span></div>
+                </div>
+
+                <div class="log-section">
+                    <div class="log-header" onclick="toggleLog()">
+                        <span>系統日誌</span>
+                        <button class="ms-btn" id="btn-log-toggle">顯示</button>
+                    </div>
+                    <div class="log-panel" id="log-panel">
+                        <div class="log-entry">> 請先設定您的暱稱後開始。</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="game-area">
+                <div id="gobang-board"></div>
+                <div class="status-panel" id="status-panel">等待玩家連線...</div>
+            </div>
+
+            <div class="footer-tools">
+                <button class="ms-btn" id="btn-reset-game" style="flex: 1; border-color: #e57373; display: none;" onclick="resetGame()">重開一局</button>
+                <button class="ms-btn" id="btn-reconnect" onclick="location.reload()">重新整理</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === 狀態變數 ===
+        let peer = null;
+        let myNick = "";
+        let isHost = false;
+        let p2pId = "";
+        let conn = null;
+        let gameActive = false;
+        let turn = "black"; // black starts first
+        let myColor = ""; // "black" (host) or "white" (guest)
+        let boardHeight = 15;
+        let boardWidth = 15;
+        let board = Array(15).fill().map(() => Array(15).fill(null));
+        let scores = { host: 0, guest: 0 };
+        let nextStarter = "black"; // Host is Black and starts first by default
+
+        const els = {
+            load: document.getElementById('loading'),
+            loadMsg: document.getElementById('load-msg'),
+            log: document.getElementById('log-panel'),
+            logBtn: document.getElementById('btn-log-toggle'),
+            nickInput: document.getElementById('nick-input'),
+            btnSaveNick: document.getElementById('btn-save-nick'),
+            btnEditNick: document.getElementById('btn-edit-nick'),
+            btnCopy: document.getElementById('btn-copy'),
+            btnLeave: document.getElementById('btn-leave'),
+            connPanel: document.getElementById('conn-panel'),
+            board: document.getElementById('gobang-board'),
+            status: document.getElementById('status-panel'),
+            pList: document.getElementById('participant-list'),
+            joinInput: document.getElementById('join-id'),
+            btnReset: document.getElementById('btn-reset-game'),
+            sHost: document.getElementById('score-host'),
+            sGuest: document.getElementById('score-guest')
+        };
+
+        // === 工具函式 ===
+        const log = (msg, type = "info") => {
+            const entry = document.createElement("div");
+            entry.className = `log-entry`;
+            entry.style.color = type === "error" ? "#ff4444" : (type === "success" ? "#00ff00" : "#00ccff");
+            entry.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            els.log.prepend(entry);
+        };
+
+        const toggleLog = () => {
+            const isHidden = els.log.style.display !== 'flex';
+            els.log.style.display = isHidden ? 'flex' : 'none';
+            els.logBtn.innerText = isHidden ? '隱藏' : '顯示';
+        };
+
+        const setLoading = (show, msg = "處理中...") => {
+            els.load.style.display = show ? 'flex' : 'none';
+            els.loadMsg.innerText = msg;
+        };
+
+        // === 渲染棋盤 ===
+        function createBoard() {
+            els.board.innerHTML = "";
+            for (let r = 0; r < 15; r++) {
+                for (let c = 0; c < 15; c++) {
+                    const cell = document.createElement("div");
+                    cell.className = "cell";
+                    cell.dataset.r = r;
+                    cell.dataset.c = c;
+                    cell.onclick = () => handleCellClick(r, c);
+                    els.board.appendChild(cell);
+                }
+            }
+        }
+
+        // === 邏輯函式 ===
+        function saveNick() {
+            let val = els.nickInput.value.trim();
+            if (val === "") {
+                val = "冒險者" + Math.floor(1000 + Math.random() * 9000);
+            }
+            if (!/^[a-zA-Z0-9\u4e00-\u9fa5]{1,10}$/.test(val)) {
+                return alert("請輸入 1-10 位有效的暱稱。");
+            }
+            myNick = val;
+            els.nickInput.value = myNick; // Update UI if random was generated
+            els.nickInput.disabled = true;
+            els.btnSaveNick.classList.add("hidden");
+            els.btnEditNick.classList.remove("hidden");
+            els.connPanel.classList.remove("hidden");
+            log(`暱稱已設定: ${myNick}`, "success");
+            
+            // Check for hash in URL to populate but NOT auto-join
+            if (window.location.hash) {
+                els.joinInput.value = window.location.hash.substring(1);
+            }
+        }
+
+        function editNick() {
+            location.reload();
+        }
+
+        function startHost() {
+            setLoading(true, "建立房間中...");
+            peer = new Peer({ debug: 1 });
+            peer.on('open', (id) => {
+                p2pId = id;
+                isHost = true;
+                myColor = "black";
+                setLoading(false);
+                els.connPanel.classList.add("hidden");
+                els.btnCopy.classList.remove("hidden");
+                els.btnLeave.classList.remove("hidden");
+                window.location.hash = id;
+                log(`房號: ${id.substring(0, 4)}`, "success");
+                els.status.innerText = "等待玩家加入...";
+                renderNicknameTags();
+            });
+            peer.on('connection', (c) => {
+                if (conn) {
+                    c.on('open', () => c.send({ type: 'REJECT', reason: '房間已滿' }));
+                    setTimeout(() => c.close(), 500);
+                    return;
+                }
+                conn = c;
+                setupConnection();
+            });
+        }
+
+        function startJoin() {
+            const id = els.joinInput.value.trim();
+            if (!id) return alert("請輸入房號");
+            setLoading(true, "連接中...");
+            peer = new Peer({ debug: 1 });
+            peer.on('open', () => {
+                conn = peer.connect(id);
+                setupConnection();
+            });
+        }
+
+        function setupConnection() {
+            conn.on('open', () => {
+                setLoading(false);
+                log("連線成功！", "success");
+                conn.send({ type: 'JOIN', nick: myNick });
+                if (!isHost) {
+                    myColor = "white";
+                    els.connPanel.classList.add("hidden");
+                    els.btnLeave.classList.remove("hidden");
+                }
+            });
+            conn.on('data', handleData);
+            conn.on('close', () => {
+                log("對方已離線", "error");
+                gameActive = false;
+                els.status.innerText = "對方已離開";
+                conn = null;
+                resetTotalState();
+                renderNicknameTags();
+            });
+        }
+
+        function resetTotalState() {
+            scores = { host: 0, guest: 0 };
+            nextStarter = "black";
+            board = Array(15).fill().map(() => Array(15).fill(null));
+            createBoard();
+            updateScoreUI();
+        }
+
+        function handleData(data) {
+            if (data.type === 'JOIN') {
+                log(`玩家 ${data.nick} 加入了遊戲`, "success");
+                resetTotalState(); // Reset everything for new joiner
+                gameActive = true;
+                els.status.innerText = "遊戲開始！黑子先行";
+                conn.send({ type: 'START', hostNick: myNick });
+                renderNicknameTags(data.nick);
+                els.btnReset.style.display = "inline-flex";
+            } else if (data.type === 'START') {
+                gameActive = true;
+                els.status.innerText = `遊戲開始！房主 (${data.hostNick}) 黑子先行`;
+                renderNicknameTags(data.hostNick);
+            } else if (data.type === 'MOVE') {
+                placePiece(data.r, data.c, data.color);
+                turn = data.color === "black" ? "white" : "black";
+                checkWin(data.r, data.c, data.color);
+                updateStatus();
+            } else if (data.type === 'RESET') {
+                scores = data.scores;
+                nextStarter = data.nextStarter;
+                resetLocal();
+                log("對方重啟了遊戲", "info");
+            } else if (data.type === 'SCORE_SYNC') {
+                scores = data.scores;
+                nextStarter = data.nextStarter;
+                updateScoreUI();
+            } else if (data.type === 'REJECT') {
+                alert(data.reason);
+                location.reload();
+            }
+        }
+
+        function renderNicknameTags(otherNick = "") {
+            els.pList.innerHTML = "";
+            const me = document.createElement("span");
+            me.className = `participant-tag ${isHost ? 'host' : ''}`;
+            me.innerText = `👑 ${myNick} (${myColor === 'black' ? '黑' : '白'})`;
+            els.pList.appendChild(me);
+
+            if (otherNick || (conn && !isHost)) {
+                const targetNick = otherNick || "房主";
+                const other = document.createElement("span");
+                other.className = `participant-tag ${!isHost ? 'host' : ''}`;
+                other.innerText = `👤 ${targetNick} (${myColor === 'black' ? '白' : '黑'})`;
+                els.pList.appendChild(other);
+            }
+        }
+
+        function handleCellClick(r, c) {
+            if (!gameActive || turn !== myColor || board[r][c]) return;
+            
+            // TODO: 黑棋禁手檢查 (3-3, 4-4, 長連)
+            if (myColor === "black" && isForbidden(r, c)) {
+                log("禁手！不能下在這裡 (3-3 / 4-4 / 長連)", "error");
+                return;
+            }
+
+            placePiece(r, c, myColor);
+            conn.send({ type: 'MOVE', r, c, color: myColor });
+            turn = myColor === "black" ? "white" : "black";
+            
+            if (checkWin(r, c, myColor)) {
+                // Win checked inside placePiece logic if we wanted, 
+                // but let's do it after updating board.
+            }
+            updateStatus();
+        }
+
+        function placePiece(r, c, color) {
+            board[r][c] = color;
+            const cell = document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+            const piece = document.createElement("div");
+            piece.className = `piece ${color}`;
+            piece.innerText = color === "black" ? "●" : "○";
+            cell.appendChild(piece);
+        }
+
+        function updateScoreUI() {
+            els.sHost.innerText = scores.host;
+            els.sGuest.innerText = scores.guest;
+        }
+
+        function updateStatus() {
+            if (!gameActive) return;
+            const currentTurnNick = (turn === myColor) ? "您的回合" : "對方的回合";
+            els.status.innerText = `${currentTurnNick} (${turn === 'black' ? '黑子' : '白子'})`;
+        }
+
+        function checkWin(r, c, color) {
+            const directions = [[1,0], [0,1], [1,1], [1,-1]];
+            for (let [dr, dc] of directions) {
+                let count = 1;
+                // Positive direction
+                for (let i = 1; i < 5; i++) {
+                    let nr = r + dr*i, nc = c + dc*i;
+                    if (nr>=0 && nr<15 && nc>=0 && nc<15 && board[nr][nc] === color) count++;
+                    else break;
+                }
+                // Negative direction
+                for (let i = 1; i < 5; i++) {
+                    let nr = r - dr*i, nc = c - dc*i;
+                    if (nr>=0 && nr<15 && nc>=0 && nc<15 && board[nr][nc] === color) count++;
+                    else break;
+                }
+                
+                if (count >= 5) {
+                    gameActive = false;
+                    els.status.innerHTML = `<span style="color:red; font-size:20px;">${color === 'black' ? '黑子' : '白子'} 勝利！</span>`;
+                    log(`${color === 'black' ? '黑子' : '白子'} 獲勝！`, "success");
+                    
+                    // Update scores
+                    if (isHost) {
+                        if (color === "black") scores.host++; else scores.guest++;
+                        nextStarter = (color === "black") ? "white" : "black";
+                        updateScoreUI();
+                        // Sync scores to guest
+                        conn.send({ type: 'SCORE_SYNC', scores, nextStarter });
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function isForbidden(r, c) {
+            // Simplified check: MS Gobang rules 3-3, 4-4, Long-link are restricted for Black.
+            // Temporarily place the piece to check
+            board[r][c] = "black";
+            
+            const directions = [[1,0], [0,1], [1,1], [1,-1]];
+            let threeCount = 0;
+            let fourCount = 0;
+            let overLine = false;
+
+            for (let [dr, dc] of directions) {
+                const lineInfo = getLineInfo(r, c, dr, dc, "black");
+                
+                // Long-link check (Overline: > 5)
+                if (lineInfo.count > 5) overLine = true;
+                
+                // Four check (4 in a row)
+                // In MS rules, both "Live Four" and "Jump Four" count towards 4-4
+                if (lineInfo.count === 4) fourCount++;
+                
+                // Three check (Live Three)
+                if (lineInfo.count === 3 && lineInfo.isLive) threeCount++;
+            }
+
+            board[r][c] = null; // Revert
+
+            if (overLine) return true; // Long link is forbidden for black
+            if (threeCount >= 2) return true; // 3-3 is forbidden
+            if (fourCount >= 2) return true; // 4-4 is forbidden
+            
+            return false;
+        }
+
+        function getLineInfo(r, c, dr, dc, color) {
+            let count = 1;
+            let leftOpen = false;
+            let rightOpen = false;
+            
+            // Check right
+            let i = 1;
+            while (true) {
+                let nr = r + dr*i, nc = c + dc*i;
+                if (nr<0 || nr>=15 || nc<0 || nc>=15) break;
+                if (board[nr][nc] === color) count++;
+                else {
+                    if (board[nr][nc] === null) rightOpen = true;
+                    break;
+                }
+                i++;
+            }
+            
+            // Check left
+            i = 1;
+            while (true) {
+                let nr = r - dr*i, nc = c - dc*i;
+                if (nr<0 || nr>=15 || nc<0 || nc>=15) break;
+                if (board[nr][nc] === color) count++;
+                else {
+                    if (board[nr][nc] === null) leftOpen = true;
+                    break;
+                }
+                i++;
+            }
+            
+            // A "Live Three" needs both ends open AND the ability to become a "Live Four"
+            // To simplify, we'll check if it has space to become 5.
+            let isLive = leftOpen && rightOpen;
+            
+            return { count, isLive };
+        }
+
+        function resetGame() {
+            if (!isHost) return;
+            resetLocal();
+            conn.send({ type: 'RESET', scores, nextStarter });
+        }
+
+        function resetLocal() {
+            board = Array(15).fill().map(() => Array(15).fill(null));
+            createBoard();
+            gameActive = true;
+            turn = nextStarter; // Loser starts first
+            updateStatus();
+            updateScoreUI();
+            log(`遊戲已重置。本局由 ${turn === 'black' ? '黑子' : '白子'} 先手。`, "info");
+        }
+
+        function copyInvite() {
+            const url = `${window.location.origin}${window.location.pathname}#${p2pId}`;
+            navigator.clipboard.writeText(url).then(() => alert("邀請連結已複製！"));
+        }
+
+        function leaveRoom() {
+            location.reload();
+        }
+
+        createBoard();
+    </script>
+</body>
+
+</html>
