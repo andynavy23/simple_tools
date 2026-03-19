@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/楓葉.png" />
+    <meta property="og:title" content="Artale - 團練小工具" />
+    <meta property="og:description" content="aespaaa 公會製作, 團練小工具, 可能破壞友誼, 謹慎使用" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/artale-party-tool.html" />
+    <title>Artale - 團練小工具</title>
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts: DotGothic16 (Pixel Style) & Noto Sans TC -->
+    <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Noto+Sans+TC:wght@400;700&display=swap"
+        rel="stylesheet">
+    <!-- PeerJS -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --maple-orange: #ff9d00;
+            --maple-blue: #00d2ff;
+            --maple-green: #7bff00;
+            --maple-pink: #ff00ea;
+            --maple-bg: #f5f7fa;
+            --maple-card-bg: #ffffff;
+            --maple-text: #333333;
+            --maple-border: #000000;
+            --pixel-shadow: 4px 4px 0px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            background-color: var(--maple-bg);
+            background-image:
+                linear-gradient(45deg, #e5eaf0 25%, transparent 25%),
+                linear-gradient(-45deg, #e5eaf0 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #e5eaf0 75%),
+                linear-gradient(-45deg, transparent 75%, #e5eaf0 75%);
+            background-size: 40px 40px;
+            background-position: 0 0, 0 20px, 20px 20px, 20px 0;
+            color: var(--maple-text);
+            font-family: 'DotGothic16', 'Noto Sans TC', sans-serif;
+            overflow-x: hidden;
+            padding-bottom: 120px;
+            min-height: 100vh;
+        }
+
+        /* 像素風格卡片 */
+        .card {
+            background: var(--maple-card-bg);
+            border: 4px solid var(--maple-border);
+            border-radius: 0;
+            margin-bottom: 1.5rem;
+            box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        /* 像素風按鈕 */
+        .btn-pixel {
+            border: 4px solid #000;
+            border-radius: 0;
+            font-weight: bold;
+            text-transform: uppercase;
+            position: relative;
+            box-shadow: 4px 4px 0px #000;
+            transition: all 0.1s;
+            margin-bottom: 4px;
+            margin-right: 4px;
+        }
+
+        .btn-pixel:active {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0px #000;
+        }
+
+        .btn-pixel-orange {
+            background-color: var(--maple-orange);
+            color: #000;
+        }
+
+        .btn-pixel-blue {
+            background-color: var(--maple-blue);
+            color: #000;
+        }
+
+        .btn-pixel-green {
+            background-color: var(--maple-green);
+            color: #000;
+        }
+
+        .btn-pixel-pink {
+            background-color: var(--maple-pink);
+            color: #fff;
+        }
+
+        .btn-pixel-outline {
+            background: #fff;
+            color: #000;
+        }
+
+        h4,
+        h5,
+        h6 {
+            color: #000;
+            font-weight: 900;
+            text-shadow: 2px 2px 0px #fff;
+            margin-bottom: 1rem;
+        }
+
+        /* 底部導航 */
+        .nav-bottom {
+            background: #fff;
+            border-top: 4px solid #000;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            z-index: 1000;
+            padding: 10px 0;
+            display: flex;
+            justify-content: space-around;
+        }
+
+        .nav-item {
+            text-decoration: none;
+            color: #000;
+            font-size: 0.9rem;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .nav-item.active {
+            color: var(--maple-orange);
+            text-decoration: underline;
+        }
+
+        .page {
+            display: none;
+            padding-top: 10px;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        /* 進度條像素化 */
+        .progress {
+            height: 32px;
+            background-color: #fff;
+            border: 4px solid #000;
+            border-radius: 0;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar {
+            background-color: var(--maple-orange);
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255, 255, 255, 0.1) 10px, rgba(255, 255, 255, 0.1) 20px);
+            color: #000;
+            font-weight: bold;
+        }
+
+        /* 生存測試 */
+        .survival-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 2000;
+            display: none;
+        }
+
+        .click-target {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            background: var(--maple-green);
+            border: 6px solid #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 6px 6px 0px #000;
+        }
+
+        /* 日誌 */
+        .log-container {
+            background: #000;
+            color: #0f0;
+            padding: 10px;
+            font-size: 0.8rem;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 4px solid #444;
+            display: none;
+            position: fixed;
+            bottom: 80px;
+            left: 5%;
+            width: 90%;
+            z-index: 900;
+        }
+
+        .footer-credit {
+            text-align: center;
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 20px;
+        }
+
+        /* 輸入框像素風 */
+        .form-control {
+            border: 3px solid #000;
+            border-radius: 0;
+            box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-control:focus {
+            box-shadow: 4px 4px 0px var(--maple-blue);
+            border-color: #000;
+        }
+
+        /* 加強 Switch 樣式 */
+        .form-check-input:checked {
+            background-color: var(--maple-orange);
+            border-color: #000;
+        }
+
+        .form-switch .form-check-input {
+            width: 3em;
+            height: 1.5em;
+            cursor: pointer;
+            border: 2px solid #000;
+        }
+
+        @media (max-width: 576px) {
+            .loot-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container py-4">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="m-0">ARTALE PARTY TOOL</h4>
+            <button class="btn btn-pixel btn-pixel-outline btn-sm" onclick="showHelp()">使用說明</button>
+        </div>
+
+        <!-- Room Tab -->
+        <div id="room" class="page active">
+            <div class="card p-3">
+                <div class="mb-3">
+                    <label class="form-label fw-bold" id="nickLabel">你的暱稱</label>
+                    <div class="input-group">
+                        <input type="text" id="nickname" class="form-control" placeholder="繁中/英/數, 30字內" maxlength="30">
+                        <button id="confirmNickBtn" class="btn btn-pixel btn-pixel-orange"
+                            onclick="confirmNickname()">確認</button>
+                        <button id="editNickBtn" class="btn btn-pixel btn-pixel-outline d-none"
+                            onclick="leaveRoom()">修改</button>
+                    </div>
+                </div>
+
+                <div id="roomActions" class="d-grid gap-2 d-none">
+                    <button class="btn btn-pixel btn-pixel-orange py-2" onclick="createRoom()">建立征途 (隊長)</button>
+                    <div class="input-group">
+                        <input type="text" id="joinIdInput" class="form-control" placeholder="輸入夥伴房號">
+                        <button class="btn btn-pixel btn-pixel-blue" onclick="joinRoom()">加入</button>
+                    </div>
+                </div>
+
+                <div id="roomInfo" class="mt-3 d-none border-top pt-3">
+                    <p class="mb-2 fw-bold">目前頻道: <span id="displayRoomId" class="text-primary"></span></p>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-pixel btn-pixel-blue btn-sm" onclick="copyInviteLink()">複製邀請連結</button>
+                        <button id="leaveDisbandBtn" class="btn btn-pixel btn-pixel-outline btn-sm text-danger"
+                            onclick="leaveRoom()">退出</button>
+                    </div>
+                </div>
+            </div>
+
+            <h5 class="mt-4">隊伍夥伴 [<span id="memberCount">0</span>/6]</h5>
+            <div id="memberList" class="row g-2">
+                <div class="col-12 text-center text-muted p-4">等待冒險者加入...</div>
+            </div>
+        </div>
+
+        <!-- EXP Tab -->
+        <div id="exp" class="page">
+            <div class="card p-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <h5 class="m-0">狩獵經驗值</h5>
+                    <button class="btn btn-pixel btn-pixel-outline btn-sm d-none" id="expResetBtn"
+                        onclick="sendAction('RESET_EXP')">歸零</button>
+                </div>
+                <div class="mb-2 small">進度: <span id="curExp" class="fw-bold">0</span> / <span id="maxExp">100</span> %
+                </div>
+                <div class="progress mb-3">
+                    <div id="expBar" class="progress-bar" style="width: 0%">0%</div>
+                </div>
+
+                <div id="captainExp" class="mb-3 d-none p-2 border bg-light">
+                    <label class="small fw-bold">隊長指令: 目標設定 (%)</label>
+                    <div class="input-group input-group-sm">
+                        <input type="number" id="newTargetInput" class="form-control" value="100" min="1">
+                        <button class="btn btn-pixel btn-pixel-orange" onclick="updateExpTarget()">更新並重置</button>
+                    </div>
+                </div>
+
+                <div class="row g-2">
+                    <div class="col-6"><button class="btn btn-pixel btn-pixel-blue w-100 py-3"
+                            onclick="sendAction('ADD_EXP', 1)">+1%</button></div>
+                    <div class="col-6"><button class="btn btn-pixel btn-pixel-orange w-100 py-3"
+                            onclick="sendAction('ADD_EXP', 5)">+5%</button></div>
+                </div>
+            </div>
+
+            <h5>戰功排行</h5>
+            <div id="expRank" class="card p-2 small">
+                <div class="text-center text-muted">暫無領先者</div>
+            </div>
+        </div>
+
+        <!-- Monitor Tab -->
+        <div id="monitor" class="page">
+            <div class="card p-3 mb-3">
+                <h5 class="mb-1">專注度檢測</h5>
+                <p class="text-muted small">確保隊員依舊待在螢幕前，防止掛機或斷線。</p>
+
+                <!-- 個人語音設定 -->
+                <div class="card p-3 bg-light mb-3">
+                    <h6 class="small fw-bold mb-2">我的檢測設定</h6>
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="voiceToggle" checked>
+                        <label class="form-check-label small">開啟語音提醒</label>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <span class="small me-2">語音內容</span>
+                        <input type="text" id="voiceText" class="form-control form-control-sm" value="還活著嗎"
+                            maxlength="10">
+                    </div>
+                </div>
+
+                <div id="captainMonitor" class="d-none border-top pt-3">
+                    <h6 class="mb-3">隊長監測台</h6>
+                    <div class="card p-3 border-dark mb-3" style="border: 2px solid #000 !important; background: #fff;">
+                        <div class="row g-2 align-items-center mb-3">
+                            <div class="col-auto">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="autoCheckToggle"
+                                        onchange="toggleAutoCheck()">
+                                    <label class="form-check-label fw-bold"
+                                        style="color: var(--maple-orange);">自動檢測開關</label>
+                                </div>
+                            </div>
+                            <div class="col d-flex align-items-center justify-content-end">
+                                <span class="small me-1">間隔</span>
+                                <input type="number" id="checkInterval" class="form-control form-control-sm"
+                                    style="width: 70px;" value="5">
+                                <span class="small ms-1">分</span>
+                            </div>
+                        </div>
+                        <div class="row g-2 align-items-center">
+                            <div class="col d-flex align-items-center justify-content-end">
+                                <span class="small me-1 font-weight-bold opacity-75">反應時效 (全體)</span>
+                                <input type="number" id="testDurationInput" class="form-control form-control-sm"
+                                    style="width: 70px;" value="10">
+                                <span class="small ms-1">秒</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="btn btn-pixel btn-pixel-orange w-100" onclick="triggerTest()">發起專注度測試 (手動)</button>
+                </div>
+            </div>
+
+            <div id="survivalGrid" class="row row-cols-2 row-cols-md-3 g-2">
+                <!-- Status -->
+            </div>
+        </div>
+
+        <!-- Loot Tab -->
+        <div id="loot" class="page">
+            <div class="card p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="m-0">戰利品統計</h5>
+                    <div>
+                        <button class="btn btn-pixel btn-pixel-outline btn-sm" onclick="resetMyLoot()">重置我的</button>
+                        <button class="btn btn-pixel btn-pixel-pink btn-sm d-none" id="lootResetAllBtn"
+                            onclick="sendAction('RESET_LOOT_ALL')">重置全部</button>
+                    </div>
+                </div>
+                <div class="text-center mb-3">
+                    <h2 id="grandTotalLoot" class="m-0 fw-bold">0</h2>
+                    <div class="small text-muted">目前累積總數</div>
+                </div>
+                <div class="loot-grid d-flex flex-wrap">
+                    <button class="btn btn-pixel btn-pixel-outline flex-fill py-3"
+                        onclick="sendAction('LOOT', '防具')">🛡️防具</button>
+                    <button class="btn btn-pixel btn-pixel-outline flex-fill py-3"
+                        onclick="sendAction('LOOT', '武器')">⚔️武器</button>
+                    <button class="btn btn-pixel btn-pixel-outline flex-fill py-3"
+                        onclick="sendAction('LOOT', '捲軸(貴)')">📜捲軸(貴)</button>
+                    <button class="btn btn-pixel btn-pixel-outline flex-fill py-3"
+                        onclick="sendAction('LOOT', '捲軸(廢)')">📄捲軸(廢)</button>
+                    <button class="btn btn-pixel btn-pixel-outline flex-fill py-3"
+                        onclick="sendAction('LOOT', '其他(貴)')">💎其他(貴)</button>
+                    <button class="btn btn-pixel btn-pixel-outline flex-fill py-3"
+                        onclick="sendAction('LOOT', '其他(廢)')">🏺其他(廢)</button>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12">
+                    <h5>類別統計</h5>
+                    <div id="lootCatStats" class="card p-3 small"></div>
+                </div>
+                <div class="col-12">
+                    <h5>隊員貢獻明細</h5>
+                    <div class="card overflow-hidden">
+                        <table class="table table-sm m-0 small">
+                            <thead class="bg-dark text-white">
+                                <tr>
+                                    <th>夥伴</th>
+                                    <th>總量</th>
+                                    <th>細項</th>
+                                </tr>
+                            </thead>
+                            <tbody id="memberLootBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer-credit">aespaaa 公會製作</div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="nav-bottom">
+        <a href="#" class="nav-item active" onclick="switchPage('room', event)">🏠<br>夥伴</a>
+        <a href="#" class="nav-item" onclick="switchPage('exp', event)">📈<br>經驗</a>
+        <a href="#" class="nav-item" onclick="switchPage('monitor', event)">👀<br>監測</a>
+        <a href="#" class="nav-item" onclick="switchPage('loot', event)">💎<br>掉落</a>
+    </nav>
+
+    <!-- Logging Section -->
+    <button class="btn btn-pixel btn-pixel-outline btn-sm" style="position:fixed; bottom:85px; right:10px; z-index:901;"
+        onclick="toggleLogs()">日誌</button>
+    <div id="logSection" class="log-container"></div>
+
+    <!-- Help Modal -->
+    <div class="modal fade" id="helpModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-4 border-dark rounded-0">
+                <div class="modal-header bg-dark text-white rounded-0">
+                    <h5 class="modal-title m-0 text-white">冒險者指南 (ADVENTURE GUIDE)</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <h6 class="border-bottom">1. 建立隊長/隊員身分</h6>
+                    <p class="small">輸入暱稱並點擊「確認」。暱稱不可重複，僅限繁中、英數且30字內。</p>
+                    <h6 class="border-bottom">2. 經驗值連動系統</h6>
+                    <p class="small">隊員退出時，其累積經驗會移交給隊長，確保總進度不流失。目標達成時會有慶祝特效！</p>
+                    <h6 class="border-bottom">3. 專注度檢測 (語音提醒)</h6>
+                    <p class="small">可自行設定檢測時的語音提醒內容。若檢測逾時未點擊「還活著」，狀態會標記為死亡 (Dead)。</p>
+                    <h6 class="border-bottom">4. 戰利品統計</h6>
+                    <p class="small">所有人拾取的掉落物手動計入後，會彙整出隊伍總產出。隊長可清空全隊數據，隊員亦可獨立重置個人數據。</p>
+                    <h6 class="border-bottom">5. 資料清理與斷線同步</h6>
+                    <p class="small">夥伴斷線時，系統會自動同步資訊，確保統計準確。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Survival Overlay -->
+    <div id="survivalOverlay" class="survival-overlay">
+        <div id="clickTarget" class="click-target" onclick="survived()">還活著!</div>
+    </div>
+
+    <script>
+        // --- 核心狀態 ---
+        let state = {
+            room: { id: '', captain: '', members: [] },
+            exp: { target: 100, current: 0, contributions: {}, finished: false },
+            monitor: { active: false, duration: 10, lastTrigger: Date.now() },
+            loot: { items: [], playerStats: {} },
+            logs: []
+        };
+
+        const LOOT_CATS = ['防具', '武器', '捲軸(貴)', '捲軸(廢)', '其他(貴)', '其他(廢)'];
+        let myPeer = null, myId = '', myName = '', isCaptain = false;
+        let connections = {}, captainConn = null, autoCheckTimer = null;
+
+        // --- 初始化 ---
+        window.onload = () => {
+            const params = new URLSearchParams(window.location.search);
+            const rId = params.get('room');
+            if (rId) document.getElementById('joinIdInput').value = rId;
+
+            const saved = localStorage.getItem('artale_v4_name');
+            if (saved) document.getElementById('nickname').value = saved;
+        };
+
+        window.onbeforeunload = () => {
+            if (captainConn) {
+                captainConn.send({ type: 'LEAVE', payload: { id: myId } });
+            }
+        };
+
+        // --- 暱稱邏輯 ---
+        function confirmNickname() {
+            let input = document.getElementById('nickname').value.trim();
+            // 驗證: 繁中、英數
+            const regex = /^[a-zA-Z0-9\u4e00-\u9fa5]+$/;
+            if (input && (!regex.test(input) || input.length > 30)) {
+                return alert("暱稱格錯誤：僅限繁中、英數，且不可超過30字!");
+            }
+
+            if (!input) {
+                input = "冒險者" + Math.floor(Math.random() * 9000 + 1000);
+                document.getElementById('nickname').value = input;
+            }
+            myName = input;
+            localStorage.setItem('artale_v4_name', myName);
+
+            document.getElementById('nickname').disabled = true;
+            document.getElementById('confirmNickBtn').classList.add('d-none');
+            document.getElementById('editNickBtn').classList.remove('d-none');
+            document.getElementById('roomActions').classList.remove('d-none');
+        }
+
+        function switchPage(pageId, e) {
+            if (e) e.preventDefault();
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            const idx = { room: 0, exp: 1, monitor: 2, loot: 3 }[pageId];
+            document.querySelectorAll('.nav-item')[idx]?.classList.add('active');
+        }
+
+        function initPeer(host, targetId = null) {
+            myPeer = new Peer();
+            myPeer.on('open', (id) => {
+                myId = id;
+                if (host) {
+                    isCaptain = true;
+                    state.room.id = id;
+                    state.room.captain = id;
+                    addLog(`[系統] 頻道初始化成功: ${id}`);
+                    addMember(id, myName, 'Captain', '連線中');
+                    document.getElementById('displayRoomId').innerText = id;
+                    document.getElementById('roomInfo').classList.remove('d-none');
+                    document.getElementById('roomActions').classList.add('d-none');
+                    document.getElementById('captainExp').classList.remove('d-none');
+                    document.getElementById('captainMonitor').classList.remove('d-none');
+                    document.getElementById('expResetBtn').classList.remove('d-none');
+                    document.getElementById('lootResetAllBtn').classList.remove('d-none');
+                    document.getElementById('leaveDisbandBtn').innerText = '解散';
+                    updateUI();
+                    setupHostHandlers();
+                } else {
+                    connectToHost(targetId);
+                }
+            });
+            myPeer.on('error', (err) => {
+                if (err.type === 'peer-disconnected') return;
+                alert("連線發生錯誤: " + err.type);
+                location.reload();
+            });
+        }
+
+        function createRoom() { initPeer(true); }
+        function joinRoom() {
+            const id = document.getElementById('joinIdInput').value.trim();
+            if (!id) return alert("請輸入房號!");
+            initPeer(false, id);
+        }
+
+        function setupHostHandlers() {
+            myPeer.on('connection', (conn) => {
+                conn.on('open', () => {
+                    connections[conn.peer] = conn;
+                });
+                conn.on('data', (data) => handleHostAction(data, conn.peer, conn));
+                conn.on('close', () => {
+                    handleDisconnect(conn.peer);
+                });
+            });
+        }
+
+        function handleDisconnect(pId) {
+            if (!connections[pId] && !state.room.members.find(m => m.id === pId)) return;
+            const leavingName = getName(pId);
+            addLog(`[離開] ${leavingName} 已斷開連線`, 'warn');
+            cleanupMember(pId);
+            delete connections[pId];
+            broadcastState();
+            updateUI();
+        }
+
+        function connectToHost(id) {
+            captainConn = myPeer.connect(id);
+            captainConn.on('open', () => {
+                captainConn.send({ type: 'JOIN', payload: { name: myName } });
+            });
+            captainConn.on('data', (data) => {
+                if (data.type === 'SYNC') {
+                    state = data.payload;
+                    updateUI();
+                    document.getElementById('roomInfo').classList.remove('d-none');
+                    document.getElementById('roomActions').classList.add('d-none');
+                    document.getElementById('displayRoomId').innerText = id;
+                    document.getElementById('leaveDisbandBtn').innerText = '退出';
+                }
+                else if (data.type === 'TEST_START') { showSurvivalUI(data.payload); }
+                else if (data.type === 'REJECTED') {
+                    alert(data.payload);
+                    location.reload();
+                }
+            });
+            captainConn.on('close', () => { alert("隊長已中斷伺服器"); location.reload(); });
+        }
+
+        function handleHostAction(action, pId, conn) {
+            if (!isCaptain) return;
+            try {
+                switch (action.type) {
+                    case 'JOIN':
+                        if (state.room.members.some(m => m.name === action.payload.name)) {
+                            conn.send({ type: 'REJECTED', payload: "暱稱已被使用，請更換後再加入!" });
+                            setTimeout(() => conn.close(), 500);
+                            return;
+                        }
+                        addMember(pId, action.payload.name, 'Member', '連線中');
+                        addLog(`[加入] ${action.payload.name} 加入了隊伍!`);
+                        conn.send({ type: 'SYNC', payload: state });
+                        break;
+                    case 'LEAVE':
+                        handleDisconnect(pId);
+                        break;
+                    case 'ADD_EXP':
+                        state.exp.current = Math.min(state.exp.target, state.exp.current + action.payload);
+                        state.exp.contributions[pId] = (state.exp.contributions[pId] || 0) + action.payload;
+                        break;
+                    case 'RESET_EXP':
+                        state.exp.current = 0; state.exp.finished = false;
+                        addLog(`[經驗] 統計數據由 ${getName(pId)} 清空`, 'warn');
+                        break;
+                    case 'UPDATE_TARGET':
+                        state.exp.target = action.payload;
+                        state.exp.current = 0; state.exp.finished = false;
+                        state.exp.contributions = {};
+                        addLog(`[目標] 更新為 ${action.payload}% (數據已重置)`, 'info');
+                        break;
+                    case 'LOOT':
+                        state.loot.items.push({ type: action.payload, player: getName(pId), time: Date.now() });
+                        if (!state.loot.playerStats[pId]) state.loot.playerStats[pId] = {};
+                        state.loot.playerStats[pId][action.payload] = (state.loot.playerStats[pId][action.payload] || 0) + 1;
+                        addLog(`[掉寶] ${getName(pId)} 獲得了 ${action.payload}`);
+                        break;
+                    case 'RESET_LOOT_SELF':
+                        const name = getName(pId);
+                        delete state.loot.playerStats[pId];
+                        state.loot.items = state.loot.items.filter(i => i.player !== name);
+                        addLog(`[掉寶] ${name} 已清空個人統計`, 'info');
+                        break;
+                    case 'RESET_LOOT_ALL':
+                        state.loot.items = []; state.loot.playerStats = {};
+                        addLog(`[掉寶] 全隊統計數據已清空`, 'warn');
+                        break;
+                    case 'SURVIVAL_CLICK':
+                        const m = state.room.members.find(m => m.id === pId);
+                        if (m) m.status = '連線中';
+                        break;
+                }
+                broadcastState();
+                updateUI();
+            } catch (e) { console.error(e); }
+        }
+
+        function broadcastState() {
+            if (!isCaptain) return;
+            Object.values(connections).forEach(c => c.send({ type: 'SYNC', payload: state }));
+        }
+
+        function sendAction(type, payload) {
+            if (isCaptain) handleHostAction({ type, payload }, myId);
+            else if (captainConn) captainConn.send({ type, payload });
+        }
+
+        // --- UI ---
+        function updateUI() {
+            document.getElementById('memberCount').innerText = state.room.members.length;
+            const mList = document.getElementById('memberList');
+            mList.innerHTML = state.room.members.map(m => `
+                <div class="col-6 col-sm-4">
+                    <div class="card p-2 text-center border-2 ${m.status === 'DEAD' ? 'bg-danger bg-opacity-10 border-danger' : ''}">
+                        <div class="fw-bold text-truncate" style="font-size:0.8rem">${m.name}</div>
+                        <div class="mb-1">
+                            <span class="badge ${m.role === 'Captain' ? 'bg-dark' : 'bg-secondary'}" style="font-size: 0.6rem">
+                                ${m.role === 'Captain' ? '隊長' : '隊員'}
+                            </span>
+                        </div>
+                        <span class="badge ${m.status === '連線中' ? 'bg-success' : (m.status === 'Idle' ? 'bg-warning' : 'bg-danger')}">
+                            ${m.status === '連線中' ? '連線中' : (m.status === 'Idle' ? '檢測中' : '已斷線/掛機')}
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+
+            // EXP
+            document.getElementById('curExp').innerText = state.exp.current;
+            document.getElementById('maxExp').innerText = state.exp.target;
+            const perc = (state.exp.current / state.exp.target) * 100;
+            const bar = document.getElementById('expBar');
+            bar.style.width = perc + '%';
+            bar.innerText = Math.round(perc) + '%';
+
+            if (state.exp.current >= state.exp.target && !state.exp.finished && state.exp.target > 0) {
+                state.exp.finished = true;
+                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+                playLevelUpSound();
+            }
+
+            const rank = document.getElementById('expRank');
+            const sorted = Object.entries(state.exp.contributions).sort((a, b) => b[1] - a[1]);
+            rank.innerHTML = sorted.length ? sorted.map(([id, val]) => {
+                const isMyRank = (id === myId);
+                return `
+                    <div class="d-flex justify-content-between px-2 mb-1 border-bottom ${isMyRank ? 'bg-light' : ''}">
+                        <span class="text-truncate">${getName(id)}</span>
+                        <b>${val}%</b>
+                    </div>
+                `;
+            }).join('') : '<div class="text-center text-muted">目前暫無數據</div>';
+
+            // Survival Grid
+            const sGrid = document.getElementById('survivalGrid');
+            sGrid.innerHTML = state.room.members.map(m => `
+                <div class="col">
+                    <div class="card p-1 text-center bg-white ${m.status === 'DEAD' ? 'grayscale opacity-50' : ''}">
+                        <div class="small fw-bold text-truncate">${m.name}</div>
+                        <div style="font-size: 1.2rem">${m.status === '連線中' ? '🟢' : (m.status === 'Idle' ? '🟡' : '🔴')}</div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Loot
+            document.getElementById('grandTotalLoot').innerText = state.loot.items.length;
+            const catStats = document.getElementById('lootCatStats');
+            const catCounts = {};
+            state.loot.items.forEach(i => catCounts[i.type] = (catCounts[i.type] || 0) + 1);
+            catStats.innerHTML = LOOT_CATS.map(cat => {
+                const c = catCounts[cat] || 0;
+                return `
+                    <div class="mb-1">
+                        <div class="d-flex justify-content-between tiny"><span>${cat}</span><span>${c}</span></div>
+                        <div class="progress" style="height: 6px;"><div class="progress-bar" style="width: ${(c / (state.loot.items.length || 1)) * 100}%"></div></div>
+                    </div>
+                `;
+            }).join('');
+
+            const mBody = document.getElementById('memberLootBody');
+            mBody.innerHTML = Object.entries(state.loot.playerStats).map(([id, stats]) => {
+                const total = Object.values(stats).reduce((a, b) => a + b, 0);
+                const detail = Object.entries(stats).map(([k, v]) => `${k}:${v}`).join(', ');
+                return `<tr><td>${getName(id)}</td><td>${total}</td><td>${detail}</td></tr>`;
+            }).join('');
+
+            // Logs
+            const lDiv = document.getElementById('logSection');
+            lDiv.innerHTML = state.logs.map(l => `
+                <div style="color:${l.type === 'warn' ? '#f88' : (l.type === 'info' ? '#88f' : '#8f8')}">
+                    [${new Date(l.time).toLocaleTimeString()}] ${l.msg}
+                </div>
+            `).join('');
+            lDiv.scrollTop = lDiv.scrollHeight;
+        }
+
+        // --- 功能 ---
+        function triggerTest() {
+            if (!isCaptain) return;
+            const duration = parseInt(document.getElementById('testDurationInput').value) || 10;
+            state.room.members.forEach(m => m.status = 'Idle');
+            state.logs.push({ time: Date.now(), msg: `[檢測] 測試開始 (限時 ${duration} 秒)`, type: "info" });
+            broadcastState();
+            Object.values(connections).forEach(c => c.send({ type: 'TEST_START', payload: duration }));
+            showSurvivalUI(duration);
+
+            setTimeout(() => {
+                if (!isCaptain) return;
+                state.room.members.forEach(m => { if (m.status === 'Idle') m.status = 'DEAD'; });
+                addLog("檢測結束，未點擊者標記為掛機", "warn");
+                broadcastState();
+                updateUI();
+            }, duration * 1000);
+        }
+
+        function showSurvivalUI(sec) {
+            const overlay = document.getElementById('survivalOverlay');
+            const target = document.getElementById('clickTarget');
+            target.style.left = Math.random() * (window.innerWidth - 120) + 'px';
+            target.style.top = (Math.random() * (window.innerHeight - 300) + 100) + 'px';
+            overlay.style.display = 'block';
+
+            // 語音提醒
+            const voiceOn = document.getElementById('voiceToggle').checked;
+            const voiceText = document.getElementById('voiceText').value || "還活著嗎";
+            if (voiceOn) {
+                try {
+                    const msg = new SpeechSynthesisUtterance(voiceText);
+                    window.speechSynthesis.speak(msg);
+                } catch (e) { }
+            }
+
+            setTimeout(() => overlay.style.display = 'none', sec * 1000);
+        }
+
+        function survived() {
+            document.getElementById('survivalOverlay').style.display = 'none';
+            sendAction('SURVIVAL_CLICK');
+        }
+
+        function toggleAutoCheck() {
+            if (autoCheckTimer) clearInterval(autoCheckTimer);
+            if (document.getElementById('autoCheckToggle').checked) {
+                const mins = parseInt(document.getElementById('checkInterval').value) || 5;
+                autoCheckTimer = setInterval(triggerTest, mins * 60000);
+                addLog(`[系統] 開啟自動檢測: 每 ${mins} 分鐘一次`, 'info');
+            }
+        }
+
+        // --- Helper ---
+        function addMember(id, name, role, status) {
+            state.room.members = state.room.members.filter(m => m.id !== id);
+            state.room.members.push({ id, name, role, status });
+        }
+        function cleanupMember(pId) {
+            const name = getName(pId);
+            const contribution = state.exp.contributions[pId] || 0;
+
+            // 轉移經驗給隊長 (如果隊長還在)
+            if (contribution > 0 && state.room.captain && state.room.captain !== pId) {
+                state.exp.contributions[state.room.captain] = (state.exp.contributions[state.room.captain] || 0) + contribution;
+            }
+
+            state.room.members = state.room.members.filter(m => m.id !== pId);
+            delete state.exp.contributions[pId];
+            delete state.loot.playerStats[pId];
+            state.loot.items = state.loot.items.filter(i => i.player !== name);
+        }
+        function getName(id) { return state.room.members.find(m => m.id === id)?.name || "未知"; }
+        function addLog(msg, type = 'success') {
+            if (isCaptain) {
+                state.logs.push({ time: Date.now(), msg, type });
+                if (state.logs.length > 50) state.logs.shift();
+                broadcastState();
+            }
+            updateUI();
+        }
+        function leaveRoom() { if (confirm("確定要離隊嗎？")) location.reload(); }
+        function copyInviteLink() {
+            const link = `${window.location.origin}${window.location.pathname}?room=${myId}`;
+            navigator.clipboard.writeText(link).then(() => alert("邀請連結已複製!"));
+        }
+        function toggleLogs() { const s = document.getElementById('logSection'); s.style.display = s.style.display === 'block' ? 'none' : 'block'; }
+        function showHelp() { new bootstrap.Modal(document.getElementById('helpModal')).show(); }
+        function updateExpTarget() { sendAction('UPDATE_TARGET', parseInt(document.getElementById('newTargetInput').value)); }
+        function resetMyLoot() { sendAction('RESET_LOOT_SELF'); }
+        function playLevelUpSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const g = ctx.createGain();
+                osc.connect(g); g.connect(ctx.destination);
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(523, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1046, ctx.currentTime + 0.2);
+                g.gain.setValueAtTime(0.1, ctx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+                osc.start(); osc.stop(ctx.currentTime + 0.5);
+            } catch (e) { }
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
