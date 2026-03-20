@@ -1,14 +1,57 @@
-# simple_tools
-Simple tools for personal
+# Simple Tools
 
-## License
-The MIT License (MIT)
+![Artale Tools Header](header_logo.png)
 
-## Donate
-ERC20/Polygon wallet address: 
-0x390634EfA0f3a4B083572a19B9D17063027feFb6
+網頁版輔助工具集。
 
-BSC wallet address: 
-0x050cC207ba7e1074a95F266D978703Ce332A4cA8
-  
-[Paypal](https://www.paypal.me/fu0224)
+---
+
+## 🚀 核心工具介紹
+
+### 1. [Artale Party Tool (團練小工具)](artale-party-tool.html)
+專為團練設計的即時同步工具。
+- **即時經驗追蹤**: 設定目標經驗值，即時顯示百分比與成員貢獻排行。
+- **戰利品統計**: 手動記錄掉寶（防具、武器、捲軸等），自動彙整全隊產出。
+- **專注度檢測**: 隊長可發起「生存測試」，隊員畫面會出現點擊目標，並支援自定義語音提醒。
+- **P2P 同步**: 無須伺服器，直接在隊友間同步數據。
+
+### 2. [Artale RJPQ Tool (羅密歐與朱麗葉標記器)](artale-rjpq-tool.html)
+通關 RJPQ（羅密歐與朱麗葉組隊任務）的終極利器。
+- **全樓層標記**: 支援 10 層樓、每層 4 道門的標記。
+- **規則強制**: 每人每層限標一格，防止混亂重疊。
+- **即時廣播**: 任何人的標記都會立即顯示在全體隊員的畫面上。
+
+### 3. [Artale Gobang (楓之谷五子棋)](artale-gobang.html)
+經典的五子棋遊戲，採用懷舊的楓之谷像素風格。
+- **連線對戰**: 透過房號與好友進行線上 PK。
+- **單機雙人**: 支援在同一台電腦上進行 1 vs 1 對戰。
+- **精美介面**: 經典木質棋盤與半透明 UI。
+
+### 4. [Artale Lucky Channel (幸運頻道計算機)](artale-lucky-channel.html)
+玄學的力量！計算屬於你的今日幸運頻道。
+- **個性化計算**: 結合角色名稱、ID、目標怪物與日期。
+- **掉寶祈願**: 用於刷寶、點捲時的頻道參考。
+
+---
+
+## 🛠️ 如何使用
+
+1. 下載本專案所有檔案。
+2. 直接點擊對應的 `.html` 檔案即可在瀏覽器開啟。
+3. 若需連線功能，請確保能連上網際網路。
+
+---
+
+## 💖 贊助與支持
+
+如果您覺得這些工具有幫助，歡迎贊助支持開發者：
+
+- **ERC20/Polygon**: `0x390634EfA0f3a4B083572a19B9D17063027feFb6`
+- **BSC**: `0x050cC207ba7e1074a95F266D978703Ce332A4cA8`
+- **[Paypal](https://www.paypal.me/fu0224)**
+
+---
+
+## 📄 開源協議
+
+本專案採用 [MIT License](LICENSE) 授權。
