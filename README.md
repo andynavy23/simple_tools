@@ -62,6 +62,10 @@
 
 - **ERC20/Polygon**: `0x390634EfA0f3a4B083572a19B9D17063027feFb6`
 - **BSC**: `0x050cC207ba7e1074a95F266D978703Ce332A4cA8`
+- <a href="https://awfu0224.bobaboba.me" target="_blank" style="text-decoration: none;">
+  <img src="https://s3.ap-southeast-1.amazonaws.com/media.anyonelab.com/images/boba/boba-embed-icon.png" width="20" style="vertical-align:middle"> 
+  <b>請我喝珍奶！</b>
+</a>
 
 ---
 
