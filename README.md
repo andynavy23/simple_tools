@@ -4,7 +4,7 @@
 
 一套網頁版輔助工具集。這套工具採用現代化的網頁技術與 P2P 同步功能，旨在提升效率與遊戲樂趣。
 
-👉 **[立即前往工具導覽頁面 (index.html)](index.html)**
+👉 **[立即前往工具導覽頁面 (導覽頁)](https://andynavy23.github.io/simple_tools/index.html)**
 
 ---
 
@@ -18,7 +18,7 @@
 - **戰利品統計**: 手動記錄掉寶（防具、武器、捲軸等），自動彙整全隊產出。
 - **專注度檢測**: 隊長可發起「生存測試」，隊員畫面會出現點擊目標，並支援自定義語音提醒。
 
-### 2. [Artale Papulatus Tool (拉圖斯輔助工具)](artale-papulatus-tool.html)
+### 2. [Artale Papulatus Tool (拉圖斯輔助工具)](https://andynavy23.github.io/simple_tools/artale-papulatus-tool.html)
 
 由 **aespaaa** 公會製作，困難拉圖斯 Boss 戰的定時助手。
 
@@ -26,21 +26,21 @@
 - **語音與振動**: 支援語音提醒與手機振動（依設備而定）。
 - **快速重啟**: 針對 Boss 機制優化的快速重置倒數功能。
 
-### 3. [Artale RJPQ Tool (羅密歐與朱麗葉標記器)](artale-rjpq-tool.html)
+### 3. [Artale RJPQ Tool (羅密歐與朱麗葉標記器)](https://andynavy23.github.io/simple_tools/artale-rjpq-tool.html)
 
 由 **aespaaa** 公會製作，通關 RJPQ（羅密歐與朱麗葉組隊任務）的終極利器。
 
 - **全樓層標記**: 支援 10 層樓、每層 4 道門的標記。
 - **即時廣播**: 任何人的標記都會立即顯示在全體隊員的畫面上。
 
-### 4. [Artale Gobang (楓之谷五子棋)](artale-gobang.html)
+### 4. [Artale Gobang (楓之谷五子棋)](https://andynavy23.github.io/simple_tools/artale-gobang.html)
 
 由 **aespaaa** 公會製作，經典的五子棋遊戲，採用懷舊的楓之谷像素風格。
 
 - **連線對戰**: 透過房號與好友進行線上 PK。
 - **單機雙人**: 支援在同一台電腦上進行 1 vs 1 對戰。
 
-### 5. [Artale Lucky Channel (幸運頻道計算機)](artale-lucky-channel.html)
+### 5. [Artale Lucky Channel (幸運頻道計算機)](https://andynavy23.github.io/simple_tools/artale-lucky-channel.html)
 
 由 **aespaaa** 公會製作，玄學的力量！計算屬於你的今日幸運頻道。
 
@@ -62,7 +62,6 @@
 
 - **ERC20/Polygon**: `0x390634EfA0f3a4B083572a19B9D17063027feFb6`
 - **BSC**: `0x050cC207ba7e1074a95F266D978703Ce332A4cA8`
-- **[Paypal](https://www.paypal.me/fu0224)**
 
 ---
 
