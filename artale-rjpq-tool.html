@@ -507,15 +507,22 @@
             display: none !important;
         }
 
-        /* 確保懸浮按鈕在設定面板隱藏時依然保持顯示 */
-        .container.pip-active .conn-panel > *:not(#pip-btn) {
-            display: none !important;
-        }
-        
         .container.pip-active .conn-panel {
             margin: 0 !important;
             padding: 0 !important;
             border: none !important;
+        }
+        .container.pip-active .conn-panel > *:not(#join-row) {
+            display: none !important;
+        }
+        .container.pip-active #join-row > *:not(#pip-btn) {
+            display: none !important;
+        }
+        .container.pip-active #pip-btn {
+            display: inline-flex !important;
+            font-size: 10px;
+            padding: 4px 8px;
+            margin: 5px 0;
         }
 
         .container.pip-active .participants-container {
@@ -1157,21 +1164,34 @@
         }
 
         function resetAll() {
-            if (!isHost) return;
-            if (!confirm("確定清空所有標記？")) return;
-            clearLocal();
-            broadcast({ type: 'RESET' });
-        }
-
-        function clearLocal() {
-            for (let f = 0; f < 10; f++) for (let d = 0; d < 4; d++) {
-                mapData[f][d].v = 0;
-                mapData[f][d].owner = null;
-                const el = getDoc().getElementById(`d-${f}-${d}`);
-                if (el) {
+            try {
+                const doc = getDoc();
+                // 1. 本地數據清空
+                for (let f = 0; f < 10; f++) for (let d = 0; d < 4; d++) {
+                    mapData[f][d].v = 0;
+                    mapData[f][d].owner = null;
+                }
+                
+                // 2. 介面全域清除 (不依賴特定 ID 查找，直接遍歷所有 door 類別)
+                const allDoors = doc.querySelectorAll('.door');
+                allDoors.forEach(el => {
                     el.classList.remove('state-pass', 'state-error');
                     el.style.removeProperty('--marker-color');
+                    const tag = el.querySelector('.door-tag');
+                    if (tag) tag.innerText = "";
+                });
+
+                // 3. 通訊同步
+                const msg = { type: 'RESET' };
+                if (isHost) broadcast(msg);
+                else {
+                    const hostConn = Object.values(connections).find(c => c.nick === "房主");
+                    if (hostConn && hostConn.conn.open) hostConn.send(msg);
                 }
+                log("已清空所有標記。", "warn");
+            } catch (err) {
+                console.error("Reset Error:", err);
+                log("重置失敗: " + err.message, "error");
             }
         }
 
