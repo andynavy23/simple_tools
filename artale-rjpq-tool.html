@@ -873,6 +873,9 @@
                 window.location.hash = fullMyId;
                 log(`已建立房間。房號: ${fullMyId}`, "success");
                 refreshParticipantList();
+                // 自動點擊一次清空標記以初始化視窗物件與狀態
+                // resetAll();
+                document.getElementById("btn-reset-all").click();
             });
         }
 
@@ -1163,25 +1166,29 @@
             }
         }
 
-        function resetAll() {
-            try {
-                const doc = getDoc();
-                // 1. 本地數據清空
-                for (let f = 0; f < 10; f++) for (let d = 0; d < 4; d++) {
-                    mapData[f][d].v = 0;
-                    mapData[f][d].owner = null;
-                }
-                
-                // 2. 介面全域清除 (不依賴特定 ID 查找，直接遍歷所有 door 類別)
-                const allDoors = doc.querySelectorAll('.door');
-                allDoors.forEach(el => {
+        function clearLocal() {
+            const doc = getDoc();
+            const containerNode = doc.querySelector('.container');
+            for (let f = 0; f < 10; f++) for (let d = 0; d < 4; d++) {
+                mapData[f][d].v = 0;
+                mapData[f][d].owner = null;
+                // 使用容器內查詢增加穩定性
+                const el = containerNode ? containerNode.querySelector(`#d-${f}-${d}`) : doc.getElementById(`d-${f}-${d}`);
+                if (el) {
                     el.classList.remove('state-pass', 'state-error');
                     el.style.removeProperty('--marker-color');
                     const tag = el.querySelector('.door-tag');
                     if (tag) tag.innerText = "";
-                });
+                }
+            }
+        }
 
-                // 3. 通訊同步
+        function resetAll() {
+            try {
+                // 1. 本地數據與介面清空
+                clearLocal();
+                
+                // 2. 通訊同步
                 const msg = { type: 'RESET' };
                 if (isHost) broadcast(msg);
                 else {
