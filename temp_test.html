@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise Data Management System v2.1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- JSZip for EPUB parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f3f4f6;
+            margin: 0;
+            overflow: hidden;
+        }
+        /* Custom scrollbar for Office feel */
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-left: 1px solid #ddd; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        .terminal-scroll::-webkit-scrollbar-track { background: #1e1e1e; border-color: #333; }
+        .terminal-scroll::-webkit-scrollbar-thumb { background: #424242; }
+        
+        .content-transition { transition: font-size 0.2s, line-height 0.2s; }
+        
+        /* Modal Styles */
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.4); }
+    </style>
+</head>
+<body class="h-screen flex flex-col text-sm text-gray-800">
+
+    <div class="bg-[#005a9e] text-white flex items-center justify-between px-4 py-2 shadow-sm z-20 shrink-0 select-none">
+        <div class="flex items-center space-x-4">
+            <div class="font-semibold text-base tracking-wide flex items-center">
+                <i class="fas fa-cubes mr-2 opacity-80"></i> EDMS Core
+            </div>
+            <div class="h-5 w-px bg-blue-400 opacity-50"></div>
+            
+            <!-- File Import -->
+            <label class="cursor-pointer hover:bg-blue-700 px-3 py-1.5 rounded transition-colors flex items-center text-xs border border-transparent hover:border-blue-500">
+                <i class="fas fa-folder-open mr-2 text-blue-200"></i> Open Dataset
+                <input type="file" id="file-upload" accept=".txt,.epub" class="hidden">
+            </label>
+
+            <!-- Encoding Selector (Only relevant for TXT, but kept for stealth) -->
+            <div class="flex items-center space-x-1 border-l border-blue-600 pl-4">
+                <i class="fas fa-language text-blue-300 text-xs"></i>
+                <select id="encoding-select" class="bg-[#004c87] text-white border-none text-xs rounded px-2 py-1 outline-none hover:bg-blue-800 cursor-pointer">
+                    <option value="UTF-8">UTF-8</option>
+                    <option value="Big5">Big5</option>
+                    <option value="GBK">GBK</option>
+                    <option value="Shift_JIS">Shift-JIS</option>
+                </select>
+            </div>
+        </div>
+        
+        <!-- View Mode Switchers & Settings -->
+        <div class="flex items-center space-x-2">
+            <div class="flex bg-[#004c87] rounded p-0.5">
+                <button onclick="switchMode('spreadsheet')" id="btn-spreadsheet" class="mode-btn bg-white text-[#005a9e] px-3 py-1 rounded shadow-sm text-xs font-medium transition-colors">
+                    <i class="fas fa-table mr-1"></i> Data Grid
+                </button>
+                <button onclick="switchMode('terminal')" id="btn-terminal" class="mode-btn hover:bg-white/20 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
+                    <i class="fas fa-terminal mr-1"></i> Syslog
+                </button>
+                <button onclick="switchMode('email')" id="btn-email" class="mode-btn hover:bg-white/20 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
+                    <i class="fas fa-envelope mr-1"></i> Comms
+                </button>
+                <button onclick="switchMode('report')" id="btn-report" class="mode-btn hover:bg-white/20 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
+                    <i class="fas fa-chart-line mr-1"></i> Analytics
+                </button>
+            </div>
+            
+            <button onclick="toggleSettings()" class="hover:bg-blue-700 p-1.5 rounded text-white ml-2 transition-colors" title="System Settings">
+                <i class="fas fa-cog"></i>
+            </button>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-overlay">
+        <div class="bg-white rounded-md shadow-2xl w-96 overflow-hidden border border-gray-300">
+            <div class="bg-gray-100 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="font-semibold text-gray-700 text-sm"><i class="fas fa-sliders-h mr-2"></i>System Configuration</h3>
+                <button onclick="toggleSettings()" class="text-gray-400 hover:text-red-500"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-4 space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Emergency Override Key (Boss Key)</label>
+                    <div class="flex">
+                        <input type="text" id="boss-key-input" maxlength="1" class="border border-gray-300 rounded-l px-3 py-1.5 w-full text-sm uppercase text-center font-mono" value="Z">
+                        <button onclick="saveSettings()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-r text-xs">Save</button>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mt-1">Press this key to instantly mask all data with generic system metrics. Press again to restore.</p>
+                </div>
+                <hr class="border-gray-200">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Cache Management</label>
+                    <button onclick="clearMemory()" class="w-full bg-white border border-gray-300 hover:bg-red-50 hover:text-red-600 hover:border-red-300 text-gray-600 px-3 py-2 rounded text-xs transition-colors flex items-center justify-center">
+                        <i class="fas fa-trash-alt mr-2"></i> Purge Current Dataset Index
+                    </button>
+                    <p class="text-[10px] text-gray-500 mt-1">Clears the saved reading progress for the currently loaded file.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-container" class="flex-1 relative bg-gray-50 overflow-hidden">
+        
+        <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white">
+            <i class="fas fa-database text-6xl mb-4 text-gray-200"></i>
+            <p class="text-lg font-medium text-gray-500">No Dataset Loaded</p>
+            <p class="text-xs mt-2 text-gray-400">Please open a dataset (.txt, .epub) to begin analysis.</p>
+        </div>
+
+        <!-- 1. Spreadsheet Mode -->
+        <div id="view-spreadsheet" class="hidden absolute inset-0 flex flex-col bg-white">
+            <div class="bg-gray-50 border-b flex px-3 py-1.5 space-x-4 text-xs border-gray-300 shrink-0 text-gray-600 select-none">
+                <span class="hover:bg-gray-200 px-1 rounded cursor-pointer"><i class="fas fa-filter text-gray-400"></i> Filter</span>
+                <span class="hover:bg-gray-200 px-1 rounded cursor-pointer"><i class="fas fa-sort-amount-down text-gray-400"></i> Sort</span>
+                <span class="hover:bg-gray-200 px-1 rounded cursor-pointer"><i class="fas fa-bolt text-yellow-500"></i> Auto-Sum</span>
+            </div>
+            <div class="flex-1 overflow-auto">
+                <table class="w-full text-left border-collapse whitespace-nowrap">
+                    <thead class="bg-gray-100 sticky top-0 z-10 shadow-sm text-xs text-gray-600">
+                        <tr>
+                            <th class="border-b border-r border-gray-300 px-2 py-1 font-normal w-12 text-center bg-gray-200"></th>
+                            <th class="border-b border-r border-gray-300 px-3 py-1 font-normal w-32 border-t">TIMESTAMP_UTC</th>
+                            <th class="border-b border-r border-gray-300 px-3 py-1 font-normal w-24 border-t">SYS_STATE</th>
+                            <th class="border-b border-gray-300 px-3 py-1 font-normal border-t">PAYLOAD_STREAM</th>
+                        </tr>
+                    </thead>
+                    <tbody id="spreadsheet-body" class="text-[13px] content-transition">
+                        <!-- Content -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="view-terminal" class="hidden absolute inset-0 bg-[#0c0c0c] text-[#cccccc] font-mono text-sm overflow-auto terminal-scroll p-4 content-transition">
+            <div class="mb-4 text-[#4af626] opacity-80 text-xs">
+                <p>Enterprise Mainframe Connection [Secure Shell v9.2]</p>
+                <p>Establishing encrypted tunnel... DONE.</p>
+                <p>user@prod-server:~$ tail -f /var/log/app_stream.log</p>
+            </div>
+            <div id="terminal-body" class="space-y-1">
+                <!-- Content -->
+            </div>
+        </div>
+
+        <div id="view-email" class="hidden absolute inset-0 flex bg-white">
+            <div class="w-72 border-r border-gray-200 bg-[#f9f9f9] flex flex-col shrink-0">
+                <div class="p-3 border-b border-gray-200 font-semibold text-gray-700 flex justify-between items-center text-sm bg-white">
+                    <span>Inbox</span>
+                    <i class="fas fa-search text-gray-400 font-normal cursor-pointer"></i>
+                </div>
+                <div class="flex-1 overflow-y-auto">
+                    <div class="p-3 border-b border-l-4 border-l-blue-500 border-gray-200 bg-blue-50 cursor-pointer">
+                        <div class="flex justify-between items-baseline mb-1">
+                            <span class="font-bold text-gray-800 text-xs">Automated System</span>
+                            <span class="text-[10px] text-blue-600">14:30</span>
+                        </div>
+                        <div class="font-semibold text-gray-800 text-xs mb-1 truncate">Data Payload Received</div>
+                        <div class="text-[11px] text-gray-500 truncate">The latest dataset has been processed...</div>
+                    </div>
+                    <div class="p-3 border-b border-gray-200 hover:bg-gray-100 cursor-pointer opacity-60">
+                        <div class="flex justify-between items-baseline mb-1">
+                            <span class="font-bold text-gray-600 text-xs">HR Department</span>
+                            <span class="text-[10px] text-gray-400">Yesterday</span>
+                        </div>
+                        <div class="font-semibold text-gray-700 text-xs mb-1 truncate">Policy Update Q3</div>
+                        <div class="text-[11px] text-gray-500 truncate">Please review the updated compliance...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex-1 flex flex-col h-full overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-100 shrink-0 bg-white">
+                    <h2 class="text-xl font-normal text-gray-800 mb-4">Data Payload Received</h2>
+                    <div class="flex items-center text-xs text-gray-500">
+                        <div class="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-white mr-3">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div>
+                            <span class="font-semibold text-gray-700">Automated System</span> &lt;noreply@enterprise.local&gt;<br>
+                            To: Analyst Group
+                        </div>
+                    </div>
+                </div>
+                <div class="p-8 overflow-y-auto flex-1 text-gray-800 text-justify content-transition" id="email-body">
+                    <!-- Content -->
+                </div>
+            </div>
+        </div>
+
+        <div id="view-report" class="hidden absolute inset-0 overflow-y-auto bg-[#e1e1e1] p-6 sm:p-12">
+            <div class="max-w-4xl mx-auto bg-white shadow-md border border-gray-300 min-h-full">
+                <!-- Word-like Toolbar -->
+                <div class="bg-gray-100 border-b border-gray-200 px-4 py-2 flex space-x-6 text-[11px] text-gray-600 shrink-0 rounded-t select-none uppercase tracking-wider font-semibold">
+                    <span class="cursor-pointer hover:text-blue-600">File</span>
+                    <span class="cursor-pointer text-blue-700 border-b-2 border-blue-700 pb-2 -mb-2">Home</span>
+                    <span class="cursor-pointer hover:text-blue-600">Insert</span>
+                    <span class="cursor-pointer hover:text-blue-600">Layout</span>
+                    <span class="cursor-pointer hover:text-blue-600">Review</span>
+                </div>
+                
+                <div class="p-12 sm:px-20">
+                    <h1 class="text-3xl font-light text-gray-800 mb-1 border-b pb-4">Quarterly Business Analysis</h1>
+                    <p class="text-gray-400 text-xs mb-8 uppercase tracking-widest font-mono">Confidential // Internal Use Only</p>
+                    
+                    <div id="report-body" class="text-gray-800 text-justify content-transition indent-8">
+                        <!-- Content -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    <div class="bg-gray-200 border-t border-gray-300 px-3 py-1 flex justify-between items-center text-[11px] text-gray-600 shrink-0 z-20 select-none">
+        <div class="flex items-center space-x-4">
+            <span class="flex items-center text-green-600"><i class="fas fa-check-circle mr-1"></i> Ready</span>
+            <span id="disguised-page-info" class="font-mono bg-gray-300 px-2 py-0.5 rounded text-gray-700 hidden">
+                Records: 0 - 0 / 0
+            </span>
+            <div id="pagination-arrows" class="hidden space-x-1">
+                <button onclick="changePage(-1)" class="hover:bg-gray-300 px-1.5 rounded transition-colors"><i class="fas fa-chevron-up"></i></button>
+                <button onclick="changePage(1)" class="hover:bg-gray-300 px-1.5 rounded transition-colors"><i class="fas fa-chevron-down"></i></button>
+            </div>
+        </div>
+
+        <!-- Disguised Layout Controls -->
+        <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-1 hidden sm:flex">
+                <span title="Adjust View Scale"><i class="fas fa-search-plus mr-1"></i> Scale:</span>
+                <button onclick="adjustLayout('down')" class="hover:bg-gray-300 px-1.5 rounded font-bold">-</button>
+                <button onclick="adjustLayout('up')" class="hover:bg-gray-300 px-1.5 rounded font-bold">+</button>
+            </div>
+            <span>v2.1.004</span>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let textChunks = [];
+        let currentMode = 'spreadsheet';
+        let currentPage = 0;
+        let currentFileName = null;
+        const CHUNKS_PER_PAGE = 40; 
+        
+        // Layout State
+        let fontSizeBase = 14; 
+        
+        // Boss Key State
+        let bossKey = localStorage.getItem('edms_bosskey') || 'Z';
+        let isBossMode = false;
+
+        // Elements
+        const fileUpload = document.getElementById('file-upload');
+        const encodingSelect = document.getElementById('encoding-select');
+        const emptyState = document.getElementById('empty-state');
+        const pageInfo = document.getElementById('disguised-page-info');
+        const paginationArrows = document.getElementById('pagination-arrows');
+        const bossKeyInput = document.getElementById('boss-key-input');
+        const settingsModal = document.getElementById('settings-modal');
+
+        const views = {
+            spreadsheet: document.getElementById('view-spreadsheet'),
+            terminal: document.getElementById('view-terminal'),
+            email: document.getElementById('view-email'),
+            report: document.getElementById('view-report')
+        };
+        const bodies = {
+            spreadsheet: document.getElementById('spreadsheet-body'),
+            terminal: document.getElementById('terminal-body'),
+            email: document.getElementById('email-body'),
+            report: document.getElementById('report-body')
+        };
+        const buttons = {
+            spreadsheet: document.getElementById('btn-spreadsheet'),
+            terminal: document.getElementById('btn-terminal'),
+            email: document.getElementById('btn-email'),
+            report: document.getElementById('btn-report')
+        };
+
+        // Initialize Settings
+        bossKeyInput.value = bossKey;
+
+        function toggleSettings() {
+            settingsModal.classList.toggle('hidden');
+        }
+
+        function saveSettings() {
+            let val = bossKeyInput.value.toUpperCase();
+            if (val) {
+                bossKey = val;
+                localStorage.setItem('edms_bosskey', bossKey);
+                toggleSettings();
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            // Ignore if typing in input
+            if(e.target.tagName === 'INPUT') return;
+            
+            if (e.key.toUpperCase() === bossKey) {
+                isBossMode = !isBossMode;
+                renderData(); // Re-render immediately
+            }
+        });
+
+        fileUpload.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            currentFileName = file.name;
+            emptyState.classList.add('hidden');
+            
+            if (file.name.toLowerCase().endsWith('.epub')) {
+                await processEpub(file);
+            } else {
+                processTxt(file);
+            }
+        });
+
+        encodingSelect.addEventListener('change', () => {
+            const file = fileUpload.files[0];
+            if (file && file.name.toLowerCase().endsWith('.txt')) {
+                processTxt(file);
+            }
+        });
+
+        function processTxt(file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const text = event.target.result;
+                prepareChunks(text);
+            };
+            reader.readAsText(file, encodingSelect.value);
+        }
+
+        async function processEpub(file) {
+            try {
+                // Change UI state to loading
+                pageInfo.innerText = "Processing Archives...";
+                pageInfo.classList.remove('hidden');
+                
+                const zip = new JSZip();
+                const loadedZip = await zip.loadAsync(file);
+                let fullText = "";
+                
+                // Very basic EPUB text extraction: find html/xhtml, strip tags.
+                // Works perfectly for novels to bypass complex XML parsing in a single file.
+                for (const [filename, fileData] of Object.entries(loadedZip.files)) {
+                    if (filename.endsWith('.html') || filename.endsWith('.xhtml') || filename.endsWith('.htm')) {
+                        const content = await fileData.async('string');
+                        // Strip HTML tags and excessive whitespace
+                        const text = content.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+                                            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+                                            .replace(/<[^>]+>/g, ' ')
+                                            .replace(/\s+/g, ' ')
+                                            .trim();
+                        if(text) fullText += text + "\n";
+                    }
+                }
+                prepareChunks(fullText);
+            } catch (error) {
+                console.error("EPUB parsing error:", error);
+                alert("Failed to parse EPUB file.");
+            }
+        }
+
+        function prepareChunks(text) {
+            // Split by newline, filter empty, merge short lines if necessary (simplified here)
+            textChunks = text.split(/\r?\n/).filter(chunk => chunk.trim().length > 0);
+            
+            if (textChunks.length > 0) {
+                loadProgress(); // Restore page
+                updateViewsAndRender();
+            } else {
+                emptyState.classList.remove('hidden');
+            }
+        }
+
+        function loadProgress() {
+            if (!currentFileName) return;
+            const saved = localStorage.getItem('stealth_reader_' + currentFileName);
+            if (saved !== null) {
+                currentPage = parseInt(saved, 10);
+                // Validate bound
+                const maxPage = Math.ceil(textChunks.length / CHUNKS_PER_PAGE) - 1;
+                if (currentPage > maxPage) currentPage = maxPage;
+                if (currentPage < 0) currentPage = 0;
+            } else {
+                currentPage = 0;
+            }
+        }
+
+        function saveProgress() {
+            if (!currentFileName) return;
+            localStorage.setItem('stealth_reader_' + currentFileName, currentPage);
+        }
+
+        function clearMemory() {
+            if (currentFileName) {
+                localStorage.removeItem('stealth_reader_' + currentFileName);
+                currentPage = 0;
+                saveProgress();
+                renderData();
+                toggleSettings();
+            }
+        }
+
+        function changePage(delta) {
+            if (textChunks.length === 0) return;
+            const totalPages = Math.ceil(textChunks.length / CHUNKS_PER_PAGE);
+            const newPage = currentPage + delta;
+            
+            if (newPage >= 0 && newPage < totalPages) {
+                currentPage = newPage;
+                saveProgress();
+                renderData();
+                
+                // Reset scroll
+                Object.values(views).forEach(view => {
+                    const scrollArea = view.querySelector('.overflow-auto, .overflow-y-auto') || view;
+                    if(scrollArea.scrollTop !== undefined) scrollArea.scrollTop = 0;
+                });
+            }
+        }
+
+        function updatePaginationUI() {
+            if (textChunks.length === 0) return;
+            const total = textChunks.length;
+            const start = currentPage * CHUNKS_PER_PAGE;
+            const end = Math.min(start + CHUNKS_PER_PAGE, total);
+            
+            pageInfo.classList.remove('hidden');
+            paginationArrows.classList.remove('hidden');
+            
+            // Disguise wording based on mode
+            if (currentMode === 'spreadsheet') {
+                pageInfo.innerText = `Rows: ${start + 1} - ${end} / ${total}`;
+            } else if (currentMode === 'terminal') {
+                pageInfo.innerText = `Log Block: 0x${start.toString(16).toUpperCase()} - 0x${end.toString(16).toUpperCase()}`;
+            } else if (currentMode === 'email') {
+                pageInfo.innerText = `Thread ${currentPage + 1} of ${Math.ceil(total/CHUNKS_PER_PAGE)}`;
+            } else {
+                pageInfo.innerText = `Doc Page ${currentPage + 1} / ${Math.ceil(total/CHUNKS_PER_PAGE)}`;
+            }
+        }
+
+        function switchMode(mode) {
+            currentMode = mode;
+            
+            Object.keys(buttons).forEach(key => {
+                const btn = buttons[key];
+                if (key === mode) {
+                    btn.classList.remove('hover:bg-white/20', 'text-white');
+                    btn.classList.add('bg-white', 'text-[#005a9e]', 'shadow-sm');
+                } else {
+                    btn.classList.add('hover:bg-white/20', 'text-white');
+                    btn.classList.remove('bg-white', 'text-[#005a9e]', 'shadow-sm');
+                }
+            });
+
+            if (textChunks.length > 0) {
+                updateViewsAndRender();
+            }
+        }
+
+        function adjustLayout(direction) {
+            if (direction === 'up' && fontSizeBase < 24) fontSizeBase += 1;
+            if (direction === 'down' && fontSizeBase > 10) fontSizeBase -= 1;
+            
+            // Apply to bodies
+            const sizeStr = `${fontSizeBase}px`;
+            const lhStr = `${fontSizeBase * 1.6}px`;
+            
+            bodies.spreadsheet.style.fontSize = `${fontSizeBase - 1}px`; // slightly smaller for table
+            
+            bodies.terminal.style.fontSize = sizeStr;
+            bodies.terminal.style.lineHeight = lhStr;
+            
+            bodies.email.style.fontSize = sizeStr;
+            bodies.email.style.lineHeight = lhStr;
+            
+            bodies.report.style.fontSize = sizeStr;
+            bodies.report.style.lineHeight = lhStr;
+        }
+
+        function updateViewsAndRender() {
+            Object.keys(views).forEach(key => {
+                if (key === currentMode) views[key].classList.remove('hidden');
+                else views[key].classList.add('hidden');
+            });
+            renderData();
+        }
+
+        function escapeHtml(unsafe) {
+            return (unsafe||"").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        function getFakeData(index) {
+            const types = ["SYS_TICK", "MEM_DUMP", "NET_SYNC", "IO_WAIT"];
+            const type = types[index % 4];
+            const hex = Math.random().toString(16).substr(2, 8).toUpperCase();
+            const hex2 = Math.random().toString(16).substr(2, 16).toUpperCase();
+            return {
+                timestamp: `2026-09-30 ${String(10 + (index % 14)).padStart(2, '0')}:${String((index*7) % 60).padStart(2, '0')}:${String((index*13) % 60).padStart(2, '0')}`,
+                status: `<span class="bg-gray-200 text-gray-700 px-1 rounded text-[10px]">${type}</span>`,
+                payload: `[0x${hex}] INSTRUCTION_PTR_REQ -> BUFFER_ADDR(0x${hex2}) VIRTUAL_ALLOC_SUCCESS`
+            };
+        }
+
+        function renderData() {
+            if (textChunks.length === 0) return;
+            updatePaginationUI();
+
+            const startIndex = currentPage * CHUNKS_PER_PAGE;
+            const endIndex = Math.min(startIndex + CHUNKS_PER_PAGE, textChunks.length);
+            const currentChunks = textChunks.slice(startIndex, endIndex);
+
+            // Clear bodies
+            Object.values(bodies).forEach(b => b.innerHTML = '');
+
+            const fragment = document.createDocumentFragment();
+
+            if (currentMode === 'spreadsheet') {
+                currentChunks.forEach((chunk, i) => {
+                    const rowIdx = startIndex + i + 1;
+                    const fake = getFakeData(rowIdx);
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-gray-200 hover:bg-blue-50';
+                    
+                    let content = escapeHtml(chunk);
+                    if (isBossMode) content = fake.payload;
+
+                    tr.innerHTML = `
+                        <td class="border-r border-gray-200 px-2 py-1.5 text-center text-gray-400 bg-gray-50">${rowIdx}</td>
+                        <td class="border-r border-gray-200 px-3 py-1.5 text-gray-500 font-mono">${fake.timestamp}</td>
+                        <td class="border-r border-gray-200 px-3 py-1.5">${fake.status}</td>
+                        <td class="px-3 py-1.5 whitespace-normal break-words">${content}</td>
+                    `;
+                    fragment.appendChild(tr);
+                });
+                bodies.spreadsheet.appendChild(fragment);
+
+            } else if (currentMode === 'terminal') {
+                currentChunks.forEach((chunk, i) => {
+                    const p = document.createElement('div');
+                    p.className = 'mb-1 flex';
+                    const timestamp = getFakeData(startIndex + i).timestamp.split(' ')[1];
+                    
+                    let content = escapeHtml(chunk);
+                    if (isBossMode) {
+                        content = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+                        content = `Executing binary shift: 0x${content.toUpperCase()}`;
+                    }
+
+                    p.innerHTML = `<span class="text-gray-500 mr-3">[${timestamp}]</span><span class="break-words w-full">${content}</span>`;
+                    fragment.appendChild(p);
+                });
+                bodies.terminal.appendChild(fragment);
+
+            } else if (currentMode === 'email' || currentMode === 'report') {
+                currentChunks.forEach(chunk => {
+                    const p = document.createElement('p');
+                    p.className = 'mb-4';
+                    
+                    if (isBossMode) {
+                        p.textContent = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.";
+                        p.classList.add('text-gray-400'); // Make fake text look boring
+                    } else {
+                        p.textContent = chunk;
+                    }
+                    fragment.appendChild(p);
+                });
+                bodies[currentMode].appendChild(fragment);
+            }
+        }
+        
+        // Initial setup
+        adjustLayout(''); // apply default sizes
+    </script>
+</body>
+</html>
