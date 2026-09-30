@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="摸魚閱讀器：本機載入 txt 小說，偽裝成 ERP 後台，支援老闆鍵、隱私模糊、閱讀進度記憶。">
+    <meta name="robots" content="noindex">
+    <!-- 分頁標題刻意偽裝成 ERP 後台，請勿改成工具名稱 -->
+    <title>ERP Operations & Metrics Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f1f5f9; overflow: hidden; margin: 0; }
+        
+        /* Scrollbar Styling for Corporate Look */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #e2e8f0; }
+        ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        .terminal-scroll::-webkit-scrollbar-track { background: #0f172a; }
+        .terminal-scroll::-webkit-scrollbar-thumb { background: #334155; }
+
+        /* Privacy Hover Blur Mode */
+        .privacy-active .content-row {
+            filter: blur(5px);
+            opacity: 0.4;
+            transition: filter 0.2s ease, opacity 0.2s ease;
+            user-select: none;
+        }
+        .privacy-active .content-row:hover {
+            filter: blur(0px);
+            opacity: 1;
+            user-select: text;
+        }
+
+        /* Modal Overlay */
+        .modal-bg { background-color: rgba(15, 23, 42, 0.75); backdrop-filter: blur(2px); }
+        
+        /* Smooth Scrolling */
+        .smooth-scroll { scroll-behavior: smooth; }
+    </style>
+</head>
+<body class="h-screen flex flex-col text-slate-800 text-sm">
+
+    <div class="bg-slate-900 text-slate-300 px-4 py-2 flex items-center justify-between border-b border-slate-700 shrink-0 z-30 shadow-md select-none">
+        <div class="flex items-center space-x-4">
+            <div class="font-bold text-slate-100 tracking-widest flex items-center text-xs">
+                <i class="fas fa-layer-group text-blue-500 mr-2"></i> ERP_CORE_v9.2
+            </div>
+            
+            <div class="h-5 w-px bg-slate-700"></div>
+
+            <!-- Any File Upload disguised as Data Source Connection -->
+            <label class="cursor-pointer hover:text-white hover:bg-slate-800 px-2 py-1 rounded transition-colors flex items-center text-xs font-mono">
+                <i class="fas fa-link mr-1.5 text-blue-400"></i> Mount Node
+                <input type="file" id="file-upload" accept=".txt,text/plain" class="hidden">
+            </label>
+
+            <!-- Encoding Selector -->
+            <div class="flex items-center space-x-1 pl-1">
+                <i class="fas fa-globe-asia text-slate-500 text-[10px] mr-1"></i>
+                <select id="encoding-select" class="bg-slate-800 border border-slate-600 text-slate-300 text-[10px] rounded px-1 py-0.5 outline-none hover:border-slate-400 cursor-pointer">
+                    <option value="auto">Auto-detect</option>
+                    <option value="UTF-8">UTF-8 (Standard)</option>
+                    <option value="Big5">Big5 (Legacy-TW)</option>
+                    <option value="GBK">GBK (Legacy-CN)</option>
+                    <option value="Shift_JIS">S-JIS (Legacy-JP)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-6">
+            <!-- Business Chart Progress Bar (Replaces explicit page numbers) -->
+            <div class="flex flex-col w-48 group" title="Memory Allocation (Progress)">
+                <div class="flex justify-between text-[9px] font-mono text-slate-400 mb-0.5">
+                    <span>MEM_ALLOC</span>
+                    <span id="chart-percentage">0.00%</span>
+                </div>
+                <div class="w-full bg-slate-700 h-1.5 rounded overflow-hidden">
+                    <div id="chart-bar" class="bg-blue-500 h-full w-0 transition-all duration-300"></div>
+                </div>
+            </div>
+
+            <div class="h-5 w-px bg-slate-700"></div>
+            
+            <div class="flex items-center space-x-2">
+                <span id="status-indicator" class="text-[10px] font-mono text-green-400 flex items-center">
+                    <i class="fas fa-circle text-[8px] animate-pulse mr-1"></i> ONLINE
+                </span>
+                <button onclick="toggleSettings()" class="hover:bg-slate-700 p-1.5 rounded text-slate-400 hover:text-white transition-colors" title="System Configuration">
+                    <i class="fas fa-sliders-h"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-slate-100 border-b border-slate-300 px-3 py-1 flex justify-between items-center z-20 shrink-0 text-xs shadow-sm">
+        <div class="flex space-x-1">
+            <button onclick="switchTheme('spreadsheet')" id="tab-spreadsheet" class="theme-tab bg-white border border-slate-300 text-slate-800 font-medium px-3 py-1 rounded-t shadow-sm">
+                <i class="fas fa-table text-blue-600 mr-1"></i> Data Grid
+            </button>
+            <button onclick="switchTheme('terminal')" id="tab-terminal" class="theme-tab hover:bg-slate-200 border border-transparent text-slate-600 px-3 py-1 rounded-t">
+                <i class="fas fa-terminal text-slate-700 mr-1"></i> SSH Console
+            </button>
+            <button onclick="switchTheme('report')" id="tab-report" class="theme-tab hover:bg-slate-200 border border-transparent text-slate-600 px-3 py-1 rounded-t">
+                <i class="fas fa-file-alt text-emerald-600 mr-1"></i> Audit Doc
+            </button>
+            <button onclick="switchTheme('chat')" id="tab-chat" class="theme-tab hover:bg-slate-200 border border-transparent text-slate-600 px-3 py-1 rounded-t flex items-center">
+                <i class="fab fa-slack text-purple-600 mr-1"></i> Internal Comms <span class="ml-2 bg-red-500 text-white text-[9px] px-1 rounded-full">3</span>
+            </button>
+        </div>
+        
+        <div class="flex items-center text-[10px] font-mono space-x-3 text-slate-500">
+            <span id="panic-status-ui" class="hidden text-orange-500 font-bold"><i class="fas fa-shield-alt mr-1"></i>AUTO-PANIC</span>
+            <span id="boss-status-ui" class="hidden text-red-600 font-bold animate-pulse"><i class="fas fa-lock mr-1"></i>LOCKED</span>
+            <span>NODE: SECURE-01</span>
+        </div>
+    </div>
+
+    <div class="flex-1 flex overflow-hidden relative">
+        
+        <!-- Left Panel: Split-Task Dashboard (Functional Tools) -->
+        <div id="split-panel" class="w-64 bg-slate-50 border-r border-slate-300 flex-col hidden shrink-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+            <div class="p-2 bg-slate-200 border-b border-slate-300 text-xs font-bold text-slate-700 uppercase tracking-wider flex justify-between items-center">
+                <span><i class="fas fa-sticky-note mr-1"></i> Utilities</span>
+            </div>
+            
+            <!-- Functional Notepad -->
+            <div class="flex-1 flex flex-col p-2">
+                <div class="text-[10px] font-bold text-slate-500 mb-1"><i class="fas fa-sticky-note mr-1"></i> SCRATCHPAD</div>
+                <textarea class="flex-1 w-full text-xs p-2 border border-slate-300 rounded bg-yellow-50 outline-none resize-none" placeholder="Take temporary notes here..."></textarea>
+            </div>
+        </div>
+
+        <!-- Right Panel: Reader Views -->
+        <div class="flex-1 relative bg-white" id="reader-container">
+            
+            <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-100 text-slate-400 z-10">
+                <i class="fas fa-database text-6xl mb-4 text-slate-300"></i>
+                <p class="text-sm font-bold tracking-widest uppercase">System Standby</p>
+                <p class="text-xs mt-1">Awaiting data node connection.</p>
+            </div>
+
+            <!-- Theme 1: Spreadsheet -->
+            <div id="view-spreadsheet" class="theme-view hidden absolute inset-0 flex flex-col bg-white">
+                <div class="flex-1 overflow-auto smooth-scroll">
+                    <table class="w-full text-left border-collapse whitespace-nowrap">
+                        <thead class="bg-slate-50 sticky top-0 z-10 shadow-sm text-[10px] uppercase tracking-wider text-slate-500">
+                            <tr>
+                                <th class="border-b border-r border-slate-300 px-2 py-1 font-semibold w-12 text-center bg-slate-200">ROW</th>
+                                <th class="border-b border-r border-slate-300 px-3 py-1 font-semibold w-32 border-t">TIMESTAMP</th>
+                                <th class="border-b border-r border-slate-300 px-2 py-1 font-semibold w-16 border-t text-center">STATUS</th>
+                                <th class="border-b border-slate-300 px-3 py-1 font-semibold border-t">PAYLOAD_BUFFER</th>
+                            </tr>
+                        </thead>
+                        <tbody id="content-spreadsheet" class="text-xs text-slate-700"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Theme 2: Terminal -->
+            <div id="view-terminal" class="theme-view hidden absolute inset-0 bg-[#0c0c0c] text-[#00ff00] font-mono text-xs overflow-auto terminal-scroll p-4 smooth-scroll">
+                <div class="mb-3 opacity-60 text-[10px] select-none border-b border-green-900 pb-2">
+                    <p>Enterprise Secure Shell - v4.1.2</p>
+                    <p>Connected to root@prod-db-cluster-01</p>
+                    <p class="mt-1 text-white">root@prod:~$ tail -f /var/log/system/transaction.log</p>
+                </div>
+                <div id="content-terminal" class="space-y-1"></div>
+            </div>
+
+            <!-- Theme 3: Report -->
+            <div id="view-report" class="theme-view hidden absolute inset-0 overflow-y-auto bg-slate-200 p-4 sm:p-8 smooth-scroll">
+                <div class="max-w-3xl mx-auto bg-white shadow border border-slate-300 min-h-full">
+                    <div class="border-b-4 border-slate-800 px-8 py-5 flex justify-between items-end bg-slate-50 shrink-0">
+                        <div>
+                            <h1 class="text-lg font-bold text-slate-800 uppercase tracking-widest">Internal Audit Record</h1>
+                            <p class="text-[10px] text-slate-500 font-mono mt-1">DOC_ID: <span id="report-doc-id">AX-9942</span></p>
+                        </div>
+                        <i class="fas fa-file-contract text-2xl text-slate-300"></i>
+                    </div>
+                    <div class="p-8">
+                        <div id="content-report" class="text-sm text-slate-800 leading-relaxed text-justify space-y-4"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Theme 4: Chat (Slack/Teams style) -->
+            <div id="view-chat" class="theme-view hidden absolute inset-0 flex bg-white">
+                <div class="w-48 bg-slate-800 text-slate-300 flex-col hidden sm:flex shrink-0 border-r border-slate-700 select-none">
+                    <div class="p-3 border-b border-slate-700 text-xs font-bold text-white flex items-center">
+                        <i class="fas fa-building mr-2"></i> Corporate HQ
+                    </div>
+                    <div class="p-2">
+                        <div class="text-[10px] font-bold text-slate-500 uppercase mb-1 px-2">Channels</div>
+                        <div class="px-2 py-1 text-xs hover:bg-slate-700 cursor-pointer rounded"><i class="fas fa-hashtag mr-1 opacity-50"></i> general</div>
+                        <div class="px-2 py-1 text-xs hover:bg-slate-700 cursor-pointer rounded"><i class="fas fa-hashtag mr-1 opacity-50"></i> dev-ops</div>
+                        <div class="px-2 py-1 text-xs bg-slate-700 text-white rounded font-medium"><i class="fas fa-lock mr-1 text-blue-400"></i> incident-logs</div>
+                    </div>
+                    <div class="p-2 mt-2">
+                        <div class="text-[10px] font-bold text-slate-500 uppercase mb-1 px-2">Direct Messages</div>
+                        <div class="px-2 py-1 text-xs hover:bg-slate-700 cursor-pointer rounded flex items-center"><div class="w-2 h-2 rounded-full bg-green-500 mr-2"></div> SysAdmin Bot</div>
+                    </div>
+                </div>
+                <div class="flex-1 flex flex-col bg-white">
+                    <div class="p-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between shadow-sm shrink-0">
+                        <div class="font-bold text-slate-700 text-sm"><i class="fas fa-lock mr-1 text-slate-400"></i> #incident-logs</div>
+                        <div class="text-xs text-slate-500"><i class="fas fa-user mr-1"></i> 4 members</div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-4 space-y-4 smooth-scroll" id="content-chat"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="settings-modal" class="hidden fixed inset-0 modal-bg z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg shadow-2xl w-[500px] max-w-[95vw] overflow-hidden border border-slate-300 flex flex-col max-h-[90vh]">
+            <div class="bg-slate-800 px-4 py-3 flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-white text-sm"><i class="fas fa-cog mr-2"></i> System Configuration</h3>
+                <button onclick="toggleSettings()" class="text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <div class="p-5 space-y-5 overflow-y-auto flex-1">
+                
+                <!-- Stealth & Privacy Section -->
+                <div class="bg-slate-50 border border-slate-200 rounded p-3">
+                    <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center"><i class="fas fa-user-secret text-indigo-500 mr-2"></i> Security / Stealth Parameters</h4>
+                    
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <label class="text-xs font-semibold text-slate-700">Boss Key Trigger</label>
+                                <p class="text-[10px] text-slate-500">Key to instantly display fake data.</p>
+                            </div>
+                            <input type="text" id="cfg-bosskey" maxlength="1" class="border border-slate-300 rounded w-12 text-center py-1 text-sm font-mono uppercase bg-white">
+                        </div>
+                        
+                        <label class="flex items-center justify-between cursor-pointer">
+                            <div>
+                                <span class="text-xs font-semibold text-slate-700">Auto-Panic Detection</span>
+                                <p class="text-[10px] text-slate-500">Trigger Boss Key when mouse leaves window.</p>
+                            </div>
+                            <input type="checkbox" id="cfg-autopanic" class="w-4 h-4 text-indigo-600 rounded">
+                        </label>
+
+                        <label class="flex items-center justify-between cursor-pointer">
+                            <div>
+                                <span class="text-xs font-semibold text-slate-700">Hover Privacy Filter</span>
+                                <p class="text-[10px] text-slate-500">Blur text rows unless hovered by cursor.</p>
+                            </div>
+                            <input type="checkbox" id="cfg-privacy" class="w-4 h-4 text-indigo-600 rounded">
+                        </label>
+
+                        <label class="flex items-center justify-between cursor-pointer">
+                            <div>
+                                <span class="text-xs font-semibold text-slate-700">Data Entry Mode</span>
+                                <p class="text-[10px] text-slate-500">Typing random keys scrolls/turns pages automatically.</p>
+                            </div>
+                            <input type="checkbox" id="cfg-typing" class="w-4 h-4 text-indigo-600 rounded">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- UI Section -->
+                <div class="bg-slate-50 border border-slate-200 rounded p-3">
+                    <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center"><i class="fas fa-desktop text-blue-500 mr-2"></i> Interface Options</h4>
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <div>
+                            <span class="text-xs font-semibold text-slate-700">Split-Task Dashboard</span>
+                            <p class="text-[10px] text-slate-500">Show notepad sidebar.</p>
+                        </div>
+                        <input type="checkbox" id="cfg-splittask" class="w-4 h-4 text-blue-600 rounded">
+                    </label>
+                </div>
+
+                <!-- State Management Section -->
+                <div class="bg-slate-50 border border-slate-200 rounded p-3">
+                    <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center"><i class="fas fa-database text-emerald-500 mr-2"></i> State Management</h4>
+                    <div class="flex space-x-2 mb-2">
+                        <button onclick="exportState()" class="flex-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 py-1.5 rounded text-xs transition font-medium">
+                            <i class="fas fa-download mr-1"></i> Export State (CSV)
+                        </button>
+                        <label class="flex-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 py-1.5 rounded text-xs transition font-medium text-center cursor-pointer">
+                            <i class="fas fa-upload mr-1"></i> Import State
+                            <input type="file" id="state-import" accept=".csv,.json" class="hidden">
+                        </label>
+                    </div>
+                    <button onclick="clearCache()" class="w-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 py-1.5 rounded text-xs transition font-medium">
+                        <i class="fas fa-trash-alt mr-1"></i> Purge Local Cache (Reset Progress)
+                    </button>
+                </div>
+            </div>
+            
+            <div class="bg-slate-100 px-4 py-3 flex justify-end border-t border-slate-200 shrink-0">
+                <button onclick="saveSettings()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-1.5 rounded text-xs font-bold shadow transition-colors">Apply Config</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data State
+        let textChunks = [];
+        let currentPage = 0;
+        let currentFileName = null;
+        let currentTheme = 'spreadsheet';
+        const LINES_PER_PAGE = 40; // Adjust for reading comfort
+
+        // Settings State
+        const DEFAULTS = { bossKey: 'Z', autoPanic: false, privacy: false, typing: false, splitTask: false };
+        let settings = DEFAULTS;
+        try { settings = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('erp_settings')) }; } catch (e) { }
+        let isBossMode = false;
+
+        // Element Refs
+        const els = {
+            upload: document.getElementById('file-upload'),
+            encoding: document.getElementById('encoding-select'),
+            empty: document.getElementById('empty-state'),
+            chartBar: document.getElementById('chart-bar'),
+            chartPct: document.getElementById('chart-percentage'),
+            splitPanel: document.getElementById('split-panel'),
+            readerContainer: document.getElementById('reader-container'),
+            panicUI: document.getElementById('panic-status-ui'),
+            bossUI: document.getElementById('boss-status-ui'),
+            stateImport: document.getElementById('state-import')
+        };
+
+        const views = {
+            spreadsheet: { el: document.getElementById('view-spreadsheet'), content: document.getElementById('content-spreadsheet') },
+            terminal: { el: document.getElementById('view-terminal'), content: document.getElementById('content-terminal') },
+            report: { el: document.getElementById('view-report'), content: document.getElementById('content-report') },
+            chat: { el: document.getElementById('view-chat'), content: document.getElementById('content-chat') }
+        };
+
+        function init() {
+            // Bind settings to UI inputs
+            document.getElementById('cfg-bosskey').value = settings.bossKey;
+            document.getElementById('cfg-autopanic').checked = settings.autoPanic;
+            document.getElementById('cfg-privacy').checked = settings.privacy;
+            document.getElementById('cfg-typing').checked = settings.typing;
+            document.getElementById('cfg-splittask').checked = settings.splitTask;
+            
+            applySettingsToUI();
+            switchTheme('spreadsheet');
+        }
+
+        function toggleSettings() {
+            document.getElementById('settings-modal').classList.toggle('hidden');
+        }
+
+        function saveSettings() {
+            settings = {
+                bossKey: document.getElementById('cfg-bosskey').value.toUpperCase() || 'Z',
+                autoPanic: document.getElementById('cfg-autopanic').checked,
+                privacy: document.getElementById('cfg-privacy').checked,
+                typing: document.getElementById('cfg-typing').checked,
+                splitTask: document.getElementById('cfg-splittask').checked
+            };
+            localStorage.setItem('erp_settings', JSON.stringify(settings));
+            applySettingsToUI();
+            toggleSettings();
+            renderCurrentPage(); // Re-render to apply privacy classes
+        }
+
+        function applySettingsToUI() {
+            // Auto Panic Status
+            els.panicUI.classList.toggle('hidden', !settings.autoPanic);
+            
+            // Privacy mode applied to container
+            els.readerContainer.classList.toggle('privacy-active', settings.privacy && !isBossMode);
+            
+            // Split Dashboard
+            els.splitPanel.classList.toggle('hidden', !settings.splitTask);
+            els.splitPanel.classList.toggle('flex', settings.splitTask);
+        }
+
+        els.upload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            currentFileName = file.name;
+            document.getElementById('report-doc-id').innerText = currentFileName.substring(0, 10).toUpperCase();
+            els.empty.classList.add('hidden');
+            parseTextFile(file);
+        });
+
+        els.encoding.addEventListener('change', () => {
+            if(els.upload.files[0]) parseTextFile(els.upload.files[0]);
+        });
+
+        // Auto：UTF-8 嚴格解碼失敗 → Big5 → GBK。Big5/GBK 位元組範圍重疊，誤判時用下拉手動指定
+        function decodeAuto(buf) {
+            for (const enc of ['utf-8', 'big5', 'gbk']) {
+                try { return new TextDecoder(enc, { fatal: true }).decode(buf); } catch (e) { }
+            }
+            return new TextDecoder('gbk').decode(buf);
+        }
+
+        async function parseTextFile(file) {
+            const buf = await file.arrayBuffer();
+            const text = els.encoding.value === 'auto' ? decodeAuto(buf) : new TextDecoder(els.encoding.value).decode(buf);
+            textChunks = text.split(/\r?\n/).filter(line => line.trim().length > 0);
+            if (textChunks.length === 0) textChunks = ["No valid text data extracted."];
+            loadProgress();
+            renderCurrentPage();
+        }
+
+        function loadProgress() {
+            if(!currentFileName) return;
+            const saved = localStorage.getItem('erp_prog_' + currentFileName);
+            currentPage = saved ? parseInt(saved, 10) : 0;
+            validatePage();
+        }
+
+        function saveProgress() {
+            if(!currentFileName) return;
+            localStorage.setItem('erp_prog_' + currentFileName, currentPage);
+            updateChart();
+        }
+
+        function clearCache() {
+            if(currentFileName) {
+                localStorage.removeItem('erp_prog_' + currentFileName);
+                currentPage = 0;
+                updateChart();
+                renderCurrentPage();
+                alert('Local cache purged. Tracking reset.');
+            }
+        }
+
+        function validatePage() {
+            const maxPage = Math.max(0, Math.ceil(textChunks.length / LINES_PER_PAGE) - 1);
+            if(currentPage > maxPage) currentPage = maxPage;
+            if(currentPage < 0) currentPage = 0;
+            updateChart();
+        }
+
+        function updateChart() {
+            if(textChunks.length === 0) return;
+            const total = Math.ceil(textChunks.length / LINES_PER_PAGE);
+            const pct = total > 1 ? ((currentPage + 1) / total) * 100 : 100;
+            els.chartBar.style.width = `${pct}%`;
+            els.chartPct.innerText = `${pct.toFixed(2)}%`;
+            
+            // Color change based on progress to look like standard metric
+            els.chartBar.className = `h-full transition-all duration-300 ${pct > 90 ? 'bg-red-500' : pct > 60 ? 'bg-orange-400' : 'bg-blue-500'}`;
+        }
+
+        function exportState() {
+            if(!currentFileName) return alert("No active data node to export state.");
+            // 刻意：內容是 JSON，檔名/MIME 偽裝成 CSV 以避免 IT 注意，請勿「修正」
+            const state = { file: currentFileName, page: currentPage, time: Date.now() };
+            const dataStr = "data:text/csv;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+            const dl = document.createElement('a');
+            dl.setAttribute("href", dataStr);
+            dl.setAttribute("download", "sys_node_backup.csv"); // Disguised name
+            document.body.appendChild(dl);
+            dl.click();
+            dl.remove();
+        }
+
+        els.stateImport.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const state = JSON.parse(ev.target.result);
+                    if(state.file === currentFileName) {
+                        currentPage = state.page || 0;
+                        validatePage();
+                        saveProgress();
+                        renderCurrentPage();
+                        alert("State synchronized.");
+                    } else {
+                        alert("Data mismatch: Current node does not match backup.");
+                    }
+                } catch(e) { alert("Invalid backup format."); }
+            };
+            reader.readAsText(file);
+        });
+
+        function toggleBossMode(force) {
+            isBossMode = force !== undefined ? force : !isBossMode;
+            els.bossUI.classList.toggle('hidden', !isBossMode);
+            els.readerContainer.classList.toggle('privacy-active', settings.privacy && !isBossMode);
+            renderCurrentPage();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if(['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+
+            // Boss Key
+            if(e.key.toUpperCase() === settings.bossKey && !e.ctrlKey && !e.metaKey) {
+                toggleBossMode();
+                return;
+            }
+
+            // Fake Data Entry Scrolling
+            if(settings.typing && !isBossMode && e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+                const activeView = views[currentTheme].el.querySelector('.overflow-auto, .overflow-y-auto') || views[currentTheme].el;
+                activeView.scrollTop += 50;
+                
+                // Pagination logic if hit bottom
+                if(Math.ceil(activeView.scrollTop + activeView.clientHeight) >= activeView.scrollHeight - 5) {
+                    setTimeout(() => changePage(1), 200);
+                }
+            }
+
+            // Arrow keys for manual reading
+            if(e.key === 'ArrowRight' || e.key === 'PageDown') changePage(1);
+            if(e.key === 'ArrowLeft' || e.key === 'PageUp') changePage(-1);
+        });
+
+        // Auto Panic Detection
+        document.addEventListener('mouseleave', () => {
+            if(settings.autoPanic && !isBossMode) {
+                toggleBossMode(true);
+            }
+        });
+
+        function changePage(delta) {
+            if(textChunks.length === 0) return;
+            const oldPage = currentPage;
+            currentPage += delta;
+            validatePage();
+            if(oldPage !== currentPage) {
+                saveProgress();
+                renderCurrentPage();
+            }
+        }
+
+        function switchTheme(theme) {
+            currentTheme = theme;
+            
+            // Tab UI update
+            document.querySelectorAll('.theme-tab').forEach(t => {
+                if(t.id === `tab-${theme}`) {
+                    t.classList.add('bg-white', 'border-slate-300', 'text-slate-800', 'shadow-sm');
+                    t.classList.remove('hover:bg-slate-200', 'border-transparent', 'text-slate-600');
+                } else {
+                    t.classList.remove('bg-white', 'border-slate-300', 'text-slate-800', 'shadow-sm');
+                    t.classList.add('hover:bg-slate-200', 'border-transparent', 'text-slate-600');
+                }
+            });
+
+            // View update
+            Object.keys(views).forEach(k => {
+                views[k].el.classList.toggle('hidden', k !== theme);
+            });
+
+            if(textChunks.length > 0) renderCurrentPage();
+        }
+
+        function escapeHtml(str) {
+            return (str||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+        }
+
+        function getFakeData(idx) {
+            const types = ["SUCCESS", "WARN", "INFO", "OK"];
+            const t = types[idx % types.length];
+            const hex = Math.random().toString(16).slice(2, 8).toUpperCase();
+            return {
+                timestamp: `2026-09-30 ${String(9 + (idx%8)).padStart(2,'0')}:${String((idx*13)%60).padStart(2,'0')}`,
+                status: t,
+                payload: `SYS_PTR[0x${hex}] Data block verified. Memory offset adjusted.`
+            };
+        }
+
+        function renderCurrentPage() {
+            if (textChunks.length === 0) return;
+            
+            const start = currentPage * LINES_PER_PAGE;
+            const end = Math.min(start + LINES_PER_PAGE, textChunks.length);
+            const chunks = textChunks.slice(start, end);
+            
+            const container = views[currentTheme].content;
+            container.innerHTML = '';
+            
+            const frag = document.createDocumentFragment();
+
+            if (currentTheme === 'spreadsheet') {
+                chunks.forEach((chunk, i) => {
+                    const rowIdx = start + i + 1;
+                    const fake = getFakeData(rowIdx);
+                    let content = isBossMode ? fake.payload : escapeHtml(chunk);
+                    
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-slate-200 hover:bg-slate-100 transition-colors content-row';
+                    tr.innerHTML = `
+                        <td class="border-r border-slate-200 px-2 py-1.5 text-center text-slate-400 bg-slate-50 font-mono text-[10px]">${rowIdx}</td>
+                        <td class="border-r border-slate-200 px-3 py-1.5 text-slate-500 font-mono">${fake.timestamp}</td>
+                        <td class="border-r border-slate-200 px-2 py-1.5 text-center text-[9px] font-bold ${fake.status==='WARN'?'text-orange-500':'text-green-600'}">${fake.status}</td>
+                        <td class="px-3 py-1.5 whitespace-normal break-words">${content}</td>
+                    `;
+                    frag.appendChild(tr);
+                });
+            } 
+            else if (currentTheme === 'terminal') {
+                chunks.forEach((chunk, i) => {
+                    let content = isBossMode ? `[DEBUG] Process ID ${Math.floor(Math.random()*9000)} initiated parameter scan.` : escapeHtml(chunk);
+                    const div = document.createElement('div');
+                    div.className = 'flex content-row';
+                    div.innerHTML = `<span class="opacity-50 mr-3 w-4 text-right shrink-0">${(i+1)}</span><span class="break-words">${content}</span>`;
+                    frag.appendChild(div);
+                });
+            }
+            else if (currentTheme === 'report') {
+                chunks.forEach(chunk => {
+                    let content = isBossMode ? "Section review indicates standard operating procedure compliance. No anomalies detected in current fiscal quarter metrics." : escapeHtml(chunk);
+                    const p = document.createElement('p');
+                    p.className = 'content-row indent-6';
+                    if(isBossMode) p.classList.add('text-slate-400', 'font-mono');
+                    p.textContent = content;
+                    frag.appendChild(p);
+                });
+            }
+            else if (currentTheme === 'chat') {
+                const authors = ["SysAdmin Bot", "DevOps_Alerts", "IT Support"];
+                chunks.forEach((chunk, i) => {
+                    const author = authors[i % authors.length];
+                    const fake = getFakeData(start + i);
+                    let content = isBossMode ? `Deployment pipeline finished for module ${Math.random().toString(36).slice(2,6).toUpperCase()}.` : escapeHtml(chunk);
+                    
+                    const div = document.createElement('div');
+                    div.className = 'flex items-start content-row hover:bg-slate-50 p-2 rounded';
+                    div.innerHTML = `
+                        <div class="w-8 h-8 rounded bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold mr-3 shrink-0"><i class="fas fa-robot"></i></div>
+                        <div>
+                            <div class="flex items-baseline mb-0.5">
+                                <span class="font-bold text-slate-800 text-xs mr-2">${author}</span>
+                                <span class="text-[10px] text-slate-400 font-mono">${fake.timestamp}</span>
+                            </div>
+                            <div class="text-slate-700 text-sm leading-snug">${content}</div>
+                        </div>
+                    `;
+                    frag.appendChild(div);
+                });
+            }
+
+            container.appendChild(frag);
+            
+            // Reset scroll position
+            const scrollArea = views[currentTheme].el.querySelector('.overflow-auto, .overflow-y-auto') || views[currentTheme].el;
+            if(scrollArea) scrollArea.scrollTop = 0;
+        }
+
+        // Boot
+        init();
+    </script>
+</body>
+</html>

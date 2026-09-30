@@ -4,10 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/拉圖斯.png" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/artale/papulatus.png" />
     <meta property="og:title" content="Artale 困難拉圖斯 - 輔助工具(手機版)" />
     <meta property="og:description" content="aespaaa 公會製作, 透過分享畫面取得即時遊戲畫面, 提供相關輔助攻略資訊給玩家" />
-    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/artale-papulatus-tool.html" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/game-assist/papulatus.html" />
     <title>Artale 困難拉圖斯 - 輔助工具</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Noto+Sans+TC:wght@500;700&display=swap');
@@ -105,7 +105,7 @@
         }
 
         /* 修改：手機橫放或寬螢幕時，固定為三欄並列不換行 */
-        @media (min-width: 600px) or (orientation: landscape) {
+        @media (min-width: 600px), (orientation: landscape) {
             .timer-grid {
                 grid-template-columns: repeat(3, 1fr);
             }
@@ -391,7 +391,30 @@
             water: { timeLeft: 70, interval: null, running: false, lastClick: 0 },
             system: { timeLeft: 10, interval: null, running: false, lastClick: 0 }
         };
+        const DEFAULTS = { mobs: 50, water: 70, system: 10 };
         let voiceUnlocked = false;
+        let wakeLock = null;
+
+        // 空值 / 非正數一律退回預設秒數
+        function getDuration(id) {
+            const v = parseFloat(document.getElementById(`input-${id}`).value);
+            return v > 0 ? v : DEFAULTS[id];
+        }
+
+        // 計時中保持螢幕常亮（手機鎖屏會讓計時停擺）；不支援的瀏覽器直接略過
+        async function syncWakeLock() {
+            if (!('wakeLock' in navigator)) return;
+            const anyRunning = Object.values(timers).some(t => t.running);
+            try {
+                if (anyRunning && !wakeLock) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => wakeLock = null);
+                } else if (!anyRunning && wakeLock) {
+                    await wakeLock.release();
+                }
+            } catch (e) { }
+        }
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncWakeLock(); });
 
         function toggleCard(id, show) {
             const card = document.getElementById(`card-${id}`);
@@ -425,7 +448,7 @@
             if (!voiceUnlocked) unlockVoice();
             const now = Date.now();
             const timer = timers[id];
-            const inputVal = parseFloat(document.getElementById(`input-${id}`).value) || 10;
+            const inputVal = getDuration(id);
             const quickRestart = document.getElementById(`quick-${id}`).checked;
 
             // 雙擊：重置並暫停
@@ -471,11 +494,14 @@
             display.classList.add('running-text');
             card.classList.add('active');
 
+            // 以絕對時間計算剩餘秒數：setInterval 會漂移，背景分頁還會被降頻
+            timer.endAt = Date.now() + timer.timeLeft * 1000;
             timer.interval = setInterval(() => {
-                timer.timeLeft -= 0.1;
+                const now = Date.now();
+                timer.timeLeft = (timer.endAt - now) / 1000;
                 const autoRestart = document.getElementById(`restart-${id}`).checked;
                 const isVoiceEnabled = document.getElementById(`voice-${id}`).checked;
-                const inputVal = parseFloat(document.getElementById(`input-${id}`).value);
+                const inputVal = getDuration(id);
 
                 if (timer.timeLeft <= 0) {
                     if (isVoiceEnabled) {
@@ -486,7 +512,10 @@
                     if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
 
                     if (autoRestart) {
-                        timer.timeLeft = inputVal;
+                        // 由上一輪終點續算，避免誤差累積；落後太多（被降頻）則從現在重算
+                        timer.endAt += inputVal * 1000;
+                        if (timer.endAt <= now) timer.endAt = now + inputVal * 1000;
+                        timer.timeLeft = (timer.endAt - now) / 1000;
                     } else {
                         pauseTimer(id);
                         timer.timeLeft = inputVal;
@@ -495,6 +524,7 @@
                 }
                 display.innerText = Math.max(0, timer.timeLeft).toFixed(1);
             }, 100);
+            syncWakeLock();
         }
 
         function pauseTimer(id) {
@@ -509,6 +539,7 @@
             btn.innerText = "繼續倒數";
             display.classList.remove('running-text');
             card.classList.remove('active');
+            syncWakeLock();
         }
 
         function resetTimer(id, duration) {
@@ -525,6 +556,7 @@
             btn.innerText = "開始倒數";
             btn.classList.remove('is-running');
             card.classList.remove('active');
+            syncWakeLock();
         }
 
         function resetSetting(id, defaultVal) {
@@ -532,9 +564,15 @@
             resetTimer(id, defaultVal);
         }
 
+        // 閒置時修改秒數要立即反映在畫面與下次倒數
+        Object.keys(timers).forEach(id => {
+            document.getElementById(`input-${id}`).addEventListener('change', () => {
+                if (!timers[id].running) resetTimer(id, getDuration(id));
+            });
+        });
+
         function speak(text) {
             if (!('speechSynthesis' in window)) return;
-            window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'zh-TW';
             utterance.pitch = 1; utterance.rate = 1.2; utterance.volume = 1;

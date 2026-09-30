@@ -4,10 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/楓葉.png" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/artale/maple-leaf.png" />
     <meta property="og:title" content="Artale - 五子棋小遊戲" />
     <meta property="og:description" content="aespaaa 公會製作, 參照楓之谷五子棋" />
-    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/artale-gobang.html" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/gobang.html" />
     <title>Artale - 五子棋小遊戲</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
@@ -477,8 +477,6 @@
         let gameActive = false;
         let turn = "black"; // black starts first
         let myColor = ""; // "black" (host) or "white" (guest)
-        let boardHeight = 15;
-        let boardWidth = 15;
         let board = Array(15).fill().map(() => Array(15).fill(null));
         let scores = { host: 0, guest: 0 };
         let nextStarter = "black"; // Host is Black and starts first by default
@@ -570,6 +568,7 @@
         function startHost() {
             setLoading(true, "建立房間中...");
             peer = new Peer({ debug: 1 });
+            peer.on('error', onPeerError);
             peer.on('open', (id) => {
                 p2pId = id;
                 isHost = true;
@@ -594,11 +593,19 @@
             });
         }
 
+        function onPeerError(err) {
+            setLoading(false);
+            conn = null;
+            log(`連線失敗：${err.type}`, "error");
+            alert(err.type === 'peer-unavailable' ? "找不到該房間，請確認房號。" : "連線失敗，請重新整理後再試。");
+        }
+
         function startJoin() {
             const id = els.joinInput.value.trim();
             if (!id) return alert("請輸入房號");
             setLoading(true, "連接中...");
             peer = new Peer({ debug: 1 });
+            peer.on('error', onPeerError);
             peer.on('open', () => {
                 conn = peer.connect(id);
                 setupConnection();
@@ -636,7 +643,8 @@
             els.btnEditNick.classList.remove("hidden");
             els.connPanel.classList.add("hidden");
             els.btnLeave.classList.remove("hidden");
-            
+            els.btnReset.style.display = "inline-flex";
+
             resetTotalState();
             gameActive = true;
             myColor = "black"; // Not strictly used in local, but for compatibility
@@ -648,6 +656,7 @@
         function resetTotalState() {
             scores = { host: 0, guest: 0 };
             nextStarter = "black";
+            turn = "black";
             lastMovePos = null;
             board = Array(15).fill().map(() => Array(15).fill(null));
             createBoard();
@@ -670,6 +679,10 @@
                 els.status.innerText = `遊戲開始！房主 (${data.hostNick}) 黑子先行`;
                 renderNicknameTags(data.hostNick);
             } else if (data.type === 'MOVE') {
+                const { r, c, color } = data;
+                const ok = gameActive && Number.isInteger(r) && Number.isInteger(c) && r >= 0 && r < 15 && c >= 0 && c < 15
+                    && !board[r][c] && color === turn && color !== myColor;
+                if (!ok) return log("忽略非法落子", "error");
                 placePiece(data.r, data.c, data.color);
                 turn = data.color === "black" ? "white" : "black";
                 checkWin(data.r, data.c, data.color);
@@ -712,7 +725,7 @@
 
             const currentColor = turn;
 
-            // TODO: 黑棋禁手檢查 (3-3, 4-4, 長連)
+            // 黑棋禁手：3-3 / 4-4 / 長連
             if (currentColor === "black" && isForbidden(r, c)) {
                 log("禁手！不能下在這裡 (3-3 / 4-4 / 長連)", "error");
                 return;
@@ -726,10 +739,7 @@
             
             turn = (currentColor === "black") ? "white" : "black";
             
-            if (checkWin(r, c, currentColor)) {
-                // Victory logic handled in checkWin
-            }
-            updateStatus();
+            if (!checkWin(r, c, currentColor)) updateStatus();
         }
 
         function placePiece(r, c, color) {
@@ -756,7 +766,7 @@
 
         function updateStatus() {
             if (!gameActive) return;
-            const currentTurnNick = (turn === myColor) ? "您的回合" : "對方的回合";
+            const currentTurnNick = isLocalMode ? "輪到" : (turn === myColor) ? "您的回合" : "對方的回合";
             els.status.innerText = `${currentTurnNick} (${turn === 'black' ? '黑子' : '白子'})`;
         }
 
@@ -795,6 +805,13 @@
                     return true;
                 }
             }
+            // 和局：棋盤下滿且無人五連（雙方各自偵測，不需同步）
+            if (board.every(row => row.every(Boolean))) {
+                gameActive = false;
+                els.status.innerHTML = `<span style="font-size:20px;">和局</span>`;
+                log("棋盤已滿，和局。", "info");
+                return true;
+            }
             return false;
         }
 
@@ -807,16 +824,18 @@
             let threeCount = 0;
             let fourCount = 0;
             let overLine = false;
+            let exactFive = false;
 
             for (let [dr, dc] of directions) {
                 const lineInfo = getLineInfo(r, c, dr, dc, "black");
 
                 // Long-link check (Overline: > 5)
                 if (lineInfo.count > 5) overLine = true;
+                if (lineInfo.count === 5) exactFive = true;
 
                 // Four check (4 in a row)
-                // In MS rules, both "Live Four" and "Jump Four" count towards 4-4
-                if (lineInfo.count === 4) fourCount++;
+                // 兩端都被堵死的四不算四；跳四 (XX_XX) 目前未計入
+                if (lineInfo.count === 4 && (lineInfo.leftOpen || lineInfo.rightOpen)) fourCount++;
 
                 // Three check (Live Three)
                 if (lineInfo.count === 3 && lineInfo.isLive) threeCount++;
@@ -824,6 +843,7 @@
 
             board[r][c] = null; // Revert
 
+            if (exactFive) return false; // 剛好五連即獲勝，優先於禁手
             if (overLine) return true; // Long link is forbidden for black
             if (threeCount >= 2) return true; // 3-3 is forbidden
             if (fourCount >= 2) return true; // 4-4 is forbidden
@@ -866,13 +886,13 @@
             // To simplify, we'll check if it has space to become 5.
             let isLive = leftOpen && rightOpen;
 
-            return { count, isLive };
+            return { count, isLive, leftOpen, rightOpen };
         }
 
         function resetGame() {
-            if (!isHost) return;
+            if (!isHost && !isLocalMode) return;
             resetLocal();
-            conn.send({ type: 'RESET', scores, nextStarter });
+            if (conn) conn.send({ type: 'RESET', scores, nextStarter });
         }
 
         function resetLocal() {
@@ -888,7 +908,7 @@
 
         function copyInvite() {
             const url = `${window.location.origin}${window.location.pathname}#${p2pId}`;
-            navigator.clipboard.writeText(url).then(() => alert("邀請連結已複製！"));
+            navigator.clipboard.writeText(url).then(() => alert("邀請連結已複製！"), () => prompt("請手動複製邀請連結：", url));
         }
 
         function leaveRoom() {

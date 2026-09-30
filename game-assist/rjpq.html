@@ -8,7 +8,7 @@
         />
         <meta
             property="og:image"
-            content="https://andynavy23.github.io/simple_tools/猶利塔.png"
+            content="https://andynavy23.github.io/simple_tools/assets/artale/yulete.png"
         />
         <meta property="og:title" content="Artale RJPQ - 輔助工具" />
         <meta
@@ -17,7 +17,7 @@
         />
         <meta
             property="og:url"
-            content="https://andynavy23.github.io/simple_tools/artale-rjpq-tool.html"
+            content="https://andynavy23.github.io/simple_tools/game-assist/rjpq.html"
         />
         <title>Artale RJPQ - 輔助工具</title>
         <!-- 使用 PeerJS 進行 P2P 連線 -->
@@ -1093,6 +1093,7 @@
                 "hsl(15, 80%, 40%)", // 赭石
             ];
 
+            const NICK_RE = /^[a-zA-Z0-9\u4e00-\u9fa5]{1,10}$/;
             let pipWindow = null;
 
             // === 工具函式 ===
@@ -1146,7 +1147,7 @@
                 if (val === "") {
                     val = "冒險者" + Math.floor(1000 + Math.random() * 9000);
                 }
-                if (!/^[a-zA-Z0-9\u4e00-\u9fa5]{1,10}$/.test(val)) {
+                if (!NICK_RE.test(val)) {
                     return alert("暱稱請使用 1-10 位英數或中文字。");
                 }
 
@@ -1236,6 +1237,15 @@
                 // 禁用房間操作直到新暱稱確定
                 getDoc().getElementById("btn-host").disabled = true;
                 getDoc().getElementById("btn-join").disabled = true;
+            }
+
+            // 連線失敗後恢復「建立 / 加入」操作（尚未進房時才適用）
+            function enableRoomControls() {
+                getDoc().getElementById("btn-host").disabled = false;
+                getDoc().getElementById("btn-join").disabled = false;
+                const ji = getDoc().getElementById("join-id");
+                if (ji) ji.disabled = false;
+                setStatus("🔴 未連線", "#999");
             }
 
             function setStatus(text, color = "#999") {
@@ -1335,6 +1345,7 @@
                             "找不到房號，請確認房號正確，或嘗試重新「建立房間」。",
                         );
                     }
+                    if (!isHost && mySlotIndex === -1 && myNick) enableRoomControls();
                 });
             }
 
@@ -1425,12 +1436,7 @@
                             alert(
                                 "連線超時，請檢查房號是否正確，或是嘗試重新點擊加入。",
                             );
-                            // 恢復設定 UI
-                            getDoc().getElementById("btn-host").disabled =
-                                false;
-                            getDoc().getElementById("btn-join").disabled =
-                                false;
-                            if (ji) ji.disabled = false;
+                            enableRoomControls();
                         }
                     }, 10000);
                 });
@@ -1471,13 +1477,27 @@
             }
 
             function handleP2PMessage(conn, data) {
+                if (!data || typeof data.type !== "string") return;
+                // 房主 → 成員的訊息只信任房主連線，避免他人偽造/覆蓋狀態
+                const fromHost = !isHost && conn.peer === hostPeerId;
+
                 if (data.type === "JOIN") {
                     if (!isHost) return;
 
-                    // 1. 檢查槽位是否已滿
-                    const freeIndex = gameState.slots.findIndex(
-                        (s) => s === null || !s.connected,
+                    if (typeof data.nick !== "string" || !NICK_RE.test(data.nick)) {
+                        conn.send({ type: "REJECT", reason: "暱稱格式錯誤。" });
+                        setTimeout(() => conn.close(), 500);
+                        return;
+                    }
+
+                    // 1. 檢查槽位是否已滿（優先沿用同暱稱的離線槽位，讓斷線者能回到原位）
+                    let freeIndex = gameState.slots.findIndex(
+                        (s) => s && !s.connected && s.nick === data.nick,
                     );
+                    if (freeIndex === -1)
+                        freeIndex = gameState.slots.findIndex(
+                            (s) => s === null || !s.connected,
+                        );
                     if (freeIndex === -1) {
                         conn.send({
                             type: "REJECT",
@@ -1489,7 +1509,9 @@
 
                     // 2. 暱稱重複檢查
                     if (
-                        gameState.slots.some((s) => s && s.nick === data.nick)
+                        gameState.slots.some(
+                            (s) => s && s.connected && s.nick === data.nick,
+                        )
                     ) {
                         conn.send({
                             type: "REJECT",
@@ -1500,19 +1522,12 @@
                     }
 
                     // 3. 顏色檢查與分配
+                    const colorTaken = (c) =>
+                        gameState.slots.some((s) => s && s.connected && s.color === c);
                     let assignedColor = data.color;
-                    if (
-                        gameState.slots.some(
-                            (s) => s && s.color === assignedColor,
-                        )
-                    ) {
+                    if (!PRESET_COLORS.includes(assignedColor) || colorTaken(assignedColor)) {
                         assignedColor =
-                            PRESET_COLORS.find(
-                                (c) =>
-                                    !gameState.slots.some(
-                                        (s) => s && s.color === c,
-                                    ),
-                            ) || assignedColor;
+                            PRESET_COLORS.find((c) => !colorTaken(c)) || PRESET_COLORS[0];
                     }
 
                     // 4. 寫入槽位
@@ -1536,6 +1551,7 @@
                     broadcastState();
                     refreshUI();
                 } else if (data.type === "STATE_SYNC") {
+                    if (!fromHost) return;
                     // 收到房主廣播的全量狀態
                     gameState = data.state;
                     setLoading(false);
@@ -1559,11 +1575,12 @@
 
                     refreshUI();
                 } else if (data.type === "REJECT") {
+                    if (!fromHost) return;
                     setLoading(false);
                     alert(data.reason);
                     conn.close();
                 } else if (data.type === "KICK") {
-                    if (data.targetId === fullMyId) {
+                    if (fromHost && data.targetId === fullMyId) {
                         alert("您已被房主踢出房間。系統將進行重置。");
                         resetSettings(); // 完全重置
                     }
@@ -1581,10 +1598,20 @@
                 const slot = gameState.slots.find((s) => s && s.peerId === pId);
                 if (!slot) return;
 
+                // 重置 / 踢人僅房主可下
+                if ((cmd.type === "CMD_RESET" || cmd.type === "CMD_KICK") && !slot.isHost) return;
+
                 if (cmd.type === "CMD_MARKER") {
-                    const { f, d, mType } = cmd; // mType: 'pass' | 'dead' | 'clear'
+                    const { f, d, mType } = cmd; // mType: 'pass' | 'dead' | 'clear_pass' | 'clear_dead'
+                    if (!Number.isInteger(f) || f < 0 || f > 9 || !Number.isInteger(d) || d < 0 || d > 3) return;
+                    if (!["pass", "dead", "clear_pass", "clear_dead"].includes(mType)) return;
 
                     if (mType === "pass") {
+                        // 每個門只能一人佔用（各端畫面可能有延遲，以房主為準）
+                        const taken = gameState.slots.some(
+                            (s) => s && s.connected && s !== slot && s.passMarkers.some((m) => m.f === f && m.d === d),
+                        );
+                        if (taken) return;
                         // 清除同層自己的舊 Pass 標記
                         slot.passMarkers = slot.passMarkers.filter(
                             (m) => m.f !== f,
@@ -1592,20 +1619,28 @@
                         slot.passMarkers.push({ f, d });
                         // 保留該格子的死路標記，以便誤點時取消通路能恢復
                     } else if (mType === "dead") {
-                        slot.deadEndMarkers.push({ f, d });
+                        if (!slot.deadEndMarkers.some((m) => m.f === f && m.d === d))
+                            slot.deadEndMarkers.push({ f, d });
                         slot.passMarkers = slot.passMarkers.filter(
                             (m) => !(m.f === f && m.d === d),
                         );
                     } else if (mType === "clear_pass") {
-                        slot.passMarkers = slot.passMarkers.filter(
-                            (m) => !(m.f === f && m.d === d),
-                        );
+                        // 房主可取消任何人的通路標記，其餘人只能取消自己的
+                        (slot.isHost ? gameState.slots.filter(Boolean) : [slot]).forEach((t) => {
+                            t.passMarkers = t.passMarkers.filter(
+                                (m) => !(m.f === f && m.d === d),
+                            );
+                        });
                     } else if (mType === "clear_dead") {
                         slot.deadEndMarkers = slot.deadEndMarkers.filter(
                             (m) => !(m.f === f && m.d === d),
                         );
                     }
                 } else if (cmd.type === "CMD_COLOR") {
+                    const taken = gameState.slots.some(
+                        (s) => s && s.connected && s !== slot && s.color === cmd.color,
+                    );
+                    if (!PRESET_COLORS.includes(cmd.color) || taken) return;
                     slot.color = cmd.color;
                 } else if (cmd.type === "CMD_RESET") {
                     gameState.slots.forEach((s) => {
@@ -1617,7 +1652,7 @@
                     gameState.clearCount = (gameState.clearCount || 0) + 1;
                 } else if (cmd.type === "CMD_KICK") {
                     const target = gameState.slots[cmd.targetIndex];
-                    if (target) {
+                    if (target && !target.isHost) {
                         const tConn = connections[target.peerId]?.conn;
                         if (tConn) {
                             tConn.send({
@@ -1667,7 +1702,7 @@
 
                     const icon = s.isHost ? "👑 " : "👤 ";
                     const isMe = s.index === mySlotIndex ? " (我)" : "";
-                    tag.innerHTML = icon + s.nick + isMe;
+                    tag.textContent = icon + s.nick + isMe;
                     if (s.index === mySlotIndex) {
                         tag.style.fontWeight = "900";
                         tag.style.textDecoration = "underline";
@@ -1705,12 +1740,6 @@
                     const hostConn = connections[hostPeerId];
                     if (hostConn && hostConn.conn.open) {
                         hostConn.conn.send(msg);
-                    } else {
-                        const fallback = Object.values(connections).find(
-                            (c) => c.nick === "房主",
-                        );
-                        if (fallback && fallback.conn.open)
-                            fallback.conn.send(msg);
                     }
                 }
             }
@@ -1721,9 +1750,10 @@
                     window.location.pathname +
                     "#" +
                     fullMyId;
-                navigator.clipboard.writeText(url).then(() => {
-                    alert("連結已複製！");
-                });
+                navigator.clipboard.writeText(url).then(
+                    () => alert("連結已複製！"),
+                    () => prompt("請手動複製邀請連結：", url),
+                );
             }
 
             // === 地圖邏輯 ===
