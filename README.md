@@ -16,6 +16,9 @@
 | [決策轉盤](fun/wheel.html) | 趣味 | 輸入選項轉盤決定，支援權重，清單自動記住 |
 | [番茄鐘](fun/pomodoro.html) | 趣味 | 專注 / 休息 / 長休息自動輪替，記錄今日番茄數 |
 | [純文字整理](utils/text-tools.html) | 工具 | 去重複、排序、刪空行、全半形、大小寫，可復原 |
+| [隨機分組 / 抽籤](fun/random-groups.html) | 趣味 | 貼上名單，分成 N 組、每組 M 人，或抽出 K 人 |
+| [單位與匯率換算](utils/unit-converter.html) | 工具 | 長度、重量、坪、溫度等單位，以及即時匯率（需連網，有離線快取） |
+| [密碼產生器](utils/password-gen.html) | 工具 | 以瀏覽器安全亂數在本機產生密碼，可排除易混淆字元 |
 | [摸魚閱讀器](reading/stealth-reader.html) | 閱讀 | 本機載入 txt 小說，偽裝 ERP 後台、老闆鍵、進度記憶（開發中） |
 
 ## 專案結構
@@ -40,7 +43,7 @@ temp_*                  開發中的暫存檔，已被 .gitignore 忽略
 
 ## 本機使用
 
-直接開啟 `index.html` 即可；連線功能（PeerJS）與部分字型 / 套件來自 CDN，需要網路。
+直接開啟 `index.html` 即可；連線功能（PeerJS）、部分字型 / 套件來自 CDN，匯率換算會呼叫 [Exchange Rate API](https://www.exchangerate-api.com)，這些需要網路。
 
 ## 支持
 
