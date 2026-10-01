@@ -13,14 +13,17 @@
 | [RJPQ 門位標記](game-assist/rjpq.html) | 遊戲輔助 | 10 層 × 4 門標記，全隊即時共享 |
 | [五子棋](mini-games/gobang.html) | 小遊戲 | 楓之谷像素風五子棋，本地雙人或房號連線 |
 | [幸運頻道計算機](fun/lucky-channel.html) | 趣味 | 依角色、怪物、日期算今日幸運頻道 |
+| [決策轉盤](fun/wheel.html) | 趣味 | 輸入選項轉盤決定，支援權重，清單自動記住 |
+| [番茄鐘](fun/pomodoro.html) | 趣味 | 專注 / 休息 / 長休息自動輪替，記錄今日番茄數 |
+| [純文字整理](utils/text-tools.html) | 工具 | 去重複、排序、刪空行、全半形、大小寫，可復原 |
 | [摸魚閱讀器](reading/stealth-reader.html) | 閱讀 | 本機載入 txt 小說，偽裝 ERP 後台、老闆鍵、進度記憶（開發中） |
 
 ## 專案結構
 
 ```text
 index.html              工具箱首頁（只負責導覽，分類與搜尋自動依卡片產生）
-game-assist/ mini-games/ fun/ reading/
-                        資料夾 = 首頁分類（遊戲輔助 / 小遊戲 / 趣味 / 閱讀），
+game-assist/ mini-games/ fun/ utils/ reading/
+                        資料夾 = 首頁分類（遊戲輔助 / 小遊戲 / 趣味 / 工具 / 閱讀），
                         每個工具一支獨立 HTML，CSS / JS 內嵌，工具間互不共用
 assets/<game>/          遊戲素材圖片（例如 assets/artale/，供 og:image 使用）
 assets/og-image.*       首頁分享預覽圖（og-image.html 為來源，以 Edge headless 截圖成 PNG）

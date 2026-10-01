@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="純文字整理工具：去重複行、排序、刪空行、全形半形轉換、大小寫，全部在本機處理。">
+    <meta property="og:title" content="純文字整理工具" />
+    <meta property="og:description" content="去重複、排序、刪空行、全半形轉換，全部在本機處理。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/text-tools.html" />
+    <title>純文字整理工具</title>
+    <style>
+        :root {
+            --bg: #f5f5f7;
+            --card: #fff;
+            --text: #1d1d1f;
+            --muted: #6e6e73;
+            --fill: rgba(118, 118, 128, .12);
+            --blue: #0071e3;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000;
+                --card: #1c1c1e;
+                --text: #f5f5f7;
+                --muted: #98989d;
+                --fill: rgba(118, 118, 128, .24);
+                --blue: #2997ff;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0 20px;
+            font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .wrap {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 24px 0 48px;
+        }
+
+        a.back {
+            color: var(--blue);
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin: 12px 0 4px;
+            letter-spacing: -.02em;
+        }
+
+        .sub {
+            color: var(--muted);
+            margin: 0 0 20px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 18px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 260px;
+            resize: vertical;
+            font: 15px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans TC", monospace;
+            color: var(--text);
+            background: var(--fill);
+            border: 0;
+            border-radius: 12px;
+            padding: 10px 12px;
+        }
+
+        .btns {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        button {
+            font: inherit;
+            font-size: 14px;
+            border: 0;
+            border-radius: 980px;
+            padding: 7px 14px;
+            background: var(--fill);
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        button.primary {
+            background: var(--blue);
+            color: #fff;
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>純文字整理工具</h1>
+        <p class="sub">貼上文字，點按鈕處理，可連續套用。所有處理都在你的瀏覽器內完成。</p>
+
+        <div class="card">
+            <textarea id="text" placeholder="在這裡貼上文字…" aria-label="文字內容"></textarea>
+            <div class="row">
+                <span id="stat">0 行 ・ 0 字</span>
+                <span><button id="undo">復原</button> <button class="primary" id="copy">複製</button></span>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="btns" id="ops"></div>
+        </div>
+    </div>
+
+    <script>
+        // 每個操作：字串進、字串出
+        const lines = (f) => (t) => f(t.split('\n')).join('\n');
+        const cmp = (a, b) => a.localeCompare(b, 'zh-Hant', { numeric: true });
+        const OPS = {
+            '去除重複行': lines(a => [...new Set(a)]),
+            '排序 A→Z': lines(a => [...a].sort(cmp)),
+            '排序 Z→A': lines(a => [...a].sort((x, y) => cmp(y, x))),
+            '反轉行序': lines(a => [...a].reverse()),
+            '刪除空白行': lines(a => a.filter(l => l.trim() !== '')),
+            '去除行首尾空白': lines(a => a.map(l => l.trim())),
+            '全形 → 半形': t => t.replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/　/g, ' '),
+            '半形 → 全形': t => t.replace(/[!-~]/g, c => String.fromCharCode(c.charCodeAt(0) + 0xFEE0)).replace(/ /g, '　'),
+            '轉大寫': t => t.toUpperCase(),
+            '轉小寫': t => t.toLowerCase(),
+        };
+
+        const $ = (s) => document.querySelector(s);
+        const ta = $('#text');
+        let history = [];
+
+        function stat() {
+            const v = ta.value;
+            $('#stat').textContent = `${v ? v.split('\n').length : 0} 行 ・ ${v.length} 字`;
+        }
+
+        for (const [name, fn] of Object.entries(OPS)) {
+            const b = document.createElement('button');
+            b.textContent = name;
+            b.onclick = () => {
+                history.push(ta.value);
+                if (history.length > 50) history.shift();
+                ta.value = fn(ta.value.replace(/\r\n/g, '\n'));
+                stat();
+            };
+            $('#ops').append(b);
+        }
+
+        $('#undo').onclick = () => { if (history.length) { ta.value = history.pop(); stat(); } };
+        $('#copy').onclick = async () => {
+            const b = $('#copy');
+            try {
+                await navigator.clipboard.writeText(ta.value);
+                b.textContent = '已複製';
+            } catch (e) {
+                ta.select();
+                b.textContent = '請按 Ctrl+C';
+            }
+            setTimeout(() => b.textContent = '複製', 1500);
+        };
+        ta.oninput = stat;
+        stat();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="決策轉盤：輸入選項，轉一下幫你決定。支援權重、自動記住清單。">
+    <meta property="og:title" content="決策轉盤" />
+    <meta property="og:description" content="輸入選項，轉一下幫你決定。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/wheel.html" />
+    <title>決策轉盤</title>
+    <style>
+        :root {
+            --bg: #f5f5f7;
+            --card: #fff;
+            --text: #1d1d1f;
+            --muted: #6e6e73;
+            --fill: rgba(118, 118, 128, .12);
+            --blue: #0071e3;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000;
+                --card: #1c1c1e;
+                --text: #f5f5f7;
+                --muted: #98989d;
+                --fill: rgba(118, 118, 128, .24);
+                --blue: #2997ff;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0 20px;
+            font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .wrap {
+            max-width: 560px;
+            margin: 0 auto;
+            padding: 24px 0 48px;
+        }
+
+        a.back {
+            color: var(--blue);
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin: 12px 0 4px;
+            letter-spacing: -.02em;
+        }
+
+        .sub {
+            color: var(--muted);
+            margin: 0 0 20px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 18px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .stage {
+            position: relative;
+            width: min(100%, 360px);
+            margin: 0 auto;
+        }
+
+        canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .pointer {
+            position: absolute;
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 12px solid transparent;
+            border-top: 22px solid var(--text);
+            border-bottom: 0;
+        }
+
+        #result {
+            min-height: 2em;
+            margin: 14px 0 10px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        button {
+            display: block;
+            margin: 0 auto;
+            font: inherit;
+            font-size: 17px;
+            border: 0;
+            border-radius: 980px;
+            padding: 10px 32px;
+            background: var(--blue);
+            color: #fff;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: .5;
+            cursor: default;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            resize: vertical;
+            font: inherit;
+            color: var(--text);
+            background: var(--fill);
+            border: 0;
+            border-radius: 12px;
+            padding: 10px 12px;
+        }
+
+        label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .hint {
+            color: var(--muted);
+            font-size: 13px;
+            margin: 6px 0 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>決策轉盤</h1>
+        <p class="sub">想不出來就交給轉盤。</p>
+
+        <div class="card">
+            <div class="stage">
+                <canvas id="wheel" width="720" height="720" aria-label="轉盤"></canvas>
+                <div class="pointer"></div>
+            </div>
+            <div id="result" aria-live="polite"></div>
+            <button id="spin">開始轉</button>
+        </div>
+
+        <div class="card">
+            <label for="items">選項（一行一個）</label>
+            <textarea id="items"></textarea>
+            <p class="hint">加權重：在名稱後面寫 <b>*數字</b>，例如「燒肉*3」代表被選中機率是其他的 3 倍。清單會自動儲存在這個瀏覽器。</p>
+        </div>
+    </div>
+
+    <script>
+        const $ = (s) => document.querySelector(s);
+        const ta = $('#items'), cv = $('#wheel'), ctx = cv.getContext('2d');
+        const btn = $('#spin'), out = $('#result');
+        const KEY = 'wheel_items', TAU = Math.PI * 2;
+        const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        let angle = 0, spinning = false;
+
+        try { ta.value = localStorage.getItem(KEY) ?? ''; } catch (e) { }
+        if (!ta.value) ta.value = '拉麵\n便當*2\n燒肉\n麥當勞\n自己煮';
+
+        function parse() {
+            return ta.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+                const m = l.match(/^(.*?)\s*\*\s*(\d+(?:\.\d+)?)$/);
+                return m && m[1] ? { name: m[1], w: +m[2] } : { name: l, w: 1 };
+            }).filter(i => i.w > 0);
+        }
+
+        function draw() {
+            const items = parse(), n = items.length, R = cv.width / 2;
+            ctx.clearRect(0, 0, cv.width, cv.height);
+            if (!n) return;
+            const total = items.reduce((s, i) => s + i.w, 0);
+            let a = angle;
+            items.forEach((it, i) => {
+                const span = it.w / total * TAU;
+                ctx.beginPath();
+                ctx.moveTo(R, R);
+                ctx.arc(R, R, R - 4, a, a + span);
+                ctx.fillStyle = `hsl(${i * 360 / n}, 70%, 55%)`;
+                ctx.fill();
+                ctx.save();
+                ctx.translate(R, R);
+                ctx.rotate(a + span / 2);
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 34px sans-serif';
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                const label = it.name.length > 8 ? it.name.slice(0, 7) + '…' : it.name;
+                ctx.fillText(label, R - 28, 0);
+                ctx.restore();
+                a += span;
+            });
+        }
+
+        function spin() {
+            const items = parse();
+            if (items.length < 2) { out.textContent = '請至少輸入 2 個選項'; return; }
+            const total = items.reduce((s, i) => s + i.w, 0);
+            // 先抽出贏家，再讓轉盤停在那一格（落點在該格內隨機，避免永遠停在中線）
+            let r = Math.random() * total, k = 0;
+            while (k < items.length - 1 && r >= items[k].w) r -= items[k++].w;
+            const before = items.slice(0, k).reduce((s, i) => s + i.w, 0);
+            const offset = (before + items[k].w * (0.15 + Math.random() * 0.7)) / total * TAU;
+            // 指針在正上方 (-90°)：offset 位置轉到那裡所需的角度，再多轉 5 圈
+            const base = -Math.PI / 2 - offset;
+            const from = angle;
+            const to = from + (((base - from) % TAU) + TAU) % TAU + TAU * 5;
+            const done = () => {
+                angle = to % TAU;
+                draw();
+                spinning = false;
+                btn.disabled = false;
+                out.textContent = '🎉 ' + items[k].name;
+            };
+            spinning = true;
+            btn.disabled = true;
+            out.textContent = '';
+            if (reduceMotion) return done();
+            const t0 = performance.now(), dur = 4500;
+            (function frame(now) {
+                const t = Math.min(1, (now - t0) / dur);
+                angle = from + (to - from) * (1 - Math.pow(1 - t, 3));
+                draw();
+                t < 1 ? requestAnimationFrame(frame) : done();
+            })(t0);
+        }
+
+        btn.onclick = spin;
+        ta.oninput = () => {
+            try { localStorage.setItem(KEY, ta.value); } catch (e) { }
+            if (!spinning) { out.textContent = ''; draw(); }
+        };
+        draw();
+    </script>
+</body>
+
+</html>
