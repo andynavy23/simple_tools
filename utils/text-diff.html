@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="文字差異比對：貼上兩段文字，逐行標出新增與刪除，全部在本機處理。">
+    <meta property="og:title" content="文字差異比對" />
+    <meta property="og:description" content="貼上兩段文字，逐行標出新增與刪除。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/text-diff.html" />
+    <title>文字差異比對</title>
+    <style>
+        :root {
+            --bg: #f5f5f7;
+            --card: #fff;
+            --text: #1d1d1f;
+            --muted: #6e6e73;
+            --fill: rgba(118, 118, 128, .12);
+            --blue: #0071e3;
+            --add: rgba(48, 209, 88, .22);
+            --del: rgba(255, 69, 58, .22);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000;
+                --card: #1c1c1e;
+                --text: #f5f5f7;
+                --muted: #98989d;
+                --fill: rgba(118, 118, 128, .24);
+                --blue: #2997ff;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0 20px;
+            font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .wrap {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 24px 0 48px;
+        }
+
+        a.back {
+            color: var(--blue);
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin: 12px 0 4px;
+            letter-spacing: -.02em;
+        }
+
+        .sub {
+            color: var(--muted);
+            margin: 0 0 20px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 18px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .two {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        @media (max-width: 640px) {
+            .two {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 200px;
+            resize: vertical;
+            font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans TC", monospace;
+            color: var(--text);
+            background: var(--fill);
+            border: 0;
+            border-radius: 12px;
+            padding: 10px 12px;
+        }
+
+        .bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 18px;
+            align-items: center;
+            margin-top: 12px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .bar label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: 400;
+            margin: 0;
+        }
+
+        button {
+            font: inherit;
+            border: 0;
+            border-radius: 980px;
+            padding: 9px 22px;
+            background: var(--blue);
+            color: #fff;
+            cursor: pointer;
+        }
+
+        #sum {
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        #out {
+            font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans TC", monospace;
+            overflow-x: auto;
+        }
+
+        .ln {
+            display: flex;
+            gap: 10px;
+            padding: 0 8px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .ln i {
+            flex: none;
+            width: 1.2em;
+            font-style: normal;
+            color: var(--muted);
+            user-select: none;
+        }
+
+        .ln.add {
+            background: var(--add);
+        }
+
+        .ln.del {
+            background: var(--del);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>文字差異比對</h1>
+        <p class="sub">左邊放舊的，右邊放新的，逐行標出差異。</p>
+
+        <div class="card">
+            <div class="two">
+                <div><label for="a">原始文字</label><textarea id="a" spellcheck="false"></textarea></div>
+                <div><label for="b">修改後文字</label><textarea id="b" spellcheck="false"></textarea></div>
+            </div>
+            <div class="bar">
+                <button id="go">比對</button>
+                <label><input type="checkbox" id="ws"> 忽略行首尾空白</label>
+                <label><input type="checkbox" id="ci"> 忽略大小寫</label>
+            </div>
+        </div>
+
+        <div class="card" id="result" hidden>
+            <div id="sum"></div>
+            <div id="out"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- pure ---
+        // 逐行 diff（LCS）。回傳 [{ t: '=' | '+' | '-', text }]
+        // opts.key 可自訂「比較用」的行轉換（例如忽略空白/大小寫），輸出仍保留原文。
+        // 行數乘積超過 limit 會回傳 null（避免 O(n·m) 記憶體暴增）。
+        function diffLines(aText, bText, opts = {}) {
+            const key = opts.key || (x => x);
+            const limit = opts.limit || 4e6;
+            const a = aText === '' ? [] : aText.split('\n'), b = bText === '' ? [] : bText.split('\n');
+            const ka = a.map(key), kb = b.map(key);
+            // 先去掉共同的開頭與結尾，縮小 DP 範圍
+            let s = 0;
+            while (s < a.length && s < b.length && ka[s] === kb[s]) s++;
+            let ea = a.length, eb = b.length;
+            while (ea > s && eb > s && ka[ea - 1] === kb[eb - 1]) { ea--; eb--; }
+            const n = ea - s, m = eb - s;
+            if (n * m > limit) return null;
+
+            // dp[i][j] = a[s+i..] 與 b[s+j..] 的 LCS 長度
+            const w = m + 1, dp = new Uint32Array((n + 1) * w);
+            for (let i = n - 1; i >= 0; i--)
+                for (let j = m - 1; j >= 0; j--)
+                    dp[i * w + j] = ka[s + i] === kb[s + j] ? dp[(i + 1) * w + j + 1] + 1 : Math.max(dp[(i + 1) * w + j], dp[i * w + j + 1]);
+
+            const out = [];
+            for (let i = 0; i < s; i++) out.push({ t: '=', text: b[i] });
+            let i = 0, j = 0;
+            while (i < n && j < m) {
+                if (ka[s + i] === kb[s + j]) { out.push({ t: '=', text: b[s + j] }); i++; j++; }
+                else if (dp[(i + 1) * w + j] >= dp[i * w + j + 1]) out.push({ t: '-', text: a[s + i++] });
+                else out.push({ t: '+', text: b[s + j++] });
+            }
+            while (i < n) out.push({ t: '-', text: a[s + i++] });
+            while (j < m) out.push({ t: '+', text: b[s + j++] });
+            for (let k = ea; k < a.length; k++) out.push({ t: '=', text: b[eb + (k - ea)] });
+            return out;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+
+        $('#go').onclick = () => {
+            const ws = $('#ws').checked, ci = $('#ci').checked;
+            const key = (x) => { if (ws) x = x.trim(); return ci ? x.toLowerCase() : x; };
+            const norm = (t) => t.replace(/\r\n/g, '\n');
+            const ops = diffLines(norm($('#a').value), norm($('#b').value), { key });
+            $('#result').hidden = false;
+            const out = $('#out');
+            out.replaceChildren();
+            if (!ops) { $('#sum').textContent = '文字太長，無法比對（行數乘積超過 400 萬）'; return; }
+            const add = ops.filter(o => o.t === '+').length, del = ops.filter(o => o.t === '-').length;
+            $('#sum').textContent = add || del ? `新增 ${add} 行、刪除 ${del} 行` : '兩段文字相同';
+            ops.forEach(o => {
+                const d = document.createElement('div'), mark = document.createElement('i');
+                d.className = 'ln' + (o.t === '+' ? ' add' : o.t === '-' ? ' del' : '');
+                mark.textContent = o.t === '=' ? '' : o.t;
+                const span = document.createElement('span');
+                span.textContent = o.text === '' ? ' ' : o.text;
+                d.append(mark, span);
+                out.append(d);
+            });
+        };
+    </script>
+</body>
+
+</html>

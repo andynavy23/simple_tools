@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="白噪音 / 環境音：用瀏覽器即時合成白噪音、粉紅噪音、棕噪音、雨聲與風聲，不需下載音檔，可定時關閉。">
+    <meta property="og:title" content="白噪音 / 環境音" />
+    <meta property="og:description" content="即時合成的白噪音、雨聲、風聲，可定時關閉。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/white-noise.html" />
+    <title>白噪音 / 環境音</title>
+    <style>
+        :root {
+            --bg: #f5f5f7;
+            --card: #fff;
+            --text: #1d1d1f;
+            --muted: #6e6e73;
+            --fill: rgba(118, 118, 128, .12);
+            --blue: #0071e3;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000;
+                --card: #1c1c1e;
+                --text: #f5f5f7;
+                --muted: #98989d;
+                --fill: rgba(118, 118, 128, .24);
+                --blue: #2997ff;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0 20px;
+            font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .wrap {
+            max-width: 560px;
+            margin: 0 auto;
+            padding: 24px 0 48px;
+        }
+
+        a.back {
+            color: var(--blue);
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin: 12px 0 4px;
+            letter-spacing: -.02em;
+        }
+
+        .sub {
+            color: var(--muted);
+            margin: 0 0 20px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 18px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .sounds {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+        }
+
+        .sound {
+            font: inherit;
+            text-align: left;
+            border: 2px solid transparent;
+            border-radius: 14px;
+            padding: 12px;
+            background: var(--fill);
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        .sound small {
+            display: block;
+            color: var(--muted);
+        }
+
+        .sound[aria-pressed=true] {
+            border-color: var(--blue);
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            margin: 14px 0 4px;
+        }
+
+        input[type=range] {
+            width: 100%;
+            accent-color: var(--blue);
+        }
+
+        select {
+            font: inherit;
+            color: var(--text);
+            background: var(--fill);
+            border: 0;
+            border-radius: 12px;
+            padding: 9px 12px;
+        }
+
+        #play {
+            display: block;
+            margin: 18px auto 0;
+            font: inherit;
+            font-size: 17px;
+            border: 0;
+            border-radius: 980px;
+            padding: 11px 36px;
+            background: var(--blue);
+            color: #fff;
+            cursor: pointer;
+        }
+
+        #status {
+            text-align: center;
+            color: var(--muted);
+            margin-top: 10px;
+            font-size: 14px;
+            min-height: 1.4em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>白噪音 / 環境音</h1>
+        <p class="sub">用程式即時合成，不需要下載任何音檔。</p>
+
+        <div class="card">
+            <div class="sounds" id="sounds"></div>
+            <label for="vol">音量</label>
+            <input id="vol" type="range" min="0" max="100" value="40">
+            <label for="timer">定時關閉</label>
+            <select id="timer">
+                <option value="0">不限時</option>
+                <option value="15">15 分鐘</option>
+                <option value="30">30 分鐘</option>
+                <option value="60">60 分鐘</option>
+                <option value="120">120 分鐘</option>
+            </select>
+            <button id="play">播放</button>
+            <div id="status" aria-live="polite"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- pure ---
+        // 產生長度 n 的單聲道雜訊（範圍 -1..1）
+        // white：每個取樣獨立；pink：Paul Kellet 濾波近似 -3dB/八度；brown：洩漏積分（低頻較強）
+        function noise(type, n) {
+            const out = new Float32Array(n);
+            if (type === 'white') {
+                for (let i = 0; i < n; i++) out[i] = Math.random() * 2 - 1;
+            } else if (type === 'pink') {
+                let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+                for (let i = 0; i < n; i++) {
+                    const w = Math.random() * 2 - 1;
+                    b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759;
+                    b2 = 0.969 * b2 + w * 0.153852; b3 = 0.8665 * b3 + w * 0.3104856;
+                    b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898;
+                    out[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11;
+                    b6 = w * 0.115926;
+                }
+            } else { // brown
+                let last = 0;
+                for (let i = 0; i < n; i++) {
+                    last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02;
+                    out[i] = last * 3.5;
+                }
+            }
+            for (let i = 0; i < n; i++) out[i] = Math.max(-1, Math.min(1, out[i]));
+            return out;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const SOUNDS = {
+            white: ['白噪音', '均勻的沙沙聲'],
+            pink: ['粉紅噪音', '較柔和，像穩定的風扇'],
+            brown: ['棕噪音', '低沉，像遠處的瀑布'],
+            rain: ['雨聲', '細密的雨落在屋簷'],
+            wind: ['風聲', '忽強忽弱的風'],
+        };
+        let current = 'rain', ctx = null, master = null, nodes = [], playing = false, timerId = null;
+
+        for (const [k, [name, desc]] of Object.entries(SOUNDS)) {
+            const b = document.createElement('button');
+            b.className = 'sound';
+            b.setAttribute('aria-pressed', k === current);
+            b.dataset.k = k;
+            b.innerHTML = '<b></b><small></small>';
+            b.firstChild.textContent = name;
+            b.lastChild.textContent = desc;
+            b.onclick = () => {
+                current = k;
+                document.querySelectorAll('.sound').forEach(x => x.setAttribute('aria-pressed', x === b));
+                if (playing) { stopNodes(); startNodes(); }
+            };
+            $('#sounds').append(b);
+        }
+
+        function loopSource(type, seconds = 6) {
+            const buf = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);
+            buf.copyToChannel(noise(type, buf.length), 0);
+            const src = ctx.createBufferSource();
+            src.buffer = buf; src.loop = true;
+            return src;
+        }
+
+        function filter(type, freq, q = 0.7) {
+            const f = ctx.createBiquadFilter();
+            f.type = type; f.frequency.value = freq; f.Q.value = q;
+            return f;
+        }
+
+        function startNodes() {
+            const srcs = [];
+            if (current === 'white' || current === 'pink' || current === 'brown') {
+                const s = loopSource(current);
+                s.connect(master);
+                srcs.push(s);
+            } else if (current === 'rain') {
+                // 粉紅噪音去掉低頻轟隆聲、留住高頻的細碎感
+                const s = loopSource('pink'), hp = filter('highpass', 700), lp = filter('lowpass', 9000);
+                s.connect(hp); hp.connect(lp); lp.connect(master);
+                srcs.push(s);
+            } else { // wind：棕噪音經低通，截止頻率與音量由慢速 LFO 緩慢起伏
+                const s = loopSource('brown'), lp = filter('lowpass', 500, 1.2), g = ctx.createGain();
+                g.gain.value = 0.6;
+                const lfo = ctx.createOscillator(), depth = ctx.createGain();
+                lfo.frequency.value = 0.12; depth.gain.value = 350;
+                lfo.connect(depth); depth.connect(lp.frequency);
+                const lfo2 = ctx.createOscillator(), depth2 = ctx.createGain();
+                lfo2.frequency.value = 0.07; depth2.gain.value = 0.35;
+                lfo2.connect(depth2); depth2.connect(g.gain);
+                s.connect(lp); lp.connect(g); g.connect(master);
+                lfo.start(); lfo2.start();
+                srcs.push(s, lfo, lfo2);
+            }
+            srcs.forEach(s => { if (s.loop !== undefined) s.start(); });
+            nodes = srcs;
+        }
+
+        function stopNodes() {
+            nodes.forEach(n => { try { n.stop(); n.disconnect(); } catch (e) { } });
+            nodes = [];
+        }
+
+        function setVolume() {
+            if (master) master.gain.value = Math.pow($('#vol').value / 100, 2); // 平方曲線，貼近人耳感受
+        }
+
+        function stop(text = '') {
+            playing = false;
+            clearTimeout(timerId);
+            stopNodes();
+            $('#play').textContent = '播放';
+            $('#status').textContent = text;
+        }
+
+        function play() {
+            if (!ctx) {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                if (!AC) { $('#status').textContent = '這個瀏覽器不支援 Web Audio'; return; }
+                ctx = new AC();
+                master = ctx.createGain();
+                master.connect(ctx.destination);
+            }
+            if (ctx.state === 'suspended') ctx.resume();
+            setVolume();
+            startNodes();
+            playing = true;
+            $('#play').textContent = '停止';
+            const min = +$('#timer').value;
+            clearTimeout(timerId);
+            if (min) timerId = setTimeout(() => stop('已定時關閉'), min * 60000);
+            $('#status').textContent = min ? `播放中，${min} 分鐘後自動停止` : '播放中';
+        }
+
+        $('#play').onclick = () => playing ? stop() : play();
+        $('#vol').oninput = setVolume;
+        $('#timer').onchange = () => { if (playing) play(); };
+    </script>
+</body>
+
+</html>

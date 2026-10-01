@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="打字速度測試：中英文短文計時，算出每分鐘字數與正確率，並記錄最佳成績。">
+    <meta property="og:title" content="打字速度測試" />
+    <meta property="og:description" content="中英文打字計時，記錄每分鐘字數與正確率。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/typing-test.html" />
+    <title>打字速度測試</title>
+    <style>
+        :root {
+            --bg: #f5f5f7;
+            --card: #fff;
+            --text: #1d1d1f;
+            --muted: #6e6e73;
+            --fill: rgba(118, 118, 128, .12);
+            --blue: #0071e3;
+            --ok: #248a3d;
+            --bad: #d70015;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000;
+                --card: #1c1c1e;
+                --text: #f5f5f7;
+                --muted: #98989d;
+                --fill: rgba(118, 118, 128, .24);
+                --blue: #2997ff;
+                --ok: #30d158;
+                --bad: #ff453a;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0 20px;
+            font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .wrap {
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 24px 0 48px;
+        }
+
+        a.back {
+            color: var(--blue);
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin: 12px 0 4px;
+            letter-spacing: -.02em;
+        }
+
+        .sub {
+            color: var(--muted);
+            margin: 0 0 20px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 18px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .bar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .seg {
+            font: inherit;
+            font-size: 14px;
+            border: 0;
+            border-radius: 980px;
+            padding: 6px 14px;
+            background: var(--fill);
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        .seg[aria-pressed=true] {
+            background: var(--text);
+            color: var(--bg);
+        }
+
+        .stats {
+            display: flex;
+            gap: 22px;
+            margin-left: auto;
+            font-variant-numeric: tabular-nums;
+            color: var(--muted);
+        }
+
+        .stats b {
+            color: var(--text);
+            font-size: 20px;
+        }
+
+        #passage {
+            font-size: 22px;
+            line-height: 1.9;
+            letter-spacing: .02em;
+            word-break: break-all;
+            padding: 6px 2px 14px;
+        }
+
+        #passage span.ok {
+            color: var(--ok);
+        }
+
+        #passage span.bad {
+            color: var(--bad);
+            background: rgba(255, 69, 58, .15);
+            border-radius: 3px;
+        }
+
+        #passage span.cur {
+            border-bottom: 3px solid var(--blue);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 90px;
+            resize: none;
+            font: inherit;
+            font-size: 18px;
+            line-height: 1.6;
+            color: var(--text);
+            background: var(--fill);
+            border: 0;
+            border-radius: 12px;
+            padding: 10px 12px;
+        }
+
+        button.primary {
+            font: inherit;
+            border: 0;
+            border-radius: 980px;
+            padding: 9px 22px;
+            background: var(--blue);
+            color: #fff;
+            cursor: pointer;
+        }
+
+        #result {
+            text-align: center;
+        }
+
+        #result .big {
+            font-size: 44px;
+            font-weight: 700;
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>打字速度測試</h1>
+        <p class="sub">在輸入框開始打字就會開始計時。</p>
+
+        <div class="card">
+            <div class="bar">
+                <button class="seg" data-lang="zh" aria-pressed="true">中文</button>
+                <button class="seg" data-lang="en" aria-pressed="false">English</button>
+                <span class="muted">|</span>
+                <button class="seg" data-sec="30" aria-pressed="true">30 秒</button>
+                <button class="seg" data-sec="60" aria-pressed="false">60 秒</button>
+                <div class="stats"><span>剩餘 <b id="left">30</b></span><span>字/分 <b id="cpm">0</b></span></div>
+            </div>
+            <div id="passage" aria-live="off"></div>
+            <textarea id="input" placeholder="在這裡輸入…" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+        </div>
+
+        <div class="card" id="result" hidden>
+            <div class="big" id="r-cpm"></div>
+            <div class="muted" id="r-detail"></div>
+            <div class="muted" id="r-best" style="margin:6px 0 12px"></div>
+            <button class="primary" id="again">再來一次</button>
+        </div>
+    </div>
+
+    <script>
+        // --- pure ---
+        // typed 與 target 逐字比較；elapsed 為實際花費秒數
+        // cpm = 每分鐘「正確」字數；wpm 以 5 字元 = 1 字 估算（英文慣例）
+        function score(target, typed, elapsed) {
+            let correct = 0;
+            const n = Math.min(typed.length, target.length);
+            for (let i = 0; i < n; i++) if (typed[i] === target[i]) correct++;
+            const minutes = Math.max(elapsed, 1) / 60;
+            return {
+                correct,
+                typed: typed.length,
+                accuracy: typed.length ? Math.round(correct / typed.length * 100) : 100,
+                cpm: Math.round(correct / minutes),
+                wpm: Math.round(correct / 5 / minutes),
+            };
+        }
+        // --- /pure ---
+
+        const PASSAGES = {
+            zh: [
+                '天行健，君子以自強不息；地勢坤，君子以厚德載物。',
+                '學而時習之，不亦說乎？有朋自遠方來，不亦樂乎？人不知而不慍，不亦君子乎？',
+                '海內存知己，天涯若比鄰。無為在歧路，兒女共沾巾。',
+                '春眠不覺曉，處處聞啼鳥。夜來風雨聲，花落知多少。',
+                '不積跬步，無以至千里；不積小流，無以成江海。',
+                '會當凌絕頂，一覽眾山小。欲窮千里目，更上一層樓。',
+                '工欲善其事，必先利其器。三人行，必有我師焉。',
+                '千里之行，始於足下。合抱之木，生於毫末。九層之臺，起於累土。',
+            ],
+            en: [
+                'The quick brown fox jumps over the lazy dog while the sun slowly sets behind the quiet hills.',
+                'A small habit repeated every day will take you farther than a big effort made once in a while.',
+                'Typing is a skill like any other: slow down, stay accurate, and the speed will come by itself.',
+                'When the rain stops, the streets smell fresh, and the whole city seems to take a deep breath.',
+                'Good tools do not make a good craftsperson, but a good craftsperson knows how to choose them.',
+                'Write the simplest thing that works, then measure it, and only then decide whether it needs more.',
+            ],
+        };
+
+        const $ = (s) => document.querySelector(s);
+        let lang = 'zh', secs = 30, target = '', startAt = 0, timer = null, finished = false, composing = false;
+        const bestKey = () => `typing_best_${lang}_${secs}`;
+        const loadBest = () => { try { return +localStorage.getItem(bestKey()) || 0; } catch (e) { return 0; } };
+
+        function pick() {
+            const list = PASSAGES[lang];
+            let next;
+            do { next = list[Math.floor(Math.random() * list.length)]; } while (next === target && list.length > 1);
+            return next;
+        }
+
+        function renderPassage() {
+            const typed = $('#input').value, box = $('#passage');
+            box.replaceChildren(...[...target].map((ch, i) => {
+                const s = document.createElement('span');
+                s.textContent = ch;
+                if (i < typed.length) s.className = typed[i] === ch ? 'ok' : 'bad';
+                else if (i === typed.length) s.className = 'cur';
+                return s;
+            }));
+        }
+
+        function reset() {
+            clearInterval(timer);
+            finished = false; startAt = 0;
+            target = pick();
+            $('#input').value = '';
+            $('#input').disabled = false;
+            $('#left').textContent = secs;
+            $('#cpm').textContent = 0;
+            $('#result').hidden = true;
+            renderPassage();
+            $('#input').focus();
+        }
+
+        function finish() {
+            if (finished) return;
+            finished = true;
+            clearInterval(timer);
+            $('#input').disabled = true;
+            const elapsed = Math.min(secs, (Date.now() - startAt) / 1000);
+            const r = score(target, $('#input').value, elapsed);
+            $('#result').hidden = false;
+            $('#r-cpm').textContent = `${r.cpm} 字/分`;
+            $('#r-detail').textContent = `約 ${r.wpm} WPM ・ 正確率 ${r.accuracy}% ・ 正確 ${r.correct} / 輸入 ${r.typed} 字`;
+            const best = loadBest();
+            if (r.cpm > best) {
+                try { localStorage.setItem(bestKey(), r.cpm); } catch (e) { }
+                $('#r-best').textContent = best ? `🎉 新紀錄！（原本 ${best}）` : '🎉 第一筆紀錄';
+            } else {
+                $('#r-best').textContent = `最佳紀錄：${best} 字/分`;
+            }
+        }
+
+        function onInput() {
+            if (finished || composing) return; // 注音/拼音組字中不計算，避免把未選字的拼音當成錯字
+            if (!startAt) {
+                startAt = Date.now();
+                timer = setInterval(() => {
+                    const left = Math.max(0, secs - (Date.now() - startAt) / 1000);
+                    $('#left').textContent = Math.ceil(left);
+                    $('#cpm').textContent = score(target, $('#input').value, (Date.now() - startAt) / 1000).cpm;
+                    if (left <= 0) finish();
+                }, 200);
+            }
+            renderPassage();
+            if ($('#input').value.length >= target.length) finish();
+        }
+
+        $('#input').addEventListener('compositionstart', () => { composing = true; });
+        $('#input').addEventListener('compositionend', () => { composing = false; onInput(); });
+        $('#input').addEventListener('input', onInput);
+        $('#again').onclick = reset;
+        document.querySelectorAll('[data-lang]').forEach(b => b.onclick = () => {
+            lang = b.dataset.lang;
+            document.querySelectorAll('[data-lang]').forEach(x => x.setAttribute('aria-pressed', x === b));
+            reset();
+        });
+        document.querySelectorAll('[data-sec]').forEach(b => b.onclick = () => {
+            secs = +b.dataset.sec;
+            document.querySelectorAll('[data-sec]').forEach(x => x.setAttribute('aria-pressed', x === b));
+            reset();
+        });
+        reset();
+    </script>
+</body>
+
+</html>

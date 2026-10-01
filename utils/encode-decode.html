@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="編碼解碼：Base64、URL、Unicode 跳脫、HTML 實體、十六進位互轉，支援中文與 emoji。">
+    <meta property="og:title" content="編碼解碼" />
+    <meta property="og:description" content="Base64、URL、Unicode、HTML 實體、十六進位互轉。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/encode-decode.html" />
+    <title>編碼解碼</title>
+    <style>
+        :root {
+            --bg: #f5f5f7;
+            --card: #fff;
+            --text: #1d1d1f;
+            --muted: #6e6e73;
+            --fill: rgba(118, 118, 128, .12);
+            --blue: #0071e3;
+            --err: #d70015;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000;
+                --card: #1c1c1e;
+                --text: #f5f5f7;
+                --muted: #98989d;
+                --fill: rgba(118, 118, 128, .24);
+                --blue: #2997ff;
+                --err: #ff453a;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0 20px;
+            font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .wrap {
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 24px 0 48px;
+        }
+
+        a.back {
+            color: var(--blue);
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin: 12px 0 4px;
+            letter-spacing: -.02em;
+        }
+
+        .sub {
+            color: var(--muted);
+            margin: 0 0 20px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 18px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin: 0 0 6px;
+        }
+
+        textarea,
+        select {
+            width: 100%;
+            font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans TC", monospace;
+            color: var(--text);
+            background: var(--fill);
+            border: 0;
+            border-radius: 12px;
+            padding: 10px 12px;
+        }
+
+        textarea {
+            min-height: 140px;
+            resize: vertical;
+        }
+
+        select {
+            font-family: inherit;
+            font-size: 16px;
+        }
+
+        .btns {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 12px 0;
+        }
+
+        button {
+            font: inherit;
+            border: 0;
+            border-radius: 980px;
+            padding: 9px 22px;
+            background: var(--fill);
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        button.primary {
+            background: var(--blue);
+            color: #fff;
+        }
+
+        #err {
+            color: var(--err);
+            font-size: 14px;
+            min-height: 1.4em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>編碼解碼</h1>
+        <p class="sub">中文、emoji 都以 UTF-8 處理，全部在本機完成。</p>
+
+        <div class="card">
+            <label for="type">格式</label>
+            <select id="type"></select>
+            <div style="height:12px"></div>
+            <label for="in">輸入</label>
+            <textarea id="in" spellcheck="false"></textarea>
+            <div class="btns">
+                <button class="primary" id="enc">編碼 ↓</button>
+                <button class="primary" id="dec">解碼 ↓</button>
+                <button id="swap">結果放回輸入</button>
+            </div>
+            <div id="err" role="alert"></div>
+            <label for="out">輸出</label>
+            <textarea id="out" readonly spellcheck="false"></textarea>
+            <div class="btns"><button id="copy">複製輸出</button></div>
+        </div>
+    </div>
+
+    <script>
+        // --- pure ---
+        const utf8 = new TextEncoder(), utf8Fatal = new TextDecoder('utf-8', { fatal: true });
+
+        const bytesToBinary = (bytes) => {
+            let s = '';
+            for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+            return s;
+        };
+
+        const NAMED = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&apos;': "'", '&nbsp;': ' ' };
+
+        const CODECS = {
+            'Base64': {
+                enc: (t) => btoa(bytesToBinary(utf8.encode(t))),
+                dec: (t) => {
+                    // 容許 URL-safe 字元 (-_) 與缺少的 = 補位、空白換行
+                    let s = t.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
+                    s += '='.repeat((4 - s.length % 4) % 4);
+                    const bin = atob(s);
+                    return utf8Fatal.decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
+                },
+            },
+            'URL 編碼 (encodeURIComponent)': {
+                enc: (t) => encodeURIComponent(t),
+                dec: (t) => decodeURIComponent(t.replace(/\+/g, ' ')),
+            },
+            'Unicode 跳脫 (\\uXXXX)': {
+                enc: (t) => [...t].map(ch => {
+                    const cp = ch.codePointAt(0);
+                    if (cp < 128) return ch;
+                    return cp > 0xffff
+                        ? ch.split('').map(u => '\\u' + u.charCodeAt(0).toString(16).padStart(4, '0')).join('')
+                        : '\\u' + cp.toString(16).padStart(4, '0');
+                }).join(''),
+                dec: (t) => t.replace(/\\u\{([0-9a-fA-F]{1,6})\}|\\u([0-9a-fA-F]{4})/g, (_, a, b) => String.fromCodePoint(parseInt(a || b, 16))),
+            },
+            'HTML 實體': {
+                enc: (t) => t.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
+                dec: (t) => t.replace(/&(?:#x([0-9a-fA-F]+)|#(\d+)|[a-zA-Z]+);/g, (m, hex, dec) => {
+                    if (hex || dec) return String.fromCodePoint(parseInt(hex || dec, hex ? 16 : 10));
+                    return NAMED[m] ?? m;
+                }),
+            },
+            '十六進位 (UTF-8 位元組)': {
+                enc: (t) => [...utf8.encode(t)].map(b => b.toString(16).padStart(2, '0')).join(' '),
+                dec: (t) => {
+                    const h = t.replace(/0x/gi, '').replace(/[\s,]+/g, '');
+                    if (!/^([0-9a-fA-F]{2})*$/.test(h)) throw new Error('不是有效的十六進位（需為偶數個 0-9 / a-f 字元）');
+                    return utf8Fatal.decode(Uint8Array.from(h.match(/../g) || [], x => parseInt(x, 16)));
+                },
+            },
+        };
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        $('#type').replaceChildren(...Object.keys(CODECS).map(k => new Option(k, k)));
+
+        function run(dir) {
+            $('#err').textContent = '';
+            try {
+                $('#out').value = CODECS[$('#type').value][dir]($('#in').value);
+            } catch (e) {
+                $('#out').value = '';
+                $('#err').textContent = '處理失敗：' + (e.message.includes('The string') ? '不是有效的 Base64' : e.message);
+            }
+        }
+
+        $('#enc').onclick = () => run('enc');
+        $('#dec').onclick = () => run('dec');
+        $('#swap').onclick = () => { $('#in').value = $('#out').value; $('#out').value = ''; };
+        $('#copy').onclick = async () => {
+            const b = $('#copy');
+            try { await navigator.clipboard.writeText($('#out').value); b.textContent = '已複製'; }
+            catch (e) { $('#out').select(); b.textContent = '請按 Ctrl+C'; }
+            setTimeout(() => b.textContent = '複製輸出', 1500);
+        };
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="翻牌記憶遊戲：單人挑戰最少步數，或建立房間與朋友（最多 4 人）輪流翻牌比誰配對得多。">
+    <meta property="og:title" content="翻牌記憶遊戲" />
+    <meta property="og:description" content="單人挑戰最少步數，或連線與朋友輪流翻牌。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/memory-match.html" />
+    <title>翻牌記憶遊戲</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --bg: #f5f5f7;
+            --card: #fff;
+            --text: #1d1d1f;
+            --muted: #6e6e73;
+            --fill: rgba(118, 118, 128, .12);
+            --blue: #0071e3;
+            --back: #5e5ce6;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000;
+                --card: #1c1c1e;
+                --text: #f5f5f7;
+                --muted: #98989d;
+                --fill: rgba(118, 118, 128, .24);
+                --blue: #2997ff;
+                --back: #7d7aff;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0 20px;
+            font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .wrap {
+            max-width: 560px;
+            margin: 0 auto;
+            padding: 24px 0 48px;
+        }
+
+        a.back {
+            color: var(--blue);
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin: 12px 0 4px;
+            letter-spacing: -.02em;
+        }
+
+        h2 {
+            font-size: 17px;
+            margin: 0 0 8px;
+        }
+
+        .sub {
+            color: var(--muted);
+            margin: 0 0 20px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 18px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        input,
+        select {
+            font: inherit;
+            color: var(--text);
+            background: var(--fill);
+            border: 0;
+            border-radius: 12px;
+            padding: 9px 12px;
+            min-width: 0;
+        }
+
+        input {
+            flex: 1 1 140px;
+        }
+
+        button {
+            font: inherit;
+            border: 0;
+            border-radius: 980px;
+            padding: 9px 20px;
+            background: var(--fill);
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        button.primary {
+            background: var(--blue);
+            color: #fff;
+        }
+
+        button:disabled {
+            opacity: .5;
+            cursor: default;
+        }
+
+        .seg[aria-pressed=true] {
+            background: var(--text);
+            color: var(--bg);
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .players {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .pl {
+            padding: 6px 14px;
+            border-radius: 14px;
+            background: var(--fill);
+            border: 2px solid transparent;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .pl.turn {
+            border-color: var(--c);
+        }
+
+        .pl.off {
+            opacity: .45;
+            text-decoration: line-through;
+        }
+
+        .pl b {
+            color: var(--c);
+        }
+
+        #board {
+            display: grid;
+            gap: 8px;
+        }
+
+        .c {
+            aspect-ratio: 1;
+            padding: 0;
+            border-radius: 14px;
+            font-size: clamp(22px, 8vw, 40px);
+            line-height: 1;
+            background: var(--back);
+            color: var(--text);
+            transition: background .15s, transform .15s;
+        }
+
+        .c.up {
+            background: var(--card);
+            border: 2px solid var(--blue);
+            transform: scale(1.04);
+        }
+
+        .c.matched {
+            background: var(--fill);
+            border: 3px solid var(--c, var(--blue));
+            opacity: .85;
+        }
+
+        .c:disabled {
+            opacity: 1;
+        }
+
+        .c.down:disabled {
+            opacity: .75;
+        }
+
+        #msg {
+            text-align: center;
+            font-weight: 600;
+            margin-top: 12px;
+            min-height: 1.5em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>翻牌記憶遊戲</h1>
+        <p class="sub">翻開兩張一樣的牌就得分。單人比步數，連線比誰配對多。</p>
+
+        <div class="card" id="setup">
+            <div class="row" id="modeBar">
+                <button class="seg" data-mode="solo" aria-pressed="true">單人</button>
+                <button class="seg" data-mode="online" aria-pressed="false">連線（2–4 人）</button>
+            </div>
+            <div class="row" id="diffRow">
+                <label for="diff" class="muted">難度</label>
+                <select id="diff">
+                    <option value="6">簡單：6 對</option>
+                    <option value="8" selected>普通：8 對</option>
+                    <option value="12">困難：12 對</option>
+                    <option value="18">專家：18 對</option>
+                </select>
+                <button class="primary" id="soloStart">開始</button>
+            </div>
+            <div id="onlineBox" hidden>
+                <div class="row"><input id="nick" maxlength="10" placeholder="你的暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+                <div class="row">
+                    <button class="primary" id="hostBtn">建立房間</button>
+                    <input id="joinId" placeholder="貼上房號" aria-label="房號">
+                    <button id="joinBtn">加入</button>
+                </div>
+                <div class="muted" id="netMsg"></div>
+            </div>
+        </div>
+
+        <div class="card" id="lobby" hidden>
+            <h2>等待玩家加入</h2>
+            <div class="players" id="lobbyPlayers"></div>
+            <div class="row" id="hostTools" hidden>
+                <button id="copyInvite">複製邀請連結</button>
+                <button class="primary" id="startOnline" disabled>開始遊戲</button>
+            </div>
+            <div class="muted" id="lobbyHint"></div>
+        </div>
+
+        <div class="card" id="game" hidden>
+            <div class="players" id="scoreboard"></div>
+            <div id="board"></div>
+            <div id="msg" aria-live="polite"></div>
+            <div class="row" style="justify-content:center;margin-top:12px">
+                <button class="primary" id="again" hidden>再來一局</button>
+                <button id="leave">離開</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- pure ---
+        const MAX_PLAYERS = 4;
+        const NICK_RE = /^[a-zA-Z0-9一-龥]{1,10}$/;
+        const EMOJI = ['🍎', '🍌', '🍇', '🍓', '🍒', '🍑', '🥝', '🍋', '🍉', '🥕', '🌽', '🍄', '🌸', '🌻', '🌈', '⭐', '🔥', '💧', '🍀', '🌙', '⚡', '❄️', '🎈', '🎁', '🎵', '🚀', '⚽', '🎲', '🐱', '🐶'];
+
+        // 取 [0, n) 的均勻亂數（拒絕取樣）
+        function rnd(n) {
+            const lim = Math.floor(2 ** 32 / n) * n;
+            let x;
+            do { x = crypto.getRandomValues(new Uint32Array(1))[0]; } while (x >= lim);
+            return x % n;
+        }
+
+        function shuffle(arr) {
+            const a = [...arr];
+            for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; }
+            return a;
+        }
+
+        const makeDeck = (pairs) => { const p = shuffle(EMOJI).slice(0, pairs); return shuffle([...p, ...p]); };
+
+        // 權威狀態只存在單人 / 房主端；牌面（deck）不會傳給其他人
+        function createGame(deck, players) {
+            return {
+                deck, status: Array(deck.length).fill('down'), owner: Array(deck.length).fill(null),
+                up: [], turn: 0, scores: Array(players).fill(0), active: Array(players).fill(true), moves: 0, over: false,
+            };
+        }
+
+        function advance(g) {
+            const n = g.active.length;
+            for (let k = 1; k <= n; k++) { const t = (g.turn + k) % n; if (g.active[t]) { g.turn = t; return; } }
+        }
+
+        // 翻牌：只有輪到的玩家、未翻開的牌、場上不到 2 張翻開時才有效
+        function flip(g, i, who) {
+            if (g.over || who !== g.turn || !g.active[who]) return false;
+            if (!Number.isInteger(i) || i < 0 || i >= g.deck.length || g.status[i] !== 'down' || g.up.length >= 2) return false;
+            g.status[i] = 'up'; g.up.push(i);
+            return true;
+        }
+
+        // 兩張都翻開後結算：配對成功→得分並繼續；失敗→蓋回並換人
+        function resolve(g) {
+            if (g.up.length !== 2) return null;
+            const [a, b] = g.up;
+            let r;
+            if (g.deck[a] === g.deck[b]) {
+                g.status[a] = g.status[b] = 'matched';
+                g.owner[a] = g.owner[b] = g.turn;
+                g.scores[g.turn]++;
+                r = 'match';
+            } else {
+                g.status[a] = g.status[b] = 'down';
+                advance(g);
+                r = 'miss';
+            }
+            g.up = [];
+            g.moves++;
+            if (g.status.every(s => s === 'matched')) g.over = true;
+            return r;
+        }
+
+        // 玩家離線：若正輪到他，翻開的牌蓋回並換人；只剩 1 人時結束
+        function drop(g, who) {
+            g.active[who] = false;
+            if (g.turn === who) { g.up.forEach(i => { g.status[i] = 'down'; }); g.up = []; }
+            if (g.active.filter(Boolean).length <= 1) g.over = true;
+            else if (g.turn === who) advance(g);
+        }
+
+        // 要傳給玩家的畫面：未翻開的牌不含牌面
+        const view = (g) => ({
+            status: g.status, vals: g.status.map((s, i) => s === 'down' ? null : g.deck[i]), owner: g.owner,
+            turn: g.turn, scores: g.scores, active: g.active, moves: g.moves, over: g.over,
+        });
+
+        // 成員端收到房主畫面時的格式檢查（房主端雖可信任，仍避免壞資料破壞畫面）
+        function validView(v) {
+            if (!v || typeof v !== 'object') return false;
+            const n = v.status?.length, m = v.scores?.length;
+            if (!Number.isInteger(n) || n < 2 || n > 36 || n % 2) return false;
+            if (!Number.isInteger(m) || m < 1 || m > MAX_PLAYERS) return false;
+            const len = (a, k) => Array.isArray(a) && a.length === k;
+            if (!len(v.status, n) || !len(v.vals, n) || !len(v.owner, n) || !len(v.scores, m) || !len(v.active, m) || !len(v.names, m)) return false;
+            if (!v.status.every(s => s === 'down' || s === 'up' || s === 'matched')) return false;
+            if (!v.vals.every(x => x === null || (typeof x === 'string' && x.length <= 8))) return false;
+            if (!v.owner.every(o => o === null || (Number.isInteger(o) && o >= 0 && o < m))) return false;
+            if (!v.names.every(x => typeof x === 'string' && x.length <= 12)) return false;
+            if (!v.scores.every(Number.isInteger) || !Number.isInteger(v.turn) || v.turn < 0 || v.turn >= m) return false;
+            return typeof v.over === 'boolean';
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const COLORS = ['#0a84ff', '#ff453a', '#30d158', '#ff9f0a'];
+        const FLIP_BACK_MS = 900;
+        let mode = 'solo', screen = 'menu';       // screen: menu | lobby | game
+        let G = null, V = null, my = 0;           // G：權威狀態（單人/房主）；V：目前顯示的畫面
+        let isHost = false, hostConn = null, hostPeerId = '', peer = null;
+        let players = [];                          // 房主端：[{ nick, peerId, conn }]
+        let resolveTimer = null, soloStart = 0, soloTick = null;
+
+        const show = (sel, on) => { $(sel).hidden = !on; };
+
+        function updateScreens() {
+            const menu = screen === 'menu', hostLobby = screen === 'lobby' && isHost;
+            show('#setup', menu || hostLobby);             // 房主在大廳仍可調整難度
+            show('#modeBar', menu);
+            show('#diffRow', (menu && mode === 'solo') || hostLobby);
+            show('#soloStart', menu && mode === 'solo');
+            show('#onlineBox', menu && mode === 'online');
+            show('#lobby', screen === 'lobby');
+            show('#game', screen === 'game');
+        }
+
+        // ---------- 畫面 ----------
+        function buildBoard(n) {
+            const cols = n <= 16 ? 4 : 6, b = $('#board');
+            b.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+            b.replaceChildren(...Array.from({ length: n }, (_, i) => {
+                const c = document.createElement('button');
+                c.className = 'c down';
+                c.setAttribute('aria-label', `第 ${i + 1} 張牌`);
+                c.onclick = () => onCard(i);
+                return c;
+            }));
+        }
+
+        function renderGame() {
+            if (!V) return;
+            const cards = $('#board').children;
+            if (cards.length !== V.status.length) buildBoard(V.status.length);
+            const upCount = V.status.filter(s => s === 'up').length;
+            const myTurn = mode === 'solo' || V.turn === my;
+            [...$('#board').children].forEach((c, i) => {
+                const s = V.status[i];
+                c.className = 'c ' + s;
+                c.textContent = s === 'down' ? '' : V.vals[i];
+                c.style.setProperty('--c', V.owner[i] === null ? '' : COLORS[V.owner[i]]);
+                c.disabled = V.over || s !== 'down' || !myTurn || upCount >= 2;
+            });
+            const sb = $('#scoreboard');
+            sb.replaceChildren();
+            if (mode === 'solo') {
+                const p = document.createElement('div');
+                p.className = 'pl turn';
+                p.style.setProperty('--c', COLORS[0]);
+                p.innerHTML = '步數 <b></b> ・ 時間 <b></b> 秒 ・ 最佳 <b></b>';
+                p.children[0].textContent = V.moves;
+                p.children[1].textContent = soloSeconds();
+                p.children[2].textContent = bestMoves() || '—';
+                sb.append(p);
+            } else {
+                V.names.forEach((nm, i) => {
+                    const p = document.createElement('div');
+                    p.className = 'pl' + (i === V.turn && !V.over ? ' turn' : '') + (V.active[i] ? '' : ' off');
+                    p.style.setProperty('--c', COLORS[i]);
+                    p.append(nm + (i === my ? '（我）' : '') + ' ');
+                    const b = document.createElement('b');
+                    b.textContent = V.scores[i];
+                    p.append(b);
+                    sb.append(p);
+                });
+            }
+            let msg = '';
+            if (V.over) {
+                if (mode === 'solo') {
+                    msg = `🎉 完成！${V.moves} 步，${soloSeconds()} 秒`;
+                } else {
+                    const top = Math.max(...V.scores), win = V.names.filter((_, i) => V.scores[i] === top);
+                    const alone = V.names.length > 1 && V.active.filter(Boolean).length <= 1;
+                    msg = alone ? '其他玩家都離開了' : (win.length > 1 ? `平手：${win.join('、')}` : `🏆 ${win[0]} 獲勝`);
+                }
+            } else if (mode === 'online') {
+                msg = V.turn === my ? '輪到你了' : `輪到 ${V.names[V.turn]}`;
+            }
+            $('#msg').textContent = msg;
+            $('#again').hidden = !(V.over && (mode === 'solo' || isHost));
+        }
+
+        // ---------- 單人 ----------
+        const bestKey = () => `memory_best_${$('#diff').value}`;
+        const bestMoves = () => { try { return +localStorage.getItem(bestKey()) || 0; } catch (e) { return 0; } };
+        const soloSeconds = () => soloStart ? Math.floor(((G && G.over ? soloEnd : Date.now()) - soloStart) / 1000) : 0;
+        let soloEnd = 0;
+
+        function startSolo() {
+            mode = 'solo'; isHost = false;
+            clearTimeout(resolveTimer); clearInterval(soloTick);
+            G = createGame(makeDeck(+$('#diff').value), 1);
+            soloStart = 0; soloEnd = 0;
+            screen = 'game';
+            $('#board').replaceChildren();
+            publish();
+            updateScreens();
+        }
+
+        // ---------- 共用：翻牌流程（單人 / 房主） ----------
+        function publish() {
+            V = { ...view(G), names: mode === 'solo' ? ['你'] : players.map(p => p.nick) };
+            renderGame();
+            if (mode === 'online' && isHost) players.forEach(p => p.conn && p.conn.open && p.conn.send({ type: 'VIEW', v: V }));
+        }
+
+        function applyFlip(i, who) {
+            if (!flip(G, i, who)) return;
+            if (mode === 'solo' && !soloStart) {
+                soloStart = Date.now();
+                soloTick = setInterval(() => { if (G && !G.over) renderGame(); }, 1000);
+            }
+            publish();
+            if (G.up.length === 2) {
+                clearTimeout(resolveTimer);
+                resolveTimer = setTimeout(() => {
+                    resolve(G);
+                    if (G.over && mode === 'solo') {
+                        soloEnd = Date.now();
+                        clearInterval(soloTick);
+                        const best = bestMoves();
+                        if (!best || G.moves < best) { try { localStorage.setItem(bestKey(), G.moves); } catch (e) { } }
+                    }
+                    publish();
+                }, FLIP_BACK_MS);
+            }
+        }
+
+        function onCard(i) {
+            if (mode === 'solo' || isHost) applyFlip(i, mode === 'solo' ? 0 : my);
+            else if (hostConn && hostConn.open && V && V.turn === my) hostConn.send({ type: 'FLIP', i });
+        }
+
+        // ---------- 連線 ----------
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => { ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; }); };
+
+        function readNick() {
+            const n = $('#nick').value.trim();
+            if (!NICK_RE.test(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; }
+            return n;
+        }
+
+        function makePeer(onOpen) {
+            if (typeof Peer === 'undefined') { netMsg('無法載入連線元件（PeerJS），請確認網路後重新整理'); enableNet(true); return; }
+            enableNet(false);
+            netMsg('連線中…');
+            peer = new Peer({ debug: 1, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] } });
+            peer.on('open', onOpen);
+            peer.on('error', (err) => {
+                if (screen !== 'menu') return;
+                netMsg(err.type === 'peer-unavailable' ? '找不到這個房號，請確認後再試' : `連線失敗（${err.type}），請再試一次`);
+                enableNet(true);
+                if (peer) { peer.destroy(); peer = null; }
+            });
+        }
+
+        // 房主
+        function hostRoom() {
+            const nick = readNick();
+            if (!nick) return;
+            makePeer((id) => {
+                mode = 'online'; isHost = true; my = 0; hostPeerId = id;
+                players = [{ nick, peerId: id, conn: null }];
+                history.replaceState('', document.title, location.pathname + '#' + id);
+                peer.on('connection', (conn) => {
+                    conn.on('data', (d) => onHostData(conn, d));
+                    conn.on('close', () => onHostClose(conn));
+                });
+                screen = 'lobby';
+                renderLobby();
+                updateScreens();
+            });
+        }
+
+        function broadcastLobby() {
+            players.forEach((p, i) => p.conn && p.conn.open && p.conn.send({ type: 'LOBBY', names: players.map(x => x.nick), index: i }));
+            renderLobby();
+        }
+
+        function onHostData(conn, d) {
+            if (!d || typeof d.type !== 'string') return;
+            const idx = players.findIndex(p => p.peerId === conn.peer);
+            if (d.type === 'JOIN') {
+                if (idx !== -1) return;
+                const reject = (reason) => { conn.send({ type: 'REJECT', reason }); setTimeout(() => conn.close(), 500); };
+                if (screen !== 'lobby') return reject('遊戲已經開始');
+                if (players.length >= MAX_PLAYERS) return reject('房間已滿（上限 4 人）');
+                if (typeof d.nick !== 'string' || !NICK_RE.test(d.nick)) return reject('暱稱格式錯誤');
+                if (players.some(p => p.nick === d.nick)) return reject('暱稱已有人使用');
+                players.push({ nick: d.nick, peerId: conn.peer, conn });
+                broadcastLobby();
+            } else if (d.type === 'FLIP') {
+                if (idx < 0 || screen !== 'game' || !G) return;
+                applyFlip(d.i, idx);
+            }
+        }
+
+        function onHostClose(conn) {
+            const idx = players.findIndex(p => p.peerId === conn.peer);
+            if (idx < 0) return;
+            if (screen === 'lobby') { players.splice(idx, 1); broadcastLobby(); return; }
+            players[idx].conn = null;
+            if (G && !G.over) {
+                const wasTurn = G.turn === idx;
+                drop(G, idx);
+                if (wasTurn) clearTimeout(resolveTimer);
+                publish();
+            }
+        }
+
+        function startOnline() {
+            if (players.length < 2) return;
+            // 重賽前先移除已離線的玩家（房主 conn 恆為 null，保留）
+            players = players.filter((p, i) => i === 0 || (p.conn && p.conn.open));
+            if (players.length < 2) { screen = 'lobby'; renderLobby(); updateScreens(); return; }
+            broadcastLobby(); // 讓每個人拿到最新的座位編號
+            clearTimeout(resolveTimer);
+            G = createGame(makeDeck(+$('#diff').value), players.length);
+            screen = 'game';
+            $('#board').replaceChildren();
+            publish();
+            updateScreens();
+        }
+
+        function renderLobby() {
+            const names = isHost ? players.map(p => p.nick) : (V && V.names) || lobbyNames;
+            $('#lobbyPlayers').replaceChildren(...names.map((n, i) => {
+                const p = document.createElement('div');
+                p.className = 'pl';
+                p.style.setProperty('--c', COLORS[i]);
+                p.textContent = n + (i === 0 ? ' 👑' : '') + (i === my ? '（我）' : '');
+                return p;
+            }));
+            show('#hostTools', isHost);
+            $('#startOnline').disabled = names.length < 2;
+            $('#lobbyHint').textContent = isHost
+                ? (names.length < 2 ? '把邀請連結傳給朋友，至少 2 人才能開始' : '人到齊了就按「開始遊戲」，也可以先選難度')
+                : '等待房主開始遊戲…';
+        }
+
+        // 成員
+        let lobbyNames = [];
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            makePeer(() => {
+                mode = 'online'; isHost = false; hostPeerId = id;
+                hostConn = peer.connect(id, { reliable: true });
+                hostConn.on('open', () => hostConn.send({ type: 'JOIN', nick }));
+                hostConn.on('data', onGuestData);
+                hostConn.on('close', () => { if (screen !== 'menu') { alert('房主已離開，遊戲結束'); location.reload(); } });
+                setTimeout(() => {
+                    if (screen === 'menu' && peer) {
+                        netMsg('連線逾時，請確認房號或網路後再試');
+                        enableNet(true);
+                        peer.destroy(); peer = null; hostConn = null;
+                    }
+                }, 10000);
+            });
+        }
+
+        function onGuestData(d) {
+            // 只信任房主的連線與格式正確的資料
+            if (!hostConn || hostConn.peer !== hostPeerId || !d || typeof d.type !== 'string') return;
+            if (d.type === 'LOBBY') {
+                if (!Array.isArray(d.names) || !d.names.every(n => typeof n === 'string' && n.length <= 12) || !Number.isInteger(d.index) || d.index < 0 || d.index >= d.names.length) return;
+                lobbyNames = d.names; my = d.index; V = null;
+                screen = 'lobby';
+                renderLobby(); updateScreens();
+            } else if (d.type === 'VIEW') {
+                if (!validView(d.v)) return;
+                V = d.v;
+                if (screen !== 'game') { screen = 'game'; $('#board').replaceChildren(); updateScreens(); }
+                renderGame();
+            } else if (d.type === 'REJECT') {
+                alert(typeof d.reason === 'string' ? d.reason.slice(0, 40) : '無法加入');
+                location.reload();
+            }
+        }
+
+        // ---------- 事件 ----------
+        document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
+            mode = b.dataset.mode;
+            document.querySelectorAll('[data-mode]').forEach(x => x.setAttribute('aria-pressed', x === b));
+            updateScreens();
+        });
+        $('#soloStart').onclick = startSolo;
+        $('#hostBtn').onclick = hostRoom;
+        $('#joinBtn').onclick = joinRoom;
+        $('#startOnline').onclick = startOnline;
+        $('#again').onclick = () => (mode === 'solo' ? startSolo() : startOnline());
+        $('#leave').onclick = () => location.reload();
+        $('#copyInvite').onclick = async () => {
+            const url = location.origin + location.pathname + '#' + hostPeerId, b = $('#copyInvite');
+            try { await navigator.clipboard.writeText(url); b.textContent = '已複製'; }
+            catch (e) { prompt('請手動複製邀請連結：', url); }
+            setTimeout(() => b.textContent = '複製邀請連結', 1500);
+        };
+
+        if (location.hash.length > 1) {
+            $('#joinId').value = location.hash.slice(1);
+            document.querySelector('[data-mode=online]').click();
+        }
+        updateScreens();
+    </script>
+</body>
+
+</html>

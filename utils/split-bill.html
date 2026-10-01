@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="分帳計算（AA 制）：記錄每筆支出與分攤對象，算出誰該付誰多少，轉帳次數最少。">
+    <meta property="og:title" content="分帳計算" />
+    <meta property="og:description" content="多人多筆支出，一次算出誰該付誰多少。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/split-bill.html" />
+    <title>分帳計算</title>
+    <style>
+        :root {
+            --bg: #f5f5f7;
+            --card: #fff;
+            --text: #1d1d1f;
+            --muted: #6e6e73;
+            --fill: rgba(118, 118, 128, .12);
+            --blue: #0071e3;
+            --red: #d70015;
+            --green: #248a3d;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000;
+                --card: #1c1c1e;
+                --text: #f5f5f7;
+                --muted: #98989d;
+                --fill: rgba(118, 118, 128, .24);
+                --blue: #2997ff;
+                --red: #ff453a;
+                --green: #30d158;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0 20px;
+            font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .wrap {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 24px 0 48px;
+        }
+
+        a.back {
+            color: var(--blue);
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin: 12px 0 4px;
+            letter-spacing: -.02em;
+        }
+
+        h2 {
+            font-size: 17px;
+            margin: 0 0 10px;
+        }
+
+        .sub {
+            color: var(--muted);
+            margin: 0 0 20px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 18px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        input,
+        select {
+            font: inherit;
+            color: var(--text);
+            background: var(--fill);
+            border: 0;
+            border-radius: 12px;
+            padding: 9px 12px;
+            min-width: 0;
+        }
+
+        button {
+            font: inherit;
+            border: 0;
+            border-radius: 980px;
+            padding: 9px 18px;
+            background: var(--fill);
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        button.primary {
+            background: var(--blue);
+            color: #fff;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>input {
+            flex: 1 1 120px;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--fill);
+            border-radius: 980px;
+            padding: 4px 6px 4px 12px;
+            margin: 0 6px 6px 0;
+        }
+
+        .chip button {
+            padding: 0 8px;
+            background: none;
+            color: var(--muted);
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .shares {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 14px;
+            margin: 10px 0;
+        }
+
+        .shares label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .item {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .item:last-child {
+            border: 0;
+        }
+
+        .item small {
+            display: block;
+            color: var(--muted);
+        }
+
+        .pos {
+            color: var(--green);
+        }
+
+        .neg {
+            color: var(--red);
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+
+        .del {
+            background: none;
+            color: var(--muted);
+            padding: 0 6px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>分帳計算</h1>
+        <p class="sub">記下每筆支出，最後一次算清楚。資料只存在這個瀏覽器。</p>
+
+        <div class="card">
+            <h2>成員</h2>
+            <div id="people"></div>
+            <div class="row">
+                <input id="pname" placeholder="輸入名字後按新增" maxlength="12" aria-label="成員名字">
+                <button id="padd">新增</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>新增支出</h2>
+            <div class="row">
+                <input id="desc" placeholder="項目（例如：晚餐）" maxlength="30" aria-label="項目">
+                <input id="amount" type="number" inputmode="decimal" min="0" step="any" placeholder="金額" style="max-width:110px" aria-label="金額">
+            </div>
+            <div class="row" style="margin-top:8px">
+                <label for="payer" class="muted">誰先付</label>
+                <select id="payer"></select>
+            </div>
+            <div class="muted" style="margin-top:10px">分攤的人</div>
+            <div class="shares" id="shares"></div>
+            <button class="primary" id="eadd">加入這筆支出</button>
+            <p class="muted" id="msg" style="margin:8px 0 0;font-size:13px"></p>
+        </div>
+
+        <div class="card">
+            <h2>支出紀錄</h2>
+            <div id="list"></div>
+        </div>
+
+        <div class="card">
+            <h2>結算</h2>
+            <div id="result"></div>
+            <button id="clear" style="margin-top:12px">全部清除</button>
+        </div>
+    </div>
+
+    <script>
+        // --- pure ---
+        // 金額一律以「分」為整數運算，避免浮點誤差
+        const toCents = (x) => Math.round(parseFloat(x) * 100);
+
+        // 平均分攤，除不盡的零頭由前面的人各多負擔 1 分
+        function splitCents(total, n) {
+            const base = Math.floor(total / n), rem = total - base * n;
+            return Array.from({ length: n }, (_, i) => base + (i < rem ? 1 : 0));
+        }
+
+        // people: 名字陣列；expenses: [{ payer, amount(分), shares: [名字] }]
+        // 回傳 { net: {名字: 分}（正=別人欠他、負=他欠別人）, transfers: [{ from, to, amount }] }
+        function settle(people, expenses) {
+            const net = Object.fromEntries(people.map(p => [p, 0]));
+            for (const e of expenses) {
+                net[e.payer] += e.amount;
+                const parts = splitCents(e.amount, e.shares.length);
+                e.shares.forEach((p, i) => { net[p] -= parts[i]; });
+            }
+            // 貪婪配對：最大欠款人 → 最大債權人，轉帳次數最多 n-1 次
+            const debtors = [], creditors = [];
+            for (const [p, v] of Object.entries(net)) {
+                if (v < 0) debtors.push({ p, v: -v }); else if (v > 0) creditors.push({ p, v });
+            }
+            const transfers = [];
+            while (debtors.length && creditors.length) {
+                debtors.sort((a, b) => b.v - a.v);
+                creditors.sort((a, b) => b.v - a.v);
+                const d = debtors[0], c = creditors[0], amt = Math.min(d.v, c.v);
+                transfers.push({ from: d.p, to: c.p, amount: amt });
+                d.v -= amt; c.v -= amt;
+                if (d.v === 0) debtors.shift();
+                if (c.v === 0) creditors.shift();
+            }
+            return { net, transfers };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'bill_state';
+        const money = (c) => (c / 100).toLocaleString('zh-TW', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        let S = { people: [], expenses: [] };
+        try { S = JSON.parse(localStorage.getItem(KEY)) || S; } catch (e) { }
+
+        const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } };
+        const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
+
+        function render() {
+            // 成員
+            const pe = $('#people');
+            pe.replaceChildren();
+            S.people.forEach(p => {
+                const chip = el('span', p, 'chip');
+                const b = el('button', '×');
+                b.setAttribute('aria-label', '移除 ' + p);
+                b.onclick = () => {
+                    if (S.expenses.some(e => e.payer === p || e.shares.includes(p))) return flash(`${p} 已有支出紀錄，請先刪除相關支出`);
+                    S.people = S.people.filter(x => x !== p);
+                    save(); render();
+                };
+                chip.append(b);
+                pe.append(chip);
+            });
+            // 付款人 / 分攤者
+            const keep = $('#payer').value;
+            $('#payer').replaceChildren(...S.people.map(p => new Option(p, p)));
+            if (S.people.includes(keep)) $('#payer').value = keep;
+            // 保留目前的勾選；新加入的成員預設勾選
+            const checked = new Set([...document.querySelectorAll('#shares input:checked')].map(i => i.value));
+            const shown = new Set([...document.querySelectorAll('#shares input')].map(i => i.value));
+            $('#shares').replaceChildren(...S.people.map(p => {
+                const l = el('label'), i = document.createElement('input');
+                i.type = 'checkbox'; i.value = p; i.checked = !shown.has(p) || checked.has(p);
+                l.append(i, p);
+                return l;
+            }));
+            // 支出
+            const ls = $('#list');
+            ls.replaceChildren();
+            if (!S.expenses.length) ls.append(el('div', '還沒有支出', 'muted'));
+            S.expenses.forEach((e, idx) => {
+                const row = el('div', null, 'item'), left = el('div');
+                left.append(el('b', e.desc || '支出'), el('small', `${e.payer} 先付 ・ 分攤：${e.shares.length === S.people.length ? '全部人' : e.shares.join('、')}`));
+                const right = el('div'), d = el('button', '刪除', 'del');
+                d.onclick = () => { S.expenses.splice(idx, 1); save(); render(); };
+                right.append(el('b', money(e.amount)), ' ', d);
+                right.style.whiteSpace = 'nowrap';
+                row.append(left, right);
+                ls.append(row);
+            });
+            // 結算
+            const rs = $('#result');
+            rs.replaceChildren();
+            if (!S.expenses.length) { rs.append(el('div', '新增支出後會在這裡顯示結果', 'muted')); return; }
+            const { net, transfers } = settle(S.people, S.expenses);
+            const total = S.expenses.reduce((s, e) => s + e.amount, 0);
+            rs.append(el('div', `總支出 ${money(total)}`, 'muted'));
+            S.people.forEach(p => {
+                const row = el('div', null, 'item');
+                row.append(el('span', p), el('b', (net[p] > 0 ? '可收回 ' : net[p] < 0 ? '應付 ' : '') + (net[p] === 0 ? '結清' : money(Math.abs(net[p]))), net[p] > 0 ? 'pos' : net[p] < 0 ? 'neg' : 'muted'));
+                rs.append(row);
+            });
+            if (transfers.length) {
+                rs.append(el('h2', '怎麼轉帳最省事'));
+                transfers.forEach(t => {
+                    const row = el('div', null, 'item');
+                    row.append(el('span', `${t.from} → ${t.to}`), el('b', money(t.amount)));
+                    rs.append(row);
+                });
+            }
+        }
+
+        function flash(t) { $('#msg').textContent = t; }
+
+        function addPerson() {
+            const n = $('#pname').value.trim();
+            if (!n) return;
+            if (S.people.includes(n)) return flash('名字重複了');
+            S.people.push(n);
+            $('#pname').value = '';
+            flash('');
+            save(); render();
+        }
+
+        $('#padd').onclick = addPerson;
+        $('#pname').onkeydown = (e) => { if (e.key === 'Enter') addPerson(); };
+        $('#eadd').onclick = () => {
+            const amount = toCents($('#amount').value);
+            const shares = [...document.querySelectorAll('#shares input:checked')].map(i => i.value);
+            if (S.people.length < 2) return flash('請先新增至少 2 位成員');
+            if (!(amount > 0)) return flash('請輸入大於 0 的金額');
+            if (!shares.length) return flash('請至少選一位分攤的人');
+            S.expenses.push({ desc: $('#desc').value.trim(), payer: $('#payer').value, amount, shares });
+            $('#desc').value = ''; $('#amount').value = '';
+            flash('');
+            save(); render();
+        };
+        $('#clear').onclick = () => {
+            if (!confirm('確定要清除所有成員與支出嗎？')) return;
+            S = { people: [], expenses: [] };
+            save(); render();
+        };
+        render();
+    </script>
+</body>
+
+</html>

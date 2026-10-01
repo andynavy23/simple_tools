@@ -19,6 +19,16 @@
 | [隨機分組 / 抽籤](fun/random-groups.html) | 趣味 | 貼上名單，分成 N 組、每組 M 人，或抽出 K 人 |
 | [單位與匯率換算](utils/unit-converter.html) | 工具 | 長度、重量、坪、溫度等單位，以及即時匯率（需連網，有離線快取） |
 | [密碼產生器](utils/password-gen.html) | 工具 | 以瀏覽器安全亂數在本機產生密碼，可排除易混淆字元 |
+| [捲軸期望值計算機](game-assist/scroll-calculator.html) | 遊戲輔助 | 算衝捲平均花費與各把握度所需次數，可設定失敗損毀機率 |
+| [翻牌記憶遊戲](mini-games/memory-match.html) | 小遊戲 | 單人挑戰最少步數，或連線（最多 4 人，房主驗證）輪流翻牌 |
+| [打字速度測試](mini-games/typing-test.html) | 小遊戲 | 中英文打字測速，每分鐘字數與正確率 |
+| [白噪音 / 環境音](fun/white-noise.html) | 趣味 | 即時合成白 / 粉紅 / 棕噪音、雨聲、風聲，可定時 |
+| [分帳計算](utils/split-bill.html) | 工具 | 多人多筆支出分帳，轉帳次數最少 |
+| [時區轉換](utils/timezone.html) | 工具 | 一個時間對照多個城市，處理夏令時間 |
+| [正規表示式測試器](utils/regex-tester.html) | 工具 | 即時標示符合內容、群組與位置 |
+| [色彩工具](utils/color-tools.html) | 工具 | 色碼互轉與 WCAG 對比度檢查 |
+| [文字差異比對](utils/text-diff.html) | 工具 | 逐行文字差異比對 |
+| [編碼解碼](utils/encode-decode.html) | 工具 | Base64 / URL / Unicode / HTML 實體 / 十六進位 |
 | [摸魚閱讀器](reading/stealth-reader.html) | 閱讀 | 本機載入 txt 小說，偽裝 ERP 後台、老闆鍵、進度記憶（開發中） |
 
 ## 專案結構
