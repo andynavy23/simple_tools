@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="倒數日 / 紀念日：記下重要日期，顯示還有幾天或已經幾天，可設定每年重複。">
+    <meta property="og:title" content="倒數日 / 紀念日" />
+    <meta property="og:description" content="記下重要日期，顯示還有幾天或已經幾天。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/countdown.html" />
+    <title>倒數日 / 紀念日</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 600px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>input[type=text] {
+            flex: 1 1 160px;
+        }
+
+        .row label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .ev .name {
+            font-weight: 600;
+            word-break: break-all;
+        }
+
+        .ev small {
+            display: block;
+            color: var(--muted);
+        }
+
+        .ev .big {
+            text-align: right;
+            font-size: 28px;
+            font-weight: 700;
+            line-height: 1.1;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .ev .big small {
+            font-size: 12px;
+            font-weight: 400;
+        }
+
+        .future .big {
+            color: var(--blue);
+        }
+
+        .today .big {
+            color: var(--ok);
+        }
+
+        .del {
+            background: none;
+            color: var(--muted);
+            padding: 0 8px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>倒數日 / 紀念日</h1>
+        <p class="sub">記下重要的日子。資料只存在這個瀏覽器。</p>
+
+        <div class="card">
+            <div class="row">
+                <input type="text" id="name" maxlength="30" placeholder="名稱（例如：旅行出發）" aria-label="名稱">
+                <input type="date" id="date" aria-label="日期">
+            </div>
+            <div class="row" style="margin-top:10px">
+                <label><input type="checkbox" id="yearly"> 每年重複（紀念日）</label>
+                <button class="primary" id="add" style="margin-left:auto">新增</button>
+            </div>
+            <p class="note" id="msg"></p>
+        </div>
+
+        <div class="card" id="list"></div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { day } = Util;
+
+        // --- pure ---
+        const parseYMD = day.parse, daysBetween = day.between; // 兩日期相差幾天（to - from）
+        const ymd = ({ y, m, d }) => day.ymd(y, m, d);
+        const isLeap = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+
+        // 2/29 在非閏年算 2/28
+        const anniv = (y, m, d) => ({ y, m, d: m === 2 && d === 29 && !isLeap(y) ? 28 : d });
+
+        // 今天（含）起的下一個紀念日
+        function nextAnniversary(todayStr, dateStr) {
+            const t = parseYMD(todayStr), e = parseYMD(dateStr);
+            let c = anniv(t.y, e.m, e.d);
+            if (daysBetween(todayStr, ymd(c)) < 0) c = anniv(t.y + 1, e.m, e.d);
+            return ymd(c);
+        }
+
+        // 回傳顯示用資訊：{ kind: 'future'|'today'|'past', days, big, label, sub, sort }
+        function describe(todayStr, ev) {
+            if (!ev.yearly) {
+                const diff = daysBetween(todayStr, ev.date);
+                if (diff > 0) return { kind: 'future', days: diff, big: diff, label: '還有', sub: ev.date, sort: diff };
+                if (diff === 0) return { kind: 'today', days: 0, big: 0, label: '就是今天', sub: ev.date, sort: 0 };
+                return { kind: 'past', days: -diff, big: -diff, label: '已經', sub: ev.date, sort: 1e9 - diff };
+            }
+            const next = nextAnniversary(todayStr, ev.date), diff = daysBetween(todayStr, next);
+            const years = parseYMD(next).y - parseYMD(ev.date).y;
+            const sinceStart = daysBetween(ev.date, todayStr);
+            const nth = years > 0 ? `第 ${years} 週年` : '當天';
+            const sub = `${ev.date} 起${sinceStart >= 0 ? `，已 ${sinceStart} 天` : ''} ・ 每年`;
+            if (diff === 0) return { kind: 'today', days: 0, big: 0, label: `今天是${nth}`, sub, sort: 0 };
+            return { kind: 'future', days: diff, big: diff, label: `距離${nth}還有`, sub, sort: diff };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'countdown_events';
+        let events = Util.store.get(KEY, []);
+        const todayStr = day.today;
+        $('#date').value = todayStr();
+
+        function render() {
+            const box = $('#list');
+            box.replaceChildren();
+            if (!events.length) { box.append(Object.assign(document.createElement('div'), { className: 'muted', textContent: '還沒有任何日期，從上面新增一個吧' })); return; }
+            const today = todayStr();
+            events.map((e, i) => ({ e, i, d: describe(today, e) })).sort((a, b) => a.d.sort - b.d.sort).forEach(({ e, i, d }) => {
+                const row = document.createElement('div');
+                row.className = 'li ev ' + d.kind;
+                const left = document.createElement('div');
+                const name = document.createElement('div'), sub = document.createElement('small');
+                name.className = 'name'; name.textContent = e.name;
+                sub.textContent = d.sub;
+                left.append(name, sub);
+                const right = document.createElement('div');
+                right.className = 'big';
+                right.innerHTML = '<small></small><span></span>';
+                right.firstChild.textContent = d.label;
+                right.lastChild.textContent = d.kind === 'today' ? '🎉' : `${d.big} 天`;
+                right.firstChild.style.display = 'block';
+                const del = document.createElement('button');
+                del.className = 'del'; del.textContent = '×'; del.setAttribute('aria-label', '刪除 ' + e.name);
+                del.onclick = () => { events.splice(i, 1); Util.store.set(KEY, events); render(); };
+                const wrap = document.createElement('div');
+                wrap.style.cssText = 'display:flex;align-items:center;gap:6px';
+                wrap.append(right, del);
+                row.append(left, wrap);
+                box.append(row);
+            });
+        }
+
+        $('#add').onclick = () => {
+            const name = $('#name').value.trim(), date = $('#date').value;
+            if (!name) { $('#msg').textContent = '請輸入名稱'; return; }
+            if (!date) { $('#msg').textContent = '請選擇日期'; return; }
+            events.push({ name, date, yearly: $('#yearly').checked });
+            Util.store.set(KEY, events);
+            $('#name').value = ''; $('#msg').textContent = '';
+            render();
+        };
+        $('#name').onkeydown = (e) => { if (e.key === 'Enter') $('#add').click(); };
+        render();
+    </script>
+</body>
+
+</html>

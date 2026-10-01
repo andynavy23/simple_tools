@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="抽卡機率計算機：輸入機率、軟保底、硬保底與 UP 規則，算出期望抽數、各把握度所需抽數與花費。">
+    <meta property="og:title" content="抽卡機率計算機" />
+    <meta property="og:description" content="算出期望抽數與各把握度所需抽數。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/game-assist/gacha-calculator.html" />
+    <title>抽卡機率計算機</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+
+        h2.sec {
+            margin-top: 16px;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>抽卡機率計算機</h1>
+        <p class="sub">不內建任何遊戲數值，機率與保底由你填，適用大多數有保底的抽卡。</p>
+
+        <div class="card">
+            <div class="fgrid">
+                <div><label for="base">基礎機率 (%)</label><input id="base" type="number" min="0.001" max="100" step="any" value="0.6"></div>
+                <div><label for="hard">硬保底（第幾抽必出）</label><input id="hard" type="number" min="1" max="500" step="1" value="90"></div>
+                <div><label for="soft">軟保底開始（第幾抽，0 = 無）</label><input id="soft" type="number" min="0" max="500" step="1" value="74"></div>
+                <div><label for="step">軟保底每抽增加 (%)</label><input id="step" type="number" min="0" max="100" step="any" value="6"></div>
+                <div><label for="up">UP 角色佔比 (%)（100 = 沒有歪）</label><input id="up" type="number" min="0" max="100" step="any" value="50"></div>
+                <div><label for="cost">每抽花費（任意單位）</label><input id="cost" type="number" min="0" step="any" value="160"></div>
+                <div class="full"><label><input type="checkbox" id="guar" checked style="width:auto;vertical-align:middle"> 歪了之後，下一個一定是 UP（大保底）</label></div>
+            </div>
+            <p class="note">軟保底：從指定抽數開始，每抽機率增加一個固定值，直到硬保底必出。假設每次出貨後保底計數歸零。</p>
+        </div>
+
+        <div class="card" id="out"></div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        // 第 1..hard 抽各自的出貨機率（0–1）：基礎 → 軟保底遞增 → 硬保底 100%
+        function pullRates(base, hard, soft, step) {
+            const r = [];
+            for (let i = 1; i <= hard; i++) {
+                let p = base;
+                if (soft > 0 && i >= soft) p = base + (i - soft + 1) * step;
+                r.push(i === hard ? 1 : Math.min(1, p));
+            }
+            return r;
+        }
+
+        // 「第 k 抽首次出貨」的機率（k = 1..hard）
+        function firstHitPmf(rates) {
+            const pmf = []; let alive = 1;
+            for (const p of rates) { pmf.push(alive * p); alive *= 1 - p; }
+            return pmf;
+        }
+
+        function convolve(a, b) {
+            const out = new Array(a.length + b.length + 1).fill(0);   // 索引 = 抽數（第 0 位不用）
+            a.forEach((x, i) => b.forEach((y, j) => { out[i + 1 + j + 1] += x * y; }));
+            return out.slice(1);                                      // 索引 k-1 = 剛好 k 抽
+        }
+
+        const expectation = (pmf) => pmf.reduce((s, p, i) => s + p * (i + 1), 0);
+        const cdf = (pmf) => { let s = 0; return pmf.map(p => (s += p)); };
+        // 累積機率第一次 >= q 的抽數
+        function quantile(pmf, q) {
+            const c = cdf(pmf);
+            const i = c.findIndex(v => v >= q - 1e-12);
+            return i < 0 ? null : i + 1;
+        }
+
+        // UP 的分佈：每次出貨有 f 機率是 UP；若有大保底，歪一次後下一個必為 UP
+        function upPmf(pmf, f, guaranteed) {
+            const two = convolve(pmf, pmf);
+            const len = two.length;
+            const one = pmf.concat(new Array(len - pmf.length).fill(0));
+            if (guaranteed) return one.map((p, i) => f * p + (1 - f) * two[i]);
+            // 沒有大保底：要出的貨數 T 服從幾何分佈 P(T=t) = f(1-f)^(t-1)；總抽數 = T 次「首次出貨」相加
+            let cur = pmf, out = pmf.map(p => f * p), total = f;
+            for (let t = 2; t <= 80 && 1 - total > 1e-9; t++) {
+                cur = convolve(cur, pmf);
+                const w = f * Math.pow(1 - f, t - 1);
+                const size = Math.max(out.length, cur.length);
+                out = Array.from({ length: size }, (_, i) => (out[i] || 0) + w * (cur[i] || 0));
+                total += w;
+            }
+            return out;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const num = (id) => parseFloat($('#' + id).value);
+        const nf = (v, d = 1) => v.toLocaleString('zh-TW', { maximumFractionDigits: d });
+
+        const row = Util.statRow;
+
+        function section(title, pmf, cost) {
+            const frag = document.createDocumentFragment(), h = document.createElement('h2');
+            h.className = 'sec'; h.textContent = title;
+            frag.append(h, row('期望抽數', `${nf(expectation(pmf))} 抽${cost ? `（約 ${nf(expectation(pmf) * cost, 0)}）` : ''}`));
+            for (const q of [0.5, 0.8, 0.9, 0.99]) {
+                const n = quantile(pmf, q);
+                frag.append(row(`${q * 100}% 機率出貨`, n ? `${n} 抽${cost ? `（約 ${nf(n * cost, 0)}）` : ''}` : '—'));
+            }
+            return frag;
+        }
+
+        function render() {
+            const out = $('#out');
+            out.replaceChildren();
+            const base = num('base') / 100, hard = Math.round(num('hard')), soft = Math.round(num('soft')) || 0, step = num('step') / 100, up = num('up') / 100, cost = num('cost') || 0;
+            if (!(base > 0 && base <= 1) || !(hard >= 1 && hard <= 500) || !(soft >= 0 && soft <= hard) || !(step >= 0) || !(up >= 0 && up <= 1) || !(cost >= 0)) {
+                out.textContent = '請檢查輸入：機率 0–100%、硬保底 1–500、軟保底不可大於硬保底';
+                return;
+            }
+            const pmf = firstHitPmf(pullRates(base, hard, soft, step));
+            out.append(section('任意一個 5★（出貨）', pmf, cost));
+            if (up < 1) out.append(section('指定的 UP 角色', upPmf(pmf, up, $('#guar').checked), cost));
+            const note = document.createElement('p');
+            note.className = 'note';
+            note.textContent = '期望值是長期平均；「N% 機率」代表 N 抽內至少出貨一次的機率。';
+            out.append(note);
+        }
+
+        document.querySelectorAll('input').forEach(i => i.oninput = render);
+        render();
+    </script>
+</body>
+
+</html>

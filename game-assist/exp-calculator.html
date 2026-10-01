@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="經驗效率計算機：輸入目前與目標經驗、每次獲得量與每小時次數，算出還要幾次、幾小時、什麼時候升級。">
+    <meta property="og:title" content="經驗效率計算機" />
+    <meta property="og:description" content="算出還要打幾次、幾小時、預計幾點升級。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/game-assist/exp-calculator.html" />
+    <title>經驗效率計算機</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+
+        .big {
+            font-size: 26px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>經驗效率計算機</h1>
+        <p class="sub">以「百分比」計算，不內建任何等級經驗表，填你看到的數字就好。</p>
+
+        <div class="card">
+            <div class="fgrid">
+                <div><label for="cur">目前經驗 (%)</label><input id="cur" type="number" min="0" step="any" value="12.5"></div>
+                <div><label for="tgt">目標經驗 (%)（滿等 = 100）</label><input id="tgt" type="number" min="0" step="any" value="100"></div>
+                <div><label for="gain">每次獲得 (%)</label><input id="gain" type="number" min="0" step="any" value="0.35"></div>
+                <div><label for="rph">每小時次數</label><input id="rph" type="number" min="0" step="any" value="240"></div>
+                <div><label for="bonus">經驗加成 (%)（選填）</label><input id="bonus" type="number" min="0" step="any" value="0"></div>
+            </div>
+            <p class="note">「每次」可以是一場、一波怪、一次任務，單位自己定，只要和「每小時次數」對得上。</p>
+        </div>
+
+        <div class="card" id="out"></div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        // 回傳 { remaining, perRun, perHour, runs, hours }；輸入不合法時回傳 { error }
+        function expPlan({ current, target, gain, perHour, bonus = 0 }) {
+            if (![current, target, gain, perHour, bonus].every(Number.isFinite) || current < 0 || target < 0 || gain < 0 || perHour < 0 || bonus < 0) return { error: '請輸入不為負的數字' };
+            const remaining = Math.max(0, target - current);
+            const perRun = gain * (1 + bonus / 100);
+            if (remaining === 0) return { remaining, perRun, perHour: perRun * perHour, runs: 0, hours: 0 };
+            if (perRun <= 0) return { error: '每次獲得必須大於 0' };
+            const runs = Math.ceil(remaining / perRun - 1e-9);
+            const hours = perHour > 0 ? runs / perHour : Infinity;
+            return { remaining, perRun, perHour: perRun * perHour, runs, hours };
+        }
+
+        function fmtDuration(hours) {
+            if (!Number.isFinite(hours)) return '—';
+            const mins = Math.round(hours * 60), d = Math.floor(mins / 1440), h = Math.floor(mins % 1440 / 60), m = mins % 60;
+            return [d ? `${d} 天` : '', h ? `${h} 小時` : '', m || (!d && !h) ? `${m} 分鐘` : ''].filter(Boolean).join(' ');
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const num = (id) => parseFloat($('#' + id).value);
+        const nf = (v, d = 2) => v.toLocaleString('zh-TW', { maximumFractionDigits: d });
+
+        const row = Util.statRow;
+
+        function render() {
+            const out = $('#out');
+            out.replaceChildren();
+            const p = expPlan({ current: num('cur'), target: num('tgt'), gain: num('gain'), perHour: num('rph'), bonus: num('bonus') || 0 });
+            if (p.error) { out.textContent = p.error; return; }
+            if (p.remaining === 0) { out.textContent = '已經達到目標 🎉'; return; }
+            const finish = Number.isFinite(p.hours) ? new Date(Date.now() + p.hours * 3600e3) : null;
+            out.append(
+                row('還差經驗', `${nf(p.remaining)} %`),
+                row('實際每次獲得', `${nf(p.perRun, 4)} %`),
+                row('每小時獲得', `${nf(p.perHour)} %`),
+                row('還需要次數', `${nf(p.runs, 0)} 次`),
+                row('預計時間', fmtDuration(p.hours), 'big'),
+                row('預計完成', finish ? finish.toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'),
+            );
+        }
+
+        document.querySelectorAll('input').forEach(i => i.oninput = render);
+        render();
+    </script>
+</body>
+
+</html>

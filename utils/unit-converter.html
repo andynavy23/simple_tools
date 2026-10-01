@@ -11,71 +11,8 @@
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/unit-converter.html" />
     <title>單位與匯率換算</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
     <style>
-        :root {
-            --bg: #f5f5f7;
-            --card: #fff;
-            --text: #1d1d1f;
-            --muted: #6e6e73;
-            --fill: rgba(118, 118, 128, .12);
-            --blue: #0071e3;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bg: #000;
-                --card: #1c1c1e;
-                --text: #f5f5f7;
-                --muted: #98989d;
-                --fill: rgba(118, 118, 128, .24);
-                --blue: #2997ff;
-            }
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            margin: 0;
-            padding: 0 20px;
-            font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
-            background: var(--bg);
-            color: var(--text);
-        }
-
-        .wrap {
-            max-width: 560px;
-            margin: 0 auto;
-            padding: 24px 0 48px;
-        }
-
-        a {
-            color: var(--blue);
-        }
-
-        a.back {
-            text-decoration: none;
-            font-size: 14px;
-        }
-
-        h1 {
-            font-size: 32px;
-            margin: 12px 0 4px;
-            letter-spacing: -.02em;
-        }
-
-        .sub {
-            color: var(--muted);
-            margin: 0 0 20px;
-        }
-
-        .card {
-            background: var(--card);
-            border-radius: 18px;
-            padding: 16px;
-            margin-bottom: 16px;
-        }
 
         .chips {
             display: flex;
@@ -86,75 +23,20 @@
             scrollbar-width: none;
         }
 
-        .chip {
-            font: inherit;
-            font-size: 14px;
-            white-space: nowrap;
-            border: 0;
-            border-radius: 980px;
-            padding: 6px 14px;
-            background: var(--fill);
-            color: var(--text);
-            cursor: pointer;
-        }
-
-        .chip[aria-pressed=true] {
-            background: var(--text);
-            color: var(--bg);
-        }
-
         .in {
             display: flex;
             gap: 10px;
-        }
-
-        input,
-        select {
-            font: inherit;
-            color: var(--text);
-            background: var(--fill);
-            border: 0;
-            border-radius: 12px;
-            padding: 10px 12px;
         }
 
         input {
             flex: 1;
             min-width: 0;
         }
-
-        .row {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 9px 0;
-            border-bottom: 1px solid var(--fill);
-        }
-
-        .row:last-child {
-            border: 0;
-        }
-
-        .row span:first-child {
-            color: var(--muted);
-        }
-
-        .row b {
-            font-variant-numeric: tabular-nums;
-            text-align: right;
-            word-break: break-all;
-        }
-
-        .row.me b {
+    
+        .me {
             color: var(--blue);
         }
-
-        .note {
-            color: var(--muted);
-            font-size: 13px;
-            margin: 10px 0 0;
-        }
-    </style>
+</style>
 </head>
 
 <body>
@@ -175,6 +57,7 @@
         <div class="card" id="out"></div>
     </div>
 
+    <script src="../shared/js/util.js"></script>
     <script>
         // --- pure ---
         // 一般類別：每個單位對應「基準單位」的倍率
@@ -230,8 +113,7 @@
 
         async function loadRates() {
             const KEY = 'fx_cache';
-            let cache = null;
-            try { cache = JSON.parse(localStorage.getItem(KEY)); } catch (e) { }
+            let cache = Util.store.get(KEY, null);
             if (cache && Date.now() - cache.fetched < 6 * 3600e3) return { ...cache, stale: false };
             try {
                 const ctl = new AbortController();
@@ -241,7 +123,7 @@
                 const j = await res.json();
                 if (j.result !== 'success') throw new Error('bad response');
                 cache = { rates: j.rates, time: j.time_last_update_utc, fetched: Date.now() };
-                try { localStorage.setItem(KEY, JSON.stringify(cache)); } catch (e) { }
+                Util.store.set(KEY, cache);
                 return { ...cache, stale: false };
             } catch (e) {
                 return cache ? { ...cache, stale: true } : null;
@@ -277,19 +159,13 @@
             if (isNaN(v)) { out.textContent = '請輸入數字'; return; }
             const from = $('#from').value;
             convertAll(cat, v, from, fx?.rates).forEach(({ unit, value }) => {
-                const row = document.createElement('div');
-                row.className = 'row' + (unit === from ? ' me' : '');
-                const l = document.createElement('span'), r = document.createElement('b');
-                l.textContent = cat === '匯率' ? `${unit} ${CURRENCIES[unit]}` : unit;
-                r.textContent = fmt(value);
-                row.append(l, r);
-                out.append(row);
+                out.append(Util.statRow(cat === '匯率' ? `${unit} ${CURRENCIES[unit]}` : unit, fmt(value), unit === from ? 'me' : ''));
             });
         }
 
         function setCat(c) {
             cat = c;
-            document.querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', b.textContent === c));
+            document.querySelectorAll('#cats button').forEach(b => b.setAttribute('aria-pressed', b.textContent === c));
             fillUnits();
             if (c === '匯率' && !fx && !fxLoading) {
                 fxLoading = true;
@@ -300,7 +176,7 @@
 
         ALL.forEach(c => {
             const b = document.createElement('button');
-            b.className = 'chip';
+            b.className = 'sm';
             b.textContent = c;
             b.onclick = () => setCat(c);
             $('#cats').append(b);

@@ -11,102 +11,10 @@
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/split-bill.html" />
     <title>分帳計算</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
     <style>
         :root {
-            --bg: #f5f5f7;
-            --card: #fff;
-            --text: #1d1d1f;
-            --muted: #6e6e73;
-            --fill: rgba(118, 118, 128, .12);
-            --blue: #0071e3;
-            --red: #d70015;
-            --green: #248a3d;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bg: #000;
-                --card: #1c1c1e;
-                --text: #f5f5f7;
-                --muted: #98989d;
-                --fill: rgba(118, 118, 128, .24);
-                --blue: #2997ff;
-                --red: #ff453a;
-                --green: #30d158;
-            }
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            margin: 0;
-            padding: 0 20px;
-            font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
-            background: var(--bg);
-            color: var(--text);
-        }
-
-        .wrap {
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 24px 0 48px;
-        }
-
-        a.back {
-            color: var(--blue);
-            text-decoration: none;
-            font-size: 14px;
-        }
-
-        h1 {
-            font-size: 32px;
-            margin: 12px 0 4px;
-            letter-spacing: -.02em;
-        }
-
-        h2 {
-            font-size: 17px;
-            margin: 0 0 10px;
-        }
-
-        .sub {
-            color: var(--muted);
-            margin: 0 0 20px;
-        }
-
-        .card {
-            background: var(--card);
-            border-radius: 18px;
-            padding: 16px;
-            margin-bottom: 16px;
-        }
-
-        input,
-        select {
-            font: inherit;
-            color: var(--text);
-            background: var(--fill);
-            border: 0;
-            border-radius: 12px;
-            padding: 9px 12px;
-            min-width: 0;
-        }
-
-        button {
-            font: inherit;
-            border: 0;
-            border-radius: 980px;
-            padding: 9px 18px;
-            background: var(--fill);
-            color: var(--text);
-            cursor: pointer;
-        }
-
-        button.primary {
-            background: var(--blue);
-            color: #fff;
+            --wrap-w: 600px;
         }
 
         .row {
@@ -151,33 +59,17 @@
             gap: 4px;
         }
 
-        .item {
-            display: flex;
-            justify-content: space-between;
-            gap: 10px;
-            padding: 8px 0;
-            border-bottom: 1px solid var(--fill);
-        }
-
-        .item:last-child {
-            border: 0;
-        }
-
-        .item small {
+        .li small{
             display: block;
             color: var(--muted);
         }
 
         .pos {
-            color: var(--green);
+            color: var(--ok);
         }
 
         .neg {
-            color: var(--red);
-        }
-
-        .muted {
-            color: var(--muted);
+            color: var(--bad);
         }
 
         .del {
@@ -231,6 +123,7 @@
         </div>
     </div>
 
+    <script src="../shared/js/util.js"></script>
     <script>
         // --- pure ---
         // 金額一律以「分」為整數運算，避免浮點誤差
@@ -273,10 +166,10 @@
         const $ = (s) => document.querySelector(s);
         const KEY = 'bill_state';
         const money = (c) => (c / 100).toLocaleString('zh-TW', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-        let S = { people: [], expenses: [] };
-        try { S = JSON.parse(localStorage.getItem(KEY)) || S; } catch (e) { }
+        const { store } = Util;
+        let S = store.get(KEY, null) || { people: [], expenses: [] };
 
-        const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } };
+        const save = () => store.set(KEY, S);
         const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
 
         function render() {
@@ -313,7 +206,7 @@
             ls.replaceChildren();
             if (!S.expenses.length) ls.append(el('div', '還沒有支出', 'muted'));
             S.expenses.forEach((e, idx) => {
-                const row = el('div', null, 'item'), left = el('div');
+                const row = el('div', null, 'li'), left = el('div');
                 left.append(el('b', e.desc || '支出'), el('small', `${e.payer} 先付 ・ 分攤：${e.shares.length === S.people.length ? '全部人' : e.shares.join('、')}`));
                 const right = el('div'), d = el('button', '刪除', 'del');
                 d.onclick = () => { S.expenses.splice(idx, 1); save(); render(); };
@@ -330,14 +223,14 @@
             const total = S.expenses.reduce((s, e) => s + e.amount, 0);
             rs.append(el('div', `總支出 ${money(total)}`, 'muted'));
             S.people.forEach(p => {
-                const row = el('div', null, 'item');
+                const row = el('div', null, 'li');
                 row.append(el('span', p), el('b', (net[p] > 0 ? '可收回 ' : net[p] < 0 ? '應付 ' : '') + (net[p] === 0 ? '結清' : money(Math.abs(net[p]))), net[p] > 0 ? 'pos' : net[p] < 0 ? 'neg' : 'muted'));
                 rs.append(row);
             });
             if (transfers.length) {
                 rs.append(el('h2', '怎麼轉帳最省事'));
                 transfers.forEach(t => {
-                    const row = el('div', null, 'item');
+                    const row = el('div', null, 'li');
                     row.append(el('span', `${t.from} → ${t.to}`), el('b', money(t.amount)));
                     rs.append(row);
                 });

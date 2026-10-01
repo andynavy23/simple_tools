@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="習慣打卡表：每天一鍵打卡，看連續天數與當月月曆，資料只存在你的瀏覽器。">
+    <meta property="og:title" content="習慣打卡表" />
+    <meta property="og:description" content="每天一鍵打卡，看連續天數與月曆。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/habit-tracker.html" />
+    <title>習慣打卡表</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .add {
+            display: flex;
+            gap: 8px;
+        }
+
+        .add input {
+            flex: 1;
+        }
+
+        .head {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .head h2 {
+            margin: 0;
+            flex: 1 1 140px;
+            word-break: break-all;
+        }
+
+        .streak {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .streak b {
+            color: var(--text);
+            font-size: 18px;
+        }
+
+        .cal {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            margin-top: 12px;
+        }
+
+        .cal .dow {
+            text-align: center;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .d {
+            aspect-ratio: 1;
+            padding: 0;
+            border-radius: 8px;
+            font-size: 13px;
+            background: var(--fill);
+            color: var(--muted);
+        }
+
+        .d.blank {
+            visibility: hidden;
+        }
+
+        .d.on {
+            background: var(--ok);
+            color: #fff;
+            font-weight: 700;
+        }
+
+        .d.today {
+            outline: 2px solid var(--blue);
+            outline-offset: 1px;
+        }
+
+        .d:disabled {
+            opacity: .35;
+        }
+
+        .nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .nav span {
+            flex: 1;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .del {
+            background: none;
+            color: var(--muted);
+            padding: 0 8px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>習慣打卡表</h1>
+        <p class="sub">每天一鍵打卡，連續天數一目了然。資料只存在這個瀏覽器。</p>
+
+        <div class="card add">
+            <input type="text" id="name" maxlength="30" placeholder="新的習慣（例如：運動 30 分鐘）" aria-label="新的習慣">
+            <button class="primary" id="add">新增</button>
+        </div>
+        <div id="list"></div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { day } = Util;
+
+        // --- pure ---
+        const ymd = day.ymd, dayNum = day.num, shiftDay = day.shift;
+
+        // 連續打卡：current 以今天（或昨天，若今天還沒打）往回算；longest 為歷史最長
+        function streaks(dates, today) {
+            const set = new Set(dates);
+            let cur = 0, day = set.has(today) ? today : shiftDay(today, -1);
+            while (set.has(day)) { cur++; day = shiftDay(day, -1); }
+            const sorted = [...set].map(dayNum).sort((a, b) => a - b);
+            let longest = 0, run = 0;
+            sorted.forEach((n, i) => { run = i && n === sorted[i - 1] + 1 ? run + 1 : 1; if (run > longest) longest = run; });
+            return { current: cur, longest, total: set.size };
+        }
+
+        // 某月的月曆格子：週日開頭；前面的空格為 null
+        function monthCells(y, m) {
+            const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+            return [...Array(first).fill(null), ...Array.from({ length: days }, (_, i) => ymd(y, m, i + 1))];
+        }
+        // --- /pure ---
+
+        const { store } = Util;
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'habits';
+        let habits = store.get(KEY, []);                    // [{ id, name, dates: [YYYY-MM-DD] }]
+        const today = day.today;
+        const view = {};                                     // 每個習慣目前看的月份 { id: [y, m] }
+
+        const save = () => store.set(KEY, habits);
+
+        function render() {
+            const list = $('#list'), t = today();
+            list.replaceChildren();
+            if (!habits.length) { const p = document.createElement('div'); p.className = 'card muted'; p.textContent = '還沒有習慣，從上面新增一個吧'; list.append(p); return; }
+            habits.forEach(h => {
+                const [ty, tm] = t.split('-').map(Number);
+                const [vy, vm] = view[h.id] || (view[h.id] = [ty, tm]);
+                const st = streaks(h.dates, t), done = h.dates.includes(t);
+                const card = document.createElement('div'); card.className = 'card';
+
+                const head = document.createElement('div'); head.className = 'head';
+                const title = document.createElement('h2'); title.textContent = h.name;
+                const info = document.createElement('div'); info.className = 'streak';
+                info.innerHTML = '連續 <b></b> 天 ・ 最長 <b></b> ・ 共 <b></b> 天';
+                [st.current, st.longest, st.total].forEach((v, i) => { info.querySelectorAll('b')[i].textContent = v; });
+                const btn = document.createElement('button'); btn.className = done ? '' : 'primary';
+                btn.textContent = done ? '✓ 今天已打卡' : '今天打卡';
+                btn.onclick = () => { toggle(h, t); };
+                const del = document.createElement('button'); del.className = 'del'; del.textContent = '×'; del.setAttribute('aria-label', '刪除 ' + h.name);
+                del.onclick = () => { if (confirm(`刪除「${h.name}」與它的所有紀錄？`)) { habits = habits.filter(x => x !== h); save(); render(); } };
+                head.append(title, btn, del);
+
+                const nav = document.createElement('div'); nav.className = 'nav';
+                const prev = document.createElement('button'); prev.className = 'sm'; prev.textContent = '‹'; prev.setAttribute('aria-label', '上個月');
+                const next = document.createElement('button'); next.className = 'sm'; next.textContent = '›'; next.setAttribute('aria-label', '下個月');
+                const label = document.createElement('span'); label.textContent = `${vy} 年 ${vm} 月`;
+                const go = (dm) => { const d = new Date(Date.UTC(vy, vm - 1 + dm, 1)); view[h.id] = [d.getUTCFullYear(), d.getUTCMonth() + 1]; render(); };
+                prev.onclick = () => go(-1); next.onclick = () => go(1);
+                nav.append(prev, label, next);
+
+                const cal = document.createElement('div'); cal.className = 'cal';
+                '日一二三四五六'.split('').forEach(w => { const e = document.createElement('div'); e.className = 'dow'; e.textContent = w; cal.append(e); });
+                monthCells(vy, vm).forEach(day => {
+                    const b = document.createElement('button');
+                    if (!day) { b.className = 'd blank'; b.disabled = true; cal.append(b); return; }
+                    b.className = 'd' + (h.dates.includes(day) ? ' on' : '') + (day === t ? ' today' : '');
+                    b.textContent = +day.slice(8);
+                    b.disabled = day > t;                      // 不能替未來打卡
+                    b.setAttribute('aria-pressed', h.dates.includes(day));
+                    b.setAttribute('aria-label', day);
+                    b.onclick = () => toggle(h, day);
+                    cal.append(b);
+                });
+                card.append(head, info, nav, cal);
+                list.append(card);
+            });
+        }
+
+        function toggle(h, day) {
+            h.dates = h.dates.includes(day) ? h.dates.filter(d => d !== day) : [...h.dates, day].sort();
+            save(); render();
+        }
+
+        function add() {
+            const name = $('#name').value.trim();
+            if (!name) return;
+            habits.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, dates: [] });
+            $('#name').value = '';
+            save(); render();
+        }
+
+        $('#add').onclick = add;
+        $('#name').onkeydown = (e) => { if (e.key === 'Enter') add(); };
+        render();
+    </script>
+</body>
+
+</html>

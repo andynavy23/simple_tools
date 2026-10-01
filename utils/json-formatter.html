@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="JSON 整理器：美化、壓縮、驗證 JSON，錯誤會標出行與欄，並可用樹狀檢視摺疊瀏覽。">
+    <meta property="og:title" content="JSON 整理器" />
+    <meta property="og:description" content="美化、壓縮、驗證 JSON，標出錯誤位置，樹狀檢視。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/json-formatter.html" />
+    <title>JSON 整理器</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 860px;
+            --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans TC", monospace;
+        }
+
+        textarea {
+            min-height: 260px;
+            resize: vertical;
+            font: 14px/1.6 var(--mono);
+        }
+
+        .bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin-top: 12px;
+        }
+
+        .bar label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        #status {
+            margin-top: 12px;
+            font-size: 14px;
+            word-break: break-all;
+        }
+
+        #status.ok {
+            color: var(--ok);
+        }
+
+        #status.err {
+            color: var(--bad);
+        }
+
+        pre.errline {
+            margin: 6px 0 0;
+            padding: 8px 10px;
+            background: var(--fill);
+            border-radius: 10px;
+            font: 13px/1.5 var(--mono);
+            overflow-x: auto;
+            color: var(--text);
+        }
+
+        .out {
+            font: 14px/1.6 var(--mono);
+            white-space: pre-wrap;
+            word-break: break-all;
+            background: var(--fill);
+            border-radius: 12px;
+            padding: 10px 12px;
+            max-height: 520px;
+            overflow: auto;
+        }
+
+        .tree details {
+            margin-left: 14px;
+        }
+
+        .tree summary {
+            cursor: pointer;
+            list-style-position: outside;
+        }
+
+        .tree .k {
+            color: var(--blue);
+        }
+
+        .tree .s {
+            color: var(--ok);
+        }
+
+        .tree .n {
+            color: #ff9f0a;
+        }
+
+        .tree .b {
+            color: var(--bad);
+        }
+
+        .tree .null {
+            color: var(--muted);
+        }
+
+        .tree .leaf {
+            margin-left: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>JSON 整理器</h1>
+        <p class="sub">貼上 JSON，一鍵美化、壓縮或驗證。全部在本機處理。</p>
+
+        <div class="card">
+            <textarea id="in" spellcheck="false" placeholder='{"name":"Simple Tools","tags":["a","b"]}' aria-label="JSON 內容"></textarea>
+            <div class="bar">
+                <button class="primary" id="pretty">美化</button>
+                <button id="min">壓縮</button>
+                <button id="check">只驗證</button>
+                <label>縮排
+                    <select id="indent">
+                        <option value="2">2 空白</option>
+                        <option value="4">4 空白</option>
+                        <option value="tab">Tab</option>
+                    </select>
+                </label>
+                <label><input type="checkbox" id="sort"> 鍵名排序</label>
+            </div>
+            <div id="status" role="status"></div>
+        </div>
+
+        <div class="card" id="outCard" hidden>
+            <div class="bar" style="margin:0 0 10px">
+                <button class="sm" id="viewText" aria-pressed="true">文字</button>
+                <button class="sm" id="viewTree" aria-pressed="false">樹狀</button>
+                <button class="sm" id="copy" style="margin-left:auto">複製結果</button>
+                <button class="sm" id="toIn">放回輸入</button>
+            </div>
+            <div class="out" id="outText"></div>
+            <div class="out tree" id="outTree" hidden></div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        // 遞迴排序鍵名（陣列順序不動）
+        function sortKeys(v) {
+            if (Array.isArray(v)) return v.map(sortKeys);
+            if (v && typeof v === 'object') return Object.fromEntries(Object.keys(v).sort().map(k => [k, sortKeys(v[k])]));
+            return v;
+        }
+
+        // 新版瀏覽器的 JSON.parse 錯誤訊息不含位置，所以自己掃一遍找出錯誤位置（只在解析失敗時使用）
+        // 回傳 { pos, msg }（pos 為字元索引）；文字其實合法則回傳 null
+        function jsonErrorPos(text) {
+            let i = 0;
+            const n = text.length, err = (msg) => { throw { pos: Math.min(i, n), msg }; };
+            const ws = () => { while (i < n && ' \t\n\r'.includes(text[i])) i++; };
+            function str() {
+                i++;
+                while (i < n) {
+                    const c = text[i];
+                    if (c === '"') { i++; return; }
+                    if (c === '\\') {
+                        const e = text[i + 1];
+                        if (e === 'u') {
+                            if (!/^[0-9a-fA-F]{4}$/.test(text.slice(i + 2, i + 6))) { i += 2; err('\\u 後面要接 4 位十六進位數字'); }
+                            i += 6; continue;
+                        }
+                        if (e === undefined || !'"\\/bfnrt'.includes(e)) { i += 1; err('不合法的跳脫字元'); }
+                        i += 2; continue;
+                    }
+                    if (c < ' ') err('字串中不能有未跳脫的換行或控制字元');
+                    i++;
+                }
+                err('字串沒有結束');
+            }
+            function num() {
+                const m = /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?/.exec(text.slice(i));
+                if (!m) err('數字格式錯誤');
+                i += m[0].length;
+            }
+            function obj() {
+                i++; ws();
+                if (text[i] === '}') { i++; return; }
+                for (; ;) {
+                    ws();
+                    if (text[i] !== '"') err('物件的鍵必須是用雙引號包住的字串');
+                    str(); ws();
+                    if (text[i] !== ':') err('鍵後面缺少冒號 :');
+                    i++; value(); ws();
+                    if (text[i] === ',') { i++; continue; }
+                    if (text[i] === '}') { i++; return; }
+                    err('缺少逗號 , 或右大括號 }');
+                }
+            }
+            function arr() {
+                i++; ws();
+                if (text[i] === ']') { i++; return; }
+                for (; ;) {
+                    value(); ws();
+                    if (text[i] === ',') { i++; continue; }
+                    if (text[i] === ']') { i++; return; }
+                    err('缺少逗號 , 或右中括號 ]');
+                }
+            }
+            function value() {
+                ws();
+                const c = text[i];
+                if (c === '{') return obj();
+                if (c === '[') return arr();
+                if (c === '"') return str();
+                if (c === '-' || (c >= '0' && c <= '9')) return num();
+                for (const lit of ['true', 'false', 'null']) if (text.startsWith(lit, i)) { i += lit.length; return; }
+                err(i >= n ? '資料提前結束' : `無法辨識的內容 ${JSON.stringify(c)}`);
+            }
+            try { value(); ws(); if (i < n) err('資料結尾後還有多餘內容'); return null; }
+            catch (e) { if (e && typeof e.pos === 'number') return e; throw e; }
+        }
+
+        const posToLineCol = (text, pos) => {
+            const before = text.slice(0, pos).split('\n');
+            return { line: before.length, col: before[before.length - 1].length + 1 };
+        };
+
+        // mode: 'pretty' | 'min' | 'check'；回傳 { ok:true, text, value } 或 { ok:false, message, hint, line, col }
+        function formatJSON(text, { indent = 2, sort = false, mode = 'pretty' } = {}) {
+            let v;
+            try { v = JSON.parse(text); }
+            catch (e) {
+                const at = jsonErrorPos(text);
+                return { ok: false, message: e.message, hint: at ? at.msg : '', ...(at ? posToLineCol(text, at.pos) : {}) };
+            }
+            if (sort) v = sortKeys(v);
+            const out = mode === 'min' ? JSON.stringify(v) : mode === 'check' ? '' : JSON.stringify(v, null, indent);
+            return { ok: true, text: out, value: v };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let result = '';
+
+        function setStatus(msg, cls, extra) {
+            const s = $('#status');
+            s.className = cls; s.textContent = msg;
+            if (extra) { const pre = document.createElement('pre'); pre.className = 'errline'; pre.textContent = extra; s.append(pre); }
+        }
+
+        function buildTree(v, key, isLast) {
+            const wrap = document.createElement('div');
+            const label = (k) => { const s = document.createElement('span'); s.className = 'k'; s.textContent = JSON.stringify(k) + ': '; return s; };
+            if (v !== null && typeof v === 'object') {
+                const arr = Array.isArray(v), entries = arr ? v.map((x, i) => [i, x]) : Object.entries(v);
+                const d = document.createElement('details'), sum = document.createElement('summary');
+                d.open = true;
+                if (key !== undefined) sum.append(arr || typeof key === 'string' ? label(key) : '');
+                sum.append(`${arr ? '[' : '{'} ${entries.length} 項 ${arr ? ']' : '}'}`);
+                d.append(sum);
+                entries.forEach(([k, x]) => d.append(buildTree(x, arr ? undefined : k)));
+                return d;
+            }
+            const row = document.createElement('div'); row.className = 'leaf';
+            if (key !== undefined) row.append(label(key));
+            const val = document.createElement('span');
+            val.className = v === null ? 'null' : typeof v === 'string' ? 's' : typeof v === 'number' ? 'n' : 'b';
+            val.textContent = JSON.stringify(v);
+            row.append(val);
+            return row;
+        }
+
+        function run(mode) {
+            const text = $('#in').value;
+            if (!text.trim()) { setStatus('請先貼上 JSON', 'err'); $('#outCard').hidden = true; return; }
+            const ind = $('#indent').value;
+            const r = formatJSON(text, { indent: ind === 'tab' ? '\t' : +ind, sort: $('#sort').checked, mode });
+            if (!r.ok) {
+                $('#outCard').hidden = true;
+                let extra = '';
+                if (r.line) {
+                    const l = text.split('\n')[r.line - 1] || '';
+                    extra = `第 ${r.line} 行`.padEnd(8) + l.slice(0, 200) + '\n' + ' '.repeat(8 + Math.max(0, r.col - 1)) + '^';
+                }
+                setStatus(`✗ 不是有效的 JSON：${r.hint || r.message}${r.line ? `（第 ${r.line} 行、第 ${r.col} 欄）` : ''}`, 'err', extra);
+                return;
+            }
+            const kind = Array.isArray(r.value) ? `陣列（${r.value.length} 項）` : r.value && typeof r.value === 'object' ? `物件（${Object.keys(r.value).length} 個鍵）` : typeof r.value;
+            setStatus(`✓ 有效的 JSON・${kind}`, 'ok');
+            if (mode === 'check') { $('#outCard').hidden = true; return; }
+            result = r.text;
+            $('#outCard').hidden = false;
+            $('#outText').textContent = result;
+            const tree = $('#outTree');
+            tree.replaceChildren();
+            let count = 0;
+            JSON.stringify(r.value, (k, x) => { count++; return x; });
+            if (count > 5000) tree.textContent = '資料太大，樹狀檢視已停用（請用文字檢視）';
+            else tree.append(buildTree(r.value));
+        }
+
+        function view(tree) {
+            $('#outText').hidden = tree; $('#outTree').hidden = !tree;
+            $('#viewText').setAttribute('aria-pressed', !tree); $('#viewTree').setAttribute('aria-pressed', tree);
+        }
+
+        $('#pretty').onclick = () => run('pretty');
+        $('#min').onclick = () => run('min');
+        $('#check').onclick = () => run('check');
+        $('#viewText').onclick = () => view(false);
+        $('#viewTree').onclick = () => view(true);
+        $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), result, () => { });
+        $('#toIn').onclick = () => { $('#in').value = result; };
+    </script>
+</body>
+
+</html>

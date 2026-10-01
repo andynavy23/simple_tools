@@ -13,8 +13,9 @@
     <!-- Google Fonts: DotGothic16 (Pixel Style) & Noto Sans TC -->
     <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Noto+Sans+TC:wght@400;700&display=swap"
         rel="stylesheet">
-    <!-- PeerJS -->
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- 連線與工具函式：共用模組（PeerJS 由 p2p-room.js 載入） -->
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
     <!-- Confetti -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
@@ -589,34 +590,27 @@
             logs: []
         };
 
-        const NAME_RE = /^[a-zA-Z0-9\u4e00-\u9fa5]{1,30}$/;
+        const MAX_NICK = 30;
         const MAX_MEMBERS = 6;
-        const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const { esc } = Util;
         const LOOT_CATS = ['防具', '武器', '捲軸(貴)', '捲軸(廢)', '其他(貴)', '其他(廢)'];
-        let myPeer = null, myId = '', myName = '', isCaptain = false;
-        let connections = {}, captainConn = null, autoCheckTimer = null;
+        let room = null, myId = '', myName = '', isCaptain = false;
+        let autoCheckTimer = null;
         let connectTimeout = null;
 
         // --- 初始化 ---
         window.onload = () => {
-            const params = new URLSearchParams(window.location.search);
-            const rId = params.get('room');
+            const rId = P2PRoom.roomFromUrl() || new URLSearchParams(window.location.search).get('room');
             if (rId) document.getElementById('joinIdInput').value = rId;
 
             const saved = localStorage.getItem('artale_v4_name');
             if (saved) document.getElementById('nickname').value = saved;
         };
 
-        window.onbeforeunload = () => {
-            if (captainConn) {
-                captainConn.send({ type: 'LEAVE', payload: { id: myId } });
-            }
-        };
-
         // --- 暱稱邏輯 ---
         function confirmNickname() {
             let input = document.getElementById('nickname').value.trim();
-            if (input && !NAME_RE.test(input)) {
+            if (input && !P2PRoom.validNick(input, MAX_NICK)) {
                 return alert("暱稱格錯誤：僅限繁中、英數，且不可超過30字!");
             }
 
@@ -669,20 +663,25 @@
             }
         }
 
-        function initPeer(host, targetId = null) {
-            if (myPeer) return;
-            toggleLoading(true, host ? "正在建立冒險頻道..." : "正在尋找冒險夥伴...");
+        function onNetError(err, message) {
+            toggleLoading(false);
+            alert(message + "\n請嘗試重新加入。");
+            location.reload();
+        }
 
-            myPeer = new Peer();
-            myPeer.on('open', (id) => {
-                myId = id;
-                if (host) {
+        function createRoom() {
+            if (room) return;
+            toggleLoading(true, "正在建立冒險頻道...");
+            room = P2PRoom.host({
+                nick: myName, maxNick: MAX_NICK, maxPlayers: MAX_MEMBERS,
+                onReady(r) {
+                    myId = r.id;
                     isCaptain = true;
-                    state.room.id = id;
-                    state.room.captain = id;
-                    addLog(`[系統] 頻道初始化成功: ${id}`);
-                    addMember(id, myName, 'Captain', '連線中');
-                    document.getElementById('displayRoomId').innerText = id;
+                    state.room.id = r.id;
+                    state.room.captain = r.id;
+                    addLog(`[系統] 頻道初始化成功: ${r.id}`);
+                    addMember(r.id, myName, 'Captain', '連線中');
+                    document.getElementById('displayRoomId').innerText = r.id;
                     document.getElementById('roomInfo').classList.remove('d-none');
                     document.getElementById('roomActions').classList.add('d-none');
                     document.getElementById('captainExp').classList.remove('d-none');
@@ -691,97 +690,62 @@
                     document.getElementById('lootResetAllBtn').classList.remove('d-none');
                     document.getElementById('leaveDisbandBtn').innerText = '解散';
                     updateUI();
-                    setupHostHandlers();
                     toggleLoading(false);
-                } else {
-                    connectToHost(targetId);
-                }
-            });
-            myPeer.on('error', (err) => {
-                toggleLoading(false);
-                if (err.type === 'peer-disconnected') return;
-                alert("冒險連線發生錯誤: " + err.type + "\n請嘗試重新加入。");
-                location.reload();
+                },
+                onJoin(p) {
+                    addMember(p.peerId, p.nick, 'Member', '連線中');
+                    addLog(`[加入] ${p.nick} 加入了隊伍!`); // 內含 broadcastState：新舊成員都會收到最新狀態
+                    updateUI();
+                },
+                onLeave(p) { handleDisconnect(p.peerId); },
+                onMessage(p, data) { handleHostAction(data, p.peerId); },
+                onError: onNetError,
             });
         }
 
-        function createRoom() { initPeer(true); }
         function joinRoom() {
+            if (room) return;
             const id = document.getElementById('joinIdInput').value.trim();
             if (!id) return alert("請輸入房號!");
-            initPeer(false, id);
-        }
-
-        function setupHostHandlers() {
-            myPeer.on('connection', (conn) => {
-                conn.on('open', () => {
-                    connections[conn.peer] = conn;
-                });
-                conn.on('data', (data) => handleHostAction(data, conn.peer, conn));
-                conn.on('close', () => {
-                    handleDisconnect(conn.peer);
-                });
+            toggleLoading(true, "正在尋找冒險夥伴...");
+            room = P2PRoom.join(id, {
+                nick: myName, maxNick: MAX_NICK,
+                onJoined(r) {
+                    toggleLoading(false);
+                    myId = r.peerId; // 自己的 peer id（排行榜用來標示自己）
+                },
+                onMessage(data) {
+                    if (data.type === 'SYNC') {
+                        state = data.payload;
+                        updateUI();
+                        document.getElementById('roomInfo').classList.remove('d-none');
+                        document.getElementById('roomActions').classList.add('d-none');
+                        document.getElementById('displayRoomId').innerText = id;
+                        document.getElementById('leaveDisbandBtn').innerText = '退出';
+                    }
+                    else if (data.type === 'TEST_START') { showSurvivalUI(data.payload); }
+                },
+                onRejected(reason) { toggleLoading(false); alert(reason); location.reload(); },
+                onClose() { alert("隊長已中斷伺服器"); location.reload(); },
+                onError: onNetError,
             });
         }
 
         function handleDisconnect(pId) {
-            if (!connections[pId] && !state.room.members.find(m => m.id === pId)) return;
-            const leavingName = getName(pId);
-            addLog(`[離開] ${leavingName} 已斷開連線`, 'warn');
+            if (!state.room.members.find(m => m.id === pId)) return;
+            addLog(`[離開] ${getName(pId)} 已斷開連線`, 'warn');
             cleanupMember(pId);
-            delete connections[pId];
             broadcastState();
             updateUI();
         }
 
-        function connectToHost(id) {
-            captainConn = myPeer.connect(id);
-            captainConn.on('open', () => {
-                captainConn.send({ type: 'JOIN', payload: { name: myName } });
-            });
-            captainConn.on('data', (data) => {
-                toggleLoading(false); // 收到資料即表示連線成功
-                if (data.type === 'SYNC') {
-                    state = data.payload;
-                    updateUI();
-                    document.getElementById('roomInfo').classList.remove('d-none');
-                    document.getElementById('roomActions').classList.add('d-none');
-                    document.getElementById('displayRoomId').innerText = id;
-                    document.getElementById('leaveDisbandBtn').innerText = '退出';
-                }
-                else if (data.type === 'TEST_START') { showSurvivalUI(data.payload); }
-                else if (data.type === 'REJECTED') {
-                    alert(data.payload);
-                    location.reload();
-                }
-            });
-            captainConn.on('close', () => { alert("隊長已中斷伺服器"); location.reload(); });
-        }
-
-        function handleHostAction(action, pId, conn) {
+        function handleHostAction(action, pId) {
             if (!isCaptain) return;
-            // 來源為任意 peer：未入隊者只能 JOIN，管理動作只有隊長（本機）能下
-            if (action.type !== 'JOIN' && !state.room.members.some(m => m.id === pId)) return;
+            // 來源是房間名單內的成員（P2PRoom 已確認）；管理動作只有隊長（本機）能下
+            if (!action || typeof action.type !== 'string' || !state.room.members.some(m => m.id === pId)) return;
             if (['RESET_EXP', 'UPDATE_TARGET', 'RESET_LOOT_ALL'].includes(action.type) && pId !== myId) return;
             try {
                 switch (action.type) {
-                    case 'JOIN': {
-                        const reject = (msg) => {
-                            conn.send({ type: 'REJECTED', payload: msg });
-                            setTimeout(() => conn.close(), 500);
-                        };
-                        const nm = action.payload?.name;
-                        if (typeof nm !== 'string' || !NAME_RE.test(nm)) return reject("暱稱格式錯誤!");
-                        if (state.room.members.length >= MAX_MEMBERS) return reject("隊伍已滿!");
-                        if (state.room.members.some(m => m.name === nm)) return reject("暱稱已被使用，請更換後再加入!");
-                    }
-                        addMember(pId, action.payload.name, 'Member', '連線中');
-                        addLog(`[加入] ${action.payload.name} 加入了隊伍!`);
-                        conn.send({ type: 'SYNC', payload: state });
-                        break;
-                    case 'LEAVE':
-                        handleDisconnect(pId);
-                        break;
                     case 'ADD_EXP':
                         if (![1, 5].includes(action.payload)) break;
                         state.exp.current = Math.min(state.exp.target, state.exp.current + action.payload);
@@ -827,12 +791,12 @@
 
         function broadcastState() {
             if (!isCaptain) return;
-            Object.values(connections).forEach(c => c.send({ type: 'SYNC', payload: state }));
+            room.broadcast({ type: 'SYNC', payload: state });
         }
 
         function sendAction(type, payload) {
             if (isCaptain) handleHostAction({ type, payload }, myId);
-            else if (captainConn) captainConn.send({ type, payload });
+            else if (room) room.send({ type, payload });
         }
 
         // --- UI ---
@@ -931,7 +895,7 @@
             state.room.members.forEach(m => m.status = 'Idle');
             state.logs.push({ time: Date.now(), msg: `[檢測] 測試開始 (限時 ${duration} 秒)`, type: "info" });
             broadcastState();
-            Object.values(connections).forEach(c => c.send({ type: 'TEST_START', payload: duration }));
+            room.broadcast({ type: 'TEST_START', payload: duration });
             showSurvivalUI(duration);
 
             setTimeout(() => {
@@ -1005,8 +969,8 @@
         }
         function leaveRoom() { if (confirm("確定要離隊嗎？")) location.reload(); }
         function copyInviteLink() {
-            const link = `${window.location.origin}${window.location.pathname}?room=${myId}`;
-            navigator.clipboard.writeText(link).then(() => alert("邀請連結已複製!"), () => prompt("請手動複製邀請連結：", link));
+            const link = P2PRoom.inviteLink(myId);
+            Util.copyText(link).then(ok => ok ? alert("邀請連結已複製!") : prompt("請手動複製邀請連結：", link));
         }
         function toggleLogs() { const s = document.getElementById('logSection'); s.style.display = s.style.display === 'block' ? 'none' : 'block'; }
         function showHelp() { new bootstrap.Modal(document.getElementById('helpModal')).show(); }

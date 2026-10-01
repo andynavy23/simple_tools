@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="四子棋：本機雙人，或建立房間連線與朋友對戰，先連成四顆就贏。">
+    <meta property="og:title" content="四子棋" />
+    <meta property="og:description" content="本機雙人或連線對戰，先連成四顆就贏。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/connect-four.html" />
+    <title>四子棋</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        :root {
+            --wrap-w: 520px;
+            --red: #ff453a;
+            --yellow: #ffd60a;
+            --board: #0a64d8;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .row input {
+            flex: 1 1 130px;
+        }
+
+        .status {
+            text-align: center;
+            font-weight: 700;
+            font-size: 18px;
+            margin-bottom: 12px;
+            min-height: 1.6em;
+        }
+
+        .dot {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            vertical-align: -2px;
+            margin-right: 4px;
+        }
+
+        .p1 {
+            background: var(--red);
+        }
+
+        .p2 {
+            background: var(--yellow);
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+            background: var(--board);
+            padding: 10px;
+            border-radius: 16px;
+        }
+
+        .col {
+            display: grid;
+            gap: 6px;
+            padding: 0;
+            background: none;
+            border-radius: 10px;
+        }
+
+        .col:not(:disabled):hover {
+            background: rgba(255, 255, 255, .15);
+        }
+
+        .col:disabled {
+            opacity: 1;
+            cursor: default;
+        }
+
+        .slot {
+            aspect-ratio: 1;
+            border-radius: 50%;
+            background: var(--bg);
+            box-shadow: inset 0 3px 6px rgba(0, 0, 0, .35);
+            transition: background .12s;
+        }
+
+        .slot.p1 {
+            background: var(--red);
+        }
+
+        .slot.p2 {
+            background: var(--yellow);
+        }
+
+        .slot.win {
+            outline: 4px solid #fff;
+            outline-offset: -3px;
+            animation: blink .8s infinite alternate;
+        }
+
+        @keyframes blink {
+            to {
+                opacity: .55;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>四子棋</h1>
+        <p class="sub">先把四顆同色連成一線（橫、直、斜）就贏。</p>
+
+        <div class="card" id="menu">
+            <div class="row">
+                <button class="primary" id="local">本機雙人</button>
+            </div>
+            <div class="row"><input id="nick" maxlength="10" placeholder="連線暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+            <div class="row">
+                <button id="host">建立房間</button>
+                <input id="joinId" placeholder="貼上房號" aria-label="房號">
+                <button id="join">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+        </div>
+
+        <div class="card" id="game" hidden>
+            <div class="status" id="status" role="status"></div>
+            <div id="board"></div>
+            <div class="row" style="justify-content:center;margin-top:14px">
+                <button class="primary" id="again" hidden>再來一局</button>
+                <button id="copy" hidden>複製邀請連結</button>
+                <button id="leave">離開</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- pure ---
+        const ROWS = 6, COLS = 7;
+        const newBoard = () => Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
+
+        // 在某欄落子：回傳落在的列（0 為最上），欄滿回傳 -1；不改動輸入
+        function dropRow(board, col) {
+            if (!Number.isInteger(col) || col < 0 || col >= COLS) return -1;
+            for (let r = ROWS - 1; r >= 0; r--) if (board[r][col] === 0) return r;
+            return -1;
+        }
+
+        // 找出連成 4 顆以上的格子；回傳 { player, cells } 或 null
+        function findWin(board) {
+            const dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
+            for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+                const p = board[r][c];
+                if (!p) continue;
+                for (const [dr, dc] of dirs) {
+                    const cells = [[r, c]];
+                    for (let k = 1; k < 4; k++) {
+                        const rr = r + dr * k, cc = c + dc * k;
+                        if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS || board[rr][cc] !== p) break;
+                        cells.push([rr, cc]);
+                    }
+                    if (cells.length === 4) return { player: p, cells };
+                }
+            }
+            return null;
+        }
+
+        const isFull = (board) => board[0].every(v => v !== 0);
+
+        // 遊戲狀態與一步棋：state = { board, turn(1|2), winner(0|1|2), cells, draw, moves }
+        function newGame(first = 1) { return { board: newBoard(), turn: first, winner: 0, cells: [], draw: false, moves: 0 }; }
+
+        // 玩家 who 在 col 落子；合法回傳 true 並更新 state，否則回傳 false
+        function play(state, who, col) {
+            if (state.winner || state.draw || who !== state.turn) return false;
+            const r = dropRow(state.board, col);
+            if (r < 0) return false;
+            state.board[r][col] = who;
+            state.moves++;
+            const w = findWin(state.board);
+            if (w) { state.winner = w.player; state.cells = w.cells; }
+            else if (isFull(state.board)) state.draw = true;
+            else state.turn = who === 1 ? 2 : 1;
+            return true;
+        }
+
+        // 成員端收到房主狀態時的格式檢查
+        function validState(s) {
+            return !!s && Array.isArray(s.board) && s.board.length === ROWS && s.board.every(r => Array.isArray(r) && r.length === COLS && r.every(v => v === 0 || v === 1 || v === 2))
+                && (s.turn === 1 || s.turn === 2) && (s.winner === 0 || s.winner === 1 || s.winner === 2) && typeof s.draw === 'boolean'
+                && Array.isArray(s.cells) && s.cells.length <= 4 && s.cells.every(p => Array.isArray(p) && p.length === 2 && Number.isInteger(p[0]) && Number.isInteger(p[1]));
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let mode = 'menu';           // menu | local | host | guest
+        let S = null;                // 狀態（本機 / 房主：權威；成員：房主傳來）
+        let room = null, myPlayer = 0, names = ['', ''], firstNext = 1, hostId = '';
+
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#local', '#host', '#join', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+
+        // ---------- 畫面 ----------
+        function build() {
+            const b = $('#board');
+            b.replaceChildren(...Array.from({ length: COLS }, (_, c) => {
+                const col = document.createElement('button');
+                col.className = 'col';
+                col.setAttribute('aria-label', `第 ${c + 1} 欄`);
+                for (let r = 0; r < ROWS; r++) { const s = document.createElement('div'); s.className = 'slot'; col.append(s); }
+                col.onclick = () => onColumn(c);
+                return col;
+            }));
+        }
+
+        function render() {
+            if (!S) return;
+            const cols = $('#board').children;
+            const win = new Set(S.cells.map(([r, c]) => r * COLS + c));
+            const myTurn = mode === 'local' || S.turn === myPlayer;
+            for (let c = 0; c < COLS; c++) {
+                const col = cols[c];
+                col.disabled = !!S.winner || S.draw || !myTurn || S.board[0][c] !== 0 || (mode === 'host' && (!room || room.players.length < 2));
+                for (let r = 0; r < ROWS; r++) {
+                    const v = S.board[r][c], slot = col.children[r];
+                    slot.className = 'slot' + (v ? ' p' + v : '') + (win.has(r * COLS + c) ? ' win' : '');
+                }
+            }
+            const dot = (p) => `<span class="dot p${p}"></span>`;
+            const who = (p) => (mode === 'local' ? (p === 1 ? '紅' : '黃') : (names[p - 1] || (p === 1 ? '紅' : '黃')));
+            let text;
+            if (S.winner) text = `${dot(S.winner)}${mode === 'local' ? who(S.winner) + '色' : who(S.winner)} 獲勝！`;
+            else if (S.draw) text = '平手';
+            else if (mode === 'host' && room && room.players.length < 2) text = '等待玩家加入…';
+            else text = mode === 'local' ? `輪到 ${dot(S.turn)}${who(S.turn)}色` : (S.turn === myPlayer ? `${dot(S.turn)}輪到你了` : `${dot(S.turn)}輪到 ${who(S.turn)}`);
+            $('#status').innerHTML = text;
+            $('#again').hidden = !((S.winner || S.draw) && (mode === 'local' || mode === 'host'));
+            $('#copy').hidden = mode !== 'host';
+        }
+
+        function show(screen) {
+            $('#menu').hidden = screen !== 'menu';
+            $('#game').hidden = screen !== 'game';
+        }
+
+        // ---------- 本機 ----------
+        function startLocal() {
+            mode = 'local';
+            S = newGame(1); firstNext = 2;
+            build(); show('game'); render();
+        }
+
+        // ---------- 房主 / 連線 ----------
+        const readNick = () => {
+            const n = $('#nick').value.trim();
+            if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; }
+            return n;
+        };
+        const onNetError = (err, message) => { netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } };
+
+        function publish() {
+            render();
+            if (mode === 'host' && room) room.broadcast({ type: 'STATE', s: S, names });
+        }
+
+        function hostRoom() {
+            const nick = readNick();
+            if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: 2,
+                onReady(r) {
+                    mode = 'host'; myPlayer = 1; hostId = r.id; names = [nick, ''];
+                    history.replaceState('', document.title, location.pathname + '#' + r.id);
+                    S = newGame(1); firstNext = 2;
+                    build(); show('game'); render();
+                },
+                onJoin(p) {
+                    names = [nick, p.nick];
+                    S = newGame(1); firstNext = 2;      // 有新對手加入：重新開始
+                    publish();
+                },
+                onLeave() {
+                    names = [nick, ''];
+                    S = newGame(1); firstNext = 2;
+                    publish();
+                },
+                onMessage(p, d) {
+                    // 只接受「輪到紅色的人以外」= 成員（黃）的落子
+                    if (d && d.type === 'DROP' && Number.isInteger(d.col) && play(S, 2, d.col)) publish();
+                },
+                onError: onNetError,
+            });
+        }
+
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.join(id, {
+                nick,
+                onJoined() { mode = 'guest'; myPlayer = 2; build(); show('game'); $('#status').textContent = '已加入，等待房主…'; },
+                onMessage(d) {
+                    if (!d || d.type !== 'STATE' || !validState(d.s)) return;
+                    S = d.s;
+                    if (Array.isArray(d.names) && d.names.length === 2 && d.names.every(n => typeof n === 'string' && n.length <= 12)) names = d.names;
+                    render();
+                },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (mode === 'guest') { alert('房主已離開，遊戲結束'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+
+        function onColumn(c) {
+            if (mode === 'local') { if (play(S, S.turn, c)) render(); }
+            else if (mode === 'host') { if (play(S, 1, c)) publish(); }
+            else if (mode === 'guest' && room && S && S.turn === myPlayer) room.send({ type: 'DROP', col: c });
+        }
+
+        // ---------- 事件 ----------
+        $('#local').onclick = startLocal;
+        $('#host').onclick = hostRoom;
+        $('#join').onclick = joinRoom;
+        $('#again').onclick = () => {
+            S = newGame(firstNext); firstNext = firstNext === 1 ? 2 : 1;   // 輸家 / 對方先手：每局輪流先手
+            if (mode === 'host') publish(); else render();
+        };
+        $('#copy').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copy'), url, () => prompt('請手動複製邀請連結：', url)); };
+        $('#leave').onclick = () => location.reload();
+
+        if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+        show('menu');
+    </script>
+</body>
+
+</html>
