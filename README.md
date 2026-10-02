@@ -22,11 +22,11 @@
 | [捲軸期望值計算機](game-assist/scroll-calculator.html) | 遊戲輔助 | 算衝捲平均花費與各把握度所需次數，可設定失敗損毀機率 |
 | [翻牌記憶遊戲](mini-games/memory-match.html) | 小遊戲 | 單人挑戰最少步數，或連線（最多 4 人，房主驗證）輪流翻牌 |
 | [打字速度測試](mini-games/typing-test.html) | 小遊戲 | 中英文打字測速，每分鐘字數與正確率 |
-| [白噪音 / 環境音](fun/white-noise.html) | 趣味 | 即時合成白 / 粉紅 / 棕噪音、雨聲、風聲，可定時 |
+| [白噪音 / 環境音](fun/white-noise.html) | 趣味 | 即時合成白 / 粉紅 / 棕噪音、雨聲、風聲、機械鍵盤與打字機聲，可定時 |
 | [分帳計算](utils/split-bill.html) | 工具 | 多人多筆支出分帳，轉帳次數最少 |
 | [時區轉換](utils/timezone.html) | 工具 | 一個時間對照多個城市，處理夏令時間 |
 | [正規表示式測試器](utils/regex-tester.html) | 工具 | 即時標示符合內容、群組與位置 |
-| [色彩工具](utils/color-tools.html) | 工具 | 色碼互轉與 WCAG 對比度檢查 |
+| [色彩工具](utils/color-tools.html) | 工具 | 色碼互轉、WCAG 對比度檢查、四種色覺缺陷模擬 |
 | [文字差異比對](utils/text-diff.html) | 工具 | 逐行文字差異比對 |
 | [編碼解碼](utils/encode-decode.html) | 工具 | Base64 / URL / Unicode / HTML 實體 / 十六進位 |
 | [倒數日 / 紀念日](utils/countdown.html) | 工具 | 還有 / 已經幾天，可設定每年重複（週年） |
@@ -49,6 +49,14 @@
 | [數獨](mini-games/sudoku.html) | 小遊戲 | 保證唯一解的出題、筆記、提示、衝突標示，記錄最佳時間 |
 | [連線你畫我猜](mini-games/draw-guess.html) | 小遊戲 | 房主判定猜題與計分；題目只傳給畫的人；筆跡經房主驗證後轉送 |
 | [連線投票 / 搶答](fun/live-poll.html) | 趣味 | 投票（可改選、即時結果）與測驗（單選計分、排行榜），可限時 |
+| [抽獎 / 刮刮樂](fun/lottery.html) | 趣味 | 名單抽 N 位（安全亂數）、已中獎者不再抽、刮刮樂揭曉 |
+| [連線終極密碼](mini-games/ultimate-code.html) | 小遊戲 | 2–8 人；密碼只存在房主端，結束才公布；累計輸的次數 |
+| [薪資 / 加班費試算](utils/salary-calc.html) | 工具 | 時薪 = 月薪 ÷ 240；平日 / 休息日 / 假日加班費分段倍率；實領概算 |
+| [日期計算機](utils/date-calc.html) | 工具 | 相差（天 / 週 / 年月日 / 工作日）、加減（含工作日）、星期與 ISO 週次 |
+| [連線海戰](mini-games/battleship.html) | 小遊戲 | 艦隊只存在自己端；開局送雜湊承諾、賽後揭曉並重算每一槍的回報 |
+| [連線規劃撲克](fun/planning-poker.html) | 趣味 | 費氏數列 / T-shirt 牌組；翻牌前只看得到誰出了牌；平均 / 中位數 / 分佈 |
+| [記帳本](utils/expense-tracker.html) | 工具 | 收支分類、月統計、分類佔比；資料只在本機，可匯出 CSV（防公式注入） |
+| [反應速度測試](mini-games/reaction-time.html) | 小遊戲 | 隨機等待、搶跑偵測、5 次平均，記錄歷史最佳與中位數 |
 | [摸魚閱讀器](reading/stealth-reader.html) | 閱讀 | 本機載入 txt 小說，偽裝 ERP 後台、老闆鍵、進度記憶（開發中） |
 
 ## 專案結構
@@ -61,7 +69,7 @@ game-assist/ mini-games/ fun/ utils/ reading/
 shared/                 共用模組（依檔案類型分資料夾；見下方「共用模組」）
   css/theme.css         蘋果風格：明暗模式色彩、頁面、卡片、按鈕、輸入框、清單列、表單格
   css/maple.css         楓之谷風格：視窗框、按鈕、暱稱欄、日誌、載入動畫、成員標籤
-  js/util.js            亂數 / 洗牌 / 複製 / localStorage / HTML 跳脫 / 日期字串 / 統計列 / 提示音 / 語音
+  js/util.js            亂數 / 洗牌 / 複製 / localStorage / HTML 跳脫 / 日期字串 / 統計列 / 提示音 / 語音 / 名單解析 / 下載檔案
   js/p2p-room.js        房主制 P2P 連線（PeerJS 由它自動載入）
 tests/                  自動測試（node，不需安裝套件）
 assets/<game>/          遊戲素材圖片（例如 assets/artale/，供 og:image 使用）
@@ -80,9 +88,9 @@ temp_*                  開發中的暫存檔，已被 .gitignore 忽略
 
 | 共用檔 | 內容 | 使用的工具 |
 | --- | --- | --- |
-| `css/theme.css` | 色彩變數與明暗模式、頁面容器、卡片、膠囊按鈕、輸入框、`.li` 清單列、`.fgrid` 表單格 | 首頁與所有蘋果風格的工具 |
+| `css/theme.css` | 色彩變數與明暗模式、頁面容器、卡片、膠囊按鈕、輸入框、`.li` 清單列、`.fgrid` 表單格、`.players` / `.pl` 玩家名牌 | 首頁與所有蘋果風格的工具 |
 | `css/maple.css` | 楓之谷視窗框 / 按鈕 / 暱稱欄 / 日誌 / 載入動畫 / 成員標籤 | 五子棋、RJPQ |
-| `js/util.js` | `rnd`、`shuffle`、`copyText`、`copyWithFeedback`、`store`、`esc`、`day`、`statRow`、`tone`、`beep`、`speak` | 見檔頭說明與各頁面 |
+| `js/util.js` | `rnd`、`shuffle`、`copyText`、`copyWithFeedback`、`store`、`esc`、`day`、`statRow`、`tone`、`beep`、`speak`、`parseNames`、`download` | 見檔頭說明與各頁面 |
 | `js/p2p-room.js` | 建房、加入、暱稱驗證、拒絕、名單、踢人、斷線、只信任房主、逾時 | 團練、RJPQ、五子棋、翻牌記憶、四子棋 |
 
 使用方式（路徑依頁面所在資料夾）：

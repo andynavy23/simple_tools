@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="連線海戰：雙方各自佈置艦隊、輪流開火。艦隊位置只存在自己的瀏覽器，賽後用雜湊承諾驗證對手沒有作弊。">
+    <meta property="og:title" content="連線海戰" />
+    <meta property="og:description" content="雙人連線的戰艦遊戲，賽後可驗證對手沒有作弊。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/battleship.html" />
+    <title>連線海戰</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        .row input[type=text] {
+            flex: 1 1 130px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 2px;
+            background: var(--fill);
+            padding: 2px;
+            border-radius: 12px;
+            max-width: 440px;
+            margin: 0 auto;
+        }
+
+        .c {
+            aspect-ratio: 1;
+            border: 0;
+            padding: 0;
+            border-radius: 4px;
+            background: var(--card);
+            color: var(--muted);
+            font-size: 15px;
+            font-weight: 800;
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+        }
+
+        .grid.off .c {
+            cursor: default;
+        }
+
+        .c.ship {
+            background: #5e7da8;
+        }
+
+        .c.ghost {
+            outline: 2px dashed var(--blue);
+            outline-offset: -2px;
+        }
+
+        .c.hit {
+            background: #d70015;
+            color: #fff;
+        }
+
+        .c.miss {
+            color: var(--muted);
+        }
+
+        .c.reveal {
+            background: color-mix(in srgb, #5e7da8 45%, var(--card));
+        }
+
+        h3 {
+            text-align: center;
+            margin: 4px 0 8px;
+            font-size: 15px;
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        #status {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+            margin-bottom: 10px;
+        }
+
+        #fleet {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        #fleet span {
+            padding: 2px 10px;
+            border-radius: 980px;
+            background: var(--fill);
+            font-size: 13px;
+            letter-spacing: 2px;
+        }
+
+        #fleet span.sunk {
+            text-decoration: line-through;
+            opacity: .5;
+        }
+
+        #verdict {
+            text-align: center;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>連線海戰</h1>
+        <p class="sub">雙人對戰，10×10 海域、5 艘艦艇。艦隊位置只留在你的瀏覽器，對方開火時才回報命中；賽後會驗證雙方都沒說謊。</p>
+
+        <div class="card" id="menu">
+            <div class="row"><input type="text" id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+            <div class="row">
+                <button class="primary" id="hostBtn">建立房間</button>
+                <input type="text" id="joinId" placeholder="貼上房號" aria-label="房號">
+                <button id="joinBtn">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+        </div>
+
+        <div id="game" hidden>
+            <div class="card">
+                <div id="status" role="status" aria-live="polite"></div>
+                <div id="enemyBox">
+                    <h3 id="enemyTitle">敵方海域（點格子開火）</h3>
+                    <div class="grid" id="enemy"></div>
+                </div>
+                <h3 id="mineTitle" style="margin-top:14px">我的艦隊</h3>
+                <div class="grid" id="mine"></div>
+                <div id="fleet"></div>
+                <div id="verdict"></div>
+                <div class="row" id="placeBar" style="justify-content:center;margin-top:12px">
+                    <button id="rot">方向：橫</button>
+                    <button id="rand">隨機佈船</button>
+                    <button id="clr">清除</button>
+                    <button class="primary" id="ready" disabled>準備好了</button>
+                </div>
+            </div>
+            <div class="row" style="justify-content:center">
+                <button id="copyInvite">複製邀請連結</button>
+                <button class="primary" id="again" hidden>再來一局</button>
+                <button id="leave">離開</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { rnd } = Util;
+
+        // --- pure ---
+        const SIZE = 10, LENS = [5, 4, 3, 3, 2];
+        const key = (r, c) => r * SIZE + c;
+        const inBoard = (r, c) => Number.isInteger(r) && Number.isInteger(c) && r >= 0 && c >= 0 && r < SIZE && c < SIZE;
+        // 船 { r, c, len, h }：從 (r,c) 往右（h=1）或往下（h=0）佔 len 格
+        const cellsOf = (s) => Array.from({ length: s.len }, (_, i) => (s.h ? [s.r, s.c + i] : [s.r + i, s.c]));
+
+        // 新的一艘船能不能放（不出界、不和 fleet 內已有的船重疊）
+        function canPlace(fleet, ship) {
+            const used = new Set(fleet.flatMap(s => cellsOf(s).map(([r, c]) => key(r, c))));
+            return cellsOf(ship).every(([r, c]) => inBoard(r, c) && !used.has(key(r, c)));
+        }
+
+        // 對手揭曉的艦隊是否合法：5 艘、長度正確、不出界、不重疊
+        function validFleet(fleet) {
+            if (!Array.isArray(fleet) || fleet.length !== LENS.length) return false;
+            if (!fleet.every(s => s && Number.isInteger(s.r) && Number.isInteger(s.c) && Number.isInteger(s.len) && (s.h === 0 || s.h === 1))) return false;
+            if (fleet.map(s => s.len).sort((a, b) => b - a).join() !== [...LENS].sort((a, b) => b - a).join()) return false;
+            const placed = [];
+            for (const s of fleet) { if (!canPlace(placed, s)) return false; placed.push(s); }
+            return true;
+        }
+
+        function randomFleet(rand) {
+            for (; ;) {                                                  // 機率上幾乎一次成功；失敗就整個重來
+                const fleet = [];
+                for (const len of LENS) {
+                    for (let t = 0; t < 200; t++) {
+                        const s = { r: rand(SIZE), c: rand(SIZE), len, h: rand(2) };
+                        if (canPlace(fleet, s)) { fleet.push(s); break; }
+                    }
+                }
+                if (fleet.length === LENS.length) return fleet;
+            }
+        }
+
+        // 對方在 (r,c) 開火：回報命中與否，以及是否剛好擊沉一艘（sunk = 該船長度，否則 0）。shots 是之前已被打過的格子
+        function shotResult(fleet, shots, r, c) {
+            const ship = fleet.find(s => cellsOf(s).some(([a, b]) => a === r && b === c));
+            if (!ship) return { hit: false, sunk: 0 };
+            const sunk = cellsOf(ship).every(([a, b]) => (a === r && b === c) || shots.has(key(a, b)));
+            return { hit: true, sunk: sunk ? ship.len : 0 };
+        }
+
+        const allSunk = (fleet, shots) => fleet.every(s => cellsOf(s).every(([r, c]) => shots.has(key(r, c))));
+
+        // 賽後驗證：用揭曉的艦隊把對手回報過的每一槍重算一遍，必須完全吻合
+        function verifyReports(fleet, reports) {
+            const shots = new Set();
+            for (const p of reports) {
+                const res = shotResult(fleet, shots, p.r, p.c);
+                if (res.hit !== p.hit || res.sunk !== p.sunk) return false;
+                shots.add(key(p.r, p.c));
+            }
+            return true;
+        }
+
+        // 承諾字串：艦隊 + 隨機鹽。開局時只送它的雜湊，賽後揭曉艦隊與鹽，對方重算雜湊即可確認沒有中途換船
+        const commitText = (fleet, salt) => JSON.stringify({ f: fleet.map(s => [s.r, s.c, s.len, s.h]), salt });
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const sha256 = async (t) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)))].map(b => b.toString(16).padStart(2, '0')).join('');
+        const randomSalt = () => [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
+
+        let room = null, isHost = false, hostId = '', names = ['', ''], my = 0;
+        let G;                                                       // 一局的狀態
+        let gameNo = 0;                                              // 第幾局：決定誰先手（輪流）
+
+        function newGame() {
+            G = {
+                phase: room && (isHost ? room.players.length > 1 : true) ? 'place' : 'wait',                 // wait | place | play | over
+                slots: LENS.map(() => null), orient: 1, myReady: false, oppReady: false, oppCommit: '', salt: '', myCommit: '',
+                turn: 'me', shotsAtMe: new Set(), myShots: new Map(), reports: [], pending: null, sunkLens: [], oppFleet: null, verdict: '', won: null, msg: '',
+            };
+        }
+        const myFleet = () => G.slots.filter(Boolean);
+
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        function out(d) { if (isHost) room.broadcast(d); else room.send(d); }
+        function readNick() {
+            const n = $('#nick').value.trim();
+            if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; }
+            return n;
+        }
+
+        // ---------- 規則 ----------
+        function startIfReady() {
+            if (G.phase !== 'place' || !G.myReady || !G.oppReady) return;
+            G.phase = 'play';
+            G.turn = (gameNo % 2 === 0) === isHost ? 'me' : 'opp';       // 偶數局房主先手，奇數局成員先手
+            render();
+        }
+
+        async function setReady() {
+            const fleet = myFleet();
+            if (G.phase !== 'place' || fleet.length !== LENS.length || G.myReady) return;
+            G.salt = randomSalt(); G.myCommit = await sha256(commitText(fleet, G.salt));
+            G.myReady = true; out({ t: 'READY', commit: G.myCommit });
+            startIfReady(); render();
+        }
+
+        function fire(r, c) {
+            if (G.phase !== 'play' || G.turn !== 'me' || G.pending || G.myShots.has(key(r, c))) return;
+            G.pending = { r, c }; out({ t: 'FIRE', r, c }); render();
+        }
+
+        function onFire(d) {
+            if (G.phase !== 'play' || G.turn !== 'opp' || !inBoard(d.r, d.c) || G.shotsAtMe.has(key(d.r, d.c))) return;
+            const res = shotResult(myFleet(), G.shotsAtMe, d.r, d.c);
+            G.shotsAtMe.add(key(d.r, d.c));
+            out({ t: 'RESULT', r: d.r, c: d.c, hit: res.hit, sunk: res.sunk });
+            if (allSunk(myFleet(), G.shotsAtMe)) { G.phase = 'over'; G.won = false; sendReveal(); } else G.turn = 'me';
+            render();
+        }
+
+        function onResult(d) {
+            if (G.phase !== 'play' || !G.pending || d.r !== G.pending.r || d.c !== G.pending.c || typeof d.hit !== 'boolean' || !LENS.concat(0).includes(d.sunk) || (d.sunk && !d.hit)) return;
+            const rep = { r: d.r, c: d.c, hit: d.hit, sunk: d.sunk };
+            G.myShots.set(key(d.r, d.c), rep); G.reports.push(rep); G.pending = null;
+            if (d.sunk) G.sunkLens.push(d.sunk);
+            if (G.sunkLens.length === LENS.length) { G.phase = 'over'; G.won = true; sendReveal(); } else G.turn = 'opp';
+            render();
+        }
+
+        const sendReveal = () => out({ t: 'REVEAL', fleet: myFleet().map(s => ({ r: s.r, c: s.c, len: s.len, h: s.h })), salt: G.salt });
+
+        async function onReveal(d) {
+            if (G.phase !== 'over' || G.oppFleet || !validFleet(d.fleet) || typeof d.salt !== 'string' || d.salt.length > 64) return;
+            const fleet = d.fleet.map(s => ({ r: s.r, c: s.c, len: s.len, h: s.h }));
+            const okHash = (await sha256(commitText(fleet, d.salt))) === G.oppCommit;
+            const okShots = verifyReports(fleet, G.reports);
+            G.oppFleet = fleet;
+            G.verdict = okHash && okShots ? '✓ 驗證通過：對手的艦隊與回報完全吻合' : `⚠ 驗證失敗：${okHash ? '回報的戰果與艦隊不符' : '艦隊與開局承諾不符'}，對手可能作弊`;
+            render();
+        }
+
+        // ---------- 連線 ----------
+        const onNetError = (err, message) => { if (G && G.phase !== 'wait') return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } };
+
+        function onMessage(d) {
+            if (!d || typeof d.t !== 'string' || !G) return;
+            if (d.t === 'READY') { if (G.phase === 'place' && typeof d.commit === 'string' && /^[0-9a-f]{64}$/.test(d.commit) && !G.oppReady) { G.oppReady = true; G.oppCommit = d.commit; startIfReady(); render(); } }
+            else if (d.t === 'FIRE') onFire(d);
+            else if (d.t === 'RESULT') onResult(d);
+            else if (d.t === 'REVEAL') onReveal(d);
+            else if (d.t === 'AGAIN' && !isHost && G.phase === 'over') { gameNo++; newGame(); render(); }
+        }
+
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: 2,
+                onReady(r) { isHost = true; my = 0; hostId = r.id; names = [nick, '']; history.replaceState('', document.title, location.pathname + '#' + r.id); newGame(); G.phase = 'wait'; enter(); },
+                onJoin(p) { names[1] = p.nick; gameNo = 0; newGame(); render(); },
+                onLeave() { names[1] = ''; const keep = G.slots; newGame(); G.phase = 'wait'; G.slots = keep; G.msg = '對手離開了，等待新的對手…'; render(); },
+                onMessage(p, d) { onMessage(d); },
+                onError: onNetError,
+            });
+        }
+
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…'); hostId = id; names = ['', nick]; my = 1;
+            room = P2PRoom.join(id, {
+                nick,
+                onJoined() { newGame(); G.phase = 'place'; enter(); },
+                onRoster(players) { names = [players[0].nick, nick]; if (G) render(); },
+                onMessage,
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (G) { alert('房主已離開，遊戲結束'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+
+        // ---------- 畫面 ----------
+        const buildGrid = (el, onClick) => {
+            el.replaceChildren(...Array.from({ length: SIZE * SIZE }, (_, i) => {
+                const b = document.createElement('button'); b.className = 'c'; b.setAttribute('aria-label', `${String.fromCharCode(65 + Math.floor(i / SIZE))}${i % SIZE + 1}`);
+                b.onclick = () => onClick(Math.floor(i / SIZE), i % SIZE); return b;
+            }));
+        };
+        function enter() { $('#menu').hidden = true; $('#game').hidden = false; buildGrid($('#enemy'), fire); buildGrid($('#mine'), placeAt); render(); }
+
+        function placeAt(r, c) {
+            if (G.phase !== 'place' || G.myReady) return;
+            const hit = G.slots.findIndex(s => s && cellsOf(s).some(([a, b]) => a === r && b === c));
+            if (hit >= 0) { G.slots[hit] = null; G.msg = ''; return render(); }
+            const i = G.slots.findIndex(s => !s);
+            if (i < 0) return;
+            const ship = { r, c, len: LENS[i], h: G.orient };
+            if (!canPlace(myFleet(), ship)) { G.msg = '放不下：超出邊界或和其他船重疊'; return render(); }
+            G.slots[i] = ship; G.msg = ''; render();
+        }
+
+        function render() {
+            if (!G) return;
+            const { phase } = G, fleet = myFleet(), over = phase === 'over';
+            const opp = names[1 - my] || '對手';
+            $('#status').textContent = G.msg && phase !== 'play' && !over ? G.msg
+                : phase === 'wait' ? '等待對手加入…（把邀請連結傳給朋友）'
+                : phase === 'place' ? (G.myReady ? (G.oppReady ? '' : `艦隊就位，等待 ${opp} 佈署…`) : fleet.length < LENS.length ? `點自己的海域佈置艦艇（下一艘長度 ${LENS[G.slots.findIndex(s => !s)]}）；點已放的船可移除` : '全部佈置完成，按「準備好了」')
+                : over ? (G.won ? '🏆 你贏了！擊沉所有敵艦' : '💥 你的艦隊全滅了')
+                : G.turn === 'me' ? '輪到你開火！點敵方海域的格子' : `等待 ${opp} 開火…`;
+            $('#enemyBox').hidden = phase === 'wait' || phase === 'place';
+            $('#mineTitle').textContent = phase === 'place' ? '佈置我的艦隊' : '我的艦隊';
+            const mineCells = $('#mine').children, enemyCells = $('#enemy').children;
+            const shipAt = new Map(); fleet.forEach(s => cellsOf(s).forEach(([r, c]) => shipAt.set(key(r, c), true)));
+            for (let i = 0; i < SIZE * SIZE; i++) {
+                const m = mineCells[i], hitMe = G.shotsAtMe.has(i), sh = shipAt.has(i);
+                m.className = 'c' + (sh ? ' ship' : '') + (hitMe ? (sh ? ' hit' : ' miss') : '');
+                m.textContent = hitMe ? (sh ? '✕' : '•') : '';
+                const e = enemyCells[i], rep = G.myShots.get(i), reveal = G.oppFleet && G.oppFleet.some(s => cellsOf(s).some(([r, c]) => key(r, c) === i));
+                e.className = 'c' + (rep ? (rep.hit ? ' hit' : ' miss') : '') + (!rep && reveal ? ' reveal' : '') + (G.pending && key(G.pending.r, G.pending.c) === i ? ' ghost' : '');
+                e.textContent = rep ? (rep.hit ? '✕' : '•') : '';
+            }
+            $('#enemy').classList.toggle('off', phase !== 'play' || G.turn !== 'me');
+            $('#mine').classList.toggle('off', phase !== 'place' || G.myReady);
+            // 剩餘艦艇：敵方（已擊沉者劃線）
+            const left = [...G.sunkLens];
+            $('#fleet').replaceChildren(...(phase === 'play' || over ? [Object.assign(document.createElement('small'), { className: 'muted', textContent: '敵艦：' })].concat(LENS.map(len => { const i = left.indexOf(len), sunk = i >= 0; if (sunk) left.splice(i, 1); return Object.assign(document.createElement('span'), { className: sunk ? 'sunk' : '', textContent: '■'.repeat(len) }); })) : []));
+            $('#verdict').textContent = over ? (G.verdict || '等待對手揭曉艦隊以驗證…') : '';
+            $('#placeBar').hidden = phase !== 'place' || G.myReady;
+            $('#rot').textContent = '方向：' + (G.orient ? '橫' : '直');
+            $('#ready').disabled = fleet.length !== LENS.length;
+            $('#again').hidden = !(isHost && over);
+            $('#copyInvite').hidden = !isHost || phase !== 'wait';
+        }
+
+        $('#hostBtn').onclick = hostRoom;
+        $('#joinBtn').onclick = joinRoom;
+        $('#rot').onclick = () => { G.orient ^= 1; render(); };
+        $('#rand').onclick = () => { if (G.phase === 'place' && !G.myReady) { G.slots = randomFleet(rnd); G.msg = ''; render(); } };
+        $('#clr').onclick = () => { if (G.phase === 'place' && !G.myReady) { G.slots = LENS.map(() => null); G.msg = ''; render(); } };
+        $('#ready').onclick = setReady;
+        $('#again').onclick = () => { out({ t: 'AGAIN' }); gameNo++; newGame(); render(); };
+        $('#leave').onclick = () => location.reload();
+        $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
+        if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+    </script>
+</body>
+
+</html>

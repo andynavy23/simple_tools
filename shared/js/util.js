@@ -1,6 +1,6 @@
-/* 共用小工具：均勻亂數 / 洗牌 / 複製 / localStorage / HTML 跳脫 / 日期字串 / 統計列 / 提示音 / 語音
+/* 共用小工具：均勻亂數 / 洗牌 / 複製 / localStorage / HTML 跳脫 / 日期字串 / 統計列 / 提示音 / 語音 / 名單解析 / 下載檔案
  *
- * 使用：<script src="../shared/js/util.js"></script>，然後 const { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak } = Util;
+ * 使用：<script src="../shared/js/util.js"></script>，然後 const { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download } = Util;
  * 放進這裡的條件：至少兩個工具在用、且不需要各工具再調整格式。
  */
 (function (root) {
@@ -50,6 +50,16 @@
             u.lang = lang; u.rate = rate;
             root.speechSynthesis.speak(u);
         } catch (e) { }
+    }
+
+    // 名單解析：換行、逗號、頓號分隔，去掉空白與空項
+    const parseNames = (text) => String(text).split(/[\n,，、]/).map(s => s.trim()).filter(Boolean);
+
+    // 下載：blob 為 Blob 物件；檔名由呼叫端決定
+    function download(blob, filename) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     }
 
     // 統計列：左邊說明、右邊數值（樣式見 theme.css 的 .li.stat）；cls 加在數值上
@@ -115,7 +125,7 @@
         },
     };
 
-    const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak };
+    const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download };
     if (typeof module !== 'undefined' && module.exports) module.exports = Util;
     else root.Util = Util;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="連線規劃撲克：主持人出題，大家同時出牌估點數，全員出完才翻牌，避免被別人的答案影響。">
+    <meta property="og:title" content="連線規劃撲克" />
+    <meta property="og:description" content="全員出牌後同時翻牌的估點工具。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/planning-poker.html" />
+    <title>連線規劃撲克</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .row input[type=text] {
+            flex: 1 1 160px;
+        }
+
+        #topic {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            word-break: break-all;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
+            gap: 8px;
+        }
+
+        .cards button {
+            height: 84px;
+            font-size: 24px;
+            font-weight: 700;
+            border-radius: 14px;
+        }
+
+        .cards button[aria-pressed=true] {
+            background: var(--blue);
+            color: #fff;
+            transform: translateY(-6px);
+        }
+
+        .seat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .seat:last-child {
+            border-bottom: 0;
+        }
+
+        .face {
+            min-width: 44px;
+            height: 56px;
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            font-size: 22px;
+            font-weight: 800;
+            background: var(--fill);
+            color: var(--muted);
+        }
+
+        .face.up {
+            background: var(--blue);
+            color: #fff;
+        }
+
+        .face.done {
+            background: color-mix(in srgb, var(--ok) 30%, var(--fill));
+            color: var(--ok);
+        }
+
+        .meta {
+            display: flex;
+            justify-content: space-between;
+            color: var(--muted);
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>連線規劃撲克</h1>
+        <p class="sub">主持人出題，大家各自選牌；全員出完才能翻牌，所以不會被別人的答案左右（最多 20 人）。</p>
+
+        <div class="card" id="menu">
+            <div class="row"><input type="text" id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+            <div class="row">
+                <button class="primary" id="hostBtn">我是主持人（建立房間）</button>
+                <input type="text" id="joinId" placeholder="貼上房號" aria-label="房號">
+                <button id="joinBtn">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+        </div>
+
+        <div id="room" hidden>
+            <div class="card" id="editor" hidden>
+                <div class="row"><input type="text" id="topicIn" maxlength="60" placeholder="題目（例如：登入頁面改版）" aria-label="題目"></div>
+                <div class="row">
+                    <select id="deckSel" aria-label="牌組"><option value="fib">費氏數列 0 1 2 3 5 8 13 21</option><option value="tshirt">T-shirt XS S M L XL</option></select>
+                    <button class="primary" id="newBtn">開始新一輪</button>
+                    <button id="revealBtn" disabled>翻牌</button>
+                    <button class="sm" id="copyInvite">複製邀請連結</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="meta"><span id="who"></span><span id="count"></span></div>
+                <div id="topic"></div>
+                <div class="cards" id="cards"></div>
+            </div>
+
+            <div class="card">
+                <div id="seats"></div>
+                <div id="result"></div>
+            </div>
+            <div class="row" style="justify-content:center"><button id="leave">離開</button></div>
+        </div>
+    </div>
+
+    <script>
+        // --- pure ---
+        const DECKS = { fib: ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'], tshirt: ['XS', 'S', 'M', 'L', 'XL', '?', '☕'] };
+        const MAX_PLAYERS = 20;
+
+        const validCard = (deck, v) => !!DECKS[deck] && typeof v === 'string' && DECKS[deck].includes(v);
+
+        // 各牌出現次數（照牌組順序）；cards 是已翻開的牌
+        function distribution(deck, cards) {
+            return DECKS[deck].map(c => [c, cards.filter(x => x === c).length]).filter(([, n]) => n > 0);
+        }
+
+        // 統計：數字牌算平均與中位數；agree = 所有人出一樣的牌
+        function stats(deck, cards) {
+            const nums = cards.filter(c => /^\d+$/.test(c)).map(Number).sort((a, b) => a - b), n = nums.length;
+            const dist = distribution(deck, cards), top = Math.max(0, ...dist.map(d => d[1]));
+            return {
+                dist, mode: dist.filter(d => d[1] === top).map(d => d[0]),
+                avg: n ? Math.round(nums.reduce((a, b) => a + b, 0) / n * 10) / 10 : null,
+                median: n ? (n % 2 ? nums[(n - 1) / 2] : (nums[n / 2 - 1] + nums[n / 2]) / 2) : null,
+                agree: cards.length > 1 && new Set(cards).size === 1,
+            };
+        }
+
+        // 成員端檢查房主傳來的狀態
+        function validState(s) {
+            return !!s && Number.isInteger(s.round) && ['vote', 'revealed'].includes(s.phase) && ['fib', 'tshirt'].includes(s.deck)
+                && typeof s.topic === 'string' && s.topic.length <= 80 && Array.isArray(s.seats) && s.seats.length <= MAX_PLAYERS
+                && s.seats.every(p => p && typeof p.n === 'string' && p.n.length <= 12 && typeof p.voted === 'boolean' && (p.v === null || validCard(s.deck, p.v)));
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let room = null, isHost = false, hostId = '', S = null, myVote = null, myRound = -1;
+        const H = { round: 0, topic: '', deck: 'fib', phase: 'vote', votes: new Map() };       // votes：peerId → 牌
+
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        function readNick() {
+            const n = $('#nick').value.trim();
+            if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; }
+            return n;
+        }
+
+        // ---------- 主持人 ----------
+        function publicState() {
+            const up = H.phase === 'revealed';
+            return { round: H.round, phase: H.phase, deck: H.deck, topic: H.topic, seats: room.players.map(p => ({ n: p.nick, voted: H.votes.has(p.peerId), v: up ? (H.votes.get(p.peerId) ?? null) : null })) };
+        }
+        function push() { S = publicState(); render(); room.broadcast({ t: 'STATE', s: S }); }
+
+        function newRound() {
+            H.round++; H.topic = $('#topicIn').value.trim(); H.deck = $('#deckSel').value; H.phase = 'vote'; H.votes = new Map(); myVote = null;
+            push();
+        }
+        function reveal() { if (H.phase === 'vote') { H.phase = 'revealed'; push(); } }
+
+        function castVote(peerId, v) {
+            if (H.phase !== 'vote' || !validCard(H.deck, v)) return false;
+            H.votes.set(peerId, v);
+            return true;
+        }
+
+        // ---------- 連線 ----------
+        const onNetError = (err, message) => { if (S) return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } };
+
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: MAX_PLAYERS,
+                onReady(r) { isHost = true; hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id); enterRoom(); push(); },
+                onJoin: () => push(),
+                onLeave(p) { H.votes.delete(p.peerId); push(); },
+                onMessage(p, d) {
+                    if (d && d.t === 'VOTE' && d.round === H.round && castVote(p.peerId, d.v)) { room.sendTo(p.index, { t: 'YOU', round: H.round, v: d.v }); push(); }
+                },
+                onError: onNetError,
+            });
+        }
+
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…'); hostId = id;
+            room = P2PRoom.join(id, {
+                nick,
+                onJoined() { S = { round: 0, phase: 'vote', deck: 'fib', topic: '', seats: [] }; enterRoom(); },
+                onMessage(d) {
+                    if (!d || typeof d.t !== 'string') return;
+                    if (d.t === 'STATE' && validState(d.s)) { S = d.s; if (S.round !== myRound) { myRound = S.round; myVote = null; } render(); }
+                    else if (d.t === 'YOU' && S && d.round === S.round && validCard(S.deck, d.v)) { myVote = d.v; render(); }
+                },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (S) { alert('主持人已離開'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+
+        // ---------- 畫面 ----------
+        function enterRoom() { $('#menu').hidden = true; $('#room').hidden = false; $('#editor').hidden = !isHost; }
+
+        function render() {
+            if (!S) return;
+            const vote = S.phase === 'vote', done = S.seats.filter(x => x.voted).length;
+            $('#who').textContent = isHost ? '你是主持人' : '參與者';
+            $('#count').textContent = `${done} / ${S.seats.length} 人已出牌`;
+            $('#topic').textContent = S.topic || (S.round ? '（未命名題目）' : isHost ? '在上方輸入題目後按「開始新一輪」' : '等待主持人開始…');
+            $('#cards').replaceChildren(...(S.round ? DECKS[S.deck] : []).map(c => {
+                const b = document.createElement('button');
+                b.textContent = c; b.disabled = !vote; b.setAttribute('aria-pressed', c === myVote);
+                b.onclick = () => {
+                    if (S.phase !== 'vote') return;
+                    if (isHost) { if (castVote(room.peerId, c)) { myVote = c; push(); } } else room.send({ t: 'VOTE', round: S.round, v: c });
+                };
+                return b;
+            }));
+            $('#seats').replaceChildren(...S.seats.map(p => {
+                const r = document.createElement('div'); r.className = 'seat';
+                const f = Object.assign(document.createElement('div'), { className: 'face' + (p.v !== null ? ' up' : p.voted ? ' done' : ''), textContent: p.v !== null ? p.v : p.voted ? '✓' : '…' });
+                r.append(Object.assign(document.createElement('span'), { textContent: p.n }), f);
+                return r;
+            }));
+            const nums = S.seats.filter(p => p.v !== null).map(p => p.v);
+            if (!vote && nums.length) {
+                const st = stats(S.deck, nums);
+                const rows = [Util.statRow('出牌分佈', st.dist.map(([c, n]) => `${c}×${n}`).join('　')), Util.statRow('最多人選', st.mode.join(' / '))];
+                if (st.avg !== null) rows.push(Util.statRow('平均 / 中位數', `${st.avg} / ${st.median}`));
+                rows.push(Util.statRow('結論', st.agree ? '🎉 全員一致' : '有分歧，討論後再來一輪', st.agree ? 'ok' : ''));
+                $('#result').replaceChildren(...rows);
+            } else $('#result').replaceChildren();
+            if (isHost) { $('#revealBtn').disabled = !vote || !S.round || done < S.seats.length; $('#newBtn').textContent = S.round ? '開始新一輪' : '開始'; }
+        }
+
+        $('#hostBtn').onclick = hostRoom;
+        $('#joinBtn').onclick = joinRoom;
+        $('#newBtn').onclick = newRound;
+        $('#revealBtn').onclick = reveal;
+        $('#leave').onclick = () => location.reload();
+        $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
+        if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="抽獎 / 刮刮樂：貼上名單抽出 N 位得獎者，可排除已中獎的人；或用刮刮樂揭曉結果。">
+    <meta property="og:title" content="抽獎 / 刮刮樂" />
+    <meta property="og:description" content="貼上名單抽獎，或用刮刮樂揭曉得獎者。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/lottery.html" />
+    <title>抽獎 / 刮刮樂</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .row label {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .prize {
+            position: relative;
+            height: 84px;
+            border-radius: 14px;
+            overflow: hidden;
+            background: var(--bg);
+            box-shadow: inset 0 0 0 2px var(--fill);
+        }
+
+        .prize b {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            font-size: 22px;
+            word-break: break-all;
+            padding: 0 8px;
+            text-align: center;
+        }
+
+        .prize canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+            cursor: crosshair;
+        }
+
+        .prize.win {
+            box-shadow: inset 0 0 0 2px var(--ok);
+        }
+
+        #out .prize {
+            animation: pop .3s ease;
+        }
+
+        @keyframes pop {
+            from {
+                transform: scale(.85);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>抽獎 / 刮刮樂</h1>
+        <p class="sub">貼上名單（換行、逗號、頓號分隔），用安全亂數抽出得獎者。</p>
+
+        <div class="card">
+            <textarea id="names" aria-label="名單" placeholder="小明&#10;小華&#10;小美&#10;阿強"></textarea>
+            <div class="row">
+                <label for="n">抽出</label>
+                <input id="n" type="number" min="1" value="1" style="width:80px">
+                <label for="mode">方式</label>
+                <select id="mode"><option value="draw">直接抽出</option><option value="scratch">刮刮樂</option></select>
+                <label><input type="checkbox" id="excl" checked> 已中獎者不再抽</label>
+            </div>
+            <div class="row">
+                <button class="primary" id="go">抽！</button>
+                <button class="sm" id="resetPool">重置中獎紀錄</button>
+                <span class="muted" id="info"></span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>本次結果</h2>
+            <div class="cards" id="out"></div>
+        </div>
+
+        <div class="card">
+            <h2>歷次得獎者 <span class="muted" id="cnt" style="font-weight:400;font-size:14px"></span></h2>
+            <div id="log"></div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { shuffle, store, parseNames } = Util;
+
+        // --- pure ---
+        // 從名單抽 n 位；exclude 是已中獎的名字（同名者一併排除）
+        const pick = (names, n, exclude = []) => shuffle(names.filter(x => !exclude.includes(x))).slice(0, n);
+
+        // 已刮開的比例：alpha 是 canvas 的 RGBA 資料；取樣每 step 個像素
+        function clearedFraction(rgba, step = 4) {
+            let seen = 0, clear = 0;
+            for (let i = 3; i < rgba.length; i += 4 * step) { seen++; if (rgba[i] < 128) clear++; }
+            return seen ? clear / seen : 0;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let won = store.get('lottery_won', []);                         // [[名字,…], …]（每次抽獎一組）
+        $('#names').value = store.get('lottery_names', '');
+
+        const flat = () => won.flat();
+        function renderLog() {
+            const total = flat().length;
+            $('#cnt').textContent = `（共 ${total} 位）`;
+            $('#log').replaceChildren(...won.map((g, i) => {
+                const d = document.createElement('div'); d.className = 'li';
+                d.append(Object.assign(document.createElement('span'), { className: 'muted', textContent: `第 ${i + 1} 次` }), Object.assign(document.createElement('b'), { textContent: g.join('、') }));
+                return d;
+            }).reverse());
+            const names = parseNames($('#names').value);
+            const left = names.length - flat().filter(x => names.includes(x)).length;
+            $('#info').textContent = names.length ? `名單 ${names.length} 人，${$('#excl').checked ? '還能抽 ' + Math.max(0, left) + ' 人' : '可重複中獎'}` : '';
+        }
+
+        function prizeCard(name, scratch) {
+            const box = document.createElement('div'); box.className = 'prize win';
+            const b = document.createElement('b'); b.textContent = name; box.append(b);
+            if (scratch) attachScratch(box);
+            return box;
+        }
+
+        function attachScratch(box) {
+            const c = document.createElement('canvas'); box.append(c);
+            requestAnimationFrame(() => {
+                const w = c.width = box.clientWidth, h = c.height = box.clientHeight, g = c.getContext('2d', { willReadFrequently: true });
+                const grad = g.createLinearGradient(0, 0, w, h); grad.addColorStop(0, '#9a9aa0'); grad.addColorStop(1, '#c7c7cc');
+                g.fillStyle = grad; g.fillRect(0, 0, w, h);
+                g.fillStyle = '#6e6e73'; g.font = '14px sans-serif'; g.textAlign = 'center'; g.fillText('刮開', w / 2, h / 2 + 5);
+                g.globalCompositeOperation = 'destination-out'; g.lineWidth = 28; g.lineCap = g.lineJoin = 'round';
+                let down = false, last = null;
+                const at = (e) => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * w / r.width, (e.clientY - r.top) * h / r.height]; };
+                c.onpointerdown = (e) => { down = true; c.setPointerCapture(e.pointerId); last = at(e); g.beginPath(); g.moveTo(...last); g.lineTo(last[0] + .1, last[1]); g.stroke(); };
+                c.onpointermove = (e) => { if (!down) return; const p = at(e); g.beginPath(); g.moveTo(...last); g.lineTo(...p); g.stroke(); last = p; };
+                c.onpointerup = c.onpointercancel = () => { if (!down) return; down = false; if (clearedFraction(g.getImageData(0, 0, w, h).data) > 0.5) c.remove(); };
+            });
+        }
+
+        function go() {
+            const names = parseNames($('#names').value), n = Math.max(1, parseInt($('#n').value, 10) || 1);
+            store.set('lottery_names', $('#names').value);
+            if (!names.length) { $('#info').textContent = '請先輸入名單'; return; }
+            const winners = pick(names, n, $('#excl').checked ? flat() : []);
+            if (!winners.length) { $('#info').textContent = '名單裡的人都中過獎了，請按「重置中獎紀錄」'; return; }
+            won.push(winners); store.set('lottery_won', won);
+            $('#out').replaceChildren(...winners.map(w => prizeCard(w, $('#mode').value === 'scratch')));
+            renderLog();
+            if (winners.length < n) $('#info').textContent += `（名單不夠，只抽出 ${winners.length} 位）`;
+        }
+
+        $('#go').onclick = go;
+        $('#resetPool').onclick = () => { won = []; store.set('lottery_won', won); $('#out').replaceChildren(); renderLog(); };
+        $('#names').oninput = () => { store.set('lottery_names', $('#names').value); renderLog(); };
+        $('#excl').onchange = renderLog;
+        renderLog();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="日期計算機：兩日期相差幾天、加減天數 / 月 / 年 / 工作日，以及某天是星期幾、第幾週。">
+    <meta property="og:title" content="日期計算機" />
+    <meta property="og:description" content="日期相差、加減與工作日計算。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/date-calc.html" />
+    <title>日期計算機</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row label {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        #res {
+            margin-top: 6px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>日期計算機</h1>
+        <p class="sub">相差幾天、幾天後是哪一天、這天是星期幾。工作日只排除週六日（不含國定假日）。</p>
+
+        <div class="card">
+            <div class="tabs" role="tablist">
+                <button data-t="diff" aria-pressed="true">日期相差</button>
+                <button data-t="add" aria-pressed="false">日期加減</button>
+                <button data-t="info" aria-pressed="false">日期資訊</button>
+            </div>
+
+            <div class="pane" data-t="diff">
+                <div class="row"><label for="d1">從</label><input type="date" id="d1"><label for="d2">到</label><input type="date" id="d2"></div>
+            </div>
+            <div class="pane" data-t="add" hidden>
+                <div class="row"><label for="d3">起始日</label><input type="date" id="d3"></div>
+                <div class="row">
+                    <select id="sign" aria-label="方向"><option value="1">之後</option><option value="-1">之前</option></select>
+                    <input type="number" id="amt" value="30" min="0" style="width:100px" aria-label="數量">
+                    <select id="unit" aria-label="單位"><option value="d">天</option><option value="w">週</option><option value="m">個月</option><option value="y">年</option><option value="wd">個工作日</option></select>
+                </div>
+            </div>
+            <div class="pane" data-t="info" hidden>
+                <div class="row"><label for="d4">日期</label><input type="date" id="d4"></div>
+            </div>
+            <div id="res" aria-live="polite"></div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { day, statRow, store } = Util;
+
+        // --- pure ---
+        const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+        const isLeap = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+        const daysInMonth = (y, m) => [31, isLeap(y) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1];
+        const weekday = (s) => (((day.num(s) + 4) % 7) + 7) % 7;                 // 0 = 週日（1970-01-01 是週四）
+        const isWorkday = (s) => { const w = weekday(s); return w !== 0 && w !== 6; };
+
+        // 加減月份：日數超過當月就取月底（1/31 + 1 個月 = 2/28 或 2/29）
+        function addMonths(s, n) {
+            const { y, m, d } = day.parse(s), t = y * 12 + (m - 1) + n, ny = Math.floor(t / 12), nm = t % 12 + 1;
+            return day.ymd(ny, nm, Math.min(d, daysInMonth(ny, nm)));
+        }
+
+        // a ≤ b：相差幾年幾個月幾天。先找出「加上幾個月不超過 b」的最大月數，剩下的是天數（1/31 → 3/1 是 1 個月 1 天）
+        function diffYMD(a, b) {
+            const p = day.parse(a), q = day.parse(b);
+            let months = (q.y - p.y) * 12 + (q.m - p.m);
+            if (day.num(addMonths(a, months)) > day.num(b)) months--;
+            return { y: Math.floor(months / 12), m: months % 12, d: day.between(addMonths(a, months), b) };
+        }
+
+        // 含起訖日的工作日數（a ≤ b）
+        function workdaysBetween(a, b) {
+            let n = 0;
+            for (let x = a, end = day.num(b); day.num(x) <= end; x = day.shift(x, 1)) if (isWorkday(x)) n++;
+            return n;
+        }
+
+        // 往後（n > 0）或往前（n < 0）數 n 個工作日；起始日本身不算
+        function addWorkdays(s, n) {
+            const step = n < 0 ? -1 : 1;
+            for (let left = Math.abs(n); left > 0;) { s = day.shift(s, step); if (isWorkday(s)) left--; }
+            return s;
+        }
+
+        const dayOfYear = (s) => day.between(day.ymd(day.parse(s).y, 1, 1), s) + 1;
+
+        // ISO 8601 週次：該週的週四所在的年，決定週所屬年份
+        function isoWeek(s) {
+            const thu = day.shift(s, 3 - ((weekday(s) + 6) % 7));
+            const y = day.parse(thu).y;
+            return { year: y, week: Math.floor(day.between(day.ymd(y, 1, 1), thu) / 7) + 1 };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const today = day.today();
+        ['#d1', '#d3', '#d4'].forEach(s => { $(s).value = today; });
+        $('#d2').value = day.shift(today, 100);
+        let tab = store.get('datecalc_tab', 'diff');
+        const valid = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+        const fmt = (s) => `${s}（週${WEEK[weekday(s)]}）`;
+
+        function render() {
+            document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab));
+            document.querySelectorAll('.pane').forEach(p => { p.hidden = p.dataset.t !== tab; });
+            const out = [];
+            if (tab === 'diff') {
+                let a = $('#d1').value, b = $('#d2').value;
+                if (valid(a) && valid(b)) {
+                    const rev = day.num(a) > day.num(b); if (rev) [a, b] = [b, a];
+                    const n = day.between(a, b), ymd = diffYMD(a, b);
+                    out.push(statRow('相差', `${n} 天`), statRow('約等於', `${Math.floor(n / 7)} 週 ${n % 7} 天`), statRow('年月日', `${ymd.y} 年 ${ymd.m} 個月 ${ymd.d} 天`), statRow('工作日數（含起訖日）', `${workdaysBetween(a, b)} 天`));
+                    if (rev) out.push(Object.assign(document.createElement('p'), { className: 'note', textContent: '「到」比「從」早，已自動對調。' }));
+                }
+            } else if (tab === 'add') {
+                const s = $('#d3').value, n = parseInt($('#amt').value, 10), sg = +$('#sign').value, u = $('#unit').value;
+                if (valid(s) && Number.isFinite(n) && n >= 0 && n <= 100000) {
+                    const r = u === 'd' ? day.shift(s, sg * n) : u === 'w' ? day.shift(s, sg * n * 7) : u === 'm' ? addMonths(s, sg * n) : u === 'y' ? addMonths(s, sg * n * 12) : addWorkdays(s, sg * n);
+                    out.push(statRow('起始日', fmt(s)), statRow('結果', fmt(r), 'ok'), statRow('相隔', `${Math.abs(day.between(s, r))} 天`));
+                }
+            } else {
+                const s = $('#d4').value;
+                if (valid(s)) {
+                    const p = day.parse(s), w = isoWeek(s);
+                    out.push(statRow('星期', `週${WEEK[weekday(s)]}`), statRow('今年第幾天', `第 ${dayOfYear(s)} 天（共 ${isLeap(p.y) ? 366 : 365} 天）`), statRow('ISO 週次', `${w.year} 年第 ${w.week} 週`), statRow('該月天數', `${daysInMonth(p.y, p.m)} 天`), statRow('閏年', isLeap(p.y) ? '是' : '否'), statRow('距今', (d => d === 0 ? '今天' : d > 0 ? `${d} 天後` : `${-d} 天前`)(day.between(today, s))));
+                }
+            }
+            $('#res').replaceChildren(...out);
+        }
+
+        document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { tab = b.dataset.t; store.set('datecalc_tab', tab); render(); }; });
+        document.querySelectorAll('input,select').forEach(e => { e.oninput = e.onchange = render; });
+        render();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="連線終極密碼：房主暗藏一個數字，大家輪流猜，範圍越縮越小，猜中的人就輸了。2–8 人，手機也能玩。">
+    <meta property="og:title" content="連線終極密碼" />
+    <meta property="og:description" content="輪流猜數字、範圍越縮越小，猜中密碼的人就輸。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/ultimate-code.html" />
+    <title>連線終極密碼</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        .row input {
+            flex: 1 1 130px;
+        }
+
+        .pl.turn {
+            border-color: var(--blue);
+        }
+
+        .pl.lose {
+            background: color-mix(in srgb, var(--bad) 22%, var(--fill));
+        }
+
+        #range {
+            text-align: center;
+            font-size: 44px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            margin: 6px 0;
+        }
+
+        #status {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+            margin-bottom: 10px;
+        }
+
+        #log {
+            max-height: 160px;
+            overflow: auto;
+            color: var(--muted);
+            font-size: 14px;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>連線終極密碼</h1>
+        <p class="sub">房主暗藏一個數字，輪流猜並縮小範圍；猜中密碼的人就輸了（2–8 人）。</p>
+
+        <div class="card" id="menu">
+            <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+            <div class="row">
+                <button class="primary" id="hostBtn">建立房間</button>
+                <input id="joinId" placeholder="貼上房號" aria-label="房號">
+                <button id="joinBtn">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+        </div>
+
+        <div class="card" id="lobby" hidden>
+            <h2>等待玩家加入</h2>
+            <div class="players" id="lobbyPlayers"></div>
+            <div class="row" style="margin-top:12px">
+                <label for="max" id="maxLabel" class="muted">密碼範圍 1 ～</label>
+                <select id="max"><option>100</option><option>500</option><option>1000</option><option>9999</option></select>
+                <button id="copyInvite">複製邀請連結</button>
+                <button class="primary" id="startBtn" disabled>開始遊戲</button>
+            </div>
+            <p class="note" id="lobbyHint"></p>
+        </div>
+
+        <div id="game" hidden>
+            <div class="card">
+                <div class="players" id="board"></div>
+                <div id="range" aria-live="polite"></div>
+                <div id="status" role="status"></div>
+                <div class="row" id="inputRow">
+                    <input type="number" id="guess" inputmode="numeric" aria-label="你的猜測">
+                    <button class="primary" id="guessBtn">猜</button>
+                </div>
+                <div id="log"></div>
+            </div>
+            <div class="row" style="justify-content:center">
+                <button class="primary" id="again" hidden>再來一局</button>
+                <button id="leave">離開</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { rnd, shuffle } = Util;
+
+        // --- pure ---
+        const MAX_PLAYERS = 8;
+
+        // 目前的合法範圍是 (lo, hi) 開區間；猜測必須是範圍內的整數
+        const validGuess = (lo, hi, g) => Number.isInteger(g) && g > lo && g < hi;
+
+        // 判定一次猜測：猜中 → { hit }；否則縮小範圍
+        function judge(lo, hi, g, secret) {
+            if (g === secret) return { hit: true, lo, hi };
+            return g < secret ? { hit: false, lo: g, hi } : { hit: false, lo, hi: g };
+        }
+
+        // 下一位還在線上的玩家（跳過自己以外全部離線的情況回傳 -1）
+        function nextActive(active, cur) {
+            for (let i = 1; i < active.length; i++) { const k = (cur + i) % active.length; if (active[k]) return k; }
+            return -1;
+        }
+
+        // 成員端檢查房主送來的狀態
+        function validState(s) {
+            const arr = (a) => Array.isArray(a) && a.length <= MAX_PLAYERS;
+            return !!s && ['lobby', 'play', 'over'].includes(s.phase) && arr(s.names) && s.names.every(n => typeof n === 'string' && n.length <= 12)
+                && arr(s.active) && s.active.every(b => typeof b === 'boolean') && arr(s.losses) && s.losses.every(Number.isInteger)
+                && Number.isInteger(s.turn) && Number.isInteger(s.lo) && Number.isInteger(s.hi) && Number.isInteger(s.secret) && Number.isInteger(s.loser)
+                && typeof s.why === 'string' && s.why.length <= 40 && Array.isArray(s.log) && s.log.length <= 12
+                && s.log.every(l => l && typeof l.n === 'string' && l.n.length <= 12 && Number.isInteger(l.g));
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let room = null, isHost = false, my = -1, hostId = '', V = null;
+        const H = { phase: 'lobby', max: 100, secret: 0, lo: 0, hi: 0, turn: 0, loser: -1, why: '', log: [], losses: {}, first: 0 };
+
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const show = (id, on) => { $(id).hidden = !on; };
+        function readNick() {
+            const n = $('#nick').value.trim();
+            if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; }
+            return n;
+        }
+
+        // ---------- 房主 ----------
+        const actives = () => room.players.map(p => p.connected);
+        function publicState() {
+            return {
+                phase: H.phase, names: room.players.map(p => p.nick), active: actives(), losses: room.players.map(p => H.losses[p.nick] || 0),
+                turn: H.turn, lo: H.lo, hi: H.hi, secret: H.phase === 'over' ? H.secret : 0, loser: H.loser, why: H.why, log: H.log.slice(-12),
+            };
+        }
+        function push() { V = publicState(); render(); room.broadcast({ t: 'STATE', s: V }); }
+
+        function startGame() {
+            const ids = room.players.filter(p => p.connected).map(p => p.index);
+            if (ids.length < 2) return;
+            room.keepSlots = true;
+            H.max = +$('#max').value; H.secret = 1 + rnd(H.max); H.lo = 0; H.hi = H.max + 1;
+            H.turn = shuffle(ids)[0]; H.phase = 'play'; H.loser = -1; H.why = ''; H.log = [];
+            push();
+        }
+
+        function finish(loser, why) {
+            H.phase = 'over'; H.loser = loser; H.why = why;
+            if (loser >= 0) { const n = room.players[loser].nick; H.losses[n] = (H.losses[n] || 0) + 1; }
+            push();
+        }
+
+        function doGuess(from, g) {
+            if (H.phase !== 'play' || from !== H.turn || !validGuess(H.lo, H.hi, g)) return;
+            H.log.push({ n: room.players[from].nick, g });
+            const r = judge(H.lo, H.hi, g, H.secret);
+            if (r.hit) return finish(from, '猜中密碼');
+            H.lo = r.lo; H.hi = r.hi;
+            const nx = nextActive(actives(), from);
+            if (nx < 0) return finish(-1, '其他玩家都離開了');
+            H.turn = nx;
+            if (H.hi - H.lo === 2) return finish(nx, '範圍只剩一個數字，躲不掉了');
+            push();
+        }
+
+        // ---------- 連線 ----------
+        const onNetError = (err, message) => { if (V || isHost) return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } };
+
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: MAX_PLAYERS,
+                onReady(r) { isHost = true; my = 0; hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id); push(); },
+                canJoin: () => (H.phase === 'play' ? '遊戲已經開始' : null),
+                onJoin: () => push(),
+                onLeave(p) {
+                    if (H.phase === 'play') {
+                        const act = actives();
+                        if (act.filter(Boolean).length < 2) return finish(-1, '人數不足，遊戲結束');
+                        if (p.index === H.turn) H.turn = nextActive(act, H.turn);
+                    }
+                    push();
+                },
+                onMessage(p, d) { if (d && d.t === 'GUESS') doGuess(p.index, d.g); },
+                onError: onNetError,
+            });
+        }
+
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…'); hostId = id;
+            room = P2PRoom.join(id, {
+                nick,
+                onRoster(players, me) {
+                    my = me;
+                    if (!V) { V = { phase: 'lobby', names: players.map(p => p.nick), active: players.map(p => p.connected), losses: players.map(() => 0), turn: -1, lo: 0, hi: 0, secret: 0, loser: -1, why: '', log: [] }; render(); }
+                },
+                onMessage(d) { if (d && d.t === 'STATE' && validState(d.s)) { V = d.s; render(); } },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (V) { alert('房主已離開，遊戲結束'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+
+        // ---------- 畫面 ----------
+        function render() {
+            if (!V) return;
+            if (V.phase === 'lobby') {
+                show('#menu', false); show('#lobby', true); show('#game', false);
+                $('#lobbyPlayers').replaceChildren(...V.names.map((x, i) => Object.assign(document.createElement('div'), { className: 'pl' + (V.active[i] ? '' : ' off'), textContent: x + (i === 0 ? ' 👑' : '') + (i === my ? '（我）' : '') })));
+                const n = V.active.filter(Boolean).length;
+                ['#max', '#maxLabel', '#copyInvite', '#startBtn'].forEach(id => show(id, isHost));
+                $('#startBtn').disabled = n < 2;
+                $('#lobbyHint').textContent = isHost ? (n < 2 ? '把邀請連結傳給朋友，至少 2 人才能開始' : '人到齊了就按「開始遊戲」') : '等待房主開始遊戲…';
+                return;
+            }
+            show('#menu', false); show('#lobby', false); show('#game', true);
+            const over = V.phase === 'over', mine = V.phase === 'play' && V.turn === my;
+            $('#board').replaceChildren(...V.names.map((x, i) => Object.assign(document.createElement('div'), {
+                className: 'pl' + (i === V.turn && !over ? ' turn' : '') + (i === V.loser && over ? ' lose' : '') + (V.active[i] ? '' : ' off'),
+                textContent: `${i === V.turn && !over ? '👉 ' : ''}${x}${i === my ? '（我）' : ''}　輸 ${V.losses[i]}`,
+            })));
+            $('#range').textContent = over ? `密碼是 ${V.secret}` : `${V.lo + 1} ～ ${V.hi - 1}`;
+            $('#status').textContent = over ? (V.loser < 0 ? V.why : `💥 ${V.names[V.loser]}${V.loser === my ? '（你）' : ''} 輸了：${V.why}`) : mine ? '輪到你了，輸入範圍內的數字' : `等待 ${V.names[V.turn]} 猜…`;
+            show('#inputRow', V.phase === 'play');
+            $('#guess').disabled = $('#guessBtn').disabled = !mine;
+            $('#guess').min = V.lo + 1; $('#guess').max = V.hi - 1;
+            $('#log').replaceChildren(...V.log.map(l => Object.assign(document.createElement('div'), { textContent: `${l.n} 猜 ${l.g}` })).reverse());
+            show('#again', isHost && over);
+        }
+
+        function sendGuess() {
+            const g = parseInt($('#guess').value, 10);
+            if (!V || !validGuess(V.lo, V.hi, g)) { $('#status').textContent = `請輸入 ${V ? V.lo + 1 : ''} ～ ${V ? V.hi - 1 : ''} 之間的整數`; return; }
+            $('#guess').value = '';
+            if (isHost) doGuess(my, g); else room.send({ t: 'GUESS', g });
+        }
+
+        $('#hostBtn').onclick = hostRoom;
+        $('#joinBtn').onclick = joinRoom;
+        $('#startBtn').onclick = startGame;
+        $('#guessBtn').onclick = sendGuess;
+        $('#guess').onkeydown = (e) => { if (e.key === 'Enter') sendGuess(); };
+        $('#again').onclick = () => { room.keepSlots = false; room.prune(); H.phase = 'lobby'; H.log = []; H.loser = -1; push(); };
+        $('#leave').onclick = () => location.reload();
+        $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
+        if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+    </script>
+</body>
+
+</html>

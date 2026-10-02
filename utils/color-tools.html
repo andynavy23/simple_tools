@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="色彩工具：HEX、RGB、HSL 互轉，並檢查兩個顏色的對比度是否符合 WCAG 無障礙標準。">
+    <meta name="description" content="色彩工具：HEX、RGB、HSL 互轉，檢查對比度是否符合 WCAG，並模擬色盲者看到的顏色。">
     <meta property="og:title" content="色彩工具" />
-    <meta property="og:description" content="色碼互轉與 WCAG 對比度檢查。" />
+    <meta property="og:description" content="色碼互轉、WCAG 對比度與色盲模擬。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/color-tools.html" />
     <title>色彩工具</title>
@@ -121,6 +121,12 @@
             <div class="ratio" id="ratio"></div>
             <div id="badges"></div>
         </div>
+
+        <div class="card">
+            <h2>色覺模擬</h2>
+            <p class="note">模擬紅色盲、綠色盲、藍黃色盲與全色盲者眼中的上方「文字 / 背景」組合，以及模擬後的對比度。</p>
+            <div id="cvd"></div>
+        </div>
     </div>
 
     <script src="../shared/js/util.js"></script>
@@ -177,6 +183,20 @@
             const a = luminance(c1), b = luminance(c2);
             return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
         }
+
+        // 色覺缺陷模擬（Machado 2009，嚴重度 100%），在線性 RGB 空間做矩陣轉換
+        const CVD = {
+            '紅色盲 Protanopia': [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]],
+            '綠色盲 Deuteranopia': [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.011820, 0.042940, 0.968881]],
+            '藍黃色盲 Tritanopia': [[1.255528, -0.076749, -0.178779], [-0.078411, 0.930809, 0.147602], [0.004733, 0.691367, 0.303900]],
+            '全色盲 Achromatopsia': [[0.2126, 0.7152, 0.0722], [0.2126, 0.7152, 0.0722], [0.2126, 0.7152, 0.0722]],
+        };
+        function simulate(c, matrix) {
+            const lin = [c.r, c.g, c.b].map(v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+            const [r, g, b] = matrix.map(row => clamp(row[0] * lin[0] + row[1] * lin[1] + row[2] * lin[2], 0, 1))
+                .map(v => Math.round(255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055)));
+            return { r, g, b };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -221,6 +241,23 @@
                 s.className = 'badge ' + (ok ? 'ok' : 'no');
                 s.textContent = (ok ? '✓ ' : '✗ ') + name;
                 return s;
+            }));
+            renderCvd();
+        }
+
+        function renderCvd() {
+            const fg = parseColor($('#fg').value), bg = parseColor($('#bg').value);
+            if (!fg || !bg) return;
+            $('#cvd').replaceChildren(...Object.entries(CVD).map(([name, m]) => {
+                const f = simulate(fg, m), b = simulate(bg, m), row = document.createElement('div'), s = document.createElement('div');
+                row.className = 'li';
+                s.className = 'sample'; s.style.cssText = `color:${toHex(f)};background:${toHex(b)};margin:0;padding:8px 18px;flex:0 0 auto;border:1px solid var(--fill)`;
+                s.textContent = 'Aa 範例';
+                const label = document.createElement('span');
+                label.innerHTML = '<b></b><br><span class="muted"></span>';
+                label.firstChild.textContent = name; label.lastChild.textContent = `對比 ${contrast(f, b).toFixed(2)} : 1`;
+                row.append(label, s);
+                return row;
             }));
         }
 

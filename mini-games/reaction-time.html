@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="反應速度測試：畫面變綠就點，連測 5 次算平均，並記錄歷史最佳。">
+    <meta property="og:title" content="反應速度測試" />
+    <meta property="og:description" content="畫面變綠就點，測你的反應有多快。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/reaction-time.html" />
+    <title>反應速度測試</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        #pad {
+            display: grid;
+            place-items: center;
+            text-align: center;
+            min-height: 260px;
+            border-radius: 20px;
+            padding: 20px;
+            background: var(--blue);
+            color: #fff;
+            font-size: 24px;
+            font-weight: 700;
+            cursor: pointer;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        #pad small {
+            display: block;
+            font-size: 15px;
+            font-weight: 400;
+            opacity: .85;
+            margin-top: 6px;
+        }
+
+        #pad.wait {
+            background: #d70015;
+        }
+
+        #pad.go {
+            background: #248a3d;
+        }
+
+        #pad.early {
+            background: #b25000;
+        }
+
+        .dots {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin: 14px 0 0;
+            font-variant-numeric: tabular-nums;
+            flex-wrap: wrap;
+        }
+
+        .dots span {
+            background: var(--fill);
+            border-radius: 980px;
+            padding: 4px 12px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>反應速度測試</h1>
+        <p class="sub">等畫面變綠色的瞬間點一下（或按空白鍵）。連測 5 次取平均。</p>
+
+        <div class="card">
+            <div id="pad" role="button" tabindex="0" aria-live="polite"></div>
+            <div class="dots" id="dots"></div>
+        </div>
+
+        <div class="card">
+            <div id="stats"></div>
+            <button class="sm" id="reset" style="margin-top:8px">清除紀錄</button>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { rnd, store, statRow } = Util;
+
+        // --- pure ---
+        const ROUNDS = 5;
+        const waitMs = (rand) => 1500 + rand(3001);                   // 1.5–4.5 秒隨機等待
+
+        function summary(times) {
+            if (!times.length) return null;
+            const s = [...times].sort((a, b) => a - b), n = s.length;
+            return { avg: Math.round(times.reduce((a, b) => a + b, 0) / n), best: s[0], worst: s[n - 1], median: n % 2 ? s[(n - 1) / 2] : Math.round((s[n / 2 - 1] + s[n / 2]) / 2) };
+        }
+
+        function rate(ms) {
+            return ms < 200 ? '閃電般' : ms < 250 ? '很快' : ms < 300 ? '一般偏快' : ms < 400 ? '一般' : '再專心一點';
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let state = 'idle', times = [], goAt = 0, timer = null;                 // idle | wait | go | early | done
+        let best = store.get('reaction_best', null), all = store.get('reaction_all', []);      // all：歷次單次成績（最多 200 筆）
+
+        function set(cls, html) { $('#pad').className = cls; $('#pad').innerHTML = '<div>' + html + '</div>'; }
+
+        function renderStats() {
+            $('#dots').replaceChildren(...times.map(t => Object.assign(document.createElement('span'), { textContent: t + ' ms' })));
+            const s = summary(all), rows = [statRow('歷史最佳', best === null ? '—' : best + ' ms')];
+            if (s) rows.push(statRow('歷史平均', s.avg + ' ms'), statRow('歷史中位數', s.median + ' ms'), statRow('累計次數', all.length + ' 次'));
+            $('#stats').replaceChildren(...rows);
+        }
+
+        function idle() { state = 'idle'; set('', times.length >= ROUNDS ? `平均 ${summary(times).avg} ms<small>${rate(summary(times).avg)}，點一下再測一輪</small>` : `點一下開始<small>第 ${times.length + 1} / ${ROUNDS} 次</small>`); }
+
+        function start() {
+            if (times.length >= ROUNDS) times = [];
+            state = 'wait'; renderStats();
+            set('wait', '等綠色…<small>太早點會重來</small>');
+            timer = setTimeout(() => { state = 'go'; goAt = performance.now(); set('go', '現在點！'); }, waitMs(rnd));
+        }
+
+        function press(t) {
+            if (state === 'idle') start();
+            else if (state === 'wait') { clearTimeout(timer); state = 'early'; set('early', '太早了！<small>點一下重試這一次</small>'); }
+            else if (state === 'early') start();
+            else if (state === 'go') {
+                const ms = Math.max(1, Math.round(t - goAt));
+                times.push(ms); all = [...all, ms].slice(-200);
+                if (best === null || ms < best) best = ms;
+                store.set('reaction_best', best); store.set('reaction_all', all);
+                state = 'idle'; renderStats();
+                if (times.length >= ROUNDS) set('', `平均 ${summary(times).avg} ms<small>${ms} ms · ${rate(summary(times).avg)}。點一下再測一輪</small>`);
+                else set('', `${ms} ms<small>${rate(ms)}。點一下繼續（${times.length} / ${ROUNDS}）</small>`);
+            }
+        }
+
+        $('#pad').addEventListener('pointerdown', (e) => { e.preventDefault(); press(e.timeStamp || performance.now()); });
+        document.addEventListener('keydown', (e) => { if (e.code === 'Space' && !e.repeat) { e.preventDefault(); press(performance.now()); } });
+        $('#reset').onclick = () => { best = null; all = []; times = []; store.set('reaction_best', null); store.set('reaction_all', []); renderStats(); idle(); };
+        renderStats(); idle();
+    </script>
+</body>
+
+</html>

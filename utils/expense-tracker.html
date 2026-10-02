@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="記帳本：資料只存在你的瀏覽器，記收支、分類、月統計，並可匯出 CSV。">
+    <meta property="og:title" content="記帳本" />
+    <meta property="og:description" content="離線記帳，月統計與分類佔比，可匯出 CSV。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/expense-tracker.html" />
+    <title>記帳本</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .row input[type=text] {
+            flex: 1 1 120px;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .nav b {
+            font-size: 18px;
+        }
+
+        .bar {
+            height: 8px;
+            border-radius: 4px;
+            background: var(--fill);
+            margin-top: 4px;
+            overflow: hidden;
+        }
+
+        .bar i {
+            display: block;
+            height: 100%;
+            background: var(--blue);
+        }
+
+        .cat {
+            display: block;
+            padding: 6px 0;
+        }
+
+        .cat div {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .amt.in {
+            color: var(--ok);
+        }
+
+        .del {
+            padding: 2px 10px;
+            font-size: 13px;
+        }
+
+        .item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .item:last-child {
+            border-bottom: 0;
+        }
+
+        .item .main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .item .main small {
+            display: block;
+            color: var(--muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>記帳本</h1>
+        <p class="sub">資料只存在這個瀏覽器的 localStorage，不會上傳。換瀏覽器或清除網站資料會消失，請定期匯出。</p>
+
+        <div class="card">
+            <div class="row">
+                <select id="type" aria-label="收支"><option value="out">支出</option><option value="in">收入</option></select>
+                <input type="number" id="amt" min="0" step="any" placeholder="金額" style="width:110px" aria-label="金額">
+                <select id="cat" aria-label="分類"></select>
+            </div>
+            <div class="row">
+                <input type="date" id="date" aria-label="日期">
+                <input type="text" id="note" maxlength="30" placeholder="備註（選填）" aria-label="備註">
+                <button class="primary" id="add">新增</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="nav"><button class="sm" id="prev" aria-label="上個月">‹</button><b id="ym"></b><button class="sm" id="next" aria-label="下個月">›</button></div>
+            <div id="sum"></div>
+        </div>
+
+        <div class="card">
+            <h2>支出分類</h2>
+            <div id="cats"></div>
+        </div>
+
+        <div class="card">
+            <h2>本月明細</h2>
+            <div id="list"></div>
+            <div class="row" style="margin-top:10px"><button class="sm" id="export">匯出全部 CSV</button><button class="sm" id="clear">清除全部資料</button></div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { rnd, store, day, statRow, download } = Util;
+
+        // --- pure ---
+        const OUT_CATS = ['餐飲', '交通', '購物', '娛樂', '居住', '醫療', '教育', '其他'];
+        const IN_CATS = ['薪資', '獎金', '投資', '其他'];
+
+        const validEntry = (e) => !!e && /^\d{4}-\d{2}-\d{2}$/.test(e.d) && Number.isFinite(e.amt) && e.amt > 0 && e.amt < 1e12
+            && (e.type === 'in' || e.type === 'out') && typeof e.cat === 'string' && typeof e.note === 'string';
+
+        // 某個月（YYYY-MM）的收支、分類統計與明細（日期新到舊）
+        function summarize(entries, ym) {
+            const list = entries.filter(e => e.d.startsWith(ym)).sort((a, b) => b.d.localeCompare(a.d) || b.id.localeCompare(a.id));
+            const income = list.filter(e => e.type === 'in').reduce((a, e) => a + e.amt, 0);
+            const by = {};
+            list.filter(e => e.type === 'out').forEach(e => { by[e.cat] = (by[e.cat] || 0) + e.amt; });
+            const expense = Object.values(by).reduce((a, b) => a + b, 0);
+            return { list, income, expense, balance: income - expense, byCat: Object.entries(by).sort((a, b) => b[1] - a[1]) };
+        }
+
+        // CSV（RFC 4180 引號跳脫）；開頭是 = + - @ 的文字前面補單引號，避免在試算表中被當成公式
+        function toCSV(entries) {
+            const cell = (v) => { let s = String(v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+            const rows = [['日期', '收支', '分類', '金額', '備註'], ...[...entries].sort((a, b) => a.d.localeCompare(b.d)).map(e => [e.d, e.type === 'in' ? '收入' : '支出', e.cat, e.amt, e.note])];
+            return rows.map(r => r.map(cell).join(',')).join('\r\n');
+        }
+
+        const shiftMonth = (ym, n) => { const [y, m] = ym.split('-').map(Number), t = y * 12 + m - 1 + n; return `${Math.floor(t / 12)}-${String(t % 12 + 1).padStart(2, '0')}`; };
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const money = (n) => Math.round(n * 100) / 100 === Math.round(n) ? Math.round(n).toLocaleString('zh-TW') : n.toLocaleString('zh-TW', { maximumFractionDigits: 2 });
+        let entries = store.get('expenses', []).filter(validEntry);
+        let ym = day.today().slice(0, 7);
+        $('#date').value = day.today();
+
+        const save = () => store.set('expenses', entries);
+
+        function fillCats() { $('#cat').replaceChildren(...($('#type').value === 'in' ? IN_CATS : OUT_CATS).map(c => new Option(c, c))); }
+
+        function render() {
+            const s = summarize(entries, ym);
+            $('#ym').textContent = ym.replace('-', ' 年 ') + ' 月';
+            $('#sum').replaceChildren(statRow('收入', money(s.income), 'ok'), statRow('支出', money(s.expense)), statRow('結餘', money(s.balance), s.balance < 0 ? 'bad' : 'ok'));
+            $('#cats').replaceChildren(...(s.byCat.length ? s.byCat.map(([c, v]) => {
+                const d = document.createElement('div'); d.className = 'cat';
+                const top = document.createElement('div'), bar = document.createElement('div'), fill = document.createElement('i');
+                top.append(Object.assign(document.createElement('span'), { textContent: c }), Object.assign(document.createElement('b'), { textContent: `${money(v)}（${Math.round(v / s.expense * 100)}%）` }));
+                bar.className = 'bar'; fill.style.width = v / s.expense * 100 + '%'; bar.append(fill); d.append(top, bar);
+                return d;
+            }) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '本月還沒有支出' })]));
+            $('#list').replaceChildren(...(s.list.length ? s.list.map(e => {
+                const r = document.createElement('div'); r.className = 'item';
+                const main = document.createElement('div'); main.className = 'main';
+                main.append(Object.assign(document.createElement('div'), { textContent: e.cat }), Object.assign(document.createElement('small'), { textContent: e.d.slice(5) + (e.note ? '　' + e.note : '') }));
+                const a = Object.assign(document.createElement('b'), { className: 'amt ' + e.type, textContent: (e.type === 'in' ? '+' : '−') + money(e.amt) });
+                const x = Object.assign(document.createElement('button'), { className: 'sm del', textContent: '刪除' });
+                x.setAttribute('aria-label', '刪除 ' + e.cat + ' ' + money(e.amt));
+                x.onclick = () => { entries = entries.filter(y => y.id !== e.id); save(); render(); };
+                r.append(main, a, x);
+                return r;
+            }) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '本月沒有紀錄' })]));
+        }
+
+        $('#add').onclick = () => {
+            const e = { id: Date.now().toString(36) + rnd(1e6).toString(36), d: $('#date').value, type: $('#type').value, cat: $('#cat').value, amt: parseFloat($('#amt').value), note: $('#note').value.trim() };
+            if (!validEntry(e)) { $('#amt').focus(); return; }
+            entries.push(e); save();
+            $('#amt').value = ''; $('#note').value = '';
+            ym = e.d.slice(0, 7); render(); $('#amt').focus();
+        };
+        $('#amt').onkeydown = $('#note').onkeydown = (e) => { if (e.key === 'Enter') $('#add').click(); };
+        $('#type').onchange = fillCats;
+        $('#prev').onclick = () => { ym = shiftMonth(ym, -1); render(); };
+        $('#next').onclick = () => { ym = shiftMonth(ym, 1); render(); };
+        $('#export').onclick = () => download(new Blob(['﻿' + toCSV(entries)], { type: 'text/csv;charset=utf-8' }), `expenses-${day.today()}.csv`);
+        $('#clear').onclick = () => { if (entries.length && confirm(`確定刪除全部 ${entries.length} 筆紀錄？無法復原。`)) { entries = []; save(); render(); } };
+        fillCats(); render();
+    </script>
+</body>
+
+</html>

@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="白噪音 / 環境音：用瀏覽器即時合成白噪音、粉紅噪音、棕噪音、雨聲與風聲，不需下載音檔，可定時關閉。">
+    <meta name="description" content="白噪音 / 環境音：用瀏覽器即時合成白噪音、粉紅噪音、棕噪音、雨聲、風聲與機械鍵盤 / 打字機聲，不需下載音檔，可定時關閉。">
     <meta property="og:title" content="白噪音 / 環境音" />
-    <meta property="og:description" content="即時合成的白噪音、雨聲、風聲，可定時關閉。" />
+    <meta property="og:description" content="即時合成的白噪音、雨聲、風聲與打字聲，可定時關閉。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/white-noise.html" />
     <title>白噪音 / 環境音</title>
@@ -119,6 +119,11 @@
             for (let i = 0; i < n; i++) out[i] = Math.max(-1, Math.min(1, out[i]));
             return out;
         }
+
+        // 打字節奏：每下按鍵之間的間隔（毫秒）；偶爾停頓思考（rand 為 [0,1) 亂數函式）
+        function typingGap(rand = Math.random) {
+            return rand() < 0.1 ? 600 + rand() * 900 : 70 + rand() * 190;
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -128,8 +133,10 @@
             brown: ['棕噪音', '低沉，像遠處的瀑布'],
             rain: ['雨聲', '細密的雨落在屋簷'],
             wind: ['風聲', '忽強忽弱的風'],
+            keys: ['機械鍵盤', '清脆的青軸敲擊聲'],
+            typewriter: ['打字機', '厚重的敲字聲，偶爾「叮」一聲'],
         };
-        let current = 'rain', ctx = null, master = null, nodes = [], playing = false, timerId = null;
+        let current = 'rain', ctx = null, master = null, nodes = [], playing = false, timerId = null, keyTimer = null;
 
         for (const [k, [name, desc]] of Object.entries(SOUNDS)) {
             const b = document.createElement('button');
@@ -172,6 +179,9 @@
                 const s = loopSource('pink'), hp = filter('highpass', 700), lp = filter('lowpass', 9000);
                 s.connect(hp); hp.connect(lp); lp.connect(master);
                 srcs.push(s);
+            } else if (current === 'keys' || current === 'typewriter') {
+                startTyping(current === 'typewriter');
+                return;
             } else { // wind：棕噪音經低通，截止頻率與音量由慢速 LFO 緩慢起伏
                 const s = loopSource('brown'), lp = filter('lowpass', 500, 1.2), g = ctx.createGain();
                 g.gain.value = 0.6;
@@ -189,7 +199,23 @@
             nodes = srcs;
         }
 
+        // 打字聲：短促的雜訊爆音經高通濾波，隨機節奏重複；打字機每約 40 下「叮」一聲
+        function startTyping(heavy) {
+            let count = 0;
+            const click = () => {
+                const len = heavy ? 0.06 : 0.03, buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * len), ctx.sampleRate), d = buf.getChannelData(0);
+                for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3);
+                const src = ctx.createBufferSource(), hp = filter('highpass', heavy ? 600 : 1800, 0.5), g = ctx.createGain();
+                g.gain.value = 0.5 + Math.random() * 0.5;
+                src.buffer = buf; src.connect(hp); hp.connect(g); g.connect(master); src.start();
+                if (heavy && ++count % 40 === 0) { const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.value = 2200; o.connect(og); og.connect(master); og.gain.setValueAtTime(0.25, ctx.currentTime); og.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.9); o.start(); o.stop(ctx.currentTime + 0.9); }
+                keyTimer = setTimeout(click, typingGap());
+            };
+            click();
+        }
+
         function stopNodes() {
+            clearTimeout(keyTimer);
             nodes.forEach(n => { try { n.stop(); n.disconnect(); } catch (e) { } });
             nodes = [];
         }
@@ -216,6 +242,7 @@
             }
             if (ctx.state === 'suspended') ctx.resume();
             setVolume();
+            stopNodes();                       // 播放中改定時會再呼叫 play()，先停掉舊的以免疊音
             startNodes();
             playing = true;
             $('#play').textContent = '停止';
