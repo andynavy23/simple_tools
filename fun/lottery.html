@@ -5,12 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="抽獎 / 刮刮樂：貼上名單抽出 N 位得獎者，可排除已中獎的人；或用刮刮樂揭曉結果。">
-    <meta property="og:title" content="抽獎 / 刮刮樂" />
-    <meta property="og:description" content="貼上名單抽獎，或用刮刮樂揭曉得獎者。" />
+    <meta name="description" content="抽獎 / 分組：貼上名單抽出 N 位得獎者，可排除已中獎的人；用刮刮樂揭曉，或把名單隨機分成幾組。">
+    <meta property="og:title" content="抽獎 / 分組" />
+    <meta property="og:description" content="貼上名單抽獎、刮刮樂或隨機分組。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/lottery.html" />
-    <title>抽獎 / 刮刮樂</title>
+    <title>抽獎 / 分組</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <style>
         textarea {
@@ -88,8 +88,8 @@
 <body>
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
-        <h1>抽獎 / 刮刮樂</h1>
-        <p class="sub">貼上名單（換行、逗號、頓號分隔），用安全亂數抽出得獎者。</p>
+        <h1>抽獎 / 分組</h1>
+        <p class="sub">貼上名單（換行、逗號、頓號分隔），用安全亂數抽出得獎者，或隨機分組。</p>
 
         <div class="card">
             <textarea id="names" aria-label="名單" placeholder="小明&#10;小華&#10;小美&#10;阿強"></textarea>
@@ -116,6 +116,16 @@
             <h2>歷次得獎者 <span class="muted" id="cnt" style="font-weight:400;font-size:14px"></span></h2>
             <div id="log"></div>
         </div>
+
+        <div class="card">
+            <h2>隨機分組</h2>
+            <div class="row" style="margin-top:0">
+                <select id="gmode" aria-label="分組方式"><option value="groups">分成 N 組</option><option value="size">每組 M 人</option></select>
+                <input id="gnum" type="number" min="1" value="2" style="width:80px" aria-label="數量">
+                <button class="primary" id="gsplit">分組</button>
+            </div>
+            <div id="gout" aria-live="polite"></div>
+        </div>
     </div>
 
     <script src="../shared/js/util.js"></script>
@@ -125,6 +135,13 @@
         // --- pure ---
         // 從名單抽 n 位；exclude 是已中獎的名字（同名者一併排除）
         const pick = (names, n, exclude = []) => shuffle(names.filter(x => !exclude.includes(x))).slice(0, n);
+
+        // 洗牌後輪流發牌：各組人數最多差 1
+        function split(names, n) {
+            const groups = Array.from({ length: n }, () => []);
+            shuffle(names).forEach((name, i) => groups[i % n].push(name));
+            return groups;
+        }
 
         // 已刮開的比例：alpha 是 canvas 的 RGBA 資料；取樣每 step 個像素
         function clearedFraction(rgba, step = 4) {
@@ -136,7 +153,7 @@
 
         const $ = (s) => document.querySelector(s);
         let won = store.get('lottery_won', []);                         // [[名字,…], …]（每次抽獎一組）
-        $('#names').value = store.get('lottery_names', '');
+        $('#names').value = store.get('lottery_names', '') || store.get('groups_names', '');      // 舊的「隨機分組」名單一併帶過來
 
         const flat = () => won.flat();
         function renderLog() {
@@ -187,7 +204,21 @@
             if (winners.length < n) $('#info').textContent += `（名單不夠，只抽出 ${winners.length} 位）`;
         }
 
+        function groupUp() {
+            const names = parseNames($('#names').value), num = Math.floor(+$('#gnum').value), out = $('#gout');
+            store.set('lottery_names', $('#names').value);
+            if (!names.length) { out.textContent = '請先輸入名單'; return; }
+            if (!(num >= 1)) { out.textContent = '數量請輸入 1 以上的整數'; return; }
+            const n = $('#gmode').value === 'groups' ? Math.min(num, names.length) : Math.ceil(names.length / num);
+            out.replaceChildren(...split(names, n).map((g, i) => {
+                const d = document.createElement('div'); d.className = 'li';
+                d.append(Object.assign(document.createElement('span'), { className: 'muted', textContent: `第 ${i + 1} 組（${g.length} 人）` }), Object.assign(document.createElement('b'), { textContent: g.join('、') }));
+                return d;
+            }));
+        }
+
         $('#go').onclick = go;
+        $('#gsplit').onclick = groupUp;
         $('#resetPool').onclick = () => { won = []; store.set('lottery_won', won); $('#out').replaceChildren(); renderLog(); };
         $('#names').oninput = () => { store.set('lottery_names', $('#names').value); renderLog(); };
         $('#excl').onchange = renderLog;

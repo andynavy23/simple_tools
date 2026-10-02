@@ -34,6 +34,29 @@
             padding: 7px 14px;
         }
 
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+        }
+
+        .cell {
+            background: var(--fill);
+            border-radius: 14px;
+            padding: 10px 14px;
+        }
+
+        .cell small {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .cell b {
+            font-size: 20px;
+            font-variant-numeric: tabular-nums;
+        }
+
         .row {
             display: flex;
             justify-content: space-between;
@@ -51,7 +74,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>純文字整理工具</h1>
-        <p class="sub">貼上文字，點按鈕處理，可連續套用；也能產生測試用的假文。所有處理都在你的瀏覽器內完成。</p>
+        <p class="sub">貼上文字，即時統計字數與閱讀時間；點按鈕處理，可連續套用；也能產生測試用的假文。所有處理都在你的瀏覽器內完成。</p>
 
         <div class="card">
             <textarea id="text" placeholder="在這裡貼上文字…" aria-label="文字內容"></textarea>
@@ -59,6 +82,11 @@
                 <span id="stat">0 行 ・ 0 字</span>
                 <span><button id="undo">復原</button> <button class="primary" id="copy">複製</button></span>
             </div>
+        </div>
+
+        <div class="card">
+            <h2>字數統計</h2>
+            <div class="grid" id="counts"></div>
         </div>
 
         <div class="card">
@@ -95,6 +123,31 @@
             '轉小寫': t => t.toLowerCase(),
         };
 
+        const CJK = /[㐀-䶿一-鿿豈-﫿]/g;
+        const WORD = /\d+(?:[.,]\d+)+|[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*/g;     // 小數 / 千分位數字算一個字
+
+        // 閱讀速度：中文約 400 字/分、英文約 230 字/分
+        function count(text) {
+            const cjk = (text.match(CJK) || []).length;
+            const words = (text.match(WORD) || []).length;
+            const lines = text === '' ? 0 : text.split(/\r?\n/).length;
+            const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim()).length;
+            const sentences = (text.match(/[^。！？!?.…\n]+[。！？!?.…]*/g) || []).filter(s => /[\p{L}\p{N}]/u.test(s)).length;
+            return {
+                chars: [...text].length,
+                charsNoSpace: [...text.replace(/\s/g, '')].length,
+                cjk, words, lines, paragraphs, sentences,
+                readMinutes: cjk / 400 + words / 230,
+            };
+        }
+
+        function fmtRead(min) {
+            if (min <= 0) return '—';
+            if (min < 1) return `${Math.max(1, Math.round(min * 60))} 秒`;
+            const m = Math.floor(min), s = Math.round((min - m) * 60);
+            return s ? `${m} 分 ${s} 秒` : `${m} 分`;
+        }
+
         // 假文產生：中文用常見詞句片段隨機組合、英文用 lorem ipsum 字庫。rand(n) 回傳 [0, n) 的整數（預設用安全亂數）
         const ZH_PIECES = ['這是一段用來測試版面的文字', '設計師正在調整字體與行距', '請把這裡換成真正的內容', '清晨的陽光灑在安靜的街道上', '我們需要先確認需求再開始實作', '這個段落只是為了填滿畫面', '好的介面應該讓人一眼就看懂', '每一次修改都要保留紀錄', '週末的市集總是擠滿了人', '把複雜的事情拆成簡單的步驟', '字數與換行會影響閱讀的節奏', '咖啡的香氣讓整個下午變得緩慢', '測試資料不應該包含真實的個人資訊', '長長的句子可以用來檢查自動換行', '文字的重點在於清楚而不是華麗', '雨停之後空氣裡有泥土的味道', '版型確定以後再來細修每個細節', '請檢查標點符號與全形半形是否一致', '一個好的預設值能省下許多麻煩', '安排好優先順序比加班更有效率'];
         const EN_WORDS = 'lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua enim ad minim veniam quis nostrud exercitation ullamco laboris nisi aliquip ex ea commodo consequat duis aute irure in reprehenderit voluptate velit esse cillum fugiat nulla pariatur excepteur sint occaecat cupidatat non proident sunt culpa qui officia deserunt mollit anim id est laborum'.split(' ');
@@ -114,9 +167,16 @@
         const ta = $('#text');
         let history = [];
 
+        const LABELS = [['cjk', '中文字'], ['words', '英文單字 / 數字'], ['chars', '全部字元'], ['charsNoSpace', '字元（不含空白）'], ['lines', '行數'], ['paragraphs', '段落'], ['sentences', '句子']];
         function stat() {
-            const v = ta.value;
-            $('#stat').textContent = `${v ? v.split('\n').length : 0} 行 ・ ${v.length} 字`;
+            const c = count(ta.value);
+            $('#stat').textContent = `${c.lines} 行 ・ ${c.chars} 字`;
+            $('#counts').replaceChildren(...[...LABELS.map(([k, name]) => [name, c[k].toLocaleString('zh-TW')]), ['預估閱讀時間', fmtRead(c.readMinutes)]].map(([name, v]) => {
+                const d = document.createElement('div'); d.className = 'cell';
+                const s = document.createElement('small'), b = document.createElement('b');
+                s.textContent = name; b.textContent = v; d.append(s, b);
+                return d;
+            }));
         }
 
         for (const [name, fn] of Object.entries(OPS)) {

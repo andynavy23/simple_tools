@@ -12,11 +12,10 @@
 | [困難拉圖斯](game-assist/papulatus.html) | 遊戲輔助 | 小怪 / 黑水 / 系統扣時倒數，支援語音與振動 |
 | [RJPQ 門位標記](game-assist/rjpq.html) | 遊戲輔助 | 10 層 × 4 門標記，全隊即時共享 |
 | [五子棋](mini-games/gobang.html) | 小遊戲 | 楓之谷像素風五子棋，本地雙人、對電腦（簡單 / 普通 / 困難，棋型評分）或房號連線 |
-| [幸運頻道計算機](fun/lucky-channel.html) | 趣味 | 依角色、怪物、日期算今日幸運頻道 |
+| [幸運頻道計算機](game-assist/lucky-channel.html) | 遊戲輔助 | 依角色、怪物、日期算今日幸運頻道 |
 | [決策轉盤](fun/wheel.html) | 趣味 | 輸入選項轉盤決定，支援權重，清單自動記住；內建午餐 / 晚餐 / 飲料 / 宵夜 / 週末活動 / 運動常用清單 |
 | [番茄鐘](fun/pomodoro.html) | 趣味 | 專注 / 休息 / 長休息自動輪替，記錄每日番茄數與專注分鐘，近 7 / 30 天圖表與連續天數 |
-| [純文字整理](utils/text-tools.html) | 工具 | 去重複、排序、刪空行、全半形、大小寫，可復原；中文 / 英文假文產生 |
-| [隨機分組 / 抽籤](fun/random-groups.html) | 趣味 | 貼上名單，分成 N 組、每組 M 人，或抽出 K 人 |
+| [純文字整理](utils/text-tools.html) | 工具 | 去重複、排序、刪空行、全半形、大小寫，可復原；即時字數 / 閱讀時間；中文 / 英文假文產生 |
 | [單位與匯率換算](utils/unit-converter.html) | 工具 | 長度、重量、坪、溫度等單位、烹飪（杯 / 匙 / 公克，依 15 種食材密度），以及即時匯率（需連網，有離線快取） |
 | [密碼產生器](utils/password-gen.html) | 工具 | 以瀏覽器安全亂數在本機產生密碼，可排除易混淆字元；強度檢測（熵、常見弱密碼、連號 / 鍵盤順序、估計破解時間，只在本機計算） |
 | [捲軸期望值計算機](game-assist/scroll-calculator.html) | 遊戲輔助 | 算衝捲平均花費與各把握度所需次數，可設定失敗損毀機率 |
@@ -41,7 +40,6 @@
 | [習慣打卡表](fun/habit-tracker.html) | 趣味 | 每日打卡、連續天數、月曆（可補打過去日期） |
 | [骰子工具](fun/dice.html) | 趣味 | 1–6 顆、d4–d100、加成，統計總和分佈（安全亂數） |
 | [貸款 / 複利試算](utils/loan-calculator.html) | 工具 | 本息 / 本金平均攤還與逐期表；起始本金 + 每月投入的複利成長；存款目標（多久達標 / 每月要存多少，可扣通膨） |
-| [字數統計 / 閱讀時間](utils/word-count.html) | 工具 | 中英文分開計算，預估閱讀時間 |
 | [BMI / 熱量 / 心率計算](utils/health-calc.html) | 工具 | BMI（台灣標準）、BMR、TDEE、心率區間（含儲備心率法） |
 | [計時器 / 碼表](fun/timers.html) | 趣味 | 碼表與分圈、多組倒數（時間戳計算，背景分頁也準）、簡報分段計時（自動換段、剩 1 分鐘提醒） |
 | [技能冷卻時間板](game-assist/cooldown-board.html) | 遊戲輔助 | 自訂技能冷卻，數字鍵觸發，冷卻完成語音 / 提示音 |
@@ -49,7 +47,7 @@
 | [數獨](mini-games/sudoku.html) | 小遊戲 | 保證唯一解的出題、筆記、提示、衝突標示，記錄最佳時間 |
 | [連線你畫我猜](mini-games/draw-guess.html) | 小遊戲 | 畫畫或口述（你說我猜）兩種模式；房主判定猜題與計分；題目只傳給畫 / 說的人；筆跡經房主驗證後轉送 |
 | [連線投票 / 搶答](fun/live-poll.html) | 趣味 | 投票（可改選、即時結果）與測驗（單選計分、排行榜），可限時 |
-| [抽獎 / 刮刮樂](fun/lottery.html) | 趣味 | 名單抽 N 位（安全亂數）、已中獎者不再抽、刮刮樂揭曉 |
+| [抽獎 / 分組](fun/lottery.html) | 趣味 | 名單抽 N 位（安全亂數）、已中獎者不再抽、刮刮樂揭曉；隨機分成 N 組或每組 M 人 |
 | [連線終極密碼](mini-games/ultimate-code.html) | 小遊戲 | 2–8 人；密碼只存在房主端，結束才公布；累計輸的次數 |
 | [薪資 / 加班費試算](utils/salary-calc.html) | 工具 | 時薪 = 月薪 ÷ 240；平日 / 休息日 / 假日加班費分段倍率；實領概算；113 年度綜合所得稅概算與年終獎金多繳的稅 |
 | [日期計算機](utils/date-calc.html) | 工具 | 相差（天 / 週 / 年月日 / 工作日）、加減（含工作日）、星期與 ISO 週次 |
@@ -77,7 +75,7 @@
 | [貪吃蛇](mini-games/snake.html) | 小遊戲 | 撞牆 / 穿牆兩種模式、方向鍵 / WASD / 觸控滑動、越吃越快，分別記錄最高分 |
 | [俄羅斯方塊](mini-games/tetris.html) | 小遊戲 | 7 袋隨機、旋轉踢牆、暫存、下一個預覽、落點影子、等級加速；鍵盤與觸控按鈕 |
 | [節拍器 / 調音器](fun/metronome.html) | 趣味 | 節拍器（30–240 BPM、拍號、重音、Tap 測速）；調音器用自相關法偵測音高，顯示音名與偏差音分，吉他 / 烏克麗麗 / 貝斯 / 小提琴參考音 |
-| [UUID / 隨機資料產生](utils/random-data.html) | 工具 | UUID v4、安全隨機字串（多種字元集）、整數、日期、假姓名 / 手機 / Email；最多 1000 筆 |
+| [UUID / 隨機資料產生](utils/random-data.html) | 工具 | UUID v4、整數、日期、假姓名 / 手機 / Email；最多 1000 筆 |
 | [週期表](utils/periodic-table.html) | 工具 | 118 元素、10 種類別著色與篩選、原子量 / 族 / 週期 / 常溫狀態 / 電子組態（含例外），中英文與符號搜尋 |
 | [油耗 / 行車成本](utils/fuel-log.html) | 工具 | 加滿到加滿法計算每段油耗（沒加滿的併入下一次）、整體平均、最近 12 段走勢、匯出 CSV |
 | [CSV / TSV 表格工具](utils/csv-tool.html) | 工具 | RFC 4180 解析（引號、跳脫、儲存格內換行）、自動判斷分隔符號、排序與篩選、輸出 JSON / Markdown / TSV |
@@ -93,75 +91,13 @@
 | [文字加密 / 解密](utils/aes-crypt.html) | 工具 | AES-256-GCM + PBKDF2-SHA256 60 萬次；隨機鹽與 IV；密文帶版本前綴；改動或密碼錯誤會被偵測 |
 | [摸魚閱讀器](reading/stealth-reader.html) | 閱讀 | 本機載入 txt 小說，偽裝 ERP 後台、老闆鍵、進度記憶（開發中） |
 
-## 專案結構
+## 使用
 
-```text
-index.html              工具箱首頁（只負責導覽，分類與搜尋自動依卡片產生）
-game-assist/ mini-games/ fun/ utils/ reading/
-                        資料夾 = 首頁分類（遊戲輔助 / 小遊戲 / 趣味 / 工具 / 閱讀），
-                        每個工具一支 HTML，頁面專屬的 CSS / JS 寫在頁面內
-shared/                 共用模組（依檔案類型分資料夾；見下方「共用模組」）
-  css/theme.css         蘋果風格：明暗模式色彩、頁面、卡片、按鈕、輸入框、清單列、表單格
-  css/maple.css         楓之谷風格：視窗框、按鈕、暱稱欄、日誌、載入動畫、成員標籤
-  js/util.js            亂數 / 洗牌 / 複製 / localStorage / HTML 跳脫 / 日期字串 / 統計列 / 提示音 / 語音 / 名單解析 / 下載檔案 / 雜湊與隨機字串 / 可播種亂數 / 月份加減與年月日差
-  js/p2p-room.js        房主制 P2P 連線（PeerJS 由它自動載入）
-TOOLS.md                工具清單（開發用）：各工具已有功能、本機資料鍵、是否連線；提新點子前先查這裡
-tests/                  自動測試（node，不需安裝套件）
-assets/<game>/          遊戲素材圖片（例如 assets/artale/，供 og:image 使用）
-assets/og-image.*       首頁分享預覽圖（og-image.html 為來源，以 Edge headless 截圖成 PNG）
-temp_*                  開發中的暫存檔，已被 .gitignore 忽略
-```
+直接開啟 `index.html` 即可，不需要安裝或建置。
 
-## 共用模組
-
-放進 `shared/` 的條件，缺一不可（樣式放 `css/`、腳本放 `js/`，新增其他類型再開新資料夾）：
-
-1. **至少兩個工具已經在用**。只有一個工具用到的，先留在該工具裡，等第二個工具需要時再抽出來。
-2. **用起來不需要再調整**。如果每個工具拿到後還要自己轉格式、改參數才能用，就不放進共用；頁面專屬的樣式與邏輯留在頁面內。
-
-目前的使用情形：
-
-| 共用檔 | 內容 | 使用的工具 |
-| --- | --- | --- |
-| `css/theme.css` | 色彩變數與明暗模式、頁面容器、卡片、膠囊按鈕、輸入框、`.li` 清單列、`.fgrid` 表單格、`.players` / `.pl` 玩家名牌 | 首頁與所有蘋果風格的工具 |
-| `css/maple.css` | 楓之谷視窗框 / 按鈕 / 暱稱欄 / 日誌 / 載入動畫 / 成員標籤 | 五子棋、RJPQ |
-| `js/util.js` | `rnd`、`shuffle`、`copyText`、`copyWithFeedback`、`store`、`esc`、`day`、`statRow`、`tone`、`beep`、`speak`、`parseNames`、`download`、`sha256`、`randomHex`、`seeded`、`day.addMonths` / `day.diffYMD` | 見檔頭說明與各頁面 |
-| `js/p2p-room.js` | 建房、加入、暱稱驗證、拒絕、名單、踢人、斷線、只信任房主、逾時 | 團練、RJPQ、五子棋、翻牌記憶、四子棋 |
-
-使用方式（路徑依頁面所在資料夾）：
-
-```html
-<link rel="stylesheet" href="../shared/css/theme.css">   <!-- 放在頁面自己的 <style> 之前 -->
-<script src="../shared/js/util.js"></script>
-<script src="../shared/js/p2p-room.js"></script>
-```
-
-- 調整頁面寬度：頁面 `<style>` 內寫 `:root { --wrap-w: 720px; }`。
-- 連線只負責「連線層」：訊息內容與遊戲規則由各工具自己在房主端處理，房主端要驗證成員送來的一切資料。
-- **改動共用檔會影響所有用到的工具**，改完請跑下面的測試。GitHub Pages 有數分鐘的快取，更新後偶爾會短暫出現新舊混用。
-
-## 測試
-
-```bash
-node tests/shared.test.js   # 共用模組：用「記憶體內的假 PeerJS」驗證整個連線協定
-node tests/tools.test.js    # 各工具的純邏輯（從 HTML 的 `// --- pure ---` 區塊取出來執行）
-```
-
-- 純邏輯寫在頁面的 `// --- pure ---` 與 `// --- /pure ---` 之間，測試會直接載入這一段。
-- 畫面互動與真正的 P2P 連線需要在瀏覽器測；連線工具請開兩個視窗實際測試。
-
-## 新增工具
-
-1. 依分類新增 `<category>/your-tool.html`，載入需要的共用檔。
-2. 在 `index.html` 複製一張 `<a class="card">`，改連結、`data-cat`、圖示色與文案，分類按鈕會自動出現。
-3. 在上方表格與 [TOOLS.md](TOOLS.md) 各補一列（測試會檢查三處都有列出）；有純邏輯就加進 `tests/tools.test.js`。
-4. 提新點子前先看 [TOOLS.md](TOOLS.md)，功能若是既有工具的延伸就擴充它，不另開新檔。
-
-想先在本機試寫，檔名用 `temp_` 開頭就不會被提交。
-
-## 本機使用
-
-直接開啟 `index.html` 即可；連線功能（PeerJS）、部分字型 / 套件來自 CDN，匯率換算會呼叫 [Exchange Rate API](https://www.exchangerate-api.com)，這些需要網路。
+- 所有資料（記帳、待辦、紀錄、設定…）只存在你自己瀏覽器的 localStorage，不會上傳；換瀏覽器或清除網站資料就會消失。
+- 連線遊戲透過 [PeerJS](https://peerjs.com) 在瀏覽器之間直接連線，建立房間後把連結傳給朋友即可。
+- 連線功能、部分字型 / 套件來自 CDN，匯率換算會呼叫 [Exchange Rate API](https://www.exchangerate-api.com)，這些需要網路；其餘工具可離線使用。
 
 ## 支持
 

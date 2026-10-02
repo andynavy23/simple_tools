@@ -32,7 +32,7 @@ const NL = String.fromCharCode(10);
 
 // ===== 隨機分組 =====
 {
-    const m = load('fun/random-groups.html', 'split');
+    const m = load('fun/lottery.html', 'split');
     assert.deepEqual(Util.parseNames('小明\n小華, 小美，阿強、 \n\n'), ['小明', '小華', '小美', '阿強']);
     const names = Array.from({ length: 23 }, (_, i) => 'n' + i);
     for (let t = 0; t < 300; t++) {
@@ -41,7 +41,7 @@ const NL = String.fromCharCode(10);
         assert.ok(Math.max(...sizes) - Math.min(...sizes) <= 1);
         assert.deepEqual(g.flat().sort(), [...names].sort());
     }
-    ok('random-groups');
+    ok('lottery: split');
 }
 
 // ===== 密碼產生器 =====
@@ -600,7 +600,7 @@ const NL = String.fromCharCode(10);
 
 // ===== 字數統計 =====
 {
-    const m = load('utils/word-count.html', 'count, fmtRead');
+    const m = load('utils/text-tools.html', 'count, fmtRead', '// 每個操作', 'const $ =');
     const c = m.count('你好 world, hello!\n\n第二段。');
     assert.equal(c.cjk, 5); assert.equal(c.words, 2); assert.equal(c.paragraphs, 2); assert.equal(c.lines, 3);
     assert.equal(m.count('').chars, 0); assert.equal(m.count('').lines, 0); assert.equal(m.count('').paragraphs, 0);
@@ -611,7 +611,7 @@ const NL = String.fromCharCode(10);
     assert.equal(m.count('Hello. World').sentences, 2);
     near(m.count('字'.repeat(400)).readMinutes, 1);
     assert.equal(m.fmtRead(0), '—'); assert.equal(m.fmtRead(0.5), '30 秒'); assert.equal(m.fmtRead(2.5), '2 分 30 秒'); assert.equal(m.fmtRead(3), '3 分');
-    ok('word-count');
+    ok('text-tools: count');
 }
 
 // ===== 健康計算 =====

@@ -7,7 +7,7 @@
 ## 新點子怎麼判斷
 
 1. 先在下表找同用途的工具；功能是它的子集或延伸、而且資料在同一個儲存鍵裡 → **擴充既有工具**（指名檔案與要加的分頁），不要另開新檔。
-2. 兩個工具都需要的函式 / 樣式，才搬進 `shared/`（見 README「共用模組」）。
+2. 兩個工具都需要的函式 / 樣式，才搬進 `shared/`（見 CLAUDE.md「共用模組收錄原則」）。
 3. 都不是才算**新工具**，並在首頁卡片、README、本檔、`tests/tools.test.js` 各補一筆。
 
 ## 遊戲輔助
@@ -21,6 +21,7 @@
 | [團練小工具](game-assist/party.html) | Artale 團練即時同步：經驗追蹤、掉寶統計、生存測試 | `artale_v4_name` | ✓ |
 | [RJPQ 門位標記](game-assist/rjpq.html) | 10 層 × 4 門標記，全隊即時共享 | — | ✓ |
 | [捲軸期望值計算機](game-assist/scroll-calculator.html) | 算衝捲平均花費與各把握度所需次數，可設定失敗損毀機率 | — |  |
+| [幸運頻道計算機](game-assist/lucky-channel.html) | 依角色、怪物、日期算今日幸運頻道 | — |  |
 
 ## 小遊戲
 
@@ -58,12 +59,10 @@
 | [習慣打卡表](fun/habit-tracker.html) | 每日打卡、連續天數、月曆（可補打過去日期） | `habits` |  |
 | [連線成語接龍](fun/idiom-chain.html) | 2–8 人；內建 1000+ 成語自動驗證，詞庫外的四字詞由房主裁決；每人 3 命、30 秒限時 | — | ✓ |
 | [連線投票 / 搶答](fun/live-poll.html) | 投票（可改選、即時結果）與測驗（單選計分、排行榜），可限時 | — | ✓ |
-| [抽獎 / 刮刮樂](fun/lottery.html) | 名單抽 N 位（安全亂數）、已中獎者不再抽、刮刮樂揭曉 | `lottery_won`、`lottery_names` |  |
-| [幸運頻道計算機](fun/lucky-channel.html) | 依角色、怪物、日期算今日幸運頻道 | — |  |
+| [抽獎 / 分組](fun/lottery.html) | 名單抽 N 位（安全亂數）、已中獎者不再抽、刮刮樂揭曉；隨機分成 N 組或每組 M 人 | `lottery_won`、`lottery_names` |  |
 | [節拍器 / 調音器](fun/metronome.html) | 節拍器（30–240 BPM、拍號、重音、Tap 測速）；調音器用自相關法偵測音高，顯示音名與偏差音分，吉他 / 烏克麗麗 / 貝斯 / 小提琴參考音 | `met_bpm` |  |
 | [連線規劃撲克](fun/planning-poker.html) | 費氏數列 / T-shirt 牌組；翻牌前只看得到誰出了牌；平均 / 中位數 / 分佈 | — | ✓ |
 | [番茄鐘](fun/pomodoro.html) | 專注 / 休息 / 長休息自動輪替，記錄每日番茄數與專注分鐘，近 7 / 30 天圖表與連續天數 | `pomo_hist`、`pomo_stats` |  |
-| [隨機分組 / 抽籤](fun/random-groups.html) | 貼上名單，分成 N 組、每組 M 人，或抽出 K 人 | `groups_names` |  |
 | [連線猜拳](fun/rps.html) | 三 / 五 / 七戰制；每局先交換雜湊承諾、兩邊都出完才揭曉並驗證，對手更改選擇會被判作弊 | — | ✓ |
 | [計分板](fun/scoreboard.html) | 最多 20 人 / 200 局；同分同名次；可設分數越低越好；複製成績表 | `score_state` |  |
 | [簡易畫板](fun/sketchpad.html) | 畫筆 / 橡皮擦、調色盤、手寫筆感壓、復原重做（含清除）、存 PNG | — |  |
@@ -100,18 +99,17 @@
 | [週期表](utils/periodic-table.html) | 118 元素、10 種類別著色與篩選、原子量 / 族 / 週期 / 常溫狀態 / 電子組態（含例外），中英文與符號搜尋 | `pt_sel` |  |
 | [比價 / 單價計算](utils/price-compare.html) | 重量 / 容量 / 個數三組單位（含台斤、兩、打），多份數，同組比較並標示貴多少 % | `price_rows` |  |
 | [QR Code 產生器](utils/qr-code.html) | 自行實作的 QR 編碼器（版本 1–40、容錯 L/M/Q/H）；Code 128（B / C 自動選）與 EAN-13 條碼（與 JsBarcode 逐位元比對過）；可下載 PNG | — |  |
-| [UUID / 隨機資料產生](utils/random-data.html) | UUID v4、安全隨機字串（多種字元集）、整數、日期、假姓名 / 手機 / Email；最多 1000 筆 | `rd_kind` |  |
+| [UUID / 隨機資料產生](utils/random-data.html) | UUID v4、整數、日期、假姓名 / 手機 / Email；最多 1000 筆 | `rd_kind` |  |
 | [正規表示式測試器](utils/regex-tester.html) | 即時標示符合內容、群組與位置 | — |  |
 | [薪資 / 加班費試算](utils/salary-calc.html) | 時薪 = 月薪 ÷ 240；平日 / 休息日 / 假日加班費分段倍率；實領概算；113 年度綜合所得稅概算與年終獎金多繳的稅 | `salary_calc` |  |
 | [螢幕 / 鍵盤 / 滑鼠測試](utils/screen-test.html) | 全螢幕純色輪播、鍵盤配置逐鍵亮燈、滑鼠按鍵 / 雙擊 / 滾輪偵測；螢幕 PPI、實際尺寸與長寬比計算 | `screentest_tab` |  |
 | [分帳計算](utils/split-bill.html) | 多人多筆支出分帳，轉帳次數最少；小費快算（百分比、人數、每人湊整數） | `bill_state` |  |
 | [文字差異比對](utils/text-diff.html) | 逐行或逐字詞（行內標示）差異比對 | — |  |
-| [純文字整理](utils/text-tools.html) | 去重複、排序、刪空行、全半形、大小寫，可復原；中文 / 英文假文產生 | — |  |
+| [純文字整理](utils/text-tools.html) | 去重複、排序、刪空行、全半形、大小寫，可復原；即時字數 / 閱讀時間；中文 / 英文假文產生 | — |  |
 | [搶票校時鐘](utils/ticket-clock.html) | 臺灣時間（UTC+8）到毫秒、不受裝置時區影響；網路校時（多來源取往返最短、顯示誤差）；開賣倒數與最後 10 秒提示音；提前毫秒補償；記錄按下時間差；螢幕常亮 | `ticket_hist`、`ticket_target`、`ticket_lead` |  |
 | [時區轉換](utils/timezone.html) | 一個時間對照多個城市，處理夏令時間；即時看板（每秒更新、日夜圖示） | `tz_zones` |  |
 | [文字轉語音](utils/tts.html) | speechSynthesis 朗讀；長文自動分段、可暫停繼續；選語音、語速、音調 | `tts_text`、`tts_voice` |  |
 | [單位與匯率換算](utils/unit-converter.html) | 長度、重量、坪、溫度等單位、烹飪（杯 / 匙 / 公克，依 15 種食材密度），以及即時匯率（需連網，有離線快取） | `fx_cache` |  |
-| [字數統計 / 閱讀時間](utils/word-count.html) | 中英文分開計算，預估閱讀時間 | `wc_text` |  |
 
 ## 閱讀
 
