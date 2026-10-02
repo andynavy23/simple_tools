@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="連線骰子賽跑：2–6 人輪流擲骰走格子，踩到事件格可能前進、後退、暫停或再擲一次，先到終點的人獲勝。">
+    <meta property="og:title" content="連線骰子賽跑" />
+    <meta property="og:description" content="輪流擲骰、踩事件格的連線桌遊。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/board-race.html" />
+    <title>連線骰子賽跑</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .row input {
+            flex: 1 1 130px;
+        }
+
+        .pl.turn {
+            border-color: var(--blue);
+        }
+
+        .pl.win {
+            background: color-mix(in srgb, var(--ok) 28%, var(--fill));
+        }
+
+        .pl .tok {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: -1px;
+        }
+
+        #track {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 4px;
+            margin: 12px 0;
+        }
+
+        .sq {
+            aspect-ratio: 1;
+            border-radius: 10px;
+            background: var(--fill);
+            position: relative;
+            font-size: 11px;
+            color: var(--muted);
+            padding: 3px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-width: 0;
+        }
+
+        .sq.fwd {
+            background: color-mix(in srgb, var(--ok) 25%, var(--fill));
+        }
+
+        .sq.back {
+            background: color-mix(in srgb, var(--bad) 22%, var(--fill));
+        }
+
+        .sq.skip,
+        .sq.again {
+            background: color-mix(in srgb, var(--blue) 22%, var(--fill));
+        }
+
+        .sq.goal {
+            background: #ffd60a;
+            color: #000;
+            font-weight: 700;
+        }
+
+        .sq .ev {
+            font-weight: 700;
+            font-size: 12px;
+            color: var(--text);
+            text-align: center;
+        }
+
+        .toks {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            justify-content: center;
+        }
+
+        .toks i {
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, .8);
+        }
+
+        #roll {
+            font-size: 18px;
+            padding: 12px 40px;
+        }
+
+        #status {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+            margin-bottom: 6px;
+        }
+
+        #note {
+            text-align: center;
+            color: var(--muted);
+            min-height: 1.4em;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>連線骰子賽跑</h1>
+        <p class="sub">輪流擲骰前進，先到第 30 格的人獲勝。綠格往前、紅格往後、藍格暫停一次或再擲一次。骰子由房主端擲出，沒人能作弊（2–6 人）。</p>
+
+        <div class="card" id="menu">
+            <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+            <div class="row">
+                <button class="primary" id="hostBtn">建立房間</button>
+                <input id="joinId" placeholder="貼上房號" aria-label="房號">
+                <button id="joinBtn">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+        </div>
+
+        <div class="card" id="lobby" hidden>
+            <h2>等待玩家加入</h2>
+            <div class="players" id="lobbyPlayers"></div>
+            <div class="row" style="margin-top:12px">
+                <button id="copyInvite" hidden>複製邀請連結</button>
+                <button class="primary" id="startBtn" hidden disabled>開始遊戲</button>
+            </div>
+            <p class="note" id="lobbyHint"></p>
+        </div>
+
+        <div id="game" hidden>
+            <div class="card">
+                <div class="players" id="board"></div>
+                <div id="track" aria-label="賽道"></div>
+                <div id="status" role="status"></div>
+                <div id="note" aria-live="polite"></div>
+                <div class="row" style="justify-content:center">
+                    <button class="primary" id="roll">🎲 擲骰子</button>
+                </div>
+            </div>
+            <div class="row" style="justify-content:center">
+                <button class="primary" id="again" hidden>再來一局</button>
+                <button id="leave">離開</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { rnd, shuffle } = Util;
+
+        // --- pure ---
+        const GOAL = 30, MAX_PLAYERS = 6;
+        // 事件格：fwd 前進 n 格、back 後退 n 格、skip 下一輪暫停、again 立刻再擲一次
+        const EVENTS = { 4: { t: 'fwd', n: 3 }, 8: { t: 'back', n: 3 }, 11: { t: 'skip' }, 14: { t: 'fwd', n: 2 }, 17: { t: 'again' }, 20: { t: 'back', n: 4 }, 23: { t: 'skip' }, 25: { t: 'fwd', n: 3 }, 27: { t: 'back', n: 5 } };
+        const COLORS = ['#ff453a', '#0a84ff', '#30d158', '#ff9f0a', '#bf5af2', '#64d2ff'];
+
+        // 從 pos 走 roll 步：回傳 { pos, win, skip, again, ev, landed }；事件只觸發一次，不連鎖
+        function move(pos, roll) {
+            const landed = pos + roll;
+            if (landed >= GOAL) return { pos: GOAL, win: true, skip: false, again: false, ev: null, landed: GOAL };
+            const ev = EVENTS[landed] || null;
+            let np = landed;
+            if (ev && ev.t === 'fwd') np = Math.min(GOAL, landed + ev.n);
+            else if (ev && ev.t === 'back') np = Math.max(0, landed - ev.n);
+            return { pos: np, win: np >= GOAL, skip: !!ev && ev.t === 'skip', again: !!ev && ev.t === 'again', ev, landed };
+        }
+
+        // 輪到下一位：跳過離線者；被標記「暫停」的人這一輪被跳過並清除標記。回傳 { turn, skip, skipped }
+        function nextTurn(active, skip, cur) {
+            const sk = [...skip], skipped = [];
+            let t = cur;
+            for (let guard = 0; guard < active.length * 2; guard++) {
+                t = (t + 1) % active.length;
+                if (!active[t]) continue;
+                if (sk[t]) { sk[t] = false; skipped.push(t); continue; }
+                return { turn: t, skip: sk, skipped };
+            }
+            return { turn: -1, skip: sk, skipped };
+        }
+
+        const describe = (m) => (!m.ev ? '' : m.ev.t === 'fwd' ? `踩到前進格，再前進 ${m.ev.n} 格` : m.ev.t === 'back' ? `踩到後退格，退 ${m.ev.n} 格` : m.ev.t === 'skip' ? '踩到暫停格，下一輪暫停' : '踩到幸運格，再擲一次');
+
+        // 成員端檢查房主傳來的狀態
+        function validState(s) {
+            const arr = (a, f) => Array.isArray(a) && a.length <= MAX_PLAYERS && a.every(f);
+            return !!s && ['lobby', 'play', 'over'].includes(s.phase) && arr(s.names, n => typeof n === 'string' && n.length <= 12) && arr(s.pos, v => Number.isInteger(v) && v >= 0 && v <= GOAL)
+                && arr(s.skip, b => typeof b === 'boolean') && arr(s.active, b => typeof b === 'boolean') && arr(s.wins, Number.isInteger) && Number.isInteger(s.turn) && Number.isInteger(s.winner)
+                && typeof s.note === 'string' && s.note.length <= 80;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let room = null, isHost = false, my = -1, hostId = '', V = null;
+        const H = { phase: 'lobby', pos: [], skip: [], turn: 0, winner: -1, note: '', wins: {} };
+
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const show = (id, on) => { $(id).hidden = !on; };
+        function readNick() {
+            const n = $('#nick').value.trim();
+            if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; }
+            return n;
+        }
+
+        // ---------- 房主 ----------
+        const actives = () => room.players.map(p => p.connected);
+        function publicState() {
+            return { phase: H.phase, names: room.players.map(p => p.nick), pos: H.pos.slice(), skip: H.skip.slice(), active: actives(), turn: H.turn, winner: H.winner, note: H.note, wins: room.players.map(p => H.wins[p.nick] || 0) };
+        }
+        function push() { V = publicState(); render(); room.broadcast({ t: 'STATE', s: V }); }
+
+        function startGame() {
+            const ids = room.players.filter(p => p.connected).map(p => p.index);
+            if (ids.length < 2) return;
+            room.keepSlots = true;
+            H.phase = 'play'; H.pos = room.players.map(() => 0); H.skip = room.players.map(() => false); H.turn = shuffle(ids)[0]; H.winner = -1; H.note = '遊戲開始！';
+            push();
+        }
+
+        function passTurn(from, prefix) {
+            const nx = nextTurn(actives(), H.skip, from);
+            H.skip = nx.skip;
+            if (nx.turn < 0) { H.phase = 'over'; H.note = '其他玩家都離開了'; return; }
+            H.turn = nx.turn;
+            H.note = prefix + nx.skipped.map(i => `${room.players[i].nick} 暫停一次。`).join('');
+        }
+
+        function doRoll(from) {
+            if (H.phase !== 'play' || from !== H.turn) return;
+            const roll = 1 + rnd(6), m = move(H.pos[from], roll), name = room.players[from].nick;
+            H.pos[from] = m.pos;
+            let note = `${name} 擲出 ${roll}，到第 ${m.landed} 格。${describe(m)}`;
+            if (m.win) { H.phase = 'over'; H.winner = from; H.wins[name] = (H.wins[name] || 0) + 1; H.note = `${name} 擲出 ${roll}，抵達終點！`; return push(); }
+            if (m.skip) H.skip[from] = true;
+            if (m.again) H.note = note + '　繼續擲。'; else passTurn(from, note + '　');
+            push();
+        }
+
+        // ---------- 連線 ----------
+        const onNetError = (err, message) => { if (V || isHost) return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } };
+
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: MAX_PLAYERS,
+                onReady(r) { isHost = true; my = 0; hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id); push(); },
+                canJoin: () => (H.phase === 'play' ? '遊戲已經開始' : null),
+                onJoin: () => push(),
+                onLeave(p) {
+                    if (H.phase === 'play') {
+                        if (actives().filter(Boolean).length < 2) { H.phase = 'over'; H.note = '人數不足，遊戲結束'; }
+                        else if (p.index === H.turn) passTurn(H.turn, `${p.nick} 離開了。`);
+                    }
+                    push();
+                },
+                onMessage(p, d) { if (d && d.t === 'ROLL') doRoll(p.index); },
+                onError: onNetError,
+            });
+        }
+
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…'); hostId = id;
+            room = P2PRoom.join(id, {
+                nick,
+                onRoster(players, me) {
+                    my = me;
+                    if (!V) { V = { phase: 'lobby', names: players.map(p => p.nick), pos: [], skip: [], active: players.map(p => p.connected), turn: -1, winner: -1, note: '', wins: [] }; render(); }
+                },
+                onMessage(d) { if (d && d.t === 'STATE' && validState(d.s)) { V = d.s; render(); } },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (V) { alert('房主已離開，遊戲結束'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+
+        // ---------- 畫面 ----------
+        const EV_TEXT = (e) => (e.t === 'fwd' ? '▶ +' + e.n : e.t === 'back' ? '◀ −' + e.n : e.t === 'skip' ? '⏸' : '🎲');
+        function buildTrack() {
+            $('#track').replaceChildren(...Array.from({ length: GOAL + 1 }, (_, i) => {
+                const s = document.createElement('div'), e = EVENTS[i];
+                s.className = 'sq' + (e ? ' ' + e.t : '') + (i === GOAL ? ' goal' : ''); s.dataset.i = i;
+                s.append(Object.assign(document.createElement('span'), { textContent: i === 0 ? '起點' : i === GOAL ? '終點' : i }));
+                if (e) s.append(Object.assign(document.createElement('span'), { className: 'ev', textContent: EV_TEXT(e) }));
+                s.append(Object.assign(document.createElement('div'), { className: 'toks' }));
+                return s;
+            }));
+        }
+        buildTrack();
+
+        function render() {
+            if (!V) return;
+            if (V.phase === 'lobby') {
+                show('#menu', false); show('#lobby', true); show('#game', false);
+                $('#lobbyPlayers').replaceChildren(...V.names.map((x, i) => Object.assign(document.createElement('div'), { className: 'pl' + (V.active[i] ? '' : ' off'), textContent: x + (i === 0 ? ' 👑' : '') + (i === my ? '（我）' : '') })));
+                const n = V.active.filter(Boolean).length;
+                show('#copyInvite', isHost); show('#startBtn', isHost); $('#startBtn').disabled = n < 2;
+                $('#lobbyHint').textContent = isHost ? (n < 2 ? '把邀請連結傳給朋友，至少 2 人才能開始' : '人到齊了就按「開始遊戲」') : '等待房主開始遊戲…';
+                return;
+            }
+            show('#menu', false); show('#lobby', false); show('#game', true);
+            const over = V.phase === 'over', mine = V.phase === 'play' && V.turn === my;
+            $('#board').replaceChildren(...V.names.map((x, i) => {
+                const d = document.createElement('div'), tok = Object.assign(document.createElement('span'), { className: 'tok' });
+                tok.style.background = COLORS[i % COLORS.length];
+                d.className = 'pl' + (i === V.turn && !over ? ' turn' : '') + (i === V.winner ? ' win' : '') + (V.active[i] ? '' : ' off');
+                d.append(tok, `${x}${i === my ? '（我）' : ''}　第 ${V.pos[i] || 0} 格${V.skip[i] ? ' ⏸' : ''}　勝 ${V.wins[i] || 0}`);
+                return d;
+            }));
+            const sq = $('#track').children;
+            for (let i = 0; i <= GOAL; i++) {
+                const toks = sq[i].querySelector('.toks');
+                toks.replaceChildren(...V.names.map((_, p) => p).filter(p => (V.pos[p] || 0) === i && V.active[p] !== false).map(p => { const t = document.createElement('i'); t.style.background = COLORS[p % COLORS.length]; return t; }));
+            }
+            $('#status').textContent = over ? (V.winner >= 0 ? `🏆 ${V.names[V.winner]}${V.winner === my ? '（你）' : ''} 獲勝！` : '遊戲結束') : mine ? '輪到你了，擲骰子！' : `等待 ${V.names[V.turn]} 擲骰…`;
+            $('#note').textContent = V.note;
+            $('#roll').disabled = !mine; show('#roll', !over);
+            show('#again', isHost && over);
+        }
+
+        $('#hostBtn').onclick = hostRoom;
+        $('#joinBtn').onclick = joinRoom;
+        $('#startBtn').onclick = startGame;
+        $('#roll').onclick = () => { if (isHost) doRoll(my); else if (V && V.phase === 'play' && V.turn === my) room.send({ t: 'ROLL' }); };
+        $('#again').onclick = () => { room.keepSlots = false; room.prune(); H.phase = 'lobby'; H.winner = -1; H.note = ''; push(); };
+        $('#leave').onclick = () => location.reload();
+        $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
+        if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+    </script>
+</body>
+
+</html>

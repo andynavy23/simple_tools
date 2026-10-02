@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="黑白棋 Othello：夾住對手的棋子就能翻面，最後棋子多的人獲勝。本機雙人或用房號連線對戰。">
+    <meta property="og:title" content="黑白棋" />
+    <meta property="og:description" content="夾住對手翻面的雙人棋，可本機或連線對戰。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/othello.html" />
+    <title>黑白棋</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        :root {
+            --wrap-w: 520px;
+            --felt: #1f8a4c;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .row input {
+            flex: 1 1 130px;
+        }
+
+        .status {
+            text-align: center;
+            font-weight: 700;
+            font-size: 18px;
+            margin-bottom: 8px;
+            min-height: 1.6em;
+        }
+
+        .score {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            margin-bottom: 12px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .dot {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            vertical-align: -2px;
+            margin-right: 4px;
+            box-shadow: inset 0 0 0 1px rgba(128, 128, 128, .6);
+        }
+
+        .p1 {
+            background: #111;
+        }
+
+        .p2 {
+            background: #fff;
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 2px;
+            background: #0f5c32;
+            padding: 4px;
+            border-radius: 12px;
+        }
+
+        .sq {
+            aspect-ratio: 1;
+            border: 0;
+            padding: 0;
+            border-radius: 4px;
+            background: var(--felt);
+            display: grid;
+            place-items: center;
+            cursor: default;
+        }
+
+        .sq:disabled {
+            opacity: 1;
+        }
+
+        .sq.ok {
+            cursor: pointer;
+        }
+
+        .sq.ok::after {
+            content: '';
+            width: 26%;
+            height: 26%;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, .45);
+        }
+
+        .sq.ok:hover {
+            background: #27a35b;
+        }
+
+        .sq i {
+            width: 78%;
+            height: 78%;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, .45);
+        }
+
+        .sq.last {
+            outline: 3px solid #ffd60a;
+            outline-offset: -3px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>黑白棋</h1>
+        <p class="sub">下的棋子要夾住對手的棋子（橫、直、斜都算），被夾住的會翻成你的顏色。沒有地方可下就跳過，棋子多的人獲勝。黑棋先手。</p>
+
+        <div class="card" id="menu">
+            <div class="row"><button class="primary" id="local">本機雙人</button></div>
+            <div class="row"><input id="nick" maxlength="10" placeholder="連線暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+            <div class="row">
+                <button id="host">建立房間</button>
+                <input id="joinId" placeholder="貼上房號" aria-label="房號">
+                <button id="join">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+        </div>
+
+        <div class="card" id="game" hidden>
+            <div class="status" id="status" role="status"></div>
+            <div class="score"><span><span class="dot p1"></span><b id="nBlack">2</b></span><span><span class="dot p2"></span><b id="nWhite">2</b></span></div>
+            <div id="board"></div>
+            <div class="row" style="justify-content:center;margin-top:14px">
+                <button class="primary" id="again" hidden>再來一局</button>
+                <button id="copy" hidden>複製邀請連結</button>
+                <button id="leave">離開</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- pure ---
+        const N = 8;
+        const DIRS = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+        const other = (p) => (p === 1 ? 2 : 1);
+
+        function newBoard() {
+            const b = Array.from({ length: N }, () => new Array(N).fill(0));
+            b[3][3] = b[4][4] = 2; b[3][4] = b[4][3] = 1;
+            return b;
+        }
+
+        // p 下在 (r,c) 會翻起的格子；位置不合法（出界、已有子、翻不到任何子）回傳空陣列
+        function flips(board, r, c, p) {
+            if (!Number.isInteger(r) || !Number.isInteger(c) || r < 0 || c < 0 || r >= N || c >= N || board[r][c] !== 0) return [];
+            const out = [];
+            for (const [dr, dc] of DIRS) {
+                const line = [];
+                let rr = r + dr, cc = c + dc;
+                while (rr >= 0 && rr < N && cc >= 0 && cc < N && board[rr][cc] === other(p)) { line.push([rr, cc]); rr += dr; cc += dc; }
+                if (line.length && rr >= 0 && rr < N && cc >= 0 && cc < N && board[rr][cc] === p) out.push(...line);
+            }
+            return out;
+        }
+
+        function legalMoves(board, p) {
+            const m = [];
+            for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (flips(board, r, c, p).length) m.push([r, c]);
+            return m;
+        }
+
+        const count = (board, p) => board.reduce((a, row) => a + row.filter(v => v === p).length, 0);
+
+        // state = { board, turn(1 黑|2 白), over, winner(0 = 平手 / 未結束), last, passed(0 或剛被跳過的玩家) }
+        function newGame() { return { board: newBoard(), turn: 1, over: false, winner: 0, last: null, passed: 0 }; }
+
+        // who 下在 (r,c)：合法回傳 true 並更新 state（含跳過與結算），否則 false
+        function play(state, who, r, c) {
+            if (state.over || who !== state.turn) return false;
+            const f = flips(state.board, r, c, who);
+            if (!f.length) return false;
+            state.board[r][c] = who; f.forEach(([a, b]) => { state.board[a][b] = who; });
+            state.last = [r, c]; state.passed = 0;
+            const nx = other(who);
+            if (legalMoves(state.board, nx).length) state.turn = nx;
+            else if (legalMoves(state.board, who).length) state.passed = nx;           // 對手無子可下：跳過，繼續由 who 下
+            else {
+                state.over = true;
+                const b = count(state.board, 1), w = count(state.board, 2);
+                state.winner = b > w ? 1 : w > b ? 2 : 0;
+            }
+            return true;
+        }
+
+        // 成員端檢查房主傳來的狀態
+        function validState(s) {
+            const pos = (p) => Array.isArray(p) && p.length === 2 && p.every(v => Number.isInteger(v) && v >= 0 && v < N);
+            return !!s && Array.isArray(s.board) && s.board.length === N && s.board.every(r => Array.isArray(r) && r.length === N && r.every(v => v === 0 || v === 1 || v === 2))
+                && (s.turn === 1 || s.turn === 2) && typeof s.over === 'boolean' && [0, 1, 2].includes(s.winner) && [0, 1, 2].includes(s.passed) && (s.last === null || pos(s.last));
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let mode = 'menu', S = null, room = null, myPlayer = 0, names = ['', ''], firstGame = true, hostId = '';
+
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#local', '#host', '#join', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+
+        function build() {
+            $('#board').replaceChildren(...Array.from({ length: N * N }, (_, i) => {
+                const b = document.createElement('button'); b.className = 'sq'; b.setAttribute('aria-label', `${String.fromCharCode(65 + i % N)}${Math.floor(i / N) + 1}`);
+                b.onclick = () => onSquare(Math.floor(i / N), i % N);
+                return b;
+            }));
+        }
+
+        function render() {
+            if (!S) return;
+            const sq = $('#board').children, myTurn = mode === 'local' || S.turn === myPlayer, canPlay = !S.over && myTurn && !(mode === 'host' && (!room || room.players.length < 2));
+            const ok = new Set(canPlay ? legalMoves(S.board, S.turn).map(([r, c]) => r * N + c) : []);
+            for (let i = 0; i < N * N; i++) {
+                const r = Math.floor(i / N), c = i % N, v = S.board[r][c], b = sq[i];
+                b.className = 'sq' + (ok.has(i) ? ' ok' : '') + (S.last && S.last[0] === r && S.last[1] === c ? ' last' : '');
+                b.disabled = !ok.has(i);
+                b.replaceChildren(...(v ? [Object.assign(document.createElement('i'), { className: 'p' + v })] : []));
+            }
+            $('#nBlack').textContent = count(S.board, 1); $('#nWhite').textContent = count(S.board, 2);
+            const dot = (p) => `<span class="dot p${p}"></span>`;
+            const who = (p) => (mode === 'local' ? (p === 1 ? '黑棋' : '白棋') : (names[p - 1] || (p === 1 ? '黑棋' : '白棋')));
+            let text;
+            if (S.over) text = S.winner ? `${dot(S.winner)}${who(S.winner)} 獲勝！` : '平手';
+            else if (mode === 'host' && room && room.players.length < 2) text = '等待玩家加入…';
+            else {
+                text = mode === 'local' ? `輪到 ${dot(S.turn)}${who(S.turn)}` : (S.turn === myPlayer ? `${dot(S.turn)}輪到你了` : `${dot(S.turn)}輪到 ${who(S.turn)}`);
+                if (S.passed) text = `${dot(S.passed)}${who(S.passed)} 無子可下，跳過。` + text;
+            }
+            $('#status').innerHTML = text;
+            $('#again').hidden = !(S.over && (mode === 'local' || mode === 'host'));
+            $('#copy').hidden = mode !== 'host';
+        }
+
+        function show(screen) { $('#menu').hidden = screen !== 'menu'; $('#game').hidden = screen !== 'game'; }
+
+        function startLocal() { mode = 'local'; S = newGame(); build(); show('game'); render(); }
+
+        const readNick = () => {
+            const n = $('#nick').value.trim();
+            if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; }
+            return n;
+        };
+        const onNetError = (err, message) => { netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } };
+        function publish() { render(); if (mode === 'host' && room) room.broadcast({ type: 'STATE', s: S, names }); }
+
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: 2,
+                onReady(r) { mode = 'host'; myPlayer = 1; hostId = r.id; names = [nick, '']; history.replaceState('', document.title, location.pathname + '#' + r.id); S = newGame(); build(); show('game'); render(); },
+                onJoin(p) { names = [nick, p.nick]; S = newGame(); publish(); },
+                onLeave() { names = [nick, '']; S = newGame(); publish(); },
+                onMessage(p, d) { if (d && d.type === 'MOVE' && play(S, 2, d.r, d.c)) publish(); },        // 成員固定是白棋
+                onError: onNetError,
+            });
+        }
+
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.join(id, {
+                nick,
+                onJoined() { mode = 'guest'; myPlayer = 2; build(); show('game'); $('#status').textContent = '已加入，等待房主…'; },
+                onMessage(d) {
+                    if (!d || d.type !== 'STATE' || !validState(d.s)) return;
+                    S = d.s;
+                    if (Array.isArray(d.names) && d.names.length === 2 && d.names.every(n => typeof n === 'string' && n.length <= 12)) names = d.names;
+                    render();
+                },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (mode === 'guest') { alert('房主已離開，遊戲結束'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+
+        function onSquare(r, c) {
+            if (mode === 'local') { if (play(S, S.turn, r, c)) render(); }
+            else if (mode === 'host') { if (play(S, 1, r, c)) publish(); }
+            else if (mode === 'guest' && room && S && S.turn === myPlayer) room.send({ type: 'MOVE', r, c });
+        }
+
+        $('#local').onclick = startLocal;
+        $('#host').onclick = hostRoom;
+        $('#join').onclick = joinRoom;
+        $('#again').onclick = () => { S = newGame(); if (mode === 'host') publish(); else render(); };
+        $('#copy').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copy'), url, () => prompt('請手動複製邀請連結：', url)); };
+        $('#leave').onclick = () => location.reload();
+        if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+        show('menu');
+    </script>
+</body>
+
+</html>

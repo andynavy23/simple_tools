@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="單字閃卡：貼上自己的詞庫，用間隔重複（簡化版 SM-2）安排複習時間，進度只存在你的瀏覽器。">
+    <meta property="og:title" content="單字閃卡" />
+    <meta property="og:description" content="自訂詞庫的間隔重複閃卡。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/flashcards.html" />
+    <title>單字閃卡</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .row input[type=text] {
+            flex: 1 1 140px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        #face {
+            min-height: 150px;
+            display: grid;
+            place-items: center;
+            text-align: center;
+            font-size: 28px;
+            font-weight: 700;
+            padding: 16px;
+            border-radius: 16px;
+            background: var(--bg);
+            box-shadow: inset 0 0 0 2px var(--fill);
+            word-break: break-word;
+            white-space: pre-wrap;
+            cursor: pointer;
+        }
+
+        #face .back {
+            color: var(--blue);
+            font-size: 24px;
+            margin-top: 10px;
+            display: block;
+        }
+
+        #face small {
+            color: var(--muted);
+            font-size: 14px;
+            font-weight: 400;
+            display: block;
+        }
+
+        .grades {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .grades button {
+            border-radius: 14px;
+            padding: 10px 4px;
+        }
+
+        .grades small {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .counts {
+            display: flex;
+            gap: 14px;
+            justify-content: center;
+            color: var(--muted);
+            margin-bottom: 10px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .counts b {
+            color: var(--text);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>單字閃卡</h1>
+        <p class="sub">貼上詞庫、每天複習到期的卡片。答對的卡片間隔會越來越長，答錯的當天會再出現。</p>
+
+        <div class="card">
+            <div class="row">
+                <select id="deck" aria-label="詞庫"></select>
+                <input type="text" id="newName" maxlength="20" placeholder="新詞庫名稱" aria-label="新詞庫名稱">
+                <button id="addDeck">建立</button>
+                <button class="sm" id="delDeck">刪除此詞庫</button>
+            </div>
+        </div>
+
+        <div class="card" id="study">
+            <div class="counts"><span>今天要複習 <b id="nDue">0</b></span><span>新卡片 <b id="nNew">0</b></span><span>共 <b id="nAll">0</b> 張</span></div>
+            <div id="face" role="button" tabindex="0" aria-live="polite"></div>
+            <div class="grades" id="grades" hidden></div>
+            <div class="row" style="justify-content:center;margin-top:12px"><button class="primary" id="flip">翻面</button></div>
+        </div>
+
+        <div class="card">
+            <h2>新增卡片</h2>
+            <p class="note">一行一張：正面與背面用 Tab、「|」或逗號分開（只取第一個分隔符號）。重複的正面會略過。</p>
+            <textarea id="import" placeholder="apple | 蘋果&#10;banana, 香蕉&#10;library	圖書館" aria-label="貼上詞庫"></textarea>
+            <div class="row" style="margin-top:8px"><button class="primary" id="importBtn">加入詞庫</button><button class="sm" id="exportBtn">複製整個詞庫</button><span class="muted" id="info"></span></div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, day, copyWithFeedback } = Util;
+
+        // --- pure ---
+        // 一行一張，分隔符號優先順序：Tab > | > 逗號；沒有分隔符號的行略過；重複的正面略過
+        function parseCards(text, existing = []) {
+            const seen = new Set(existing.map(c => c.f)), out = [];
+            for (const raw of String(text).split(/\r?\n/)) {
+                const line = raw.trim(); if (!line) continue;
+                let i = line.indexOf('\t'); if (i < 0) i = line.indexOf('|'); if (i < 0) i = line.search(/[,，]/);
+                if (i <= 0) continue;
+                const f = line.slice(0, i).trim(), b = line.slice(i + 1).trim();
+                if (!f || !b || f.length > 80 || b.length > 200 || seen.has(f)) continue;
+                seen.add(f); out.push({ f, b, ease: 2.5, iv: 0, reps: 0, due: '', seen: false });
+            }
+            return out;
+        }
+
+        // 簡化版 SM-2。grade：0 重來、1 困難、2 良好、3 簡單。回傳新的卡片（不改動原物件）
+        function schedule(card, grade, today) {
+            let { ease, iv, reps } = card;
+            if (grade === 0) { reps = 0; iv = 0; ease = Math.max(1.3, ease - 0.2); }
+            else {
+                if (grade === 1) { iv = Math.max(1, Math.round(Math.max(iv, 1) * 1.2)); ease = Math.max(1.3, ease - 0.15); }
+                else if (grade === 2) iv = reps === 0 ? 1 : reps === 1 ? 3 : Math.max(iv + 1, Math.round(iv * ease));
+                else { iv = reps === 0 ? 3 : Math.max(iv + 2, Math.round(iv * ease * 1.3)); ease = Math.min(3, ease + 0.15); }
+                reps++;
+            }
+            return { ...card, ease: Math.round(ease * 100) / 100, iv, reps, seen: true, due: day.shift(today, iv) };
+        }
+
+        // 今天要複習的卡片位置：已看過且到期的（最舊的先）+ 最多 newLimit 張新卡
+        function dueQueue(cards, today, newLimit = 20) {
+            const due = cards.map((c, i) => ({ c, i })).filter(({ c }) => c.seen && c.due <= today).sort((a, b) => a.c.due.localeCompare(b.c.due) || a.i - b.i).map(x => x.i);
+            const fresh = cards.map((c, i) => ({ c, i })).filter(({ c }) => !c.seen).slice(0, newLimit).map(x => x.i);
+            return [...due, ...fresh];
+        }
+
+        const validCard = (c) => !!c && typeof c.f === 'string' && typeof c.b === 'string' && Number.isFinite(c.ease) && Number.isInteger(c.iv) && Number.isInteger(c.reps) && typeof c.seen === 'boolean' && typeof c.due === 'string';
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let decks = store.get('flash_decks', {}), cur = store.get('flash_cur', ''), queue = [], flipped = false;
+        for (const k of Object.keys(decks)) decks[k] = Array.isArray(decks[k]) ? decks[k].filter(validCard) : [];
+        const save = () => { store.set('flash_decks', decks); store.set('flash_cur', cur); };
+        const cards = () => decks[cur] || [];
+        const GRADES = [['重來', 0], ['困難', 1], ['良好', 2], ['簡單', 3]];
+
+        function buildQueue() { queue = dueQueue(cards(), day.today()); flipped = false; }
+
+        function renderDecks() {
+            const names = Object.keys(decks);
+            if (!names.includes(cur)) cur = names[0] || '';
+            $('#deck').replaceChildren(...names.map(n => new Option(`${n}（${decks[n].length}）`, n)));
+            $('#deck').value = cur;
+        }
+
+        function render() {
+            const cs = cards(), t = day.today();
+            $('#nDue').textContent = cs.filter(c => c.seen && c.due <= t).length; $('#nNew').textContent = cs.filter(c => !c.seen).length; $('#nAll').textContent = cs.length;
+            const face = $('#face'), i = queue[0];
+            $('#grades').hidden = !flipped || i === undefined; $('#flip').hidden = flipped || i === undefined;
+            if (!cur) { face.textContent = '先在上方建立一個詞庫'; return; }
+            if (i === undefined) { face.innerHTML = '<span>🎉 今天沒有要複習的卡片<small>明天再來，或在下方新增卡片</small></span>'; return; }
+            const c = cs[i];
+            face.replaceChildren(Object.assign(document.createElement('span'), { textContent: c.f }));
+            if (flipped) {
+                face.firstChild.append(Object.assign(document.createElement('span'), { className: 'back', textContent: c.b }));
+                $('#grades').replaceChildren(...GRADES.map(([n, g]) => {
+                    const b = document.createElement('button'), nx = schedule(c, g, t), small = document.createElement('small');
+                    small.textContent = nx.iv === 0 ? '今天再看' : `${nx.iv} 天後`;
+                    b.append(n, small); b.onclick = () => answer(g); return b;
+                }));
+            }
+        }
+
+        function answer(g) {
+            const i = queue.shift(); if (i === undefined) return;
+            const next = schedule(cards()[i], g, day.today());
+            decks[cur][i] = next; save();
+            if (g === 0) queue.push(i);                                  // 重來：本次稍後再出現
+            flipped = false; render();
+        }
+
+        $('#face').onclick = $('#flip').onclick = () => { if (queue.length && !flipped) { flipped = true; render(); } };
+        $('#face').onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#flip').click(); } };
+        document.addEventListener('keydown', (e) => {
+            if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+            if (!flipped && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); $('#flip').click(); }
+            else if (flipped && '1234'.includes(e.key) && e.key) answer(+e.key - 1);
+        });
+
+        $('#addDeck').onclick = () => {
+            const n = $('#newName').value.trim();
+            if (!n || decks[n]) { $('#info').textContent = n ? '已有同名詞庫' : '請輸入詞庫名稱'; return; }
+            decks[n] = []; cur = n; $('#newName').value = ''; save(); renderDecks(); buildQueue(); render(); $('#info').textContent = '';
+        };
+        $('#delDeck').onclick = () => { if (cur && confirm(`確定刪除詞庫「${cur}」與它的學習進度？無法復原。`)) { delete decks[cur]; cur = ''; save(); renderDecks(); buildQueue(); render(); } };
+        $('#deck').onchange = () => { cur = $('#deck').value; save(); buildQueue(); render(); };
+        $('#importBtn').onclick = () => {
+            if (!cur) { $('#info').textContent = '請先建立詞庫'; return; }
+            const add = parseCards($('#import').value, cards());
+            decks[cur].push(...add); save(); $('#import').value = ''; $('#info').textContent = `加入 ${add.length} 張`;
+            renderDecks(); buildQueue(); render();
+        };
+        $('#exportBtn').onclick = () => copyWithFeedback($('#exportBtn'), cards().map(c => `${c.f} | ${c.b}`).join('\n'), () => { $('#info').textContent = '複製失敗，請手動選取'; });
+
+        renderDecks(); buildQueue(); render();
+    </script>
+</body>
+
+</html>

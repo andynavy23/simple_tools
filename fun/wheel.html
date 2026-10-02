@@ -60,6 +60,13 @@
             display: block;
             margin-bottom: 6px;
         }
+
+        .presets {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
     </style>
 </head>
 
@@ -67,7 +74,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>決策轉盤</h1>
-        <p class="sub">想不出來就交給轉盤。</p>
+        <p class="sub">想不出來就交給轉盤，也有午餐、飲料、活動等常用清單。</p>
 
         <div class="card">
             <div class="stage">
@@ -79,6 +86,8 @@
         </div>
 
         <div class="card">
+            <label>常用清單（點一下載入，會取代目前的選項）</label>
+            <div class="presets" id="presets"></div>
             <label for="items">選項（一行一個）</label>
             <textarea id="items"></textarea>
             <p class="note">加權重：在名稱後面寫 <b>*數字</b>，例如「燒肉*3」代表被選中機率是其他的 3 倍。清單會自動儲存在這個瀏覽器。</p>
@@ -87,6 +96,26 @@
 
     <script src="../shared/js/util.js"></script>
     <script>
+        // --- pure ---
+        // 一行一個選項；名稱後面寫 *數字 代表權重，沒寫就是 1；權重 ≤ 0 的略過
+        function parseItems(text) {
+            return text.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+                const m = l.match(/^(.*?)\s*\*\s*(\d+(?:\.\d+)?)$/);
+                return m && m[1] ? { name: m[1], w: +m[2] } : { name: l, w: 1 };
+            }).filter(i => i.w > 0);
+        }
+
+        // 常用清單：名稱 → 選項（可含 *權重）
+        const PRESETS = {
+            '午餐': ['拉麵', '便當*2', '燒肉', '麥當勞', '水餃', '麵店', '咖哩飯', '壽司', '涼麵', '滷肉飯', '自己煮'],
+            '晚餐': ['火鍋', '燒烤', '牛排', '義大利麵', '家常菜', '日式定食', '泰式料理', '韓式炸雞', '港式燒臘', '鍋貼'],
+            '飲料': ['珍珠奶茶', '四季春', '多多綠', '黑糖鮮奶', '美式咖啡', '拿鐵', '檸檬綠茶', '仙草', '冬瓜茶'],
+            '宵夜': ['鹽酥雞', '滷味', '燒烤', '泡麵', '炒飯', '蚵仔煎', '鹹粥', '豆漿燒餅'],
+            '週末活動': ['看電影', '爬山', '逛街', '宅在家', '咖啡廳', '桌遊', '運動', '郊遊', '補眠'],
+            '運動': ['慢跑', '游泳', '瑜珈', '重訓', '騎單車', '羽球', '籃球', '健走'],
+        };
+        // --- /pure ---
+
         const $ = (s) => document.querySelector(s);
         const ta = $('#items'), cv = $('#wheel'), ctx = cv.getContext('2d');
         const btn = $('#spin'), out = $('#result');
@@ -98,12 +127,7 @@
         ta.value = store.get(KEY, '');
         if (!ta.value) ta.value = '拉麵\n便當*2\n燒肉\n麥當勞\n自己煮';
 
-        function parse() {
-            return ta.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
-                const m = l.match(/^(.*?)\s*\*\s*(\d+(?:\.\d+)?)$/);
-                return m && m[1] ? { name: m[1], w: +m[2] } : { name: l, w: 1 };
-            }).filter(i => i.w > 0);
-        }
+        const parse = () => parseItems(ta.value);
 
         function draw() {
             const items = parse(), n = items.length, R = cv.width / 2;
@@ -165,6 +189,9 @@
             })(t0);
         }
 
+        $('#presets').replaceChildren(...Object.entries(PRESETS).map(([name, list]) => Object.assign(document.createElement('button'), {
+            className: 'sm', textContent: name, onclick: () => { if (spinning) return; ta.value = list.join('\n'); store.set(KEY, ta.value); out.textContent = ''; draw(); },
+        })));
         btn.onclick = spin;
         ta.oninput = () => {
             store.set(KEY, ta.value);

@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="色彩工具：HEX、RGB、HSL 互轉，檢查對比度是否符合 WCAG，並模擬色盲者看到的顏色。">
+    <meta name="description" content="色彩工具：HEX、RGB、HSL 互轉，產生配色、檢查對比度是否符合 WCAG，並模擬色盲者看到的顏色。">
     <meta property="og:title" content="色彩工具" />
-    <meta property="og:description" content="色碼互轉、WCAG 對比度與色盲模擬。" />
+    <meta property="og:description" content="色碼互轉、配色產生、WCAG 對比度與色盲模擬。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/color-tools.html" />
     <title>色彩工具</title>
@@ -83,6 +83,25 @@
             color: var(--bad);
         }
 
+        .palette {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .palette button {
+            flex: 1 1 70px;
+            min-width: 70px;
+            height: 76px;
+            border-radius: 14px;
+            border: 1px solid var(--fill);
+            font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding: 6px;
+        }
+
         .ratio {
             font-size: 28px;
             font-weight: 700;
@@ -103,6 +122,13 @@
             </div>
             <div class="swatch" id="swatch"></div>
             <div id="vals"></div>
+        </div>
+
+        <div class="card">
+            <h2>配色產生</h2>
+            <div class="row"><label for="scheme" class="sub" style="margin:0">配色</label><select id="scheme" aria-label="配色方式"></select></div>
+            <div class="palette" id="palette"></div>
+            <p class="note" id="paletteNote">點色塊複製色碼。</p>
         </div>
 
         <div class="card">
@@ -197,6 +223,30 @@
                 .map(v => Math.round(255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055)));
             return { r, g, b };
         }
+
+        // 配色：由主色（hex）依色相環產生一組顏色，回傳 hex 陣列（第一個一定是主色本身）
+        const SCHEMES = {
+            complementary: ['互補色', [0, 180]],
+            analogous: ['類似色', [-30, 0, 30]],
+            triadic: ['三角配色', [0, 120, 240]],
+            split: ['分裂互補', [0, 150, 210]],
+            tetradic: ['四角配色', [0, 90, 180, 270]],
+        };
+        function palette(hex, scheme) {
+            const c = parseColor(hex);
+            if (!c) return [];
+            const { h, s, l } = rgbToHsl(c);
+            if (scheme === 'mono') return [20, 35, 50, 65, 80, 92].map(L => toHex(hslToRgb(h, s, L)));
+            if (scheme === 'gradient') {
+                const to = hslToRgb((h + 180) % 360, s, l);
+                return Array.from({ length: 7 }, (_, i) => toHex({ r: Math.round(c.r + (to.r - c.r) * i / 6), g: Math.round(c.g + (to.g - c.g) * i / 6), b: Math.round(c.b + (to.b - c.b) * i / 6) }));
+            }
+            const def = SCHEMES[scheme];
+            if (!def) return [];
+            const out = def[1].map(d => toHex(hslToRgb(((h + d) % 360 + 360) % 360, s, l)));
+            out[def[1].indexOf(0)] = toHex(c);                                  // 色相與亮度取整後可能和主色差 1，把「偏移 0」那格固定成主色本身
+            return out;
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -216,6 +266,7 @@
             if (!c) return;
             const hsl = rgbToHsl(c);
             $('#swatch').style.background = toHex(c);
+            renderPalette();
             const vals = [toHex(c), `rgb(${c.r}, ${c.g}, ${c.b})`, `hsl(${hsl.h}, ${hsl.s}%, ${hsl.l}%)`];
             $('#vals').replaceChildren(...vals.map(v => {
                 const row = document.createElement('div'), b = document.createElement('button');
@@ -260,6 +311,22 @@
                 return row;
             }));
         }
+
+        function renderPalette() {
+            const c = parseColor($('#color').value);
+            if (!c) return;
+            const list = palette(toHex(c), $('#scheme').value);
+            $('#palette').replaceChildren(...list.map(hex => {
+                const b = document.createElement('button'), rgb = parseColor(hex);
+                b.style.background = hex; b.style.color = luminance(rgb) > 0.4 ? '#000' : '#fff'; b.textContent = hex; b.title = '點擊複製';
+                b.onclick = () => Util.copyWithFeedback(b, hex);
+                return b;
+            }));
+            $('#paletteNote').textContent = $('#scheme').value === 'gradient' ? 'CSS：linear-gradient(90deg, ' + list[0] + ', ' + list[list.length - 1] + ')' : '點色塊複製色碼。';
+        }
+        $('#scheme').replaceChildren(...Object.entries(SCHEMES).map(([k, v]) => new Option(v[0], k)), new Option('單色深淺', 'mono'), new Option('漸層（主色 → 互補色）', 'gradient'));
+        $('#scheme').value = 'triadic';
+        $('#scheme').onchange = renderPalette;
 
         // 讓主色欄位也能從 rgb()/hsl() 反映到選色器
         bind('color', 'picker', renderMain);

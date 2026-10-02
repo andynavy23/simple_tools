@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="薪資 / 加班費試算：月薪換算時薪、依勞基法倍率算平日 / 休息日 / 假日加班費，並概算實領薪資與年薪。">
+    <meta name="description" content="薪資 / 加班費試算：月薪換算時薪、依勞基法倍率算平日 / 休息日 / 假日加班費，概算實領薪資、年薪與年度所得稅。">
     <meta property="og:title" content="薪資 / 加班費試算" />
     <meta property="og:description" content="月薪換時薪，依勞基法倍率算加班費與實領概算。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
@@ -54,6 +54,18 @@
             <p class="note">直接以月薪乘上費率，未使用投保級距、未計所得稅與眷屬健保費，費率請自行依最新公告調整。</p>
             <div id="net"></div>
         </div>
+
+        <div class="card">
+            <h2>年度所得稅概算</h2>
+            <p class="note" style="margin-bottom:12px">依 113 年度（2024 年所得）綜合所得稅規則：薪資所得、免稅額、標準扣除額、薪資特別扣除額與基本生活費差額。只計算本人薪資，不含股利、租金、其他特別扣除（如房貸利息、幼兒學前）；實際請以財政部公告與報稅軟體為準。</p>
+            <div class="fgrid">
+                <div><label for="t-gross">全年薪資所得（留空 = 月薪 × (12 + 獎金月數)）</label><input id="t-gross" type="number" min="0" placeholder="自動"></div>
+                <div><label for="t-married">申報方式</label><select id="t-married"><option value="0">單身</option><option value="1">夫妻合併（配偶無所得）</option></select></div>
+                <div><label for="t-deps">受扶養親屬人數（不含配偶）</label><input id="t-deps" type="number" min="0" max="20" value="0"></div>
+                <div><label for="t-other">其他扣除額（元）</label><input id="t-other" type="number" min="0" value="0"></div>
+            </div>
+            <div id="tax"></div>
+        </div>
     </div>
 
     <script src="../shared/js/util.js"></script>
@@ -80,12 +92,34 @@
 
         // 概算實領：rates 為百分比
         const netPay = (gross, { labor, health, pension }) => gross * (1 - (labor + health + pension) / 100);
+
+        // 綜合所得稅（113 年度）：級距上限 → 稅率；各項扣除額為每年公告的數字，之後調整只要改這一組
+        const TAX_BRACKETS = [[590000, 0.05], [1330000, 0.12], [2660000, 0.2], [4980000, 0.3], [Infinity, 0.4]];
+        const TAX_PARAMS = { exemption: 92000, standardSingle: 131000, standardCouple: 262000, salarySpecial: 218000, basicLiving: 202000 };
+
+        // 應稅所得淨額 → 累進稅額與適用的最高稅率
+        function incomeTax(net) {
+            let tax = 0, prev = 0, rate = 0;
+            for (const [top, r] of TAX_BRACKETS) { if (net > prev) { tax += (Math.min(net, top) - prev) * r; rate = r; } prev = top; }
+            return { tax, rate };
+        }
+
+        // 只有本人有薪資所得時的估算；基本生活費差額 = 基本生活費 × 人數 − (免稅額 + 標準扣除額)，不足時為 0
+        function estimateTax({ gross, married, dependents, other = 0 }, p = TAX_PARAMS) {
+            const persons = 1 + (married ? 1 : 0) + dependents;
+            const exemption = persons * p.exemption, standard = married ? p.standardCouple : p.standardSingle;
+            const salarySpecial = Math.min(gross, p.salarySpecial);
+            const basicDiff = Math.max(0, p.basicLiving * persons - (exemption + standard));
+            const net = Math.max(0, gross - exemption - standard - salarySpecial - other - basicDiff);
+            const { tax, rate } = incomeTax(net);
+            return { gross, persons, exemption, standard, salarySpecial, other, basicDiff, net, tax, rate, effective: gross > 0 ? tax / gross : 0 };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
         const num = (id) => Math.max(0, parseFloat($('#' + id).value) || 0);
         const money = (n) => Math.round(n).toLocaleString('zh-TW');
-        const ids = ['salary', 'bonus', 'h-weekday', 'h-rest', 'h-holiday', 'd-weekday', 'd-rest', 'd-holiday', 'r-labor', 'r-health', 'r-pension'];
+        const ids = ['t-gross', 't-married', 't-deps', 't-other', 'salary', 'bonus', 'h-weekday', 'h-rest', 'h-holiday', 'd-weekday', 'd-rest', 'd-holiday', 'r-labor', 'r-health', 'r-pension'];
         const saved = store.get('salary_calc', {});
         ids.forEach(i => { if (saved[i] !== undefined) $('#' + i).value = saved[i]; });
 
@@ -102,6 +136,13 @@
             $('#ot').replaceChildren(...rows.map(([l, v]) => statRow(l, `${money(v)} 元`)), statRow('加班費合計', `${money(ot)} 元`, 'ok'), ...warn.map(w => Object.assign(document.createElement('p'), { className: 'note', textContent: '⚠ ' + w })));
             const net = netPay(gross, { labor: num('r-labor'), health: num('r-health'), pension: num('r-pension') });
             $('#net').replaceChildren(statRow('本月應領（月薪 + 加班費）', `${money(gross)} 元`), statRow('扣除後實領概算', `${money(net)} 元`, 'ok'));
+            const grossYear = $('#t-gross').value === '' ? monthly * (12 + num('bonus')) : num('t-gross');
+            const input = { gross: grossYear, married: $('#t-married').value === '1', dependents: Math.floor(num('t-deps')), other: num('t-other') };
+            const t = estimateTax(input), noBonus = estimateTax({ ...input, gross: $('#t-gross').value === '' ? monthly * 12 : grossYear });
+            $('#tax').replaceChildren(statRow('全年薪資所得', `${money(t.gross)} 元`), statRow(`免稅額（${t.persons} 人）`, `${money(t.exemption)} 元`), statRow('標準扣除額', `${money(t.standard)} 元`), statRow('薪資特別扣除額', `${money(t.salarySpecial)} 元`),
+                statRow('基本生活費差額', `${money(t.basicDiff)} 元`), statRow('應稅所得淨額', `${money(t.net)} 元`), statRow('適用稅率', `${Math.round(t.rate * 100)}%`),
+                statRow('應納稅額概算', `${money(t.tax)} 元`, 'ok'), statRow('有效稅率', `${(t.effective * 100).toFixed(2)}%`),
+                ...($('#t-gross').value === '' && num('bonus') > 0 ? [statRow('其中年終 / 獎金多繳的稅', `${money(t.tax - noBonus.tax)} 元`)] : []));
             store.set('salary_calc', Object.fromEntries(ids.map(i => [i, $('#' + i).value])));
         }
         ids.forEach(i => { $('#' + i).oninput = render; });

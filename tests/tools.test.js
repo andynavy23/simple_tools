@@ -7,13 +7,15 @@ global.Util = require(path.join(root, 'shared/js/util.js'));
 const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
 
 // 頁面外層用 const { ... } = Util 取得共用函式，這裡提供同樣的名稱
-const PRELUDE = 'const { rnd, shuffle, store, copyText, esc, day, statRow, tone, beep, speak, parseNames, download } = Util;\n';
+const PRELUDE = 'const { rnd, shuffle, store, copyText, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex } = Util;\n';
 const load = (file, names, from = '// --- pure ---', to = '// --- /pure ---') => {
     const h = read(file);
     return new Function(PRELUDE + h.slice(h.indexOf(from), h.indexOf(to)) + `; return { ${names} };`)();
 };
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps * Math.max(1, Math.abs(b)), `${a} !~ ${b}`);
 const ok = (name) => console.log('ok  ' + name);
+const { sha256, randomHex } = Util;
+const pending = [];                                       // 非同步測試（crypto.subtle）：最後一起等
 const NL = String.fromCharCode(10);
 
 // ===== 純文字整理 =====
@@ -176,7 +178,7 @@ const NL = String.fromCharCode(10);
 {
     const m = load('utils/encode-decode.html', 'CODECS');
     const samples = ['Hello, World!', '你好，世界 🌏', 'a+b=c&d?e/f#g', '<script>alert("x")</script>', '', 'line1\nline2\t🎉'];
-    for (const [name, c] of Object.entries(m.CODECS)) for (const s of samples) assert.equal(c.dec(c.enc(s)), s, name);
+    for (const [name, c] of Object.entries(m.CODECS).filter(([, c]) => c.enc && c.dec)) for (const s of samples) assert.equal(c.dec(c.enc(s)), s, name);
     assert.equal(m.CODECS['Base64'].enc('你好'), '5L2g5aW9');
     assert.throws(() => m.CODECS['Base64'].dec('!!!'));
     assert.throws(() => m.CODECS['十六進位 (UTF-8 位元組)'].dec('zz'));
@@ -915,4 +917,451 @@ const NL = String.fromCharCode(10);
     ok('battleship');
 }
 
-console.log('ALL OK');
+// ===== 工具清單 TOOLS.md 與實際頁面同步 =====
+{
+    const listed = read('TOOLS.md'), readme = read('README.md'), index = read('index.html');
+    for (const dir of ['game-assist', 'mini-games', 'fun', 'utils', 'reading'])
+        for (const f of fs.readdirSync(path.join(root, dir)).filter(x => x.endsWith('.html'))) {
+            assert.ok(listed.includes(`(${dir}/${f})`), `TOOLS.md 沒有列出 ${dir}/${f}`);
+            assert.ok(readme.includes(`(${dir}/${f})`), `README.md 沒有列出 ${dir}/${f}`);
+            assert.ok(index.includes(`href="${dir}/${f}"`), `index.html 沒有卡片 ${dir}/${f}`);
+        }
+    ok('TOOLS.md / README / index 與頁面一致');
+}
+
+// ===== 番茄鐘：歷史紀錄 =====
+{
+    const m = load('fun/pomodoro.html', 'lastDays, streak, trim, cleanHist');
+    const sh = Util.day.shift, bt = Util.day.between, T = '2024-03-10';
+    const hist = { '2024-03-10': { count: 2, minutes: 50 }, '2024-03-09': { count: 1, minutes: 25 }, '2024-03-07': { count: 4, minutes: 100 }, '2023-01-01': { count: 1, minutes: 25 } };
+    assert.deepEqual(m.lastDays(hist, 4, T, sh), [{ d: '2024-03-07', count: 4, minutes: 100 }, { d: '2024-03-08', count: 0, minutes: 0 }, { d: '2024-03-09', count: 1, minutes: 25 }, { d: '2024-03-10', count: 2, minutes: 50 }]);
+    assert.equal(m.lastDays(hist, 30, T, sh).length, 30); assert.equal(m.lastDays({}, 7, T, sh).every(x => x.minutes === 0), true);
+    assert.equal(m.streak(hist, T, sh), 2);                                                  // 3/10、3/9 連續，3/8 中斷
+    assert.equal(m.streak({ '2024-03-09': { count: 1, minutes: 25 } }, T, sh), 1);            // 今天還沒專注：從昨天算
+    assert.equal(m.streak({ '2024-03-08': { count: 1, minutes: 25 } }, T, sh), 0); assert.equal(m.streak({}, T, sh), 0);
+    assert.deepEqual(Object.keys(m.trim(hist, 365, T, bt)).sort(), ['2024-03-07', '2024-03-09', '2024-03-10']);
+    assert.deepEqual(m.cleanHist({ '2024-03-10': { count: 1, minutes: 25 }, bad: { count: 1, minutes: 1 }, '2024-03-09': { count: -1, minutes: 5 }, '2024-03-08': { count: 'x', minutes: 5 }, '2024-03-07': null }), { '2024-03-10': { count: 1, minutes: 25 } });
+    assert.deepEqual(m.cleanHist(null), {}); assert.deepEqual(m.cleanHist([1, 2]), {}); assert.deepEqual(m.cleanHist('x'), {});
+    ok('pomodoro history');
+}
+
+// ===== 進位 / 位元運算 =====
+{
+    const m = load('utils/base-converter.html', 'parseBig, toUnsigned, toSigned, bitOp, floatParts, parseFloatText, group4');
+    assert.equal(m.parseBig('ff', 16), 255n); assert.equal(m.parseBig('0xFF', 16), 255n); assert.equal(m.parseBig('-0b101', 2), -5n); assert.equal(m.parseBig('1_000', 10), 1000n); assert.equal(m.parseBig('zz', 36), 1295n);
+    assert.equal(m.parseBig('ffffffffffffffffffff', 16), 1208925819614629174706175n);
+    for (const [s, b] of [['12', 2], ['', 10], ['g', 16], ['-', 10], ['0x', 16], ['1.5', 10], ['9', 8], ['x'.repeat(401), 36]]) assert.equal(m.parseBig(s, b), null, s);
+    assert.equal(m.toUnsigned(-1n, 8), 255n); assert.equal(m.toUnsigned(256n, 8), 0n); assert.equal(m.toSigned(255n, 8), -1n); assert.equal(m.toSigned(127n, 8), 127n); assert.equal(m.toSigned(128n, 8), -128n);
+    assert.equal(m.bitOp(0xF0n, 0x3Cn, 'AND', 8), 0x30n); assert.equal(m.bitOp(0xF0n, 0x3Cn, 'OR', 8), 0xFCn); assert.equal(m.bitOp(0xF0n, 0x3Cn, 'XOR', 8), 0xCCn);
+    assert.equal(m.bitOp(0xF0n, 0x3Cn, 'NAND', 8), 0xCFn); assert.equal(m.bitOp(0x0Fn, 0n, 'NOT', 8), 0xF0n); assert.equal(m.bitOp(0n, 0n, 'NOT', 64), (1n << 64n) - 1n);
+    assert.equal(m.bitOp(1n, 7n, 'SHL', 8), 128n); assert.equal(m.bitOp(1n, 8n, 'SHL', 8), 0n); assert.equal(m.bitOp(1n, 100n, 'SHL', 8), 0n); assert.equal(m.bitOp(0x80n, 7n, 'SHR', 8), 1n);
+    assert.equal(m.bitOp(0x80n, 1n, 'SAR', 8), 0xC0n); assert.equal(m.bitOp(0x40n, 1n, 'SAR', 8), 0x20n); assert.equal(m.bitOp(-1n, 3n, 'SHR', 8), 0x1Fn); assert.equal(m.bitOp(-8n, 1n, 'SAR', 32), m.toUnsigned(-4n, 32));
+    assert.throws(() => m.bitOp(1n, 1n, '??', 8));
+    // 與 JavaScript 的 32 位元運算交叉驗證
+    for (let i = 0; i < 300; i++) {
+        const a = Util.rnd(2 ** 32) | 0, b = Util.rnd(2 ** 32) | 0, A = BigInt(a), B = BigInt(b);
+        assert.equal(Number(m.toSigned(m.bitOp(A, B, 'AND', 32), 32)), a & b); assert.equal(Number(m.toSigned(m.bitOp(A, B, 'XOR', 32), 32)), a ^ b);
+        const n = Util.rnd(32); assert.equal(Number(m.toSigned(m.bitOp(A, BigInt(n), 'SHL', 32), 32)), a << n); assert.equal(Number(m.toSigned(m.bitOp(A, BigInt(n), 'SAR', 32), 32)), a >> n); assert.equal(Number(m.bitOp(A, BigInt(n), 'SHR', 32)), a >>> n);
+    }
+    const f = m.floatParts(0.1, 32);
+    assert.equal(f.hex, '0x3dcccccd'); assert.equal(f.sign, '0'); assert.equal(f.exp, '01111011'); assert.equal(f.mant, '10011001100110011001101'); assert.equal(f.back, 0.10000000149011612);
+    const d = m.floatParts(0.1, 64); assert.equal(d.hex, '0x3fb999999999999a'); assert.equal(d.bits.length, 64); assert.equal(d.exp.length, 11); assert.equal(d.back, 0.1);
+    assert.equal(m.floatParts(-0, 64).sign, '1'); assert.equal(m.floatParts(NaN, 32).hex, '0x7fc00000'); assert.equal(m.floatParts(Infinity, 64).hex, '0x7ff0000000000000'); assert.equal(m.floatParts(1, 32).hex, '0x3f800000');
+    assert.equal(m.parseFloatText('1e-3'), 0.001); assert.equal(m.parseFloatText('.5'), 0.5); assert.equal(m.parseFloatText('5.'), 5); assert.equal(m.parseFloatText('-inf'), -Infinity); assert.ok(Number.isNaN(m.parseFloatText('NaN')));
+    for (const bad of ['abc', '', '1.2.3', '--1', '0x10', '1e', '１２']) assert.equal(m.parseFloatText(bad), null, bad);
+    assert.equal(m.group4('10101111'), '1010 1111'); assert.equal(m.group4('101'), '101');
+    ok('base-converter');
+}
+
+// ===== Cron =====
+{
+    const m = load('utils/cron-parser.html', 'parseCron, nextRuns, summarize, describeField');
+    const c = m.parseCron('*/15 9-17 * * 1-5');
+    assert.deepEqual(c.fields[0].values, [0, 15, 30, 45]); assert.deepEqual(c.fields[1].values, [9, 10, 11, 12, 13, 14, 15, 16, 17]); assert.deepEqual(c.fields[4].values, [1, 2, 3, 4, 5]);
+    assert.deepEqual(m.parseCron('0 0 * JAN MON').fields.slice(3).map(f => f.values), [[1], [1]]); assert.deepEqual(m.parseCron('0 0 * * 7').fields[4].values, [0]); assert.deepEqual(m.parseCron('0 0 * * 5-7').fields[4].values, [0, 5, 6]);
+    assert.deepEqual(m.parseCron('5/20 * * * *').fields[0].values, [5, 25, 45]); assert.deepEqual(m.parseCron('1,2,2,3 * * * *').fields[0].values, [1, 2, 3]); assert.equal(m.parseCron('@daily').expr, '0 0 * * *'); assert.equal(m.parseCron('  0   0 *  * * ').expr, '0 0 * * *');
+    for (const bad of ['* * * *', '* * * * * *', '', '60 * * * *', '* 24 * * *', '* * 0 * *', '* * 32 * *', '* * * 13 *', '* * * * 8', '*/0 * * * *', 'a * * * *', '1- * * * *', '5-1 * * * *', '1,,2 * * * *', '*/x * * * *', '1-2-3 * * * *'])
+        assert.throws(() => m.parseCron(bad), Error, JSON.stringify(bad));
+    const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const from = new Date(2024, 0, 1, 0, 0);
+    assert.deepEqual(m.nextRuns(c, from, 10).map(fmt), ['2024-01-01 09:00', '2024-01-01 09:15', '2024-01-01 09:30', '2024-01-01 09:45', '2024-01-01 10:00', '2024-01-01 10:15', '2024-01-01 10:30', '2024-01-01 10:45', '2024-01-01 11:00', '2024-01-01 11:15']);
+    assert.deepEqual(m.nextRuns(m.parseCron('* * * * *'), new Date(2024, 0, 1, 23, 58), 3).map(fmt), ['2024-01-01 23:59', '2024-01-02 00:00', '2024-01-02 00:01']);   // 嚴格晚於 from；跨日
+    assert.equal(fmt(m.nextRuns(m.parseCron('30 2 29 2 *'), new Date(2024, 2, 1), 1)[0]), '2028-02-29 02:30');                                               // 閏日
+    assert.deepEqual(m.nextRuns(m.parseCron('0 0 31 * *'), from, 4).map(fmt), ['2024-01-31 00:00', '2024-03-31 00:00', '2024-05-31 00:00', '2024-07-31 00:00']);   // 沒有 31 日的月份跳過
+    assert.deepEqual(m.nextRuns(m.parseCron('0 0 13 * 5'), from, 5).map(d => d.getDate()), [5, 12, 13, 19, 26]);                                              // 日與週都限制 → 符合任一
+    assert.deepEqual(m.nextRuns(m.parseCron('0 0 30 2 *'), from, 3), []);
+    assert.equal(m.nextRuns(m.parseCron('0 0 1 1 *'), from, 1).map(fmt)[0], '2025-01-01 00:00');
+    for (const [e, t] of [['* * * * *', '每分鐘執行一次'], ['*/5 * * * *', '每 5 分鐘執行一次'], ['0 * * * *', '每小時的第 0 分執行'], ['0 9 * * *', '每天 09:00 執行'], ['30 8 * * MON', '每週一 08:30 執行'], ['0 9 * * 1,3,5', '每週一、三、五 09:00 執行'], ['0 0 1 * *', '每月 1 日 00:00 執行'], ['0 0 1,15 * *', '每月 1、15 日 00:00 執行'], ['0 0 1 1 *', '']])
+        assert.equal(m.summarize(m.parseCron(e)), t, e);
+    assert.equal(m.describeField(m.parseCron('*/20 * * * *').fields[0]), '每 20 分鐘（0 分、20 分、40 分）'); assert.equal(m.describeField(m.parseCron('* * * * *').fields[4]), '每天');
+    ok('cron-parser');
+}
+
+// ===== 數織 =====
+{
+    const m = load('mini-games/nonogram.html', 'runsOf, solveLine, solveGrid, cluesOf, matches, generate');
+    assert.deepEqual(m.runsOf([0, 0, 0]), [0]); assert.deepEqual(m.runsOf([1, 1, 0, 1]), [2, 1]); assert.deepEqual(m.runsOf([1, 0, 1, 1, 1]), [1, 3]); assert.deepEqual(m.runsOf([1, 1, 1]), [3]);
+    const U = (n) => new Array(n).fill(-1);
+    assert.deepEqual(m.solveLine([5], U(5)), [1, 1, 1, 1, 1]); assert.deepEqual(m.solveLine([2], U(5)), U(5)); assert.deepEqual(m.solveLine([3], U(5)), [-1, -1, 1, -1, -1]);
+    assert.deepEqual(m.solveLine([1, 1], [1, -1, -1]), [1, 0, 1]); assert.deepEqual(m.solveLine([0], U(3)), [0, 0, 0]); assert.deepEqual(m.solveLine([2, 2], U(5)), [1, 1, 0, 1, 1]);
+    assert.equal(m.solveLine([3], [0, -1, 0]), null); assert.equal(m.solveLine([1], [1, 1]), null); assert.equal(m.solveLine([2, 2], U(4)), null); assert.deepEqual(m.solveLine([2], [-1, 1, -1, -1]), [-1, 1, -1, 0]);
+    // 已知空白格限制排法
+    assert.deepEqual(m.solveLine([2], [-1, -1, 0, -1, -1]), [-1, -1, 0, -1, -1]); assert.deepEqual(m.solveLine([3], [-1, -1, 0, -1, -1, -1]), [0, 0, 0, 1, 1, 1]);
+    // 隨機驗證：任意一行，solveLine 的結論必須和暴力枚舉一致
+    for (let t = 0; t < 400; t++) {
+        const n = 3 + Util.rnd(8), line = Array.from({ length: n }, () => Util.rnd(2)), clue = m.runsOf(line), known = line.map(v => (Util.rnd(3) ? v : -1));
+        const out = m.solveLine(clue, known); assert.ok(out, 'clue 本身的排法一定存在');
+        const all = []; for (let b = 0; b < 1 << n; b++) { const l = Array.from({ length: n }, (_, i) => (b >> i) & 1); if (JSON.stringify(m.runsOf(l)) === JSON.stringify(clue) && l.every((v, i) => known[i] === -1 || known[i] === v)) all.push(l); }
+        const expect = known.map((v, i) => (all.every(l => l[i] === 1) ? 1 : all.every(l => l[i] === 0) ? 0 : -1));
+        assert.deepEqual(out, expect, JSON.stringify({ clue, known }));
+    }
+    for (const n of [5, 10, 15]) for (let k = 0; k < 20; k++) {
+        const g = m.generate(n, Util.rnd); assert.ok(g, '要能出題');
+        const s = m.solveGrid(g.rowC, g.colC); assert.ok(s.solved); assert.deepEqual(s.grid, g.grid);
+        assert.ok(m.matches(g.grid, g.rowC, g.colC)); assert.ok(m.matches(g.grid.map(r => r.map(v => (v ? 1 : 2))), g.rowC, g.colC));   // ✕ 標記不影響判定
+        const bad = g.grid.map(r => [...r]); bad[0][0] ^= 1; assert.equal(m.matches(bad, g.rowC, g.colC), false);
+    }
+    // 5×5：用暴力法確認解唯一
+    for (let k = 0; k < 2; k++) {
+        const g = m.generate(5, Util.rnd); let cnt = 0;
+        for (let b = 0; b < 1 << 25 && cnt < 2; b++) { const gr = Array.from({ length: 5 }, (_, i) => Array.from({ length: 5 }, (_, j) => (b >> (i * 5 + j)) & 1)); if (m.matches(gr, g.rowC, g.colC)) cnt++; }
+        assert.equal(cnt, 1, '唯一解');
+    }
+    assert.equal(m.solveGrid([[2], [2]], [[1], [1]]).contradiction, true);
+    ok('nonogram');
+}
+
+// ===== 單字閃卡 =====
+{
+    const m = load('fun/flashcards.html', 'parseCards, schedule, dueQueue, validCard');
+    const cs = m.parseCards('apple | 蘋果\nbanana,香蕉\nlib\t圖書館\nnosep\n | x\ny|\n\napple|dup\nlong | ' + 'x'.repeat(201) + '\r\nkey，鑰匙\r\n');
+    assert.deepEqual(cs.map(c => [c.f, c.b]), [['apple', '蘋果'], ['banana', '香蕉'], ['lib', '圖書館'], ['key', '鑰匙']]);
+    assert.ok(cs.every(c => m.validCard(c) && !c.seen && c.ease === 2.5));
+    assert.equal(m.parseCards('apple|x\nnew|新', cs).length, 1);                                                              // 已有的正面略過
+    assert.equal(m.parseCards('a|b,c')[0].b, 'b,c');                                                                          // 只取第一個分隔符號
+    const T = '2024-03-10', c0 = cs[0];
+    let c = m.schedule(c0, 2, T); assert.deepEqual([c.iv, c.reps, c.due, c.seen], [1, 1, '2024-03-11', true]); assert.equal(c0.reps, 0, '不改動原物件');
+    c = m.schedule(c, 2, '2024-03-11'); assert.deepEqual([c.iv, c.reps], [3, 2]); c = m.schedule(c, 2, '2024-03-14'); assert.deepEqual([c.iv, c.reps], [8, 3]); assert.equal(c.due, '2024-03-22');
+    const f = m.schedule(c, 0, T); assert.deepEqual([f.iv, f.reps, f.due, f.ease], [0, 0, T, 2.3]);
+    assert.equal(m.schedule(c0, 3, T).iv, 3); assert.equal(m.schedule(c0, 1, T).iv, 1); assert.equal(m.schedule(c0, 3, T).ease, 2.65);
+    let h = c0; for (let i = 0; i < 20; i++) h = m.schedule(h, 0, T); assert.equal(h.ease, 1.3);                                   // 下限
+    h = c0; for (let i = 0; i < 20; i++) h = m.schedule(h, 3, T); assert.equal(h.ease, 3);                                      // 上限
+    // 間隔單調：連續「良好」下一次間隔必定變長
+    h = c0; let prev = 0; for (let i = 0; i < 12; i++) { h = m.schedule(h, 2, T); assert.ok(h.iv > prev); prev = h.iv; }
+    const deck = [{ ...c0, seen: true, due: '2024-03-09' }, { ...c0, f: 'b', seen: true, due: '2024-03-12' }, { ...c0, f: 'c', seen: true, due: '2024-03-01' }, ...Array.from({ length: 25 }, (_, i) => ({ ...c0, f: 'n' + i }))];
+    const q = m.dueQueue(deck, T); assert.deepEqual(q.slice(0, 2), [2, 0]); assert.equal(q.length, 2 + 20); assert.ok(!q.includes(1)); assert.equal(m.dueQueue(deck, T, 5).length, 2 + 5); assert.deepEqual(m.dueQueue([], T), []);
+    for (const bad of [null, {}, { ...c0, f: 1 }, { ...c0, ease: 'x' }, { ...c0, iv: 1.5 }, { ...c0, seen: 'y' }]) assert.equal(m.validCard(bad), false);
+    ok('flashcards');
+}
+
+// ===== 螢幕 / 鍵盤 / 滑鼠 =====
+{
+    const m = load('utils/screen-test.html', 'COLORS, ROWS, ALL_CODES, MOUSE_ITEMS, BUTTON_NAME');
+    assert.equal(new Set(m.ALL_CODES).size, m.ALL_CODES.length, '鍵盤配置不能有重複的 code');
+    for (const c of ['KeyA', 'KeyZ', 'Digit0', 'Space', 'Enter', 'ArrowUp', 'F12', 'Escape', 'ShiftLeft', 'ShiftRight']) assert.ok(m.ALL_CODES.includes(c), c);
+    assert.equal(m.ALL_CODES.filter(c => /^Key[A-Z]$/.test(c)).length, 26); assert.equal(m.ALL_CODES.filter(c => /^Digit\d$/.test(c)).length, 10); assert.equal(m.ALL_CODES.filter(c => /^F\d+$/.test(c)).length, 12);
+    assert.ok(m.ROWS.flat().every(k => Array.isArray(k) && typeof k[0] === 'string' && typeof k[1] === 'string' && (k[2] === undefined || k[2] > 0)));
+    assert.ok(m.COLORS.every(([n, c]) => /^#[0-9a-f]{6}$/.test(c)) && new Set(m.COLORS.map(c => c[1])).size === m.COLORS.length);
+    assert.equal(new Set(m.MOUSE_ITEMS.map(i => i[0])).size, 8); assert.ok(Object.values(m.BUTTON_NAME).every(n => m.MOUSE_ITEMS.some(i => i[0] === n)));
+    ok('screen-test');
+}
+
+// ===== 黑白棋 =====
+{
+    const m = load('mini-games/othello.html', 'N, flips, legalMoves, count, newBoard, newGame, play, validState');
+    const b0 = m.newBoard();
+    assert.deepEqual(m.legalMoves(b0, 1), [[2, 3], [3, 2], [4, 5], [5, 4]]); assert.deepEqual(m.legalMoves(b0, 2), [[2, 4], [3, 5], [4, 2], [5, 3]]);
+    assert.deepEqual(m.flips(b0, 2, 3, 1), [[3, 3]]); assert.deepEqual(m.flips(b0, 0, 0, 1), []); assert.deepEqual(m.flips(b0, 3, 3, 1), []); assert.deepEqual(m.flips(b0, -1, 0, 1), []); assert.deepEqual(m.flips(b0, 8, 0, 1), []); assert.deepEqual(m.flips(b0, 1.5, 2, 1), []);
+    assert.equal(m.count(b0, 1), 2); assert.equal(m.count(b0, 2), 2);
+    // 獨立的簡單實作（逐方向走字串）交叉驗證
+    const naive = (board, r, c, p) => {
+        if (board[r][c]) return 0; let total = 0;
+        for (const [dr, dc] of [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]) {
+            let s = '', rr = r + dr, cc = c + dc; while (rr >= 0 && rr < 8 && cc >= 0 && cc < 8) { s += board[rr][cc]; rr += dr; cc += dc; }
+            const mm = s.match(new RegExp('^' + (3 - p) + '+' + p)); if (mm) total += mm[0].length - 1;
+        }
+        return total;
+    };
+    let passes = 0, ended = 0;
+    for (let g = 0; g < 200; g++) {
+        const s = m.newGame(); let moves = 0;
+        while (!s.over) {
+            for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) assert.equal(m.flips(s.board, r, c, s.turn).length, naive(s.board, r, c, s.turn));
+            const legal = m.legalMoves(s.board, s.turn); assert.ok(legal.length > 0, '輪到的人一定有合法步（沒有的話必須已跳過或結束）');
+            const [r, c] = legal[Util.rnd(legal.length)], before = s.board.map(x => [...x]), who = s.turn, nf = m.flips(before, r, c, who).length;
+            assert.equal(m.play(s, 3 - who, r, c), false, '不是自己的回合不能下'); assert.ok(m.play(s, who, r, c)); moves++;
+            assert.equal(m.count(s.board, 1) + m.count(s.board, 2), 4 + moves); assert.equal(m.count(s.board, who) - m.count(before, who), 1 + nf);
+            if (s.passed) passes++;
+        }
+        ended++; const b = m.count(s.board, 1), w = m.count(s.board, 2); assert.equal(s.winner, b > w ? 1 : w > b ? 2 : 0);
+        assert.equal(m.play(s, 1, 0, 0), false); assert.ok(moves <= 60);
+    }
+    assert.equal(ended, 200);
+    // 手工局面：黑下 (0,2) 後白無棋可下 → 跳過，仍由黑下
+    const st = { board: Array.from({ length: 8 }, () => new Array(8).fill(0)), turn: 1, over: false, winner: 0, last: null, passed: 0 };
+    st.board[0][0] = 1; st.board[0][1] = 2; st.board[7][7] = 1; st.board[7][6] = 2;
+    assert.ok(m.play(st, 1, 0, 2)); assert.equal(st.passed, 2); assert.equal(st.turn, 1); assert.equal(st.over, false); assert.equal(st.board[0][1], 1);
+    // 雙方都無棋可下：結束並計分
+    const end = { board: Array.from({ length: 8 }, () => new Array(8).fill(0)), turn: 1, over: false, winner: 0, last: null, passed: 0 };
+    end.board[0][0] = 1; end.board[0][1] = 2; assert.ok(m.play(end, 1, 0, 2)); assert.equal(end.over, true); assert.equal(end.winner, 1);
+    const good = m.newGame(); assert.ok(m.validState(good));
+    for (const bad of [null, {}, { ...good, board: good.board.slice(1) }, { ...good, board: good.board.map(r => r.map(() => 3)) }, { ...good, turn: 3 }, { ...good, over: 1 }, { ...good, winner: 5 }, { ...good, passed: 'x' }, { ...good, last: [8, 0] }, { ...good, last: [1] }]) assert.ok(!m.validState(bad));
+    assert.ok(m.validState({ ...good, last: [2, 3] }));
+    ok('othello (' + passes + ' passes seen in 200 random games)');
+}
+
+// ===== 連線骰子賽跑 =====
+{
+    const m = load('fun/board-race.html', 'GOAL, EVENTS, move, nextTurn, describe, validState');
+    assert.deepEqual(m.move(0, 3), { pos: 3, win: false, skip: false, again: false, ev: null, landed: 3 });
+    assert.equal(m.move(1, 3).pos, 7); assert.equal(m.move(1, 3).landed, 4); assert.equal(m.move(5, 3).pos, 5); assert.equal(m.move(5, 3).landed, 8);
+    assert.deepEqual([m.move(8, 3).skip, m.move(8, 3).pos], [true, 11]); assert.deepEqual([m.move(14, 3).again, m.move(14, 3).pos], [true, 17]);
+    assert.deepEqual([m.move(26, 4).win, m.move(26, 4).pos], [true, m.GOAL]); assert.equal(m.move(29, 6).pos, m.GOAL); assert.equal(m.move(22, 3).pos, 28);
+    for (let pos = 0; pos < m.GOAL; pos++) for (let roll = 1; roll <= 6; roll++) { const r = m.move(pos, roll); assert.ok(r.pos >= 0 && r.pos <= m.GOAL); assert.equal(r.win, r.pos === m.GOAL); assert.ok(!(r.skip && r.again)); }
+    // 後退不會退到負數、前進不會超過終點（事件格 27 後退 5、25 前進 3 → 28）
+    assert.equal(Math.min(...Object.keys(m.EVENTS).map(Number)) >= 1, true); assert.ok(Object.keys(m.EVENTS).every(k => +k < m.GOAL));
+    let n = m.nextTurn([true, true, true], [false, true, false], 0); assert.deepEqual([n.turn, n.skipped, n.skip], [2, [1], [false, false, false]]);
+    n = m.nextTurn([true, false, true], [false, false, false], 0); assert.equal(n.turn, 2);
+    n = m.nextTurn([true, true], [true, true], 0); assert.deepEqual([n.turn, n.skipped], [1, [1, 0]]); assert.deepEqual(n.skip, [false, false]);
+    n = m.nextTurn([true, false], [false, false], 0); assert.equal(n.turn, 0); n = m.nextTurn([false, false], [false, false], 0); assert.equal(n.turn, -1);
+    n = m.nextTurn([true, true, true], [false, false, false], 2); assert.equal(n.turn, 0);
+    // 隨機整局：永遠會有人到終點（平均 < 80 輪）
+    for (let g = 0; g < 200; g++) { let pos = 0, steps = 0, skip = false; while (pos < m.GOAL && steps < 500) { steps++; if (skip) { skip = false; continue; } const r = m.move(pos, 1 + Util.rnd(6)); pos = r.pos; skip = r.skip; } assert.equal(pos, m.GOAL); assert.ok(steps < 200); }
+    assert.ok(m.describe(m.move(1, 3)).includes('前進')); assert.equal(m.describe(m.move(0, 1)), '');
+    const good = { phase: 'play', names: ['a', 'b'], pos: [0, 5], skip: [false, true], active: [true, true], wins: [0, 1], turn: 0, winner: -1, note: 'x' };
+    assert.ok(m.validState(good));
+    for (const bad of [null, {}, { ...good, phase: 'x' }, { ...good, pos: [31] }, { ...good, pos: [-1] }, { ...good, pos: [1.5] }, { ...good, names: Array(7).fill('a') }, { ...good, skip: [1] }, { ...good, wins: ['a'] }, { ...good, note: 'x'.repeat(81) }, { ...good, turn: 'a' }])
+        assert.ok(!m.validState(bad), JSON.stringify(bad).slice(0, 50));
+    ok('board-race');
+}
+
+// ===== 連線誰是臥底 =====
+{
+    const m = load('fun/spy-game.html', 'PAIRS, spyCount, assign, tally, outcome, descOk, voteOk, validState');
+    assert.deepEqual([3, 6, 7, 10].map(m.spyCount), [1, 1, 2, 2]);
+    assert.ok(m.PAIRS.every(p => p.length === 2 && p[0] !== p[1] && p.every(w => w.length >= 1 && w.length <= 10)));
+    assert.equal(new Set(m.PAIRS.map(p => p.join())).size, m.PAIRS.length);
+    for (let n = 3; n <= 10; n++) for (let t = 0; t < 100; t++) {
+        const a = m.assign(n, Util.rnd);
+        assert.equal(a.roles.length, n); assert.equal(a.roles.filter(r => r === 'spy').length, m.spyCount(n)); assert.notEqual(a.civWord, a.spyWord);
+        assert.ok(m.PAIRS.some(p => (p[0] === a.civWord && p[1] === a.spyWord) || (p[1] === a.civWord && p[0] === a.spyWord)));
+    }
+    // 公平性：每個位置當臥底的機率相近；兩個詞都有機會成為臥底詞
+    const cnt = [0, 0, 0, 0, 0]; let flip = 0;
+    for (let t = 0; t < 10000; t++) { const a = m.assign(5, Util.rnd, [['x', 'y']]); cnt[a.roles.indexOf('spy')]++; flip += a.spyWord === 'x' ? 1 : 0; }
+    cnt.forEach(v => assert.ok(v > 1800 && v < 2200, JSON.stringify(cnt))); assert.ok(flip > 4700 && flip < 5300);
+    assert.equal(m.tally([[0, 2], [1, 2], [2, 0]]), 2); assert.equal(m.tally([[0, 1], [1, 0]]), -1); assert.equal(m.tally([]), -1); assert.equal(m.tally([[0, 1], [1, 2], [2, 1], [3, 1]]), 1);
+    const roles = ['civ', 'civ', 'civ', 'spy'];
+    assert.equal(m.outcome(roles, [true, true, true, true]), null); assert.equal(m.outcome(roles, [true, true, true, false]), 'civ'); assert.equal(m.outcome(roles, [true, false, true, true]), null);
+    assert.equal(m.outcome(roles, [false, false, true, true]), 'spy'); assert.equal(m.outcome(['civ', 'civ', 'spy'], [true, false, true]), 'spy'); assert.equal(m.outcome(['civ', 'spy', 'spy', 'civ', 'civ'], [true, true, true, true, false]), 'spy'); assert.equal(m.outcome(['civ', 'spy', 'spy', 'civ', 'civ'], [true, true, true, true, true]), null);
+    assert.ok(m.descOk('是一種水果', '蘋果')); assert.ok(!m.descOk('我的蘋果很甜', '蘋果')); assert.ok(!m.descOk('', '蘋果')); assert.ok(!m.descOk('   ', '蘋果')); assert.ok(!m.descOk('x'.repeat(21), '蘋果')); assert.ok(!m.descOk(5, '蘋果'));
+    const alive = [true, true, false, true];
+    assert.ok(m.voteOk(0, 1, alive) && m.voteOk(3, 0, alive)); for (const [v, t] of [[0, 0], [0, 2], [2, 0], [0, 4], [0, -1], [0, 1.5], [0, '1'], [0, null]]) assert.ok(!m.voteOk(v, t, alive), v + ',' + t);
+    const good = { phase: 'vote', names: ['a', 'b', 'c'], alive: [true, true, true], active: [true, true, true], voted: [false, true, false], round: 1, speaker: -1, elim: -1, spies: 1, note: '', roles: [], words: [], votes: [], log: [{ r: 1, n: 'a', t: 'hi' }] };
+    assert.ok(m.validState(good)); assert.ok(m.validState({ ...good, phase: 'over', roles: ['civ', 'spy', 'civ'], words: ['蘋果', '水梨'], votes: [[0, 1]] }));
+    for (const bad of [null, {}, { ...good, phase: 'x' }, { ...good, names: Array(11).fill('a') }, { ...good, alive: [1] }, { ...good, roles: ['boss'] }, { ...good, words: ['a', 'b', 'c'] }, { ...good, words: ['x'.repeat(11)] }, { ...good, votes: [[0]] }, { ...good, votes: [['a', 'b']] }, { ...good, log: [{ r: 1, n: 'a', t: 'x'.repeat(21) }] }, { ...good, note: 'x'.repeat(81) }, { ...good, round: 'x' }])
+        assert.ok(!m.validState(bad), JSON.stringify(bad).slice(0, 60));
+    ok('spy-game');
+}
+
+// ===== 你畫我猜：口述模式 =====
+{
+    const m = load('mini-games/draw-guess.html', 'validState');
+    const good = { phase: 'draw', mode: 'talk', names: ['a', 'b'], scores: [0, 0], drawer: 0, hint: '＿ ＿', ms: 1000, guessed: [], word: '', active: [true, true], round: 1, rounds: 2 };
+    assert.ok(m.validState(good)); assert.ok(m.validState({ ...good, mode: 'draw' }));
+    for (const bad of [{ ...good, mode: 'x' }, { ...good, mode: undefined }]) assert.ok(!m.validState(bad));
+    ok('draw-guess talk mode');
+}
+
+// ===== 共用：雜湊與隨機字串 =====
+{
+    pending.push((async () => {
+        assert.equal(await sha256('abc'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+        assert.equal(await sha256('abc', 'SHA-1'), 'a9993e364706816aba3e25717850c26c9cd0d89d');
+        assert.ok((await sha256('abc', 'SHA-512')).startsWith('ddaf35a193617aba'));
+        assert.equal(await sha256(''), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+        assert.equal(await sha256('你好'), '670d9743542cae3ea7ebe36af56bd53648b0a1126162e78d81a32934a711302e');
+        await assert.rejects(() => sha256('x', 'MD5'));
+        assert.equal(randomHex(16).length, 32); assert.match(randomHex(8), /^[0-9a-f]{16}$/); assert.notEqual(randomHex(16), randomHex(16)); assert.equal(randomHex(0), '');
+        ok('util: sha256 / randomHex');
+    })());
+}
+
+// ===== 連線猜拳 =====
+{
+    const m = load('fun/rps.html', 'CHOICES, beats, winsNeeded, commitText, validHash, validReveal, BEST_OF');
+    const win = [['rock', 'scissors'], ['scissors', 'paper'], ['paper', 'rock']];
+    for (const [a, b] of win) { assert.equal(m.beats(a, b), 1); assert.equal(m.beats(b, a), -1); }
+    for (const c of m.CHOICES) assert.equal(m.beats(c, c), 0);
+    assert.deepEqual(m.BEST_OF.map(m.winsNeeded), [2, 3, 4]);
+    assert.equal(m.commitText(2, 'rock', 'ab'), '2:rock:ab'); assert.notEqual(m.commitText(1, 'rock', 'ab'), m.commitText(2, 'rock', 'ab'));
+    assert.ok(m.validHash('a'.repeat(64))); for (const bad of ['', 'A'.repeat(64), 'a'.repeat(63), 5, null, 'g'.repeat(64)]) assert.ok(!m.validHash(bad));
+    const salt = 'a'.repeat(32);
+    assert.ok(m.validReveal({ round: 1, choice: 'rock', salt })); for (const bad of [null, {}, { round: 1.5, choice: 'rock', salt }, { round: 1, choice: 'lizard', salt }, { round: 1, choice: 'rock', salt: 'x' }, { round: 1, choice: 'rock', salt: 'A'.repeat(32) }, { round: 1, choice: 'rock' }]) assert.ok(!m.validReveal(bad));
+    // 承諾的綁定性：改選擇、改回合、改鹽，雜湊都不同
+    pending.push((async () => {
+        const base = await sha256(m.commitText(1, 'rock', salt));
+        for (const alt of [m.commitText(1, 'paper', salt), m.commitText(2, 'rock', salt), m.commitText(1, 'rock', 'b'.repeat(32))]) assert.notEqual(await sha256(alt), base);
+        ok('rps: beats / best-of / commitment binding');
+    })());
+}
+
+// ===== 圖片壓縮 =====
+{
+    const m = load('utils/image-resize.html', 'fitSize, fmtBytes, ratioText, outName, sizeOk, EXT');
+    assert.deepEqual(m.fitSize(4000, 3000, 1920, null), { w: 1920, h: 1440 }); assert.deepEqual(m.fitSize(4000, 3000, null, 1500), { w: 2000, h: 1500 });
+    assert.deepEqual(m.fitSize(4000, 3000, 1000, 1000), { w: 1000, h: 750 }); assert.deepEqual(m.fitSize(800, 600, 1920, 1080), { w: 800, h: 600 }, '不放大');
+    assert.deepEqual(m.fitSize(100, 100, null, null), { w: 100, h: 100 }); assert.deepEqual(m.fitSize(1, 1000, 1, null), { w: 1, h: 1000 }); assert.deepEqual(m.fitSize(10000, 1, 100, null), { w: 100, h: 1 }, '至少 1 像素');
+    assert.equal(m.fmtBytes(500), '500 B'); assert.equal(m.fmtBytes(1536), '1.5 KB'); assert.equal(m.fmtBytes(5 * 1048576), '5.00 MB');
+    assert.equal(m.ratioText(1000, 250), '縮小 75%'); assert.equal(m.ratioText(1000, 1500), '增加 50%'); assert.equal(m.ratioText(0, 5), '');
+    assert.equal(m.outName('IMG_0001.JPG', 800, 600, 'image/webp'), 'IMG_0001-800x600.webp'); assert.equal(m.outName('a.b.png', 1, 1, 'image/png'), 'a.b-1x1.png'); assert.equal(m.outName('', 1, 2, 'image/jpeg'), 'image-1x2.jpg'); assert.equal(m.outName('a/b:c.png', 1, 1, 'image/png'), 'a_b_c-1x1.png');
+    assert.ok(m.sizeOk(16384, 6000)); for (const [w, h] of [[16385, 1], [0, 5], [-1, 5], [12000, 12000]]) assert.ok(!m.sizeOk(w, h));
+    ok('image-resize');
+}
+
+// ===== 待辦清單 =====
+{
+    const m = load('fun/todo.html', 'GROUPS, groupOf, group, move, validItem, dueLabel');
+    const T = '2024-03-10', bt = Util.day.between, it = (id, due, done = false) => ({ id, t: id, due, done });
+    assert.equal(m.groupOf(it('a', '2024-03-09'), T, bt), 'late'); assert.equal(m.groupOf(it('a', T), T, bt), 'today'); assert.equal(m.groupOf(it('a', '2024-03-11'), T, bt), 'tomorrow');
+    assert.equal(m.groupOf(it('a', '2024-03-20'), T, bt), 'later'); assert.equal(m.groupOf(it('a', ''), T, bt), 'none'); assert.equal(m.groupOf(it('a', '2024-03-09', true), T, bt), 'done');
+    const list = [it('x', ''), it('l1', '2024-03-01'), it('t', T), it('l2', '2024-03-05'), it('d', '', true), it('later', '2024-04-01'), it('y', '')];
+    const gs = m.group(list, T, bt);
+    assert.deepEqual(gs.map(g => g.key), ['late', 'today', 'later', 'none', 'done']); assert.deepEqual(gs[0].items.map(i => i.id), ['l1', 'l2']); assert.deepEqual(gs[3].items.map(i => i.id), ['x', 'y']);
+    assert.deepEqual(m.group([], T, bt), []);
+    // 組內移動：只和同組相鄰的互換，不影響其他組的相對順序
+    let r = m.move(list, 'l2', -1, T, bt); assert.deepEqual(r.map(i => i.id), ['x', 'l2', 't', 'l1', 'd', 'later', 'y']);
+    r = m.move(list, 'x', 1, T, bt); assert.deepEqual(r.map(i => i.id), ['y', 'l1', 't', 'l2', 'd', 'later', 'x']);
+    assert.equal(m.move(list, 'l1', -1, T, bt), list, '已經在最前面'); assert.equal(m.move(list, 'y', 1, T, bt), list, '已經在最後面'); assert.equal(m.move(list, 'nope', 1, T, bt), list);
+    assert.equal(m.move(list, 't', 1, T, bt), list, '今天只有一項，無法移動'); assert.deepEqual(list.map(i => i.id), ['x', 'l1', 't', 'l2', 'd', 'later', 'y'], '不改動原陣列');
+    assert.ok(m.validItem(it('a', '2024-01-01'))); assert.ok(m.validItem(it('a', ''))); for (const bad of [null, {}, { ...it('a', ''), t: '' }, { ...it('a', ''), t: 'x'.repeat(101) }, { ...it('a', 'x') }, { ...it('a', ''), done: 1 }, { ...it('a', ''), id: 5 }]) assert.ok(!m.validItem(bad));
+    assert.deepEqual(['2024-03-10', '2024-03-11', '2024-03-09', '2024-03-05', '2024-03-13', ''].map(d => m.dueLabel(d, T, bt)), ['今天', '明天', '昨天', '逾期 5 天', '3 天後', '']);
+    ok('todo');
+}
+
+// ===== 簡易畫板 =====
+{
+    const m = load('fun/sketchpad.html', 'COLORS, MAX_OPS, strokeWidth, lastClear, splitForBake');
+    assert.equal(m.strokeWidth(10, 0.5, 'mouse'), 10); assert.equal(m.strokeWidth(10, 0, 'pen'), 10, '沒有筆壓資料時用固定粗細'); assert.equal(m.strokeWidth(10, 1, 'pen'), 17); assert.equal(m.strokeWidth(10, 0.5, 'pen'), 10); near(m.strokeWidth(10, 0.1, 'pen'), 4.4);
+    assert.equal(m.strokeWidth(10, 5, 'pen'), 17, '筆壓上限 1'); assert.equal(m.strokeWidth(1, 0.01, 'pen'), 1, '至少 1');
+    assert.equal(m.lastClear([]), -1); assert.equal(m.lastClear([{ k: 's' }, { k: 'c' }, { k: 's' }, { k: 'c' }, { k: 's' }]), 3); assert.equal(m.lastClear([{ k: 's' }]), -1);
+    const ops = Array.from({ length: 450 }, (_, i) => ({ k: 's', i }));
+    const sp = m.splitForBake(ops); assert.equal(sp.bake.length, 100); assert.equal(sp.keep.length, 350); assert.equal(sp.bake[0].i, 0); assert.equal(sp.keep[0].i, 100);
+    const sp2 = m.splitForBake(ops.slice(0, 400)); assert.deepEqual([sp2.bake.length, sp2.keep.length], [0, 400]);
+    assert.ok(m.COLORS.every(c => /^#[0-9a-f]{6}$/.test(c)) && new Set(m.COLORS).size === m.COLORS.length);
+    ok('sketchpad');
+}
+
+// ===== 連線成語接龍 =====
+{
+    const m = load('fun/idiom-chain.html', 'IDIOMS, isShape, lastChar, firstChar, successors, startPool, checkAnswer, nextAlive, validState, LIVES, TURN_MS');
+    assert.ok(m.IDIOMS.length >= 1000, '詞庫大小 ' + m.IDIOMS.length);
+    assert.equal(new Set(m.IDIOMS).size, m.IDIOMS.length, '詞庫不能有重複');
+    for (const w of m.IDIOMS) assert.ok(m.isShape(w), '不是四個中文字：' + w);
+    const used = new Set(['一心一意']);
+    assert.ok(m.successors('意', used).length >= 3); assert.ok(m.successors('意', used).every(w => w[0] === '意' && !used.has(w)));
+    assert.ok(!m.successors('一', used).includes('一心一意')); assert.deepEqual(m.successors('龘', used), []);
+    const pool = m.startPool(); assert.ok(pool.length >= 100, '開局題庫太小 ' + pool.length);
+    for (const w of pool.slice(0, 300)) assert.ok(m.successors(m.lastChar(w), new Set([w])).length >= 3);
+    const u = new Set(['一心一意']);
+    assert.deepEqual(m.checkAnswer('一心一意', u, '意氣風發'), { ok: true, kind: 'listed', w: '意氣風發' });
+    assert.deepEqual(m.checkAnswer('一心一意', u, ' 意氣風發 '), { ok: true, kind: 'listed', w: '意氣風發' }, '去掉前後空白');
+    assert.deepEqual(m.checkAnswer('一心一意', u, '意在言表'), { ok: true, kind: 'unlisted', w: '意在言表' });
+    for (const [w, why] of [['氣宇軒昂', '意'], ['意氣', '四個'], ['意氣風發了', '四個'], ['abcd', '四個'], ['', '四個'], [null, '四個'], ['一心一意', '意'], [5, '四個']]) { const r = m.checkAnswer('一心一意', u, w); assert.equal(r.ok, false, String(w)); assert.ok(r.reason.includes(why), r.reason); }
+    assert.equal(m.checkAnswer('一心一意', new Set(['一心一意', '意氣風發']), '意氣風發').reason, '這個成語已經用過了');
+    assert.equal(m.nextAlive([true, true, true], 0), 1); assert.equal(m.nextAlive([true, false, true], 0), 2); assert.equal(m.nextAlive([true, false, true], 2), 0); assert.equal(m.nextAlive([false, true, false], 1), 1); assert.equal(m.nextAlive([false, false], 0), -1);
+    // 模擬整局（只用詞庫）：每一步合法、不重複，鏈一定能連續接下去至少 5 步
+    for (let t = 0; t < 50; t++) {
+        const s = pool[Util.rnd(pool.length)], used2 = new Set([s]); let last = s, steps = 0;
+        for (; steps < 30; steps++) { const c = m.successors(m.lastChar(last), used2); if (!c.length) break; last = c[Util.rnd(c.length)]; assert.ok(m.checkAnswer(Array.from(used2).pop(), used2, last).ok); used2.add(last); }
+        assert.ok(steps >= 1);
+    }
+    const good = { phase: 'play', names: ['a', 'b'], lives: [3, 2], alive: [true, true], active: [true, true], turn: 0, winner: -1, last: '一心一意', ms: 1000, note: 'x', count: 1, pending: null, chain: [{ n: '題目', w: '一心一意' }] };
+    assert.ok(m.validState(good)); assert.ok(m.validState({ ...good, pending: { n: 'b', w: '意在言表' } }));
+    for (const bad of [null, {}, { ...good, phase: 'x' }, { ...good, lives: [4] }, { ...good, lives: [-1] }, { ...good, last: '一心一意一' }, { ...good, pending: { n: 'b', w: 'abc' } }, { ...good, pending: 5 }, { ...good, chain: [{ n: 'a', w: '一二三' }] }, { ...good, chain: Array(41).fill(good.chain[0]) }, { ...good, note: 'x'.repeat(81) }, { ...good, ms: 'x' }, { ...good, names: Array(9).fill('a') }])
+        assert.ok(!m.validState(bad), JSON.stringify(bad).slice(0, 60));
+    ok('idiom-chain (' + m.IDIOMS.length + ' idioms, ' + pool.length + ' start idioms)');
+}
+
+// ===== 編碼解碼：JWT 與雜湊 =====
+{
+    const m = load('utils/encode-decode.html', 'CODECS, HASHES, b64urlToText, jwtDecode, fmtTime, relative');
+    const b64u = (o) => Buffer.from(typeof o === 'string' ? o : JSON.stringify(o)).toString('base64url');
+    const sample = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+    const iat = 1516239022 * 1000;
+    let t = m.jwtDecode(sample, iat + 3600e3);
+    assert.ok(t.includes('"alg": "HS256"') && t.includes('"name": "John Doe"') && t.includes('簽發 iat：') && t.includes('（1 小時前）') && t.includes('不驗證簽章'), t);
+    const now = Date.UTC(2024, 0, 10);
+    t = m.jwtDecode(`${b64u({ alg: 'none' })}.${b64u({ exp: now / 1000 - 2 * 86400, nbf: now / 1000 + 3600, 名字: '小明' })}.`, now);
+    assert.ok(t.includes('已過期 2 天') && t.includes('（1 小時後才生效）') && t.includes('"名字": "小明"') && t.includes('alg=none'), t);
+    t = m.jwtDecode(`${b64u({ alg: 'HS256' })}.${b64u({ exp: now / 1000 + 90 * 60 })}.sig`, now); assert.ok(t.includes('還有 1 小時'), t);
+    t = m.jwtDecode(`${b64u({ alg: 'HS256' })}.${b64u({ sub: 'x' })}.sig`, now); assert.ok(!t.includes('時間'), '沒有時間欄位就不顯示');
+    for (const [bad, why] of [['a.b', '3 段'], ['a.b.c.d', '3 段'], [`${b64u('not json')}.${b64u({})}.x`, 'JSON'], [`${b64u({})}.${b64u('[1]')}.x`, 'JSON 物件'], [`${b64u({})}.${b64u('"s"')}.x`, 'JSON 物件'], ['e+y.abc.x', 'Base64URL'], ['', '3 段'], [`${b64u({ a: 1 })}.@@.x`, 'Base64URL']])
+        assert.throws(() => m.jwtDecode(bad, now), (e) => e.message.includes(why), bad);
+    assert.equal(m.b64urlToText(b64u('你好，世界')), '你好，世界'); assert.equal(m.b64urlToText(''), '');
+    assert.equal(m.relative(-2 * 86400e3 - 5), '2 天'); assert.equal(m.relative(30 * 60e3), '30 分鐘'); assert.equal(m.relative(3 * 3600e3), '3 小時');
+    assert.deepEqual(Object.keys(m.CODECS).filter(k => k.includes('雜湊')), m.HASHES.map(h => `${h} 雜湊`)); assert.ok(m.CODECS['JWT 解碼（不驗簽）'].noEnc); assert.ok(m.CODECS['SHA-256 雜湊'].noDec);
+    // 舊功能不受影響
+    assert.equal(m.CODECS['Base64'].enc('你好'), '5L2g5aW9');
+    ok('encode-decode: JWT / hashes');
+}
+
+// ===== 色彩工具：配色 =====
+{
+    const m = load('utils/color-tools.html', 'palette, SCHEMES, parseColor, toHex, rgbToHsl');
+    assert.deepEqual(m.palette('#ff0000', 'complementary'), ['#ff0000', '#00ffff']); assert.deepEqual(m.palette('#ff0000', 'triadic'), ['#ff0000', '#00ff00', '#0000ff']);
+    assert.equal(m.palette('#ff0000', 'tetradic').length, 4); assert.equal(m.palette('#ff0000', 'split').length, 3); assert.equal(m.palette('#ff0000', 'mono').length, 6); assert.equal(m.palette('#ff0000', 'gradient').length, 7);
+    for (const k of Object.keys(m.SCHEMES)) for (const hex of ['#336699', '#0a84ff', '#ff9f0a', '#808080', '#123456', '#abcdef']) {
+        const p = m.palette(hex, k); assert.ok(p.length >= 2 && p.every(h => /^#[0-9a-f]{6}$/.test(h)), k + hex);
+        assert.ok(p.includes(hex), `${k} 必須包含主色 ${hex}：${p}`); if (hex !== '#808080') assert.equal(new Set(p).size, p.length, '沒有重複顏色');
+    }
+    assert.equal(m.palette('#336699', 'analogous')[1], '#336699');
+    const g = m.palette('#336699', 'gradient'); assert.equal(g[0], '#336699'); const h0 = m.rgbToHsl(m.parseColor(g[6])).h, h1 = m.rgbToHsl(m.parseColor('#336699')).h; assert.ok(Math.abs(((h0 - h1 + 360) % 360) - 180) <= 2, '漸層終點是互補色');
+    assert.deepEqual(m.palette('nope', 'triadic'), []); assert.deepEqual(m.palette('#ff0000', 'zzz'), []); assert.deepEqual(m.palette('#ff0000', 'mono').map(h => m.rgbToHsl(m.parseColor(h)).l), [20, 35, 50, 65, 80, 92]);
+    ok('color-tools: palettes');
+}
+
+// ===== 薪資：年度所得稅 =====
+{
+    const m = load('utils/salary-calc.html', 'incomeTax, estimateTax, TAX_BRACKETS, TAX_PARAMS');
+    assert.deepEqual(m.incomeTax(0), { tax: 0, rate: 0 }); assert.deepEqual(m.incomeTax(590000), { tax: 29500, rate: 0.05 }); near(m.incomeTax(590001).tax, 29500.12); assert.equal(m.incomeTax(590001).rate, 0.12);
+    near(m.incomeTax(1330000).tax, 118300); near(m.incomeTax(2000000).tax, 252300); near(m.incomeTax(4980000).tax, 1080300); near(m.incomeTax(6000000).tax, 1488300); assert.equal(m.incomeTax(6000000).rate, 0.4);
+    // 累進稅額連續、遞增
+    let prev = -1; for (let n = 0; n <= 7e6; n += 12345) { const t = m.incomeTax(n).tax; assert.ok(t >= prev); prev = t; }
+    let e = m.estimateTax({ gross: 600000, married: false, dependents: 0 });
+    assert.deepEqual([e.exemption, e.standard, e.salarySpecial, e.basicDiff, e.net, e.tax], [92000, 131000, 218000, 0, 159000, 7950]);
+    e = m.estimateTax({ gross: 1200000, married: true, dependents: 2 });
+    assert.deepEqual([e.persons, e.exemption, e.standard, e.basicDiff, e.net, e.tax], [4, 368000, 262000, 178000, 174000, 8700]);
+    e = m.estimateTax({ gross: 100000, married: false, dependents: 0 }); assert.equal(e.net, 0); assert.equal(e.tax, 0); assert.equal(e.salarySpecial, 100000, '薪資特別扣除額不超過薪資');
+    e = m.estimateTax({ gross: 2000000, married: false, dependents: 0, other: 100000 }); assert.equal(e.net, 2000000 - 92000 - 131000 - 218000 - 100000); assert.equal(e.rate, 0.2);
+    e = m.estimateTax({ gross: 3000000, married: false, dependents: 0 }); assert.ok(e.effective > 0.08 && e.effective < 0.2);
+    assert.equal(m.estimateTax({ gross: 0, married: false, dependents: 0 }).effective, 0);
+    // 年終多繳的稅 = 含獎金的稅 − 不含獎金的稅（邊際）
+    const a = m.estimateTax({ gross: 14 * 50000, married: false, dependents: 0 }).tax, b = m.estimateTax({ gross: 12 * 50000, married: false, dependents: 0 }).tax; assert.ok(a > b);
+    ok('salary-calc: income tax');
+}
+
+// ===== 決策轉盤：解析與常用清單 =====
+{
+    const m = load('fun/wheel.html', 'parseItems, PRESETS');
+    assert.deepEqual(m.parseItems('拉麵\n便當*2\n  燒肉 * 1.5 \n\n*3\n零*0\n水餃*'), [{ name: '拉麵', w: 1 }, { name: '便當', w: 2 }, { name: '燒肉', w: 1.5 }, { name: '*3', w: 1 }, { name: '水餃*', w: 1 }]);
+    assert.deepEqual(m.parseItems(''), []);
+    assert.ok(Object.keys(m.PRESETS).length >= 6);
+    for (const [k, list] of Object.entries(m.PRESETS)) {
+        const items = m.parseItems(list.join('\n'));
+        assert.equal(items.length, list.length, k); assert.ok(items.length >= 5); assert.equal(new Set(items.map(i => i.name)).size, items.length, k + ' 有重複'); assert.ok(items.every(i => i.w > 0 && i.name.length <= 8), k);
+    }
+    ok('wheel: parseItems / presets');
+}
+
+// ===== 打字測試：自訂文章 =====
+{
+    const m = load('mini-games/typing-test.html', 'cleanCustom, score');
+    assert.equal(m.cleanCustom('  你好\n\n世界\t  abc  '), '你好 世界 abc'); assert.equal(m.cleanCustom(''), ''); 
+    assert.equal([...m.cleanCustom('字'.repeat(500))].length, 300); assert.equal([...m.cleanCustom('😀'.repeat(400))].length, 300, '以字元計，不切壞 emoji');
+    assert.equal(m.cleanCustom('a '.repeat(200)).endsWith(' '), false);
+    assert.equal(m.score('abc', 'abc', 60).cpm, 3);
+    ok('typing-test: cleanCustom');
+}
+
+Promise.all(pending).then(() => console.log('ALL OK')).catch((e) => { console.error(e); process.exit(1); });

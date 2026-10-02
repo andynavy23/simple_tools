@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="編碼解碼：Base64、URL、Unicode 跳脫、HTML 實體、十六進位互轉，支援中文與 emoji。">
+    <meta name="description" content="編碼解碼：Base64、URL、Unicode 跳脫、HTML 實體、十六進位互轉，並能解析 JWT、計算 SHA 雜湊，支援中文與 emoji。">
     <meta property="og:title" content="編碼解碼" />
-    <meta property="og:description" content="Base64、URL、Unicode、HTML 實體、十六進位互轉。" />
+    <meta property="og:description" content="Base64、URL、Unicode、HTML 實體、十六進位互轉，JWT 解析與 SHA 雜湊。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/encode-decode.html" />
     <title>編碼解碼</title>
@@ -52,7 +52,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>編碼解碼</h1>
-        <p class="sub">中文、emoji 都以 UTF-8 處理，全部在本機完成。</p>
+        <p class="sub">中文、emoji 都以 UTF-8 處理，全部在本機完成。也能解析 JWT、計算 SHA 雜湊。</p>
 
         <div class="card">
             <label for="type">格式</label>
@@ -82,6 +82,45 @@
             for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
             return s;
         };
+
+        // JWT：header.payload.signature，各段是 Base64URL。這裡只解碼顯示，不驗證簽章（驗簽需要密鑰）
+        function b64urlToText(seg) {
+            if (!/^[A-Za-z0-9_-]*$/.test(seg)) throw new Error('JWT 的段落含有不是 Base64URL 的字元');
+            let b = seg.replace(/-/g, '+').replace(/_/g, '/');
+            b += '='.repeat((4 - b.length % 4) % 4);
+            return utf8Fatal.decode(Uint8Array.from(atob(b), c => c.charCodeAt(0)));
+        }
+        const p2 = (n) => String(n).padStart(2, '0');
+        const fmtTime = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`; };
+        function relative(diffMs) {
+            const a = Math.abs(diffMs), m = Math.floor(a / 60000), h = Math.floor(m / 60), d = Math.floor(h / 24);
+            return d ? `${d} 天` : h ? `${h} 小時` : `${m} 分鐘`;
+        }
+        function jwtDecode(token, now = Date.now()) {
+            const parts = token.trim().split('.');
+            if (parts.length !== 3) throw new Error('JWT 應該有 3 段（header.payload.signature），以 . 分隔');
+            const [h, pl] = [parts[0], parts[1]].map(seg => {
+                let o;
+                try { o = JSON.parse(b64urlToText(seg)); } catch (e) { throw new Error(e.message.includes('Base64URL') ? e.message : 'JWT 的 header 或 payload 不是有效的 JSON'); }
+                if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('JWT 的 header 或 payload 應該是 JSON 物件');
+                return o;
+            });
+            const lines = ['Header', JSON.stringify(h, null, 2), '', 'Payload', JSON.stringify(pl, null, 2), ''];
+            const claims = [['iat', '簽發'], ['nbf', '生效'], ['exp', '到期']].filter(([k]) => Number.isFinite(pl[k]));
+            if (claims.length) {
+                lines.push('時間');
+                for (const [k, label] of claims) {
+                    const ms = pl[k] * 1000, diff = ms - now;
+                    const note = k === 'exp' ? (diff < 0 ? `（已過期 ${relative(diff)}）` : `（還有 ${relative(diff)}）`) : k === 'nbf' ? (diff > 0 ? `（${relative(diff)}後才生效）` : '') : `（${relative(diff)}前）`;
+                    lines.push(`${label} ${k}：${fmtTime(ms)}${note}`);
+                }
+                lines.push('');
+            }
+            lines.push(parts[2] ? `簽章：${parts[2].length} 字元（本工具不驗證簽章）` : '簽章：空白（alg=none 的未簽章 token，請小心）');
+            return lines.join('\n');
+        }
+
+        const HASHES = ['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512'];
 
         const NAMED = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&apos;': "'", '&nbsp;': ' ' };
 
@@ -117,6 +156,8 @@
                     return NAMED[m] ?? m;
                 }),
             },
+            'JWT 解碼（不驗簽）': { dec: (t) => jwtDecode(t), noEnc: true },
+            ...Object.fromEntries(HASHES.map(h => [`${h} 雜湊`, { hash: h, noDec: true }])),
             '十六進位 (UTF-8 位元組)': {
                 enc: (t) => [...utf8.encode(t)].map(b => b.toString(16).padStart(2, '0')).join(' '),
                 dec: (t) => {
@@ -131,16 +172,28 @@
         const $ = (s) => document.querySelector(s);
         $('#type').replaceChildren(...Object.keys(CODECS).map(k => new Option(k, k)));
 
-        function run(dir) {
+        // 雜湊只能「編碼」、JWT 只能「解碼」：按鈕跟著格式變化
+        function syncButtons() {
+            const c = CODECS[$('#type').value];
+            $('#enc').disabled = !!c.noEnc; $('#dec').disabled = !!c.noDec;
+            $('#enc').textContent = c.hash ? '計算雜湊 ↓' : '編碼 ↓'; $('#dec').textContent = c.noEnc ? '解析 ↓' : '解碼 ↓';
+        }
+        $('#type').onchange = syncButtons;
+
+        async function run(dir) {
             $('#err').textContent = '';
             try {
-                $('#out').value = CODECS[$('#type').value][dir]($('#in').value);
+                const c = CODECS[$('#type').value];
+                const fn = c.hash ? (dir === 'enc' ? (t) => Util.sha256(t, c.hash) : null) : c[dir];
+                if (!fn) throw new Error(dir === 'enc' ? '這個格式只能解碼' : '雜湊無法還原');
+                $('#out').value = await fn($('#in').value);
             } catch (e) {
                 $('#out').value = '';
                 $('#err').textContent = '處理失敗：' + (e.message.includes('The string') ? '不是有效的 Base64' : e.message);
             }
         }
 
+        syncButtons();
         $('#enc').onclick = () => run('enc');
         $('#dec').onclick = () => run('dec');
         $('#swap').onclick = () => { $('#in').value = $('#out').value; $('#out').value = ''; };

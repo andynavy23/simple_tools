@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="連線你畫我猜：2–8 人輪流畫畫，其他人即時猜答案，猜得越快分數越高。">
+    <meta name="description" content="連線你畫我猜：2–8 人輪流畫畫或口述，其他人即時猜答案，猜得越快分數越高。房主可選畫畫或口述（你說我猜）模式。">
     <meta property="og:title" content="連線你畫我猜" />
-    <meta property="og:description" content="輪流畫畫、即時猜題的多人連線遊戲。" />
+    <meta property="og:description" content="輪流畫畫或口述、即時猜題的多人連線遊戲。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/draw-guess.html" />
     <title>連線你畫我猜</title>
@@ -139,7 +139,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>連線你畫我猜</h1>
-        <p class="sub">房主建立房間，朋友用房號或邀請連結加入（2–8 人）。每個人輪流畫一次。</p>
+        <p class="sub">房主建立房間，朋友用房號或邀請連結加入（2–8 人）。每個人輪流畫（或口述）一次。</p>
 
         <div class="card" id="menu">
             <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
@@ -155,6 +155,7 @@
             <h2>等待玩家加入</h2>
             <div class="players" id="lobbyPlayers"></div>
             <div class="row" style="margin-top:12px">
+                <select id="modeSel" hidden aria-label="遊戲模式"><option value="draw">畫畫模式</option><option value="talk">口述模式（用說的，不能說出題目的字）</option></select>
                 <button id="copyInvite" hidden>複製邀請連結</button>
                 <button class="primary" id="startBtn" hidden disabled>開始遊戲</button>
             </div>
@@ -169,8 +170,8 @@
                 </div>
                 <div class="players" id="scoreboard"></div>
             </div>
-            <div class="main">
-                <div class="card" style="margin:0">
+            <div class="main" id="mainBox">
+                <div class="card" style="margin:0" id="canvasCard">
                     <canvas id="cv" width="1000" height="640" aria-label="畫布"></canvas>
                     <div class="tools" id="tools" hidden>
                         <span id="palette" class="tools" style="margin:0"></span>
@@ -225,6 +226,15 @@
             if (!m.pts.every(p => Array.isArray(p) && p.length === 2 && p.every(v => Number.isFinite(v) && v >= 0 && v <= 1000))) return false;
             return COLORS.includes(m.color) && Number.isInteger(m.w) && m.w >= 1 && m.w <= 30;
         }
+
+        // 成員端檢查房主傳來的狀態
+        function validState(s) {
+            const arr = (a, n) => Array.isArray(a) && a.length <= n;
+            return !!s && ['lobby', 'draw', 'between', 'over'].includes(s.phase) && (s.mode === 'draw' || s.mode === 'talk') && arr(s.names, 8) && s.names.every(n => typeof n === 'string' && n.length <= 12)
+                && arr(s.scores, 8) && s.scores.every(Number.isFinite) && Number.isInteger(s.drawer) && typeof s.hint === 'string' && s.hint.length <= 40
+                && Number.isFinite(s.ms) && arr(s.guessed, 8) && typeof s.word === 'string' && s.word.length <= 8 && arr(s.active, 8)
+                && Number.isInteger(s.round) && Number.isInteger(s.rounds);
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -236,7 +246,7 @@
         let color = COLORS[0], width = 10, drawing = false, buf = [], lastSend = 0, lastPt = null;
 
         // ---------- 房主端的遊戲狀態 ----------
-        const H = { order: [], cur: 0, drawer: -1, word: '', endsAt: 0, guessed: new Set(), scores: [], used: new Set(), pts: 0, timer: null, nextTimer: null, chat: [] };
+        const H = { mode: 'draw', order: [], cur: 0, drawer: -1, word: '', endsAt: 0, guessed: new Set(), scores: [], used: new Set(), pts: 0, timer: null, nextTimer: null, chat: [] };
 
         const show = (id, on) => { $(id).hidden = !on; };
         const netMsg = (t) => { $('#netMsg').textContent = t; };
@@ -292,7 +302,7 @@
         // ---------- 房主：規則與計分 ----------
         function publicState() {
             return {
-                phase, names: names(), scores: H.scores, drawer: H.drawer, round: H.cur + 1, rounds: H.order.length,
+                phase, mode: H.mode, names: names(), scores: H.scores, drawer: H.drawer, round: H.cur + 1, rounds: H.order.length,
                 hint: phase === 'draw' ? maskWord(H.word) : '', ms: Math.max(0, H.endsAt - Date.now()),
                 guessed: [...H.guessed], word: phase === 'between' || phase === 'over' ? H.word : '',
                 active: room.players.map(p => p.connected),
@@ -302,7 +312,7 @@
         function chat(text, sys) { const m = { text, sys: !!sys }; addChat(m); room.broadcast({ t: 'CHAT', m }); }
 
         function acceptStroke(m, from) {
-            if (phase !== 'draw' || from !== H.drawer || !validStroke(m)) return false;
+            if (phase !== 'draw' || H.mode !== 'draw' || from !== H.drawer || !validStroke(m)) return false;
             H.pts += m.pts.length;
             if (H.pts > MAX_PTS_PER_ROUND) return false;
             if (from !== my) drawSeg(m);
@@ -312,7 +322,7 @@
         function startGame() {
             const order = room.players.filter(p => p.connected).map(p => p.index);
             if (order.length < 2) return;
-            room.keepSlots = true;
+            room.keepSlots = true; H.mode = $('#modeSel').value === 'talk' ? 'talk' : 'draw';
             H.order = shuffle(order); H.cur = 0; H.used = new Set(); H.scores = new Array(room.players.length).fill(0);
             startRound();
         }
@@ -326,7 +336,7 @@
             clearCanvas(); room.broadcast({ t: 'CLEAR' });
             if (H.drawer === my) myWord = H.word; else { myWord = ''; room.sendTo(H.drawer, { t: 'WORD', word: H.word }); }
             $('#chat').replaceChildren();
-            chat(`第 ${H.cur + 1} 回合：${room.players[H.drawer].nick} 開始畫畫`, true);
+            chat(`第 ${H.cur + 1} 回合：${room.players[H.drawer].nick} ${H.mode === 'talk' ? '開始描述' : '開始畫畫'}`, true);
             pushState();
             clearInterval(H.timer);
             H.timer = setInterval(() => { if (Date.now() >= H.endsAt) endRound('時間到'); else if (isHost) { V.ms = H.endsAt - Date.now(); renderTimer(); } }, 250);
@@ -408,13 +418,6 @@
             });
         }
 
-        function validState(s) {
-            const arr = (a, n) => Array.isArray(a) && a.length <= n;
-            return !!s && ['lobby', 'draw', 'between', 'over'].includes(s.phase) && arr(s.names, 8) && s.names.every(n => typeof n === 'string' && n.length <= 12)
-                && arr(s.scores, 8) && s.scores.every(Number.isFinite) && Number.isInteger(s.drawer) && typeof s.hint === 'string' && s.hint.length <= 40
-                && Number.isFinite(s.ms) && arr(s.guessed, 8) && typeof s.word === 'string' && s.word.length <= 8 && arr(s.active, 8)
-                && Number.isInteger(s.round) && Number.isInteger(s.rounds);
-        }
 
         // ---------- 畫面 ----------
         function addChat(m) {
@@ -428,7 +431,7 @@
             const n = names();
             $('#lobbyPlayers').replaceChildren(...n.map((x, i) => Object.assign(document.createElement('div'), { className: 'pl', textContent: x + (i === 0 ? ' 👑' : '') + (i === my ? '（我）' : '') })));
             show('#menu', false); show('#lobby', true); show('#game', false);
-            show('#copyInvite', isHost); show('#startBtn', isHost); $('#startBtn').disabled = n.length < 2;
+            show('#copyInvite', isHost); show('#modeSel', isHost); show('#startBtn', isHost); $('#startBtn').disabled = n.length < 2;
             $('#lobbyHint').textContent = isHost ? (n.length < 2 ? '把邀請連結傳給朋友，至少 2 人才能開始' : '人到齊了就按「開始遊戲」') : '等待房主開始遊戲…';
         }
 
@@ -443,16 +446,17 @@
             if (V.phase === 'lobby') return renderLobby();
             show('#menu', false); show('#lobby', false); show('#game', true);
             $('#roundInfo').textContent = V.phase === 'over' ? '遊戲結束' : `第 ${V.round} / ${V.rounds} 回合`;
-            const drawer = V.drawer === my;
-            $('#hint').textContent = V.phase === 'draw' ? (drawer ? `你要畫：${myWord}` : V.hint) : V.phase === 'between' ? `答案：${V.word}` : '';
+            const drawer = V.drawer === my, talk = V.mode === 'talk';
+            $('#canvasCard').hidden = talk; $('#mainBox').style.gridTemplateColumns = talk ? '1fr' : '';
+            $('#hint').textContent = V.phase === 'draw' ? (drawer ? (talk ? `你要說：${myWord}（不能說出題目裡的任何一個字）` : `你要畫：${myWord}`) : V.hint) : V.phase === 'between' ? `答案：${V.word}` : '';
             renderTimer();
             $('#scoreboard').replaceChildren(...V.names.map((nm, i) => {
                 const d = document.createElement('div');
                 d.className = 'pl' + (i === V.drawer && V.phase === 'draw' ? ' drawer' : '') + (V.guessed.includes(i) ? ' ok' : '') + (V.active[i] ? '' : ' off');
-                d.textContent = `${i === V.drawer && V.phase === 'draw' ? '✏️ ' : ''}${nm}${i === my ? '（我）' : ''}　${V.scores[i] || 0}`;
+                d.textContent = `${i === V.drawer && V.phase === 'draw' ? (talk ? '🗣 ' : '✏️ ') : ''}${nm}${i === my ? '（我）' : ''}　${V.scores[i] || 0}`;
                 return d;
             }));
-            show('#tools', iAmDrawer());
+            show('#tools', iAmDrawer() && !talk);
             const canGuess = V.phase === 'draw' && !drawer && !V.guessed.includes(my);
             $('#guess').disabled = $('#guessBtn').disabled = !canGuess;
             if (V.phase === 'over') {
@@ -466,7 +470,7 @@
         $('#hostBtn').onclick = hostRoom;
         $('#joinBtn').onclick = joinRoom;
         $('#startBtn').onclick = startGame;
-        $('#again').onclick = () => { phase = 'lobby'; room.keepSlots = false; room.prune(); V = null; clearCanvas(); $('#chat').replaceChildren(); room.broadcast({ t: 'STATE', s: { phase: 'lobby', names: names(), scores: [], drawer: -1, hint: '', ms: 0, guessed: [], word: '', active: [], round: 0, rounds: 0 } }); renderLobby(); };
+        $('#again').onclick = () => { phase = 'lobby'; room.keepSlots = false; room.prune(); V = null; clearCanvas(); $('#chat').replaceChildren(); room.broadcast({ t: 'STATE', s: { phase: 'lobby', mode: 'draw', names: names(), scores: [], drawer: -1, hint: '', ms: 0, guessed: [], word: '', active: [], round: 0, rounds: 0 } }); renderLobby(); };
         $('#leave').onclick = () => location.reload();
         $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
         function sendGuess() { const t = $('#guess').value.trim(); if (!t) return; $('#guess').value = ''; if (isHost) onGuess(my, t); else room.send({ t: 'GUESS', text: t }); }

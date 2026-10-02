@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="數織 Nonogram：依照行列的數字提示塗格子，還原隱藏的圖案。題目保證只靠邏輯推理就能解開，不必猜。">
+    <meta property="og:title" content="數織 Nonogram" />
+    <meta property="og:description" content="依行列提示塗格子的邏輯益智遊戲。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/nonogram.html" />
+    <title>數織 Nonogram</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 600px;
+        }
+
+        .bar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .bar .chip {
+            background: var(--card);
+            border-radius: 980px;
+            padding: 6px 14px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: auto repeat(var(--n), 1fr);
+            background: var(--card);
+            border-radius: 14px;
+            padding: 8px;
+            touch-action: none;
+            user-select: none;
+        }
+
+        .cl,
+        .rl {
+            display: flex;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--muted);
+            font-variant-numeric: tabular-nums;
+            gap: 2px;
+        }
+
+        .cl {
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            padding-bottom: 3px;
+            min-height: 52px;
+        }
+
+        .rl {
+            justify-content: flex-end;
+            align-items: center;
+            padding-right: 6px;
+            min-width: 36px;
+            gap: 5px;
+        }
+
+        .cl.done,
+        .rl.done {
+            opacity: .35;
+        }
+
+        .c {
+            aspect-ratio: 1;
+            border: 1px solid var(--line);
+            display: grid;
+            place-items: center;
+            font-size: 14px;
+            color: var(--muted);
+            cursor: pointer;
+        }
+
+        .c.f {
+            background: var(--text);
+        }
+
+        .c.g5r {
+            border-right: 2px solid var(--muted);
+        }
+
+        .c.g5b {
+            border-bottom: 2px solid var(--muted);
+        }
+
+        #msg {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>數織 Nonogram</h1>
+        <p class="sub">數字代表該行（列）連續塗黑的格數，兩段之間至少空一格。點一下塗黑、再點取消；可拖曳連續塗；右鍵或「標 ✕」模式用來標記一定是空白的格子。</p>
+
+        <div class="bar">
+            <select id="size" aria-label="大小"><option value="5">5 × 5</option><option value="10" selected>10 × 10</option><option value="15">15 × 15</option></select>
+            <button class="primary" id="newBtn">新題目</button>
+            <button id="mode" aria-pressed="false">標 ✕ 模式</button>
+            <button id="clear">清空</button>
+            <span class="chip">⏱ <b id="time">0:00</b></span>
+            <span class="chip">最佳 <b id="best">—</b></span>
+        </div>
+        <div id="board" aria-label="數織盤面"></div>
+        <div id="msg" role="status"></div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { rnd, store } = Util;
+
+        // --- pure ---
+        // 一行的連續塗黑段長度；全空為 [0]
+        function runsOf(line) {
+            const r = []; let n = 0;
+            for (const v of line) { if (v === 1) n++; else if (n) { r.push(n); n = 0; } }
+            if (n) r.push(n);
+            return r.length ? r : [0];
+        }
+
+        // 單行邏輯推理：known 每格 -1（未知）/ 0 / 1；列舉所有符合提示且不違反已知格的排法，
+        // 回傳「每種排法都一樣」的格子；矛盾則回傳 null
+        function solveLine(clue, known) {
+            const c = clue.length === 1 && clue[0] === 0 ? [] : clue, n = known.length;
+            const ones = new Array(n).fill(0), zeros = new Array(n).fill(0), cur = new Array(n).fill(0);
+            let count = 0;
+            const record = () => { count++; for (let p = 0; p < n; p++) (cur[p] ? ones : zeros)[p]++; };
+            const rec = (pos, k) => {
+                if (k === c.length) {
+                    for (let p = pos; p < n; p++) if (known[p] === 1) return;
+                    for (let p = pos; p < n; p++) cur[p] = 0;
+                    return record();
+                }
+                const len = c[k];
+                let need = c.length - k - 1; for (let j = k; j < c.length; j++) need += c[j];
+                for (let s = pos; s + need <= n; s++) {
+                    let ok = true;
+                    for (let p = pos; p < s; p++) { if (known[p] === 1) { ok = false; break; } cur[p] = 0; }
+                    if (!ok) return;                                    // 已知的黑格被留在左邊：再往右排也不可能
+                    for (let p = s; p < s + len; p++) { if (known[p] === 0) { ok = false; break; } cur[p] = 1; }
+                    if (!ok) continue;
+                    const after = s + len;
+                    if (after < n) { if (known[after] === 1) continue; cur[after] = 0; rec(after + 1, k + 1); }
+                    else rec(after, k + 1);
+                }
+            };
+            rec(0, 0);
+            if (!count) return null;
+            return known.map((v, p) => (ones[p] === count ? 1 : zeros[p] === count ? 0 : v));
+        }
+
+        // 只靠逐行推理解題：回傳 { grid, solved }；矛盾回傳 { grid, solved: false, contradiction: true }
+        function solveGrid(rowC, colC) {
+            const n = rowC.length, g = Array.from({ length: n }, () => new Array(n).fill(-1));
+            for (let changed = true; changed;) {
+                changed = false;
+                for (let i = 0; i < n; i++) {
+                    const r = solveLine(rowC[i], g[i]); if (!r) return { grid: g, solved: false, contradiction: true };
+                    r.forEach((v, j) => { if (g[i][j] !== v) { g[i][j] = v; changed = true; } });
+                }
+                for (let j = 0; j < n; j++) {
+                    const col = g.map(row => row[j]), r = solveLine(colC[j], col); if (!r) return { grid: g, solved: false, contradiction: true };
+                    r.forEach((v, i) => { if (g[i][j] !== v) { g[i][j] = v; changed = true; } });
+                }
+            }
+            return { grid: g, solved: g.every(row => row.every(v => v !== -1)) };
+        }
+
+        const cluesOf = (grid) => ({ rowC: grid.map(runsOf), colC: grid[0].map((_, j) => runsOf(grid.map(r => r[j]))) });
+        const sameClue = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+        // 目前塗的格子（1 = 黑）是否滿足全部提示
+        function matches(cells, rowC, colC) {
+            const n = rowC.length, g = cells.map(r => r.map(v => (v === 1 ? 1 : 0)));
+            return g.every((row, i) => sameClue(runsOf(row), rowC[i])) && colC.every((c, j) => sameClue(runsOf(g.map(r => r[j])), c));
+        }
+
+        // 隨機產生「只靠邏輯就能唯一解開」的題目；密度會隨嘗試次數變化
+        function generate(n, rand, maxTries = 400) {
+            for (let t = 0; t < maxTries; t++) {
+                const density = 0.5 + 0.2 * (rand(100) / 100);
+                const grid = Array.from({ length: n }, () => Array.from({ length: n }, () => (rand(100) < density * 100 ? 1 : 0)));
+                if (!grid.some(r => r.includes(1))) continue;
+                const { rowC, colC } = cluesOf(grid);
+                if (solveGrid(rowC, colC).solved) return { grid, rowC, colC };
+            }
+            return null;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let N = 10, P = null, cells = [], marking = false, started = 0, timer = null, done = false, painting = null;
+
+        const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+        const bestKey = () => 'nono_best_' + N;
+        const showBest = () => { const b = store.get(bestKey(), null); $('#best').textContent = b === null ? '—' : fmt(b); };
+
+        let pending = 0;
+        function newPuzzle() {
+            N = +$('#size').value;
+            clearInterval(timer); clearTimeout(pending); started = 0; done = false; $('#time').textContent = '0:00'; $('#msg').textContent = '出題中…';
+            pending = setTimeout(() => {                                  // 先讓畫面更新再計算；連按時只保留最後一次
+                P = generate(N, rnd);
+                cells = Array.from({ length: N }, () => new Array(N).fill(0));
+                $('#msg').textContent = P ? '' : '出題失敗，請再按一次「新題目」';
+                build(); showBest();
+            }, 20);
+        }
+
+        function build() {
+            const b = $('#board'); b.style.setProperty('--n', N);
+            const nodes = [document.createElement('div')];
+            P && P.colC.forEach((c, j) => { const d = document.createElement('div'); d.className = 'cl'; d.dataset.col = j; d.append(...c.map(v => Object.assign(document.createElement('span'), { textContent: v }))); nodes.push(d); });
+            for (let i = 0; P && i < N; i++) {
+                const r = document.createElement('div'); r.className = 'rl'; r.dataset.row = i; r.append(...P.rowC[i].map(v => Object.assign(document.createElement('span'), { textContent: v }))); nodes.push(r);
+                for (let j = 0; j < N; j++) {
+                    const c = document.createElement('div');
+                    c.className = 'c' + ((j + 1) % 5 === 0 && j < N - 1 ? ' g5r' : '') + ((i + 1) % 5 === 0 && i < N - 1 ? ' g5b' : '');
+                    c.dataset.i = i; c.dataset.j = j; nodes.push(c);
+                }
+            }
+            b.replaceChildren(...nodes); render();
+        }
+
+        function render() {
+            document.querySelectorAll('#board .c').forEach(el => {
+                const v = cells[el.dataset.i][el.dataset.j];
+                el.classList.toggle('f', v === 1); el.textContent = v === 2 ? '✕' : '';
+            });
+            if (!P) return;
+            const g = cells.map(r => r.map(v => (v === 1 ? 1 : 0)));
+            document.querySelectorAll('#board .rl').forEach(el => el.classList.toggle('done', sameClue(runsOf(g[el.dataset.row]), P.rowC[el.dataset.row])));
+            document.querySelectorAll('#board .cl').forEach(el => el.classList.toggle('done', sameClue(runsOf(g.map(r => r[el.dataset.col])), P.colC[el.dataset.col])));
+        }
+
+        function paint(el, val) {
+            if (done || !el || el.dataset.i === undefined) return;
+            const i = +el.dataset.i, j = +el.dataset.j;
+            if (cells[i][j] === val) return;
+            if (!started) { started = Date.now(); timer = setInterval(() => { $('#time').textContent = fmt(Math.floor((Date.now() - started) / 1000)); }, 500); }
+            cells[i][j] = val; render();
+            if (matches(cells, P.rowC, P.colC)) win();
+        }
+
+        function win() {
+            done = true; clearInterval(timer);
+            const secs = Math.floor((Date.now() - started) / 1000), best = store.get(bestKey(), null);
+            $('#time').textContent = fmt(secs);
+            $('#msg').textContent = best === null || secs < best ? `🎉 完成！${fmt(secs)}（新紀錄）` : `🎉 完成！${fmt(secs)}`;
+            if (best === null || secs < best) store.set(bestKey(), secs);
+            showBest();
+        }
+
+        const pick = (e) => document.elementFromPoint(e.clientX, e.clientY);
+        $('#board').addEventListener('pointerdown', (e) => {
+            const el = e.target.closest('.c'); if (!el) return;
+            e.preventDefault();
+            const target = (e.button === 2 || marking) ? 2 : 1, cur = cells[el.dataset.i][el.dataset.j];
+            painting = cur === target ? 0 : target;                      // 拖曳時整串用同一個動作（塗上或擦掉）
+            $('#board').setPointerCapture(e.pointerId); paint(el, painting);
+        });
+        $('#board').addEventListener('pointermove', (e) => { if (painting !== null) paint(pick(e), painting); });
+        const up = () => { painting = null; };
+        $('#board').addEventListener('pointerup', up); $('#board').addEventListener('pointercancel', up);
+        $('#board').addEventListener('contextmenu', (e) => e.preventDefault());
+
+        $('#newBtn').onclick = newPuzzle;
+        $('#size').onchange = newPuzzle;
+        $('#mode').onclick = () => { marking = !marking; $('#mode').setAttribute('aria-pressed', marking); };
+        $('#clear').onclick = () => { if (!P || done) return; cells = Array.from({ length: N }, () => new Array(N).fill(0)); $('#msg').textContent = ''; render(); };
+        newPuzzle();
+    </script>
+</body>
+
+</html>

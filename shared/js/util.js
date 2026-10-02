@@ -1,6 +1,6 @@
-/* 共用小工具：均勻亂數 / 洗牌 / 複製 / localStorage / HTML 跳脫 / 日期字串 / 統計列 / 提示音 / 語音 / 名單解析 / 下載檔案
+/* 共用小工具：均勻亂數 / 洗牌 / 複製 / localStorage / HTML 跳脫 / 日期字串 / 統計列 / 提示音 / 語音 / 名單解析 / 下載檔案 / 雜湊與隨機字串
  *
- * 使用：<script src="../shared/js/util.js"></script>，然後 const { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download } = Util;
+ * 使用：<script src="../shared/js/util.js"></script>，然後 const { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex } = Util;
  * 放進這裡的條件：至少兩個工具在用、且不需要各工具再調整格式。
  */
 (function (root) {
@@ -61,6 +61,15 @@
         a.href = URL.createObjectURL(blob); a.download = filename; a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     }
+
+    // 雜湊（十六進位字串）：algo 為 SHA-1 / SHA-256 / SHA-384 / SHA-512；需要 crypto.subtle（https 或 localhost）
+    async function sha256(text, algo = 'SHA-256') {
+        const buf = await crypto.subtle.digest(algo, new TextEncoder().encode(text));
+        return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    // 安全隨機的十六進位字串（bytes 個位元組 = 2 倍長度），用來當雜湊承諾的鹽
+    const randomHex = (bytes = 16) => [...crypto.getRandomValues(new Uint8Array(bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
 
     // 統計列：左邊說明、右邊數值（樣式見 theme.css 的 .li.stat）；cls 加在數值上
     function statRow(label, value, cls) {
@@ -125,7 +134,7 @@
         },
     };
 
-    const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download };
+    const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex };
     if (typeof module !== 'undefined' && module.exports) module.exports = Util;
     else root.Util = Util;
 })(typeof window !== 'undefined' ? window : globalThis);

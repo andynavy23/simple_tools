@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="打字速度測試：中英文短文計時，算出每分鐘字數與正確率，並記錄最佳成績。">
+    <meta name="description" content="打字速度測試：中英文、程式碼或自訂文章計時，算出每分鐘字數與正確率，並記錄最佳成績。">
     <meta property="og:title" content="打字速度測試" />
     <meta property="og:description" content="中英文打字計時，記錄每分鐘字數與正確率。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
@@ -82,16 +82,22 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>打字速度測試</h1>
-        <p class="sub">在輸入框開始打字就會開始計時。</p>
+        <p class="sub">在輸入框開始打字就會開始計時。可選中文、英文、程式碼，或貼上自己的文章。</p>
 
         <div class="card">
             <div class="bar">
                 <button class="sm" data-lang="zh" aria-pressed="true">中文</button>
                 <button class="sm" data-lang="en" aria-pressed="false">English</button>
+                <button class="sm" data-lang="code" aria-pressed="false">程式碼</button>
+                <button class="sm" data-lang="custom" aria-pressed="false">自訂文章</button>
                 <span class="muted">|</span>
                 <button class="sm" data-sec="30" aria-pressed="true">30 秒</button>
                 <button class="sm" data-sec="60" aria-pressed="false">60 秒</button>
                 <div class="stats"><span>剩餘 <b id="left">30</b></span><span>字/分 <b id="cpm">0</b></span></div>
+            </div>
+            <div id="customBox" hidden>
+                <textarea id="customText" maxlength="1000" placeholder="貼上想練習的文章（會把空白與換行整理成單行，最多 300 字）" aria-label="自訂文章" style="min-height:80px;margin-bottom:8px"></textarea>
+                <button class="sm" id="customApply">使用這段文字</button>
             </div>
             <div id="passage" aria-live="off"></div>
             <textarea id="input" placeholder="在這裡輸入…" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
@@ -123,6 +129,11 @@
                 wpm: Math.round(correct / 5 / minutes),
             };
         }
+
+        // 自訂文章：空白與換行整理成單一空格、去頭尾，最多 300 字（以 Unicode 字元計）
+        function cleanCustom(text) {
+            return [...String(text).replace(/\s+/g, ' ').trim()].slice(0, 300).join('').trim();
+        }
         // --- /pure ---
 
         const PASSAGES = {
@@ -135,6 +146,16 @@
                 '會當凌絕頂，一覽眾山小。欲窮千里目，更上一層樓。',
                 '工欲善其事，必先利其器。三人行，必有我師焉。',
                 '千里之行，始於足下。合抱之木，生於毫末。九層之臺，起於累土。',
+            ],
+            code: [
+                'const total = items.filter(x => x.done).map(x => x.price).reduce((a, b) => a + b, 0);',
+                'for (let i = 0; i < arr.length; i++) { if (arr[i] > max) max = arr[i]; }',
+                'def fib(n): return n if n < 2 else fib(n - 1) + fib(n - 2)',
+                'SELECT name, COUNT(*) AS n FROM orders WHERE total > 100 GROUP BY name ORDER BY n DESC;',
+                'git commit -m "fix: handle empty list" && git push origin main',
+                'document.querySelector("#btn").addEventListener("click", () => alert("hi"));',
+                'const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));',
+                'if (!user || !user.name) { throw new Error("name is required"); }',
             ],
             en: [
                 'The quick brown fox jumps over the lazy dog while the sun slowly sets behind the quiet hills.',
@@ -151,8 +172,10 @@
         const bestKey = () => `typing_best_${lang}_${secs}`;
         const { store } = Util;
         const loadBest = () => store.get(bestKey(), 0);
+        let custom = cleanCustom(store.get('typing_custom', ''));
 
         function pick() {
+            if (lang === 'custom') return custom;                        // 自訂文章：固定使用貼上的那一段
             const list = PASSAGES[lang];
             let next;
             do { next = list[Math.floor(Math.random() * list.length)]; } while (next === target && list.length > 1);
@@ -174,13 +197,14 @@
             clearInterval(timer);
             finished = false; startAt = 0;
             target = pick();
+            $('#customBox').hidden = lang !== 'custom';
             $('#input').value = '';
-            $('#input').disabled = false;
+            $('#input').disabled = !target;                              // 自訂文章還沒貼時不能打字
             $('#left').textContent = secs;
             $('#cpm').textContent = 0;
             $('#result').hidden = true;
-            renderPassage();
-            $('#input').focus();
+            if (target) renderPassage(); else $('#passage').textContent = '請在上方貼上想練習的文章，再按「使用這段文字」。';
+            if (target) $('#input').focus();
         }
 
         function finish() {
@@ -193,6 +217,7 @@
             $('#result').hidden = false;
             $('#r-cpm').textContent = `${r.cpm} 字/分`;
             $('#r-detail').textContent = `約 ${r.wpm} WPM ・ 正確率 ${r.accuracy}% ・ 正確 ${r.correct} / 輸入 ${r.typed} 字`;
+            if (lang === 'custom') { $('#r-best').textContent = '自訂文章不記錄最佳成績'; return; }
             const best = loadBest();
             if (r.cpm > best) {
                 store.set(bestKey(), r.cpm);
@@ -221,6 +246,8 @@
         $('#input').addEventListener('compositionend', () => { composing = false; onInput(); });
         $('#input').addEventListener('input', onInput);
         $('#again').onclick = reset;
+        $('#customText').value = custom;
+        $('#customApply').onclick = () => { custom = cleanCustom($('#customText').value); $('#customText').value = custom; store.set('typing_custom', custom); reset(); };
         document.querySelectorAll('[data-lang]').forEach(b => b.onclick = () => {
             lang = b.dataset.lang;
             document.querySelectorAll('[data-lang]').forEach(x => x.setAttribute('aria-pressed', x === b));

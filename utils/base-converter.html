@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="進位 / 位元運算工具：2、8、10、16 進位互轉，AND / OR / XOR / 位移運算，並拆解 IEEE 754 浮點數的符號、指數與尾數。">
+    <meta property="og:title" content="進位 / 位元運算工具" />
+    <meta property="og:description" content="進位互轉、位元運算與 IEEE 754 浮點數拆解。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/base-converter.html" />
+    <title>進位 / 位元運算工具</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row input[type=text] {
+            flex: 1 1 160px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+
+        .row label {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            word-break: break-all;
+        }
+
+        .bits {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 15px;
+            letter-spacing: 1px;
+            word-break: break-all;
+            margin: 6px 0 10px;
+        }
+
+        .bits .s {
+            color: var(--bad);
+        }
+
+        .bits .e {
+            color: var(--ok);
+        }
+
+        .bits .m {
+            color: var(--blue);
+        }
+
+        .err {
+            color: var(--bad);
+            font-size: 14px;
+            min-height: 1.4em;
+        }
+
+        .li.stat button {
+            font: inherit;
+            padding: 2px 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>進位 / 位元運算工具</h1>
+        <p class="sub">用 BigInt 計算，不會有大數精度問題；負數以二補數表示。</p>
+
+        <div class="card">
+            <div class="tabs" role="tablist">
+                <button data-t="conv" aria-pressed="true">進位轉換</button>
+                <button data-t="bit" aria-pressed="false">位元運算</button>
+                <button data-t="float" aria-pressed="false">浮點數 IEEE 754</button>
+            </div>
+
+            <div class="pane" data-t="conv">
+                <div class="row"><input type="text" id="cin" spellcheck="false" aria-label="數值" value="255"><select id="cbase" aria-label="輸入的進位"></select></div>
+                <div class="err" id="cerr"></div>
+                <div id="cout"></div>
+            </div>
+
+            <div class="pane" data-t="bit" hidden>
+                <div class="row"><label for="ba">A</label><input type="text" id="ba" spellcheck="false" value="F0"><label for="bb">B</label><input type="text" id="bb" spellcheck="false" value="3C"></div>
+                <div class="row">
+                    <label for="bbase">輸入進位</label><select id="bbase"></select>
+                    <label for="bw">位元寬度</label><select id="bw"><option>8</option><option>16</option><option selected>32</option><option>64</option></select>
+                    <label for="bop">運算</label><select id="bop"></select>
+                </div>
+                <div class="err" id="berr"></div>
+                <div id="bout"></div>
+            </div>
+
+            <div class="pane" data-t="float" hidden>
+                <div class="row"><input type="text" id="fin" spellcheck="false" value="0.1" aria-label="十進位小數"><span class="muted">十進位數值（可輸入 NaN、Infinity、1e-3）</span></div>
+                <div class="err" id="ferr"></div>
+                <div id="fout"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { statRow, store, copyWithFeedback } = Util;
+
+        // --- pure ---
+        const DIGITS = '0123456789abcdefghijklmnopqrstuvwxyz';
+        const PREFIX = { 2: '0b', 8: '0o', 16: '0x' };
+
+        // 字串 → BigInt；允許正負號、0b / 0o / 0x 前綴與 _ 分隔；不合法回傳 null
+        function parseBig(str, base) {
+            let s = String(str).trim().toLowerCase().replace(/[_\s]/g, ''), neg = false;
+            if (s[0] === '-' || s[0] === '+') { neg = s[0] === '-'; s = s.slice(1); }
+            if (PREFIX[base] && s.startsWith(PREFIX[base])) s = s.slice(2);
+            if (!s || s.length > 400) return null;
+            let v = 0n; const b = BigInt(base);
+            for (const c of s) { const d = DIGITS.indexOf(c); if (d < 0 || d >= base) return null; v = v * b + BigInt(d); }
+            return neg ? -v : v;
+        }
+
+        // w 位元的二補數：BigInt → 無號 / 有號
+        const toUnsigned = (v, w) => ((v % (1n << BigInt(w))) + (1n << BigInt(w))) % (1n << BigInt(w));
+        const toSigned = (u, w) => (u >= (1n << BigInt(w - 1)) ? u - (1n << BigInt(w)) : u);
+        const group4 = (bits) => bits.replace(/(.{4})(?=.)/g, '$1 ');
+
+        const OPS = { AND: 'A AND B', OR: 'A OR B', XOR: 'A XOR B', NAND: 'NOT (A AND B)', NOT: 'NOT A', SHL: 'A << B', SHR: 'A >> B（邏輯）', SAR: 'A >> B（算術）' };
+        // 結果以 w 位元無號數回傳；位移量 b 取其無號值，超過 w 時結果為 0（SAR 為符號擴展）
+        function bitOp(a, b, op, w) {
+            const W = BigInt(w), M = (1n << W) - 1n, ua = toUnsigned(a, w), ub = toUnsigned(b, w), n = ub > W ? W : ub;
+            switch (op) {
+                case 'AND': return ua & ub;
+                case 'OR': return ua | ub;
+                case 'XOR': return ua ^ ub;
+                case 'NAND': return ~(ua & ub) & M;
+                case 'NOT': return ~ua & M;
+                case 'SHL': return (ua << n) & M;
+                case 'SHR': return ua >> n;
+                case 'SAR': return toUnsigned(toSigned(ua, w) >> n, w);
+                default: throw new Error('未知運算');
+            }
+        }
+
+        // IEEE 754：回傳 { bits, sign, exp, mant, hex, back }（back 是存成該精度後實際的數值）
+        function floatParts(x, kind) {
+            const dv = new DataView(new ArrayBuffer(8)), is32 = kind === 32, n = is32 ? 32 : 64, eb = is32 ? 8 : 11;
+            if (is32) dv.setFloat32(0, x); else dv.setFloat64(0, x);
+            const u = is32 ? BigInt(dv.getUint32(0)) : dv.getBigUint64(0), bits = u.toString(2).padStart(n, '0');
+            return { bits, sign: bits.slice(0, 1), exp: bits.slice(1, 1 + eb), mant: bits.slice(1 + eb), hex: '0x' + u.toString(16).padStart(n / 4, '0'), back: is32 ? dv.getFloat32(0) : dv.getFloat64(0) };
+        }
+
+        // 十進位文字 → 數值（接受 NaN / Infinity / 科學記號）；失敗回傳 null
+        function parseFloatText(s) {
+            const t = String(s).trim();
+            if (/^[+-]?(nan)$/i.test(t)) return NaN;
+            if (/^[+-]?inf(inity)?$/i.test(t)) return t[0] === '-' ? -Infinity : Infinity;
+            return /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(t) ? Number(t) : null;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const BASES = [[2, '2 進位'], [8, '8 進位'], [10, '10 進位'], [16, '16 進位'], [36, '36 進位']];
+        for (const sel of ['#cbase', '#bbase']) $(sel).replaceChildren(...BASES.map(([b, n]) => new Option(n, b)));
+        $('#cbase').value = 10; $('#bbase').value = 16;
+        $('#bop').replaceChildren(...Object.entries(OPS).map(([k, v]) => new Option(v, k)));
+        let tab = 'conv';
+
+        const copyRow = (label, text) => {
+            const row = statRow(label, ''), v = row.lastChild, b = document.createElement('button');
+            b.className = 'sm'; b.textContent = text; b.classList.add('mono'); b.title = '點擊複製'; b.onclick = () => copyWithFeedback(b, text);
+            v.replaceChildren(b); return row;
+        };
+
+        function renderConv() {
+            const base = +$('#cbase').value, v = parseBig($('#cin').value, base);
+            $('#cerr').textContent = v === null ? '輸入含有這個進位不允許的字元' : '';
+            if (v === null) return $('#cout').replaceChildren();
+            const rows = [2, 8, 10, 16, 36].map(b => copyRow(`${b} 進位`, (v < 0n ? '-' : '') + (v < 0n ? -v : v).toString(b)));
+            for (const w of [8, 16, 32, 64]) {
+                if (v >= -(1n << BigInt(w - 1)) && v < (1n << BigInt(w))) { rows.push(copyRow(`${w} 位元二補數`, group4(toUnsigned(v, w).toString(2).padStart(w, '0')))); break; }
+            }
+            $('#cout').replaceChildren(...rows);
+        }
+
+        function renderBit() {
+            const base = +$('#bbase').value, w = +$('#bw').value, op = $('#bop').value, a = parseBig($('#ba').value, base), b = parseBig($('#bb').value, base);
+            const needB = !['NOT'].includes(op);
+            $('#bb').disabled = !needB;
+            $('#berr').textContent = a === null || (needB && b === null) ? '輸入含有這個進位不允許的字元' : '';
+            if (a === null || (needB && b === null)) return $('#bout').replaceChildren();
+            const r = bitOp(a, b ?? 0n, op, w);
+            $('#bout').replaceChildren(
+                copyRow('A（二進位）', group4(toUnsigned(a, w).toString(2).padStart(w, '0'))),
+                ...(needB ? [copyRow('B（二進位）', group4(toUnsigned(b, w).toString(2).padStart(w, '0')))] : []),
+                copyRow('結果（二進位）', group4(r.toString(2).padStart(w, '0'))),
+                copyRow('結果（16 進位）', '0x' + r.toString(16).toUpperCase().padStart(w / 4, '0')),
+                copyRow('結果（無號）', r.toString()), copyRow('結果（有號）', toSigned(r, w).toString()));
+        }
+
+        function renderFloat() {
+            const x = parseFloatText($('#fin').value);
+            $('#ferr').textContent = x === null ? '請輸入十進位數值，例如 0.1、-3.5e-2、Infinity' : '';
+            if (x === null) return $('#fout').replaceChildren();
+            const nodes = [];
+            for (const kind of [32, 64]) {
+                const p = floatParts(x, kind), h = document.createElement('div');
+                h.innerHTML = `<h2>${kind === 32 ? 'float32（單精度）' : 'float64（雙精度，JavaScript 的 Number）'}</h2><div class="bits"><span class="s"></span> <span class="e"></span> <span class="m"></span></div>`;
+                const [s, e, m] = h.querySelectorAll('.bits span'); s.textContent = p.sign; e.textContent = p.exp; m.textContent = p.mant;
+                nodes.push(h, statRow('分段', `符號 1 位元（紅）・指數 ${p.exp.length} 位元（綠）・尾數 ${p.mant.length} 位元（藍）`), copyRow('16 進位', p.hex), statRow('存入後實際的值', p.back === x || (Number.isNaN(p.back) && Number.isNaN(x)) ? String(p.back) : p.back.toPrecision(kind === 32 ? 12 : 21)));
+            }
+            $('#fout').replaceChildren(...nodes);
+        }
+
+        const render = () => {
+            document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab));
+            document.querySelectorAll('.pane').forEach(p => { p.hidden = p.dataset.t !== tab; });
+            ({ conv: renderConv, bit: renderBit, float: renderFloat })[tab]();
+        };
+        document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { tab = b.dataset.t; store.set('base_tab', tab); render(); }; });
+        document.querySelectorAll('input,select').forEach(e => { e.oninput = e.onchange = render; });
+        const saved = store.get('base_tab', 'conv'); if (['conv', 'bit', 'float'].includes(saved)) tab = saved;
+        render();
+    </script>
+</body>
+
+</html>

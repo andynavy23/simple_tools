@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="簡易畫板：畫筆、橡皮擦、調色盤、復原重做，支援滑鼠、觸控與手寫筆（感壓），可存成 PNG。">
+    <meta property="og:title" content="簡易畫板" />
+    <meta property="og:description" content="單人塗鴉畫板，可復原並存成 PNG。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/sketchpad.html" />
+    <title>簡易畫板</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 820px;
+        }
+
+        #cv {
+            width: 100%;
+            aspect-ratio: 3 / 2;
+            background: #fff;
+            border-radius: 12px;
+            touch-action: none;
+            display: block;
+            box-shadow: inset 0 0 0 1px var(--fill);
+            cursor: crosshair;
+        }
+
+        .tools {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .sw {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            padding: 0;
+            border: 3px solid transparent;
+            box-shadow: inset 0 0 0 1px var(--line);
+        }
+
+        .sw[aria-pressed=true] {
+            border-color: var(--text);
+        }
+
+        input[type=color] {
+            width: 34px;
+            height: 30px;
+            padding: 0;
+            border: 0;
+            background: none;
+        }
+
+        input[type=range] {
+            width: 120px;
+            accent-color: var(--blue);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>簡易畫板</h1>
+        <p class="sub">畫筆、橡皮擦、復原（Ctrl+Z）與重做（Ctrl+Y）。手寫筆會依筆壓改變粗細。畫面只在這個頁面，不會上傳。</p>
+
+        <div class="card">
+            <div class="tools">
+                <button class="sm" id="pen" aria-pressed="true">畫筆</button>
+                <button class="sm" id="eraser" aria-pressed="false">橡皮擦</button>
+                <span id="palette" class="tools" style="margin:0"></span>
+                <input type="color" id="custom" value="#0a84ff" aria-label="自訂顏色">
+                <label class="muted" for="w">粗細</label><input type="range" id="w" min="1" max="60" value="6">
+            </div>
+            <canvas id="cv" width="1200" height="800" aria-label="畫布"></canvas>
+            <div class="tools" style="margin:10px 0 0">
+                <button class="sm" id="undo">復原</button><button class="sm" id="redo">重做</button><button class="sm" id="clear">清除全部</button>
+                <button class="primary sm" id="save">存成 PNG</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        const COLORS = ['#000000', '#8e8e93', '#ff453a', '#ff9f0a', '#ffd60a', '#30d158', '#0a84ff', '#bf5af2', '#8b5a2b'];
+        const MAX_OPS = 400;                                              // 超過就把最舊的筆畫「烤」進底圖，不再能復原
+
+        // 手寫筆依筆壓決定粗細（0.3×–1.7×）；滑鼠 / 觸控固定粗細
+        const strokeWidth = (base, pressure, type) => (type === 'pen' && pressure > 0 ? Math.max(1, base * (0.3 + 1.4 * Math.min(1, pressure))) : base);
+
+        // 最後一次「清除全部」在哪（-1 = 沒有）：redraw 只需要畫它之後的筆畫；復原清除時，它之前的筆畫還在清單裡
+        const lastClear = (ops) => ops.map(o => o.k).lastIndexOf('c');
+
+        // 筆畫數太多時，取出最舊的一批要烤進底圖的筆畫；回傳 { bake, keep }
+        function splitForBake(ops, max = MAX_OPS, chunk = 100) {
+            return ops.length > max ? { bake: ops.slice(0, chunk), keep: ops.slice(chunk) } : { bake: [], keep: ops };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const cv = $('#cv'), ctx = cv.getContext('2d');
+        const base = document.createElement('canvas'); base.width = cv.width; base.height = cv.height;   // 底圖：已烤進去的舊筆畫
+        let ops = [], redo = [], tool = 'pen', color = COLORS[0], cur = null;
+
+        function drawOp(g, op) {
+            if (op.k === 'c') { g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); return; }
+            g.strokeStyle = g.fillStyle = op.erase ? '#fff' : op.color; g.lineCap = g.lineJoin = 'round';
+            op.pts.forEach(([x, y, w], i) => {
+                g.lineWidth = w;
+                if (i === 0) { g.beginPath(); g.arc(x, y, w / 2, 0, 7); g.fill(); return; }
+                const [px, py] = op.pts[i - 1]; g.beginPath(); g.moveTo(px, py); g.lineTo(x, y); g.stroke();
+            });
+        }
+
+        function redraw() {
+            const c = lastClear(ops);
+            if (c < 0) ctx.drawImage(base, 0, 0); else { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height); }
+            for (const o of ops.slice(c + 1)) drawOp(ctx, o);
+        }
+        function fillBase() { const g = base.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, base.width, base.height); }
+
+        function commit(op) {
+            ops.push(op); redo = [];
+            const { bake, keep } = splitForBake(ops);
+            if (bake.length) { const g = base.getContext('2d'); bake.forEach(o => drawOp(g, o)); ops = keep; }
+        }
+
+        const pos = (e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * cv.width, (e.clientY - r.top) / r.height * cv.height]; };
+        cv.addEventListener('pointerdown', (e) => {
+            if (e.button > 0) return;
+            cv.setPointerCapture(e.pointerId);
+            const [x, y] = pos(e), w = strokeWidth(+$('#w').value, e.pressure, e.pointerType);
+            cur = { k: 's', color, erase: tool === 'eraser', pts: [[x, y, w]] };
+            drawOp(ctx, cur);
+        });
+        cv.addEventListener('pointermove', (e) => {
+            if (!cur) return;
+            for (const ev of (e.getCoalescedEvents ? e.getCoalescedEvents() : [e])) {
+                const [x, y] = pos(ev), w = strokeWidth(+$('#w').value, ev.pressure, e.pointerType);
+                cur.pts.push([x, y, w]);
+                drawOp(ctx, { ...cur, pts: cur.pts.slice(-2) });                                      // 只畫最新一段
+            }
+        });
+        const up = () => { const op = cur; cur = null; if (op) commit(op); };
+        cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+
+        function undo() { const op = ops.pop(); if (op) { redo.push(op); redraw(); } }
+        function redoOp() { const op = redo.pop(); if (op) { ops.push(op); redraw(); } }
+
+        $('#undo').onclick = undo; $('#redo').onclick = redoOp;
+        $('#clear').onclick = () => { commit({ k: 'c' }); redraw(); };
+        document.addEventListener('keydown', (e) => {
+            if (!(e.ctrlKey || e.metaKey) || /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+            if (e.key === 'z' || e.key === 'Z') { e.preventDefault(); e.shiftKey ? redoOp() : undo(); }
+            else if (e.key === 'y' || e.key === 'Y') { e.preventDefault(); redoOp(); }
+        });
+        $('#save').onclick = () => cv.toBlob((b) => Util.download(b, 'sketch-' + Util.day.today() + '.png'));
+
+        function setTool(t) { tool = t; $('#pen').setAttribute('aria-pressed', t === 'pen'); $('#eraser').setAttribute('aria-pressed', t === 'eraser'); }
+        $('#pen').onclick = () => setTool('pen'); $('#eraser').onclick = () => setTool('eraser');
+        $('#palette').replaceChildren(...COLORS.map(c => { const b = document.createElement('button'); b.className = 'sw'; b.style.background = c; b.setAttribute('aria-label', '顏色 ' + c); b.setAttribute('aria-pressed', c === color); b.onclick = () => { color = c; setTool('pen'); [...$('#palette').children].forEach(x => x.setAttribute('aria-pressed', x === b)); }; return b; }));
+        $('#custom').oninput = (e) => { color = e.target.value; setTool('pen'); [...$('#palette').children].forEach(x => x.setAttribute('aria-pressed', false)); };
+        fillBase(); redraw();
+    </script>
+</body>
+
+</html>

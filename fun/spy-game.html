@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="連線誰是臥底：大家拿到相近的詞，臥底拿到不同的。輪流描述、投票淘汰，揪出臥底。3–10 人，詞只私下傳給本人。">
+    <meta property="og:title" content="連線誰是臥底" />
+    <meta property="og:description" content="輪流描述相近的詞，投票找出拿到不同詞的臥底。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/spy-game.html" />
+    <title>連線誰是臥底</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .row input {
+            flex: 1 1 130px;
+        }
+
+        .pl.turn {
+            border-color: var(--blue);
+        }
+
+        .pl.dead {
+            opacity: .45;
+            text-decoration: line-through;
+        }
+
+        .pl.spy {
+            background: color-mix(in srgb, var(--bad) 25%, var(--fill));
+        }
+
+        #word {
+            margin-top: 12px;
+            text-align: center;
+            font-size: 15px;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        #word b {
+            display: block;
+            font-size: 34px;
+            color: var(--text);
+        }
+
+        #log {
+            max-height: 220px;
+            overflow: auto;
+            background: var(--fill);
+            border-radius: 12px;
+            padding: 8px 12px;
+            margin: 10px 0;
+            font-size: 15px;
+        }
+
+        #log .r {
+            color: var(--muted);
+            font-size: 12px;
+            margin-top: 6px;
+        }
+
+        #status {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+            margin: 8px 0;
+        }
+
+        .targets {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 8px;
+        }
+
+        .targets button[aria-pressed=true] {
+            background: var(--blue);
+            color: #fff;
+        }
+
+        #result .li b.bad {
+            color: var(--bad);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>連線誰是臥底</h1>
+        <p class="sub">每個人拿到一個詞：大多數人的詞相同，臥底的詞相近但不一樣，而且大家都不知道自己是不是臥底。輪流用一句話描述（不能直接說出自己的詞），再投票淘汰最可疑的人。</p>
+
+        <div class="card" id="menu">
+            <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+            <div class="row">
+                <button class="primary" id="hostBtn">建立房間</button>
+                <input id="joinId" placeholder="貼上房號" aria-label="房號">
+                <button id="joinBtn">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+        </div>
+
+        <div class="card" id="lobby" hidden>
+            <h2>等待玩家加入（3–10 人）</h2>
+            <div class="players" id="lobbyPlayers"></div>
+            <div class="row" style="margin-top:12px">
+                <button id="copyInvite" hidden>複製邀請連結</button>
+                <button class="primary" id="startBtn" hidden disabled>開始遊戲</button>
+            </div>
+            <p class="note" id="lobbyHint"></p>
+        </div>
+
+        <div id="game" hidden>
+            <div class="card">
+                <div class="players" id="board"></div>
+                <div id="word"></div>
+                <div id="log" aria-label="描述紀錄"></div>
+                <div id="status" role="status"></div>
+                <div class="row" id="descRow" hidden><input id="desc" maxlength="20" placeholder="用一句話描述你的詞" aria-label="描述"><button class="primary" id="descBtn">送出</button></div>
+                <div class="targets" id="targets" hidden></div>
+                <div id="result"></div>
+            </div>
+            <div class="row" style="justify-content:center">
+                <button class="primary" id="next" hidden>下一輪</button>
+                <button class="primary" id="again" hidden>再來一局</button>
+                <button id="leave">離開</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { rnd, shuffle } = Util;
+
+        // --- pure ---
+        const MAX_PLAYERS = 10, MIN_PLAYERS = 3;
+        const PAIRS = [['蘋果', '水梨'], ['可樂', '汽水'], ['牛奶', '豆漿'], ['麥當勞', '肯德基'], ['火車', '高鐵'], ['西瓜', '哈密瓜'], ['眼鏡', '隱形眼鏡'], ['籃球', '排球'], ['手機', '平板'], ['咖啡', '奶茶'], ['鋼琴', '電子琴'], ['老虎', '獅子'], ['游泳', '潛水'], ['泡麵', '麵線'], ['月餅', '蛋糕'], ['雨傘', '雨衣'], ['電影', '電視劇'], ['醫生', '護士'], ['警察', '保全'], ['公車', '捷運'], ['牙刷', '牙膏'], ['枕頭', '棉被'], ['鉛筆', '原子筆'], ['冰淇淋', '雪糕'], ['披薩', '漢堡'], ['足球', '橄欖球'], ['玫瑰', '牡丹'], ['太陽', '月亮'], ['海灘', '泳池'], ['蜘蛛', '螃蟹']];
+
+        // 7 人以上有 2 位臥底
+        const spyCount = (n) => (n >= 7 ? 2 : 1);
+
+        // 分配身分與詞：回傳 { roles: ['civ'|'spy'...], civWord, spyWord }；rand(n) 為 [0,n) 亂數，pairs 的兩個詞隨機決定誰是臥底詞
+        function assign(n, rand, pairs = PAIRS) {
+            const pair = pairs[rand(pairs.length)], swap = rand(2) === 1, spies = new Set();
+            while (spies.size < spyCount(n)) spies.add(rand(n));
+            return { roles: Array.from({ length: n }, (_, i) => (spies.has(i) ? 'spy' : 'civ')), civWord: swap ? pair[1] : pair[0], spyWord: swap ? pair[0] : pair[1] };
+        }
+
+        // 票數統計：votes 是 [[投票者, 被投], …]；得票唯一最高者淘汰，平手回傳 -1
+        function tally(votes) {
+            const c = new Map();
+            for (const [, t] of votes) c.set(t, (c.get(t) || 0) + 1);
+            const max = Math.max(0, ...c.values()), top = [...c].filter(([, v]) => v === max).map(([k]) => k);
+            return top.length === 1 ? top[0] : -1;
+        }
+
+        // 勝負：臥底全被淘汰 → 好人勝；好人人數不多於臥底 → 臥底勝；否則繼續
+        function outcome(roles, alive) {
+            const spies = roles.filter((r, i) => alive[i] && r === 'spy').length, civs = roles.filter((r, i) => alive[i] && r === 'civ').length;
+            return spies === 0 ? 'civ' : civs <= spies ? 'spy' : null;
+        }
+
+        // 描述不得包含自己的詞（避免直接說出答案）
+        const descOk = (text, word) => typeof text === 'string' && text.trim().length >= 1 && text.trim().length <= 20 && !text.includes(word);
+        // 投票是否合法：投給還活著的其他人
+        const voteOk = (voter, target, alive) => Number.isInteger(target) && target >= 0 && target < alive.length && alive[target] && alive[voter] && target !== voter;
+
+        // 成員端檢查房主傳來的狀態
+        function validState(s) {
+            const arr = (a, f, n = MAX_PLAYERS) => Array.isArray(a) && a.length <= n && a.every(f);
+            return !!s && ['lobby', 'describe', 'vote', 'result', 'over'].includes(s.phase) && arr(s.names, n => typeof n === 'string' && n.length <= 12) && arr(s.alive, b => typeof b === 'boolean') && arr(s.active, b => typeof b === 'boolean')
+                && arr(s.voted, b => typeof b === 'boolean') && Number.isInteger(s.round) && Number.isInteger(s.speaker) && Number.isInteger(s.elim) && Number.isInteger(s.spies) && typeof s.note === 'string' && s.note.length <= 80
+                && arr(s.roles, r => r === 'spy' || r === 'civ') && arr(s.words, w => typeof w === 'string' && w.length <= 10, 2) && arr(s.votes, v => Array.isArray(v) && v.length === 2 && v.every(Number.isInteger))
+                && arr(s.log, l => l && Number.isInteger(l.r) && typeof l.n === 'string' && l.n.length <= 12 && typeof l.t === 'string' && l.t.length <= 20, 100);
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let room = null, isHost = false, my = -1, hostId = '', V = null, myWord = '', myVote = -1;
+        const H = { phase: 'lobby', roles: [], alive: [], civWord: '', spyWord: '', round: 0, order: [], speaker: -1, descs: [], log: [], votes: new Map(), elim: -1, note: '' };
+
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const show = (id, on) => { $(id).hidden = !on; };
+        function readNick() {
+            const n = $('#nick').value.trim();
+            if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; }
+            return n;
+        }
+
+        // ---------- 房主 ----------
+        const wordOf = (i) => (H.roles[i] === 'spy' ? H.spyWord : H.civWord);
+        const actives = () => room.players.map(p => p.connected);
+        function publicState() {
+            const over = H.phase === 'over', result = H.phase === 'result' || over;
+            return {
+                phase: H.phase, names: room.players.map(p => p.nick), alive: H.alive.slice(), active: actives(), round: H.round, speaker: H.phase === 'describe' ? H.speaker : -1,
+                voted: H.alive.map((a, i) => a && H.votes.has(i)), elim: result ? H.elim : -1, spies: H.roles.filter(r => r === 'spy').length, note: H.note,
+                roles: over ? H.roles.slice() : [], words: over ? [H.civWord, H.spyWord] : [],
+                votes: result ? [...H.votes] : [], log: H.log.slice(-100),
+            };
+        }
+        function push() { V = publicState(); render(); room.broadcast({ t: 'STATE', s: V }); }
+
+        function startGame() {
+            const ids = room.players.filter(p => p.connected).map(p => p.index);
+            if (ids.length < MIN_PLAYERS) return;
+            room.keepSlots = true;
+            // 離線的槽位直接視為淘汰；身分只分給在線玩家
+            H.alive = room.players.map(p => p.connected);
+            const picked = assign(ids.length, rnd);
+            H.roles = room.players.map(() => 'civ'); ids.forEach((idx, k) => { H.roles[idx] = picked.roles[k]; });
+            H.civWord = picked.civWord; H.spyWord = picked.spyWord; H.round = 0; H.log = [];
+            room.players.forEach((p, i) => { if (H.alive[i]) { if (i === my) myWord = wordOf(i); else room.sendTo(i, { t: 'WORD', word: wordOf(i) }); } });
+            startRound();
+        }
+
+        function startRound() {
+            H.round++; H.votes = new Map(); H.elim = -1; H.phase = 'describe'; H.note = '';
+            H.order = H.alive.map((a, i) => (a ? i : -1)).filter(i => i >= 0); H.speaker = H.order[0];
+            myVote = -1; push();
+        }
+
+        function nextSpeaker() {
+            const k = H.order.indexOf(H.speaker);
+            let nx = k + 1; while (nx < H.order.length && !H.alive[H.order[nx]]) nx++;
+            if (nx >= H.order.length) { H.phase = 'vote'; H.speaker = -1; H.note = '全員描述完畢，開始投票'; }
+            else H.speaker = H.order[nx];
+        }
+
+        function onDesc(from, text) {
+            if (H.phase !== 'describe' || from !== H.speaker) return;
+            if (!descOk(text, wordOf(from))) { if (from !== my) room.sendTo(from, { t: 'ERR', msg: '描述不能是空的，也不能直接包含你的詞' }); else $('#status').textContent = '描述不能是空的，也不能直接包含你的詞'; return; }
+            H.log.push({ r: H.round, n: room.players[from].nick, t: text.trim() });
+            nextSpeaker(); push();
+        }
+
+        function checkTally() {
+            const aliveIdx = H.alive.map((a, i) => (a ? i : -1)).filter(i => i >= 0);
+            if (!aliveIdx.every(i => H.votes.has(i))) return false;
+            H.elim = tally([...H.votes]); H.phase = 'result';
+            if (H.elim >= 0) { H.alive[H.elim] = false; H.note = `${room.players[H.elim].nick} 被淘汰，身分是${H.roles[H.elim] === 'spy' ? '臥底' : '平民'}`; } else H.note = '平票，沒有人被淘汰';
+            if (outcome(H.roles, H.alive)) { H.phase = 'over'; H.note += outcome(H.roles, H.alive) === 'civ' ? '。🎉 平民獲勝！' : '。🕵️ 臥底獲勝！'; }
+            return true;
+        }
+
+        function onVote(from, d) {
+            if (H.phase !== 'vote' || d.r !== H.round || !voteOk(from, d.target, H.alive)) return;
+            H.votes.set(from, d.target);
+            if (from === my) myVote = d.target; else room.sendTo(from, { t: 'YOU', r: H.round, target: d.target });
+            checkTally(); push();
+        }
+
+        function onLeaveGame(p) {
+            if (!H.alive[p.index]) return push();
+            H.alive[p.index] = false; H.votes.delete(p.index);
+            for (const [v, t] of [...H.votes]) if (t === p.index) H.votes.delete(v);
+            H.note = `${p.nick} 離開了（身分是${H.roles[p.index] === 'spy' ? '臥底' : '平民'}）`;
+            const o = outcome(H.roles, H.alive);
+            if (o) { H.phase = 'over'; H.elim = -1; H.note += o === 'civ' ? '。🎉 平民獲勝！' : '。🕵️ 臥底獲勝！'; }
+            else if (H.phase === 'describe') { if (p.index === H.speaker) nextSpeaker(); }
+            else if (H.phase === 'vote') checkTally();
+            push();
+        }
+
+        // ---------- 連線 ----------
+        const onNetError = (err, message) => { if (V || isHost) return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } };
+
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: MAX_PLAYERS,
+                onReady(r) { isHost = true; my = 0; hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id); push(); },
+                canJoin: () => (['describe', 'vote', 'result'].includes(H.phase) ? '遊戲已經開始' : null),
+                onJoin: () => push(),
+                onLeave(p) { if (['describe', 'vote', 'result'].includes(H.phase)) onLeaveGame(p); else push(); },
+                onMessage(p, d) {
+                    if (!d || typeof d.t !== 'string') return;
+                    if (d.t === 'DESC' && d.r === H.round) onDesc(p.index, d.text);
+                    else if (d.t === 'VOTE') onVote(p.index, d);
+                },
+                onError: onNetError,
+            });
+        }
+
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…'); hostId = id;
+            room = P2PRoom.join(id, {
+                nick,
+                onRoster(players, me) {
+                    my = me;
+                    if (!V) { V = { phase: 'lobby', names: players.map(p => p.nick), alive: [], active: players.map(p => p.connected), voted: [], round: 0, speaker: -1, elim: -1, spies: 0, note: '', roles: [], words: [], votes: [], log: [] }; render(); }
+                },
+                onMessage(d) {
+                    if (!d || typeof d.t !== 'string') return;
+                    if (d.t === 'STATE' && validState(d.s)) { if (d.s.round !== (V && V.round)) myVote = -1; V = d.s; render(); }
+                    else if (d.t === 'WORD' && typeof d.word === 'string' && d.word.length <= 10) { myWord = d.word; render(); }
+                    else if (d.t === 'YOU' && V && d.r === V.round && Number.isInteger(d.target)) { myVote = d.target; render(); }
+                    else if (d.t === 'ERR' && typeof d.msg === 'string') $('#status').textContent = d.msg.slice(0, 40);
+                },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (V) { alert('房主已離開，遊戲結束'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+
+        // ---------- 畫面 ----------
+        function render() {
+            if (!V) return;
+            if (V.phase === 'lobby') {
+                show('#menu', false); show('#lobby', true); show('#game', false);
+                $('#lobbyPlayers').replaceChildren(...V.names.map((x, i) => Object.assign(document.createElement('div'), { className: 'pl' + (V.active[i] ? '' : ' off'), textContent: x + (i === 0 ? ' 👑' : '') + (i === my ? '（我）' : '') })));
+                const n = V.active.filter(Boolean).length;
+                show('#copyInvite', isHost); show('#startBtn', isHost); $('#startBtn').disabled = n < MIN_PLAYERS;
+                $('#lobbyHint').textContent = isHost ? (n < MIN_PLAYERS ? `把邀請連結傳給朋友，至少 ${MIN_PLAYERS} 人才能開始` : `人到齊了就按「開始遊戲」（${n} 人，${n >= 7 ? 2 : 1} 位臥底）`) : '等待房主開始遊戲…';
+                return;
+            }
+            show('#menu', false); show('#lobby', false); show('#game', true);
+            const over = V.phase === 'over', alive = (i) => V.alive[i];
+            $('#board').replaceChildren(...V.names.map((x, i) => Object.assign(document.createElement('div'), {
+                className: 'pl' + (i === V.speaker ? ' turn' : '') + (!alive(i) ? ' dead' : '') + (over && V.roles[i] === 'spy' ? ' spy' : ''),
+                textContent: `${i === V.speaker ? '🗣 ' : ''}${x}${i === my ? '（我）' : ''}${V.voted[i] && V.phase === 'vote' ? ' ✓' : ''}${over && V.roles[i] === 'spy' ? ' 🕵️' : ''}`,
+            })));
+            $('#word').replaceChildren(...(over ? [`平民詞：${V.words[0]}　臥底詞：${V.words[1]}`] : [`你的詞（第 ${V.round} 輪・${V.spies} 位臥底）`, Object.assign(document.createElement('b'), { textContent: myWord || '…' })]));
+            let lastR = 0;
+            $('#log').replaceChildren(...V.log.flatMap(l => { const out = []; if (l.r !== lastR) { lastR = l.r; out.push(Object.assign(document.createElement('div'), { className: 'r', textContent: `第 ${l.r} 輪` })); } out.push(Object.assign(document.createElement('div'), { textContent: `${l.n}：${l.t}` })); return out; }));
+            $('#log').scrollTop = 1e9;
+            const myTurn = V.phase === 'describe' && V.speaker === my, canVote = V.phase === 'vote' && alive(my);
+            $('#status').textContent = V.phase === 'describe' ? (myTurn ? '輪到你描述了（不能直接說出你的詞）' : `等待 ${V.names[V.speaker]} 描述…`) : V.phase === 'vote' ? (canVote ? '投給你覺得是臥底的人' : '你已被淘汰，觀戰中') : V.note;
+            show('#descRow', myTurn);
+            show('#targets', canVote);
+            if (canVote) $('#targets').replaceChildren(...V.names.flatMap((x, i) => { if (i === my || !alive(i)) return []; const b = document.createElement('button'); b.textContent = x; b.setAttribute('aria-pressed', myVote === i); b.onclick = () => vote(i); return [b]; }));
+            $('#result').replaceChildren(...(V.phase === 'result' || over ? [...(V.note ? [Object.assign(document.createElement('p'), { className: 'note', textContent: V.note })] : []), ...V.votes.map(([a, b]) => Util.statRow(V.names[a] || '?', '投給 ' + (V.names[b] || '?')))] : []));
+            show('#next', isHost && V.phase === 'result'); show('#again', isHost && over);
+        }
+
+        function vote(i) { if (isHost) onVote(my, { r: V.round, target: i }); else room.send({ t: 'VOTE', r: V.round, target: i }); }
+        $('#descBtn').onclick = () => { const t = $('#desc').value; if (!t.trim()) return; $('#desc').value = ''; if (isHost) onDesc(my, t); else room.send({ t: 'DESC', r: V.round, text: t }); };
+        $('#desc').onkeydown = (e) => { if (e.key === 'Enter') $('#descBtn').click(); };
+        $('#hostBtn').onclick = hostRoom;
+        $('#joinBtn').onclick = joinRoom;
+        $('#startBtn').onclick = startGame;
+        $('#next').onclick = startRound;
+        $('#again').onclick = () => { room.keepSlots = false; room.prune(); H.phase = 'lobby'; H.log = []; H.round = 0; H.alive = []; H.roles = []; H.elim = -1; H.note = ''; myWord = ''; push(); };
+        $('#leave').onclick = () => location.reload();
+        $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
+        if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+    </script>
+</body>
+
+</html>

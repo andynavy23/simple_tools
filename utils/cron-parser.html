@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="Cron 表達式解析：輸入 5 欄位的 cron，用中文說明每個欄位的意思，並列出接下來 10 次執行時間。">
+    <meta property="og:title" content="Cron 表達式解析" />
+    <meta property="og:description" content="Cron 中文說明與未來執行時間預覽。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/cron-parser.html" />
+    <title>Cron 表達式解析</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        #expr {
+            flex: 1 1 260px;
+            font: 18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+
+        .presets {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        #sum {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 6px 0 12px;
+        }
+
+        .err {
+            color: var(--bad);
+            min-height: 1.4em;
+        }
+
+        #fields .li>:first-child {
+            white-space: nowrap;
+        }
+
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>Cron 表達式解析</h1>
+        <p class="sub">格式：分 時 日 月 週。支援 * , - / ?、月份與星期的英文縮寫、@daily 等縮寫。執行時間以你的本機時區計算。</p>
+
+        <div class="card">
+            <div class="row"><input id="expr" spellcheck="false" aria-label="cron 表達式" value="*/15 9-17 * * 1-5"></div>
+            <div class="presets" id="presets"></div>
+            <div class="err" id="err" role="alert"></div>
+            <div id="sum"></div>
+            <div id="fields"></div>
+        </div>
+
+        <div class="card">
+            <h2>接下來 10 次執行</h2>
+            <div id="runs"></div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { statRow, store } = Util;
+
+        // --- pure ---
+        const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+        const DOWS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+        const WEEK_ZH = ['日', '一', '二', '三', '四', '五', '六'];
+        const MACROS = { '@yearly': '0 0 1 1 *', '@annually': '0 0 1 1 *', '@monthly': '0 0 1 * *', '@weekly': '0 0 * * 0', '@daily': '0 0 * * *', '@midnight': '0 0 * * *', '@hourly': '0 * * * *' };
+        // 欄位定義：名稱、範圍、英文縮寫對照（值 = 縮寫在陣列中的位置 + offset）
+        const FIELDS = [
+            { key: 'min', name: '分', unit: '分鐘', lo: 0, hi: 59 },
+            { key: 'hour', name: '時', unit: '小時', lo: 0, hi: 23 },
+            { key: 'dom', name: '日', unit: '天', lo: 1, hi: 31 },
+            { key: 'month', name: '月', unit: '個月', lo: 1, hi: 12, names: MONTHS, off: 1 },
+            { key: 'dow', name: '週', unit: '天', lo: 0, hi: 7, names: DOWS, off: 0 },
+        ];
+
+        // 解析單一欄位成排序後的數值陣列；失敗丟出 Error（訊息是中文）
+        function parseField(text, f) {
+            const t = text.toUpperCase().replace(/\?/g, '*'), out = new Set();
+            const num = (s) => {
+                if (f.names && f.names.includes(s)) return f.names.indexOf(s) + f.off;
+                if (!/^\d+$/.test(s)) throw new Error(`「${s}」不是有效的${f.name}`);
+                return +s;
+            };
+            for (const part of t.split(',')) {
+                if (!part) throw new Error(`${f.name}欄位有空的項目`);
+                const [range, step, ...extra] = part.split('/');
+                if (extra.length || (step !== undefined && !/^\d+$/.test(step) || step === '0')) throw new Error(`${f.name}欄位的步進值不正確：${part}`);
+                let a, b;
+                if (range === '*') { a = f.lo; b = f.key === 'dow' ? 6 : f.hi; }
+                else if (range.includes('-')) { const [x, y, ...more] = range.split('-'); if (more.length) throw new Error(`範圍格式不正確：${range}`); a = num(x); b = num(y); }
+                else { a = num(range); b = step === undefined ? a : f.hi; }
+                if (a < f.lo || b > f.hi || a > b) throw new Error(`${f.name}欄位超出範圍 ${f.lo}–${f.hi}：${part}`);
+                for (let v = a; v <= b; v += step === undefined ? 1 : +step) out.add(f.key === 'dow' && v === 7 ? 0 : v);
+            }
+            return [...out].sort((x, y) => x - y);
+        }
+
+        // 整條 cron：回傳 { fields: [{...f, text, values, star}], expr }
+        function parseCron(expr) {
+            let e = String(expr).trim().replace(/\s+/g, ' ');
+            if (MACROS[e.toLowerCase()]) e = MACROS[e.toLowerCase()];
+            const parts = e.split(' ');
+            if (parts.length !== 5) throw new Error(`需要 5 個欄位（分 時 日 月 週），目前是 ${e ? parts.length : 0} 個`);
+            const fields = FIELDS.map((f, i) => ({ ...f, text: parts[i], values: parseField(parts[i], f), star: /^[*?]$/.test(parts[i]) }));
+            return { fields, expr: e };
+        }
+
+        // 接下來 n 次執行（嚴格晚於 from 的整分鐘）。日與週都有限制時，符合任一即可（標準 cron 行為）
+        function nextRuns(cron, from, n) {
+            const [min, hour, dom, month, dow] = cron.fields, runs = [];
+            const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+            for (let i = 0; i < 366 * 8 && runs.length < n; i++) {
+                const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+                if (!month.values.includes(d.getMonth() + 1)) continue;
+                const domOk = dom.values.includes(d.getDate()), dowOk = dow.values.includes(d.getDay());
+                if (!(dom.star || dow.star ? domOk && dowOk : domOk || dowOk)) continue;
+                for (const h of hour.values) for (const m of min.values) {
+                    const t = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m);
+                    if (t > from && t.getHours() === h && runs.length < n) runs.push(t);
+                }
+            }
+            return runs;
+        }
+
+        const pad2 = (n) => String(n).padStart(2, '0');
+        // 單一欄位的中文說明
+        function describeField(f) {
+            const step = f.text.match(/^(\*|\d+-\d+)\/(\d+)$/), label = (v) => (f.key === 'dow' ? '週' + WEEK_ZH[v] : f.key === 'month' ? v + ' 月' : f.key === 'dom' ? v + ' 日' : f.key === 'hour' ? v + ' 點' : v + ' 分');
+            if (f.star) return `每${f.unit === '天' && f.key === 'dow' ? '天' : f.unit}`;
+            if (step && step[1] === '*') return `每 ${step[2]} ${f.unit}（${f.values.map(label).join('、')}）`;
+            return f.values.map(label).join('、');
+        }
+
+        // 一句話總結：只處理常見形式，其餘請看逐欄說明
+        function summarize(cron) {
+            const [min, hour, dom, month, dow] = cron.fields, rest = dom.star && month.star && dow.star;
+            if (min.star && hour.star && rest) return '每分鐘執行一次';
+            const stepMin = min.text.match(/^\*\/(\d+)$/);
+            if (stepMin && hour.star && rest) return `每 ${stepMin[1]} 分鐘執行一次`;
+            if (min.values.length === 1 && hour.star && rest) return `每小時的第 ${min.values[0]} 分執行`;
+            if (min.values.length === 1 && hour.values.length === 1) {
+                const when = `${pad2(hour.values[0])}:${pad2(min.values[0])}`;
+                if (rest) return `每天 ${when} 執行`;
+                if (dom.star && month.star) return `每${dow.values.length === 7 ? '天' : '週' + dow.values.map(v => WEEK_ZH[v]).join('、')} ${when} 執行`;
+                if (month.star && dow.star) return `每月 ${dom.values.join('、')} 日 ${when} 執行`;
+            }
+            return '';
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const PRESETS = [['每分鐘', '* * * * *'], ['每 5 分鐘', '*/5 * * * *'], ['每小時', '0 * * * *'], ['每天 9 點', '0 9 * * *'], ['平日 9–17 每 15 分', '*/15 9-17 * * 1-5'], ['每週一 8:30', '30 8 * * MON'], ['每月 1 日午夜', '0 0 1 * *'], ['每年元旦', '@yearly']];
+        $('#presets').replaceChildren(...PRESETS.map(([n, e]) => Object.assign(document.createElement('button'), { className: 'sm', textContent: n, onclick: () => { $('#expr').value = e; render(); } })));
+        $('#expr').value = store.get('cron_expr', $('#expr').value);
+
+        function render() {
+            const text = $('#expr').value;
+            try {
+                const c = parseCron(text);
+                $('#err').textContent = '';
+                $('#sum').textContent = summarize(c) || '（請看下方逐欄說明）';
+                $('#fields').replaceChildren(...c.fields.map(f => statRow(`${f.name}　${f.text}`, describeField(f))));
+                const runs = nextRuns(c, new Date(), 10), w = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}（週${WEEK_ZH[d.getDay()]}）${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+                $('#runs').replaceChildren(...(runs.length ? runs.map((d, i) => statRow(`第 ${i + 1} 次`, w(d))) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '未來 8 年內沒有符合的時間（例如 2 月 30 日）' })]));
+                store.set('cron_expr', text);
+            } catch (e) {
+                $('#err').textContent = e.message; $('#sum').textContent = ''; $('#fields').replaceChildren(); $('#runs').replaceChildren();
+            }
+        }
+        $('#expr').oninput = render;
+        render();
+    </script>
+</body>
+
+</html>

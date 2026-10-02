@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="連線猜拳：雙人剪刀石頭布，三戰兩勝或五戰三勝。雙方先送出加密承諾再同時揭曉，沒有人能後出。">
+    <meta property="og:title" content="連線猜拳" />
+    <meta property="og:description" content="用雜湊承諾確保公平的雙人猜拳。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/rps.html" />
+    <title>連線猜拳</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        :root {
+            --wrap-w: 520px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .row input {
+            flex: 1 1 130px;
+        }
+
+        .score {
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .score b {
+            display: block;
+            font-size: 40px;
+        }
+
+        .arena {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            text-align: center;
+            font-size: 64px;
+            min-height: 110px;
+            margin: 10px 0;
+        }
+
+        .arena small {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .picks {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .picks button {
+            font-size: 44px;
+            padding: 14px 0;
+            border-radius: 18px;
+        }
+
+        .picks button[aria-pressed=true] {
+            background: var(--blue);
+        }
+
+        #status {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+            margin: 8px 0;
+        }
+
+        #hist {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 8px;
+        }
+
+        #hist span {
+            padding: 2px 10px;
+            border-radius: 980px;
+            background: var(--fill);
+            font-size: 14px;
+        }
+
+        #hist span.w {
+            color: var(--ok);
+        }
+
+        #hist span.l {
+            color: var(--bad);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>連線猜拳</h1>
+        <p class="sub">雙人剪刀石頭布。出拳時雙方先交換「加密後的選擇」，兩邊都出完才一起揭曉並驗證，所以沒有人能偷看或後出。</p>
+
+        <div class="card" id="menu">
+            <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+            <div class="row">
+                <button class="primary" id="hostBtn">建立房間</button>
+                <input id="joinId" placeholder="貼上房號" aria-label="房號">
+                <button id="joinBtn">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+        </div>
+
+        <div class="card" id="game" hidden>
+            <div class="row" id="setup" style="justify-content:center">
+                <label for="bestOf" class="muted">賽制</label>
+                <select id="bestOf"><option value="3">三戰兩勝</option><option value="5">五戰三勝</option><option value="7">七戰四勝</option></select>
+            </div>
+            <div class="score"><div><span id="n0">我</span><b id="s0">0</b></div><div><span id="n1">對手</span><b id="s1">0</b></div></div>
+            <div class="arena"><div id="a0">❔</div><small id="vs">VS</small><div id="a1">❔</div></div>
+            <div id="status" role="status" aria-live="polite"></div>
+            <div class="picks" id="picks"></div>
+            <div id="hist"></div>
+            <div class="row" style="justify-content:center;margin-top:14px">
+                <button class="primary" id="again" hidden>再來一局</button>
+                <button id="copy" hidden>複製邀請連結</button>
+                <button id="leave">離開</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { sha256, randomHex } = Util;
+
+        // --- pure ---
+        const CHOICES = ['rock', 'paper', 'scissors'];
+        const EMOJI = { rock: '✊', paper: '✋', scissors: '✌️' };
+        const LABEL = { rock: '石頭', paper: '布', scissors: '剪刀' };
+        const BEST_OF = [3, 5, 7];
+
+        // a 對 b：1 贏、-1 輸、0 平手
+        function beats(a, b) {
+            if (a === b) return 0;
+            return (a === 'rock' && b === 'scissors') || (a === 'paper' && b === 'rock') || (a === 'scissors' && b === 'paper') ? 1 : -1;
+        }
+        const winsNeeded = (bestOf) => Math.floor(bestOf / 2) + 1;
+
+        // 承諾字串：包含回合數，同一個選擇 + 鹽在不同回合不能重複使用
+        const commitText = (round, choice, salt) => `${round}:${choice}:${salt}`;
+        const validHash = (h) => typeof h === 'string' && /^[0-9a-f]{64}$/.test(h);
+        const validReveal = (d) => !!d && Number.isInteger(d.round) && CHOICES.includes(d.choice) && typeof d.salt === 'string' && /^[0-9a-f]{32}$/.test(d.salt);
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let room = null, isHost = false, hostId = '', names = ['', ''], bestOf = 3;
+        let G = null, inbox = [];                                      // 一局的狀態；inbox：對手已經進入下一回合時提早送來的訊息
+
+        function newMatch() {
+            G = { round: 1, scores: [0, 0], hist: [], over: false, cheat: false, ...freshRound() }; inbox = [];
+        }
+        function freshRound() { return { pick: null, salt: '', myCommit: '', oppCommit: '', oppReveal: null, sent: false, shown: null }; }
+
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const out = (d) => { if (isHost) room.broadcast(d); else room.send(d); };
+        const paired = () => !isHost || (room && room.players.length > 1);
+
+        // ---------- 對局流程 ----------
+        async function choose(c) {
+            if (!G || G.over || G.pick || !paired() || !CHOICES.includes(c)) return;
+            G.pick = c; G.salt = randomHex(16);
+            G.myCommit = await sha256(commitText(G.round, c, G.salt));
+            out({ t: 'COMMIT', round: G.round, hash: G.myCommit });
+            maybeReveal(); render();
+        }
+
+        // 雙方都送出承諾後才揭曉；之後兩邊都收到對方的揭曉就結算
+        function maybeReveal() {
+            if (G.myCommit && G.oppCommit && !G.sent) { G.sent = true; out({ t: 'REVEAL', round: G.round, choice: G.pick, salt: G.salt }); }
+            settle();
+        }
+
+        async function settle() {
+            if (!G.sent || !G.oppReveal || G.shown) return;
+            const r = G.oppReveal, round = G.round;
+            const ok = (await sha256(commitText(round, r.choice, r.salt))) === G.oppCommit;
+            if (round !== G.round || G.shown) return;
+            if (!ok) { G.cheat = true; G.over = true; render(); return; }
+            const res = beats(G.pick, r.choice);
+            G.shown = { me: G.pick, opp: r.choice, res };
+            if (res > 0) G.scores[0]++; else if (res < 0) G.scores[1]++;
+            G.hist.push(res);
+            if (Math.max(...G.scores) >= winsNeeded(bestOf)) G.over = true;
+            render();
+            if (!G.over) setTimeout(() => { if (G && G.round === round) { G.round++; Object.assign(G, freshRound()); render(); inbox.splice(0).forEach(onMessage); } }, 1800);
+        }
+
+        function onMessage(d) {
+            if (!d || typeof d.t !== 'string' || !G) return;
+            if ((d.t === 'COMMIT' || d.t === 'REVEAL') && d.round === G.round + 1 && inbox.length < 4) { inbox.push(d); return; }
+            if (d.t === 'COMMIT') { if (d.round === G.round && validHash(d.hash) && !G.oppCommit && !G.over) { G.oppCommit = d.hash; maybeReveal(); render(); } }
+            else if (d.t === 'REVEAL') { if (validReveal(d) && d.round === G.round && G.oppCommit && !G.oppReveal) { G.oppReveal = d; settle(); } }
+            else if (d.t === 'SETUP' && !isHost && BEST_OF.includes(d.bestOf)) { bestOf = d.bestOf; render(); }
+            else if (d.t === 'AGAIN' && !isHost) { newMatch(); render(); }                    // 只有房主能重開；對方判定作弊時雙方畫面可能不同步，所以不限狀態
+        }
+
+        // ---------- 連線 ----------
+        const readNick = () => {
+            const n = $('#nick').value.trim();
+            if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; }
+            return n;
+        };
+        const onNetError = (err, message) => { if (G) return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } };
+
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: 2,
+                onReady(r) { isHost = true; hostId = r.id; names = [nick, '']; history.replaceState('', document.title, location.pathname + '#' + r.id); newMatch(); show(); render(); },
+                onJoin(p) { names[1] = p.nick; newMatch(); room.sendTo(1, { t: 'SETUP', bestOf }); render(); },
+                onLeave() { names[1] = ''; newMatch(); render(); },
+                onMessage(p, d) { onMessage(d); },
+                onError: onNetError,
+            });
+        }
+
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…'); hostId = id; names = ['', nick];
+            room = P2PRoom.join(id, {
+                nick,
+                onJoined() { newMatch(); show(); render(); },
+                onRoster(players) { names = [players[0].nick, nick]; if (G) render(); },
+                onMessage,
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (G) { alert('房主已離開，遊戲結束'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+
+        // ---------- 畫面 ----------
+        const show = () => { $('#menu').hidden = true; $('#game').hidden = false; };
+        function buildPicks() {
+            $('#picks').replaceChildren(...CHOICES.map(c => {
+                const b = document.createElement('button'); b.textContent = EMOJI[c]; b.dataset.c = c; b.setAttribute('aria-label', LABEL[c]);
+                b.onclick = () => choose(c); return b;
+            }));
+        }
+        buildPicks();
+
+        function render() {
+            if (!G) return;
+            const meName = isHost ? names[0] : names[1], oppName = isHost ? names[1] : names[0], ready = paired();
+            $('#n0').textContent = meName + '（我）'; $('#n1').textContent = oppName || '等待對手…';
+            $('#s0').textContent = G.scores[0]; $('#s1').textContent = G.scores[1];
+            $('#setup').hidden = !isHost || G.round > 1 || G.pick !== null || G.over || G.hist.length > 0;
+            $('#bestOf').value = bestOf; $('#bestOf').disabled = !isHost || !ready;
+            $('#a0').textContent = G.shown ? EMOJI[G.shown.me] : G.pick ? '🔒' : '❔';
+            $('#a1').textContent = G.shown ? EMOJI[G.shown.opp] : G.oppCommit ? '🔒' : '❔';
+            let st;
+            if (!ready) st = '等待對手加入…（把邀請連結傳給朋友）';
+            else if (G.cheat) st = '⚠ 對手揭曉的選擇與先前送出的承諾不符，判定作弊';
+            else if (G.over) st = G.scores[0] > G.scores[1] ? `🏆 你贏了！ ${G.scores[0]} : ${G.scores[1]}` : `💥 ${oppName} 獲勝 ${G.scores[1]} : ${G.scores[0]}`;
+            else if (G.shown) st = G.shown.res > 0 ? '這局你贏了！' : G.shown.res < 0 ? '這局你輸了' : '平手，重來';
+            else if (!G.pick) st = `第 ${G.round} 局：請出拳（${winsNeeded(bestOf)} 勝制）`;
+            else if (!G.oppCommit) st = '已出拳（已加密），等待對手…';
+            else st = '雙方都出拳了，揭曉中…';
+            $('#status').textContent = st;
+            document.querySelectorAll('#picks button').forEach(b => { b.disabled = !ready || G.over || !!G.pick; b.setAttribute('aria-pressed', b.dataset.c === G.pick); });
+            $('#hist').replaceChildren(...G.hist.map(r => Object.assign(document.createElement('span'), { className: r > 0 ? 'w' : r < 0 ? 'l' : '', textContent: r > 0 ? '勝' : r < 0 ? '負' : '和' })));
+            $('#again').hidden = !(isHost && G.over); $('#copy').hidden = !isHost;
+        }
+
+        $('#hostBtn').onclick = hostRoom;
+        $('#joinBtn').onclick = joinRoom;
+        $('#bestOf').onchange = () => { bestOf = +$('#bestOf').value; if (isHost && room.players.length > 1) room.sendTo(1, { t: 'SETUP', bestOf }); render(); };
+        $('#again').onclick = () => { newMatch(); out({ t: 'AGAIN' }); render(); };
+        $('#leave').onclick = () => location.reload();
+        $('#copy').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copy'), url, () => prompt('請手動複製邀請連結：', url)); };
+        if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+    </script>
+</body>
+
+</html>

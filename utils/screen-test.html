@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="螢幕 / 鍵盤 / 滑鼠測試：全螢幕純色檢查壞點與漏光，鍵盤逐鍵亮燈，滑鼠按鍵與滾輪偵測。">
+    <meta property="og:title" content="螢幕 / 鍵盤 / 滑鼠測試" />
+    <meta property="og:description" content="壞點檢查、鍵盤按鍵測試與滑鼠測試。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/screen-test.html" />
+    <title>螢幕 / 鍵盤 / 滑鼠測試</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 760px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .swatches {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin: 10px 0;
+        }
+
+        .swatches i {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            box-shadow: inset 0 0 0 1px var(--line);
+        }
+
+        #cover {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: grid;
+            place-items: end center;
+            cursor: none;
+        }
+
+        #cover span {
+            margin-bottom: 24px;
+            padding: 6px 16px;
+            border-radius: 980px;
+            background: rgba(128, 128, 128, .55);
+            color: #fff;
+            font-size: 14px;
+            transition: opacity 1s;
+        }
+
+        .kb {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            overflow-x: auto;
+            padding-bottom: 6px;
+        }
+
+        .kr {
+            display: flex;
+            gap: 3px;
+        }
+
+        .k {
+            flex: 0 0 auto;
+            width: calc(var(--w, 1) * 33px + (var(--w, 1) - 1) * 3px);
+            height: 34px;
+            border-radius: 7px;
+            background: var(--fill);
+            display: grid;
+            place-items: center;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .k.sp {
+            background: transparent;
+        }
+
+        .k.hit {
+            background: var(--ok);
+            color: #fff;
+        }
+
+        .k.down {
+            background: var(--blue);
+            color: #fff;
+        }
+
+        #last {
+            margin: 10px 0;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #pad {
+            height: 220px;
+            border-radius: 16px;
+            background: var(--bg);
+            box-shadow: inset 0 0 0 2px var(--fill);
+            display: grid;
+            place-items: center;
+            color: var(--muted);
+            user-select: none;
+            touch-action: none;
+            text-align: center;
+        }
+
+        .lights {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .lights span {
+            padding: 8px;
+            border-radius: 10px;
+            background: var(--fill);
+            text-align: center;
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        .lights span.hit {
+            background: var(--ok);
+            color: #fff;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>螢幕 / 鍵盤 / 滑鼠測試</h1>
+        <p class="sub">買新螢幕、筆電或週邊時，快速檢查有沒有壞點、卡鍵或失靈的按鍵。</p>
+
+        <div class="card">
+            <div class="tabs" role="tablist">
+                <button data-t="screen" aria-pressed="true">螢幕壞點</button>
+                <button data-t="kb" aria-pressed="false">鍵盤</button>
+                <button data-t="mouse" aria-pressed="false">滑鼠</button>
+            </div>
+
+            <div class="pane" data-t="screen">
+                <p class="note">全螢幕顯示純色：點一下、按空白鍵或 → 換下一色，← 回上一色，Esc 離開。請在各種顏色下找不會變色的亮點 / 暗點，白色與黑色畫面可看漏光與髒點。</p>
+                <div class="swatches" id="swatches"></div>
+                <button class="primary" id="startScreen">開始全螢幕測試</button>
+            </div>
+
+            <div class="pane" data-t="kb" hidden>
+                <p class="note">按下每個按鍵，按過的會亮綠色、正在按住的是藍色。瀏覽器會攔截部分組合鍵（如 Ctrl+W、Alt+F4），這類無法測試。</p>
+                <div class="kb" id="kb"></div>
+                <div id="last"></div>
+                <div class="row"><button class="sm" id="kbReset">重新測試</button></div>
+            </div>
+
+            <div class="pane" data-t="mouse" hidden>
+                <div id="pad" tabindex="0">在這裡按滑鼠按鍵、雙擊、滾動滾輪<br><small id="pos">座標：—</small></div>
+                <div class="lights" id="lights"></div>
+                <div class="row" style="margin-top:10px"><button class="sm" id="mouseReset">重新測試</button></div>
+            </div>
+        </div>
+    </div>
+    <div id="cover" hidden><span id="hint"></span></div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store } = Util;
+
+        // --- pure ---
+        const COLORS = [['黑', '#000000'], ['白', '#ffffff'], ['紅', '#ff0000'], ['綠', '#00ff00'], ['藍', '#0000ff'], ['黃', '#ffff00'], ['青', '#00ffff'], ['洋紅', '#ff00ff'], ['灰', '#808080']];
+
+        // 鍵盤配置：每列 [KeyboardEvent.code, 顯示文字, 寬度（鍵單位）]；code 為 '' 代表空白間隔
+        const letters = (s) => [...s].map(c => ['Key' + c, c]);
+        const range = (a, b, f) => Array.from({ length: b - a + 1 }, (_, i) => f(a + i));
+        const ROWS = [
+            [['Escape', 'Esc'], ['', '', 1], ...range(1, 4, i => ['F' + i, 'F' + i]), ['', '', .5], ...range(5, 8, i => ['F' + i, 'F' + i]), ['', '', .5], ...range(9, 12, i => ['F' + i, 'F' + i]), ['', '', .5], ['PrintScreen', 'PrtSc'], ['ScrollLock', 'ScrLk'], ['Pause', 'Pause']],
+            [['Backquote', '`'], ...range(1, 9, i => ['Digit' + i, String(i)]), ['Digit0', '0'], ['Minus', '-'], ['Equal', '='], ['Backspace', '⌫', 2], ['', '', .5], ['Insert', 'Ins'], ['Home', 'Home'], ['PageUp', 'PgUp']],
+            [['Tab', 'Tab', 1.5], ...letters('QWERTYUIOP'), ['BracketLeft', '['], ['BracketRight', ']'], ['Backslash', '\\', 1.5], ['', '', .5], ['Delete', 'Del'], ['End', 'End'], ['PageDown', 'PgDn']],
+            [['CapsLock', 'Caps', 1.8], ...letters('ASDFGHJKL'), ['Semicolon', ';'], ['Quote', "'"], ['Enter', 'Enter', 2.2]],
+            [['ShiftLeft', 'Shift', 2.3], ...letters('ZXCVBNM'), ['Comma', ','], ['Period', '.'], ['Slash', '/'], ['ShiftRight', 'Shift', 2.7], ['', '', 1.5], ['ArrowUp', '↑']],
+            [['ControlLeft', 'Ctrl', 1.4], ['MetaLeft', 'Win', 1.2], ['AltLeft', 'Alt', 1.2], ['Space', 'Space', 6], ['AltRight', 'Alt', 1.2], ['MetaRight', 'Win', 1.2], ['ContextMenu', 'Menu', 1.2], ['ControlRight', 'Ctrl', 1.4], ['', '', .5], ['ArrowLeft', '←'], ['ArrowDown', '↓'], ['ArrowRight', '→']],
+        ];
+        const ALL_CODES = ROWS.flat().map(k => k[0]).filter(Boolean);
+
+        // 滑鼠測試項目
+        const MOUSE_ITEMS = [['left', '左鍵'], ['middle', '中鍵'], ['right', '右鍵'], ['back', '上一頁鍵'], ['forward', '下一頁鍵'], ['dbl', '雙擊'], ['up', '滾輪向上'], ['down', '滾輪向下']];
+        const BUTTON_NAME = { 0: 'left', 1: 'middle', 2: 'right', 3: 'back', 4: 'forward' };
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let tab = 'screen', ci = 0;
+
+        // ---------- 螢幕 ----------
+        $('#swatches').replaceChildren(...COLORS.map(([n, c]) => Object.assign(document.createElement('i'), { title: n, style: `background:${c}` })));
+        let hintTimer = null;
+        function showColor() {
+            $('#cover').style.background = COLORS[ci][1];
+            $('#hint').textContent = `${COLORS[ci][0]}（${ci + 1} / ${COLORS.length}）← → 換色，Esc 離開`; $('#hint').style.opacity = 1;
+            clearTimeout(hintTimer); hintTimer = setTimeout(() => { $('#hint').style.opacity = 0; }, 1800);
+        }
+        const coverOpen = () => !$('#cover').hidden;
+        function startScreen() { ci = 0; $('#cover').hidden = false; showColor(); try { $('#cover').requestFullscreen && $('#cover').requestFullscreen(); } catch (e) { } }
+        function stopScreen() { $('#cover').hidden = true; try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) { } }
+        $('#startScreen').onclick = startScreen;
+        $('#cover').onclick = () => { ci = (ci + 1) % COLORS.length; showColor(); };
+        document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && coverOpen()) $('#cover').hidden = true; });
+
+        // ---------- 鍵盤 ----------
+        const hit = new Set();
+        $('#kb').replaceChildren(...ROWS.map(row => {
+            const r = document.createElement('div'); r.className = 'kr';
+            r.append(...row.map(([code, label, w = 1]) => { const k = document.createElement('div'); k.className = 'k' + (code ? '' : ' sp'); k.style.setProperty('--w', w); k.textContent = label; if (code) k.dataset.code = code; return k; }));
+            return r;
+        }));
+        const keyEl = (code) => document.querySelector(`.k[data-code="${code}"]`);
+        function kbUpdate(e, down) {
+            const el = keyEl(e.code);
+            if (down) { hit.add(e.code); if (el) { el.classList.add('hit', 'down'); } $('#last').textContent = `最後按下：${e.key === ' ' ? '(空白)' : e.key}　code=${e.code}　keyCode=${e.keyCode}　已測試 ${[...hit].filter(c => ALL_CODES.includes(c)).length} / ${ALL_CODES.length} 個鍵`; }
+            else if (el) el.classList.remove('down');
+        }
+        document.addEventListener('keydown', (e) => {
+            if (coverOpen()) {
+                if (e.key === 'Escape') return stopScreen();
+                e.preventDefault();
+                if (e.key === 'ArrowLeft') ci = (ci + COLORS.length - 1) % COLORS.length; else ci = (ci + 1) % COLORS.length;
+                return showColor();
+            }
+            if (tab !== 'kb' || e.target.tagName === 'INPUT') return;
+            e.preventDefault(); kbUpdate(e, true);
+        });
+        document.addEventListener('keyup', (e) => { if (tab === 'kb') kbUpdate(e, false); });
+        window.addEventListener('blur', () => document.querySelectorAll('.k.down').forEach(k => k.classList.remove('down')));
+        $('#kbReset').onclick = () => { hit.clear(); document.querySelectorAll('.k').forEach(k => k.classList.remove('hit', 'down')); $('#last').textContent = ''; };
+
+        // ---------- 滑鼠 ----------
+        const seen = new Set();
+        $('#lights').replaceChildren(...MOUSE_ITEMS.map(([k, n]) => Object.assign(document.createElement('span'), { textContent: n, id: 'm-' + k })));
+        const light = (k) => { seen.add(k); $('#m-' + k).classList.add('hit'); };
+        const pad = $('#pad');
+        pad.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse' && BUTTON_NAME[e.button]) { e.preventDefault(); light(BUTTON_NAME[e.button]); } });
+        pad.addEventListener('auxclick', (e) => e.preventDefault());
+        pad.addEventListener('contextmenu', (e) => e.preventDefault());
+        pad.addEventListener('dblclick', () => light('dbl'));
+        pad.addEventListener('wheel', (e) => { e.preventDefault(); light(e.deltaY < 0 ? 'up' : 'down'); }, { passive: false });
+        pad.addEventListener('pointermove', (e) => { $('#pos').textContent = `座標：${Math.round(e.offsetX)}, ${Math.round(e.offsetY)}`; });
+        $('#mouseReset').onclick = () => { seen.clear(); document.querySelectorAll('.lights span').forEach(s => s.classList.remove('hit')); };
+
+        // ---------- 分頁 ----------
+        function render() {
+            document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab));
+            document.querySelectorAll('.pane').forEach(p => { p.hidden = p.dataset.t !== tab; });
+        }
+        document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { tab = b.dataset.t; store.set('screentest_tab', tab); render(); }; });
+        const saved = store.get('screentest_tab', 'screen'); if (['screen', 'kb', 'mouse'].includes(saved)) tab = saved;
+        render();
+    </script>
+</body>
+
+</html>

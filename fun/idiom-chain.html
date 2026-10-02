@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="連線成語接龍：2–8 人輪流用上一個成語的最後一個字開頭接成語，限時作答，超時扣命，最後存活的人獲勝。">
+    <meta property="og:title" content="連線成語接龍" />
+    <meta property="og:description" content="輪流接成語、限時淘汰的多人連線遊戲。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/idiom-chain.html" />
+    <title>連線成語接龍</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .row input {
+            flex: 1 1 130px;
+        }
+
+        .pl.turn {
+            border-color: var(--blue);
+        }
+
+        #last {
+            text-align: center;
+            font-size: 44px;
+            font-weight: 800;
+            letter-spacing: .12em;
+            margin: 14px 0 4px;
+        }
+
+        #last b {
+            color: var(--blue);
+        }
+
+        #need {
+            text-align: center;
+            color: var(--muted);
+            margin-bottom: 10px;
+        }
+
+        #timer {
+            text-align: center;
+            font-size: 28px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            min-height: 1.4em;
+        }
+
+        #status {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+            margin: 6px 0;
+        }
+
+        #log {
+            max-height: 160px;
+            overflow: auto;
+            background: var(--fill);
+            border-radius: 12px;
+            padding: 8px 12px;
+            margin-top: 12px;
+            font-size: 15px;
+        }
+
+        #judge {
+            background: color-mix(in srgb, var(--blue) 14%, var(--fill));
+            border-radius: 12px;
+            padding: 10px 12px;
+            margin: 10px 0;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>連線成語接龍</h1>
+        <p class="sub">輪流用上一個成語的最後一個字開頭，接一個四字成語（不能重複）。每人 3 條命，每次限時 30 秒，超時扣一命，最後存活的人獲勝。詞庫沒有收錄的四字詞由房主裁決是否接受。</p>
+
+        <div class="card" id="menu">
+            <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+            <div class="row">
+                <button class="primary" id="hostBtn">建立房間</button>
+                <input id="joinId" placeholder="貼上房號" aria-label="房號">
+                <button id="joinBtn">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+        </div>
+
+        <div class="card" id="lobby" hidden>
+            <h2>等待玩家加入（2–8 人）</h2>
+            <div class="players" id="lobbyPlayers"></div>
+            <div class="row" style="margin-top:12px">
+                <button id="copyInvite" hidden>複製邀請連結</button>
+                <button class="primary" id="startBtn" hidden disabled>開始遊戲</button>
+            </div>
+            <p class="note" id="lobbyHint"></p>
+        </div>
+
+        <div id="game" hidden>
+            <div class="card">
+                <div class="players" id="board"></div>
+                <div id="last"></div>
+                <div id="need"></div>
+                <div id="timer"></div>
+                <div id="judge" hidden><span id="judgeText"></span><div class="row" style="justify-content:center;margin:8px 0 0"><button class="primary sm" id="accept">接受</button><button class="sm" id="reject">不接受</button></div></div>
+                <div id="status" role="status" aria-live="polite"></div>
+                <div class="row" id="ansRow"><input id="ans" maxlength="4" placeholder="輸入四字成語" aria-label="你的答案" autocomplete="off"><button class="primary" id="ansBtn">送出</button></div>
+                <div id="log" aria-label="接龍紀錄"></div>
+            </div>
+            <div class="row" style="justify-content:center">
+                <button class="primary" id="again" hidden>再來一局</button>
+                <button id="leave">離開</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { rnd, shuffle } = Util;
+
+        // --- pure ---
+        const MAX_PLAYERS = 8, LIVES = 3, TURN_MS = 30000;
+        const IDIOMS = '一心一意 一帆風順 一舉兩得 一石二鳥 一見鍾情 一針見血 一目了然 一鳴驚人 一絲不苟 一籌莫展 一模一樣 一字千金 一諾千金 一視同仁 一波三折 一氣呵成 一敗塗地 一落千丈 一葉知秋 一技之長 一箭雙鵰 一塵不染 一言九鼎 一望無際 一網打盡 一馬當先 一蹴可幾 一觸即發 一毛不拔 一勞永逸 一概而論 一拍即合 一口咬定 不可思議 不屈不撓 不翼而飛 不言而喻 不約而同 不謀而合 不勝枚舉 不知所措 不攻自破 不速之客 不恥下問 不遺餘力 不修邊幅 不卑不亢 不倫不類 不期而遇 不甘示弱 不自量力 不務正業 不由自主 不辭辛勞 不堪設想 不顧一切 不拘小節 不三不四 不動聲色 不寒而慄 不可救藥 不省人事 不計其數 不聞不問 不偏不倚 不亦樂乎 不置可否 無微不至 無憂無慮 無與倫比 無法無天 無可奈何 無所事事 無中生有 無濟於事 無懈可擊 無孔不入 無事生非 無動於衷 無緣無故 無地自容 無精打采 無影無蹤 無病呻吟 無獨有偶 無遠弗屆 無傷大雅 無關痛癢 無往不利 無理取鬧 無拘無束 天長地久 天翻地覆 天衣無縫 天馬行空 天下無雙 天真爛漫 天涯海角 天崩地裂 天網恢恢 天經地義 天生麗質 天高地厚 天花亂墜 天誅地滅 天寒地凍 天南地北 天作之合 天賦異稟 天府之國 天災人禍 天理昭彰 地大物博 地動山搖 地廣人稀 地久天長 地利人和 人山人海 人云亦云 人定勝天 人仰馬翻 人才輩出 人面桃花 人間天堂 人心惶惶 人之常情 人傑地靈 人情世故 人浮於事 人窮志短 人命關天 人多勢眾 人言可畏 人財兩失 心花怒放 心急如焚 心照不宣 心有餘悸 心平氣和 心懷鬼胎 心曠神怡 心不在焉 心甘情願 心安理得 心直口快 心神不寧 心灰意冷 心狠手辣 心領神會 心心相印 心滿意足 心驚膽戰 心口如一 心浮氣躁 心如刀割 心服口服 心猿意馬 心煩意亂 心想事成 心有靈犀 大公無私 大驚小怪 大器晚成 大智若愚 大刀闊斧 大張旗鼓 大海撈針 大功告成 大材小用 大快人心 大同小異 大相逕庭 大名鼎鼎 大義凜然 大顯身手 大放異彩 大勢所趨 大庭廣眾 大難臨頭 大有可為 大言不慚 大搖大擺 大街小巷 大吉大利 小心翼翼 小題大作 小鳥依人 小家碧玉 小試牛刀 千方百計 千鈞一髮 千變萬化 千載難逢 千辛萬苦 千言萬語 千里迢迢 千篇一律 千秋萬代 千絲萬縷 千山萬水 千姿百態 千真萬確 千奇百怪 千軍萬馬 千差萬別 千錘百鍊 千叮萬囑 千依百順 萬紫千紅 萬事如意 萬無一失 萬象更新 萬眾一心 萬古長青 萬馬奔騰 萬家燈火 萬世師表 萬籟俱寂 萬不得已 萬水千山 百發百中 百折不撓 百戰百勝 百花齊放 百思不解 百感交集 百依百順 百年好合 百無聊賴 百口莫辯 百孔千瘡 百川歸海 百廢待舉 百年樹人 九牛一毛 九死一生 九霄雲外 九五之尊 三心二意 三顧茅廬 三言兩語 三長兩短 三番兩次 三令五申 三教九流 三生有幸 三思而行 三三兩兩 三足鼎立 三五成群 三姑六婆 三緘其口 五光十色 五花八門 五穀豐登 五體投地 五湖四海 五顏六色 五味雜陳 五彩繽紛 五洲四海 七上八下 七手八腳 七嘴八舌 七零八落 七擒七縱 十全十美 十拿九穩 十年寒窗 十萬火急 十惡不赦 十室九空 十指連心 半途而廢 半信半疑 半斤八兩 半推半就 半夢半醒 半壁江山 自力更生 自食其力 自相矛盾 自強不息 自暴自棄 自鳴得意 自言自語 自作自受 自給自足 自欺欺人 自討苦吃 自投羅網 自以為是 自私自利 自生自滅 自告奮勇 自食其果 自慚形穢 自顧不暇 口若懸河 口是心非 口蜜腹劍 口乾舌燥 口無遮攔 口口聲聲 口出狂言 口誅筆伐 手忙腳亂 手舞足蹈 手足無措 手到擒來 手無寸鐵 手下留情 手不釋卷 手足情深 手腳並用 眼花繚亂 眼高手低 眼明手快 眼疾手快 眼見為憑 風和日麗 風調雨順 風起雲湧 風雨同舟 風塵僕僕 風平浪靜 風馳電掣 風吹草動 風燭殘年 風花雪月 風度翩翩 風捲殘雲 風雨無阻 風言風語 風靡一時 風光明媚 水到渠成 水落石出 水乳交融 水深火熱 水漲船高 水泄不通 水滴石穿 水能載舟 水清無魚 水秀山明 山明水秀 山高水長 山清水秀 山盟海誓 山窮水盡 山重水複 山崩地裂 山珍海味 山河破碎 山雨欲來 海闊天空 海枯石爛 海底撈月 海納百川 海市蜃樓 海角天涯 海誓山盟 海天一色 花好月圓 花紅柳綠 花團錦簇 花言巧語 花容月貌 花枝招展 花天酒地 花前月下 花開富貴 花香鳥語 月明星稀 月白風清 月下花前 月缺月圓 月朗風清 日新月異 日久天長 日積月累 日理萬機 日復一日 日上三竿 日出而作 日薄西山 日月如梭 日暮途窮 日進斗金 日以繼夜 春暖花開 春風得意 春回大地 春華秋實 春意盎然 春光明媚 春風化雨 春色滿園 春夏秋冬 秋高氣爽 秋風掃葉 秋毫無犯 秋色宜人 秋收冬藏 學無止境 學以致用 學富五車 學貫中西 學而不厭 學海無涯 知足常樂 知己知彼 知難而退 知恩圖報 知書達禮 知行合一 知無不言 言簡意賅 言而有信 言行一致 言之有物 言聽計從 言歸於好 言過其實 言多必失 言不由衷 言外之意 言語道斷 言傳身教 行雲流水 行屍走肉 行色匆匆 行將就木 行之有效 行俠仗義 成竹在胸 成人之美 成千上萬 成敗得失 成家立業 成年累月 功成名就 功虧一簣 功德無量 功不可沒 功高蓋世 功敗垂成 功名利祿 功成身退 名正言順 名列前茅 名落孫山 名揚四海 名不虛傳 名垂青史 名副其實 名存實亡 名門望族 利令智昏 利欲薰心 利害得失 利國利民 和顏悅色 和藹可親 和風細雨 和平共處 和衷共濟 和盤托出 和氣生財 平步青雲 平易近人 平安無事 平心而論 平淡無奇 平分秋色 平鋪直敘 平白無故 安居樂業 安步當車 安然無恙 安分守己 安之若素 安身立命 安土重遷 樂不思蜀 樂極生悲 樂在其中 樂善好施 樂此不疲 樂天知命 樂於助人 樂而忘返 喜出望外 喜笑顏開 喜聞樂見 喜形於色 喜怒無常 喜上眉梢 喜新厭舊 喜從天降 笑逐顏開 笑裡藏刀 笑容可掬 笑口常開 笑傲江湖 哭笑不得 哭天搶地 哭哭啼啼 愛不釋手 愛屋及烏 愛莫能助 愛憎分明 愛財如命 恩重如山 恩將仇報 恩愛夫妻 恩怨分明 恩斷義絕 情同手足 情投意合 情不自禁 情真意切 情有可原 情深義重 情景交融 情理之中 情意綿綿 情竇初開 情非得已 意氣風發 意味深長 意想不到 意猶未盡 意氣用事 意料之外 意興闌珊 意在言外 意氣相投 得心應手 得天獨厚 得不償失 得過且過 得意忘形 得寸進尺 得道多助 得意洋洋 順水推舟 順理成章 順藤摸瓜 順手牽羊 順其自然 順天應人 鳥語花香 鳥盡弓藏 見仁見智 見義勇為 見風轉舵 見微知著 見賢思齊 見異思遷 見多識廣 見利忘義 見死不救 見怪不怪 見錢眼開 見縫插針 見獵心喜 見機行事 見好就收 了如指掌 了然於胸 了無牽掛 驚天動地 驚心動魄 驚弓之鳥 驚慌失措 驚濤駭浪 驚世駭俗 驚鴻一瞥 驚魂未定 驚喜交加 苟且偷安 苟延殘喘 展翅高飛 展露鋒芒 樣樣精通 樣樣俱全 金玉滿堂 金碧輝煌 金榜題名 金蟬脫殼 金石為開 金口玉言 金枝玉葉 金屋藏嬌 金科玉律 金戈鐵馬 金迷紙醉 金城湯池 金玉良言 金童玉女 陰錯陽差 陰魂不散 陰險狡詐 陰陽怪氣 陰謀詭計 折衝樽俎 折戟沉沙 折腰事人 氣宇軒昂 氣急敗壞 氣勢磅礡 氣貫長虹 氣壯山河 氣喘吁吁 氣吞山河 氣息奄奄 氣象萬千 氣定神閒 氣味相投 氣勢洶洶 事半功倍 事與願違 事必躬親 事過境遷 事在人為 事倍功半 事無巨細 事不宜遲 事出有因 事不關己 敗軍之將 敗興而歸 敗絮其中 塗脂抹粉 塗炭生靈 落花流水 落井下石 落葉歸根 落落大方 落荒而逃 落英繽紛 落地生根 落魄江湖 葉落歸根 葉公好龍 技高一籌 技壓群雄 技驚四座 雕蟲小技 雕梁畫棟 雕欄玉砌 塵埃落定 塵世浮沉 塵土飛揚 塵封已久 鼎力相助 鼎足而立 鼎鼎大名 鼎新革故 先見之明 先發制人 先禮後兵 先入為主 先聲奪人 先來後到 先睹為快 先斬後奏 先苦後甜 先天不足 先憂後樂 先人後己 當機立斷 當頭棒喝 當仁不讓 當之無愧 當局者迷 當務之急 當家作主 發憤圖強 發人深省 發揚光大 發號施令 發奮圖強 發揮所長 發人深思 發蒙振聵 即景生情 即學即用 即知即行 拔苗助長 拔山蓋世 拔刀相助 拔本塞源 拔地而起 勞苦功高 勞逸結合 勞燕分飛 勞師動眾 勞而無功 勞民傷財 概莫能外 拍案叫絕 拍手稱快 拍案而起 拍案驚奇 咬牙切齒 咬文嚼字 咬緊牙關 咬定青山 窮兵黷武 窮途末路 窮凶極惡 窮奢極侈 窮追不捨 窮則思變 窮鄉僻壤 窮山惡水 窮困潦倒 可歌可泣 可想而知 可乘之機 可圈可點 可有可無 可見一斑 可喜可賀 思前想後 思緒萬千 思如泉湧 思慮周詳 思潮起伏 思賢若渴 思過自新 思鄉心切 議論紛紛 議而不決 屈指可數 屈打成招 屈膝求和 喻之以理 約定俗成 約法三章 謀財害命 謀事在人 謀定後動 謀略過人 勝券在握 勝人一籌 勝利在望 勝似神仙 措手不及 措辭嚴厲 措置失當 措置裕如 攻無不克 攻城掠地 攻其不備 攻堅克難 攻心為上 攻守同盟 攻守兼備 破釜沉舟 破涕為笑 破鏡重圓 破綻百出 破格錄用 破口大罵 破罐破摔 破家蕩產 速戰速決 客死他鄉 客氣有禮 客來客往 客隨主便 遺臭萬年 遺世獨立 遺風餘韻 遺憾終生 遺珠之憾 餘音繞樑 餘悸猶存 餘味無窮 餘勇可賈 修身齊家 修成正果 修心養性 修舊利廢 修橋鋪路 邊疆告急 邊幅不修 邊走邊看 卑躬屈膝 卑鄙無恥 亢龍有悔 類聚群分 期期艾艾 期待已久 期望過高 期盼已久 遇難呈祥 遇事不驚 遇人不淑 遇水架橋 遇強則強 甘拜下風 甘之如飴 甘心情願 甘苦與共 甘冒風險 甘居人後 示人以誠 示威遊行 弱不禁風 弱肉強食 弱冠之年 虎視眈眈 虎背熊腰 虎頭蛇尾 虎口餘生 虎落平陽 虎踞龍盤 虎虎生風 虎狼之心 量力而為 量體裁衣 量入為出 量才錄用 務實求真 務必三思 正大光明 正襟危坐 正義凜然 正中下懷 正本清源 正人君子 正氣凜然 正言厲色 業精於勤 業績驚人 主客易位 主次分明 主題鮮明 主持公道 主僕有別 辛辛苦苦 辛酸淚下 辛勤耕耘 辛苦萬分 辭舊迎新 辭嚴義正 辭不達意 辭藻華麗 辭窮理屈 堪稱一絕 堪稱典範 堪當重任 堪稱完美 堪稱一流 設身處地 設想周到 設法補救 設計巧妙 顧此失彼 顧影自憐 顧名思義 顧全大局 顧盼生姿 顧前顧後 切磋琢磨 切膚之痛 切中要害 切實可行 切齒痛恨 拘泥不化 拘謹小心 節衣縮食 節外生枝 節哀順變 節節敗退 節節高升 節奏明快 節儉持家 四面楚歌 四通八達 四海為家 四分五裂 四平八穩 四面八方 四季如春 四體不勤 四大皆空 動人心弦 動如脫兔 動彈不得 動輒得咎 動盪不安 動魄驚心 動手動腳 寒窗苦讀 寒光閃閃 寒風刺骨 寒氣逼人 寒冬臘月 寒來暑往 慄慄危懼 藥到病除 藥石罔效 藥不對症 省吃儉用 省事省力 計日程功 計無所出 計劃周詳 計上心來 計出萬全 聞過則喜 聞風而動 聞雞起舞 聞名遐邇 聞風喪膽 聞所未聞 聞名天下 偏聽偏信 偏安一隅 偏心不公 偏愛有加 倚老賣老 倚門而望 倚馬可待 倚勢凌人 亦步亦趨 亦莊亦諧 亦師亦友 亦喜亦悲 置若罔聞 置之不理 置身事外 置之度外 置之死地 置諸腦後 微不足道 微乎其微 微言大義 微服私訪 微風習習 憂國憂民 憂心忡忡 憂心如焚 憂患意識 憂喜參半 憂勞成疾 與世無爭 與眾不同 與日俱增 與時俱進 與人為善 與虎謀皮 與世長辭 與民同樂 法外開恩 法網恢恢 法不容情 法力無邊 濟世救民 濟濟一堂 濟弱扶傾 濟人利物 孔武有力 孔孟之道 非同小可 非親非故 非此即彼 非分之想 非驢非馬 非禮勿視 緣木求魚 緣慳一面 故步自封 故弄玄虛 故技重施 故地重遊 故態復萌 故作鎮定 故交舊友 容光煥發 容人雅量 容身之地 容貌秀麗 病入膏肓 病從口入 病魔纏身 獨一無二 獨具匠心 獨樹一幟 獨斷專行 獨善其身 獨木難支 獨霸一方 獨當一面 獨立自主 獨坐愁城 獨占鰲頭 獨闢蹊徑 遠見卓識 遠走高飛 遠大前程 遠道而來 遠交近攻 遠離塵囂 傷風敗俗 傷天害理 傷心欲絕 傷筋動骨 傷痕累累 傷心慘目 關懷備至 關門大吉 關山難越 關鍵時刻 關愛有加 痛心疾首 痛定思痛 痛不欲生 痛改前非 痛快淋漓 痛哭流涕 痛下殺手 往來如梭 往事如煙 往返奔波 往日情懷 理直氣壯 理所當然 理屈詞窮 理虧心虛 理當如此 鬧中取靜 束手無策 束手待斃 束之高閣 束身自好 束手就擒 策馬奔騰 策無遺算 策劃周詳'.split(' ');
+        const IDIOM_SET = new Set(IDIOMS);
+
+        const isShape = (w) => typeof w === 'string' && /^[一-鿿]{4}$/.test(w);
+        const lastChar = (w) => [...w][3];
+        const firstChar = (w) => [...w][0];
+
+        // 詞庫中，以 ch 開頭、還沒用過的成語
+        const successors = (ch, used, list = IDIOMS) => list.filter(w => firstChar(w) === ch && !used.has(w));
+
+        // 開局題目：最後一個字在詞庫裡至少有 minSucc 個可接的成語，讓前幾手比較好接
+        const startPool = (minSucc = 3, list = IDIOMS) => list.filter(w => successors(lastChar(w), new Set([w]), list).length >= minSucc);
+
+        // 檢查答案：回傳 { ok, kind: 'listed' | 'unlisted' } 或 { ok: false, reason }
+        function checkAnswer(last, used, w) {
+            w = typeof w === 'string' ? w.trim() : '';
+            if (!isShape(w)) return { ok: false, reason: '請輸入四個中文字的成語' };
+            if (firstChar(w) !== lastChar(last)) return { ok: false, reason: `要用「${lastChar(last)}」開頭` };
+            if (used.has(w)) return { ok: false, reason: '這個成語已經用過了' };
+            return { ok: true, kind: IDIOM_SET.has(w) ? 'listed' : 'unlisted', w };
+        }
+
+        // 下一位還活著的玩家（只剩自己回傳自己；沒人回傳 -1）
+        function nextAlive(alive, cur) {
+            for (let i = 1; i <= alive.length; i++) { const k = (cur + i) % alive.length; if (alive[k]) return k; }
+            return -1;
+        }
+
+        // 成員端檢查房主傳來的狀態
+        function validState(s) {
+            const arr = (a, f, n = MAX_PLAYERS) => Array.isArray(a) && a.length <= n && a.every(f);
+            return !!s && ['lobby', 'play', 'over'].includes(s.phase) && arr(s.names, n => typeof n === 'string' && n.length <= 12) && arr(s.lives, v => Number.isInteger(v) && v >= 0 && v <= LIVES)
+                && arr(s.alive, b => typeof b === 'boolean') && arr(s.active, b => typeof b === 'boolean') && Number.isInteger(s.turn) && Number.isInteger(s.winner) && Number.isFinite(s.ms)
+                && typeof s.last === 'string' && s.last.length <= 4 && typeof s.note === 'string' && s.note.length <= 80 && Number.isInteger(s.count)
+                && (s.pending === null || (s.pending && typeof s.pending.n === 'string' && s.pending.n.length <= 12 && isShape(s.pending.w)))
+                && arr(s.chain, c => c && typeof c.n === 'string' && c.n.length <= 12 && isShape(c.w), 40);
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let room = null, isHost = false, my = -1, hostId = '', V = null, flash = '';      // flash：只給自己看的暫時訊息
+        const H = { phase: 'lobby', lives: [], alive: [], turn: 0, last: '', chain: [], used: new Set(), endsAt: 0, paused: 0, pending: null, note: '', winner: -1, timer: null };
+
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const show = (id, on) => { $(id).hidden = !on; };
+        function readNick() {
+            const n = $('#nick').value.trim();
+            if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; }
+            return n;
+        }
+
+        // ---------- 房主 ----------
+        const actives = () => room.players.map(p => p.connected);
+        const nameOf = (i) => room.players[i].nick;
+        function publicState() {
+            return {
+                phase: H.phase, names: room.players.map(p => p.nick), lives: H.lives.slice(), alive: H.alive.slice(), active: actives(), turn: H.turn, winner: H.winner, last: H.last,
+                ms: H.pending ? H.paused : Math.max(0, H.endsAt - Date.now()), note: H.note, count: H.used.size, pending: H.pending ? { n: nameOf(H.pending.from), w: H.pending.w } : null,
+                chain: H.chain.slice(-40),
+            };
+        }
+        function push() { V = publicState(); V.at = Date.now(); flash = ''; render(); room.broadcast({ t: 'STATE', s: V }); }
+
+        function startGame() {
+            const ids = room.players.filter(p => p.connected).map(p => p.index);
+            if (ids.length < 2) return;
+            room.keepSlots = true;
+            const pool = startPool(), first = pool[rnd(pool.length)];
+            H.phase = 'play'; H.lives = room.players.map(p => (p.connected ? LIVES : 0)); H.alive = room.players.map(p => p.connected);
+            H.last = first; H.used = new Set([first]); H.chain = [{ n: '題目', w: first }]; H.pending = null; H.winner = -1; H.note = '遊戲開始！';
+            H.turn = shuffle(ids)[0]; H.endsAt = Date.now() + TURN_MS;
+            clearInterval(H.timer); H.timer = setInterval(tick, 250);
+            push();
+        }
+
+        function endGame(winner, note) { clearInterval(H.timer); H.phase = 'over'; H.winner = winner; H.pending = null; H.note = note; push(); }
+
+        function advance(from, note) {
+            const left = H.alive.filter(Boolean).length;
+            if (left <= 1) return endGame(H.alive.indexOf(true), left ? `${nameOf(H.alive.indexOf(true))} 是最後的贏家！` : '遊戲結束');
+            H.turn = nextAlive(H.alive, from); H.endsAt = Date.now() + TURN_MS; H.note = note; push();
+        }
+
+        function tick() {
+            if (H.phase !== 'play' || H.pending) return;
+            if (Date.now() < H.endsAt) { V = publicState(); V.at = Date.now(); render(); return; }
+            const t = H.turn; H.lives[t]--;
+            if (H.lives[t] <= 0) H.alive[t] = false;
+            advance(t, `${nameOf(t)} 超時，${H.alive[t] ? `剩 ${H.lives[t]} 條命` : '被淘汰了'}`);
+        }
+
+        function accept(from, w, extra = '') {
+            H.used.add(w); H.chain.push({ n: nameOf(from), w }); H.last = w; H.pending = null;
+            advance(from, `${nameOf(from)} 接「${w}」${extra}`);
+        }
+
+        function reject(from, reason) { if (from === my) { flash = reason; render(); } else room.sendTo(from, { t: 'ERR', msg: reason }); }
+
+        function doAnswer(from, text) {
+            if (H.phase !== 'play' || from !== H.turn || H.pending) return;
+            const r = checkAnswer(H.last, H.used, text);
+            if (!r.ok) return reject(from, r.reason);
+            if (r.kind === 'listed') return accept(from, r.w);
+            if (from === 0) return accept(from, r.w, '（詞庫未收錄，房主作答）');
+            H.pending = { from, w: r.w }; H.paused = Math.max(0, H.endsAt - Date.now());      // 詞庫沒有：暫停計時，等房主裁決
+            push();
+        }
+
+        function judge(ok) {
+            const p = H.pending; if (!p || H.phase !== 'play') return;
+            if (ok) return accept(p.from, p.w, '（房主認可）');
+            H.pending = null; H.endsAt = Date.now() + H.paused; push(); reject(p.from, '房主不接受這個詞，請再想一個');         // 先更新狀態、再送訊息，否則訊息會被緊接的狀態更新蓋掉
+        }
+
+        // ---------- 連線 ----------
+        const onNetError = (err, message) => { if (V || isHost) return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } };
+
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: MAX_PLAYERS,
+                onReady(r) { isHost = true; my = 0; hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id); push(); },
+                canJoin: () => (H.phase === 'play' ? '遊戲已經開始' : null),
+                onJoin: () => push(),
+                onLeave(p) {
+                    if (H.phase === 'play') {
+                        H.alive[p.index] = false; H.lives[p.index] = 0;
+                        if (H.pending && H.pending.from === p.index) { H.pending = null; H.endsAt = Date.now() + H.paused; }
+                        if (p.index === H.turn) return advance(p.index, `${p.nick} 離開了`);
+                        if (H.alive.filter(Boolean).length <= 1) return endGame(H.alive.indexOf(true), '其他玩家都離開了');
+                    }
+                    push();
+                },
+                onMessage(p, d) { if (d && d.t === 'ANS') doAnswer(p.index, d.w); },
+                onError: onNetError,
+            });
+        }
+
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…'); hostId = id;
+            room = P2PRoom.join(id, {
+                nick,
+                onRoster(players, me) {
+                    my = me;
+                    if (!V) { V = { phase: 'lobby', names: players.map(p => p.nick), lives: [], alive: [], active: players.map(p => p.connected), turn: -1, winner: -1, last: '', ms: 0, note: '', count: 0, pending: null, chain: [], at: Date.now() }; render(); }
+                },
+                onMessage(d) {
+                    if (!d || typeof d.t !== 'string') return;
+                    if (d.t === 'STATE' && validState(d.s)) { V = d.s; V.at = Date.now(); flash = ''; render(); }
+                    else if (d.t === 'ERR' && typeof d.msg === 'string') { flash = d.msg.slice(0, 40); render(); }
+                },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (V) { alert('房主已離開，遊戲結束'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+
+        // ---------- 畫面 ----------
+        function render() {
+            if (!V) return;
+            if (V.phase === 'lobby') {
+                show('#menu', false); show('#lobby', true); show('#game', false);
+                $('#lobbyPlayers').replaceChildren(...V.names.map((x, i) => Object.assign(document.createElement('div'), { className: 'pl' + (V.active[i] ? '' : ' off'), textContent: x + (i === 0 ? ' 👑' : '') + (i === my ? '（我）' : '') })));
+                const n = V.active.filter(Boolean).length;
+                show('#copyInvite', isHost); show('#startBtn', isHost); $('#startBtn').disabled = n < 2;
+                $('#lobbyHint').textContent = isHost ? (n < 2 ? '把邀請連結傳給朋友，至少 2 人才能開始' : '人到齊了就按「開始遊戲」') : '等待房主開始遊戲…';
+                return;
+            }
+            show('#menu', false); show('#lobby', false); show('#game', true);
+            const over = V.phase === 'over', mine = V.phase === 'play' && V.turn === my && !V.pending;
+            $('#board').replaceChildren(...V.names.map((x, i) => Object.assign(document.createElement('div'), {
+                className: 'pl' + (i === V.turn && !over && V.alive[i] ? ' turn' : '') + (V.alive[i] ? '' : ' off'),
+                textContent: `${i === V.turn && !over && V.alive[i] ? '👉 ' : ''}${x}${i === my ? '（我）' : ''}　${'❤️'.repeat(V.lives[i] || 0) || '💀'}`,
+            })));
+            const ch = [...V.last];
+            $('#last').replaceChildren(...ch.slice(0, 3).map(c => document.createTextNode(c)), ...(ch[3] ? [Object.assign(document.createElement('b'), { textContent: ch[3] })] : []));
+            $('#need').textContent = over ? `共接了 ${V.count} 個成語` : `請用「${ch[3] || ''}」開頭接下去（已用 ${V.count} 個）`;
+            const ms = V.pending ? V.ms : V.ms - (Date.now() - V.at);
+            $('#timer').textContent = V.phase === 'play' ? (V.pending ? '⏸ 等待房主裁決' : `⏱ ${Math.max(0, Math.ceil(ms / 1000))}`) : '';
+            show('#judge', isHost && !!V.pending);
+            if (V.pending) $('#judgeText').textContent = `${V.pending.n} 接「${V.pending.w}」（詞庫沒有收錄），要接受嗎？`;
+            $('#status').textContent = flash || (over ? (V.winner >= 0 ? `🏆 ${V.names[V.winner]}${V.winner === my ? '（你）' : ''} 獲勝！` : '遊戲結束') : V.pending && V.pending.n === V.names[my] ? '等待房主裁決…' : mine ? '輪到你了！' : `等待 ${V.names[V.turn]} 作答…`);
+            show('#ansRow', V.phase === 'play'); $('#ans').disabled = $('#ansBtn').disabled = !mine;
+            $('#log').replaceChildren(...(V.note ? [Object.assign(document.createElement('div'), { className: 'muted', textContent: V.note })] : []), ...V.chain.map(c => Object.assign(document.createElement('div'), { textContent: `${c.n}：${c.w}` })).reverse());
+            show('#again', isHost && over);
+        }
+        setInterval(() => { if (V && V.phase === 'play' && !V.pending) { const ms = V.ms - (Date.now() - V.at); $('#timer').textContent = `⏱ ${Math.max(0, Math.ceil(ms / 1000))}`; } }, 500);
+
+        function sendAnswer() {
+            const w = $('#ans').value.trim(); if (!w) return;
+            $('#ans').value = ''; flash = '';
+            if (isHost) doAnswer(my, w); else room.send({ t: 'ANS', w });
+        }
+        $('#ansBtn').onclick = sendAnswer;
+        $('#ans').onkeydown = (e) => { if (e.key === 'Enter' && !e.isComposing) sendAnswer(); };
+        $('#accept').onclick = () => judge(true); $('#reject').onclick = () => judge(false);
+        $('#hostBtn').onclick = hostRoom;
+        $('#joinBtn').onclick = joinRoom;
+        $('#startBtn').onclick = startGame;
+        $('#again').onclick = () => { room.keepSlots = false; room.prune(); H.phase = 'lobby'; H.winner = -1; H.note = ''; H.chain = []; H.last = ''; H.used = new Set(); push(); };
+        $('#leave').onclick = () => location.reload();
+        $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
+        if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+    </script>
+</body>
+
+</html>
