@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="倒數日 / 紀念日：記下重要日期，顯示還有幾天或已經幾天，可設定每年重複。">
+    <meta name="description" content="倒數日 / 紀念日：記下重要日期，顯示還有幾天或已經幾天，可設定每年重複，並提供今日下班倒數。">
     <meta property="og:title" content="倒數日 / 紀念日" />
-    <meta property="og:description" content="記下重要日期，顯示還有幾天或已經幾天。" />
+    <meta property="og:description" content="重要日期倒數與今日下班倒數。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/countdown.html" />
     <title>倒數日 / 紀念日</title>
@@ -68,6 +68,27 @@
             color: var(--ok);
         }
 
+        .today-big {
+            text-align: center;
+            font-size: 52px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: .02em;
+            margin: 6px 0 2px;
+        }
+
+        .today-sub {
+            text-align: center;
+            color: var(--muted);
+            margin-bottom: 12px;
+        }
+
+        progress {
+            width: 100%;
+            height: 10px;
+            accent-color: var(--blue);
+        }
+
         .del {
             background: none;
             color: var(--muted);
@@ -81,7 +102,19 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>倒數日 / 紀念日</h1>
-        <p class="sub">記下重要的日子。資料只存在這個瀏覽器。</p>
+        <p class="sub">記下重要的日子，也能倒數今天的下班時間。資料只存在這個瀏覽器。</p>
+
+        <div class="card" id="todayCard">
+            <h2>今日倒數</h2>
+            <div class="row" style="margin-bottom:10px">
+                <input type="text" id="tLabel" maxlength="12" placeholder="目標名稱" aria-label="目標名稱" style="max-width:130px">
+                <label>開始 <input type="time" id="tStart" aria-label="開始時間"></label>
+                <label>目標 <input type="time" id="tEnd" aria-label="目標時間"></label>
+            </div>
+            <div class="today-big" id="tBig" aria-live="off">--:--:--</div>
+            <div class="today-sub" id="tSub"></div>
+            <progress id="tProg" value="0" max="1" aria-label="今天的進度"></progress>
+        </div>
 
         <div class="card">
             <div class="row">
@@ -96,6 +129,7 @@
         </div>
 
         <div class="card" id="list"></div>
+        <div style="text-align:center"><button class="sm" id="ics">匯出成行事曆檔（.ics）</button></div>
     </div>
 
     <script src="../shared/js/util.js"></script>
@@ -133,6 +167,39 @@
             const sub = `${ev.date} 起${sinceStart >= 0 ? `，已 ${sinceStart} 天` : ''} ・ 每年`;
             if (diff === 0) return { kind: 'today', days: 0, big: 0, label: `今天是${nth}`, sub, sort: 0 };
             return { kind: 'future', days: diff, big: diff, label: `距離${nth}還有`, sub, sort: diff };
+        }
+
+        // 今日倒數：以「一天中的第幾秒」計算。start / end 為秒數（0–86399），now 為目前秒數
+        // 回傳 { state: 'before' | 'during' | 'after' | 'invalid', remaining（秒）, elapsedAfter（秒）, fraction（0–1）}
+        function todayProgress(now, start, end) {
+            if (!(end > start)) return { state: 'invalid', remaining: 0, elapsedAfter: 0, fraction: 0 };
+            if (now < start) return { state: 'before', remaining: end - now, elapsedAfter: 0, fraction: 0 };
+            if (now >= end) return { state: 'after', remaining: 0, elapsedAfter: now - end, fraction: 1 };
+            return { state: 'during', remaining: end - now, elapsedAfter: 0, fraction: (now - start) / (end - start) };
+        }
+        const hms = (sec) => [Math.floor(sec / 3600), Math.floor(sec % 3600 / 60), sec % 60].map(v => String(v).padStart(2, '0')).join(':');
+        const toSec = (t) => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m && +m[1] < 24 && +m[2] < 60 ? +m[1] * 3600 + +m[2] * 60 : NaN; };
+
+        // 匯出成 iCalendar（.ics）：全天事件；每年重複的用 RRULE。2/29 的週年在非閏年落在 2/28（與畫面上的規則一致）
+        const icsEscape = (s) => String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+        // 每行最多 75 位元組，超過要折行（下一行開頭加一個空白）；以 UTF-8 位元組計算，不切斷多位元組字元
+        function icsFold(line) {
+            const enc = new TextEncoder(); if (enc.encode(line).length <= 75) return line;
+            const out = []; let cur = '', len = 0;
+            for (const ch of line) { const n = enc.encode(ch).length, limit = out.length ? 74 : 75; if (len + n > limit) { out.push(cur); cur = ''; len = 0; } cur += ch; len += n; }
+            out.push(cur); return out.join('\r\n ');
+        }
+        const ymdCompact = (s) => s.replace(/-/g, '');
+        function buildICS(events, nowIso, uid = (e, i) => `countdown-${i}-${ymdCompact(e.date)}@simple-tools`) {
+            const stamp = nowIso.replace(/[-:]/g, '').replace(/\.\d+/, ''), lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//simple_tools//countdown//ZH', 'CALSCALE:GREGORIAN'];
+            events.forEach((e, i) => {
+                const end = day.shift(e.date, 1), p = parseYMD(e.date);
+                lines.push('BEGIN:VEVENT', `UID:${uid(e, i)}`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${ymdCompact(e.date)}`, `DTEND;VALUE=DATE:${ymdCompact(end)}`, `SUMMARY:${icsEscape(e.name)}`);
+                if (e.yearly) lines.push(p.m === 2 && p.d === 29 ? 'RRULE:FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=-1' : 'RRULE:FREQ=YEARLY');
+                lines.push('TRANSP:TRANSPARENT', 'END:VEVENT');
+            });
+            lines.push('END:VCALENDAR');
+            return lines.map(icsFold).join('\r\n') + '\r\n';
         }
         // --- /pure ---
 
@@ -181,6 +248,21 @@
             $('#name').value = ''; $('#msg').textContent = '';
             render();
         };
+        // ---------- 今日倒數 ----------
+        const cfg = Util.store.get('countdown_today', { label: '下班', start: '09:00', end: '18:00' });
+        $('#tLabel').value = cfg.label; $('#tStart').value = cfg.start; $('#tEnd').value = cfg.end;
+        function tickToday() {
+            const d = new Date(), now = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds(), label = $('#tLabel').value.trim() || '目標';
+            const r = todayProgress(now, toSec($('#tStart').value), toSec($('#tEnd').value));
+            $('#tProg').value = r.fraction;
+            if (r.state === 'invalid') { $('#tBig').textContent = '--:--:--'; $('#tSub').textContent = '請設定開始與目標時間（目標要晚於開始）'; return; }
+            $('#tBig').textContent = r.state === 'after' ? '🎉' : hms(r.remaining);
+            $('#tSub').textContent = r.state === 'before' ? `距離${label}還有，今天還沒開始（${$('#tStart').value} 開始）` : r.state === 'during' ? `距離${label}還有 ・ 已過 ${Math.round(r.fraction * 100)}%` : `已經${label}了 ${Math.floor(r.elapsedAfter / 60)} 分鐘`;
+        }
+        ['tLabel', 'tStart', 'tEnd'].forEach(id => { $('#' + id).oninput = () => { Util.store.set('countdown_today', { label: $('#tLabel').value, start: $('#tStart').value, end: $('#tEnd').value }); tickToday(); }; });
+        setInterval(tickToday, 1000); tickToday();
+
+        $('#ics').onclick = () => { if (!events.length) { $('#msg').textContent = '還沒有日期可以匯出'; return; } Util.download(new Blob([buildICS(events, new Date().toISOString())], { type: 'text/calendar;charset=utf-8' }), 'countdown.ics'); };
         $('#name').onkeydown = (e) => { if (e.key === 'Enter') $('#add').click(); };
         render();
     </script>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="生日 / 星座 / 生肖：輸入出生日期，算出年齡、已經活了幾天、星座、農曆生日、天干地支與生肖（依農曆新年換算），以及下次生日倒數。">
+    <meta property="og:title" content="生日 / 星座 / 生肖" />
+    <meta property="og:description" content="年齡、星座、生肖、農曆生日與下次生日倒數。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/age-zodiac.html" />
+    <title>生日 / 星座 / 生肖</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .big {
+            font-size: 44px;
+            font-weight: 800;
+            text-align: center;
+            margin: 10px 0 2px;
+        }
+
+        .sub2 {
+            text-align: center;
+            color: var(--muted);
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>生日 / 星座 / 生肖</h1>
+        <p class="sub">純粹是日期計算，不做運勢。生肖與天干地支依<b>農曆新年</b>換算（1 月出生不一定是前一年的生肖，要看那年的春節在哪天）。</p>
+
+        <div class="card">
+            <div class="row"><label for="birth" class="muted">出生日期</label><input type="date" id="birth"><label for="today" class="muted">計算到</label><input type="date" id="today"></div>
+            <div class="big" id="big"></div>
+            <div class="sub2" id="sub"></div>
+            <div id="out"></div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { day, statRow, store } = Util;
+
+        // --- pure ---
+        const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+        const ZODIAC = ['鼠', '牛', '虎', '兔', '龍', '蛇', '馬', '羊', '猴', '雞', '狗', '豬'];
+        const STEMS = '甲乙丙丁戊己庚辛壬癸', BRANCHES = '子丑寅卯辰巳午未申酉戌亥';
+        // 星座：[開始月, 開始日, 名稱, 元素]；12/22 起是摩羯
+        const SIGNS = [[1, 20, '水瓶座', '風'], [2, 19, '雙魚座', '水'], [3, 21, '牡羊座', '火'], [4, 20, '金牛座', '土'], [5, 21, '雙子座', '風'], [6, 21, '巨蟹座', '水'], [7, 23, '獅子座', '火'], [8, 23, '處女座', '土'], [9, 23, '天秤座', '風'], [10, 23, '天蠍座', '水'], [11, 22, '射手座', '火'], [12, 22, '摩羯座', '土']];
+        function westernSign(m, d) {
+            let cur = SIGNS[11];                                                // 1/1–1/19 屬於前一年 12/22 起的摩羯
+            for (const s of SIGNS) if (m > s[0] || (m === s[0] && d >= s[1])) cur = s;
+            return { name: cur[2], element: cur[3] };
+        }
+
+        // 農曆年（以「相關公曆年」表示，如 2024 年春節前是 2023）。fmt 預設用瀏覽器 / Node 內建的 Intl 農曆；回傳 { year, month, day, leap } 或 null
+        function lunarOf(dateStr, Fmt = Intl.DateTimeFormat) {
+            try {
+                const { y, m, d } = day.parse(dateStr), parts = new Fmt('zh-u-ca-chinese', { timeZone: 'UTC', year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(new Date(Date.UTC(y, m - 1, d, 12)));
+                const get = (t) => (parts.find(p => p.type === t) || {}).value, ry = +get('relatedYear'), mon = String(get('month')), dd = +get('day');
+                if (!Number.isFinite(ry) || !Number.isFinite(dd)) return null;
+                return { year: ry, month: mon.replace('闰', '閏').replace('腊', '臘'), day: dd, leap: mon.startsWith('闰') };
+            } catch (e) { return null; }
+        }
+        const zodiacOf = (lunarYear) => ZODIAC[((lunarYear - 4) % 12 + 12) % 12];
+        const ganzhiOf = (lunarYear) => STEMS[((lunarYear - 4) % 10 + 10) % 10] + BRANCHES[((lunarYear - 4) % 12 + 12) % 12];
+
+        // 週歲：到 today 為止的 年 / 月 / 天（today 早於 birth 回傳 null）
+        const ageOf = (birth, today) => (day.num(today) < day.num(birth) ? null : day.diffYMD(birth, today));
+        // 下一次生日（今天算）；2/29 的生日在非閏年算 2/28
+        function nextBirthday(birth, today) {
+            const b = day.parse(birth), t = day.parse(today);
+            const at = (y) => day.ymd(y, b.m, b.m === 2 && b.d === 29 ? day.daysInMonth(y, 2) : b.d);
+            let c = at(t.y); if (day.num(c) < day.num(today)) c = at(t.y + 1);
+            return { date: c, days: day.between(today, c), turning: day.parse(c).y - b.y };
+        }
+        // 活到第 n 天的那一天（出生當天算第 0 天）
+        const dayNumber = (birth, n) => day.shift(birth, n);
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        $('#birth').value = store.get('zodiac_birth', ''); $('#today').value = day.today();
+        const valid = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(day.num(s));
+
+        function render() {
+            const b = $('#birth').value, t = $('#today').value, box = $('#out');
+            if (!valid(b) || !valid(t)) { box.replaceChildren(); $('#big').textContent = ''; $('#sub').textContent = ''; return; }
+            store.set('zodiac_birth', b);
+            const age = ageOf(b, t); if (!age) { $('#big').textContent = ''; $('#sub').textContent = '計算日期要晚於出生日期'; box.replaceChildren(); return; }
+            const p = day.parse(b), sign = westernSign(p.m, p.d), lu = lunarOf(b), wd = (day.num(b) + 4) % 7, lived = day.between(b, t), nb = nextBirthday(b, t);
+            $('#big').textContent = `${age.y} 歲`; $('#sub').textContent = `${age.y} 年 ${age.m} 個月 ${age.d} 天`;
+            const rows = [statRow('已經活了', `${lived.toLocaleString('zh-TW')} 天（約 ${(lived / 7).toFixed(0)} 週）`), statRow('出生那天是', `星期${WEEK[((wd % 7) + 7) % 7]}`), statRow('星座', `${sign.name}（${sign.element}象）`)];
+            if (lu) rows.push(statRow('農曆生日', `${lu.year} 年 ${lu.month}${lu.month.endsWith('月') ? '' : '月'} ${lu.day} 日`), statRow('天干地支', `${ganzhiOf(lu.year)}年`), statRow('生肖', `屬${zodiacOf(lu.year)}`));
+            else rows.push(statRow('農曆 / 生肖', '這個瀏覽器不支援農曆，無法換算'));
+            rows.push(statRow('下次生日', `${nb.date}（${nb.days === 0 ? '就是今天 🎉' : nb.days + ' 天後'}，滿 ${nb.turning} 歲）`));
+            for (const n of [10000, 20000]) { const d = dayNumber(b, n); rows.push(statRow(`第 ${n.toLocaleString('zh-TW')} 天`, `${d}（${day.between(t, d) >= 0 ? day.between(t, d) + ' 天後' : '已過 ' + -day.between(t, d) + ' 天'}）`)); }
+            box.replaceChildren(...rows);
+        }
+        $('#birth').oninput = $('#today').oninput = render; render();
+    </script>
+</body>
+
+</html>

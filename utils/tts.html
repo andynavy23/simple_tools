@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="文字轉語音：貼上文字，選語音、語速與音調，用瀏覽器內建的語音朗讀，可暫停與繼續，不上傳任何內容。">
+    <meta property="og:title" content="文字轉語音" />
+    <meta property="og:description" content="用瀏覽器內建語音朗讀文字。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/tts.html" />
+    <title>文字轉語音</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 680px;
+        }
+
+        textarea {
+            min-height: 180px;
+            resize: vertical;
+            width: 100%;
+        }
+
+        .fgrid {
+            margin: 12px 0;
+        }
+
+        .fgrid input[type=range] {
+            accent-color: var(--blue);
+        }
+
+        .btns {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        progress {
+            width: 100%;
+            height: 8px;
+            margin-top: 12px;
+            accent-color: var(--blue);
+        }
+
+        #msg {
+            color: var(--muted);
+            font-size: 14px;
+            min-height: 1.4em;
+            margin-top: 6px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>文字轉語音</h1>
+        <p class="sub">使用瀏覽器內建的語音（不同瀏覽器與系統有不同的聲音可選）。文字不會離開你的裝置。</p>
+
+        <div class="card">
+            <textarea id="text" placeholder="在這裡貼上或輸入要朗讀的文字…" aria-label="要朗讀的文字"></textarea>
+            <div class="fgrid">
+                <div style="grid-column:1/-1"><label for="voice">語音</label><select id="voice" style="width:100%"></select></div>
+                <div><label for="rate">語速 <b id="rateV">1.0</b></label><input type="range" id="rate" min="0.5" max="2" step="0.1" value="1"></div>
+                <div><label for="pitch">音調 <b id="pitchV">1.0</b></label><input type="range" id="pitch" min="0.5" max="2" step="0.1" value="1"></div>
+            </div>
+            <div class="btns">
+                <button class="primary" id="play">朗讀</button>
+                <button id="pause">暫停</button>
+                <button id="stop">停止</button>
+                <span class="muted" id="count"></span>
+            </div>
+            <progress id="prog" value="0" max="1" hidden></progress>
+            <div id="msg" role="status"></div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store } = Util;
+
+        // --- pure ---
+        // 把長文字切成適合朗讀的短片段：優先在句號、問號、驚嘆號、換行處切，單句太長再在逗號 / 空白處切，最後硬切
+        function chunks(text, max = 120) {
+            const out = [];
+            const pieces = String(text).replace(/\r\n/g, '\n').split(/(?<=[。！？!?；;\n])/);
+            for (const piece of pieces) {
+                let s = piece.trim();
+                while (s.length > max) {
+                    let cut = Math.max(s.lastIndexOf('，', max), s.lastIndexOf(',', max), s.lastIndexOf('、', max), s.lastIndexOf(' ', max));
+                    if (cut < max / 3) cut = max - 1;
+                    out.push(s.slice(0, cut + 1).trim()); s = s.slice(cut + 1).trim();
+                }
+                if (s) out.push(s);
+            }
+            return out;
+        }
+
+        // 語音排序：預設優先選與頁面語言相符、其次是中文的語音
+        const voiceRank = (v, lang) => (v.lang === lang ? 0 : v.lang.toLowerCase().startsWith(lang.slice(0, 2).toLowerCase()) ? 1 : /^zh/i.test(v.lang) ? 2 : 3);
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const synth = window.speechSynthesis;
+        let voices = [], queue = [], idx = 0, total = 0, playing = false, token = 0;      // token：每次重新朗讀 / 停止就換一個，舊的事件回呼（有些瀏覽器取消後仍會觸發 end）一律忽略
+        $('#text').value = store.get('tts_text', '');
+
+        if (!synth || typeof SpeechSynthesisUtterance === 'undefined') {
+            $('#msg').textContent = '這個瀏覽器不支援語音合成（speechSynthesis）。'; ['play', 'pause', 'stop'].forEach(i => { $('#' + i).disabled = true; });
+        }
+
+        function loadVoices() {
+            if (!synth) return;
+            voices = synth.getVoices().slice().sort((a, b) => voiceRank(a, 'zh-TW') - voiceRank(b, 'zh-TW') || a.name.localeCompare(b.name));
+            const saved = store.get('tts_voice', '');
+            $('#voice').replaceChildren(...(voices.length ? voices.map(v => Object.assign(new Option(`${v.name}（${v.lang}）`, v.voiceURI))) : [new Option('（系統沒有提供語音，會用預設語音）', '')]));
+            if (voices.some(v => v.voiceURI === saved)) $('#voice').value = saved;
+        }
+        if (synth) { loadVoices(); synth.onvoiceschanged = loadVoices; }
+
+        function speakNext(run) {
+            if (!playing || run !== token) return;
+            if (idx >= queue.length) { playing = false; $('#play').textContent = '朗讀'; $('#prog').value = 1; $('#msg').textContent = '朗讀完畢'; return; }
+            const u = new SpeechSynthesisUtterance(queue[idx]), v = voices.find(x => x.voiceURI === $('#voice').value);
+            if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'zh-TW';
+            u.rate = +$('#rate').value; u.pitch = +$('#pitch').value;
+            u.onend = () => { if (run !== token) return; idx++; $('#prog').value = idx / total; speakNext(run); };
+            u.onerror = (e) => { if (run !== token || e.error === 'canceled' || e.error === 'interrupted') return; playing = false; $('#msg').textContent = '朗讀失敗：' + e.error; $('#play').textContent = '朗讀'; };
+            synth.speak(u);
+        }
+
+        function start() {
+            synth.cancel(); const run = ++token;
+            queue = chunks($('#text').value); idx = 0; total = queue.length;
+            if (!total) { $('#msg').textContent = '請先輸入文字'; return; }
+            store.set('tts_text', $('#text').value); store.set('tts_voice', $('#voice').value);
+            playing = true; $('#play').textContent = '重新朗讀'; $('#prog').hidden = false; $('#prog').value = 0; $('#msg').textContent = `共 ${total} 段`;
+            speakNext(run);
+        }
+
+        $('#play').onclick = start;
+        $('#pause').onclick = () => { if (!synth.speaking) return; if (synth.paused) { synth.resume(); $('#pause').textContent = '暫停'; } else { synth.pause(); $('#pause').textContent = '繼續'; } };
+        $('#stop').onclick = () => { playing = false; token++; synth.cancel(); $('#play').textContent = '朗讀'; $('#pause').textContent = '暫停'; $('#msg').textContent = '已停止'; };
+        $('#rate').oninput = () => { $('#rateV').textContent = (+$('#rate').value).toFixed(1); };
+        $('#pitch').oninput = () => { $('#pitchV').textContent = (+$('#pitch').value).toFixed(1); };
+        $('#text').oninput = () => { $('#count').textContent = $('#text').value.length + ' 字'; store.set('tts_text', $('#text').value); };
+        window.addEventListener('pagehide', () => { if (synth) synth.cancel(); });
+        $('#count').textContent = $('#text').value.length + ' 字';
+    </script>
+</body>
+
+</html>

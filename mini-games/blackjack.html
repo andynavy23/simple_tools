@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="連線 21 點：1–6 人一起對莊家，要牌、停牌、加倍。莊家由程式擔任，牌堆與莊家暗牌只存在房主端。">
+    <meta property="og:title" content="連線 21 點" />
+    <meta property="og:description" content="多人一起對莊家的 21 點，籌碼累計。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/blackjack.html" />
+    <title>連線 21 點</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        :root {
+            --wrap-w: 720px;
+            --felt: #1f6f43;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .row input {
+            flex: 1 1 130px;
+        }
+
+        .table {
+            background: var(--felt);
+            color: #fff;
+            border-radius: 18px;
+            padding: 14px;
+        }
+
+        .seat {
+            background: rgba(0, 0, 0, .18);
+            border-radius: 14px;
+            padding: 10px 12px;
+            margin-top: 10px;
+            border: 2px solid transparent;
+        }
+
+        .seat.turn {
+            border-color: #ffd60a;
+        }
+
+        .seat.out {
+            opacity: .5;
+        }
+
+        .seat h3 {
+            font-size: 15px;
+            margin: 0 0 6px;
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .cards {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            min-height: 62px;
+        }
+
+        .card-c {
+            width: 44px;
+            height: 62px;
+            border-radius: 7px;
+            background: #fff;
+            color: #111;
+            font-weight: 800;
+            display: grid;
+            place-items: center;
+            font-size: 17px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, .35);
+            line-height: 1.1;
+            text-align: center;
+        }
+
+        .card-c.red {
+            color: #d70015;
+        }
+
+        .card-c.back {
+            background: repeating-linear-gradient(45deg, #1d4ed8, #1d4ed8 5px, #3b82f6 5px, #3b82f6 10px);
+        }
+
+        .tot {
+            font-variant-numeric: tabular-nums;
+            opacity: .9;
+        }
+
+        .res {
+            font-weight: 800;
+        }
+
+        .res.win {
+            color: #8cffb0;
+        }
+
+        .res.lose {
+            color: #ffb3ad;
+        }
+
+        .ctrl {
+            margin-top: 14px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        #status {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+            margin-top: 12px;
+        }
+
+        #note {
+            text-align: center;
+            color: var(--muted);
+            min-height: 1.3em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>連線 21 點</h1>
+        <p class="sub">每人從 500 籌碼開始，一起對莊家。點數最接近 21 又不爆就贏；Blackjack（A + 10 點牌）賠 1.5 倍；莊家 17 點以上停牌。可要牌、停牌、加倍（1–6 人，一個人也能玩）。</p>
+
+        <div class="card" id="menu">
+            <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+            <div class="row">
+                <button class="primary" id="hostBtn">建立房間</button>
+                <input id="joinId" placeholder="貼上房號" aria-label="房號">
+                <button id="joinBtn">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+        </div>
+
+        <div class="card" id="lobby" hidden>
+            <h2>等待玩家加入（最多 6 人）</h2>
+            <div class="players" id="lobbyPlayers"></div>
+            <div class="row" style="margin-top:12px">
+                <button id="copyInvite" hidden>複製邀請連結</button>
+                <button class="primary" id="startBtn" hidden>開始遊戲</button>
+            </div>
+            <p class="note" id="lobbyHint"></p>
+        </div>
+
+        <div id="game" hidden>
+            <div class="table">
+                <div class="seat" id="dealer"><h3><span>莊家</span><span class="tot" id="dealerTot"></span></h3><div class="cards" id="dealerCards"></div></div>
+                <div id="seats"></div>
+            </div>
+            <div id="status" role="status" aria-live="polite"></div>
+            <div id="note"></div>
+            <div class="ctrl" id="ctrl"></div>
+            <div class="row" style="justify-content:center;margin-top:14px">
+                <button class="primary" id="next" hidden>下一局</button>
+                <button id="end" hidden>結束牌局</button>
+                <button class="primary" id="again" hidden>重新開始</button>
+                <button id="leave">離開</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { shuffle } = Util;
+
+        // --- pure ---
+        const MAX_PLAYERS = 6, START_CHIPS = 500, BETS = [10, 25, 50, 100], ACT_MS = 30000;
+        const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], SUITS = ['S', 'H', 'D', 'C'];
+        const newDeck = () => SUITS.flatMap(s => RANKS.map(r => r + s));
+        const rankOf = (c) => c.slice(0, -1);
+        const cardValue = (c) => { const r = rankOf(c); return r === 'A' ? 11 : 'JQK'.includes(r) || r === '10' ? 10 : +r; };
+
+        // 一手牌的點數：A 先當 11，爆牌就逐張改當 1。soft = 還有 A 當 11（軟牌）
+        function handValue(cards) {
+            let total = 0, aces = 0;
+            for (const c of cards) { total += cardValue(c); if (rankOf(c) === 'A') aces++; }
+            while (total > 21 && aces) { total -= 10; aces--; }
+            return { total, soft: aces > 0, bust: total > 21, blackjack: cards.length === 2 && total === 21 };
+        }
+        // 莊家規則：16 以下要牌，17 以上（含軟 17）停牌
+        const dealerShouldHit = (cards) => handValue(cards).total < 17;
+
+        // 結算一位玩家：bet 是最後的下注額（加倍後已是兩倍）。回傳 { outcome, delta }
+        function settle(player, dealer, bet) {
+            const p = handValue(player), d = handValue(dealer);
+            if (p.bust) return { outcome: 'bust', delta: -bet };
+            if (p.blackjack && d.blackjack) return { outcome: 'push', delta: 0 };
+            if (p.blackjack) return { outcome: 'blackjack', delta: Math.floor(bet * 1.5) };
+            if (d.blackjack) return { outcome: 'lose', delta: -bet };
+            if (d.bust || p.total > d.total) return { outcome: 'win', delta: bet };
+            if (p.total === d.total) return { outcome: 'push', delta: 0 };
+            return { outcome: 'lose', delta: -bet };
+        }
+
+        const validCard = (c) => c === '??' || (typeof c === 'string' && /^(A|10|[2-9]|J|Q|K)[SHDC]$/.test(c));
+
+        // 成員端檢查房主傳來的狀態
+        function validState(s) {
+            const arr = (a, f, n = MAX_PLAYERS) => Array.isArray(a) && a.length <= n && a.every(f);
+            const int = Number.isInteger;
+            return !!s && ['lobby', 'bet', 'play', 'dealer', 'result', 'over'].includes(s.phase) && arr(s.names, n => typeof n === 'string' && n.length <= 12) && arr(s.chips, int) && arr(s.bets, int) && arr(s.done, b => typeof b === 'boolean')
+                && arr(s.out, b => typeof b === 'boolean') && arr(s.inRound, b => typeof b === 'boolean') && arr(s.hands, h => arr(h, validCard, 12)) && arr(s.dealer, validCard, 12)
+                && arr(s.result, r => r === null || (r && ['blackjack', 'win', 'push', 'lose', 'bust'].includes(r.o) && int(r.d))) && int(s.turn) && int(s.round) && Number.isFinite(s.ms) && typeof s.note === 'string' && s.note.length <= 80
+                && int(s.dealerTotal) && arr(s.active, b => typeof b === 'boolean');
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let room = null, isHost = false, my = -1, hostId = '', V = null;
+        const H = { phase: 'lobby', round: 0, deck: [], dealer: [], hidden: true, chips: [], bets: [], hands: [], done: [], out: [], inRound: [], doubled: [], result: [], turn: -1, endsAt: 0, note: '', timer: null };
+
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const show = (id, on) => { $(id).hidden = !on; };
+        function readNick() {
+            const n = $('#nick').value.trim();
+            if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; }
+            return n;
+        }
+
+        // ---------- 房主 ----------
+        const actives = () => room.players.map(p => p.connected);
+        const nameOf = (i) => room.players[i].nick;
+        function publicState() {
+            const shown = H.hidden && H.dealer.length ? [H.dealer[0], '??'] : H.dealer;
+            return {
+                phase: H.phase, round: H.round, names: room.players.map(p => p.nick), chips: H.chips.slice(), bets: H.bets.slice(), done: H.done.slice(), out: H.out.slice(), inRound: H.inRound.slice(),
+                hands: H.hands.map(h => h.slice()), dealer: shown.slice(), dealerTotal: H.hidden ? -1 : handValue(H.dealer).total, result: H.result.slice(), turn: H.turn,
+                ms: ['bet', 'play'].includes(H.phase) ? Math.max(0, H.endsAt - Date.now()) : 0, note: H.note, active: actives(),
+            };
+        }
+        function push() { V = publicState(); V.at = Date.now(); render(); room.broadcast({ t: 'STATE', s: V }); }
+
+        function startGame() {
+            room.keepSlots = true;
+            H.chips = room.players.map(() => START_CHIPS); H.out = room.players.map(p => !p.connected); H.round = 0;
+            clearInterval(H.timer); H.timer = setInterval(tick, 250);
+            startBet();
+        }
+
+        function startBet() {
+            H.round++; const n = room.players.length;
+            H.out = H.out.map((o, i) => o || H.chips[i] <= 0 || !room.players[i].connected);
+            if (H.out.every(Boolean)) return finish('沒有人能繼續了');
+            H.phase = 'bet'; H.bets = new Array(n).fill(0); H.hands = Array.from({ length: n }, () => []); H.done = new Array(n).fill(false); H.doubled = new Array(n).fill(false);
+            H.inRound = new Array(n).fill(false); H.result = new Array(n).fill(null); H.dealer = []; H.hidden = true; H.turn = -1; H.note = ''; H.endsAt = Date.now() + ACT_MS;
+            push();
+        }
+
+        function finish(note) { clearInterval(H.timer); H.phase = 'over'; H.note = note; push(); }
+
+        function placeBet(i, amt) {
+            if (H.phase !== 'bet' || H.out[i] || H.bets[i] || !BETS.includes(amt) || amt > H.chips[i]) return;
+            H.bets[i] = amt;
+            if (H.out.every((o, k) => o || H.bets[k])) return deal();
+            push();
+        }
+
+        const draw = () => H.deck.pop();
+        function deal() {
+            H.deck = shuffle(newDeck());
+            H.inRound = H.bets.map(b => b > 0);
+            H.hands = H.hands.map((_, i) => (H.inRound[i] ? [draw(), draw()] : []));
+            H.dealer = [draw(), draw()];
+            H.done = H.hands.map((h, i) => !H.inRound[i] || handValue(h).blackjack);
+            H.note = '';
+            if (handValue(H.dealer).blackjack) return dealerPlay();                // 莊家 Blackjack：直接開牌結算
+            H.phase = 'play'; nextTurn(-1); push();
+        }
+
+        function nextTurn(from) {
+            for (let i = from + 1; i < H.hands.length; i++) if (!H.done[i]) { H.turn = i; H.endsAt = Date.now() + ACT_MS; return; }
+            H.turn = -1; dealerPlay();
+        }
+
+        function act(i, what) {
+            if (H.phase !== 'play' || i !== H.turn || H.done[i]) return;
+            const h = H.hands[i];
+            if (what === 'hit') { h.push(draw()); const v = handValue(h); if (v.bust || v.total === 21) H.done[i] = true; else H.endsAt = Date.now() + ACT_MS; }
+            else if (what === 'stand') H.done[i] = true;
+            else if (what === 'double') {
+                if (h.length !== 2 || H.chips[i] < H.bets[i] * 2) return;
+                H.bets[i] *= 2; H.doubled[i] = true; h.push(draw()); H.done[i] = true;
+            } else return;
+            if (H.done[i]) { nextTurn(i); if (H.phase === 'play') push(); } else push();
+        }
+
+        // 莊家開牌、補牌（每張間隔一下，讓大家看得到）、結算
+        function dealerPlay() {
+            H.phase = 'dealer'; H.hidden = false; H.turn = -1; push();
+            const needs = H.hands.some((h, i) => H.inRound[i] && !handValue(h).bust && !handValue(h).blackjack);
+            const step = () => {
+                if (H.phase !== 'dealer') return;
+                if (needs && !handValue(H.dealer).blackjack && dealerShouldHit(H.dealer)) { H.dealer.push(draw()); push(); setTimeout(step, 700); } else settleAll();
+            };
+            setTimeout(step, 700);
+        }
+
+        function settleAll() {
+            H.hands.forEach((h, i) => {
+                if (!H.inRound[i]) return;
+                const r = H.left && H.left[i] ? { outcome: 'lose', delta: -H.bets[i] } : settle(h, H.dealer, H.bets[i]);
+                H.chips[i] += r.delta; H.result[i] = { o: r.outcome, d: r.delta };
+            });
+            H.out = H.out.map((o, i) => o || H.chips[i] <= 0);
+            H.phase = 'result'; H.note = ''; push();
+        }
+
+        function tick() {
+            if (!['bet', 'play'].includes(H.phase)) return;
+            if (Date.now() < H.endsAt) { V = publicState(); V.at = Date.now(); render(); return; }
+            if (H.phase === 'bet') { H.out.forEach((o, i) => { if (!o && !H.bets[i]) H.bets[i] = Math.min(10, H.chips[i]); }); if (H.out.every((o, k) => o || H.bets[k])) deal(); }
+            else if (H.turn >= 0) { H.note = `${nameOf(H.turn)} 超時，自動停牌`; act(H.turn, 'stand'); }
+        }
+
+        // ---------- 連線 ----------
+        const onNetError = (err, message) => { if (V || isHost) return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } };
+
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: MAX_PLAYERS,
+                onReady(r) { isHost = true; my = 0; hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id); push(); },
+                canJoin: () => (['lobby', 'over'].includes(H.phase) ? null : '牌局進行中，請等這一輪結束後再試（或請房主重新開始）'),
+                onJoin: () => push(),
+                onLeave(p) {
+                    const i = p.index;
+                    if (H.phase === 'lobby' || H.phase === 'over') return push();
+                    H.out[i] = true; H.left = H.left || {}; H.left[i] = true;
+                    if (H.phase === 'bet') { H.bets[i] = 0; if (H.out.every((o, k) => o || H.bets[k]) && H.bets.some(Boolean)) return deal(); if (H.out.every(Boolean)) return finish('所有玩家都離開了'); }
+                    else if (H.phase === 'play' && H.inRound[i] && !H.done[i]) { H.done[i] = true; if (H.turn === i) { nextTurn(i); } }
+                    push();
+                },
+                onMessage(p, d) {
+                    if (!d || typeof d.t !== 'string') return;
+                    if (d.t === 'BET') placeBet(p.index, d.amt); else if (d.t === 'ACT') act(p.index, d.what);
+                },
+                onError: onNetError,
+            });
+        }
+
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…'); hostId = id;
+            room = P2PRoom.join(id, {
+                nick,
+                onRoster(players, me) {
+                    my = me;
+                    if (!V) { V = { phase: 'lobby', round: 0, names: players.map(p => p.nick), chips: [], bets: [], done: [], out: [], inRound: [], hands: [], dealer: [], dealerTotal: -1, result: [], turn: -1, ms: 0, note: '', active: players.map(p => p.connected), at: Date.now() }; render(); }
+                },
+                onMessage(d) { if (d && d.t === 'STATE' && validState(d.s)) { V = d.s; V.at = Date.now(); render(); } },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (V) { alert('房主已離開，牌局結束'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+
+        // ---------- 畫面 ----------
+        const SUIT = { S: '♠', H: '♥', D: '♦', C: '♣' };
+        function cardEl(c) {
+            const e = document.createElement('div');
+            if (c === '??') { e.className = 'card-c back'; return e; }
+            e.className = 'card-c' + (c.endsWith('H') || c.endsWith('D') ? ' red' : '');
+            e.append(document.createTextNode(rankOf(c)), document.createElement('br'), document.createTextNode(SUIT[c.slice(-1)]));
+            return e;
+        }
+        const OUTCOME = { blackjack: ['Blackjack！', 'win'], win: ['贏', 'win'], push: ['平手', ''], lose: ['輸', 'lose'], bust: ['爆牌', 'lose'] };
+
+        function render() {
+            if (!V) return;
+            if (V.phase === 'lobby') {
+                show('#menu', false); show('#lobby', true); show('#game', false);
+                $('#lobbyPlayers').replaceChildren(...V.names.map((x, i) => Object.assign(document.createElement('div'), { className: 'pl' + (V.active[i] ? '' : ' off'), textContent: x + (i === 0 ? ' 👑' : '') + (i === my ? '（我）' : '') })));
+                show('#copyInvite', isHost); show('#startBtn', isHost);
+                $('#lobbyHint').textContent = isHost ? '一個人也可以開始；人到齊了就按「開始遊戲」' : '等待房主開始遊戲…';
+                return;
+            }
+            show('#menu', false); show('#lobby', false); show('#game', true);
+            const over = V.phase === 'over', n = V.names.length;
+            $('#dealerCards').replaceChildren(...V.dealer.map(cardEl)); $('#dealerTot').textContent = V.dealerTotal >= 0 ? `${V.dealerTotal} 點` : '';
+            $('#seats').replaceChildren(...V.names.map((nm, i) => {
+                const d = document.createElement('div'), h = V.hands[i] || [], v = handValue(h.filter(c => c !== '??')), r = V.result[i], oc = r && OUTCOME[r.o];
+                d.className = 'seat' + (i === V.turn && V.phase === 'play' ? ' turn' : '') + (V.out[i] ? ' out' : '');
+                const head = document.createElement('h3');
+                head.append(Object.assign(document.createElement('span'), { textContent: `${i === V.turn && V.phase === 'play' ? '👉 ' : ''}${nm}${i === my ? '（我）' : ''}${V.active[i] ? '' : '（離線）'}` }),
+                    Object.assign(document.createElement('span'), { className: 'tot', textContent: `籌碼 ${V.chips[i] ?? 0}${V.bets[i] ? `・下注 ${V.bets[i]}` : ''}${V.inRound[i] && h.length ? `・${v.total} 點${v.soft && !v.bust ? '（軟）' : ''}` : ''}` }));
+                const cards = Object.assign(document.createElement('div'), { className: 'cards' }); cards.append(...h.map(cardEl));
+                d.append(head, cards);
+                if (oc) d.append(Object.assign(document.createElement('div'), { className: 'res ' + oc[1], textContent: `${oc[0]}　${r.d > 0 ? '+' : ''}${r.d}` }));
+                else if (V.out[i] && V.chips[i] <= 0 && V.round > 0) d.append(Object.assign(document.createElement('div'), { className: 'res lose', textContent: '籌碼用完了' }));
+                return d;
+            }));
+            const mine = V.turn === my && V.phase === 'play', placed = V.bets[my] > 0, left = Math.max(0, Math.ceil((V.ms - (Date.now() - V.at)) / 1000));
+            $('#status').textContent = over ? `牌局結束：${V.note}` : V.phase === 'bet' ? (V.out[my] ? '你的籌碼用完了，觀戰中' : placed ? `已下注 ${V.bets[my]}，等待其他人… ⏱ ${left}` : `第 ${V.round} 局：請下注 ⏱ ${left}`) : V.phase === 'play' ? (mine ? `輪到你了 ⏱ ${left}` : `等待 ${V.names[V.turn]} 決定…`) : V.phase === 'dealer' ? '莊家開牌…' : '本局結算';
+            $('#note').textContent = V.note && !over ? V.note : '';
+            const ctrl = $('#ctrl'); ctrl.replaceChildren();
+            if (V.phase === 'bet' && !V.out[my] && !placed) ctrl.append(...BETS.map(b => { const x = Object.assign(document.createElement('button'), { className: 'primary', textContent: `下注 ${b}`, disabled: b > V.chips[my] }); x.onclick = () => bet(b); return x; }));
+            if (mine) {
+                const mk = (txt, what, dis) => { const x = Object.assign(document.createElement('button'), { className: what === 'stand' ? '' : 'primary', textContent: txt, disabled: !!dis }); x.onclick = () => action(what); return x; };
+                ctrl.append(mk('要牌', 'hit'), mk('停牌', 'stand'), mk('加倍', 'double', (V.hands[my] || []).length !== 2 || V.chips[my] < V.bets[my] * 2));
+            }
+            const finalStand = V.names.map((nm, i) => [nm, V.chips[i]]).sort((a, b) => b[1] - a[1]);
+            if (over) $('#note').textContent = '最終籌碼：' + finalStand.map(([nm, c]) => `${nm} ${c}`).join('　');
+            show('#next', isHost && V.phase === 'result'); show('#end', isHost && V.phase === 'result'); show('#again', isHost && over);
+        }
+        setInterval(() => { if (V && ['bet', 'play'].includes(V.phase)) render(); }, 1000);
+
+        const bet = (amt) => { if (isHost) placeBet(my, amt); else room.send({ t: 'BET', amt }); };
+        const action = (what) => { if (isHost) act(my, what); else room.send({ t: 'ACT', what }); };
+        $('#hostBtn').onclick = hostRoom;
+        $('#joinBtn').onclick = joinRoom;
+        $('#startBtn').onclick = startGame;
+        $('#next').onclick = startBet;
+        $('#end').onclick = () => finish('由房主結束');
+        $('#again').onclick = () => { room.keepSlots = false; room.prune(); H.phase = 'lobby'; H.left = null; H.note = ''; push(); };
+        $('#leave').onclick = () => location.reload();
+        $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
+        if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="連線畫圖接力：2–8 人在同一張畫布上輪流作畫，每人固定一種顏色，限時接力，最後一起欣賞成品並存成 PNG。">
+    <meta property="og:title" content="連線畫圖接力" />
+    <meta property="og:description" content="大家輪流畫同一張圖的連線創作遊戲。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/art-relay.html" />
+    <title>連線畫圖接力</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        :root {
+            --wrap-w: 760px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .row input[type=text] {
+            flex: 1 1 130px;
+        }
+
+        .row label {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .pl.turn {
+            border-color: var(--blue);
+        }
+
+        .pl .tok {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: -1px;
+        }
+
+        #cv {
+            width: 100%;
+            aspect-ratio: 3 / 2;
+            background: #fff;
+            border-radius: 12px;
+            touch-action: none;
+            display: block;
+            box-shadow: inset 0 0 0 1px var(--fill);
+        }
+
+        #status {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+            margin: 10px 0;
+        }
+
+        .tools {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>連線畫圖接力</h1>
+        <p class="sub">大家在同一張畫布上輪流作畫。每個人有自己的顏色，輪到你時有限時間可以畫，畫完或時間到就換下一位。沒有答案、沒有輸贏，一起完成一張作品。</p>
+
+        <div class="card" id="menu">
+            <div class="row"><input type="text" id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+            <div class="row">
+                <button class="primary" id="hostBtn">建立房間</button>
+                <input type="text" id="joinId" placeholder="貼上房號" aria-label="房號">
+                <button id="joinBtn">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+        </div>
+
+        <div class="card" id="lobby" hidden>
+            <h2>等待玩家加入（2–8 人）</h2>
+            <div class="players" id="lobbyPlayers"></div>
+            <div class="row" style="margin-top:12px">
+                <label for="turnSec" id="l1" hidden>每人</label><select id="turnSec" hidden><option value="15">15 秒</option><option value="20" selected>20 秒</option><option value="30">30 秒</option><option value="45">45 秒</option></select>
+                <label for="rounds" id="l2" hidden>輪數</label><select id="rounds" hidden><option value="1">1 輪</option><option value="2" selected>2 輪</option><option value="3">3 輪</option></select>
+                <button id="copyInvite" hidden>複製邀請連結</button>
+                <button class="primary" id="startBtn" hidden disabled>開始</button>
+            </div>
+            <p class="note" id="lobbyHint"></p>
+        </div>
+
+        <div id="game" hidden>
+            <div class="card">
+                <div class="players" id="board" style="margin-bottom:10px"></div>
+                <canvas id="cv" width="1200" height="800" aria-label="共同畫布"></canvas>
+                <div id="status" role="status"></div>
+                <div class="tools" id="tools" hidden>
+                    <label class="muted" for="w">筆粗</label><input type="range" id="w" min="2" max="40" value="8" style="accent-color:var(--blue)">
+                    <button id="done">我畫完了</button>
+                </div>
+            </div>
+            <div class="row" style="justify-content:center">
+                <button class="primary" id="save" hidden>存成 PNG</button>
+                <button class="primary" id="again" hidden>再畫一張</button>
+                <button id="leave">離開</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- pure ---
+        const MAX_PLAYERS = 8, MAX_PTS_PER_MSG = 100, MAX_PTS_PER_TURN = 1500;
+        const COLORS = ['#ff453a', '#0a84ff', '#30d158', '#ff9f0a', '#bf5af2', '#64d2ff', '#ff375f', '#8b5a2b'];
+        const colorOf = (index) => COLORS[((index % COLORS.length) + COLORS.length) % COLORS.length];
+
+        // 房主檢查筆跡：{ pts: [[x,y],…], w, begin }；顏色由房主依玩家決定，不採用玩家送來的顏色
+        function validStroke(m) {
+            if (!m || !Array.isArray(m.pts) || m.pts.length < 1 || m.pts.length > MAX_PTS_PER_MSG) return false;
+            if (!m.pts.every(p => Array.isArray(p) && p.length === 2 && p.every(v => Number.isFinite(v) && v >= 0 && v <= 1200))) return false;
+            return Number.isInteger(m.w) && m.w >= 1 && m.w <= 40;
+        }
+        // 輪流順序：每一輪每位在線玩家各一次；回傳下一位 { turn, round }（turn = -1 表示結束）
+        function nextTurn(order, pos, rounds) {
+            const p = pos + 1; if (p >= order.length * rounds) return { pos: p, turn: -1, round: rounds };
+            return { pos: p, turn: order[p % order.length], round: Math.floor(p / order.length) + 1 };
+        }
+        function validState(s) {
+            const arr = (a, f) => Array.isArray(a) && a.length <= MAX_PLAYERS && a.every(f);
+            return !!s && ['lobby', 'draw', 'over'].includes(s.phase) && arr(s.names, n => typeof n === 'string' && n.length <= 12) && arr(s.active, b => typeof b === 'boolean')
+                && Number.isInteger(s.turn) && Number.isInteger(s.round) && Number.isInteger(s.rounds) && Number.isFinite(s.ms) && Number.isInteger(s.turnSec);
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const cv = $('#cv'), ctx = cv.getContext('2d');
+        let room = null, isHost = false, my = -1, hostId = '', V = null, drawing = false, buf = [], lastPt = null, lastSend = 0, strokeBegin = true;
+        const H = { phase: 'lobby', order: [], pos: 0, turn: -1, round: 0, rounds: 2, turnSec: 20, endsAt: 0, pts: 0, timer: null };
+
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const show = (id, on) => { $(id).hidden = !on; };
+        function readNick() {
+            const n = $('#nick').value.trim();
+            if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; }
+            return n;
+        }
+
+        // ---------- 畫布 ----------
+        const clearCanvas = () => { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height); lastPt = null; };
+        function drawSeg(m, color) {
+            ctx.strokeStyle = ctx.fillStyle = color; ctx.lineWidth = m.w; ctx.lineCap = ctx.lineJoin = 'round';
+            m.pts.forEach(([x, y], i) => {
+                if (i === 0 && (m.begin || !lastPt)) { ctx.beginPath(); ctx.arc(x, y, m.w / 2, 0, 7); ctx.fill(); lastPt = [x, y]; return; }
+                ctx.beginPath(); ctx.moveTo(lastPt[0], lastPt[1]); ctx.lineTo(x, y); ctx.stroke(); lastPt = [x, y];
+            });
+        }
+        const pos = (e) => { const r = cv.getBoundingClientRect(); return [Math.max(0, Math.min(1200, Math.round((e.clientX - r.left) / r.width * 1200))), Math.max(0, Math.min(800, Math.round((e.clientY - r.top) / r.height * 800)))]; };
+        const myTurn = () => V && V.phase === 'draw' && V.turn === my;
+
+        function flush(begin) {
+            if (!buf.length) return;
+            const m = { pts: buf, w: +$('#w').value, begin: !!begin }; buf = [];
+            if (isHost) { if (acceptStroke(m, my)) room.broadcast({ t: 'STROKE', m, c: colorOf(my) }, my); } else room.send({ t: 'STROKE', m });
+        }
+        cv.addEventListener('pointerdown', (e) => { if (!myTurn()) return; cv.setPointerCapture(e.pointerId); drawing = true; const p = pos(e); buf = [p]; drawSeg({ pts: [p], w: +$('#w').value, begin: true }, colorOf(my)); flush(true); });
+        cv.addEventListener('pointermove', (e) => { if (!drawing || !myTurn()) return; const p = pos(e); drawSeg({ pts: [p], w: +$('#w').value, begin: false }, colorOf(my)); buf.push(p); if (buf.length >= 10 || Date.now() - lastSend > 60) { flush(false); lastSend = Date.now(); } });
+        const up = () => { if (drawing) { drawing = false; flush(false); lastPt = null; } };
+        cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+
+        // ---------- 房主 ----------
+        const actives = () => room.players.map(p => p.connected);
+        function publicState() { return { phase: H.phase, names: room.players.map(p => p.nick), active: actives(), turn: H.turn, round: H.round, rounds: H.rounds, ms: H.phase === 'draw' ? Math.max(0, H.endsAt - Date.now()) : 0, turnSec: H.turnSec }; }
+        function push() { V = publicState(); V.at = Date.now(); render(); room.broadcast({ t: 'STATE', s: V }); }
+
+        function acceptStroke(m, from) {
+            if (H.phase !== 'draw' || from !== H.turn || !validStroke(m)) return false;
+            H.pts += m.pts.length; if (H.pts > MAX_PTS_PER_TURN) return false;
+            if (from !== my) drawSeg(m, colorOf(from));
+            return true;
+        }
+
+        function startGame() {
+            const order = room.players.filter(p => p.connected).map(p => p.index);
+            if (order.length < 2) return;
+            room.keepSlots = true; H.order = order; H.rounds = +$('#rounds').value; H.turnSec = +$('#turnSec').value; H.pos = -1;
+            clearCanvas(); room.broadcast({ t: 'CLEAR' }); H.phase = 'draw'; advance();
+            clearInterval(H.timer); H.timer = setInterval(() => { if (H.phase === 'draw' && Date.now() >= H.endsAt) advance(); else if (H.phase === 'draw') { V = publicState(); V.at = Date.now(); render(); } }, 250);
+        }
+        function advance() {
+            let n = nextTurn(H.order, H.pos, H.rounds);
+            while (n.turn >= 0 && !room.players[n.turn].connected) n = nextTurn(H.order, n.pos, H.rounds);       // 跳過離線者
+            H.pos = n.pos;
+            if (n.turn < 0) { clearInterval(H.timer); H.phase = 'over'; H.turn = -1; return push(); }
+            H.turn = n.turn; H.round = n.round; H.pts = 0; H.endsAt = Date.now() + H.turnSec * 1000; push();
+        }
+
+        // ---------- 連線 ----------
+        const onNetError = (err, message) => { if (V || isHost) return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } };
+
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: MAX_PLAYERS,
+                onReady(r) { isHost = true; my = 0; hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id); push(); },
+                canJoin: () => (H.phase === 'draw' ? '作畫進行中，請等這張畫完再加入' : null),
+                onJoin: () => push(),
+                onLeave(p) {
+                    if (H.phase === 'draw') { if (actives().filter(Boolean).length < 2) { clearInterval(H.timer); H.phase = 'over'; H.turn = -1; return push(); } if (p.index === H.turn) return advance(); }
+                    push();
+                },
+                onMessage(p, d) {
+                    if (!d || typeof d.t !== 'string') return;
+                    if (d.t === 'STROKE') { if (acceptStroke(d.m, p.index)) room.broadcast({ t: 'STROKE', m: d.m, c: colorOf(p.index) }, p.index); }
+                    else if (d.t === 'DONE' && H.phase === 'draw' && p.index === H.turn) advance();
+                },
+                onError: onNetError,
+            });
+        }
+
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…'); hostId = id;
+            room = P2PRoom.join(id, {
+                nick,
+                onRoster(players, me) { my = me; if (!V) { V = { phase: 'lobby', names: players.map(p => p.nick), active: players.map(p => p.connected), turn: -1, round: 0, rounds: 0, ms: 0, turnSec: 20, at: Date.now() }; render(); } },
+                onMessage(d) {
+                    if (!d || typeof d.t !== 'string') return;
+                    if (d.t === 'STATE' && validState(d.s)) { if (d.s.phase === 'draw' && (!V || V.phase !== 'draw') && !isHost) clearCanvas(); V = d.s; V.at = Date.now(); render(); }
+                    else if (d.t === 'STROKE' && validStroke(d.m) && COLORS.includes(d.c)) drawSeg(d.m, d.c);
+                    else if (d.t === 'CLEAR') clearCanvas();
+                },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (V) { alert('房主已離開'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+
+        // ---------- 畫面 ----------
+        function render() {
+            if (!V) return;
+            if (V.phase === 'lobby') {
+                show('#menu', false); show('#lobby', true); show('#game', false);
+                $('#lobbyPlayers').replaceChildren(...V.names.map((x, i) => { const d = document.createElement('div'), t = Object.assign(document.createElement('span'), { className: 'tok' }); t.style.background = colorOf(i); d.className = 'pl' + (V.active[i] ? '' : ' off'); d.append(t, x + (i === 0 ? ' 👑' : '') + (i === my ? '（我）' : '')); return d; }));
+                const n = V.active.filter(Boolean).length;
+                ['#copyInvite', '#startBtn', '#turnSec', '#rounds', '#l1', '#l2'].forEach(id => show(id, isHost)); $('#startBtn').disabled = n < 2;
+                $('#lobbyHint').textContent = isHost ? (n < 2 ? '把邀請連結傳給朋友，至少 2 人才能開始' : '人到齊了就按「開始」') : '等待房主開始…';
+                return;
+            }
+            show('#menu', false); show('#lobby', false); show('#game', true);
+            const over = V.phase === 'over', mine = myTurn();
+            $('#board').replaceChildren(...V.names.map((x, i) => { const d = document.createElement('div'), t = Object.assign(document.createElement('span'), { className: 'tok' }); t.style.background = colorOf(i); d.className = 'pl' + (i === V.turn && !over ? ' turn' : '') + (V.active[i] ? '' : ' off'); d.append(t, `${i === V.turn && !over ? '🖌 ' : ''}${x}${i === my ? '（我）' : ''}`); return d; }));
+            const left = Math.max(0, Math.ceil((isHost ? H.endsAt - Date.now() : V.ms - (Date.now() - V.at)) / 1000));
+            $('#status').textContent = over ? '🎨 完成！可以存成 PNG' : mine ? `輪到你了！還有 ${left} 秒（第 ${V.round} / ${V.rounds} 輪）` : `${V.names[V.turn]} 正在畫… ${left} 秒（第 ${V.round} / ${V.rounds} 輪）`;
+            show('#tools', mine); cv.style.cursor = mine ? 'crosshair' : 'default';
+            show('#save', over); show('#again', isHost && over);
+        }
+        setInterval(() => { if (V && V.phase === 'draw') render(); }, 500);
+
+        $('#hostBtn').onclick = hostRoom;
+        $('#joinBtn').onclick = joinRoom;
+        $('#startBtn').onclick = startGame;
+        $('#done').onclick = () => { if (!myTurn()) return; if (isHost) advance(); else room.send({ t: 'DONE' }); };
+        $('#save').onclick = () => cv.toBlob(b => Util.download(b, 'relay-' + Util.day.today() + '.png'));
+        $('#again').onclick = () => { room.keepSlots = false; room.prune(); H.phase = 'lobby'; H.turn = -1; clearCanvas(); room.broadcast({ t: 'CLEAR' }); push(); };
+        $('#leave').onclick = () => location.reload();
+        $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
+        if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+        clearCanvas();
+    </script>
+</body>
+
+</html>

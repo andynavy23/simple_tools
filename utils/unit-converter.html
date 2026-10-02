@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="單位與匯率換算：長度、重量、面積（含坪）、體積、溫度、速度、資料量，以及即時匯率。">
+    <meta name="description" content="單位與匯率換算：長度、重量、面積（含坪）、體積、溫度、速度、資料量、烹飪（杯 / 匙 / 公克，依食材），以及即時匯率。">
     <meta property="og:title" content="單位與匯率換算" />
-    <meta property="og:description" content="常用單位（含台尺、台斤、坪）與即時匯率一次換算。" />
+    <meta property="og:description" content="常用單位（含台尺、台斤、坪）、烹飪用量與即時匯率一次換算。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/unit-converter.html" />
     <title>單位與匯率換算</title>
@@ -43,7 +43,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>單位與匯率換算</h1>
-        <p class="sub">輸入數字，所有單位一次列出。</p>
+        <p class="sub">輸入數字，所有單位一次列出；烹飪類別可依食材換算杯、匙與公克。</p>
 
         <div class="card">
             <div class="chips" id="cats"></div>
@@ -51,6 +51,7 @@
                 <input id="val" type="number" inputmode="decimal" value="1" step="any" aria-label="數值">
                 <select id="from" aria-label="單位"></select>
             </div>
+            <select id="ing" aria-label="食材" hidden style="margin-top:8px"></select>
             <p class="note" id="note"></p>
         </div>
 
@@ -78,15 +79,26 @@
         // 匯率：rates 以新台幣為基準（1 TWD = rates[code] 單位外幣）
         const CURRENCIES = { TWD: '新台幣', USD: '美元', JPY: '日圓', EUR: '歐元', CNY: '人民幣', HKD: '港幣', KRW: '韓元', GBP: '英鎊', AUD: '澳幣', CAD: '加幣', SGD: '新加坡幣', THB: '泰銖', VND: '越南盾' };
 
+        // 烹飪：體積與重量互換需要「密度」（每毫升幾公克）。數值為常見食譜換算的近似值（杯量依一般舀法），實際會因品牌與緊實度不同
+        const COOK_VOL = { 毫升: 1, 茶匙: 5, 湯匙: 15, 公制杯: 250, 美制杯: 236.5882365, 美制液體盎司: 29.5735295625 };
+        const COOK_MASS = { 公克: 1, 公斤: 1000, 盎司: 28.349523125, 磅: 453.59237, 台兩: 37.5 };
+        const INGREDIENTS = { 水: 1, 牛奶: 1.03, 鮮奶油: 0.99, 食用油: 0.92, 蜂蜜: 1.42, 醬油: 1.15, 細鹽: 1.2, 砂糖: 0.85, 糖粉: 0.51, 黑糖: 0.9, 低筋麵粉: 0.53, 奶油: 0.96, 可可粉: 0.46, 生米: 0.85, 燕麥片: 0.37 };
+
         function unitsOf(cat) {
+            if (cat === '烹飪') return [...Object.keys(COOK_VOL), ...Object.keys(COOK_MASS)];
             if (cat === '溫度') return Object.keys(TEMP);
             if (cat === '匯率') return Object.keys(CURRENCIES);
             return Object.keys(CATS[cat]);
         }
 
         // 回傳 [{ unit, value }]，涵蓋該類別全部單位
-        function convertAll(cat, value, from, rates) {
+        function convertAll(cat, value, from, rates, ingredient = '水') {
             const units = unitsOf(cat);
+            if (cat === '烹飪') {
+                const d = INGREDIENTS[ingredient];
+                const ml = from in COOK_VOL ? value * COOK_VOL[from] : value * COOK_MASS[from] / d;
+                return units.map(u => ({ unit: u, value: u in COOK_VOL ? ml / COOK_VOL[u] : ml * d / COOK_MASS[u] }));
+            }
             if (cat === '溫度') {
                 const c = TEMP[from].to(value);
                 return units.map(u => ({ unit: u, value: TEMP[u].from(c) }));
@@ -108,7 +120,7 @@
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
-        const ALL = [...Object.keys(CATS), '溫度', '匯率'];
+        const ALL = [...Object.keys(CATS), '烹飪', '溫度', '匯率'];
         let cat = '長度', fx = null, fxLoading = false; // fx: { rates, time, stale } | null
 
         async function loadRates() {
@@ -145,6 +157,7 @@
             const out = $('#out'), note = $('#note');
             out.replaceChildren();
             note.replaceChildren();
+            if (cat === '烹飪') note.textContent = '體積與重量互換依食材密度估算（一般舀法），不同品牌、篩過與否、壓緊程度會有差異，食譜請以實際為準。';
             if (cat === '匯率') {
                 if (fxLoading) { out.textContent = '載入匯率中…'; return; }
                 if (!fx) { out.textContent = '目前無法取得匯率，請確認網路後重新整理。'; return; }
@@ -158,7 +171,7 @@
             const v = parseFloat($('#val').value);
             if (isNaN(v)) { out.textContent = '請輸入數字'; return; }
             const from = $('#from').value;
-            convertAll(cat, v, from, fx?.rates).forEach(({ unit, value }) => {
+            convertAll(cat, v, from, fx?.rates, $('#ing').value).forEach(({ unit, value }) => {
                 out.append(Util.statRow(cat === '匯率' ? `${unit} ${CURRENCIES[unit]}` : unit, fmt(value), unit === from ? 'me' : ''));
             });
         }
@@ -166,7 +179,7 @@
         function setCat(c) {
             cat = c;
             document.querySelectorAll('#cats button').forEach(b => b.setAttribute('aria-pressed', b.textContent === c));
-            fillUnits();
+            fillUnits(); $('#ing').hidden = c !== '烹飪';
             if (c === '匯率' && !fx && !fxLoading) {
                 fxLoading = true;
                 loadRates().then(r => { fx = r; fxLoading = false; if (cat === '匯率') render(); });
@@ -181,6 +194,8 @@
             b.onclick = () => setCat(c);
             $('#cats').append(b);
         });
+        $('#ing').replaceChildren(...Object.keys(INGREDIENTS).map(k => new Option(k, k)));
+        $('#ing').onchange = render;
         $('#val').oninput = render;
         $('#from').onchange = render;
         setCat('長度');

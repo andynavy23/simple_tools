@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="俄羅斯方塊：七種方塊、消行計分、等級加速、下一個預覽與暫存，鍵盤與觸控按鈕都能玩，記錄最高分。">
+    <meta property="og:title" content="俄羅斯方塊" />
+    <meta property="og:description" content="經典俄羅斯方塊，含暫存、預覽與落點提示。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/tetris.html" />
+    <title>俄羅斯方塊</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 560px;
+        }
+
+        .play {
+            display: grid;
+            grid-template-columns: 1fr 130px;
+            gap: 12px;
+            align-items: start;
+        }
+
+        #cv {
+            width: 100%;
+            aspect-ratio: 1 / 2;
+            display: block;
+            border-radius: 12px;
+            background: var(--card);
+        }
+
+        .side>div {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 8px;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .side canvas {
+            width: 100%;
+            display: block;
+        }
+
+        .side b {
+            display: block;
+            font-size: 22px;
+            color: var(--text);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .touch {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .touch button {
+            padding: 14px 0;
+            font-size: 18px;
+            border-radius: 14px;
+            touch-action: manipulation;
+        }
+
+        #msg {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>俄羅斯方塊</h1>
+        <p class="sub">← → 移動、↑ 或 X 順時針旋轉、Z 逆時針、↓ 加速、空白鍵直接落下、C 暫存、P 暫停。</p>
+        <div class="play">
+            <canvas id="cv" width="300" height="600" aria-label="遊戲畫面"></canvas>
+            <div class="side">
+                <div>下一個<canvas id="next" width="90" height="90"></canvas></div>
+                <div>暫存<canvas id="hold" width="90" height="90"></canvas></div>
+                <div>分數<b id="score">0</b></div>
+                <div>行數<b id="lines">0</b></div>
+                <div>等級<b id="level">1</b></div>
+                <div>最高<b id="best">0</b></div>
+                <button class="primary" id="start" style="width:100%">開始</button>
+            </div>
+        </div>
+        <div class="touch" id="touch"></div>
+        <div id="msg" role="status"></div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { shuffle, store } = Util;
+
+        // --- pure ---
+        const W = 10, H = 20;
+        // 七種方塊（旋轉狀態 0 的格子座標，在 4×4 或 3×3 的盒子內）；旋轉用「盒內順時針轉 90 度」計算
+        const SHAPES = {
+            I: { box: 4, cells: [[0, 1], [1, 1], [2, 1], [3, 1]], color: '#64d2ff' },
+            O: { box: 2, cells: [[0, 0], [1, 0], [0, 1], [1, 1]], color: '#ffd60a' },
+            T: { box: 3, cells: [[1, 0], [0, 1], [1, 1], [2, 1]], color: '#bf5af2' },
+            S: { box: 3, cells: [[1, 0], [2, 0], [0, 1], [1, 1]], color: '#30d158' },
+            Z: { box: 3, cells: [[0, 0], [1, 0], [1, 1], [2, 1]], color: '#ff453a' },
+            J: { box: 3, cells: [[0, 0], [0, 1], [1, 1], [2, 1]], color: '#0a84ff' },
+            L: { box: 3, cells: [[2, 0], [0, 1], [1, 1], [2, 1]], color: '#ff9f0a' },
+        };
+        const NAMES = Object.keys(SHAPES);
+
+        const rotateCells = (cells, box, dir) => cells.map(([x, y]) => (dir > 0 ? [box - 1 - y, x] : [y, box - 1 - x]));
+        // 方塊 { type, rot, x, y } 目前佔據的格子（盤面座標）
+        function cellsOf(p) {
+            const s = SHAPES[p.type]; let c = s.cells;
+            for (let i = 0; i < ((p.rot % 4) + 4) % 4; i++) c = rotateCells(c, s.box, 1);
+            return c.map(([x, y]) => [x + p.x, y + p.y]);
+        }
+        const newBoard = () => Array.from({ length: H }, () => new Array(W).fill(0));
+        const fits = (board, p) => cellsOf(p).every(([x, y]) => x >= 0 && x < W && y < H && (y < 0 || !board[y][x]));
+
+        // 嘗試移動 / 旋轉；旋轉時依序嘗試左右小幅位移（簡化的踢牆）。成功回傳新方塊，失敗回傳 null
+        function tryMove(board, p, dx, dy, drot = 0) {
+            const base = { ...p, rot: p.rot + drot };
+            for (const kick of drot ? [0, -1, 1, -2, 2] : [0]) {
+                const q = { ...base, x: p.x + dx + kick, y: p.y + dy };
+                if (fits(board, q)) return q;
+            }
+            return null;
+        }
+        const spawn = (type) => ({ type, rot: 0, x: Math.floor((W - SHAPES[type].box) / 2), y: type === 'I' ? -1 : 0 });
+        const ghost = (board, p) => { let q = p; for (let n = tryMove(board, q, 0, 1); n; n = tryMove(board, q, 0, 1)) q = n; return q; };
+
+        // 把方塊固定到盤面並消行；回傳 { board, cleared }（不改動輸入）
+        function lock(board, p) {
+            const b = board.map(r => r.slice());
+            for (const [x, y] of cellsOf(p)) if (y >= 0) b[y][x] = p.type;
+            const kept = b.filter(r => r.some(v => !v)), cleared = H - kept.length;
+            return { board: [...Array.from({ length: cleared }, () => new Array(W).fill(0)), ...kept], cleared };
+        }
+
+        // 計分：1/2/3/4 行 = 100/300/500/800 × 等級；等級每 10 行 +1
+        const LINE_POINTS = [0, 100, 300, 500, 800];
+        const lineScore = (n, level) => LINE_POINTS[n] * level;
+        const levelOf = (lines) => 1 + Math.floor(lines / 10);
+        const dropMs = (level) => Math.max(80, 800 - (level - 1) * 70);
+
+        // 7 袋隨機：每一袋七種各一個、打亂順序；保證不會太久不出現某種方塊
+        const bag = (shuf = shuffle) => shuf(NAMES);
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const cv = $('#cv'), g = cv.getContext('2d'), CELL = cv.width / W;
+        let board, cur, queue, held, canHold, score, lines, level, over, paused, timer, running = false;
+
+        const bestKey = 'tetris_best';
+        const nextType = () => { if (queue.length < 7) queue.push(...bag()); return queue.shift(); };
+
+        function block(ctx, x, y, size, color) { ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(x * size + 1, y * size + 1, size - 2, size - 2, 4); ctx.fill(); }
+        function mini(canvas, type) {
+            const c = canvas.getContext('2d'); c.clearRect(0, 0, canvas.width, canvas.height);
+            if (!type) return;
+            const s = SHAPES[type], size = 20, ox = (canvas.width - s.box * size) / 2 / size, oy = (canvas.height - s.box * size) / 2 / size;
+            for (const [x, y] of s.cells) block(c, x + ox, y + oy, size, s.color);
+        }
+        function draw() {
+            const cs = getComputedStyle(document.documentElement);
+            g.fillStyle = cs.getPropertyValue('--card').trim() || '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+            g.strokeStyle = 'rgba(128,128,128,.08)'; for (let i = 1; i < W; i++) { g.beginPath(); g.moveTo(i * CELL, 0); g.lineTo(i * CELL, cv.height); g.stroke(); }
+            for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (board[y][x]) block(g, x, y, CELL, SHAPES[board[y][x]].color);
+            if (cur && !over) {
+                g.globalAlpha = .25; for (const [x, y] of cellsOf(ghost(board, cur))) if (y >= 0) block(g, x, y, CELL, SHAPES[cur.type].color); g.globalAlpha = 1;
+                for (const [x, y] of cellsOf(cur)) if (y >= 0) block(g, x, y, CELL, SHAPES[cur.type].color);
+            }
+            $('#score').textContent = score; $('#lines').textContent = lines; $('#level').textContent = level;
+        }
+
+        function nextPiece() {
+            cur = spawn(queue.length ? queue.shift() : nextType()); if (queue.length < 7) queue.push(...bag());
+            canHold = true; mini($('#next'), queue[0]);
+            if (!fits(board, cur)) endGame();
+        }
+        function endGame() {
+            over = true; clearTimeout(timer); running = false;
+            const best = store.get(bestKey, 0); if (score > best) store.set(bestKey, score);
+            $('#best').textContent = Math.max(best, score); $('#msg').textContent = score > best ? `💥 遊戲結束　🎉 新紀錄 ${score}` : `💥 遊戲結束　得分 ${score}`; $('#start').textContent = '再玩一次'; draw();
+        }
+        function settle() {
+            const r = lock(board, cur); board = r.board;
+            if (r.cleared) { lines += r.cleared; score += lineScore(r.cleared, level); level = levelOf(lines); }
+            nextPiece(); draw();
+        }
+        function tick() {
+            if (over || paused) return;
+            const q = tryMove(board, cur, 0, 1); if (q) cur = q; else settle();
+            draw(); timer = setTimeout(tick, dropMs(level));
+        }
+
+        function act(a) {
+            if (!running || over || paused) return;
+            let q = null;
+            if (a === 'left') q = tryMove(board, cur, -1, 0); else if (a === 'right') q = tryMove(board, cur, 1, 0);
+            else if (a === 'cw') q = tryMove(board, cur, 0, 0, 1); else if (a === 'ccw') q = tryMove(board, cur, 0, 0, -1);
+            else if (a === 'down') { q = tryMove(board, cur, 0, 1); if (q) score += 1; else { settle(); return; } }
+            else if (a === 'drop') { const t = ghost(board, cur); score += 2 * (t.y - cur.y); cur = t; settle(); return; }
+            else if (a === 'hold' && canHold) { const t = cur.type; cur = spawn(held || nextType()); held = t; canHold = false; mini($('#hold'), held); mini($('#next'), queue[0]); draw(); return; }
+            if (q) { cur = q; draw(); }
+        }
+
+        function start() {
+            board = newBoard(); queue = [...bag()]; held = null; score = 0; lines = 0; level = 1; over = false; paused = false; running = true;
+            mini($('#hold'), null); $('#msg').textContent = ''; $('#start').textContent = '重新開始'; $('#best').textContent = store.get(bestKey, 0);
+            clearTimeout(timer); nextPiece(); draw(); timer = setTimeout(tick, dropMs(1));
+        }
+        function pause() { if (!running || over) return; paused = !paused; $('#msg').textContent = paused ? '⏸ 暫停' : ''; if (!paused) { clearTimeout(timer); timer = setTimeout(tick, dropMs(level)); } }
+
+        const KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowDown: 'down', ArrowUp: 'cw', x: 'cw', X: 'cw', z: 'ccw', Z: 'ccw', ' ': 'drop', c: 'hold', C: 'hold' };
+        document.addEventListener('keydown', (e) => {
+            if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+            if (e.key === 'p' || e.key === 'P') return pause();
+            const a = KEYS[e.key]; if (a) { e.preventDefault(); act(a); }
+        });
+        $('#touch').replaceChildren(...[['◀', 'left'], ['⟳', 'cw'], ['▶', 'right'], ['▼', 'down'], ['⤓', 'drop']].map(([t, a]) => Object.assign(document.createElement('button'), { textContent: t, onpointerdown: (e) => { e.preventDefault(); act(a); } })));
+        $('#start').onclick = start;
+        board = newBoard(); queue = []; score = lines = 0; level = 1; $('#best').textContent = store.get(bestKey, 0); draw();
+    </script>
+</body>
+
+</html>

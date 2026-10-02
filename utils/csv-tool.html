@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="CSV / TSV 表格工具：貼上或載入檔案，自動判斷分隔符號，表格預覽、點欄位排序、篩選，並轉成 JSON 或 Markdown 表格。全部在本機處理。">
+    <meta property="og:title" content="CSV / TSV 表格工具" />
+    <meta property="og:description" content="CSV 預覽、排序、篩選與轉 JSON / Markdown。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/csv-tool.html" />
+    <title>CSV / TSV 表格工具</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 900px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            resize: vertical;
+            font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans TC", monospace;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin: 10px 0;
+        }
+
+        .row label {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .tbl {
+            overflow: auto;
+            max-height: 420px;
+            border-radius: 10px;
+            box-shadow: inset 0 0 0 1px var(--fill);
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 14px;
+        }
+
+        th,
+        td {
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--fill);
+            text-align: left;
+            white-space: nowrap;
+            max-width: 280px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        th {
+            position: sticky;
+            top: 0;
+            background: var(--card);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        td.num {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        pre {
+            max-height: 320px;
+            overflow: auto;
+            background: var(--fill);
+            border-radius: 10px;
+            padding: 10px 12px;
+            font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .err {
+            color: var(--bad);
+            min-height: 1.4em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>CSV / TSV 表格工具</h1>
+        <p class="sub">貼上文字或選擇檔案（支援引號、雙引號跳脫與儲存格內換行）。處理全在本機，不會上傳。</p>
+
+        <div class="card">
+            <textarea id="src" spellcheck="false" placeholder="姓名,部門,年資&#10;小明,工程,3&#10;&quot;王, 小華&quot;,設計,5" aria-label="CSV 內容"></textarea>
+            <div class="row">
+                <input type="file" id="file" accept=".csv,.tsv,.txt,text/csv,text/plain">
+                <label for="delim">分隔符號</label><select id="delim"><option value="auto">自動判斷</option><option value=",">逗號 ,</option><option value="&#9;">Tab</option><option value=";">分號 ;</option><option value="|">直線 |</option></select>
+                <label><input type="checkbox" id="hdr" checked> 第一列是標題</label>
+            </div>
+            <div class="err" id="err" role="alert"></div>
+        </div>
+
+        <div class="card">
+            <div class="row" style="margin-top:0"><input type="search" id="filter" placeholder="篩選（任一欄包含）" aria-label="篩選" style="flex:1 1 200px"><span class="muted" id="info"></span></div>
+            <div class="tbl"><table id="tbl"></table></div>
+        </div>
+
+        <div class="card">
+            <div class="row" style="margin-top:0"><button data-o="json" class="sm" aria-pressed="true">JSON</button><button data-o="md" class="sm" aria-pressed="false">Markdown 表格</button><button data-o="tsv" class="sm" aria-pressed="false">TSV</button><button class="sm" id="copy" style="margin-left:auto">複製</button><button class="sm" id="save">下載</button></div>
+            <pre id="out"></pre>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { download } = Util;
+
+        // --- pure ---
+        // 判斷分隔符號：在前幾列中，各候選符號出現次數一致且最多者勝出
+        function detectDelimiter(text) {
+            const lines = text.split(/\r?\n/).filter(l => l.trim()).slice(0, 10); let best = ',', score = -1;
+            for (const d of [',', '\t', ';', '|']) {
+                const counts = lines.map(l => { let n = 0, q = false; for (const c of l) { if (c === '"') q = !q; else if (c === d && !q) n++; } return n; });
+                const min = Math.min(...counts), consistent = counts.every(c => c === counts[0]);
+                const s = (min > 0 ? 1 : 0) * 1000 + (consistent ? 500 : 0) + min;
+                if (s > score) { score = s; best = d; }
+            }
+            return best;
+        }
+
+        // RFC 4180：欄位可用雙引號包起來，裡面可有分隔符號、換行與 ""（代表一個引號）。回傳二維陣列；不成對的引號丟出錯誤
+        function parseCSV(text, delim = ',') {
+            const rows = []; let row = [], field = '', q = false, i = 0, any = false;
+            const s = String(text).replace(/^﻿/, '');
+            while (i < s.length) {
+                const c = s[i];
+                if (q) {
+                    if (c === '"') { if (s[i + 1] === '"') { field += '"'; i += 2; continue; } q = false; i++; continue; }
+                    field += c; i++; continue;
+                }
+                if (c === '"' && field === '') { q = true; any = true; i++; continue; }
+                if (c === delim) { row.push(field); field = ''; any = true; i++; continue; }
+                if (c === '\r' || c === '\n') { if (c === '\r' && s[i + 1] === '\n') i++; if (any || field !== '' || row.length) { row.push(field); rows.push(row); } row = []; field = ''; any = false; i++; continue; }
+                field += c; any = true; i++;
+            }
+            if (q) throw new Error('有引號沒有成對（雙引號開了但沒有關閉）');
+            if (any || field !== '' || row.length) { row.push(field); rows.push(row); }
+            return rows;
+        }
+
+        const isNum = (v) => /^-?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(String(v).trim());
+        // 比較：兩邊都是數字就用數值比，否則用字串（含中文）比
+        const cmp = (a, b) => (isNum(a) && isNum(b) ? parseFloat(a) - parseFloat(b) : String(a).localeCompare(String(b), 'zh-Hant', { numeric: true }));
+        function sortRows(rows, col, dir) { return [...rows].sort((x, y) => dir * cmp(x[col] ?? '', y[col] ?? '')); }
+        const filterRows = (rows, q) => { q = q.trim().toLowerCase(); return q ? rows.filter(r => r.some(c => String(c).toLowerCase().includes(q))) : rows; };
+
+        // 轉成 JSON（物件陣列）：標題重複時後面加 _2、_3；數字與 true/false 轉成對應型別
+        function toObjects(header, rows) {
+            const seen = {}, keys = header.map((h, i) => { let k = String(h).trim() || `col${i + 1}`; seen[k] = (seen[k] || 0) + 1; return seen[k] > 1 ? `${k}_${seen[k]}` : k; });
+            const conv = (v) => (isNum(v) ? parseFloat(v) : v === 'true' ? true : v === 'false' ? false : v);
+            return rows.map(r => Object.fromEntries(keys.map((k, i) => [k, conv(r[i] ?? '')])));
+        }
+        // Markdown 表格：| 與換行要跳脫；數字欄靠右
+        function toMarkdown(header, rows) {
+            const esc = (v) => String(v ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
+            const right = header.map((_, i) => rows.length && rows.every(r => r[i] === undefined || r[i] === '' || isNum(r[i])));
+            return [`| ${header.map(esc).join(' | ')} |`, `| ${right.map(r => (r ? '---:' : '---')).join(' | ')} |`, ...rows.map(r => `| ${header.map((_, i) => esc(r[i])).join(' | ')} |`)].join('\n');
+        }
+        const toTSV = (header, rows) => [header, ...rows].map(r => r.map(c => String(c ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\n');
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let header = [], body = [], sortCol = -1, sortDir = 1, outKind = 'json';
+
+        function load() {
+            $('#err').textContent = '';
+            const text = $('#src').value;
+            if (!text.trim()) { header = []; body = []; return render(); }
+            try {
+                const d = $('#delim').value === 'auto' ? detectDelimiter(text) : $('#delim').value, rows = parseCSV(text, d);
+                const width = Math.max(0, ...rows.map(r => r.length));
+                const norm = rows.map(r => Object.assign(new Array(width).fill(''), r));
+                if ($('#hdr').checked) { header = norm[0] || []; body = norm.slice(1); } else { header = Array.from({ length: width }, (_, i) => `欄 ${i + 1}`); body = norm; }
+                sortCol = -1;
+            } catch (e) { $('#err').textContent = e.message; header = []; body = []; }
+            render();
+        }
+
+        function render() {
+            let rows = filterRows(body, $('#filter').value); if (sortCol >= 0) rows = sortRows(rows, sortCol, sortDir);
+            const t = $('#tbl'); t.replaceChildren();
+            if (header.length) {
+                const tr = document.createElement('tr');
+                header.forEach((h, i) => { const th = document.createElement('th'); th.textContent = h + (i === sortCol ? (sortDir > 0 ? ' ▲' : ' ▼') : ''); th.onclick = () => { if (sortCol === i) sortDir = -sortDir; else { sortCol = i; sortDir = 1; } render(); }; th.title = '點一下排序'; tr.append(th); });
+                const thead = document.createElement('thead'); thead.append(tr); t.append(thead);
+                const tb = document.createElement('tbody');
+                rows.slice(0, 500).forEach(r => { const tr2 = document.createElement('tr'); header.forEach((_, i) => { const td = document.createElement('td'); td.textContent = r[i] ?? ''; if (isNum(r[i] ?? '')) td.className = 'num'; tr2.append(td); }); tb.append(tr2); });
+                t.append(tb);
+            }
+            $('#info').textContent = header.length ? `${rows.length} / ${body.length} 列 × ${header.length} 欄${rows.length > 500 ? '（只顯示前 500 列）' : ''}` : '';
+            const out = outKind === 'json' ? JSON.stringify(toObjects(header, rows), null, 2) : outKind === 'md' ? toMarkdown(header, rows) : toTSV(header, rows);
+            $('#out').textContent = header.length ? out : '';
+        }
+
+        $('#src').oninput = load; $('#delim').onchange = load; $('#hdr').onchange = load; $('#filter').oninput = render;
+        $('#file').onchange = async (e) => { const f = e.target.files[0]; if (!f) return; if (f.size > 5e6) { $('#err').textContent = '檔案太大（上限 5 MB）'; return; } $('#src').value = await f.text(); load(); };
+        document.querySelectorAll('[data-o]').forEach(b => { b.onclick = () => { outKind = b.dataset.o; document.querySelectorAll('[data-o]').forEach(x => x.setAttribute('aria-pressed', x === b)); render(); }; });
+        $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), $('#out').textContent);
+        $('#save').onclick = () => download(new Blob([$('#out').textContent], { type: 'text/plain;charset=utf-8' }), 'table.' + (outKind === 'json' ? 'json' : outKind === 'md' ? 'md' : 'tsv'));
+        load();
+    </script>
+</body>
+
+</html>

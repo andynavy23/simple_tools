@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="統一發票與樂透對獎：貼上當期開獎號碼，批次核對手上的發票號碼或樂透號碼，列出中了哪一獎。開獎號碼要自己輸入，不連網。">
+    <meta property="og:title" content="發票 / 樂透對獎" />
+    <meta property="og:description" content="輸入開獎號碼，批次核對發票與樂透。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/lottery-check.html" />
+    <title>發票 / 樂透對獎</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .fgrid label small {
+            color: var(--muted);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            font: 15px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+
+        .res {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--fill);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .res.win b {
+            color: var(--ok);
+        }
+
+        .res.bad {
+            color: var(--bad);
+        }
+
+        .err {
+            color: var(--bad);
+            min-height: 1.4em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>發票 / 樂透對獎</h1>
+        <p class="sub">開獎號碼請自行到財政部或台灣彩券官網查詢後貼上，這個頁面只負責核對，不會上網查資料。結果僅供參考，以官方公告為準。</p>
+
+        <div class="card">
+            <div class="tabs"><button data-t="inv" aria-pressed="true">統一發票</button><button data-t="big" aria-pressed="false">大樂透</button><button data-t="pw" aria-pressed="false">威力彩</button></div>
+
+            <div class="pane" data-t="inv">
+                <div class="fgrid">
+                    <div><label for="sp">特別獎 <small>8 碼・1000 萬</small></label><input id="sp" inputmode="numeric" maxlength="8" placeholder="8 碼"></div>
+                    <div><label for="gr">特獎 <small>8 碼・200 萬</small></label><input id="gr" inputmode="numeric" maxlength="8" placeholder="8 碼"></div>
+                    <div style="grid-column:1/-1"><label for="fi">頭獎（最多 3 組，空白或逗號分隔）<small>末 8 碼 20 萬；末 7 碼二獎 4 萬、6 碼三獎 1 萬、5 碼四獎 4 千、4 碼五獎 1 千、3 碼六獎 200</small></label><input id="fi" placeholder="例如：12345678 23456789 34567890" style="width:100%"></div>
+                    <div style="grid-column:1/-1"><label for="ex">增開六獎（末 3 碼，可多組）<small>200 元</small></label><input id="ex" placeholder="例如：123 456" style="width:100%"></div>
+                </div>
+                <label for="tix" style="display:block;margin:12px 0 4px;font-size:13px;color:var(--muted)">要對的發票（一行一張，可連字軌一起貼，如 AB-12345678）</label>
+                <textarea id="tix" spellcheck="false" placeholder="AB-12345678&#10;CD23456789"></textarea>
+            </div>
+
+            <div class="pane" data-t="big" hidden>
+                <div class="fgrid">
+                    <div style="grid-column:1/-1"><label for="bw">開獎號碼（6 個，空白或逗號分隔）<small>1–49</small></label><input id="bw" placeholder="例如：03 12 18 25 33 47" style="width:100%"></div>
+                    <div><label for="bs">特別號</label><input id="bs" inputmode="numeric" placeholder="1–49"></div>
+                </div>
+                <label for="bt" style="display:block;margin:12px 0 4px;font-size:13px;color:var(--muted)">你的號碼（一行一注，6 個號碼）</label>
+                <textarea id="bt" spellcheck="false" placeholder="03 12 18 25 33 47"></textarea>
+            </div>
+
+            <div class="pane" data-t="pw" hidden>
+                <div class="fgrid">
+                    <div style="grid-column:1/-1"><label for="pwW">第一區開獎號碼（6 個）<small>1–38</small></label><input id="pwW" placeholder="例如：05 11 20 27 33 38" style="width:100%"></div>
+                    <div><label for="pwS">第二區號碼</label><input id="pwS" inputmode="numeric" placeholder="1–8"></div>
+                </div>
+                <label for="pwT" style="display:block;margin:12px 0 4px;font-size:13px;color:var(--muted)">你的號碼（一行一注：第一區 6 個，最後一個是第二區，可用「/」或「+」隔開）</label>
+                <textarea id="pwT" spellcheck="false" placeholder="05 11 20 27 33 38 / 04"></textarea>
+            </div>
+
+            <div class="err" id="err" role="alert"></div>
+            <button class="primary" id="check">對獎</button>
+        </div>
+
+        <div class="card" id="outCard" hidden>
+            <h2>結果 <span class="muted" id="sum" style="font-weight:400;font-size:14px"></span></h2>
+            <div id="out"></div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store } = Util;
+
+        // --- pure ---
+        // 一串文字拆成數字字串（空白、逗號、頓號、斜線、加號都可以分隔）
+        const tokens = (s) => String(s).split(/[\s,，、/+|]+/).filter(Boolean);
+
+        // ---------- 統一發票 ----------
+        const SUFFIX_PRIZES = [[8, '頭獎', 200000], [7, '二獎', 40000], [6, '三獎', 10000], [5, '四獎', 4000], [4, '五獎', 1000], [3, '六獎', 200]];
+        // 發票字串 → 8 位數字；可含兩碼字軌與連字號；不是 8 位數字回傳 null
+        function invoiceDigits(s) { const d = String(s).replace(/[A-Za-z\s-]/g, ''); return /^\d{8}$/.test(d) ? d : null; }
+        // win = { special: '8碼'|'', grand: '8碼'|'', first: ['8碼',…], extra: ['3碼',…] }。回傳最高的一個獎 { name, amount } 或 null
+        function checkInvoice(num, win) {
+            if (win.special && win.special === num) return { name: '特別獎', amount: 10000000 };
+            if (win.grand && win.grand === num) return { name: '特獎', amount: 2000000 };
+            let best = null;
+            for (const f of win.first) for (const [n, name, amount] of SUFFIX_PRIZES) if (f.slice(-n) === num.slice(-n) && (!best || amount > best.amount)) best = { name, amount };
+            if (win.extra.some(e => num.endsWith(e)) && (!best || best.amount < 200)) best = { name: '增開六獎', amount: 200 };
+            return best;
+        }
+        // 檢查開獎號碼欄位：回傳錯誤訊息或 ''
+        function validateInvoiceWin(win) {
+            if (win.special && !/^\d{8}$/.test(win.special)) return '特別獎要 8 位數字';
+            if (win.grand && !/^\d{8}$/.test(win.grand)) return '特獎要 8 位數字';
+            if (win.first.some(f => !/^\d{8}$/.test(f)) || win.first.length > 3) return '頭獎要 8 位數字，最多 3 組';
+            if (win.extra.some(e => !/^\d{3}$/.test(e))) return '增開六獎要 3 位數字';
+            if (!win.special && !win.grand && !win.first.length && !win.extra.length) return '請至少輸入一組開獎號碼';
+            return '';
+        }
+
+        // ---------- 樂透 ----------
+        const parseNums = (s, max) => { const t = tokens(s).map(Number); return t.every(n => Number.isInteger(n) && n >= 1 && n <= max) ? t : null; };
+        // 大樂透：6 個號碼 + 特別號。回傳獎項名稱或 null
+        function bigPrize(mine, win, special) {
+            const m = mine.filter(n => win.includes(n)).length, sp = mine.includes(special);
+            if (m === 6) return '頭獎'; if (m === 5 && sp) return '貳獎'; if (m === 5) return '參獎'; if (m === 4 && sp) return '肆獎'; if (m === 4) return '伍獎'; if (m === 3 && sp) return '陸獎'; if (m === 2 && sp) return '柒獎'; if (m === 3) return '普獎';
+            return null;
+        }
+        // 威力彩：第一區 6 個（1–38）+ 第二區 1 個（1–8）
+        function powerPrize(mine, second, win, winSecond) {
+            const m = mine.filter(n => win.includes(n)).length, s = second === winSecond;
+            if (m === 6 && s) return '頭獎'; if (m === 6) return '貳獎'; if (m === 5 && s) return '參獎'; if (m === 5) return '肆獎'; if (m === 4 && s) return '伍獎'; if (m === 4) return '陸獎'; if (m === 3 && s) return '柒獎'; if (m === 2 && s) return '捌獎'; if (m === 3) return '玖獎'; if (m === 1 && s) return '普獎';
+            return null;
+        }
+        const noDup = (a) => new Set(a).size === a.length;
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let tab = store.get('lc_tab', 'inv'); if (!['inv', 'big', 'pw'].includes(tab)) tab = 'inv';
+        const money = (n) => n.toLocaleString('zh-TW');
+        const row = (text, res, cls) => { const r = document.createElement('div'); r.className = 'res ' + cls; r.append(Object.assign(document.createElement('span'), { textContent: text }), Object.assign(document.createElement('b'), { textContent: res })); return r; };
+
+        function run() {
+            $('#err').textContent = ''; const rows = []; let wins = 0, total = 0;
+            if (tab === 'inv') {
+                const win = { special: $('#sp').value.trim(), grand: $('#gr').value.trim(), first: tokens($('#fi').value), extra: tokens($('#ex').value) }, bad = validateInvoiceWin(win);
+                if (bad) { $('#err').textContent = bad; return; }
+                for (const line of $('#tix').value.split('\n').map(l => l.trim()).filter(Boolean)) {
+                    const d = invoiceDigits(line); if (!d) { rows.push(row(line, '格式不對（要 8 位數字）', 'bad')); continue; }
+                    const r = checkInvoice(d, win); if (r) { wins++; total += r.amount; }
+                    rows.push(row(line, r ? `🎉 ${r.name}　${money(r.amount)} 元` : '沒中', r ? 'win' : ''));
+                }
+            } else {
+                const big = tab === 'big', max = big ? 49 : 38, win = parseNums($(big ? '#bw' : '#pwW').value, max), sp = parseInt($(big ? '#bs' : '#pwS').value, 10);
+                if (!win || win.length !== 6 || !noDup(win)) { $('#err').textContent = `開獎號碼要 6 個不重複的數字（1–${max}）`; return; }
+                if (!(sp >= 1 && sp <= (big ? 49 : 8)) || (big && win.includes(sp))) { $('#err').textContent = big ? '特別號要是 1–49 且不能和開獎號碼重複' : '第二區號碼要是 1–8'; return; }
+                for (const line of $(big ? '#bt' : '#pwT').value.split('\n').map(l => l.trim()).filter(Boolean)) {
+                    let mine, second;
+                    if (big) mine = parseNums(line, 49); else { const t = tokens(line).map(Number); second = t[6]; mine = t.slice(0, 6); if (t.length !== 7 || mine.some(n => !(n >= 1 && n <= 38)) || !(second >= 1 && second <= 8)) mine = null; }
+                    if (!mine || mine.length !== 6 || !noDup(mine)) { rows.push(row(line, '格式不對', 'bad')); continue; }
+                    const r = big ? bigPrize(mine, win, sp) : powerPrize(mine, second, win, sp); if (r) wins++;
+                    rows.push(row(line, r ? `🎉 ${r}` : '沒中', r ? 'win' : ''));
+                }
+            }
+            $('#outCard').hidden = !rows.length; $('#out').replaceChildren(...rows);
+            $('#sum').textContent = rows.length ? `${rows.length} 筆・中 ${wins} 筆${tab === 'inv' && total ? `・合計 ${money(total)} 元` : ''}${tab !== 'inv' && wins ? '（獎金依當期公告）' : ''}` : '';
+        }
+        function render() { document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab)); document.querySelectorAll('.pane').forEach(p => { p.hidden = p.dataset.t !== tab; }); $('#outCard').hidden = true; $('#err').textContent = ''; }
+        document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { tab = b.dataset.t; store.set('lc_tab', tab); render(); }; });
+        $('#check').onclick = run; render();
+    </script>
+</body>
+
+</html>

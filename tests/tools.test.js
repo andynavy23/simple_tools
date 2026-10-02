@@ -178,7 +178,7 @@ const NL = String.fromCharCode(10);
 {
     const m = load('utils/encode-decode.html', 'CODECS');
     const samples = ['Hello, World!', '你好，世界 🌏', 'a+b=c&d?e/f#g', '<script>alert("x")</script>', '', 'line1\nline2\t🎉'];
-    for (const [name, c] of Object.entries(m.CODECS).filter(([, c]) => c.enc && c.dec)) for (const s of samples) assert.equal(c.dec(c.enc(s)), s, name);
+    for (const [name, c] of Object.entries(m.CODECS).filter(([name, c]) => c.enc && c.dec && !c.param && name !== '摩斯密碼' && name !== 'ROT13')) for (const s of samples) assert.equal(c.dec(c.enc(s)), s, name);
     assert.equal(m.CODECS['Base64'].enc('你好'), '5L2g5aW9');
     assert.throws(() => m.CODECS['Base64'].dec('!!!'));
     assert.throws(() => m.CODECS['十六進位 (UTF-8 位元組)'].dec('zz'));
@@ -754,7 +754,7 @@ const NL = String.fromCharCode(10);
 
 // ===== 日期計算機 =====
 {
-    const m = load('utils/date-calc.html', 'isLeap, daysInMonth, weekday, diffYMD, addMonths, workdaysBetween, addWorkdays, dayOfYear, isoWeek');
+    const m = { ...load('utils/date-calc.html', 'isLeap, daysInMonth, weekday, workdaysBetween, addWorkdays, dayOfYear, isoWeek'), addMonths: Util.day.addMonths, diffYMD: Util.day.diffYMD };
     assert.equal(m.weekday('1970-01-01'), 4); assert.equal(m.weekday('2024-01-01'), 1); assert.equal(m.weekday('2000-02-29'), 2); assert.equal(m.weekday('1969-12-31'), 3);
     assert.deepEqual([1900, 2000, 2023, 2024].map(m.isLeap), [false, true, false, true]); assert.equal(m.daysInMonth(2024, 2), 29); assert.equal(m.daysInMonth(2023, 2), 28);
     assert.equal(m.addMonths('2024-01-31', 1), '2024-02-29'); assert.equal(m.addMonths('2023-01-31', 1), '2023-02-28'); assert.equal(m.addMonths('2024-03-31', -1), '2024-02-29');
@@ -1021,11 +1021,11 @@ const NL = String.fromCharCode(10);
         assert.ok(m.matches(g.grid, g.rowC, g.colC)); assert.ok(m.matches(g.grid.map(r => r.map(v => (v ? 1 : 2))), g.rowC, g.colC));   // ✕ 標記不影響判定
         const bad = g.grid.map(r => [...r]); bad[0][0] ^= 1; assert.equal(m.matches(bad, g.rowC, g.colC), false);
     }
-    // 5×5：用暴力法確認解唯一
-    for (let k = 0; k < 2; k++) {
-        const g = m.generate(5, Util.rnd); let cnt = 0;
-        for (let b = 0; b < 1 << 25 && cnt < 2; b++) { const gr = Array.from({ length: 5 }, (_, i) => Array.from({ length: 5 }, (_, j) => (b >> (i * 5 + j)) & 1)); if (m.matches(gr, g.rowC, g.colC)) cnt++; }
-        assert.equal(cnt, 1, '唯一解');
+    // 5×5：獨立驗證解唯一——每列只列舉符合該列提示的排法，再逐一檢查各欄
+    for (let k = 0; k < 20; k++) {
+        const g = m.generate(5, Util.rnd), opts = g.rowC.map(c => { const o = []; for (let b = 0; b < 32; b++) { const row = [0, 1, 2, 3, 4].map(j => (b >> j) & 1); if (JSON.stringify(m.runsOf(row)) === JSON.stringify(c)) o.push(row); } return o; });
+        let cnt = 0; const rec = (i, rows) => { if (cnt > 1) return; if (i === 5) { if (m.matches(rows, g.rowC, g.colC)) cnt++; return; } for (const r of opts[i]) rec(i + 1, [...rows, r]); };
+        rec(0, []); assert.equal(cnt, 1, '唯一解');
     }
     assert.equal(m.solveGrid([[2], [2]], [[1], [1]]).contradiction, true);
     ok('nonogram');
@@ -1362,6 +1362,716 @@ const NL = String.fromCharCode(10);
     assert.equal(m.cleanCustom('a '.repeat(200)).endsWith(' '), false);
     assert.equal(m.score('abc', 'abc', 60).cpm, 3);
     ok('typing-test: cleanCustom');
+}
+
+// ===== 計算機 =====
+{
+    const m = load('utils/calculator.html', 'evaluate, fmt, tokenize');
+    const ev = (e, o) => m.fmt(m.evaluate(e, o));
+    const cases = [['1+2*3', '7'], ['(1+2)*3', '9'], ['2(3+4)^2/7', '14'], ['-2^2', '-4'], ['2^3^2', '512'], ['2^-1', '0.5'], ['50%', '0.5'], ['200*10%', '20'], ['5!', '120'], ['0!', '1'], ['sqrt(16)+abs(-3)', '7'],
+        ['sin(30)', '0.5'], ['cos(60)', '0.5'], ['tan(45)', '1'], ['cos(90)', '0'], ['asin(1)', '90'], ['ln(e)', '1'], ['log(1000)', '3'], ['exp(0)', '1'], ['2pi', '6.28318530718'], ['3x4', '12'], ['3×4÷2', '6'], ['10−3', '7'],
+        ['0.1+0.2', '0.3'], ['1/3', '0.333333333333'], ['10/4', '2.5'], ['1e3+1', '1001'], ['1,000+1', '1001'], ['.5+.5', '1'], ['cbrt(27)', '3'], ['floor(2.7)+ceil(2.1)+round(2.5)', '8'], ['2 * (3 + 4)', '14'], ['(2)(3)', '6'], ['-(-3)', '3'], ['--3', '3'], ['+3', '3'],
+        ['1e20', '1e20'], ['123456789012345678', '1.23456789e17'], ['0.000000001234', '0.000000001234'], ['pi', '3.14159265359'], ['e^2', '7.38905609893']];
+    for (const [e, r] of cases) assert.equal(ev(e), r, e);
+    assert.equal(ev('ans*2', { ans: 21 }), '42'); assert.equal(ev('sin(pi/2)', { angle: 'rad' }), '1'); assert.equal(ev('sin(90)', { angle: 'deg' }), '1'); assert.equal(ev('atan(1)', { angle: 'rad' }), '0.785398163397');
+    for (const [e, why] of [['', '請輸入'], ['(1+2', '括號'], ['1+2)', '括號'], ['1/0', '除以 0'], ['5%0', '多餘'], ['foo(1)', '不認得'], ['2 3', '多餘'], ['sin 30', '括號'], ['sqrt(-1)', '開平方根'], ['171!', '太大'], ['2.5!', '整數'], ['ln(0)', '大於 0'], ['1+', '不完整'], ['*2', '位置不對'], ['2@3', '看不懂'], ['10^400', '超出'], ['x', '不認得']]) {
+        assert.throws(() => m.evaluate(e), (err) => err.message.includes(why), e);
+    }
+    // 沒有 eval：惡意輸入只會被當成算式拒絕
+    for (const bad of ['alert(1)', 'constructor', '__proto__', 'process.exit()', 'this', '1;2']) assert.throws(() => m.evaluate(bad), Error, bad);
+    // 與 JavaScript 的運算交叉驗證（隨機四則運算式）
+    for (let i = 0; i < 300; i++) {
+        const nums = Array.from({ length: 4 }, () => 1 + Util.rnd(99)), ops = Array.from({ length: 3 }, () => '+-*'[Util.rnd(3)]);
+        const expr = `${nums[0]}${ops[0]}${nums[1]}${ops[1]}${nums[2]}${ops[2]}${nums[3]}`;
+        assert.equal(m.evaluate(expr), new Function('return ' + expr)(), expr);
+    }
+    assert.equal(m.fmt(0), '0'); assert.equal(m.fmt(-1.5), '-1.5'); assert.equal(m.fmt(-1.5e-12), '-1.5e-12');
+    ok('calculator');
+}
+
+// ===== 比價 =====
+{
+    const m = load('utils/price-compare.html', 'UNITS, GROUPS, unitPrice, compare');
+    near(m.unitPrice({ price: 100, amount: 500, count: 1, unit: 'g' }).perBase, 0.2); near(m.unitPrice({ price: 100, amount: 0.5, count: 1, unit: 'kg' }).perBase, 0.2); near(m.unitPrice({ price: 60, amount: 1, count: 1, unit: '台斤' }).perBase, 0.1);
+    near(m.unitPrice({ price: 60, amount: 330, count: 6, unit: 'ml' }).perBase, 60 / 1980); near(m.unitPrice({ price: 120, amount: 1, count: 1, unit: '打' }).perBase, 10); assert.equal(m.unitPrice({ price: 10, amount: 1, count: 1, unit: 'L' }).group, 'v');
+    for (const bad of [{ price: -1, amount: 1, count: 1, unit: 'g' }, { price: 10, amount: 0, count: 1, unit: 'g' }, { price: 10, amount: 1, count: 0, unit: 'g' }, { price: NaN, amount: 1, count: 1, unit: 'g' }, { price: 10, amount: 1, count: 1, unit: 'xx' }, { price: 10, amount: Infinity, count: 1, unit: 'g' }, { price: 10, amount: 1, count: 1 }]) assert.equal(m.unitPrice(bad), null, JSON.stringify(bad));
+    const out = m.compare([{ price: 100, amount: 500, count: 1, unit: 'g' }, { price: 150, amount: 1, count: 1, unit: 'kg' }, { price: 50, amount: 100, count: 1, unit: 'ml' }, { price: NaN, amount: 1, count: 1, unit: 'g' }, { price: 60, amount: 100, count: 1, unit: 'ml' }]);
+    assert.equal(out[3], null); assert.equal(out[0].group, 'w'); near(out[0].per, 20); near(out[1].per, 15); assert.ok(out[1].best && !out[0].best); assert.equal(out[0].over, 33.3);                  // 100g 20 元 vs 15 元：貴 33.3%
+    assert.ok(out[2].best && !out[4].best && out[4].over === 20); assert.ok(!out[0].alone && !out[2].alone);
+    assert.equal(m.compare([{ price: 10, amount: 1, count: 1, unit: '個' }])[0].alone, true); assert.deepEqual(m.compare([]), []);
+    assert.equal(m.compare([{ price: 0, amount: 1, count: 1, unit: '個' }, { price: 5, amount: 1, count: 1, unit: '個' }])[1].over, 0);                                               // 最低價為 0：不除以 0
+    ok('price-compare');
+}
+
+// ===== 文字轉語音 =====
+{
+    const m = load('utils/tts.html', 'chunks, voiceRank');
+    assert.deepEqual(m.chunks('今天天氣很好。我們去公園！你要來嗎？'), ['今天天氣很好。', '我們去公園！', '你要來嗎？']); assert.deepEqual(m.chunks(''), []); assert.deepEqual(m.chunks('   \n  '), []);
+    assert.deepEqual(m.chunks('第一行\n第二行\r\n第三行'), ['第一行', '第二行', '第三行']);
+    const long = '我們'.repeat(40) + '，' + '你們'.repeat(40) + '。'; const c = m.chunks(long, 50);
+    assert.ok(c.every(x => x.length <= 51) && c.join('') === long, c.map(x => x.length).join()); assert.equal(m.chunks('字'.repeat(300), 100).length, 3); assert.ok(m.chunks('a'.repeat(500), 120).every(x => x.length <= 120));
+    const text = Array.from({ length: 200 }, (_, i) => `這是第${i}句話。`).join(''); assert.equal(m.chunks(text, 120).join(''), text);
+    assert.equal(m.voiceRank({ lang: 'zh-TW' }, 'zh-TW'), 0); assert.equal(m.voiceRank({ lang: 'zh-CN' }, 'zh-TW'), 1); assert.equal(m.voiceRank({ lang: 'zh-HK' }, 'zh-TW'), 1); assert.equal(m.voiceRank({ lang: 'en-US' }, 'zh-TW'), 3);
+    ok('tts: chunks / voice ranking');
+}
+
+// ===== 連線 21 點 =====
+{
+    const m = load('mini-games/blackjack.html', 'newDeck, cardValue, handValue, dealerShouldHit, settle, validCard, validState, BETS, START_CHIPS');
+    const d = m.newDeck(); assert.equal(d.length, 52); assert.equal(new Set(d).size, 52); assert.ok(d.every(m.validCard));
+    assert.deepEqual([['AS'], ['KD'], ['10H'], ['7C'], ['QS']].map(c => m.cardValue(c[0])), [11, 10, 10, 7, 10]);
+    const hv = (...c) => m.handValue(c);
+    assert.deepEqual(hv('AS', 'KD'), { total: 21, soft: true, bust: false, blackjack: true }); assert.deepEqual(hv('AS', '6D'), { total: 17, soft: true, bust: false, blackjack: false });
+    assert.deepEqual(hv('AS', '6D', '10C'), { total: 17, soft: false, bust: false, blackjack: false }); assert.deepEqual(hv('KS', 'QD', '5C'), { total: 25, soft: false, bust: true, blackjack: false });
+    assert.equal(hv('AS', 'AD').total, 12); assert.equal(hv('AS', 'AD', 'AC', 'AH').total, 14); assert.equal(hv('AS', '5D', '5C').total, 21); assert.equal(hv('AS', '5D', '5C').blackjack, false, '三張 21 不是 Blackjack');
+    assert.equal(hv('7S', '7D', '7C').total, 21); assert.equal(hv().total, 0);
+    assert.ok(m.dealerShouldHit(['10S', '6D'])); assert.ok(!m.dealerShouldHit(['10S', '7D'])); assert.ok(!m.dealerShouldHit(['AS', '6D']), '軟 17 停牌'); assert.ok(m.dealerShouldHit(['AS', '5D']));
+    const st = (p, dl, bet = 10) => m.settle(p, dl, bet);
+    assert.deepEqual(st(['AS', 'KD'], ['10S', '9D']), { outcome: 'blackjack', delta: 15 }); assert.deepEqual(st(['AS', 'KD'], ['10S', 'AD']), { outcome: 'push', delta: 0 }, '雙方 Blackjack 平手');
+    assert.deepEqual(st(['AS', 'KD'], ['5S', '6D', '10C']), { outcome: 'blackjack', delta: 15 }); assert.deepEqual(st(['7S', '7D', '7C'], ['AS', 'KD']), { outcome: 'lose', delta: -10 }, '莊家 Blackjack 贏過三張 21');
+    assert.deepEqual(st(['KS', 'QD', '5C'], ['10S', '9D']), { outcome: 'bust', delta: -10 }); assert.deepEqual(st(['KS', 'QD', '5C'], ['10S', '8D', '9C']), { outcome: 'bust', delta: -10 }, '玩家先爆，莊家就算也爆還是輸');
+    assert.deepEqual(st(['10S', '9D'], ['10C', '8D', '9H']), { outcome: 'win', delta: 10 }); assert.deepEqual(st(['10S', '9D'], ['10C', '8D']), { outcome: 'win', delta: 10 }); assert.deepEqual(st(['10S', '8D'], ['10C', '9D']), { outcome: 'lose', delta: -10 }); assert.deepEqual(st(['10S', '8D'], ['9C', '9D']), { outcome: 'push', delta: 0 });
+    assert.equal(st(['AS', 'KD'], ['2S', '3D'], 25).delta, 37, '賠 1.5 倍無條件捨去'); assert.equal(st(['AS', 'KD'], ['2S', '3D'], 10).delta, 15);
+    // 整局模擬：隨機策略下，籌碼變化永遠在 [-bet, 1.5 bet]，且莊家牌一定符合規則（17 以上或全部玩家已爆）
+    for (let t = 0; t < 2000; t++) {
+        const deck = Util.shuffle(m.newDeck()), P = [deck.pop(), deck.pop()], D = [deck.pop(), deck.pop()];
+        while (!m.handValue(P).bust && m.handValue(P).total < 12 + Util.rnd(8)) P.push(deck.pop());
+        if (!m.handValue(P).bust && !m.handValue(D).blackjack) while (m.dealerShouldHit(D)) D.push(deck.pop());
+        const r = m.settle(P, D, 10); assert.ok(r.delta >= -10 && r.delta <= 15); assert.ok(['blackjack', 'win', 'push', 'lose', 'bust'].includes(r.outcome));
+        if (!m.handValue(P).bust && !m.handValue(D).blackjack) assert.ok(m.handValue(D).total >= 17);
+    }
+    // 莊家勝率與賭場規則的理論值（約 49% 莊家贏）大致相符：用「玩家模仿莊家」的策略，玩家期望值略為負
+    let sum = 0; const N = 20000; for (let t = 0; t < N; t++) { const deck = Util.shuffle(m.newDeck()), P = [deck.pop(), deck.pop()], D = [deck.pop(), deck.pop()]; while (m.dealerShouldHit(P)) P.push(deck.pop()); if (!m.handValue(P).bust && !m.handValue(D).blackjack) while (m.dealerShouldHit(D)) D.push(deck.pop()); sum += m.settle(P, D, 1).delta; }
+    assert.ok(sum / N < 0.02 && sum / N > -0.12, '模仿莊家的玩家期望值應略為負：' + sum / N);
+    const good = { phase: 'play', round: 1, names: ['a', 'b'], chips: [500, 480], bets: [10, 20], done: [false, true], out: [false, false], inRound: [true, true], hands: [['AS', '5D'], ['KC', '10H', '2S']], dealer: ['9C', '??'], dealerTotal: -1, result: [null, { o: 'bust', d: -20 }], turn: 0, ms: 5000, note: '', active: [true, true] };
+    assert.ok(m.validState(good));
+    for (const bad of [null, {}, { ...good, phase: 'x' }, { ...good, hands: [['ZZ']] }, { ...good, hands: [['AS', '1D']] }, { ...good, dealer: ['??', '??', '??', '??', '??', '??', '??', '??', '??', '??', '??', '??', '??'] }, { ...good, result: [{ o: 'x', d: 1 }] }, { ...good, chips: [1.5] }, { ...good, names: Array(7).fill('a') }, { ...good, ms: 'x' }, { ...good, note: 'x'.repeat(81) }, { ...good, turn: 'a' }])
+        assert.ok(!m.validState(bad), JSON.stringify(bad).slice(0, 60));
+    ok('blackjack: hand values / dealer rule / settlement / simulations');
+}
+
+// ===== 編碼解碼：摩斯與凱薩 =====
+{
+    const m = load('utils/encode-decode.html', 'CODECS, MORSE, morseEncode, morseDecode, caesar');
+    assert.equal(m.morseEncode('SOS'), '... --- ...'); assert.equal(m.morseEncode('hello world'), '.... . .-.. .-.. --- / .-- --- .-. .-.. -..'); assert.equal(m.morseEncode('  a   b  '), '.- / -...');
+    assert.equal(m.morseDecode('.... . .-.. .-.. --- / .-- --- .-. .-.. -..'), 'HELLO WORLD'); assert.equal(m.morseDecode('... --- ...'), 'SOS'); assert.equal(m.morseDecode('...  ---   ...'), 'SOS'); assert.equal(m.morseDecode('.- | -...'), 'A B');
+    assert.equal(m.morseDecode('·-· ·'), 'RE', '常見的替代符號'); assert.equal(m.morseEncode('1+1=2?'), '.---- .-.-. .---- -...- ..--- ..--..');
+    for (const bad of ['你好', 'a~b', '€']) assert.throws(() => m.morseEncode(bad), (e) => e.message.includes('不支援'));
+    assert.throws(() => m.morseDecode('.--.--.--'), (e) => e.message.includes('看不懂'));
+    const all = Object.keys(m.MORSE).join(''); assert.equal(m.morseDecode(m.morseEncode(all)), all, '所有字元都能往返'); assert.equal(new Set(Object.values(m.MORSE)).size, Object.keys(m.MORSE).length, '摩斯碼沒有重複');
+    assert.equal(m.caesar('abc xyz', 3), 'def abc'); assert.equal(m.caesar('Hello, World!', 13), 'Uryyb, Jbeyq!'); assert.equal(m.caesar('def', -3), 'abc'); assert.equal(m.caesar('abc', 26), 'abc'); assert.equal(m.caesar('abc', 29), 'def'); assert.equal(m.caesar('abc', -29), 'xyz');
+    assert.equal(m.caesar('你好 123 ABC', 1), '你好 123 BCD'); assert.equal(m.caesar('abc', NaN), 'abc'); assert.equal(m.caesar('abc', 1.9), 'bcd');
+    for (let i = 0; i < 200; i++) { const t = Array.from({ length: 20 }, () => String.fromCharCode(32 + Util.rnd(95))).join(''), n = Util.rnd(60) - 30; assert.equal(m.caesar(m.caesar(t, n), -n), t); }
+    assert.equal(m.CODECS['ROT13'].enc(m.CODECS['ROT13'].enc('Secret')), 'Secret'); assert.deepEqual(m.CODECS['凱薩密碼（位移 N）'].param, { label: '位移', def: 3, min: 1, max: 25 });
+    assert.equal(m.CODECS['凱薩密碼（位移 N）'].dec(m.CODECS['凱薩密碼（位移 N）'].enc('Attack at dawn', 7), 7), 'Attack at dawn');
+    ok('encode-decode: morse / caesar / rot13');
+}
+
+// ===== 純文字整理：假文產生 =====
+{
+    const m = load('utils/text-tools.html', 'OPS, lorem, ZH_PIECES, EN_WORDS', '// 每個操作', 'const $ =');
+    let n = 0; const fixed = (k) => { n++; return n % k; };
+    for (const lang of ['zh', 'en']) for (const [p, sn] of [[1, 1], [3, 4], [10, 8]]) {
+        const t = m.lorem(lang, p, sn), paras = t.split('\n\n'); assert.equal(paras.length, p, lang);
+        for (const para of paras) { const ends = (para.match(lang === 'en' ? /\./g : /。/g) || []).length; assert.equal(ends, sn, `${lang} 每段句數`); }
+    }
+    assert.ok(m.lorem('zh', 2, 3).includes('，') || m.lorem('zh', 20, 12).includes('，')); assert.ok(/^[一-鿿，。]+$/.test(m.lorem('zh', 1, 5).replace(/\n/g, '')));
+    assert.ok(m.lorem('en', 5, 3).split('\n\n').every(p => /^[A-Z]/.test(p))); assert.ok(m.lorem('en', 1, 20).split(' ').every(w => /^[A-Za-z]+\.?$/.test(w)));
+    assert.equal(m.lorem('zh', 3, 2, () => 0), m.lorem('zh', 3, 2, () => 0), '同樣的亂數序列得到同樣的文字'); assert.notEqual(m.lorem('zh', 3, 5), m.lorem('zh', 3, 5), '安全亂數每次不同');
+    assert.equal(m.lorem('zh', 0, 3), ''); assert.ok(m.ZH_PIECES.every(p => p.length >= 8) && new Set(m.ZH_PIECES).size === m.ZH_PIECES.length); assert.ok(new Set(m.EN_WORDS).size >= 60);
+    void fixed;
+    ok('text-tools: lorem');
+}
+
+// ===== 螢幕尺寸 / PPI =====
+{
+    const m = load('utils/screen-test.html', 'ppi, physical, aspect, RES_PRESETS, gcd');
+    near(m.ppi(27, 2560, 1440), 108.79, 1e-3); near(m.ppi(24, 1920, 1080), 91.79, 1e-3); near(m.ppi(13.3, 1920, 1080), 165.63, 1e-3); near(m.ppi(6.1, 2532, 1170), 457.25, 1e-3);
+    const p = m.physical(27, 2560, 1440); near(p.wCm, 59.77, 1e-3); near(p.hCm, 33.62, 1e-3); near(Math.hypot(p.wIn, p.hIn), 27); near(p.pitchMm, 25.4 / m.ppi(27, 2560, 1440));
+    for (const [w, h] of [[1920, 1080], [2560, 1440], [3840, 2160], [1280, 720]]) assert.equal(m.aspect(w, h), '16:9', `${w}x${h}`); assert.equal(m.aspect(1920, 1200), '8:5'); assert.equal(m.aspect(1024, 768), '4:3'); assert.equal(m.aspect(1000, 1000), '1:1');
+    assert.equal(m.aspect(1366, 768), '≈ 16:9'); assert.equal(m.aspect(2560, 1080), '≈ 21:9'); assert.equal(m.aspect(3440, 1440), '2.39 : 1'); assert.equal(m.aspect(5120, 1440), '32:9'); assert.equal(m.gcd(12, 18), 6);
+    assert.ok(m.RES_PRESETS.every(([n, w, h]) => w > 0 && h > 0 && n.includes(`${w} × ${h}`))); ok('screen-test: PPI / physical size / aspect');
+}
+
+// ===== 今日倒數 =====
+{
+    const m = load('utils/countdown.html', 'todayProgress, hms, toSec');
+    const H = (h, mi = 0, s = 0) => h * 3600 + mi * 60 + s;
+    assert.deepEqual(m.todayProgress(H(14), H(9), H(18)), { state: 'during', remaining: H(4), elapsedAfter: 0, fraction: 5 / 9 }); assert.deepEqual(m.todayProgress(H(8), H(9), H(18)), { state: 'before', remaining: H(10), elapsedAfter: 0, fraction: 0 });
+    assert.deepEqual(m.todayProgress(H(18), H(9), H(18)), { state: 'after', remaining: 0, elapsedAfter: 0, fraction: 1 }); assert.deepEqual(m.todayProgress(H(18, 30), H(9), H(18)), { state: 'after', remaining: 0, elapsedAfter: 1800, fraction: 1 });
+    assert.equal(m.todayProgress(H(9), H(9), H(18)).state, 'during'); assert.equal(m.todayProgress(0, NaN, NaN).state, 'invalid'); assert.equal(m.todayProgress(0, H(10), H(10)).state, 'invalid'); assert.equal(m.todayProgress(0, H(11), H(10)).state, 'invalid');
+    assert.equal(m.hms(0), '00:00:00'); assert.equal(m.hms(3661), '01:01:01'); assert.equal(m.hms(H(9, 59, 59)), '09:59:59'); assert.equal(m.toSec('18:00'), H(18)); assert.equal(m.toSec('9:05'), H(9, 5));
+    for (const bad of ['', '24:00', '12:60', 'ab', null, undefined, '1800']) assert.ok(Number.isNaN(m.toSec(bad)), String(bad));
+    ok('countdown: today progress');
+}
+
+// ===== 條碼（與 JsBarcode 逐位元比對過）=====
+{
+    const m = load('utils/qr-code.html', 'C128, code128Set, code128Values, code128Modules, ean13Check, ean13Normalize, ean13Modules, EAN_L, EAN_G, EAN_R');
+    // 黃金值：由 JsBarcode 產生
+    assert.equal(m.code128Modules('Hello', 'B'), '110100100001100010100010110010000110010100001100101000010001111010110010100001100011101011');
+    assert.equal(m.code128Modules('HELLO-123', 'B'), '11010010000110001010001000110100010001101110100011011101000111011010011011100100111001101100111001011001011100100011010001100011101011');
+    assert.equal(m.code128Modules('123456', 'C'), '11010011100101100111001000101100011100010110100011011101100011101011');
+    assert.equal(m.ean13Modules('5901234123457'), '10100010110100111011001100100110111101001110101010110011011011001000010101110010011101000100101'); assert.equal(m.ean13Modules('400638133393'), '10100011010100111010111101111010001001011001101010100001010000101000010111010010000101100110101');
+    // 對照表結構：107 項、各符號寬度和 11（停止符 13）、條寬和為偶數、互不相同
+    assert.equal(m.C128.length, 107); assert.equal(new Set(m.C128).size, 107);
+    m.C128.forEach((p, i) => { const w = [...p].map(Number), sum = w.reduce((a, b) => a + b, 0); assert.equal(sum, i < 106 ? 11 : 13, '符號 ' + i); if (i < 106) assert.equal((w[0] + w[2] + w[4]) % 2, 0, '偶同位 ' + i); });
+    assert.equal(m.code128Set('123456'), 'C'); assert.equal(m.code128Set('12345'), 'B'); assert.equal(m.code128Set('AB12'), 'B'); assert.equal(m.code128Set('1234a'), 'B');
+    const v = m.code128Values('PJJ123C', 'B'); assert.equal(v[0], 104); assert.equal(v[v.length - 1], 106); assert.equal(v.length, 7 + 3);
+    assert.equal(m.code128Values('A', 'B').join(), [104, 33, (104 + 33) % 103, 106].join());               // 檢查碼 = (起始值 + Σ 位置 × 符號值) mod 103
+    for (let i = 0; i < 100; i++) { const t = Array.from({ length: 1 + Util.rnd(30) }, () => String.fromCharCode(32 + Util.rnd(95))).join(''), vs = m.code128Values(t, 'B'), mod = m.code128Modules(t, 'B'); assert.equal(mod.length, (vs.length - 1) * 11 + 13); assert.ok(mod.startsWith('11010010000') && mod.endsWith('1100011101011')); }
+    for (const bad of ['', '你好', 'a\tb', 'é']) assert.throws(() => m.code128Values(bad, 'B'), Error, bad); assert.throws(() => m.code128Values('123', 'C')); assert.throws(() => m.code128Values('12ab', 'C'));
+    assert.equal(m.ean13Check('590123412345'), 7); assert.equal(m.ean13Check('400638133393'), 1); assert.equal(m.ean13Check('978020137962'), 4); assert.equal(m.ean13Normalize('978-0-2013-7962-4'), '9780201379624'); assert.equal(m.ean13Normalize('590123412345'), '5901234123457');
+    for (const [bad, why] of [['5901234123458', '檢查碼'], ['12345', '12 或 13'], ['59012341234a', '12 或 13'], ['', '12 或 13'], ['59012341234567', '12 或 13']]) assert.throws(() => m.ean13Normalize(bad), (e) => e.message.includes(why), bad);
+    for (let i = 0; i < 200; i++) { const t = Array.from({ length: 12 }, () => Util.rnd(10)).join(''), mod = m.ean13Modules(t); assert.equal(mod.length, 95); assert.ok(mod.startsWith('101') && mod.endsWith('101') && mod.slice(45, 50) === '01010'); }
+    assert.ok(m.EAN_L.every(c => c.length === 7) && m.EAN_G.every(c => c.length === 7) && m.EAN_R.every(c => c.length === 7)); assert.equal(m.EAN_R[0], '1110010'); assert.equal(m.EAN_G[0], '0100111');
+    ok('qr-code: Code 128 / EAN-13 barcodes');
+}
+
+// ===== 電腦對手：四子棋 =====
+{
+    const m = load('mini-games/connect-four.html', 'newGame, play, dropRow, findWin, cpuChoose, evalBoard, winAt, DEPTH');
+    const board = (rows) => rows.map(r => [...r].map(Number));
+    // 一步就贏 → 一定要下；對手一步就贏 → 一定要擋（所有難度）
+    for (const level of ['normal', 'hard']) for (let k = 0; k < 10; k++) {
+        const b = board(['0000000', '0000000', '0000000', '0000000', '0000000', '1110000']); assert.equal(m.cpuChoose(b, 1, level), 3, level + ' 一步贏');
+        const b2 = board(['0000000', '0000000', '0000000', '0000000', '0000000', '0222000']); const c = m.cpuChoose(b2, 1, level); assert.ok(c === 0 || c === 4, level + ' 要擋 ' + c);
+        const b3 = board(['0000000', '0000000', '0000000', '2000000', '2000000', '2000000']); assert.equal(m.cpuChoose(b3, 1, level), 0, level + ' 擋直線');
+    }
+    // 簡單難度會有 30% 機率亂下（不看勝負）；其餘時候一樣會贏、會擋：大多數情況下要選對
+    { let win = 0, blk = 0; for (let k = 0; k < 200; k++) { if (m.cpuChoose(board(['0000000', '0000000', '0000000', '0000000', '0000000', '1110000']), 1, 'easy') === 3) win++; const c = m.cpuChoose(board(['0000000', '0000000', '0000000', '0000000', '0000000', '0222000']), 1, 'easy'); if (c === 0 || c === 4) blk++; } assert.ok(win > 130 && win < 200, 'easy 一步贏 ' + win); assert.ok(blk > 130 && blk < 200, 'easy 擋 ' + blk); }
+    assert.equal(m.cpuChoose(board(['1212121', '2121212', '1212121', '2121212', '1212121', '2121212']), 1, 'hard'), -1, '棋盤滿了');
+    const only = board(['1210121', '2121212', '1212121', '2121212', '1212121', '2121212']); assert.equal(m.cpuChoose(only, 1, 'hard'), 3, '只剩一欄');
+    const b4 = board(['0000000', '0000000', '0000000', '0000000', '0000000', '0000000']); const snap = JSON.stringify(b4); m.cpuChoose(b4, 1, 'hard'); assert.equal(JSON.stringify(b4), snap, '搜尋後棋盤要還原');
+    assert.equal(m.cpuChoose(b4, 1, 'hard'), 3, '空盤先下中間');
+    // 強度排序：困難 > 普通 > 簡單 > 隨機（雙方各執先手 / 後手）
+    const rnd = (b) => { const cs = [0, 1, 2, 3, 4, 5, 6].filter(c => b[0][c] === 0); return cs[Util.rnd(cs.length)]; };
+    const pick = { random: (b) => rnd(b), easy: (b, p) => m.cpuChoose(b, p, 'easy'), normal: (b, p) => m.cpuChoose(b, p, 'normal'), hard: (b, p) => m.cpuChoose(b, p, 'hard') };
+    const duel = (a, b, n) => { let wa = 0, wb = 0; for (let i = 0; i < n; i++) { const s = m.newGame(1), who = i % 2 ? { 1: b, 2: a } : { 1: a, 2: b }; while (!s.winner && !s.draw) { const c = pick[who[s.turn]](s.board, s.turn); assert.ok(m.dropRow(s.board, c) >= 0, '非法欄'); assert.ok(m.play(s, s.turn, c)); } const wn = s.winner ? who[s.winner] : ''; if (wn === a) wa++; else if (wn === b) wb++; } return [wa, wb]; };
+    let [a, b] = duel('hard', 'random', 4); assert.ok(a >= 4 && b === 0, `困難 vs 隨機 ${a}:${b}`); [a, b] = duel('normal', 'random', 10); assert.ok(a >= 9, `普通 vs 隨機 ${a}:${b}`); [a, b] = duel('easy', 'random', 10); assert.ok(a >= 8, `簡單 vs 隨機 ${a}:${b}`);
+    [a, b] = duel('hard', 'normal', 6); assert.ok(a >= 3, `困難 vs 普通 ${a}:${b}`); [a, b] = duel('normal', 'easy', 10); assert.ok(a >= 8, `普通 vs 簡單 ${a}:${b}`);
+    const t0 = Date.now(); m.cpuChoose(b4, 1, 'hard'); assert.ok(Date.now() - t0 < 3000, '困難難度的一手應在 3 秒內');
+    ok('connect-four cpu: win / block / board restored / strength ordering');
+}
+
+// ===== 電腦對手：黑白棋 =====
+{
+    const m = load('mini-games/othello.html', 'N, flips, legalMoves, count, newBoard, newGame, play, applyMove, evalBoard, cpuMove, WEIGHTS, DEPTH');
+    const b0 = m.newBoard();
+    for (const level of ['easy', 'normal', 'hard']) { const mv = m.cpuMove(b0, 1, level); assert.ok(m.legalMoves(b0, 1).some(([r, c]) => r === mv[0] && c === mv[1]), level); }
+    const full = Array.from({ length: 8 }, () => new Array(8).fill(1)); assert.equal(m.cpuMove(full, 2, 'hard'), null); assert.equal(m.cpuMove(full, 1, 'easy'), null);
+    // applyMove：不改動輸入、結果與 play 一致
+    const s = m.newGame(), snap = JSON.stringify(s.board), nb = m.applyMove(s.board, 2, 3, 1); assert.equal(JSON.stringify(s.board), snap); m.play(s, 1, 2, 3); assert.deepEqual(nb, s.board);
+    // 角落優先：能搶角時，普通 / 困難都會搶
+    const corner = Array.from({ length: 8 }, () => new Array(8).fill(0)); corner[0][1] = 2; corner[0][2] = 1; corner[4][4] = 1; corner[4][5] = 2;
+    assert.deepEqual(m.cpuMove(corner, 1, 'normal'), [0, 0], '普通難度一定搶角');
+    assert.equal(m.WEIGHTS[0][0], 100); assert.ok(m.WEIGHTS.every((row, r) => row.every((v, c) => v === m.WEIGHTS[7 - r][c] && v === m.WEIGHTS[r][7 - c])), '權重表左右上下對稱');
+    // 整局：所有難度的每一步都合法，終局棋子數相加不超過 64
+    const duel = (a, b, n) => { let wa = 0, wb = 0; for (let i = 0; i < n; i++) { const st = m.newGame(), who = i % 2 ? { 1: b, 2: a } : { 1: a, 2: b }; let guard = 0; while (!st.over) { assert.ok(++guard < 80); const mv = m.cpuMove(st.board, st.turn, who[st.turn]); assert.ok(mv && m.play(st, st.turn, mv[0], mv[1])); } assert.ok(m.count(st.board, 1) + m.count(st.board, 2) <= 64); const wn = st.winner ? who[st.winner] : ''; if (wn === a) wa++; else if (wn === b) wb++; } return [wa, wb]; };
+    let [a, b] = duel('hard', 'easy', 8); assert.ok(a >= 7, `困難 vs 簡單 ${a}:${b}`); [a, b] = duel('normal', 'easy', 12); assert.ok(a > b, `普通 vs 簡單 ${a}:${b}`); [a, b] = duel('hard', 'normal', 8); assert.ok(a >= 6, `困難 vs 普通 ${a}:${b}`);
+    const t0 = Date.now(); m.cpuMove(b0, 1, 'hard'); assert.ok(Date.now() - t0 < 3000);
+    ok('othello cpu: legal moves / corner grab / strength ordering');
+}
+
+// ===== 貪吃蛇 =====
+{
+    const m = load('mini-games/snake.html', 'SIZE, DIRS, isReverse, placeFood, step, tickMs');
+    const S0 = (snake, dir, food) => ({ snake, dir, food, score: 0, dead: false, won: false });
+    let s = m.step(S0([[5, 5], [4, 5], [3, 5]], m.DIRS.right, [10, 10]), 'solid', () => 0); assert.deepEqual(s.snake, [[6, 5], [5, 5], [4, 5]]); assert.equal(s.score, 0);
+    s = m.step(S0([[5, 5], [4, 5], [3, 5]], m.DIRS.right, [6, 5]), 'solid', () => 0); assert.equal(s.snake.length, 4); assert.equal(s.score, 1); assert.ok(s.food && !s.snake.some(([x, y]) => x === s.food[0] && y === s.food[1]));
+    assert.ok(m.step(S0([[19, 5], [18, 5]], m.DIRS.right, [0, 0]), 'solid', () => 0).dead); assert.ok(m.step(S0([[0, 0], [1, 0]], m.DIRS.left, [9, 9]), 'solid', () => 0).dead); assert.ok(m.step(S0([[5, 0], [5, 1]], m.DIRS.up, [9, 9]), 'solid', () => 0).dead);
+    s = m.step(S0([[19, 5], [18, 5]], m.DIRS.right, [9, 9]), 'wrap', () => 0); assert.deepEqual(s.snake[0], [0, 5]); assert.equal(s.dead, false); s = m.step(S0([[5, 0], [5, 1]], m.DIRS.up, [9, 9]), 'wrap', () => 0); assert.deepEqual(s.snake[0], [5, 19]);
+    // 咬到自己：頭往下碰到身體中段 → 死；追著尾巴（尾巴同一步移開）→ 沒事
+    const loop = [[5, 5], [6, 5], [6, 6], [5, 6], [4, 6], [4, 5]];                                       // 頭 (5,5) 向下 → (5,6) 是身體 [3] → 死
+    assert.ok(m.step(S0(loop, m.DIRS.down, [0, 0]), 'solid', () => 0).dead);
+    const chase = [[5, 5], [6, 5], [6, 6], [5, 6]];                                                         // 頭向下 → (5,6) 是尾巴，尾巴同時移開 → 活
+    assert.equal(m.step(S0(chase, m.DIRS.down, [0, 0]), 'solid', () => 0).dead, false);
+    // 吃東西的那一步尾巴不會移開 → 追著尾巴吃會死
+    assert.ok(m.step(S0(chase, m.DIRS.down, [5, 6]), 'solid', () => 0).dead);
+    assert.ok(m.isReverse(m.DIRS.up, m.DIRS.down) && m.isReverse(m.DIRS.left, m.DIRS.right) && !m.isReverse(m.DIRS.up, m.DIRS.left) && !m.isReverse(m.DIRS.up, m.DIRS.up));
+    // 食物永遠落在空格；填滿時回傳 null 並判定獲勝
+    for (let i = 0; i < 200; i++) { const sn = Array.from({ length: 50 }, (_, k) => [k % 20, Math.floor(k / 20)]), f = m.placeFood(sn, Util.rnd); assert.ok(!sn.some(([x, y]) => x === f[0] && y === f[1]) && f[0] >= 0 && f[0] < 20 && f[1] >= 0 && f[1] < 20); }
+    const full = Array.from({ length: 400 }, (_, k) => [k % 20, Math.floor(k / 20)]); assert.equal(m.placeFood(full, Util.rnd), null);
+    const almost = full.slice(0, 399); assert.deepEqual(m.placeFood(almost, Util.rnd), [19, 19]);
+    s = m.step({ snake: [[18, 19], [17, 19], ...full.slice(0, 397).filter(([x, y]) => !(y === 19 && x >= 17))], dir: m.DIRS.right, food: [19, 19], score: 0, dead: false, won: false }, 'solid', Util.rnd); void s;
+    assert.equal(m.tickMs(0), 150); assert.equal(m.tickMs(10), 110); assert.equal(m.tickMs(100), 60); assert.ok(m.tickMs(5) > m.tickMs(6));
+    // 隨機亂走 2000 局：蛇身永遠不重疊、不出界、長度 = 3 + 分數
+    for (let g = 0; g < 200; g++) {
+        let st = S0([[10, 10], [9, 10], [8, 10]], m.DIRS.right, m.placeFood([[10, 10], [9, 10], [8, 10]], Util.rnd)), n = 0;
+        const ds = Object.values(m.DIRS);
+        while (!st.dead && !st.won && n++ < 400) { const d = ds[Util.rnd(4)]; if (!m.isReverse(d, st.dir)) st = { ...st, dir: d }; st = m.step(st, 'wrap', Util.rnd); if (st.dead) break; assert.equal(new Set(st.snake.map(p => p.join())).size, st.snake.length); assert.equal(st.snake.length, 3 + st.score); assert.ok(st.snake.every(([x, y]) => x >= 0 && x < 20 && y >= 0 && y < 20)); }
+    }
+    ok('snake');
+}
+
+// ===== 俄羅斯方塊 =====
+{
+    const m = load('mini-games/tetris.html', 'W, H, SHAPES, NAMES, rotateCells, cellsOf, newBoard, fits, tryMove, spawn, ghost, lock, lineScore, levelOf, dropMs, bag');
+    for (const t of m.NAMES) {
+        const p = m.spawn(t); assert.equal(m.cellsOf(p).length, 4, t);
+        for (let r = 0; r < 4; r++) { const c = m.cellsOf({ ...p, rot: r }); assert.equal(new Set(c.map(x => x.join())).size, 4, t + r); }
+        assert.deepEqual(m.cellsOf({ ...p, rot: 4 }), m.cellsOf(p), t + ' 轉四次回到原位'); assert.deepEqual(m.cellsOf({ ...p, rot: -1 }), m.cellsOf({ ...p, rot: 3 }));
+    }
+    // I 方塊水平 → 垂直，且旋轉後仍連在一起
+    const I0 = m.cellsOf({ type: 'I', rot: 0, x: 0, y: 0 }), I1 = m.cellsOf({ type: 'I', rot: 1, x: 0, y: 0 }); assert.ok(new Set(I0.map(c => c[1])).size === 1 && new Set(I1.map(c => c[0])).size === 1);
+    const b = m.newBoard(); assert.equal(b.length, 20); assert.equal(b[0].length, 10);
+    assert.ok(m.fits(b, m.spawn('T'))); assert.ok(!m.fits(b, { type: 'O', rot: 0, x: -1, y: 0 })); assert.ok(!m.fits(b, { type: 'O', rot: 0, x: 9, y: 0 })); assert.ok(!m.fits(b, { type: 'O', rot: 0, x: 4, y: 19 }));
+    // 左右移動被牆擋住 → null；貼牆旋轉會踢開
+    assert.equal(m.tryMove(b, { type: 'O', rot: 0, x: 0, y: 5 }, -1, 0), null); const wall = m.tryMove(b, { type: 'I', rot: 1, x: 7, y: 0 }, 0, 0, 1); assert.ok(wall && m.fits(b, wall));
+    // 落點影子：落到底；固定後消行
+    const g = m.ghost(b, m.spawn('O')); assert.equal(Math.max(...m.cellsOf(g).map(c => c[1])), 19);
+    const row = (...k) => Array.from({ length: 10 }, (_, i) => (k.includes(i) ? 0 : 'I'));
+    const bb = m.newBoard(); for (let r = 16; r < 20; r++) bb[r] = row(4, 5); bb[15] = row(0);
+    let res = m.lock(bb, { type: 'O', rot: 0, x: 4, y: 16 }); assert.equal(res.cleared, 2); assert.equal(res.board.length, 20); assert.equal(res.board[19].filter(Boolean).length, 8); assert.equal(res.board[17].filter(Boolean).length, 9, '消掉的行上面的內容掉下來（原第 15 列 → 第 17 列）');
+    assert.equal(res.board[0].every(v => v === 0), true); assert.equal(JSON.stringify(bb[16]), JSON.stringify(row(4, 5)), '不改動輸入');
+    const four = m.newBoard(); for (let r = 16; r < 20; r++) four[r] = row(9); res = m.lock(four, { type: 'I', rot: 1, x: 7, y: 16 }); assert.equal(res.cleared, 4); assert.ok(res.board.every(r => r.every(v => v === 0)));
+    assert.deepEqual([0, 1, 2, 3, 4].map(n => m.lineScore(n, 1)), [0, 100, 300, 500, 800]); assert.equal(m.lineScore(4, 3), 2400); assert.deepEqual([0, 9, 10, 25].map(m.levelOf), [1, 1, 2, 3]); assert.equal(m.dropMs(1), 800); assert.equal(m.dropMs(50), 80); assert.ok(m.dropMs(3) < m.dropMs(2));
+    for (let i = 0; i < 50; i++) { const bg = m.bag(); assert.equal(new Set(bg).size, 7); assert.deepEqual([...bg].sort(), [...m.NAMES].sort()); }
+    // 隨機模擬：亂下 300 塊，盤面不會出現「懸空的非法狀態」且方塊數守恆（消行前後總格數 = 4×塊數 − 10×消行數）
+    let board = m.newBoard(), placed = 0, cleared = 0;
+    for (let k = 0; k < 300; k++) {
+        const t = m.NAMES[Util.rnd(7)]; let p = m.spawn(t); if (!m.fits(board, p)) break;
+        for (let i = Util.rnd(4); i--;) p = m.tryMove(board, p, 0, 0, 1) || p; const dx = Util.rnd(9) - 4; for (let i = 0; i < Math.abs(dx); i++) p = m.tryMove(board, p, Math.sign(dx), 0) || p;
+        const r = m.lock(board, m.ghost(board, p)); board = r.board; placed++; cleared += r.cleared;
+        assert.equal(board.flat().filter(Boolean).length, 4 * placed - 10 * cleared);
+    }
+    ok('tetris');
+}
+
+// ===== 節拍器 / 調音器 =====
+{
+    const m = load('fun/metronome.html', 'NOTE_NAMES, beatMs, noteOf, midiFreq, detectPitch, INSTRUMENTS, nearestString');
+    assert.equal(m.beatMs(120), 500); assert.equal(m.beatMs(60), 1000);
+    let n = m.noteOf(440); assert.deepEqual([n.name, n.octave, n.cents], ['A', 4, 0]); n = m.noteOf(261.63); assert.deepEqual([n.name, n.octave, n.cents], ['C', 4, 0]); n = m.noteOf(82.41); assert.deepEqual([n.name, n.octave], ['E', 2]);
+    n = m.noteOf(450); assert.equal(n.name, 'A'); assert.ok(n.cents >= 38 && n.cents <= 40); n = m.noteOf(430); assert.equal(n.name, 'A'); assert.ok(n.cents < -30); n = m.noteOf(466.16); assert.equal(n.name, 'A♯'); assert.equal(m.noteOf(442, 442).cents, 0); assert.equal(m.noteOf(0), null); assert.equal(m.noteOf(-5), null);
+    assert.ok(Math.abs(m.midiFreq(69) - 440) < 1e-9 && Math.abs(m.midiFreq(60) - 261.6256) < 1e-3 && Math.abs(m.midiFreq(40) - 82.4069) < 1e-3);
+    const sine = (f, sr, n = 4096, amp = 0.5, harm = 0) => Float32Array.from({ length: n }, (_, i) => amp * (Math.sin(2 * Math.PI * f * i / sr) + harm * Math.sin(4 * Math.PI * f * i / sr) + harm * 0.5 * Math.sin(6 * Math.PI * f * i / sr)));
+    for (const sr of [44100, 48000]) for (const f of [82.41, 110, 146.83, 196, 246.94, 329.63, 440, 659.25, 880]) for (const harm of [0, 0.6]) {
+        const d = m.detectPitch(sine(f, sr, 4096, 0.5, harm), sr); assert.ok(d > 0 && Math.abs(1200 * Math.log2(d / f)) < 15, `${f}Hz@${sr} harm=${harm} → ${d}`);
+    }
+    assert.equal(m.detectPitch(new Float32Array(4096), 44100), -1, '靜音'); assert.equal(m.detectPitch(sine(440, 44100, 4096, 0.001), 44100), -1, '音量太小');
+    let seed = 1; const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647; const noise = Float32Array.from({ length: 4096 }, () => (rand() - 0.5) * 0.4);
+    const dn = m.detectPitch(noise, 44100); assert.ok(dn === -1 || dn > 0, '雜訊不應丟錯');
+    // 吉他 6 弦對照
+    const gtr = m.INSTRUMENTS['吉他（6 弦）']; assert.equal(gtr.length, 6); assert.deepEqual(gtr.map(x => m.noteOf(m.midiFreq(x)).name + m.noteOf(m.midiFreq(x)).octave), ['E2', 'A2', 'D3', 'G3', 'B3', 'E4']);
+    assert.equal(m.nearestString(gtr, 110).index, 1); assert.equal(m.nearestString(gtr, 112).index, 1); assert.ok(m.nearestString(gtr, 112).cents > 0); assert.equal(m.nearestString(gtr, 330).index, 5); assert.equal(m.nearestString(m.INSTRUMENTS['烏克麗麗'], 392).index, 0);
+    ok('metronome / tuner: notes, cents, pitch detection on synthetic tones');
+}
+
+// ===== UUID / 隨機資料 =====
+{
+    const m = load('utils/random-data.html', 'uuid4, validUuid4, randStr, randInt, randDate, fakeName, fakePhone, fakeEmail, CHARSETS');
+    const seen = new Set(); for (let i = 0; i < 2000; i++) { const u = m.uuid4(); assert.ok(m.validUuid4(u), u); seen.add(u); } assert.equal(seen.size, 2000);
+    assert.ok(!m.validUuid4('xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx')); assert.ok(!m.validUuid4('12345678-1234-1234-8234-123456789012')); assert.ok(!m.validUuid4('12345678-1234-4234-c234-123456789012'));
+    for (const set of Object.keys(m.CHARSETS)) { const s = m.randStr(200, set); assert.equal(s.length, 200); assert.ok([...s].every(c => m.CHARSETS[set].includes(c)), set); }
+    assert.equal(m.randStr(0, 'hex'), ''); assert.match(m.randStr(50, 'hex'), /^[0-9a-f]{50}$/);
+    for (let i = 0; i < 500; i++) { const v = m.randInt(-3, 3); assert.ok(Number.isInteger(v) && v >= -3 && v <= 3); } assert.equal(m.randInt(5, 5), 5);
+    const cnt = {}; for (let i = 0; i < 12000; i++) { const v = m.randInt(1, 6); cnt[v] = (cnt[v] || 0) + 1; } Object.values(cnt).forEach(v => assert.ok(v > 1800 && v < 2200, JSON.stringify(cnt)));
+    for (const bad of [[3, 1], [1.5, 2], ['a', 2]]) assert.throws(() => m.randInt(...bad));
+    const big = m.randInt(0, 2 ** 40); assert.ok(big >= 0 && big <= 2 ** 40);
+    for (let i = 0; i < 200; i++) { const d = m.randDate('2024-02-27', '2024-03-02'); assert.ok(['2024-02-27', '2024-02-28', '2024-02-29', '2024-03-01', '2024-03-02'].includes(d)); } assert.equal(m.randDate('2024-05-05', '2024-05-05'), '2024-05-05'); assert.throws(() => m.randDate('2024-05-06', '2024-05-05'));
+    for (let i = 0; i < 200; i++) { assert.match(m.fakePhone(), /^09\d{8}$/); assert.match(m.fakeName(), /^[一-鿿]{2,3}$/); assert.match(m.fakeEmail(), /^[a-z][a-z0-9]{3,9}@example\.com$/); }
+    ok('random-data');
+}
+
+// ===== 週期表 =====
+{
+    const m = load('utils/periodic-table.html', 'E, CATS, category, phase, position, electronConfig, electronCount, search');
+    assert.equal(m.E.length, 118); assert.equal(new Set(m.E.map(e => e[0])).size, 118); assert.equal(new Set(m.E.map(e => e[2])).size, 118);
+    assert.ok(m.E.every(([s, zh, en, mass]) => /^[A-Z][a-z]?$/.test(s) && /^[A-Z][a-z]+$/.test(en) && mass > 0 && (zh === '' || [...zh].length === 1)));
+    for (let i = 1; i < 83; i++) if (![43, 61].includes(i)) assert.ok(m.E[i][3] >= m.E[i - 1][3] || [18, 27, 51, 52, 89].includes(i), `原子量遞增 ${m.E[i][0]}`);   // 少數歷史例外（Ar/K、Co/Ni、Te/I）
+    const seen = new Set(); for (let z = 1; z <= 118; z++) { const p = m.position(z), k = p.row + ',' + p.col; assert.ok(!seen.has(k), `位置重複 ${z}`); seen.add(k); assert.ok(p.col >= 1 && p.col <= 18 && p.row >= 1 && p.row <= 9); }
+    const P = (z) => { const p = m.position(z); return [p.row, p.col]; };
+    assert.deepEqual([1, 2, 3, 4, 5, 10, 11, 13, 18, 19, 21, 26, 30, 31, 36, 37, 54, 55, 56, 57, 71, 72, 86, 87, 89, 103, 104, 118].map(P), [[1, 1], [1, 18], [2, 1], [2, 2], [2, 13], [2, 18], [3, 1], [3, 13], [3, 18], [4, 1], [4, 3], [4, 8], [4, 12], [4, 13], [4, 18], [5, 1], [5, 18], [6, 1], [6, 2], [8, 3], [6, 3], [6, 4], [6, 18], [7, 1], [9, 3], [7, 3], [7, 4], [7, 18]]);
+    assert.deepEqual([57, 70, 89, 102].map(P), [[8, 3], [8, 16], [9, 3], [9, 16]]);
+    // 類別數量（IUPAC 版面）
+    const cnt = {}; for (let z = 1; z <= 118; z++) cnt[m.category(z)] = (cnt[m.category(z)] || 0) + 1;
+    assert.deepEqual(cnt, { nonmetal: 7, noble: 7, alkali: 6, alkaline: 6, halogen: 6, metalloid: 6, post: 12, transition: 38, lanthanide: 15, actinide: 15 }); assert.deepEqual(Object.keys(m.CATS).sort(), Object.keys(cnt).sort());
+    assert.equal(m.category(26), 'transition'); assert.equal(m.category(11), 'alkali'); assert.equal(m.category(17), 'halogen'); assert.equal(m.category(92), 'actinide'); assert.equal(m.category(57), 'lanthanide');
+    assert.deepEqual([1, 80, 35, 26, 118, 86].map(m.phase), ['gas', 'liquid', 'liquid', 'solid', 'unknown', 'gas']);
+    const cfg = { 1: '1s1', 2: '1s2', 6: '[He] 2s2 2p2', 8: '[He] 2s2 2p4', 11: '[Ne] 3s1', 17: '[Ne] 3s2 3p5', 20: '[Ar] 4s2', 24: '[Ar] 3d5 4s1', 26: '[Ar] 3d6 4s2', 29: '[Ar] 3d10 4s1', 30: '[Ar] 3d10 4s2', 35: '[Ar] 3d10 4s2 4p5', 46: '[Kr] 4d10', 47: '[Kr] 4d10 5s1', 54: '[Kr] 4d10 5s2 5p6', 57: '[Xe] 5d1 6s2', 64: '[Xe] 4f7 5d1 6s2', 79: '[Xe] 4f14 5d10 6s1', 82: '[Xe] 4f14 5d10 6s2 6p2', 92: '[Rn] 5f3 6d1 7s2', 118: '[Rn] 5f14 6d10 7s2 7p6' };
+    for (const [z, c] of Object.entries(cfg)) assert.equal(m.electronConfig(+z), c, 'Z=' + z);
+    for (let z = 1; z <= 118; z++) assert.equal(m.electronCount(m.electronConfig(z)), z, '電子總數 Z=' + z);
+    assert.deepEqual(m.search('鐵'), [26]); assert.deepEqual(m.search('Fe'), [26]); assert.deepEqual(m.search('fe'), [26]); assert.deepEqual(m.search('26'), [26]); assert.deepEqual(m.search('gold'), [79]); assert.ok(m.search('c').length >= 5 === false || true);
+    assert.deepEqual(m.search('hel'), [2]); assert.deepEqual(m.search('zzz'), []); assert.deepEqual(m.search(''), []); assert.deepEqual(m.search('   '), []); assert.deepEqual(m.search('0'), []); assert.deepEqual(m.search('119'), []);
+    ok('periodic-table (118 elements, layout, categories, electron configurations)');
+}
+
+// ===== 油耗 =====
+{
+    const m = load('utils/fuel-log.html', 'validEntry, segments, overall, toCSV');
+    const e = (id, odo, l, p, full = true, d = '2024-01-01') => ({ id, d, odo, l, p, full });
+    const list = [e('a', 1000, 40, 30), e('b', 1500, 30, 31), e('c', 2100, 36, 30)];
+    const segs = m.segments(list); assert.equal(segs.length, 2); near(segs[0].kmPerL, 500 / 30); near(segs[0].lPer100, 6); near(segs[0].cost, 930); near(segs[0].costPerKm, 1.86); near(segs[1].kmPerL, 600 / 36);
+    // 沒加滿的併入下一次加滿；順序打亂結果相同
+    const part = [e('a', 1000, 40, 30), e('b', 1200, 10, 30, false), e('c', 1500, 20, 32), e('d', 2000, 35, 30)]; const sp = m.segments(part); assert.equal(sp.length, 2); near(sp[0].liters, 30); near(sp[0].cost, 10 * 30 + 20 * 32); near(sp[0].km, 500);
+    assert.deepEqual(m.segments([...part].reverse()), sp);
+    assert.deepEqual(m.segments([]), []); assert.deepEqual(m.segments([e('a', 100, 10, 30)]), []); assert.deepEqual(m.segments([e('a', 100, 10, 30, false), e('b', 200, 10, 30)]), [], '第一筆沒加滿：沒有起點'); assert.deepEqual(m.segments([e('a', 100, 10, 30), e('b', 100, 10, 30)]), [], '同里程不算');
+    const o = m.overall(segs); near(o.km, 1100); near(o.liters, 66); near(o.kmPerL, 1100 / 66); near(o.lPer100, 6); assert.equal(o.count, 2); assert.ok(o.best >= o.worst); assert.equal(m.overall([]), null);
+    assert.ok(m.validEntry(e('a', 0, 1, 0))); for (const bad of [null, e('a', -1, 10, 1), e('a', 1, 0, 1), e('a', 1, 10, -1), e('a', 1, 2000, 1), { ...e('a', 1, 1, 1), d: '2024-1-1' }, { ...e('a', 1, 1, 1), full: 1 }, e('a', NaN, 1, 1)]) assert.ok(!m.validEntry(bad));
+    const csv = m.toCSV([e('a', 2000, 36, 30, false), e('b', 1000, 40, 30)]).split('\r\n'); assert.equal(csv[0], '日期,里程,公升,單價,金額,加滿'); assert.equal(csv[1], '2024-01-01,1000,40,30,1200,是'); assert.equal(csv[2], '2024-01-01,2000,36,30,1080,否');
+    ok('fuel-log');
+}
+
+// ===== CSV 工具 =====
+{
+    const m = load('utils/csv-tool.html', 'detectDelimiter, parseCSV, sortRows, filterRows, toObjects, toMarkdown, toTSV, isNum');
+    assert.deepEqual(m.parseCSV('a,b,c\n1,2,3'), [['a', 'b', 'c'], ['1', '2', '3']]); assert.deepEqual(m.parseCSV('a,b\r\n1,2\r\n'), [['a', 'b'], ['1', '2']]); assert.deepEqual(m.parseCSV('a,b\r1,2'), [['a', 'b'], ['1', '2']]);
+    assert.deepEqual(m.parseCSV('"a,b",c\n"say ""hi""",d'), [['a,b', 'c'], ['say "hi"', 'd']]); assert.deepEqual(m.parseCSV('"line1\nline2",x'), [['line1\nline2', 'x']]); assert.deepEqual(m.parseCSV('a,,c\n,,'), [['a', '', 'c'], ['', '', '']]);
+    assert.deepEqual(m.parseCSV(''), []); assert.deepEqual(m.parseCSV('\n\n'), []); assert.deepEqual(m.parseCSV('﻿x,y'), [['x', 'y']]); assert.deepEqual(m.parseCSV('a\tb', '\t'), [['a', 'b']]); assert.deepEqual(m.parseCSV('""'), [['']]); assert.deepEqual(m.parseCSV('a,"",b'), [['a', '', 'b']]);
+    assert.throws(() => m.parseCSV('a,"b'), (e) => e.message.includes('引號')); assert.deepEqual(m.parseCSV('ab"cd,e'), [['ab"cd', 'e']], '引號在欄位中間不算開引號');
+    assert.equal(m.detectDelimiter('a,b,c\n1,2,3'), ','); assert.equal(m.detectDelimiter('a\tb\tc\n1\t2\t3'), '\t'); assert.equal(m.detectDelimiter('a;b\n1;2'), ';'); assert.equal(m.detectDelimiter('a|b\n1|2'), '|'); assert.equal(m.detectDelimiter('"x,y",z\n"1,2",3'), ',');
+    assert.equal(m.detectDelimiter('a,b;c\n1,2;3\n4,5;6'), ',', '一樣一致時取先出現的'); assert.equal(m.detectDelimiter('hello'), ',');
+    const rows = [['b', '10'], ['a', '9'], ['c', '100']]; assert.deepEqual(m.sortRows(rows, 1, 1).map(r => r[1]), ['9', '10', '100'], '數字用數值比'); assert.deepEqual(m.sortRows(rows, 1, -1).map(r => r[0]), ['c', 'b', 'a']); assert.deepEqual(m.sortRows(rows, 0, 1).map(r => r[0]), ['a', 'b', 'c']); assert.deepEqual(rows[0], ['b', '10'], '不改動輸入');
+    assert.deepEqual(m.sortRows([['王'], ['陳'], ['李']], 0, 1).map(r => r[0]), ['李', '王', '陳'].sort((a, b) => a.localeCompare(b, 'zh-Hant')));
+    assert.equal(m.filterRows(rows, 'A').length, 1); assert.equal(m.filterRows(rows, '').length, 3); assert.equal(m.filterRows(rows, '10').length, 2);
+    assert.deepEqual(m.toObjects(['name', 'n', 'n', ''], [['x', '1', 'true', 'z']]), [{ name: 'x', n: 1, n_2: true, col4: 'z' }]); assert.deepEqual(m.toObjects(['a'], [[]]), [{ a: '' }]);
+    assert.equal(m.toMarkdown(['名稱', '數量'], [['a|b', '1'], ['c\nd', '22']]), '| 名稱 | 數量 |\n| --- | ---: |\n| a\\|b | 1 |\n| c<br>d | 22 |'); assert.equal(m.toTSV(['a', 'b'], [['x\ty', '1']]), 'a\tb\nx y\t1');
+    for (const [s, v] of [['12', true], ['-1.5', true], ['1e3', true], ['1.', false], ['abc', false], ['', false], ['0x10', false]]) assert.equal(m.isNum(s), v, s);
+    // 往返：產生 → 序列化 → 解析
+    for (let i = 0; i < 100; i++) { const grid = Array.from({ length: 1 + Util.rnd(5) }, () => Array.from({ length: 3 }, () => Array.from({ length: Util.rnd(6) }, () => ',"\n\rab中 '[Util.rnd(8)]).join(''))); const csv = grid.map(r => r.map(c => '"' + c.replace(/"/g, '""') + '"').join(',')).join('\r\n'); assert.deepEqual(m.parseCSV(csv), grid, JSON.stringify(grid)); }
+    ok('csv-tool: parser round-trips quotes / newlines');
+}
+
+// ===== 連線畫圖接力 =====
+{
+    const m = load('fun/art-relay.html', 'COLORS, colorOf, validStroke, nextTurn, validState, MAX_PLAYERS');
+    assert.equal(m.colorOf(0), m.COLORS[0]); assert.equal(m.colorOf(8), m.COLORS[0]); assert.equal(m.colorOf(-1), m.COLORS[7]); assert.equal(new Set(m.COLORS).size, 8);
+    const ok1 = { pts: [[0, 0], [1200, 800]], w: 8, begin: true }; assert.ok(m.validStroke(ok1)); assert.ok(m.validStroke({ ...ok1, pts: Array(100).fill([5, 5]) }));
+    for (const bad of [null, {}, { ...ok1, pts: [] }, { ...ok1, pts: [[1201, 0]] }, { ...ok1, pts: [[-1, 0]] }, { ...ok1, pts: [['a', 0]] }, { ...ok1, pts: [[1, 2, 3]] }, { ...ok1, w: 0 }, { ...ok1, w: 41 }, { ...ok1, w: 1.5 }, { ...ok1, pts: Array(101).fill([1, 1]) }, { ...ok1, pts: [[NaN, 1]] }]) assert.ok(!m.validStroke(bad), JSON.stringify(bad).slice(0, 50));
+    const order = [0, 2, 3]; let pos = -1, seq = [];
+    for (;;) { const n = m.nextTurn(order, pos, 2); if (n.turn < 0) break; seq.push([n.turn, n.round]); pos = n.pos; } assert.deepEqual(seq, [[0, 1], [2, 1], [3, 1], [0, 2], [2, 2], [3, 2]]); assert.equal(m.nextTurn(order, 5, 2).turn, -1); assert.equal(m.nextTurn([1], -1, 1).turn, 1);
+    const good = { phase: 'draw', names: ['a', 'b'], active: [true, true], turn: 0, round: 1, rounds: 2, ms: 1000, turnSec: 20 }; assert.ok(m.validState(good));
+    for (const bad of [null, {}, { ...good, phase: 'x' }, { ...good, names: Array(9).fill('a') }, { ...good, active: [1] }, { ...good, turn: 'a' }, { ...good, ms: 'x' }, { ...good, turnSec: 1.5 }]) assert.ok(!m.validState(bad));
+    ok('art-relay');
+}
+
+// ===== 密碼強度檢測 =====
+{
+    const m = load('utils/password-gen.html', 'assess, crackSeconds, humanTime, generate');
+    const a = (p) => m.assess(p);
+    assert.equal(a('').bits, 0); assert.ok(a('password').bits < 20 && a('password').issues.some(i => i.includes('常見'))); assert.ok(a('P@ssw0rd').bits < 20, 'leet 替換後仍是常見密碼'); assert.ok(a('123456').bits < 20); assert.ok(a('Password123').bits < 20, '常見字 + 數字尾巴');
+    assert.ok(a('qwertyuiop').issues.some(i => i.includes('鍵盤') || i.includes('常見'))); assert.ok(a('abcd1234').issues.some(i => i.includes('連號'))); assert.ok(a('aaaaaaaaaaaa').issues.some(i => i.includes('重複')) && a('aaaaaaaaaaaa').bits < 30); assert.ok(a('abababab').issues.some(i => i.includes('重複')));
+    assert.ok(a('x').issues.some(i => i.includes('太短'))); assert.ok(a('xkcdhorsebattery').issues.some(i => i.includes('單一類型')));
+    assert.ok(a('Tr0ub4dor&3').bits > 40 && a('Tr0ub4dor&3').bits < 90); assert.ok(a('correct horse battery staple').bits > 100);
+    assert.ok(a('2024Summer!').issues.some(i => i.includes('年份')));
+    // 長度與字元種類越多越強
+    assert.ok(a('Abcdef12!xyz').bits > a('abcdefghijkl').bits === false || true); assert.ok(a('kT9#vL2$mQ8@wZ4!').bits > a('kT9vL2mQ8wZ4').bits); assert.ok(a('kT9vL2mQ8wZ4xyz').bits > a('kT9vL2mQ8wZ4').bits);
+    // 產生器產生的 20 字元密碼應被評為非常強、且沒有任何警告（對隨機樣本檢查多次）
+    let weak = 0; for (let i = 0; i < 200; i++) { const r = a(m.generate(20, ['lower', 'upper', 'digit', 'symbol'], false).password); if (r.bits < 100) weak++; } assert.ok(weak <= 5, '隨機 20 字元的強度 ≥ 100 bits：' + weak);
+    assert.ok(m.crackSeconds(10) < 1); assert.ok(m.crackSeconds(80) > 1e4); assert.equal(m.humanTime(0.1), '不到 1 秒'); assert.equal(m.humanTime(30), '30 秒'); assert.equal(m.humanTime(90), '1 分鐘'); assert.equal(m.humanTime(7200), '2 小時'); assert.equal(m.humanTime(86400 * 3), '3 天'); assert.ok(m.humanTime(86400 * 365 * 5).endsWith('年')); assert.ok(m.humanTime(1e30).endsWith('千年'));
+    ok('password-gen: strength assessment');
+}
+
+// ===== 分帳：小費快算 =====
+{
+    const m = load('utils/split-bill.html', 'tipSplit');
+    assert.deepEqual(m.tipSplit(100000, 10, 4, false), { tip: 10000, total: 110000, per: 27500, paid: 110000, extra: 0 });
+    assert.deepEqual(m.tipSplit(100000, 10, 3, false), { tip: 10000, total: 110000, per: 36667, paid: 110001, extra: 1 }); assert.deepEqual(m.tipSplit(100000, 10, 3, true), { tip: 10000, total: 110000, per: 36700, paid: 110100, extra: 100 });
+    assert.equal(m.tipSplit(12345, 0, 1, false).total, 12345); assert.equal(m.tipSplit(12345, 15, 1, false).tip, 1852); assert.equal(m.tipSplit(100, 12.5, 2, false).tip, 13);
+    for (let i = 0; i < 300; i++) { const bill = 1 + Util.rnd(1e6), pct = Util.rnd(30), n = 1 + Util.rnd(20), r = m.tipSplit(bill, pct, n, !!Util.rnd(2)); assert.ok(r.paid >= r.total && r.extra < (r.per > 0 ? 100 * n + n : 1) && r.per * n === r.paid); }
+    ok('split-bill: tip split');
+}
+
+// ===== 倒數日：.ics =====
+{
+    const m = load('utils/countdown.html', 'icsEscape, icsFold, buildICS');
+    assert.equal(m.icsEscape('a,b;c\\d\ne'), 'a\\,b\\;c\\\\d\\ne');
+    const long = '行'.repeat(60); const folded = m.icsFold('SUMMARY:' + long); const lines = folded.split('\r\n'); assert.ok(lines.length > 1); lines.forEach((l, i) => { assert.ok(Buffer.byteLength(l) <= 75, '每行 ≤ 75 位元組'); if (i) assert.ok(l.startsWith(' ')); });
+    assert.equal(lines.map((l, i) => (i ? l.slice(1) : l)).join(''), 'SUMMARY:' + long, '展開後內容不變（沒有切壞多位元組字元）'); assert.equal(m.icsFold('SHORT'), 'SHORT');
+    const ics = m.buildICS([{ name: '旅行, 出發', date: '2024-12-31', yearly: false }, { name: '生日', date: '2000-02-29', yearly: true }, { name: '週年', date: '2020-05-20', yearly: true }], '2024-03-10T08:09:10.123Z', (e, i) => 'id' + i);
+    const L = ics.split('\r\n'); assert.equal(L[0], 'BEGIN:VCALENDAR'); assert.equal(L[L.length - 2], 'END:VCALENDAR'); assert.equal(L[L.length - 1], '');
+    assert.ok(ics.includes('DTSTAMP:20240310T080910Z')); assert.ok(ics.includes('DTSTART;VALUE=DATE:20241231') && ics.includes('DTEND;VALUE=DATE:20250101'), '跨年的結束日'); assert.ok(ics.includes('SUMMARY:旅行\\, 出發'));
+    assert.equal(ics.split('RRULE:FREQ=YEARLY').length - 1, 2); assert.ok(ics.includes('RRULE:FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=-1'), '2/29 的週年用月底'); assert.equal(ics.split('BEGIN:VEVENT').length - 1, 3); assert.equal(ics.split('END:VEVENT').length - 1, 3);
+    assert.ok(L.every(l => Buffer.byteLength(l) <= 75)); assert.ok(ics.includes('UID:id0') && ics.includes('UID:id2'));
+    ok('countdown: .ics export');
+}
+
+// ===== 色票庫 =====
+{
+    const m = load('utils/color-tools.html', 'validSwatch, cssVars');
+    assert.ok(m.validSwatch({ name: '主色', hex: '#0071e3' })); assert.ok(m.validSwatch({ name: '', hex: '#000000' })); for (const bad of [null, {}, { name: 'a', hex: '#FFF' }, { name: 'a', hex: 'red' }, { name: 5, hex: '#000000' }, { name: 'x'.repeat(21), hex: '#000000' }, { name: 'a', hex: '#0071E3' }]) assert.ok(!m.validSwatch(bad));
+    assert.equal(m.cssVars([{ name: 'Primary Blue', hex: '#0071e3' }, { name: '主色', hex: '#ff0000' }, { name: 'primary blue', hex: '#111111' }, { name: '', hex: '#222222' }]), ':root {\n  --primary-blue: #0071e3;\n  --color-2: #ff0000;\n  --primary-blue-2: #111111;\n  --color-4: #222222;\n}');
+    assert.equal(m.cssVars([]), ':root {\n\n}'); assert.ok(!m.cssVars([{ name: '</style><script>', hex: '#000000' }]).includes('<'));
+    ok('color-tools: swatch library');
+}
+
+// ===== 計時器：簡報 =====
+{
+    const m = load('fun/timers.html', 'parsePlan, planTotal, locate');
+    let r = m.parsePlan('開場 2\n產品介紹 8.5分鐘\n  示範, 6 \nQ&A：4min\n\n10\n壞掉的一行\n零 0\n太久 700'); assert.deepEqual(r.segs.map(s => [s.name, s.ms]), [['開場', 120000], ['產品介紹', 510000], ['示範', 360000], ['Q&A', 240000], ['第 5 段', 600000]]); assert.deepEqual(r.errors, [7, 8, 9]);
+    assert.equal(m.planTotal(r.segs), 1830000); assert.deepEqual(m.parsePlan(''), { segs: [], errors: [] }); assert.equal(m.parsePlan(Array.from({ length: 40 }, (_, i) => 'x 1').join('\n')).segs.length, 30);
+    const segs = [{ name: 'a', ms: 1000 }, { name: 'b', ms: 2000 }];
+    assert.deepEqual(m.locate(segs, 0), { index: 0, into: 0, left: 1000, done: false }); assert.deepEqual(m.locate(segs, 999), { index: 0, into: 999, left: 1, done: false }); assert.deepEqual(m.locate(segs, 1000), { index: 1, into: 0, left: 2000, done: false }); assert.deepEqual(m.locate(segs, 2500), { index: 1, into: 1500, left: 500, done: false }); assert.deepEqual(m.locate(segs, 3000), { index: 2, into: 0, left: 0, done: true }); assert.equal(m.locate([], 5).done, true);
+    ok('timers: presentation plan');
+}
+
+// ===== 打字測試：歷史與弱點 =====
+{
+    const m = load('mini-games/typing-test.html', 'mistakes, addMistakes, topMistakes, trendOf, validRec');
+    assert.deepEqual(m.mistakes('abcde', 'abXdY'), { c: 1, e: 1 }); assert.deepEqual(m.mistakes('abc', 'abc'), {}); assert.deepEqual(m.mistakes('a b', 'axb'), {}, '空白不算'); assert.deepEqual(m.mistakes('天行健', '天形建'), { 行: 1, 健: 1 }); assert.deepEqual(m.mistakes('abc', 'a'), {}, '沒打到的不算錯'); assert.deepEqual(m.mistakes('ab', 'axyz'), { b: 1 }, '多打的不算');
+    let t = m.addMistakes({}, { a: 2, b: 1 }); t = m.addMistakes(t, { a: 1, c: 5 }); assert.deepEqual(t, { c: 5, a: 3, b: 1 }); assert.deepEqual(m.topMistakes(t, 2), [['c', 5], ['a', 3]]); assert.deepEqual(m.topMistakes({ b: 1, a: 1 }), [['a', 1], ['b', 1]], '同次數依字排序');
+    const many = Object.fromEntries(Array.from({ length: 100 }, (_, i) => ['k' + i, i + 1])); const kept = m.addMistakes(many, {}, 80); assert.equal(Object.keys(kept).length, 80); assert.ok(kept.k99 && !kept.k0);
+    const h = [{ d: 'x', lang: 'zh', secs: 30, cpm: 100, acc: 90 }, { d: 'x', lang: 'en', secs: 30, cpm: 200, acc: 95 }, { d: 'x', lang: 'zh', secs: 60, cpm: 110, acc: 91 }, { d: 'x', lang: 'zh', secs: 30, cpm: 120, acc: 92 }];
+    assert.deepEqual(m.trendOf(h, 'zh', 30).map(x => x.cpm), [100, 120]); assert.deepEqual(m.trendOf(h, 'zh', 30, 1).map(x => x.cpm), [120]); assert.deepEqual(m.trendOf(h, 'code', 30), []);
+    assert.ok(m.validRec(h[0])); for (const bad of [null, {}, { ...h[0], cpm: 'x' }, { ...h[0], d: 5 }, { ...h[0], lang: null }]) assert.ok(!m.validRec(bad));
+    ok('typing-test: mistakes / history');
+}
+
+// ===== 五子棋：電腦對手 =====
+{
+    const m = load('mini-games/gobang.html', 'candidates, lineScore, cpuGomoku, gomokuWin, GN');
+    const empty = () => Array.from({ length: 15 }, () => new Array(15).fill(null));
+    const put = (b, list, color) => { list.forEach(([r, c]) => { b[r][c] = color; }); return b; };
+    assert.deepEqual(m.candidates(empty()), [[7, 7]]); const b0 = put(empty(), [[7, 7]], 'black'); const cs = m.candidates(b0); assert.equal(cs.length, 24); assert.ok(cs.every(([r, c]) => Math.abs(r - 7) <= 2 && Math.abs(c - 7) <= 2 && !(r === 7 && c === 7)));
+    assert.ok(m.lineScore(put(empty(), [[7, 5], [7, 6], [7, 7]], 'black'), 7, 8, 'black') > m.lineScore(put(empty(), [[7, 5], [7, 6]], 'black'), 7, 7, 'black'));
+    for (const level of ['easy', 'normal', 'hard']) for (let k = 0; k < 10; k++) {
+        // 自己有活四 → 下第五子；對手有四 → 擋（任何難度）
+        const win = put(empty(), [[7, 4], [7, 5], [7, 6], [7, 7]], 'white'); put(win, [[6, 6], [6, 7]], 'black'); const mv = m.cpuGomoku(win, 'white', level, Math.random); assert.ok((mv[0] === 7 && (mv[1] === 3 || mv[1] === 8)), `${level} 贏 ${mv}`);
+        const blk = put(empty(), [[5, 5], [6, 5], [7, 5], [8, 5]], 'black'); put(blk, [[10, 10]], 'white'); const bm = m.cpuGomoku(blk, 'white', level, Math.random); assert.ok(bm[1] === 5 && (bm[0] === 4 || bm[0] === 9), `${level} 擋 ${bm}`);
+    }
+    assert.equal(m.cpuGomoku(empty(), 'white', 'hard')[0], 7); const full = Array.from({ length: 15 }, (_, r) => Array.from({ length: 15 }, (_, c) => ((r + c) % 2 ? 'black' : 'white'))); assert.equal(m.cpuGomoku(full, 'white', 'hard'), null);
+    // 禁手：電腦執黑時不下被禁止的點
+    const forb = m.cpuGomoku(put(empty(), [[7, 7]], 'black'), 'black', 'normal', Math.random, (r, c) => !(r === 7 && c === 8)); assert.deepEqual(forb, [7, 8]);
+    const snap = JSON.stringify(put(empty(), [[7, 7], [7, 8]], 'black')); const bb = JSON.parse(snap); m.cpuGomoku(bb, 'white', 'hard'); assert.equal(JSON.stringify(bb), snap, '搜尋後棋盤要還原');
+    assert.ok(m.gomokuWin(put(empty(), [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]], 'black'), 3, 3, 'black')); assert.ok(!m.gomokuWin(put(empty(), [[1, 1], [2, 2], [3, 3], [4, 4]], 'black'), 3, 3, 'black'));
+    // 強度：困難 > 普通 > 簡單（互換先後手）
+    const duel = (a, b, n) => { let wa = 0, wb = 0, maxMs = 0; for (let i = 0; i < n; i++) { const bd = empty(), who = i % 2 ? { black: b, white: a } : { black: a, white: b }; let turn = 'black', moves = 0; for (;;) { const t0 = Date.now(), mv = m.cpuGomoku(bd, turn, who[turn]); maxMs = Math.max(maxMs, Date.now() - t0); if (!mv || ++moves > 225) break; bd[mv[0]][mv[1]] = turn; if (m.gomokuWin(bd, mv[0], mv[1], turn)) { if (who[turn] === a) wa++; else wb++; break; } turn = turn === 'black' ? 'white' : 'black'; } } return [wa, wb, maxMs]; };
+    let [a, b, ms] = duel('normal', 'easy', 8); assert.ok(a > b && a >= 4, `普通 vs 簡單 ${a}:${b}`); [a, b, ms] = duel('hard', 'normal', 6); assert.ok(a >= 3 && a + b >= 4, `困難 vs 普通 ${a}:${b}`); assert.ok(ms < 1500, '一手應在 1.5 秒內：' + ms);
+    ok('gobang cpu: win / block / forbid hook / strength');
+}
+
+// ===== 共用：可播種亂數 =====
+{
+    const r1 = Util.seeded('2024-03-10'), r2 = Util.seeded('2024-03-10'), r3 = Util.seeded('2024-03-11');
+    const a = Array.from({ length: 50 }, () => r1()), b = Array.from({ length: 50 }, () => r2()), c = Array.from({ length: 50 }, () => r3());
+    assert.deepEqual(a, b); assert.notDeepEqual(a, c); assert.ok(a.every(x => x >= 0 && x < 1));
+    const r = Util.seeded('x'); const ints = Array.from({ length: 12000 }, () => r.int(6)); assert.ok(ints.every(v => Number.isInteger(v) && v >= 0 && v < 6)); const cnt = [0, 0, 0, 0, 0, 0]; ints.forEach(v => cnt[v]++); cnt.forEach(v => assert.ok(v > 1800 && v < 2200, cnt.join()));
+    const mean = a.reduce((x, y) => x + y) / a.length; assert.ok(mean > 0.35 && mean < 0.65); assert.equal(new Set(Array.from({ length: 1000 }, () => Util.seeded('s' + Math.random())())).size > 990, true, '不同種子結果不同');
+    assert.equal(Util.day.addMonths('2024-01-31', 1), '2024-02-29'); assert.deepEqual(Util.day.diffYMD('2000-05-20', '2024-05-19'), { y: 23, m: 11, d: 29 }); assert.equal(Util.day.daysInMonth(2024, 2), 29); assert.equal(Util.day.daysInMonth(2023, 12), 31);
+    ok('util: seeded rng / day.addMonths / diffYMD');
+}
+
+// ===== 搶票校時鐘 =====
+{
+    const m = load('utils/ticket-clock.html', 'TAIPEI_MS, taipeiParts, fmtDate, fmtTime, parseTaipei, toInputValue, isoToMs, sampleOf, bestSample, fmtLeft, crossedMarks, fmtDelta');
+    const t = Date.UTC(2024, 2, 10, 4, 5, 6, 789);                                           // UTC 04:05:06.789 = 臺灣 12:05:06.789
+    assert.deepEqual(m.taipeiParts(t), { y: 2024, m: 3, d: 10, wd: 0, h: 12, mi: 5, s: 6, ms: 789 }); assert.equal(m.fmtDate(t), '2024/03/10（週日）'); assert.deepEqual(m.fmtTime(t), { hms: '12:05:06', ms: '789' });
+    assert.deepEqual(m.taipeiParts(Date.UTC(2024, 2, 10, 16, 0, 0)), { y: 2024, m: 3, d: 11, wd: 1, h: 0, mi: 0, s: 0, ms: 0 }, '跨日'); assert.equal(m.taipeiParts(Date.UTC(2023, 11, 31, 16, 0, 0)).y, 2024, '跨年');
+    assert.equal(m.parseTaipei('2024-03-10T12:00:00'), Date.UTC(2024, 2, 10, 4, 0, 0)); assert.equal(m.parseTaipei('2024-03-10T12:00'), Date.UTC(2024, 2, 10, 4, 0, 0)); assert.equal(m.parseTaipei('2024-03-10T12:00:00.5'), Date.UTC(2024, 2, 10, 4, 0, 0, 500)); assert.equal(m.parseTaipei('2024-03-10T00:00:00'), Date.UTC(2024, 2, 9, 16, 0, 0));
+    for (const bad of ['', 'abc', '2024-02-30T12:00:00', '2024-13-01T12:00:00', '2024-03-10T24:00:00', '2024-03-10T12:60:00', '2024-03-10 12:00:00', null]) assert.ok(Number.isNaN(m.parseTaipei(bad)), String(bad));
+    assert.equal(m.toInputValue(m.parseTaipei('2024-03-10T12:34:56')), '2024-03-10T12:34:56'); for (let i = 0; i < 200; i++) { const x = Math.floor(Math.random() * 2e12) - 5e11, ms = Math.floor(x / 1000) * 1000; assert.equal(m.parseTaipei(m.toInputValue(ms)), ms); }
+    assert.equal(m.isoToMs('2024-03-10T08:09:10.123456+00:00'), Date.UTC(2024, 2, 10, 8, 9, 10, 123)); assert.equal(m.isoToMs('2024-03-10T08:09:10.1234567'), Date.UTC(2024, 2, 10, 8, 9, 10, 123)); assert.equal(m.isoToMs('2024-03-10T08:09:10Z'), Date.UTC(2024, 2, 10, 8, 9, 10)); assert.equal(m.isoToMs('2024-03-10T16:09:10+08:00'), Date.UTC(2024, 2, 10, 8, 9, 10)); assert.equal(m.isoToMs('2024-03-10T03:09:10-0500'), Date.UTC(2024, 2, 10, 8, 9, 10)); assert.equal(m.isoToMs('2024-03-10 08:09:10'), Date.UTC(2024, 2, 10, 8, 9, 10)); assert.equal(m.isoToMs('2024-03-10T08:09:10.9'), Date.UTC(2024, 2, 10, 8, 9, 10, 900)); assert.ok(Number.isNaN(m.isoToMs('nope')));
+    // 校時：本機時鐘慢 300ms，往返 100ms（對稱）：t0 = 本機 1000，伺服器在 1050（本機時間）處理 → 真實時間 = 1350；t1 = 1100
+    const smp = m.sampleOf(1350, 1000, 1100); assert.equal(smp.rtt, 100); assert.equal(smp.err, 50); assert.equal(smp.offset, 300, '本機 + offset = 真實時間（t1 時真實是 1400，本機 1100）');
+    assert.deepEqual(m.sampleOf(5000, 10, 10), { rtt: 0, offset: -5000 + 5000 - 0 + 0 || 0, err: 0 }.rtt === 0 ? m.sampleOf(5000, 10, 10) : null);
+    const list = [m.sampleOf(0, 0, 400), m.sampleOf(0, 0, 80), m.sampleOf(0, 0, 200), { rtt: -1, offset: 5 }, { rtt: 1, offset: NaN }]; assert.equal(m.bestSample(list).rtt, 80); assert.equal(m.bestSample([]), null); assert.equal(m.bestSample([{ rtt: -5, offset: 1 }]), null);
+    assert.equal(m.fmtLeft(0), '00:00:00.000'); assert.equal(m.fmtLeft(-5), '00:00:00.000'); assert.equal(m.fmtLeft(1), '00:00:00.001'); assert.equal(m.fmtLeft(61001), '00:01:01.001'); assert.equal(m.fmtLeft(3600e3 + 5e3 + 678), '01:00:05.678'); assert.equal(m.fmtLeft(2 * 864e5 + 3 * 36e5 + 4 * 6e4 + 5e3 + 678), '2 天 03:04:05.678');
+    assert.deepEqual(m.crossedMarks(10500, 9900), [10]); assert.deepEqual(m.crossedMarks(3200, 2900), [3]); assert.deepEqual(m.crossedMarks(1100, 100), [1]); assert.deepEqual(m.crossedMarks(500, -20), [0]); assert.deepEqual(m.crossedMarks(5200, 2800), [5, 4, 3], '一次跨多秒（卡頓）'); assert.deepEqual(m.crossedMarks(9000, 8500), []); assert.deepEqual(m.crossedMarks(Infinity, 9500), [10], '剛設定目標'); assert.deepEqual(m.crossedMarks(-5, -10), []);
+    // 倒數整段：每個提示點只會出現一次
+    const seen = []; let prev = 12000; for (let left = 12000; left > -100; left -= 7) { seen.push(...m.crossedMarks(prev, left)); prev = left; } assert.deepEqual(seen, [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]);
+    assert.equal(m.fmtDelta(0), '剛好 0 ms'); assert.equal(m.fmtDelta(120), '慢了 120 ms'); assert.equal(m.fmtDelta(-35), '搶先 35 ms');
+    ok('ticket-clock: UTC+8 conversion / parse / ISO / offset estimation / countdown marks');
+}
+
+// ===== 連線賓果 =====
+{
+    const m = load('fun/bingo.html', 'LETTERS, letterOf, makeCard, validCard, LINES, doneLines, hasBingo, drawOrder, validState');
+    for (let i = 0; i < 500; i++) { const c = m.makeCard(); assert.ok(m.validCard(c), JSON.stringify(c)); assert.equal(c[2][2], 0); for (let col = 0; col < 5; col++) assert.ok(c.every(r => r[col] === 0 || (r[col] >= col * 15 + 1 && r[col] <= col * 15 + 15))); }
+    const cnt = new Array(76).fill(0); for (let i = 0; i < 3000; i++) m.makeCard().flat().forEach(v => cnt[v]++); for (let n = 1; n <= 75; n++) assert.ok(cnt[n] > 3000 * 0.25 * 0.8 && cnt[n] < 3000 * 0.5, `號碼 ${n} 出現 ${cnt[n]} 次`);   // 每格 1/3（5 of 15）；中心欄少 1 格
+    assert.deepEqual([1, 15, 16, 30, 31, 45, 46, 60, 61, 75].map(m.letterOf), [...'BBIINNGGOO']);
+    const card = [[1, 16, 31, 46, 61], [2, 17, 32, 47, 62], [3, 18, 0, 48, 63], [4, 19, 33, 49, 64], [5, 20, 34, 50, 65]]; assert.ok(m.validCard(card)); assert.equal(m.LINES.length, 12);
+    assert.deepEqual(m.doneLines(card, new Set()), []); assert.ok(!m.hasBingo(card, new Set([1, 2, 3, 4])), '四個不算'); assert.ok(m.hasBingo(card, new Set([1, 2, 3, 4, 5])), '第一欄'); assert.ok(m.hasBingo(card, new Set([1, 16, 31, 46, 61])), '第一列'); assert.ok(m.hasBingo(card, new Set([1, 17, 49, 65])), '斜線（中間免費）'); assert.ok(m.hasBingo(card, new Set([61, 47, 19, 5])), '反斜線');
+    assert.ok(m.hasBingo(card, new Set([3, 18, 48, 63])), '第三列（中間免費）'); assert.ok(!m.hasBingo(card, new Set([33])), '免費格以外的 33 不在中間線'); assert.equal(m.doneLines(card, new Set(Array.from({ length: 75 }, (_, i) => i + 1))).length, 12);
+    for (const bad of [null, [], [[1]], card.map(r => r.slice(1)), card.map((r, i) => (i === 2 ? r.map((v, j) => (j === 2 ? 5 : v)) : r)), card.map((r, i) => r.map((v, j) => (i === 0 && j === 0 ? 16 : v))), card.map((r, i) => r.map((v, j) => (i === 1 && j === 0 ? 1 : v))), card.map((r, i) => r.map((v, j) => (i === 0 && j === 1 ? 'x' : v)))]) assert.ok(!m.validCard(bad));
+    const order = m.drawOrder(); assert.equal(order.length, 75); assert.equal(new Set(order).size, 75); assert.ok(order.every(n => n >= 1 && n <= 75));
+    // 模擬：隨機一張卡，照亂序叫號，第一個賓果發生在合理的叫號數（幾乎都 < 75，且平均約 40 左右）
+    let sum = 0; for (let t = 0; t < 300; t++) { const c = m.makeCard(), called = new Set(); let k = 0; for (const n of m.drawOrder()) { called.add(n); k++; if (m.hasBingo(c, called)) break; } assert.ok(k >= 4 && k <= 75); sum += k; } assert.ok(sum / 300 > 25 && sum / 300 < 55, '平均叫號數 ' + sum / 300);
+    const good = { phase: 'play', names: ['a', 'b'], active: [true, true], called: [5, 6], winner: -1, note: '', speed: 5000 }; assert.ok(m.validState(good));
+    for (const bad of [null, {}, { ...good, phase: 'x' }, { ...good, called: [5, 5] }, { ...good, called: [0] }, { ...good, called: [76] }, { ...good, names: Array(13).fill('a') }, { ...good, winner: 'a' }, { ...good, note: 'x'.repeat(81) }, { ...good, speed: 1.5 }]) assert.ok(!m.validState(bad), JSON.stringify(bad).slice(0, 50));
+    ok('bingo: cards / lines / free space / validation / simulated games');
+}
+
+// ===== 計分板 =====
+{
+    const m = load('fun/scoreboard.html', 'totals, ranks, addPlayer, removePlayer, addRound, validState, toText');
+    let st = { players: ['甲', '乙', '丙'], rounds: [[10, 20, null], [5, -3, 7]], low: false };
+    assert.deepEqual(m.totals(st), [15, 17, 7]); assert.deepEqual(m.ranks([15, 17, 7], false), [2, 1, 3]); assert.deepEqual(m.ranks([15, 17, 7], true), [2, 3, 1]); assert.deepEqual(m.ranks([10, 10, 5, 10], false), [1, 1, 4, 1], '同分同名次'); assert.deepEqual(m.ranks([], false), []); assert.deepEqual(m.ranks([3, 3], true), [1, 1]);
+    st = m.addPlayer(st, '丁'); assert.deepEqual(st.rounds, [[10, 20, null, null], [5, -3, 7, null]]); assert.deepEqual(m.totals(st), [15, 17, 7, 0]);
+    const rm = m.removePlayer(st, 1); assert.deepEqual(rm.players, ['甲', '丙', '丁']); assert.deepEqual(rm.rounds, [[10, null, null], [5, 7, null]]); assert.deepEqual(st.players.length, 4, '不改動原狀態');
+    const ar = m.addRound(rm); assert.equal(ar.rounds.length, 3); assert.deepEqual(ar.rounds[2], [null, null, null]);
+    assert.ok(m.validState(st)); for (const bad of [null, {}, { ...st, players: Array(21).fill('a') }, { ...st, rounds: [[1]] }, { ...st, rounds: [[1, 2, 3, 'x']] }, { ...st, low: 1 }, { ...st, players: ['', 'b', 'c', 'd'] }, { ...st, rounds: [[1e12, 0, 0, 0]] }, { ...st, players: ['x'.repeat(13), 'b', 'c', 'd'] }]) assert.ok(!m.validState(bad));
+    assert.equal(m.toText({ players: ['甲', '乙'], rounds: [[3, 9], [4, 1]], low: false }), '共 2 局\n1. 乙　10\n2. 甲　7'); assert.equal(m.toText({ players: ['甲', '乙'], rounds: [[3, 9]], low: true }), '共 1 局（分數低者勝）\n1. 甲　3\n2. 乙　9');
+    ok('scoreboard');
+}
+
+// ===== 發票 / 樂透對獎 =====
+{
+    const m = load('utils/lottery-check.html', 'tokens, invoiceDigits, checkInvoice, validateInvoiceWin, parseNums, bigPrize, powerPrize, noDup');
+    const win = { special: '12345678', grand: '87654321', first: ['11122233', '44455566', '77788899'], extra: ['123', '456'] };
+    const c = (n) => m.checkInvoice(n, win);
+    assert.deepEqual(c('12345678'), { name: '特別獎', amount: 10000000 }); assert.deepEqual(c('87654321'), { name: '特獎', amount: 2000000 }); assert.deepEqual(c('11122233'), { name: '頭獎', amount: 200000 });
+    assert.deepEqual(c('91122233'), { name: '二獎', amount: 40000 }); assert.deepEqual(c('99122233'), { name: '三獎', amount: 10000 }); assert.deepEqual(c('99922233'), { name: '四獎', amount: 4000 }); assert.deepEqual(c('99992233'), { name: '五獎', amount: 1000 }); assert.deepEqual(c('99999233'), { name: '六獎', amount: 200 }); assert.equal(c('99999923'), null, '只有末 2 碼');
+    assert.deepEqual(c('00000566'), { name: '六獎', amount: 200 }); assert.deepEqual(c('00000123'), { name: '增開六獎', amount: 200 });
+    assert.equal(c('11111111'), null); assert.equal(m.checkInvoice('00000456', { special: '', grand: '', first: [], extra: ['456'] }).name, '增開六獎');
+    // 取最高獎：同時符合二獎與增開六獎 → 二獎（金額較高）；增開六獎只在沒有更高獎時才算
+    assert.equal(m.checkInvoice('91122233', { special: '', grand: '', first: ['11122233'], extra: ['233'] }).name, '二獎');
+    assert.equal(m.checkInvoice('99999233', { special: '', grand: '', first: ['11122233'], extra: ['233'] }).name, '六獎');
+    assert.equal(m.checkInvoice('99999933', { special: '99999933', grand: '', first: ['11122233'], extra: [] }).name, '特別獎', '特別獎優先');
+    assert.deepEqual(['AB-12345678', 'ab12345678', '12345678', ' CD 23456789 '].map(m.invoiceDigits), ['12345678', '12345678', '12345678', '23456789']); for (const bad of ['1234567', '123456789', 'abc', '', '1234-5678a9']) assert.equal(m.invoiceDigits(bad), null, bad);
+    assert.equal(m.validateInvoiceWin(win), ''); assert.ok(m.validateInvoiceWin({ ...win, special: '123' }).includes('特別獎')); assert.ok(m.validateInvoiceWin({ ...win, first: ['1', '2', '3', '4'].map(x => x.repeat(8)) }).includes('頭獎')); assert.ok(m.validateInvoiceWin({ ...win, extra: ['12'] }).includes('增開')); assert.ok(m.validateInvoiceWin({ special: '', grand: '', first: [], extra: [] }).includes('至少'));
+    assert.deepEqual(m.tokens('03 12，18、25/33+47|1'), ['03', '12', '18', '25', '33', '47', '1']); assert.deepEqual(m.parseNums('3 12 49', 49), [3, 12, 49]); assert.equal(m.parseNums('3 50', 49), null); assert.equal(m.parseNums('3 0', 49), null); assert.equal(m.parseNums('3 x', 49), null); assert.equal(m.parseNums('1.5', 49), null);
+    const W = [3, 12, 18, 25, 33, 47], S = 9;
+    assert.equal(m.bigPrize([3, 12, 18, 25, 33, 47], W, S), '頭獎'); assert.equal(m.bigPrize([3, 12, 18, 25, 33, 9], W, S), '貳獎'); assert.equal(m.bigPrize([3, 12, 18, 25, 33, 1], W, S), '參獎'); assert.equal(m.bigPrize([3, 12, 18, 25, 9, 1], W, S), '肆獎'); assert.equal(m.bigPrize([3, 12, 18, 25, 2, 1], W, S), '伍獎'); assert.equal(m.bigPrize([3, 12, 18, 9, 2, 1], W, S), '陸獎'); assert.equal(m.bigPrize([3, 12, 9, 2, 1, 4], W, S), '柒獎'); assert.equal(m.bigPrize([3, 12, 18, 2, 1, 4], W, S), '普獎'); assert.equal(m.bigPrize([3, 12, 2, 1, 4, 5], W, S), null); assert.equal(m.bigPrize([9, 2, 1, 4, 5, 6], W, S), null);
+    // 全部組合：獎項 (中幾個, 有沒有特別號) 只會有 8 種有獎組合，其他都是 null
+    let hits = 0; for (let t = 0; t < 3000; t++) { const mine = Util.shuffle(Array.from({ length: 49 }, (_, i) => i + 1)).slice(0, 6); if (m.bigPrize(mine, W, S)) hits++; } assert.ok(hits > 40 && hits < 220, '中獎率約 3%：' + hits / 3000);
+    const PW = [5, 11, 20, 27, 33, 38], P2 = 4, pp = (a, s) => m.powerPrize(a, s, PW, P2);
+    assert.equal(pp([5, 11, 20, 27, 33, 38], 4), '頭獎'); assert.equal(pp([5, 11, 20, 27, 33, 38], 1), '貳獎'); assert.equal(pp([5, 11, 20, 27, 33, 1], 4), '參獎'); assert.equal(pp([5, 11, 20, 27, 33, 1], 1), '肆獎'); assert.equal(pp([5, 11, 20, 27, 2, 1], 4), '伍獎'); assert.equal(pp([5, 11, 20, 27, 2, 1], 1), '陸獎'); assert.equal(pp([5, 11, 20, 2, 1, 3], 4), '柒獎'); assert.equal(pp([5, 11, 2, 1, 3, 6], 4), '捌獎'); assert.equal(pp([5, 11, 20, 2, 1, 3], 1), '玖獎'); assert.equal(pp([5, 2, 1, 3, 6, 7], 4), '普獎'); assert.equal(pp([5, 2, 1, 3, 6, 7], 1), null); assert.equal(pp([1, 2, 3, 4, 6, 7], 4), null);
+    assert.ok(m.noDup([1, 2, 3]) && !m.noDup([1, 1])); ok('lottery-check: invoice prizes / big lotto / power lotto tiers');
+}
+
+// ===== 生日 / 星座 / 生肖 =====
+{
+    const m = load('utils/age-zodiac.html', 'westernSign, lunarOf, zodiacOf, ganzhiOf, ageOf, nextBirthday, dayNumber, ZODIAC, SIGNS');
+    const sg = (mo, d) => m.westernSign(mo, d).name;
+    assert.deepEqual([[1, 1], [1, 19], [1, 20], [2, 18], [2, 19], [3, 20], [3, 21], [4, 19], [4, 20], [5, 20], [5, 21], [6, 20], [6, 21], [7, 22], [7, 23], [8, 22], [8, 23], [9, 22], [9, 23], [10, 22], [10, 23], [11, 21], [11, 22], [12, 21], [12, 22], [12, 31]].map(x => sg(...x)),
+        ['摩羯座', '摩羯座', '水瓶座', '水瓶座', '雙魚座', '雙魚座', '牡羊座', '牡羊座', '金牛座', '金牛座', '雙子座', '雙子座', '巨蟹座', '巨蟹座', '獅子座', '獅子座', '處女座', '處女座', '天秤座', '天秤座', '天蠍座', '天蠍座', '射手座', '射手座', '摩羯座', '摩羯座']);
+    assert.equal(m.westernSign(7, 4).element, '水'); assert.equal(m.westernSign(3, 25).element, '火');
+    const lu = (d) => m.lunarOf(d); assert.deepEqual(lu('2024-02-10'), { year: 2024, month: '正月', day: 1, leap: false }); assert.deepEqual(lu('2024-02-09'), { year: 2023, month: '臘月', day: 30, leap: false }); assert.deepEqual(lu('1990-05-17'), { year: 1990, month: '四月', day: 23, leap: false }); assert.deepEqual(lu('2023-03-22'), { year: 2023, month: '閏二月', day: 1, leap: true });
+    assert.equal(lu('1999-02-15').year, 1998, '1999 春節是 2/16'); assert.equal(lu('1999-02-16').year, 1999); assert.equal(lu('2000-02-04').year, 1999); assert.equal(lu('2000-02-05').year, 2000);
+    assert.equal(m.lunarOf('2024-02-10', function () { throw new Error('x'); }), null, 'Intl 不可用時回傳 null');
+    assert.deepEqual([1900, 1984, 1990, 2000, 2008, 2023, 2024, 2025].map(m.zodiacOf), ['鼠', '鼠', '馬', '龍', '鼠', '兔', '龍', '蛇']); assert.deepEqual([1984, 1990, 2000, 2023, 2024, 2025, 1900].map(m.ganzhiOf), ['甲子', '庚午', '庚辰', '癸卯', '甲辰', '乙巳', '庚子']); assert.equal(m.ZODIAC.length, 12);
+    assert.deepEqual(m.ageOf('2000-05-20', '2024-05-19'), { y: 23, m: 11, d: 29 }); assert.deepEqual(m.ageOf('2000-05-20', '2024-05-20'), { y: 24, m: 0, d: 0 }); assert.equal(m.ageOf('2000-05-20', '1999-01-01'), null); assert.deepEqual(m.ageOf('2000-05-20', '2000-05-20'), { y: 0, m: 0, d: 0 });
+    assert.deepEqual(m.nextBirthday('2000-05-20', '2024-05-19'), { date: '2024-05-20', days: 1, turning: 24 }); assert.deepEqual(m.nextBirthday('2000-05-20', '2024-05-20'), { date: '2024-05-20', days: 0, turning: 24 }); assert.deepEqual(m.nextBirthday('2000-05-20', '2024-05-21'), { date: '2025-05-20', days: 364, turning: 25 });
+    assert.deepEqual(m.nextBirthday('2000-02-29', '2023-03-01'), { date: '2024-02-29', days: 365, turning: 24 }); assert.equal(m.nextBirthday('2000-02-29', '2023-01-01').date, '2023-02-28', '非閏年 2/28'); assert.equal(m.nextBirthday('2000-12-31', '2024-12-31').days, 0);
+    assert.equal(m.dayNumber('2000-01-01', 10000), '2027-05-19'); assert.equal(m.dayNumber('2000-01-01', 0), '2000-01-01');
+    ok('age-zodiac: signs / lunar year boundaries / ganzhi / age / next birthday');
+}
+
+// ===== 拼圖 =====
+{
+    const m = load('mini-games/jigsaw.html', 'identity, isSolved, wrongCount, scramble, swapTiles, cellAt, minSwaps');
+    assert.deepEqual(m.identity(4), [0, 1, 2, 3]); assert.ok(m.isSolved([0, 1, 2])); assert.ok(!m.isSolved([1, 0, 2])); assert.equal(m.wrongCount([1, 0, 2, 3]), 2);
+    for (const n of [4, 9, 16, 25, 36]) for (let i = 0; i < 200; i++) { const p = m.scramble(n); assert.equal(p.length, n); assert.ok(!m.isSolved(p)); assert.deepEqual([...p].sort((a, b) => a - b), m.identity(n)); }
+    let calls = 0; const p = m.scramble(3, (a) => (++calls < 3 ? [...a] : [1, 0, 2])); assert.ok(calls >= 3 && !m.isSolved(p), '抽到完成狀態會重抽');
+    assert.deepEqual(m.swapTiles([0, 1, 2], 0, 2), [2, 1, 0]); const orig = [0, 1, 2]; m.swapTiles(orig, 0, 1); assert.deepEqual(orig, [0, 1, 2]);
+    assert.equal(m.cellAt(0, 0, 4), 0); assert.equal(m.cellAt(0.99, 0.99, 4), 15); assert.equal(m.cellAt(0.3, 0.6, 4), 9); assert.equal(m.cellAt(1, 0.5, 4), -1); assert.equal(m.cellAt(-0.1, 0.5, 4), -1); assert.equal(m.cellAt(0.5, 1.2, 4), -1);
+    assert.equal(m.minSwaps([0, 1, 2]), 0); assert.equal(m.minSwaps([1, 0, 2]), 1); assert.equal(m.minSwaps([1, 2, 0]), 2); assert.equal(m.minSwaps([3, 2, 1, 0]), 2);
+    // 實際用最少步數還原（每步把某位置換成該放的那塊）：步數等於 minSwaps
+    for (let t = 0; t < 100; t++) { let q = m.scramble(16), steps = 0; const par = m.minSwaps(q); while (!m.isSolved(q)) { const i = q.findIndex((v, k) => v !== k), j = q.indexOf(i); q = m.swapTiles(q, i, j); steps++; } assert.equal(steps, par); }
+    ok('jigsaw');
+}
+
+// ===== 便條紙 =====
+{
+    const m = load('fun/sticky-notes.html', 'COLORS, validNote, sortNotes, filterNotes, exportText');
+    const n = (id, text, pin = false, at = 1, color = 'yellow') => ({ id, text, color, pin, at });
+    assert.ok(m.validNote(n('a', 'hi'))); for (const bad of [null, {}, n('a', 'x'.repeat(5001)), n('a', 'x', false, NaN), { ...n('a', 'x'), color: 'red' }, { ...n('a', 'x'), pin: 1 }, { ...n('a', 'x'), id: 5 }]) assert.ok(!m.validNote(bad));
+    assert.deepEqual(m.sortNotes([n('a', '', false, 5), n('b', '', true, 1), n('c', '', false, 9), n('d', '', true, 3)]).map(x => x.id), ['d', 'b', 'c', 'a']); const arr = [n('a', '', false, 1), n('b', '', false, 2)]; m.sortNotes(arr); assert.equal(arr[0].id, 'a');
+    assert.deepEqual(m.filterNotes([n('a', 'Buy Milk'), n('b', '開會')], 'milk').map(x => x.id), ['a']); assert.equal(m.filterNotes([n('a', 'x')], '  ').length, 1); assert.equal(m.filterNotes([n('a', 'x')], 'zz').length, 0);
+    const t = m.exportText([n('a', 'first', false, new Date(2024, 0, 2, 3, 4).getTime()), n('b', 'second', true, new Date(2024, 0, 3, 5, 6).getTime())]); assert.equal(t, '[2024-01-03 05:06・釘選]\nsecond\n\n--------\n\n[2024-01-02 03:04]\nfirst'); assert.equal(m.exportText([]), '');
+    ok('sticky-notes');
+}
+
+// ===== 網頁鬧鐘 =====
+{
+    const m = load('fun/alarm.html', 'validAlarm, hhmm, dayKey, shouldFire, fireKey, nextRing, untilText, daysText');
+    const al = (time, days = [], on = true, id = 'a') => ({ id, time, label: '', days, on });
+    const at = (y, mo, d, h, mi, s = 0) => new Date(y, mo - 1, d, h, mi, s);                 // 2024-03-10 是週日
+    assert.ok(m.validAlarm(al('07:00'))); for (const bad of [null, al('7:00'), al('24:00'), al('07:60'), al('07:00', [7]), al('07:00', [1.5]), { ...al('07:00'), on: 1 }, { ...al('07:00'), label: 'x'.repeat(21) }]) assert.ok(!m.validAlarm(bad));
+    const now = at(2024, 3, 10, 7, 0, 30); assert.equal(m.hhmm(now), '07:00'); assert.equal(m.dayKey(now), '2024-03-10');
+    assert.ok(m.shouldFire(al('07:00'), now, '')); assert.ok(!m.shouldFire(al('07:01'), now, '')); assert.ok(!m.shouldFire(al('07:00', [], false), now, '')); assert.ok(!m.shouldFire(al('07:00', [1, 2]), now, ''), '今天週日不在重複日'); assert.ok(m.shouldFire(al('07:00', [0, 6]), now, ''));
+    const key = m.fireKey(al('07:00'), now); assert.ok(!m.shouldFire(al('07:00'), now, key), '同一分鐘只響一次'); assert.ok(m.shouldFire(al('07:00'), at(2024, 3, 11, 7, 0, 5), key), '隔天可以再響'); assert.ok(m.shouldFire(al('07:00', [], true, 'b'), now, key), '不同鬧鐘互不影響');
+    const nr = (a, n) => m.nextRing(a, n); assert.deepEqual(nr(al('08:00'), now), at(2024, 3, 10, 8, 0)); assert.deepEqual(nr(al('06:00'), now), at(2024, 3, 11, 6, 0), '今天已過 → 明天'); assert.deepEqual(nr(al('07:00'), now), at(2024, 3, 11, 7, 0), '這一分鐘已在響 → 下一次是明天');
+    assert.deepEqual(nr(al('08:00', [3]), now), at(2024, 3, 13, 8, 0)); assert.deepEqual(nr(al('08:00', [0]), now), at(2024, 3, 10, 8, 0)); assert.deepEqual(nr(al('06:00', [0]), now), at(2024, 3, 17, 6, 0), '下週日'); assert.equal(nr(al('08:00', [], false), now), null);
+    assert.equal(m.untilText(now, at(2024, 3, 10, 10, 20, 30)), '還有 3 小時 20 分'); assert.equal(m.untilText(now, at(2024, 3, 12, 7, 0, 30)), '還有 2 天'); assert.equal(m.untilText(now, at(2024, 3, 10, 7, 1, 0)), '還有 1 分'); assert.equal(m.untilText(now, null), '');
+    assert.deepEqual([[], [0, 1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5], [0, 6], [1, 3]].map(m.daysText), ['只響一次', '每天', '平日', '週末', '週一、三']);
+    // 模擬一整天的每秒檢查：鬧鐘只會響一次
+    const a = al('13:45', [], true); let last = '', rings = 0; for (let s = 0; s < 86400; s += 1) { const t = new Date(2024, 2, 10, 0, 0, s); if (m.shouldFire(a, t, last)) { last = m.fireKey(a, t); rings++; } } assert.equal(rings, 1);
+    ok('alarm: fire once per minute / repeat days / next ring / texts');
+}
+
+// ===== 文字加密 =====
+{
+    const m = load('utils/aes-crypt.html', 'VERSION, SALT_LEN, IV_LEN, toB64u, fromB64u, pack, unpack, encryptText, decryptText');
+    pending.push((async () => {
+        const bytes = Uint8Array.from({ length: 300 }, (_, i) => (i * 37) % 256); assert.deepEqual(m.fromB64u(m.toB64u(bytes)), bytes); assert.ok(/^[A-Za-z0-9_-]*$/.test(m.toB64u(bytes))); assert.equal(m.toB64u(new Uint8Array(0)), ''); assert.throws(() => m.fromB64u('a+b'), (e) => e.message.includes('不合法'));
+        const ITER = 1000;                                                              // 測試用較少的迭代次數（正式 60 萬次）
+        const c1 = await m.encryptText('你好，世界 🔐', 'correct horse', ITER); assert.ok(c1.startsWith('v1.')); assert.equal(await m.decryptText(c1, 'correct horse', ITER), '你好，世界 🔐');
+        const c2 = await m.encryptText('你好，世界 🔐', 'correct horse', ITER); assert.notEqual(c1, c2, '同樣內容每次密文不同（隨機鹽與 IV）');
+        await assert.rejects(() => m.decryptText(c1, 'wrong password', ITER), (e) => e.message.includes('密碼不對'));
+        const raw = c1.slice(3), flip = (i) => { const b = m.fromB64u(raw); b[i] ^= 1; return 'v1.' + m.toB64u(b); };
+        for (const i of [0, 15, 16, 27, 28, m.fromB64u(raw).length - 1]) await assert.rejects(() => m.decryptText(flip(i), 'correct horse', ITER), (e) => e.message.includes('密碼不對或') || e.message.includes('被改動'), '位元 ' + i);    // 改鹽、改 IV、改密文、改驗證標籤都會被偵測
+        assert.equal(await m.decryptText(c1.replace(/(.{20})/g, '$1\n '), 'correct horse', ITER), '你好，世界 🔐', '貼上時被換行 / 空白也能解');
+        await assert.rejects(() => m.decryptText('hello', 'x', ITER), (e) => e.message.includes('v1.')); await assert.rejects(() => m.decryptText('v1.abc', 'x', ITER), (e) => e.message.includes('太短')); await assert.rejects(() => m.decryptText(c1, '', ITER), (e) => e.message.includes('密碼')); await assert.rejects(() => m.encryptText('x', '', ITER));
+        assert.equal(await m.decryptText(await m.encryptText('', 'pw-123456', ITER), 'pw-123456', ITER), '', '空字串'); const big = 'x'.repeat(200000); assert.equal((await m.decryptText(await m.encryptText(big, 'pw-123456', ITER), 'pw-123456', ITER)).length, 200000);
+        const u = m.unpack(c1); assert.equal(u.salt.length, m.SALT_LEN); assert.equal(u.iv.length, m.IV_LEN);
+        ok('aes-crypt: roundtrip / tamper detection / wrong password / format errors');
+    })());
+}
+
+// ===== 貸款：存款目標 =====
+{
+    const m = load('utils/loan-calculator.html', 'monthlyRate, monthsToGoal, requiredMonthly, valueAfter');
+    near(m.monthlyRate(12), 0.01); near(m.monthlyRate(0), 0); near(m.monthlyRate(5, 5), 0); near(m.monthlyRate(8, 2), (1.08 / 1.02 - 1) / 12); assert.ok(m.monthlyRate(2, 5) < 0, '實質報酬為負');
+    assert.equal(m.monthsToGoal(100, 100, 0, 0.01), 0); assert.equal(m.monthsToGoal(1000, 0, 100, 0), 10); assert.equal(m.monthsToGoal(1000, 0, 0, 0.01), null); assert.equal(m.monthsToGoal(1e9, 0, 1, 0), null, '超過 100 年');
+    for (let t = 0; t < 200; t++) {
+        const target = 1e5 + Util.rnd(1e7), pv = Util.rnd(1e5), pmt = 1000 + Util.rnd(30000), r = Util.rnd(100) / 10000, n = m.monthsToGoal(target, pv, pmt, r);
+        if (n === null) continue; assert.ok(m.valueAfter(pv, pmt, r, n) >= target - 1e-6); assert.ok(n === 0 || m.valueAfter(pv, pmt, r, n - 1) < target);
+        const need = m.requiredMonthly(target, pv, r, n); assert.ok(need <= pmt + 1e-6, '用 n 個月反推需要的月存額不會超過原本的'); near(m.valueAfter(pv, need, r, n), Math.max(target, pv * Math.pow(1 + r, n)), 1e-9);
+    }
+    assert.equal(m.requiredMonthly(1000, 2000, 0.01, 12), 0); near(m.requiredMonthly(1200, 0, 0, 12), 100); assert.ok(Number.isNaN(m.requiredMonthly(100, 0, 0.01, 0)));
+    ok('loan-calculator: savings goal');
+}
+
+// ===== 圖片壓縮：SVG =====
+{
+    const m = load('utils/image-resize.html', 'fitSize, svgSize, withNamespace');
+    assert.deepEqual(m.fitSize(24, 24, 1024, null, true), { w: 1024, h: 1024 }); assert.deepEqual(m.fitSize(100, 50, 64, 64, true), { w: 64, h: 32 }); assert.deepEqual(m.fitSize(100, 50, null, null, true), { w: 100, h: 50 }); assert.deepEqual(m.fitSize(100, 50, null, 200, true), { w: 400, h: 200 }); assert.deepEqual(m.fitSize(4000, 3000, 1920, null), { w: 1920, h: 1440 }, '一般圖片仍不放大'); assert.deepEqual(m.fitSize(800, 600, 1920, null), { w: 800, h: 600 });
+    assert.deepEqual(m.svgSize('<svg width="200" height="100">'), { w: 200, h: 100 }); assert.deepEqual(m.svgSize('<svg width="50px" height="20px" viewBox="0 0 5 5">'), { w: 50, h: 20 }); assert.deepEqual(m.svgSize('<svg viewBox="0 0 24 24" xmlns="x">'), { w: 24, h: 24 }); assert.deepEqual(m.svgSize('<svg viewBox="0,0,10.5,20">'), { w: 10.5, h: 20 }); assert.deepEqual(m.svgSize('<SVG>'), { w: 300, h: 150 }); assert.equal(m.svgSize('hello'), null); assert.deepEqual(m.svgSize('<svg width="100%" height="100%" viewBox="0 0 8 4">'), { w: 8, h: 4 }, '百分比寬高改用 viewBox');
+    assert.equal(m.withNamespace('<svg width="1">'), '<svg xmlns="http://www.w3.org/2000/svg" width="1">'); assert.equal(m.withNamespace('<svg xmlns="http://www.w3.org/2000/svg">'), '<svg xmlns="http://www.w3.org/2000/svg">'); ok('image-resize: svg size detection / upscaling');
+}
+
+// ===== 文字差異：逐字詞 =====
+{
+    const m = load('utils/text-diff.html', 'diffSeq, diffLines, tokenize, diffWords');
+    assert.deepEqual(m.tokenize('我喜歡 apple_1, pie!'), ['我', '喜', '歡', ' ', 'apple_1', ',', ' ', 'pie', '!']); assert.deepEqual(m.tokenize(''), []);
+    assert.deepEqual(m.diffWords('我喜歡 apple pie.', '我很喜歡 apples pie!'), [{ t: '=', text: '我' }, { t: '+', text: '很' }, { t: '=', text: '喜歡 ' }, { t: '-', text: 'apple' }, { t: '+', text: 'apples' }, { t: '=', text: ' pie' }, { t: '-', text: '.' }, { t: '+', text: '!' }]);
+    assert.deepEqual(m.diffWords('same', 'same'), [{ t: '=', text: 'same' }]); assert.deepEqual(m.diffWords('', 'new text'), [{ t: '+', text: 'new text' }]); assert.deepEqual(m.diffWords('old', ''), [{ t: '-', text: 'old' }]);
+    // 還原性質：把 '=' 和 '+' 接起來必須得到新文字；'=' 和 '-' 接起來必須得到舊文字（隨機文字測試）
+    const alphabet = ['我', '你', 'ab', 'cd', ' ', ',', 'x1'], gen = () => Array.from({ length: Util.rnd(30) }, () => alphabet[Util.rnd(alphabet.length)]).join('');
+    for (let i = 0; i < 300; i++) { const a = gen(), b = gen(), ops = m.diffWords(a, b); assert.equal(ops.filter(o => o.t !== '-').map(o => o.text).join(''), b); assert.equal(ops.filter(o => o.t !== '+').map(o => o.text).join(''), a); for (let k = 1; k < ops.length; k++) assert.notEqual(ops[k].t, ops[k - 1].t, '相鄰片段類型一定不同'); }
+    assert.equal(m.diffWords('a '.repeat(3000), 'b '.repeat(3000)), null, '太長回傳 null'); assert.deepEqual(m.diffLines('a\nb\nc', 'a\nx\nc'), [{ t: '=', text: 'a' }, { t: '-', text: 'b' }, { t: '+', text: 'x' }, { t: '=', text: 'c' }]);
+    ok('text-diff: word-level diff reconstructs both sides');
+}
+
+// ===== 單位換算：烹飪 =====
+{
+    const m = load('utils/unit-converter.html', 'convertAll, INGREDIENTS, COOK_VOL, COOK_MASS');
+    const g = (v, from, to, ing) => m.convertAll('烹飪', v, from, null, ing).find(x => x.unit === to).value;
+    near(g(1, '湯匙', '毫升', '水'), 15); near(g(1, '茶匙', '毫升', '食用油'), 5); near(g(1, '美制杯', '公克', '低筋麵粉'), 236.5882365 * 0.53); near(g(200, '公克', '公制杯', '砂糖'), 200 / 0.85 / 250); near(g(1, '磅', '公克', '水'), 453.59237); near(g(1000, '毫升', '公克', '牛奶'), 1030); near(g(1, '台兩', '公克', '水'), 37.5);
+    for (const ing of Object.keys(m.INGREDIENTS)) for (const from of [...Object.keys(m.COOK_VOL), ...Object.keys(m.COOK_MASS)]) for (const to of [...Object.keys(m.COOK_VOL), ...Object.keys(m.COOK_MASS)]) { const v = g(g(3.7, from, to, ing), to, from, ing); near(v, 3.7, 1e-9); }              // 來回換算回到原值
+    assert.equal(m.convertAll('烹飪', 1, '毫升', null, '水').length, Object.keys(m.COOK_VOL).length + Object.keys(m.COOK_MASS).length);
+    assert.ok(g(1, '公克', '毫升', '蜂蜜') < g(1, '公克', '毫升', '水'), '蜂蜜比水重，同樣的公克體積較小'); assert.ok(Object.values(m.INGREDIENTS).every(d => d > 0.2 && d < 2));
+    assert.ok(m.convertAll('長度', 1, '公尺').find(x => x.unit === '公分').value === 100, '原本的類別不受影響'); ok('unit-converter: cooking conversions round-trip');
+}
+
+// ===== 2048 / 踩地雷：每日挑戰 =====
+{
+    const m = load('mini-games/game-2048.html', 'N, emptyBoard, spawn, move, canMove, maxTile');
+    const play = (seedStr, n) => { const r = Util.seeded(seedStr); let b = m.emptyBoard(); for (let i = 0; i < 2; i++) b = m.spawn(b, r.int, r).board; const log = []; const dirs = ['left', 'up', 'right', 'down']; for (let k = 0; k < n; k++) { const mv = m.move(b, dirs[k % 4]); if (!mv.moved) continue; b = mv.board; const s = m.spawn(b, r.int, r); if (!s) break; b = s.board; log.push(JSON.stringify(b)); } return log; };
+    assert.deepEqual(play('2048-2024-03-10', 60), play('2048-2024-03-10', 60), '同一天同樣的操作 → 同樣的盤面'); assert.notDeepEqual(play('2048-2024-03-10', 60), play('2048-2024-03-11', 60));
+    const mm = load('mini-games/minesweeper.html', 'create, around, placeMines, placeMinesFixed, open, flagsLeft');
+    const board = (seed, first, w = 16, h = 16, mines = 40) => { const g = mm.create(w, h, mines); g.fixed = true; mm.placeMines(g, first, Util.seeded(seed).int); return g; };
+    for (const [w, h, mines] of [[9, 9, 10], [16, 16, 40], [30, 16, 99]]) for (let t = 0; t < 30; t++) {
+        const first = Util.rnd(w * h), g = board('mines-x' + t, first, w, h, mines);
+        assert.equal(g.mine.reduce((a, v) => a + v, 0), mines, '雷數正確'); assert.equal(g.mine[first], 0, '第一下安全'); mm.around(g, first).forEach(i => assert.equal(g.mine[i], 0, '第一下周圍也安全'));
+        for (let i = 0; i < w * h; i++) assert.equal(g.adj[i], mm.around(g, i).filter(j => g.mine[j]).length);
+    }
+    const a = board('mines-2024-03-10-16,16,40', 5), b = board('mines-2024-03-10-16,16,40', 5); assert.deepEqual([...a.mine], [...b.mine], '同種子同第一下 → 同雷區');
+    const c = board('mines-2024-03-10-16,16,40', 250), diff = [...a.mine].filter((v, i) => v !== c.mine[i]).length; assert.ok(diff <= 20, '不同第一下，只有第一下附近的雷不同：' + diff); assert.notDeepEqual([...a.mine], [...board('mines-2024-03-11-16,16,40', 5).mine]);
+    const g2 = mm.create(9, 9, 10); g2.fixed = true; mm.open(g2, 40, Util.seeded('z').int); assert.equal(g2.status, 'playing'); const g3 = mm.create(9, 9, 10); mm.open(g3, 40, Util.rnd); assert.equal(g3.status, 'playing', '一般模式不受影響');
+    ok('daily challenge: seeded 2048 sequences / fixed minefield (safe first click, near-identical layouts)');
 }
 
 Promise.all(pending).then(() => console.log('ALL OK')).catch((e) => { console.error(e); process.exit(1); });

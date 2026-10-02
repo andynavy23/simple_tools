@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="UUID / 隨機資料產生：UUID v4、安全隨機字串、隨機整數與日期、測試用的假姓名與電話，可批次產生並複製。">
+    <meta property="og:title" content="UUID / 隨機資料產生" />
+    <meta property="og:description" content="批次產生 UUID、隨機字串與測試資料。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/random-data.html" />
+    <title>UUID / 隨機資料產生</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 680px;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row label {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 220px;
+            font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans TC", monospace;
+        }
+
+        input[type=number] {
+            width: 90px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>UUID / 隨機資料產生</h1>
+        <p class="sub">全部使用瀏覽器的安全亂數，在本機產生。假姓名、電話只是測試資料，不是真實的人。</p>
+
+        <div class="card">
+            <div class="row">
+                <label for="kind">種類</label>
+                <select id="kind">
+                    <option value="uuid">UUID v4</option>
+                    <option value="str">隨機字串</option>
+                    <option value="int">隨機整數</option>
+                    <option value="date">隨機日期</option>
+                    <option value="name">假姓名（中文）</option>
+                    <option value="phone">假手機號碼（09xx 開頭）</option>
+                    <option value="email">假 Email（example.com）</option>
+                </select>
+                <label for="count">數量</label><input type="number" id="count" min="1" max="1000" value="10">
+            </div>
+            <div class="row" id="opts"></div>
+            <div class="row"><button class="primary" id="gen">產生</button><button id="copy">複製全部</button><span class="muted" id="info"></span></div>
+            <textarea id="out" readonly aria-label="結果" spellcheck="false"></textarea>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { rnd, day, store } = Util;
+
+        // --- pure ---
+        // RFC 4122 v4：第 13 個 16 進位字元固定 4，第 17 個是 8 / 9 / a / b
+        const uuid4 = (r = rnd) => { const h = Array.from({ length: 32 }, () => '0123456789abcdef'[r(16)]); h[12] = '4'; h[16] = '89ab'[r(4)]; const s = h.join(''); return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}`; };
+        const validUuid4 = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(s);
+
+        const CHARSETS = { alnum: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', lower: 'abcdefghijklmnopqrstuvwxyz0123456789', upper: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', hex: '0123456789abcdef', digits: '0123456789', base64url: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_' };
+        const randStr = (len, set, r = rnd) => { const cs = CHARSETS[set] || CHARSETS.alnum; return Array.from({ length: len }, () => cs[r(cs.length)]).join(''); };
+
+        // lo..hi（含）的均勻隨機整數；支援到 2^53 範圍內
+        function randInt(lo, hi, r = rnd) {
+            if (!Number.isInteger(lo) || !Number.isInteger(hi) || lo > hi) throw new Error('範圍不正確');
+            const span = hi - lo + 1; if (span > 2 ** 32) { return lo + Math.floor(Math.random() * span); }   // ponytail: 超過 2^32 的巨大範圍改用 Math.random，仍均勻但非密碼學安全
+            return lo + r(span);
+        }
+
+        // 兩個日期（YYYY-MM-DD，含）之間的隨機日期
+        function randDate(from, to, r = rnd) { const a = day.num(from), b = day.num(to); if (a > b) throw new Error('起日要早於迄日'); return day.shift(from, r(b - a + 1)); }
+
+        const SURNAMES = '陳林黃張李王吳劉蔡楊許鄭謝郭洪曾邱廖賴徐周葉蘇莊呂江何蕭羅高潘簡朱鍾游彭詹胡施沈余盧梁顏柯孫魏翁戴范宋方杜傅侯曹薛丁卓阮馬董温唐藍石蔣古紀姚連馮歐程湯黎田趙'.split('');
+        const GIVEN = '怡君雅婷欣宜佳穎家豪志明俊傑建宏柏翰承恩宇軒冠廷瑋庭宗翰淑芬美玲惠雯怡萱心怡詩涵靜宜雅雯佩珊嘉慧偉哲彥廷子晴思妤品妍冠宇哲宇育銘柏宇世傑昱廷'.split('');
+        const fakeName = (r = rnd) => SURNAMES[r(SURNAMES.length)] + GIVEN[r(GIVEN.length)] + (r(10) < 7 ? GIVEN[r(GIVEN.length)] : '');
+        // 台灣手機格式 09 + 8 位數字；用 0900-0999 測試段以外的隨機值，僅供測試
+        const fakePhone = (r = rnd) => '09' + Array.from({ length: 8 }, () => r(10)).join('');
+        const fakeEmail = (r = rnd) => 'abcdefghijklmnopqrstuvwxyz'[r(26)] + randStr(3 + r(6), 'lower', r) + '@example.com';
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const OPTS = {
+            str: '<label for="len">長度</label><input type="number" id="len" min="1" max="256" value="16"><label for="set">字元</label><select id="set"><option value="alnum">英數大小寫</option><option value="lower">小寫 + 數字</option><option value="upper">大寫 + 數字</option><option value="hex">16 進位</option><option value="digits">數字</option><option value="base64url">Base64URL</option></select>',
+            int: '<label for="lo">最小</label><input type="number" id="lo" value="1"><label for="hi">最大</label><input type="number" id="hi" value="100">',
+            date: '<label for="from">從</label><input type="date" id="from"><label for="to">到</label><input type="date" id="to">',
+            uuid: '<label><input type="checkbox" id="upper"> 大寫</label><label><input type="checkbox" id="nodash"> 不含連字號</label>',
+        };
+        function renderOpts() {
+            $('#opts').innerHTML = OPTS[$('#kind').value] || ''; $('#opts').hidden = !OPTS[$('#kind').value];
+            if ($('#from')) { $('#from').value = day.shift(day.today(), -365); $('#to').value = day.today(); }
+        }
+        const num = (id, d) => { const v = parseInt($(id).value, 10); return Number.isFinite(v) ? v : d; };
+
+        function generate() {
+            const n = Math.max(1, Math.min(1000, num('#count', 10))), k = $('#kind').value, out = [];
+            try {
+                for (let i = 0; i < n; i++) {
+                    if (k === 'uuid') { let s = uuid4(); if ($('#upper').checked) s = s.toUpperCase(); if ($('#nodash').checked) s = s.replace(/-/g, ''); out.push(s); }
+                    else if (k === 'str') out.push(randStr(Math.max(1, Math.min(256, num('#len', 16))), $('#set').value));
+                    else if (k === 'int') out.push(randInt(num('#lo', 1), num('#hi', 100)));
+                    else if (k === 'date') out.push(randDate($('#from').value, $('#to').value));
+                    else if (k === 'name') out.push(fakeName());
+                    else if (k === 'phone') out.push(fakePhone());
+                    else out.push(fakeEmail());
+                }
+                $('#out').value = out.join('\n'); $('#info').textContent = `${n} 筆`;
+            } catch (e) { $('#out').value = ''; $('#info').textContent = e.message; }
+        }
+        $('#kind').onchange = () => { renderOpts(); generate(); store.set('rd_kind', $('#kind').value); };
+        $('#gen').onclick = generate; $('#count').onchange = generate;
+        $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), $('#out').value, () => $('#out').select());
+        const k0 = store.get('rd_kind', 'uuid'); if ([...$('#kind').options].some(o => o.value === k0)) $('#kind').value = k0;
+        renderOpts(); generate();
+    </script>
+</body>
+
+</html>

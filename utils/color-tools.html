@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="色彩工具：HEX、RGB、HSL 互轉，產生配色、檢查對比度是否符合 WCAG，並模擬色盲者看到的顏色。">
+    <meta name="description" content="色彩工具：HEX、RGB、HSL 互轉，產生配色、存色票庫、檢查對比度是否符合 WCAG，並模擬色盲者看到的顏色。">
     <meta property="og:title" content="色彩工具" />
     <meta property="og:description" content="色碼互轉、配色產生、WCAG 對比度與色盲模擬。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
@@ -122,6 +122,13 @@
             </div>
             <div class="swatch" id="swatch"></div>
             <div id="vals"></div>
+        </div>
+
+        <div class="card">
+            <h2>色票庫</h2>
+            <div class="row"><input type="text" id="swName" maxlength="20" placeholder="替目前的顏色取個名字" aria-label="色票名稱"><button class="primary" id="swAdd">存到色票庫</button></div>
+            <div class="palette" id="swList"></div>
+            <div class="row" style="margin-top:10px"><button class="sm" id="swCss">複製成 CSS 變數</button><button class="sm" id="swClear">清空</button><span class="note" id="swMsg" style="margin:0"></span></div>
         </div>
 
         <div class="card">
@@ -247,6 +254,14 @@
             out[def[1].indexOf(0)] = toHex(c);                                  // 色相與亮度取整後可能和主色差 1，把「偏移 0」那格固定成主色本身
             return out;
         }
+
+        // 色票庫：驗證本機資料、轉成 CSS 變數（名稱只留英數與連字號，沒有可用字元就用 color-序號）
+        const validSwatch = (s) => !!s && typeof s.name === 'string' && s.name.length <= 20 && /^#[0-9a-f]{6}$/.test(s.hex);
+        function cssVars(list) {
+            const used = new Set();
+            const lines = list.map((s, i) => { let k = s.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || `color-${i + 1}`; let n = k, c = 2; while (used.has(n)) n = `${k}-${c++}`; used.add(n); return `  --${n}: ${s.hex};`; });
+            return `:root {\n${lines.join('\n')}\n}`;
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -327,6 +342,25 @@
         $('#scheme').replaceChildren(...Object.entries(SCHEMES).map(([k, v]) => new Option(v[0], k)), new Option('單色深淺', 'mono'), new Option('漸層（主色 → 互補色）', 'gradient'));
         $('#scheme').value = 'triadic';
         $('#scheme').onchange = renderPalette;
+
+        // 色票庫
+        let lib = Util.store.get('color_lib', []).filter(validSwatch);
+        const saveLib = () => Util.store.set('color_lib', lib);
+        function renderLib() {
+            $('#swList').replaceChildren(...(lib.length ? lib.map((s, i) => {
+                const b = document.createElement('button'), rgb = parseColor(s.hex);
+                b.style.background = s.hex; b.style.color = luminance(rgb) > 0.4 ? '#000' : '#fff'; b.style.flexDirection = 'column'; b.style.alignItems = 'center'; b.style.justifyContent = 'flex-end'; b.title = '點一下載入為主色；右上角 ✕ 刪除';
+                b.append(Object.assign(document.createElement('b'), { textContent: s.name || s.hex }), Object.assign(document.createElement('span'), { textContent: s.hex }));
+                b.onclick = (e) => { if (e.shiftKey || e.altKey) { lib.splice(i, 1); saveLib(); renderLib(); return; } $('#color').value = s.hex; $('#color').dispatchEvent(new Event('input')); };
+                b.oncontextmenu = (e) => { e.preventDefault(); lib.splice(i, 1); saveLib(); renderLib(); };
+                return b;
+            }) : [Object.assign(document.createElement('span'), { className: 'muted', textContent: '還沒有存任何顏色' })]));
+            $('#swMsg').textContent = lib.length ? '點色票載入；右鍵（或按住 Shift 點）刪除' : '';
+        }
+        $('#swAdd').onclick = () => { const c = parseColor($('#color').value); if (!c) { $('#swMsg').textContent = '目前的色碼不正確'; return; } const hex = toHex(c); if (lib.some(s => s.hex === hex && s.name === $('#swName').value.trim())) return; lib.push({ name: $('#swName').value.trim(), hex }); lib = lib.slice(-40); saveLib(); $('#swName').value = ''; renderLib(); };
+        $('#swCss').onclick = () => Util.copyWithFeedback($('#swCss'), cssVars(lib));
+        $('#swClear').onclick = () => { if (lib.length && confirm('確定清空色票庫？')) { lib = []; saveLib(); renderLib(); } };
+        renderLib();
 
         // 讓主色欄位也能從 rgb()/hsl() 反映到選色器
         bind('color', 'picker', renderMain);

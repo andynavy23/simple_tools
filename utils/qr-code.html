@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="QR Code 產生器：輸入文字或網址即時產生，可選容錯等級與大小，下載 PNG，全部在本機完成。">
+    <meta name="description" content="QR Code 產生器：輸入文字或網址即時產生，可選容錯等級與大小，下載 PNG，並能產生 Code 128 與 EAN-13 條碼，全部在本機完成。">
     <meta property="og:title" content="QR Code 產生器" />
-    <meta property="og:description" content="輸入文字或網址即時產生 QR Code，可下載 PNG。" />
+    <meta property="og:description" content="QR Code 與 Code 128 / EAN-13 條碼，可下載 PNG。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/qr-code.html" />
     <title>QR Code 產生器</title>
@@ -51,8 +51,14 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>QR Code 產生器</h1>
-        <p class="sub">輸入文字或網址，立刻產生。全部在你的瀏覽器內完成。</p>
+        <p class="sub">輸入文字或網址產生 QR Code，或切到「條碼」產生 Code 128 / EAN-13。全部在你的瀏覽器內完成。</p>
 
+        <div class="tabs" style="display:flex;gap:8px;margin-bottom:12px">
+            <button data-t="qr" aria-pressed="true">QR Code</button>
+            <button data-t="bar" aria-pressed="false">條碼</button>
+        </div>
+
+        <div id="qrPane">
         <div class="card">
             <textarea id="text" placeholder="例如：https://andynavy23.github.io/simple_tools/" aria-label="內容"></textarea>
             <div class="row">
@@ -76,6 +82,25 @@
         <div class="card stage" id="stage" hidden>
             <canvas id="qr" aria-label="QR Code"></canvas>
             <div class="row"><button class="primary" id="save">下載 PNG</button></div>
+        </div>
+        </div>
+
+        <div id="barPane" hidden>
+            <div class="card">
+                <div class="row" style="margin-top:0">
+                    <label for="btype">種類</label>
+                    <select id="btype"><option value="c128">Code 128（英文、數字、符號）</option><option value="ean13">EAN-13（商品條碼，12 或 13 位數字）</option></select>
+                    <label for="bscale">寬度</label>
+                    <select id="bscale"><option value="1">細</option><option value="2" selected>中</option><option value="3">粗</option></select>
+                    <label><input type="checkbox" id="btext" checked> 顯示文字</label>
+                </div>
+                <input id="bin" type="text" placeholder="例如：HELLO-123 或 590123412345" autocomplete="off" spellcheck="false" style="width:100%;margin-top:12px" aria-label="條碼內容">
+                <p class="note" id="binfo"></p>
+            </div>
+            <div class="card stage" id="bstage" hidden>
+                <canvas id="bc" aria-label="條碼"></canvas>
+                <div class="row"><button class="primary" id="bsave">下載 PNG</button></div>
+            </div>
         </div>
     </div>
 
@@ -300,6 +325,60 @@
             applyMask(mask);
             return { version: ver, size, modules: mod, capacityBytes: Math.floor((numDataCodewords(ver, e) * 8 - 4 - ccBits) / 8) };
         }
+
+        // Code 128：每個符號 6 個寬度（條、空交錯，總寬 11 模組）；最後的停止符 7 個寬度（13 模組）。索引 = 符號值 0..106
+        const C128 = ['212222', '222122', '222221', '121223', '121322', '131222', '122213', '122312', '132212', '221213', '221312', '231212', '112232', '122132', '122231', '113222', '123122', '123221', '223211', '221132', '221231', '213212', '223112', '312131', '311222', '321122', '321221', '312212', '322112', '322211', '212123', '212321', '232121', '111323', '131123', '131321', '112313', '132113', '132311', '211313', '231113', '231311', '112133', '112331', '132131', '113123', '113321', '133121', '313121', '211331', '231131', '213113', '213311', '213131', '311123', '311321', '331121', '312113', '312311', '332111', '314111', '221411', '431111', '111224', '111422', '121124', '121421', '141122', '141221', '112214', '112412', '122114', '122411', '142112', '142211', '241211', '221114', '413111', '241112', '134111', '111242', '121142', '121241', '114212', '124112', '124211', '411212', '421112', '421211', '212141', '214121', '412121', '111143', '111341', '131141', '114113', '114311', '411113', '411311', '113141', '114131', '311141', '411131', '211412', '211214', '211232', '2331112'];
+        const START_B = 104, START_C = 105, STOP = 106;
+
+        // 選字元集：全是數字且長度為偶數 → C（兩位數一組，條碼最短）；否則 B（ASCII 32–126）
+        function code128Set(text) { return /^\d+$/.test(text) && text.length % 2 === 0 ? 'C' : 'B'; }
+
+        // 回傳符號值陣列（含起始、資料、檢查碼、停止）
+        function code128Values(text, set = code128Set(text)) {
+            if (!text) throw new Error('請輸入要編成條碼的內容');
+            const data = [];
+            if (set === 'C') {
+                if (!/^\d+$/.test(text) || text.length % 2) throw new Error('Code C 只能放偶數個數字');
+                for (let i = 0; i < text.length; i += 2) data.push(+text.slice(i, i + 2));
+            } else {
+                for (const ch of text) {
+                    const c = ch.charCodeAt(0);
+                    if (ch.length !== 1 || c < 32 || c > 126) throw new Error(`Code 128 只支援英文、數字與半形符號，不能放「${ch}」`);
+                    data.push(c - 32);
+                }
+            }
+            const start = set === 'C' ? START_C : START_B;
+            const sum = data.reduce((a, v, i) => a + v * (i + 1), start) % 103;
+            return [start, ...data, sum, STOP];
+        }
+
+        // 符號值 → 由 '1'（條）與 '0'（空）組成的模組字串
+        const code128Modules = (text, set) => code128Values(text, set).map(v => [...C128[v]].map((w, i) => (i % 2 ? '0' : '1').repeat(+w)).join('')).join('');
+
+        // EAN-13：左 6 位用 L / G 編碼（由第一碼決定排列），右 6 位用 R 編碼
+        const EAN_L = ['0001101', '0011001', '0010011', '0111101', '0100011', '0110001', '0101111', '0111011', '0110111', '0001011'];
+        const EAN_G = ['0100111', '0110011', '0011011', '0100001', '0011101', '0111001', '0000101', '0010001', '0001001', '0010111'];
+        const EAN_R = EAN_L.map(c => [...c].map(b => (b === '1' ? '0' : '1')).join(''));
+        const EAN_PARITY = ['LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG', 'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL'];
+
+        // 前 12 碼的檢查碼：奇數位 ×1、偶數位 ×3（從左數第 1 碼起）
+        const ean13Check = (d12) => (10 - ([...d12].reduce((a, c, i) => a + +c * (i % 2 ? 3 : 1), 0) % 10)) % 10;
+
+        // 12 碼 → 補上檢查碼；13 碼 → 驗證檢查碼。回傳 13 碼字串
+        function ean13Normalize(text) {
+            const t = String(text).replace(/[\s-]/g, '');
+            if (!/^\d+$/.test(t) || (t.length !== 12 && t.length !== 13)) throw new Error('EAN-13 需要 12 或 13 位數字');
+            const full = t.length === 12 ? t + ean13Check(t) : t;
+            if (+full[12] !== ean13Check(full.slice(0, 12))) throw new Error(`檢查碼不正確（第 13 碼應為 ${ean13Check(full.slice(0, 12))}）`);
+            return full;
+        }
+
+        function ean13Modules(text) {
+            const d = ean13Normalize(text), par = EAN_PARITY[+d[0]];
+            const left = [...d.slice(1, 7)].map((c, i) => (par[i] === 'L' ? EAN_L : EAN_G)[+c]).join(''), right = [...d.slice(7)].map(c => EAN_R[+c]).join('');
+            return '101' + left + '01010' + right + '101';
+        }
+
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -324,6 +403,30 @@
                 $('#stage').hidden = true;
             }
         }
+
+        // ---------- 條碼 ----------
+        function renderBar() {
+            const text = $('#bin').value, type = $('#btype').value;
+            $('#bstage').hidden = !text;
+            if (!text) { $('#binfo').textContent = ''; return; }
+            try {
+                const modules = type === 'ean13' ? ean13Modules(text) : code128Modules(text);
+                const shown = type === 'ean13' ? ean13Normalize(text) : text;
+                const unit = +$('#bscale').value * 2, quiet = 10, h = 110, textH = $('#btext').checked ? 26 : 0, w = (modules.length + quiet * 2) * unit;
+                const cv = $('#bc'); cv.width = w; cv.height = h + textH + 20;
+                const g = cv.getContext('2d');
+                g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.fillStyle = '#000';
+                [...modules].forEach((m, i) => { if (m === '1') g.fillRect((quiet + i) * unit, 10, unit, h); });
+                if (textH) {
+                    g.font = `${Math.max(14, unit * 5)}px ui-monospace, Menlo, Consolas, monospace`; g.textAlign = 'center'; g.textBaseline = 'top';
+                    g.fillText(type === 'ean13' ? `${shown[0]}  ${shown.slice(1, 7)}  ${shown.slice(7)}` : shown, w / 2, h + 16, w - 8);
+                }
+                $('#binfo').textContent = type === 'ean13' ? `EAN-13：${shown}（檢查碼 ${shown[12]}）` : `Code 128 ${code128Set(text)}：${modules.length / 11 | 0} 個符號`;
+            } catch (e) { $('#binfo').textContent = e.message; $('#bstage').hidden = true; }
+        }
+        ['bin', 'btype', 'bscale', 'btext'].forEach(id => { $('#' + id).oninput = $('#' + id).onchange = renderBar; });
+        $('#bsave').onclick = () => $('#bc').toBlob((blob) => Util.download(blob, 'barcode.png'));
+        document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-pressed', x === b)); $('#qrPane').hidden = b.dataset.t !== 'qr'; $('#barPane').hidden = b.dataset.t !== 'bar'; }; });
 
         $('#text').oninput = render;
         $('#ecc').onchange = render;

@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="文字差異比對：貼上兩段文字，逐行標出新增與刪除，全部在本機處理。">
+    <meta name="description" content="文字差異比對：貼上兩段文字，逐行或逐字詞標出新增與刪除，全部在本機處理。">
     <meta property="og:title" content="文字差異比對" />
-    <meta property="og:description" content="貼上兩段文字，逐行標出新增與刪除。" />
+    <meta property="og:description" content="貼上兩段文字，逐行或逐字詞標出差異。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/text-diff.html" />
     <title>文字差異比對</title>
@@ -104,7 +104,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>文字差異比對</h1>
-        <p class="sub">左邊放舊的，右邊放新的，逐行標出差異。</p>
+        <p class="sub">左邊放舊的，右邊放新的，逐行或逐字詞標出差異。</p>
 
         <div class="card">
             <div class="two">
@@ -115,6 +115,7 @@
                 <button class="primary" id="go">比對</button>
                 <label><input type="checkbox" id="ws"> 忽略行首尾空白</label>
                 <label><input type="checkbox" id="ci"> 忽略大小寫</label>
+                <label>比對單位 <select id="unit"><option value="line">逐行</option><option value="word">逐字詞（行內標示）</option></select></label>
             </div>
         </div>
 
@@ -126,13 +127,9 @@
 
     <script>
         // --- pure ---
-        // 逐行 diff（LCS）。回傳 [{ t: '=' | '+' | '-', text }]
-        // opts.key 可自訂「比較用」的行轉換（例如忽略空白/大小寫），輸出仍保留原文。
-        // 行數乘積超過 limit 會回傳 null（避免 O(n·m) 記憶體暴增）。
-        function diffLines(aText, bText, opts = {}) {
-            const key = opts.key || (x => x);
-            const limit = opts.limit || 4e6;
-            const a = aText === '' ? [] : aText.split('\n'), b = bText === '' ? [] : bText.split('\n');
+        // 序列 diff（LCS）：a、b 是元素陣列。回傳 [{ t: '=' | '+' | '-', text }]；'=' 的 text 取自 b（保留新版的原樣）
+        // key 是「比較用」的轉換（例如忽略空白 / 大小寫），輸出仍保留原文。a、b 長度乘積超過 limit 回傳 null（避免 O(n·m) 記憶體暴增）
+        function diffSeq(a, b, key = (x => x), limit = 4e6) {
             const ka = a.map(key), kb = b.map(key);
             // 先去掉共同的開頭與結尾，縮小 DP 範圍
             let s = 0;
@@ -161,6 +158,22 @@
             for (let k = ea; k < a.length; k++) out.push({ t: '=', text: b[eb + (k - ea)] });
             return out;
         }
+
+        // 逐行 diff。opts.key 可自訂行的比較轉換、opts.limit 為行數乘積上限
+        function diffLines(aText, bText, opts = {}) {
+            return diffSeq(aText === '' ? [] : aText.split('\n'), bText === '' ? [] : bText.split('\n'), opts.key, opts.limit);
+        }
+
+        // 切成字詞：英數字連續算一個詞、每個中文字各算一個、空白連續算一個、其他符號各算一個
+        const tokenize = (text) => text.match(/[A-Za-z0-9_]+|[一-鿿]|\s+|[^\sA-Za-z0-9_一-鿿]/g) || [];
+        // 逐字詞 diff；連續同類型的片段合併成一段，方便顯示
+        function diffWords(aText, bText, opts = {}) {
+            const ops = diffSeq(tokenize(aText), tokenize(bText), opts.key, opts.limit);
+            if (!ops) return null;
+            const out = [];
+            for (const o of ops) { const last = out[out.length - 1]; if (last && last.t === o.t) last.text += o.text; else out.push({ ...o }); }
+            return out;
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -169,11 +182,18 @@
             const ws = $('#ws').checked, ci = $('#ci').checked;
             const key = (x) => { if (ws) x = x.trim(); return ci ? x.toLowerCase() : x; };
             const norm = (t) => t.replace(/\r\n/g, '\n');
-            const ops = diffLines(norm($('#a').value), norm($('#b').value), { key });
+            const word = $('#unit').value === 'word', ops = (word ? diffWords : diffLines)(norm($('#a').value), norm($('#b').value), { key: word ? (x => key(x)) : key });
             $('#result').hidden = false;
             const out = $('#out');
             out.replaceChildren();
-            if (!ops) { $('#sum').textContent = '文字太長，無法比對（行數乘積超過 400 萬）'; return; }
+            if (word && ops) {
+                const cnt = (t) => ops.filter(o => o.t === t).reduce((a, o) => a + tokenize(o.text).filter(x => x.trim()).length, 0), add = cnt('+'), del = cnt('-');
+                $('#sum').textContent = add || del ? `新增 ${add} 個字詞、刪除 ${del} 個字詞` : '兩段文字相同';
+                const p = document.createElement('div'); p.className = 'ln'; p.style.display = 'block';
+                p.append(...ops.map(o => { if (o.t === '=') return document.createTextNode(o.text); const e = document.createElement(o.t === '+' ? 'ins' : 'del'); e.textContent = o.text; e.style.background = o.t === '+' ? 'var(--add)' : 'var(--del)'; e.style.textDecoration = o.t === '+' ? 'none' : 'line-through'; return e; }));
+                out.append(p); return;
+            }
+            if (!ops) { $('#sum').textContent = '文字太長，無法比對（長度乘積超過 400 萬）'; return; }
             const add = ops.filter(o => o.t === '+').length, del = ops.filter(o => o.t === '-').length;
             $('#sum').textContent = add || del ? `新增 ${add} 行、刪除 ${del} 行` : '兩段文字相同';
             ops.forEach(o => {

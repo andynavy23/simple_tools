@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="計分板：記錄桌遊、撲克、麻將的多人多局分數，輪次表、累計與排名一目了然，資料只存在你的瀏覽器。">
+    <meta property="og:title" content="計分板" />
+    <meta property="og:description" content="多人多局計分，自動累計與排名。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/scoreboard.html" />
+    <title>計分板</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 760px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .row input[type=text] {
+            flex: 1 1 140px;
+        }
+
+        .scroll {
+            overflow-x: auto;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            font-variant-numeric: tabular-nums;
+        }
+
+        th,
+        td {
+            padding: 6px 8px;
+            text-align: center;
+            border-bottom: 1px solid var(--fill);
+            white-space: nowrap;
+        }
+
+        th:first-child,
+        td:first-child {
+            text-align: left;
+            color: var(--muted);
+        }
+
+        td input {
+            width: 64px;
+            text-align: center;
+            padding: 6px 4px;
+        }
+
+        tfoot td {
+            font-weight: 800;
+            font-size: 18px;
+            border-bottom: 0;
+        }
+
+        tfoot .lead {
+            color: var(--ok);
+        }
+
+        .rank {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .rank div {
+            background: var(--fill);
+            border-radius: 12px;
+            padding: 8px 14px;
+            min-width: 100px;
+            text-align: center;
+        }
+
+        .rank b {
+            display: block;
+            font-size: 24px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .rank .first {
+            background: color-mix(in srgb, #ffd60a 40%, var(--fill));
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>計分板</h1>
+        <p class="sub">加入玩家、每局輸入分數，自動累計與排名。資料只存在這個瀏覽器。</p>
+
+        <div class="card">
+            <h2>排名</h2>
+            <div class="rank" id="rank"></div>
+        </div>
+
+        <div class="card">
+            <div class="scroll"><table id="tbl"></table></div>
+            <div class="row" style="margin-top:12px"><button class="primary" id="addRound">新增一局</button><button class="sm" id="delRound">刪除最後一局</button><label><input type="checkbox" id="low"> 分數越低越好（如高爾夫、心臟病）</label></div>
+        </div>
+
+        <div class="card">
+            <div class="row"><input type="text" id="pname" maxlength="12" placeholder="玩家名稱" aria-label="玩家名稱"><button id="padd">加入玩家</button></div>
+            <div id="people" class="row"></div>
+            <div class="row"><button class="sm" id="copy">複製成績表</button><button class="sm" id="reset">全部重來</button></div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store } = Util;
+
+        // --- pure ---
+        // state = { players: [名字], rounds: [[每位玩家該局分數 | null]], low: bool }
+        const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+        const totals = (st) => st.players.map((_, i) => st.rounds.reduce((a, r) => a + num(r[i]), 0));
+
+        // 名次（同分同名次，如 1、1、3）；low 時分數低者名次在前
+        function ranks(scores, low) {
+            const order = scores.map((s, i) => ({ s, i })).sort((a, b) => (low ? a.s - b.s : b.s - a.s));
+            const out = new Array(scores.length); let rank = 0, prev = null;
+            order.forEach((o, k) => { if (prev === null || o.s !== prev) { rank = k + 1; prev = o.s; } out[o.i] = rank; });
+            return out;
+        }
+        // 玩家增減時，各局的分數陣列要跟著調整（新玩家補 null、移除者刪掉）
+        const addPlayer = (st, name) => ({ ...st, players: [...st.players, name], rounds: st.rounds.map(r => [...r, null]) });
+        const removePlayer = (st, i) => ({ ...st, players: st.players.filter((_, k) => k !== i), rounds: st.rounds.map(r => r.filter((_, k) => k !== i)) });
+        const addRound = (st) => ({ ...st, rounds: [...st.rounds, st.players.map(() => null)] });
+
+        function validState(st) {
+            return !!st && Array.isArray(st.players) && st.players.length <= 20 && st.players.every(p => typeof p === 'string' && p.length >= 1 && p.length <= 12) && Array.isArray(st.rounds) && st.rounds.length <= 200
+                && st.rounds.every(r => Array.isArray(r) && r.length === st.players.length && r.every(v => v === null || (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e9))) && typeof st.low === 'boolean';
+        }
+        // 可貼到聊天室的純文字成績表
+        function toText(st) {
+            const t = totals(st), rk = ranks(t, st.low), order = t.map((_, i) => i).sort((a, b) => rk[a] - rk[b]);
+            return [`共 ${st.rounds.length} 局${st.low ? '（分數低者勝）' : ''}`, ...order.map(i => `${rk[i]}. ${st.players[i]}　${t[i]}`)].join('\n');
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let S = store.get('score_state', null); if (!validState(S)) S = { players: [], rounds: [], low: false };
+        const save = () => store.set('score_state', S);
+
+        function render() {
+            $('#low').checked = S.low;
+            const t = totals(S), rk = ranks(t, S.low);
+            renderRank();
+            const tb = $('#tbl'); tb.replaceChildren();
+            if (S.players.length) {
+                const head = document.createElement('tr'); head.append(document.createElement('th'), ...S.players.map(p => Object.assign(document.createElement('th'), { textContent: p }))); const th = document.createElement('thead'); th.append(head);
+                const body = document.createElement('tbody');
+                S.rounds.forEach((r, ri) => { const tr = document.createElement('tr'); tr.append(Object.assign(document.createElement('td'), { textContent: `第 ${ri + 1} 局` })); S.players.forEach((_, pi) => { const td = document.createElement('td'), inp = Object.assign(document.createElement('input'), { type: 'number', step: 'any', inputMode: 'decimal', value: r[pi] ?? '' }); inp.setAttribute('aria-label', `第 ${ri + 1} 局 ${S.players[pi]} 的分數`); inp.oninput = () => { const v = inp.value === '' ? null : parseFloat(inp.value); r[pi] = Number.isFinite(v) ? v : null; save(); renderTotals(); }; td.append(inp); tr.append(td); }); body.append(tr); });
+                const foot = document.createElement('tfoot'), fr = document.createElement('tr'); fr.id = 'totRow'; foot.append(fr);
+                tb.append(th, body, foot); renderTotals();
+            }
+            $('#people').replaceChildren(...S.players.map((p, i) => { const b = Object.assign(document.createElement('button'), { className: 'sm', textContent: p + ' ✕' }); b.setAttribute('aria-label', '移除 ' + p); b.onclick = () => { if (confirm(`移除「${p}」與他的所有分數？`)) { S = removePlayer(S, i); save(); render(); } }; return b; }));
+        }
+        function renderRank() {
+            const t = totals(S), rk = ranks(t, S.low), order = S.players.map((_, i) => i).sort((a, b) => rk[a] - rk[b]);
+            $('#rank').replaceChildren(...(order.length ? order.map(i => { const d = document.createElement('div'), first = rk[i] === 1 && S.rounds.length > 0; d.className = first ? 'first' : ''; d.append(Object.assign(document.createElement('span'), { textContent: `${first ? '🥇 ' : rk[i] + '. '}${S.players[i]}` }), Object.assign(document.createElement('b'), { textContent: t[i] })); return d; }) : [Object.assign(document.createElement('span'), { className: 'muted', textContent: '先在下面加入玩家' })]));
+        }
+        function renderTotals() {
+            const t = totals(S), rk = ranks(t, S.low), fr = $('#totRow'); if (!fr) return;
+            fr.replaceChildren(Object.assign(document.createElement('td'), { textContent: '合計' }), ...t.map((v, i) => Object.assign(document.createElement('td'), { className: rk[i] === 1 && S.rounds.length ? 'lead' : '', textContent: v })));
+            renderRank();
+        }
+
+        $('#padd').onclick = () => { const n = $('#pname').value.trim(); if (!n || S.players.length >= 20 || S.players.includes(n)) { $('#pname').focus(); return; } S = addPlayer(S, n); save(); $('#pname').value = ''; render(); };
+        $('#pname').onkeydown = (e) => { if (e.key === 'Enter' && !e.isComposing) $('#padd').click(); };
+        $('#addRound').onclick = () => { if (!S.players.length || S.rounds.length >= 200) return; S = addRound(S); save(); render(); const last = [...document.querySelectorAll('#tbl tbody tr:last-child input')][0]; if (last) last.focus(); };
+        $('#delRound').onclick = () => { if (S.rounds.length && confirm('刪除最後一局的分數？')) { S = { ...S, rounds: S.rounds.slice(0, -1) }; save(); render(); } };
+        $('#low').onchange = () => { S = { ...S, low: $('#low').checked }; save(); render(); };
+        $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), toText(S));
+        $('#reset').onclick = () => { if (confirm('清除所有玩家與分數？')) { S = { players: [], rounds: [], low: false }; save(); render(); } };
+        render();
+    </script>
+</body>
+
+</html>

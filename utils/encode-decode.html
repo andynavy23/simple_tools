@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="編碼解碼：Base64、URL、Unicode 跳脫、HTML 實體、十六進位互轉，並能解析 JWT、計算 SHA 雜湊，支援中文與 emoji。">
+    <meta name="description" content="編碼解碼：Base64、URL、Unicode 跳脫、HTML 實體、十六進位互轉，並能解析 JWT、計算 SHA 雜湊、摩斯與凱薩密碼，支援中文與 emoji。">
     <meta property="og:title" content="編碼解碼" />
-    <meta property="og:description" content="Base64、URL、Unicode、HTML 實體、十六進位互轉，JWT 解析與 SHA 雜湊。" />
+    <meta property="og:description" content="Base64、URL、Unicode、十六進位互轉，JWT、SHA 雜湊與古典密碼。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/encode-decode.html" />
     <title>編碼解碼</title>
@@ -58,6 +58,7 @@
             <label for="type">格式</label>
             <select id="type"></select>
             <div style="height:12px"></div>
+            <div id="paramRow" hidden style="margin-bottom:12px"><label for="param" id="paramLabel">位移</label><input id="param" type="number" step="1" style="width:100%"></div>
             <label for="in">輸入</label>
             <textarea id="in" spellcheck="false"></textarea>
             <div class="btns">
@@ -120,6 +121,33 @@
             return lines.join('\n');
         }
 
+        // 摩斯密碼：字母、數字與常用標點；字之間用空白、詞之間用 " / " 分隔
+        const MORSE = {
+            A: '.-', B: '-...', C: '-.-.', D: '-..', E: '.', F: '..-.', G: '--.', H: '....', I: '..', J: '.---', K: '-.-', L: '.-..', M: '--', N: '-.', O: '---', P: '.--.', Q: '--.-', R: '.-.', S: '...', T: '-', U: '..-', V: '...-', W: '.--', X: '-..-', Y: '-.--', Z: '--..',
+            0: '-----', 1: '.----', 2: '..---', 3: '...--', 4: '....-', 5: '.....', 6: '-....', 7: '--...', 8: '---..', 9: '----.',
+            '.': '.-.-.-', ',': '--..--', '?': '..--..', "'": '.----.', '!': '-.-.--', '/': '-..-.', '(': '-.--.', ')': '-.--.-', '&': '.-...', ':': '---...', ';': '-.-.-.', '=': '-...-', '+': '.-.-.', '-': '-....-', '_': '..--.-', '"': '.-..-.', '$': '...-..-', '@': '.--.-.',
+        };
+        const MORSE_REV = Object.fromEntries(Object.entries(MORSE).map(([k, v]) => [v, k]));
+        function morseEncode(text) {
+            return String(text).trim().split(/\s+/).filter(Boolean).map(word => [...word.toUpperCase()].map(ch => {
+                if (!MORSE[ch]) throw new Error(`摩斯密碼不支援「${ch}」（只支援英文字母、數字與常用標點）`);
+                return MORSE[ch];
+            }).join(' ')).join(' / ');
+        }
+        function morseDecode(text) {
+            return String(text).trim().split(/\s*(?:\/|\|)\s*/).map(word => word.trim().split(/\s+/).filter(Boolean).map(code => {
+                const c = code.replace(/[·•＊*]/g, '.').replace(/[_－—]/g, '-');
+                if (!MORSE_REV[c]) throw new Error(`看不懂這個摩斯碼：${code}`);
+                return MORSE_REV[c];
+            }).join('')).join(' ');
+        }
+
+        // 凱薩密碼：只位移英文字母（大小寫各自循環），其他字元不變。n 可為負數；ROT13 就是 n = 13
+        function caesar(text, n) {
+            const k = (((Math.trunc(n) || 0) % 26) + 26) % 26;
+            return String(text).replace(/[A-Za-z]/g, c => { const base = c <= 'Z' ? 65 : 97; return String.fromCharCode((c.charCodeAt(0) - base + k) % 26 + base); });
+        }
+
         const HASHES = ['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512'];
 
         const NAMED = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&apos;': "'", '&nbsp;': ' ' };
@@ -156,6 +184,9 @@
                     return NAMED[m] ?? m;
                 }),
             },
+            '摩斯密碼': { enc: morseEncode, dec: morseDecode },
+            '凱薩密碼（位移 N）': { enc: (t, n) => caesar(t, n), dec: (t, n) => caesar(t, -n), param: { label: '位移', def: 3, min: 1, max: 25 } },
+            'ROT13': { enc: (t) => caesar(t, 13), dec: (t) => caesar(t, 13) },
             'JWT 解碼（不驗簽）': { dec: (t) => jwtDecode(t), noEnc: true },
             ...Object.fromEntries(HASHES.map(h => [`${h} 雜湊`, { hash: h, noDec: true }])),
             '十六進位 (UTF-8 位元組)': {
@@ -175,6 +206,8 @@
         // 雜湊只能「編碼」、JWT 只能「解碼」：按鈕跟著格式變化
         function syncButtons() {
             const c = CODECS[$('#type').value];
+            $('#paramRow').hidden = !c.param;
+            if (c.param) { $('#paramLabel').textContent = `${c.param.label}（${c.param.min}–${c.param.max}）`; $('#param').min = c.param.min; $('#param').max = c.param.max; if ($('#param').dataset.for !== $('#type').value) { $('#param').value = c.param.def; $('#param').dataset.for = $('#type').value; } }
             $('#enc').disabled = !!c.noEnc; $('#dec').disabled = !!c.noDec;
             $('#enc').textContent = c.hash ? '計算雜湊 ↓' : '編碼 ↓'; $('#dec').textContent = c.noEnc ? '解析 ↓' : '解碼 ↓';
         }
@@ -186,7 +219,8 @@
                 const c = CODECS[$('#type').value];
                 const fn = c.hash ? (dir === 'enc' ? (t) => Util.sha256(t, c.hash) : null) : c[dir];
                 if (!fn) throw new Error(dir === 'enc' ? '這個格式只能解碼' : '雜湊無法還原');
-                $('#out').value = await fn($('#in').value);
+                let n; if (c.param) { n = parseInt($('#param').value, 10); if (!(n >= c.param.min && n <= c.param.max)) throw new Error(`${c.param.label}請輸入 ${c.param.min}–${c.param.max} 的整數`); }
+                $('#out').value = await fn($('#in').value, n);
             } catch (e) {
                 $('#out').value = '';
                 $('#err').textContent = '處理失敗：' + (e.message.includes('The string') ? '不是有效的 Base64' : e.message);

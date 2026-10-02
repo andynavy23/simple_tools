@@ -1,4 +1,4 @@
-/* 共用小工具：均勻亂數 / 洗牌 / 複製 / localStorage / HTML 跳脫 / 日期字串 / 統計列 / 提示音 / 語音 / 名單解析 / 下載檔案 / 雜湊與隨機字串
+/* 共用小工具：均勻亂數 / 洗牌 / 複製 / localStorage / HTML 跳脫 / 日期字串 / 統計列 / 提示音 / 語音 / 名單解析 / 下載檔案 / 雜湊與隨機字串 / 可播種亂數
  *
  * 使用：<script src="../shared/js/util.js"></script>，然後 const { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex } = Util;
  * 放進這裡的條件：至少兩個工具在用、且不需要各工具再調整格式。
@@ -17,6 +17,19 @@
         num(s) { const { y, m, d } = day.parse(s); return Math.floor(Date.UTC(y, m - 1, d) / 864e5); },
         between: (from, to) => day.num(to) - day.num(from),
         shift(s, n) { const t = new Date((day.num(s) + n) * 864e5); return day.ymd(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()); },
+        daysInMonth: (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate(),
+        // 加減月份：日數超過當月就取月底（1/31 + 1 個月 = 2/28 或 2/29）
+        addMonths(s, n) {
+            const { y, m, d } = day.parse(s), t = y * 12 + (m - 1) + n, ny = Math.floor(t / 12), nm = t % 12 + 1;
+            return day.ymd(ny, nm, Math.min(d, day.daysInMonth(ny, nm)));
+        },
+        // a ≤ b：相差幾年幾個月幾天（先找出「加上幾個月不超過 b」的最大月數，剩下的是天數；1/31 → 3/1 是 1 個月 1 天）
+        diffYMD(a, b) {
+            const p = day.parse(a), q = day.parse(b);
+            let months = (q.y - p.y) * 12 + (q.m - p.m);
+            if (day.num(day.addMonths(a, months)) > day.num(b)) months--;
+            return { y: Math.floor(months / 12), m: months % 12, d: day.between(day.addMonths(a, months), b) };
+        },
     };
 
     // 提示音：共用同一個 AudioContext（瀏覽器限制同時數量）；需在使用者操作後才發得出聲音
@@ -89,6 +102,17 @@
         return x % n;
     }
 
+    // 可播種的亂數（mulberry32，種子字串先雜湊成 32 位元）：同一個種子永遠產生同一串數字，用在「每日挑戰」。
+    // 回傳函式 rand01()，傳回 [0,1) 小數；rand01.int(n) 傳回 [0,n) 整數。非密碼學用途
+    function seeded(seed) {
+        let h = 1779033703 ^ String(seed).length;
+        for (const ch of String(seed)) { h = Math.imul(h ^ ch.charCodeAt(0), 3432918353); h = (h << 13) | (h >>> 19); }
+        let a = Math.imul(h ^ (h >>> 16), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909);
+        const rand01 = () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+        rand01.int = (n) => Math.floor(rand01() * n);
+        return rand01;
+    }
+
     // Fisher-Yates 洗牌，回傳新陣列，不改動原陣列
     function shuffle(arr) {
         const a = [...arr];
@@ -134,7 +158,7 @@
         },
     };
 
-    const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex };
+    const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex, seeded };
     if (typeof module !== 'undefined' && module.exports) module.exports = Util;
     else root.Util = Util;
 })(typeof window !== 'undefined' ? window : globalThis);

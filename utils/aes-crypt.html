@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="文字加密 / 解密：用密碼以 AES-256-GCM 加密文字，輸出可貼到任何地方的字串；密碼經 PBKDF2 強化，全部在瀏覽器內完成，密碼與內容都不會離開你的裝置。">
+    <meta property="og:title" content="文字加密 / 解密" />
+    <meta property="og:description" content="AES-256-GCM 文字加密，全在本機完成。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/aes-crypt.html" />
+    <title>文字加密 / 解密</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 700px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            resize: vertical;
+            font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans TC", monospace;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin: 10px 0;
+        }
+
+        .row input[type=password],
+        .row input[type=text] {
+            flex: 1 1 200px;
+        }
+
+        .err {
+            color: var(--bad);
+            min-height: 1.4em;
+        }
+
+        .ok {
+            color: var(--ok);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>文字加密 / 解密</h1>
+        <p class="sub">AES-256-GCM + PBKDF2-SHA256（60 萬次）。加密結果是一串文字，可以貼進任何地方，只有知道密碼的人能解開。<b>忘記密碼就無法救回</b>，這裡不會保存密碼。</p>
+
+        <div class="card">
+            <label for="pw" class="muted" style="font-size:13px">密碼</label>
+            <div class="row" style="margin-top:4px"><input type="password" id="pw" autocomplete="off" placeholder="至少 8 個字元，越長越好"><label class="muted" style="font-size:14px"><input type="checkbox" id="show"> 顯示</label></div>
+            <div class="muted" id="pwHint" style="font-size:13px;min-height:1.3em"></div>
+            <label for="in" class="muted" style="font-size:13px;display:block;margin-top:10px">內容（要加密的文字，或要解密的密文）</label>
+            <textarea id="in" spellcheck="false" aria-label="內容"></textarea>
+            <div class="row"><button class="primary" id="enc">加密 ↓</button><button class="primary" id="dec">解密 ↓</button><span class="muted" id="busy"></span></div>
+            <div class="err" id="err" role="alert"></div>
+            <label for="out" class="muted" style="font-size:13px">結果</label>
+            <textarea id="out" readonly spellcheck="false" aria-label="結果"></textarea>
+            <div class="row"><button id="copy">複製結果</button><button id="swap">結果放回內容</button></div>
+        </div>
+        <p class="note">注意：這是「文字」加密，不是檔案或通訊加密。密碼太短或太常見仍然容易被猜到；加密不會隱藏「有一段密文存在」這件事。</p>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        const VERSION = 'v1', ITER = 600000, SALT_LEN = 16, IV_LEN = 12;
+        const enc = new TextEncoder(), dec = new TextDecoder('utf-8', { fatal: true });
+
+        // base64url（無補位）
+        const toB64u = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+        const fromB64u = (str) => { if (!/^[A-Za-z0-9_-]*$/.test(str)) throw new Error('密文含有不合法的字元'); let b = str.replace(/-/g, '+').replace(/_/g, '/'); b += '='.repeat((4 - b.length % 4) % 4); return Uint8Array.from(atob(b), c => c.charCodeAt(0)); };
+
+        // 格式： "v1." + base64url( salt(16) | iv(12) | 密文+驗證標籤 )
+        const pack = (salt, iv, ct) => { const all = new Uint8Array(SALT_LEN + IV_LEN + ct.length); all.set(salt, 0); all.set(iv, SALT_LEN); all.set(ct, SALT_LEN + IV_LEN); return `${VERSION}.${toB64u(all)}`; };
+        function unpack(text) {
+            const t = String(text).replace(/\s+/g, '');
+            if (!t.startsWith(VERSION + '.')) throw new Error('這不是這個工具加密出來的密文（開頭應該是 v1.）');
+            const all = fromB64u(t.slice(VERSION.length + 1));
+            if (all.length < SALT_LEN + IV_LEN + 16) throw new Error('密文太短或已經被截斷');
+            return { salt: all.slice(0, SALT_LEN), iv: all.slice(SALT_LEN, SALT_LEN + IV_LEN), ct: all.slice(SALT_LEN + IV_LEN) };
+        }
+
+        async function deriveKey(password, salt, iter = ITER) {
+            const base = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+            return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+        }
+        async function encryptText(plain, password, iter = ITER) {
+            if (!password) throw new Error('請輸入密碼');
+            const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN)), iv = crypto.getRandomValues(new Uint8Array(IV_LEN)), key = await deriveKey(password, salt, iter);
+            return pack(salt, iv, new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(plain))));
+        }
+        async function decryptText(cipher, password, iter = ITER) {
+            if (!password) throw new Error('請輸入密碼');
+            const { salt, iv, ct } = unpack(cipher), key = await deriveKey(password, salt, iter);
+            let buf; try { buf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct); } catch (e) { throw new Error('解密失敗：密碼不對，或密文被改動過'); }
+            return dec.decode(buf);
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const supported = !!(window.crypto && crypto.subtle);
+        if (!supported) { $('#err').textContent = '這個環境不支援加密功能（需要 https 或 localhost）'; $('#enc').disabled = $('#dec').disabled = true; }
+
+        async function run(kind) {
+            $('#err').textContent = ''; $('#out').value = ''; $('#busy').textContent = '運算中…'; $('#enc').disabled = $('#dec').disabled = true;
+            await new Promise(r => setTimeout(r, 30));
+            try {
+                if (kind === 'enc') { if ($('#pw').value.length < 8) throw new Error('密碼至少要 8 個字元'); $('#out').value = await encryptText($('#in').value, $('#pw').value); }
+                else $('#out').value = await decryptText($('#in').value, $('#pw').value);
+            } catch (e) { $('#err').textContent = e.message; }
+            $('#busy').textContent = ''; $('#enc').disabled = $('#dec').disabled = !supported;
+        }
+        $('#enc').onclick = () => run('enc'); $('#dec').onclick = () => run('dec');
+        $('#show').onchange = () => { $('#pw').type = $('#show').checked ? 'text' : 'password'; };
+        $('#pw').oninput = () => { const n = $('#pw').value.length; $('#pwHint').textContent = !n ? '' : n < 8 ? `太短（${n}／至少 8）` : n < 12 ? '可以，但越長越安全（建議 12 個字元以上）' : '長度足夠'; };
+        $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), $('#out').value, () => $('#out').select());
+        $('#swap').onclick = () => { $('#in').value = $('#out').value; $('#out').value = ''; };
+    </script>
+</body>
+
+</html>

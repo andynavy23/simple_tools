@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="搶票校時鐘：顯示中原標準時間（UTC+8）到毫秒，可用網路時間校正裝置誤差，倒數到開賣時刻並在最後 10 秒提醒，還能記錄你按下按鈕的時間差。">
+    <meta property="og:title" content="搶票校時鐘" />
+    <meta property="og:description" content="中原標準時間毫秒時鐘，校時、倒數與按鍵時間差紀錄。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/ticket-clock.html" />
+    <title>搶票校時鐘</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        #clock {
+            text-align: center;
+            font-size: clamp(34px, 11vw, 64px);
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -.01em;
+            line-height: 1.1;
+        }
+
+        #clock small {
+            font-size: .5em;
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        #date {
+            text-align: center;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        #sync {
+            text-align: center;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        #sync.ok {
+            color: var(--ok);
+        }
+
+        #sync.warn {
+            color: var(--bad);
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row label {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        #left {
+            text-align: center;
+            font-size: clamp(30px, 9vw, 52px);
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            margin: 6px 0;
+        }
+
+        #left.soon {
+            color: var(--bad);
+        }
+
+        #left.now {
+            color: var(--ok);
+        }
+
+        #go {
+            display: block;
+            width: 100%;
+            padding: 22px 0;
+            font-size: 24px;
+            font-weight: 800;
+            border-radius: 18px;
+            margin-top: 10px;
+            touch-action: manipulation;
+        }
+
+        body.flash {
+            animation: flash .6s ease;
+        }
+
+        @keyframes flash {
+            0% {
+                background: var(--ok);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>搶票校時鐘</h1>
+        <p class="sub">顯示中原標準時間（臺灣，UTC+8，不受你裝置時區影響）。裝置時鐘常有幾百毫秒到數秒的誤差，先「校時」再搶。</p>
+
+        <div class="card">
+            <div id="date" aria-hidden="true"></div>
+            <div id="clock" aria-label="目前的中原標準時間">--:--:--<small>.---</small></div>
+            <div id="sync" role="status">尚未校時（使用裝置時間）</div>
+            <div class="row" style="justify-content:center;margin-top:12px"><button class="primary" id="syncBtn">網路校時</button><button class="sm" id="resetSync">取消校正</button><label><input type="checkbox" id="wake"> 螢幕保持亮著</label></div>
+        </div>
+
+        <div class="card">
+            <h2>開賣倒數</h2>
+            <div class="row"><label for="target">開賣時間（臺灣時間）</label><input type="datetime-local" id="target" step="1"><button class="sm" id="nextHour">下個整點</button><button class="sm" id="tomorrow12">明天中午 12:00</button></div>
+            <div class="row"><label for="lead">提前（毫秒）</label><input type="number" id="lead" value="0" min="0" max="5000" step="50" style="width:100px"><span class="muted">抵銷網路與點擊延遲，倒數會提早這麼多歸零</span></div>
+            <div id="left" aria-live="off">--</div>
+            <div class="muted" id="leftNote" style="text-align:center"></div>
+            <button class="primary" id="go" disabled>按下去（記錄與開賣時間的差距）</button>
+        </div>
+
+        <div class="card">
+            <h2>我的按鍵紀錄 <button class="sm" id="clearHist" style="float:right">清除</button></h2>
+            <div id="hist"></div>
+        </div>
+
+        <p class="note">只能看時間，不能代搶。實際以售票系統伺服器的時間為準；網路校時只能估算到幾十毫秒，通常已比裝置時間準得多。</p>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, tone, beep } = Util;
+
+        // --- pure ---
+        const TAIPEI_MS = 8 * 3600e3;                               // 中原標準時間 = UTC+8，沒有夏令時間
+        const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+
+        // 以「臺灣的牆上時間」拆開：y m d wd h mi s ms（和裝置所在時區無關）
+        function taipeiParts(ms) {
+            const d = new Date(ms + TAIPEI_MS);
+            return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), wd: d.getUTCDay(), h: d.getUTCHours(), mi: d.getUTCMinutes(), s: d.getUTCSeconds(), ms: d.getUTCMilliseconds() };
+        }
+        const p2 = (n) => String(n).padStart(2, '0');
+        const fmtDate = (ms) => { const p = taipeiParts(ms); return `${p.y}/${p2(p.m)}/${p2(p.d)}（週${WEEK[p.wd]}）`; };
+        const fmtTime = (ms) => { const p = taipeiParts(ms); return { hms: `${p2(p.h)}:${p2(p.mi)}:${p2(p.s)}`, ms: String(p.ms).padStart(3, '0') }; };
+
+        // 'YYYY-MM-DDTHH:MM[:SS[.mmm]]'（datetime-local）當成臺灣時間 → epoch 毫秒；格式不對回傳 NaN
+        function parseTaipei(str) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(String(str));
+            if (!m) return NaN;
+            const [y, mo, d, h, mi, s, f] = [+m[1], +m[2], +m[3], +m[4], +m[5], +(m[6] || 0), +((m[7] || '0') + '00').slice(0, 3)];
+            if (mo < 1 || mo > 12 || d < 1 || d > 31 || h > 23 || mi > 59 || s > 59) return NaN;
+            const t = Date.UTC(y, mo - 1, d, h, mi, s, f);
+            return new Date(t).getUTCMonth() === mo - 1 ? t - TAIPEI_MS : NaN;       // 2/30 這類不存在的日期
+        }
+        const toInputValue = (ms) => { const p = taipeiParts(ms); return `${p.y}-${p2(p.m)}-${p2(p.d)}T${p2(p.h)}:${p2(p.mi)}:${p2(p.s)}`; };
+
+        // 解析 ISO 8601 時間字串到毫秒（支援 7 位小數與 Z / ±hh:mm / 沒有時區時視為 UTC）；失敗回傳 NaN
+        function isoToMs(str) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:?\d{2})?$/.exec(String(str).trim());
+            if (!m) return NaN;
+            let t = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6], Math.floor(+('0.' + (m[7] || '0')) * 1000));
+            if (m[8] && m[8] !== 'Z') { const s = m[8].replace(':', ''), sign = s[0] === '-' ? -1 : 1; t -= sign * (+s.slice(1, 3) * 60 + +s.slice(3, 5)) * 60000; }
+            return t;
+        }
+
+        // 一次校時取樣：t0 送出前、t1 收到後（皆為本機毫秒），serverMs 是伺服器回報的時間。假設回程與去程延遲相同 → 伺服器時間 ≈ 收到時刻的一半往返之前
+        function sampleOf(serverMs, t0, t1) { const rtt = t1 - t0; return { rtt, offset: serverMs + rtt / 2 - t1, err: rtt / 2 }; }
+        // 取往返時間最短的樣本（延遲越小，估計越準）
+        const bestSample = (list) => list.filter(s => Number.isFinite(s.offset) && s.rtt >= 0).sort((a, b) => a.rtt - b.rtt)[0] || null;
+
+        // 倒數顯示："2 天 03:04:05.678"；已過回傳 '00:00:00.000'
+        function fmtLeft(ms) {
+            if (ms <= 0) return '00:00:00.000';
+            const d = Math.floor(ms / 864e5), h = Math.floor(ms % 864e5 / 36e5), mi = Math.floor(ms % 36e5 / 6e4), s = Math.floor(ms % 6e4 / 1e3), x = Math.floor(ms % 1e3);
+            return `${d ? d + ' 天 ' : ''}${p2(h)}:${p2(mi)}:${p2(s)}.${String(x).padStart(3, '0')}`;
+        }
+        // 倒數過程中剛越過哪些整秒提示點（10..1 秒、0 秒）：prev / cur 為前後兩次的剩餘毫秒
+        const crossedMarks = (prev, cur) => { const out = []; for (let k = 10; k >= 0; k--) if (prev > k * 1000 && cur <= k * 1000) out.push(k); return out; };
+        // 我的按鍵時間差：delta = 按下時刻 − 開賣時刻（毫秒）。正數 = 慢了、負數 = 搶先（太早按可能無效）
+        const fmtDelta = (d) => (d === 0 ? '剛好 0 ms' : d > 0 ? `慢了 ${d} ms` : `搶先 ${-d} ms`);
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let offset = 0, synced = null;                                       // offset：伺服器時間 − 本機時間（毫秒）
+        const base = Date.now(), perf0 = performance.now();
+        const now = () => base + (performance.now() - perf0) + offset;       // 用單調時鐘推進，不受裝置時鐘中途被調整影響
+        let target = NaN, lead = 0, prevLeft = Infinity, hist = store.get('ticket_hist', []).filter(h => h && Number.isFinite(h.delta)).slice(-10);
+
+        // ---------- 校時 ----------
+        const SOURCES = [
+            { name: 'worldtimeapi.org', url: 'https://worldtimeapi.org/api/timezone/Etc/UTC', pick: (j) => j.utc_datetime },
+            { name: 'timeapi.io', url: 'https://timeapi.io/api/Time/current/zone?timeZone=UTC', pick: (j) => j.dateTime },
+        ];
+        async function sampleSource(src, n = 4) {
+            const out = [];
+            for (let i = 0; i < n; i++) {
+                const t0 = Date.now(); let r;
+                try { const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 4000); r = await fetch(src.url + (src.url.includes('?') ? '&' : '?') + '_=' + t0, { cache: 'no-store', signal: ctl.signal }); clearTimeout(to); } catch (e) { continue; }
+                const t1 = Date.now(); if (!r.ok) continue;
+                let j; try { j = await r.json(); } catch (e) { continue; }
+                const ms = isoToMs(src.pick(j)); if (Number.isFinite(ms)) out.push(sampleOf(ms, t0, t1));
+            }
+            return out;
+        }
+        async function doSync() {
+            $('#syncBtn').disabled = true; setSync('校時中…', '');
+            let best = null, used = '';
+            for (const src of SOURCES) { const b = bestSample(await sampleSource(src)); if (b && (!best || b.rtt < best.rtt)) { best = b; used = src.name; } if (best && best.rtt < 150) break; }
+            $('#syncBtn').disabled = false;
+            if (!best) { setSync('校時失敗（無法連線）；目前使用裝置時間，可能有誤差', 'warn'); return; }
+            offset = best.offset; synced = { at: Date.now(), err: best.err, src: used };
+            setSync(`已校時：裝置時鐘${offset >= 0 ? '慢' : '快'}了 ${Math.abs(Math.round(offset))} ms（誤差約 ±${Math.ceil(best.err)} ms，來源 ${used}）`, 'ok');
+        }
+        function setSync(t, cls) { $('#sync').textContent = t; $('#sync').className = cls; }
+
+        // ---------- 畫面 ----------
+        let lastSec = -1;
+        function frame() {
+            const t = now(), tt = fmtTime(t);
+            $('#clock').firstChild.textContent = tt.hms; $('#clock small').textContent = '.' + tt.ms;
+            const sec = Math.floor(t / 1000); if (sec !== lastSec) { lastSec = sec; $('#date').textContent = fmtDate(t); }
+            if (Number.isFinite(target)) {
+                const left = target - lead - t, el = $('#left');
+                el.textContent = left > 0 ? fmtLeft(left) : '開賣！'; el.className = left <= 0 ? 'now' : left <= 10000 ? 'soon' : '';
+                for (const k of crossedMarks(prevLeft, left)) { if (k === 0) { beep(2); document.body.classList.add('flash'); setTimeout(() => document.body.classList.remove('flash'), 700); } else tone(k <= 3 ? 1000 : 700, 90); }
+                prevLeft = left;
+            }
+            requestAnimationFrame(frame);
+        }
+
+        function setTarget(ms) {
+            target = ms; prevLeft = Infinity; $('#go').disabled = !Number.isFinite(ms);
+            if (Number.isFinite(ms)) { $('#target').value = toInputValue(ms); store.set('ticket_target', ms); $('#leftNote').textContent = `開賣：${fmtDate(ms)} ${fmtTime(ms).hms}`; } else { $('#left').textContent = '--'; $('#leftNote').textContent = ''; }
+        }
+        $('#target').oninput = () => { const v = $('#target').value; setTarget(parseTaipei(v.length === 16 ? v + ':00' : v)); };
+        $('#nextHour').onclick = () => { const t = Math.floor(now()), p = taipeiParts(t); setTarget(t - p.mi * 6e4 - p.s * 1e3 - p.ms + 3600e3); };
+        $('#tomorrow12').onclick = () => { const p = taipeiParts(now() + 864e5); setTarget(parseTaipei(`${p.y}-${p2(p.m)}-${p2(p.d)}T12:00:00`)); };
+        $('#lead').oninput = () => { lead = Math.max(0, Math.min(5000, parseInt($('#lead').value, 10) || 0)); store.set('ticket_lead', lead); };
+        $('#syncBtn').onclick = doSync;
+        $('#resetSync').onclick = () => { offset = 0; synced = null; setSync('已取消校正（使用裝置時間）', ''); };
+
+        function renderHist() {
+            $('#hist').replaceChildren(...(hist.length ? [...hist].reverse().map(h => { const r = document.createElement('div'); r.className = 'li'; r.append(Object.assign(document.createElement('span'), { className: 'muted', textContent: h.at }), Object.assign(document.createElement('b'), { textContent: fmtDelta(h.delta) })); return r; }) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '設好開賣時間，開賣時按上面的大按鈕，這裡會記錄你的反應。' })]));
+        }
+        $('#go').onclick = () => { const t = now(); if (!Number.isFinite(target)) return; hist.push({ at: fmtTime(t).hms + '.' + fmtTime(t).ms, delta: Math.round(t - target) }); hist = hist.slice(-10); store.set('ticket_hist', hist); renderHist(); };
+        $('#clearHist').onclick = () => { hist = []; store.set('ticket_hist', hist); renderHist(); };
+
+        let lock = null;
+        $('#wake').onchange = async () => { try { if ($('#wake').checked) lock = await navigator.wakeLock.request('screen'); else if (lock) { await lock.release(); lock = null; } } catch (e) { $('#wake').checked = false; setSync('這個瀏覽器不支援螢幕常亮', 'warn'); } };
+        document.addEventListener('visibilitychange', async () => { if (document.visibilityState === 'visible' && $('#wake').checked) { try { lock = await navigator.wakeLock.request('screen'); } catch (e) { } } });
+
+        lead = store.get('ticket_lead', 0); $('#lead').value = lead;
+        const saved = store.get('ticket_target', NaN); if (Number.isFinite(saved) && saved > now() - 864e5) setTarget(saved);
+        renderHist(); requestAnimationFrame(frame); doSync();
+    </script>
+</body>
+
+</html>

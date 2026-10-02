@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="黑白棋 Othello：夾住對手的棋子就能翻面，最後棋子多的人獲勝。本機雙人或用房號連線對戰。">
+    <meta name="description" content="黑白棋 Othello：夾住對手的棋子就能翻面，最後棋子多的人獲勝。本機雙人、對電腦（簡單 / 普通 / 困難）或用房號連線對戰。">
     <meta property="og:title" content="黑白棋" />
-    <meta property="og:description" content="夾住對手翻面的雙人棋，可本機或連線對戰。" />
+    <meta property="og:description" content="夾住對手翻面的雙人棋，可本機、對電腦或連線對戰。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/othello.html" />
     <title>黑白棋</title>
@@ -131,7 +131,12 @@
         <p class="sub">下的棋子要夾住對手的棋子（橫、直、斜都算），被夾住的會翻成你的顏色。沒有地方可下就跳過，棋子多的人獲勝。黑棋先手。</p>
 
         <div class="card" id="menu">
-            <div class="row"><button class="primary" id="local">本機雙人</button></div>
+            <div class="row">
+                <button class="primary" id="local">本機雙人</button>
+                <button class="primary" id="cpu">對電腦</button>
+                <select id="level" aria-label="電腦難度"><option value="easy">簡單</option><option value="normal" selected>普通</option><option value="hard">困難</option></select>
+                <select id="first" aria-label="執哪一色"><option value="me">我執黑（先手）</option><option value="cpu">我執白（電腦先手）</option></select>
+            </div>
             <div class="row"><input id="nick" maxlength="10" placeholder="連線暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
             <div class="row">
                 <button id="host">建立房間</button>
@@ -207,6 +212,64 @@
             return true;
         }
 
+        // ---------- 電腦對手 ----------
+        // 位置權重：四個角最好，緊鄰角的格子（X 格、C 格）最危險，邊上次之，中間大致相同
+        const WEIGHTS = [
+            [100, -20, 10, 5, 5, 10, -20, 100], [-20, -50, -2, -2, -2, -2, -50, -20], [10, -2, -1, -1, -1, -1, -2, 10], [5, -2, -1, -1, -1, -1, -2, 5],
+            [5, -2, -1, -1, -1, -1, -2, 5], [10, -2, -1, -1, -1, -1, -2, 10], [-20, -50, -2, -2, -2, -2, -50, -20], [100, -20, 10, 5, 5, 10, -20, 100],
+        ];
+
+        // 在 (r,c) 下子並翻面，回傳新棋盤（不改動輸入；假設是合法步）
+        function applyMove(board, r, c, p) {
+            const b = board.map(row => row.slice());
+            for (const [a, k] of flips(board, r, c, p)) b[a][k] = p;
+            b[r][c] = p;
+            return b;
+        }
+
+        // 從 me 的角度評分：位置權重差 + 行動力差（可下的位置數）；棋盤快滿時改看棋子數
+        function evalBoard(board, me) {
+            const op = other(me);
+            let pos = 0, empties = 0;
+            for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) { const v = board[r][c]; if (v === me) pos += WEIGHTS[r][c]; else if (v === op) pos -= WEIGHTS[r][c]; else empties++; }
+            if (empties <= 8) return (count(board, me) - count(board, op)) * 10 + pos * 0.2;
+            return pos + 6 * (legalMoves(board, me).length - legalMoves(board, op).length);
+        }
+
+        const DEPTH = { normal: 1, hard: 5 };
+
+        // 回傳電腦要下的 [r, c]；沒有合法步回傳 null。easy：隨機；normal：位置權重最高；hard：alpha-beta 搜尋
+        function cpuMove(board, me, level = 'normal', rand = Util.rnd) {
+            const moves = legalMoves(board, me);
+            if (!moves.length) return null;
+            if (level === 'easy') return moves[rand(moves.length)];
+            const byWeight = (a, b) => WEIGHTS[b[0]][b[1]] - WEIGHTS[a[0]][a[1]];
+            moves.sort(byWeight);
+            if (level !== 'hard') {
+                const top = Math.max(...moves.map(([r, c]) => WEIGHTS[r][c] * 10 + flips(board, r, c, me).length)), best = moves.filter(([r, c]) => WEIGHTS[r][c] * 10 + flips(board, r, c, me).length === top);
+                return best[rand(best.length)];
+            }
+            const search = (b, turn, depth, alpha, beta) => {
+                const ms = legalMoves(b, turn);
+                if (!ms.length) {
+                    const op = other(turn);
+                    if (!legalMoves(b, op).length) return (count(b, me) - count(b, other(me))) * 1000;      // 雙方都沒步：終局，直接看棋子數
+                    return search(b, op, depth, alpha, beta);                                              // 跳過
+                }
+                if (depth === 0) return evalBoard(b, me);
+                ms.sort(byWeight);
+                let best = turn === me ? -Infinity : Infinity;
+                for (const [r, c] of ms) {
+                    const v = search(applyMove(b, r, c, turn), other(turn), depth - 1, alpha, beta);
+                    if (turn === me) { if (v > best) best = v; if (best > alpha) alpha = best; } else { if (v < best) best = v; if (best < beta) beta = best; }
+                    if (alpha >= beta) break;
+                }
+                return best;
+            };
+            const scores = moves.map(([r, c]) => search(applyMove(board, r, c, me), other(me), DEPTH.hard - 1, -Infinity, Infinity)), top = Math.max(...scores), tied = moves.filter((_, i) => scores[i] === top);
+            return tied[rand(tied.length)];
+        }
+
         // 成員端檢查房主傳來的狀態
         function validState(s) {
             const pos = (p) => Array.isArray(p) && p.length === 2 && p.every(v => Number.isInteger(v) && v >= 0 && v < N);
@@ -216,10 +279,10 @@
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
-        let mode = 'menu', S = null, room = null, myPlayer = 0, names = ['', ''], firstGame = true, hostId = '';
+        let mode = 'menu', S = null, room = null, myPlayer = 0, names = ['', ''], firstGame = true, hostId = '', cpuPlayer = 0, cpuLevel = 'normal', cpuTimer = 0;
 
         const netMsg = (t) => { $('#netMsg').textContent = t; };
-        const enableNet = (on) => ['#local', '#host', '#join', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const enableNet = (on) => ['#local', '#cpu', '#host', '#join', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
 
         function build() {
             $('#board').replaceChildren(...Array.from({ length: N * N }, (_, i) => {
@@ -250,13 +313,30 @@
                 if (S.passed) text = `${dot(S.passed)}${who(S.passed)} 無子可下，跳過。` + text;
             }
             $('#status').innerHTML = text;
-            $('#again').hidden = !(S.over && (mode === 'local' || mode === 'host'));
+            $('#again').hidden = !(S.over && (mode === 'local' || mode === 'host' || mode === 'cpu'));
             $('#copy').hidden = mode !== 'host';
         }
 
         function show(screen) { $('#menu').hidden = screen !== 'menu'; $('#game').hidden = screen !== 'game'; }
 
         function startLocal() { mode = 'local'; S = newGame(); build(); show('game'); render(); }
+
+        // ---------- 對電腦 ----------
+        function startCpu() {
+            mode = 'cpu'; cpuLevel = $('#level').value; myPlayer = $('#first').value === 'cpu' ? 2 : 1; cpuPlayer = other(myPlayer);
+            names = myPlayer === 1 ? ['你', '電腦'] : ['電腦', '你'];
+            S = newGame(); build(); show('game'); render(); scheduleCpu();
+        }
+        function scheduleCpu() {
+            clearTimeout(cpuTimer);
+            if (mode !== 'cpu' || !S || S.over || S.turn !== cpuPlayer) return;
+            cpuTimer = setTimeout(() => {
+                if (mode !== 'cpu' || !S || S.over || S.turn !== cpuPlayer) return;
+                const mv = cpuMove(S.board, cpuPlayer, cpuLevel);
+                if (mv) play(S, cpuPlayer, mv[0], mv[1]);
+                render(); scheduleCpu();                              // 對手無子可下被跳過時，輪到電腦連下
+            }, 550);
+        }
 
         const readNick = () => {
             const n = $('#nick').value.trim();
@@ -301,14 +381,16 @@
 
         function onSquare(r, c) {
             if (mode === 'local') { if (play(S, S.turn, r, c)) render(); }
+            else if (mode === 'cpu') { if (S.turn === myPlayer && play(S, myPlayer, r, c)) { render(); scheduleCpu(); } }
             else if (mode === 'host') { if (play(S, 1, r, c)) publish(); }
             else if (mode === 'guest' && room && S && S.turn === myPlayer) room.send({ type: 'MOVE', r, c });
         }
 
         $('#local').onclick = startLocal;
+        $('#cpu').onclick = startCpu;
         $('#host').onclick = hostRoom;
         $('#join').onclick = joinRoom;
-        $('#again').onclick = () => { S = newGame(); if (mode === 'host') publish(); else render(); };
+        $('#again').onclick = () => { S = newGame(); if (mode === 'host') publish(); else { render(); scheduleCpu(); } };
         $('#copy').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copy'), url, () => prompt('請手動複製邀請連結：', url)); };
         $('#leave').onclick = () => location.reload();
         if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();

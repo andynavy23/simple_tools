@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="四子棋：本機雙人，或建立房間連線與朋友對戰，先連成四顆就贏。">
+    <meta name="description" content="四子棋：本機雙人、對電腦（簡單 / 普通 / 困難），或建立房間連線與朋友對戰，先連成四顆就贏。">
     <meta property="og:title" content="四子棋" />
-    <meta property="og:description" content="本機雙人或連線對戰，先連成四顆就贏。" />
+    <meta property="og:description" content="本機雙人、對電腦或連線對戰，先連成四顆就贏。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/connect-four.html" />
     <title>四子棋</title>
@@ -128,6 +128,9 @@
         <div class="card" id="menu">
             <div class="row">
                 <button class="primary" id="local">本機雙人</button>
+                <button class="primary" id="cpu">對電腦</button>
+                <select id="level" aria-label="電腦難度"><option value="easy">簡單</option><option value="normal" selected>普通</option><option value="hard">困難</option></select>
+                <select id="first" aria-label="誰先下"><option value="me">我先手（紅）</option><option value="cpu">電腦先手</option></select>
             </div>
             <div class="row"><input id="nick" maxlength="10" placeholder="連線暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
             <div class="row">
@@ -199,6 +202,69 @@
             return true;
         }
 
+        // ---------- 電腦對手 ----------
+        // 從 me 的角度評分：連線視窗（每 4 格一組）裡自己或對手的子數，加上中間欄位的位置分
+        function evalBoard(board, me) {
+            const op = me === 1 ? 2 : 1;
+            let score = 0;
+            for (let r = 0; r < ROWS; r++) if (board[r][3] === me) score += 3; else if (board[r][3] === op) score -= 3;
+            const win = (cells) => {
+                let a = 0, b = 0;
+                for (const [r, c] of cells) { const v = board[r][c]; if (v === me) a++; else if (v === op) b++; }
+                if (a && b) return 0;
+                if (a === 4) return 100000; if (b === 4) return -100000;
+                return a === 3 ? 5 : a === 2 ? 2 : b === 3 ? -6 : b === 2 ? -2 : 0;
+            };
+            for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) for (const [dr, dc] of [[0, 1], [1, 0], [1, 1], [1, -1]]) {
+                const er = r + dr * 3, ec = c + dc * 3;
+                if (er < 0 || er >= ROWS || ec < 0 || ec >= COLS) continue;
+                score += win([0, 1, 2, 3].map(k => [r + dr * k, c + dc * k]));
+            }
+            return score;
+        }
+
+        // 剛下在 (r,c) 的 p 有沒有連成四子
+        function winAt(board, r, c, p) {
+            for (const [dr, dc] of [[0, 1], [1, 0], [1, 1], [1, -1]]) {
+                let n = 1;
+                for (const sg of [1, -1]) for (let k = 1; k < 4; k++) { const rr = r + dr * k * sg, cc = c + dc * k * sg; if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS || board[rr][cc] !== p) break; n++; }
+                if (n >= 4) return true;
+            }
+            return false;
+        }
+
+        const COL_ORDER = [3, 2, 4, 1, 5, 0, 6];                   // 先試中間：alpha-beta 剪枝效果最好
+        const DEPTH = { easy: 3, normal: 5, hard: 7 };                // 用奇數層：搜尋結束在自己下完之後，實測比偶數層強很多
+
+        // 回傳電腦要下的欄（0–6）。會暫時修改 board 再還原。easy 有 30% 機率亂下；同分的好步隨機選一個
+        function cpuChoose(board, me, level = 'normal', rand = Util.rnd) {
+            const cols = COL_ORDER.filter(c => board[0][c] === 0);
+            if (!cols.length) return -1;
+            if (level === 'easy' && rand(100) < 30) return cols[rand(cols.length)];
+            const op = me === 1 ? 2 : 1;
+            // 先看能不能一步贏、要不要擋（所有難度都會做；簡單難度也不會漏掉明顯的）
+            for (const p of [me, op]) for (const c of cols) { const r = dropRow(board, c); board[r][c] = p; const w = winAt(board, r, c, p); board[r][c] = 0; if (w) return c; }
+            const search = (turn, depth, alpha, beta) => {
+                let best = turn === me ? -Infinity : Infinity, any = false;
+                for (const c of COL_ORDER) {
+                    if (board[0][c] !== 0) continue;
+                    any = true;
+                    const r = dropRow(board, c); board[r][c] = turn;
+                    let v;
+                    if (winAt(board, r, c, turn)) v = (turn === me ? 1 : -1) * (1e6 + depth);
+                    else if (depth <= 1) v = evalBoard(board, me);
+                    else v = search(turn === 1 ? 2 : 1, depth - 1, alpha, beta);
+                    board[r][c] = 0;
+                    if (turn === me) { if (v > best) best = v; if (best > alpha) alpha = best; } else { if (v < best) best = v; if (best < beta) beta = best; }
+                    if (alpha >= beta) break;
+                }
+                return any ? best : 0;                               // 棋盤滿了：平手
+            };
+            const depth = DEPTH[level] || DEPTH.normal, scores = cols.map(c => { const r = dropRow(board, c); board[r][c] = me; const v = winAt(board, r, c, me) ? 1e6 : (depth <= 1 ? evalBoard(board, me) : search(op, depth - 1, -Infinity, Infinity)); board[r][c] = 0; return v; });
+            const top = Math.max(...scores), tied = cols.filter((_, i) => scores[i] === top);
+            return tied[rand(tied.length)];
+        }
+
         // 成員端收到房主狀態時的格式檢查
         function validState(s) {
             return !!s && Array.isArray(s.board) && s.board.length === ROWS && s.board.every(r => Array.isArray(r) && r.length === COLS && r.every(v => v === 0 || v === 1 || v === 2))
@@ -210,10 +276,10 @@
         const $ = (s) => document.querySelector(s);
         let mode = 'menu';           // menu | local | host | guest
         let S = null;                // 狀態（本機 / 房主：權威；成員：房主傳來）
-        let room = null, myPlayer = 0, names = ['', ''], firstNext = 1, hostId = '';
+        let room = null, myPlayer = 0, names = ['', ''], firstNext = 1, hostId = '', cpuPlayer = 0, cpuLevel = 'normal', cpuTimer = 0;
 
         const netMsg = (t) => { $('#netMsg').textContent = t; };
-        const enableNet = (on) => ['#local', '#host', '#join', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const enableNet = (on) => ['#local', '#cpu', '#host', '#join', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
 
         // ---------- 畫面 ----------
         function build() {
@@ -249,7 +315,7 @@
             else if (mode === 'host' && room && room.players.length < 2) text = '等待玩家加入…';
             else text = mode === 'local' ? `輪到 ${dot(S.turn)}${who(S.turn)}色` : (S.turn === myPlayer ? `${dot(S.turn)}輪到你了` : `${dot(S.turn)}輪到 ${who(S.turn)}`);
             $('#status').innerHTML = text;
-            $('#again').hidden = !((S.winner || S.draw) && (mode === 'local' || mode === 'host'));
+            $('#again').hidden = !((S.winner || S.draw) && (mode === 'local' || mode === 'host' || mode === 'cpu'));
             $('#copy').hidden = mode !== 'host';
         }
 
@@ -263,6 +329,23 @@
             mode = 'local';
             S = newGame(1); firstNext = 2;
             build(); show('game'); render();
+        }
+
+        // ---------- 對電腦 ----------
+        function startCpu() {
+            mode = 'cpu'; cpuLevel = $('#level').value; myPlayer = $('#first').value === 'cpu' ? 2 : 1; cpuPlayer = myPlayer === 1 ? 2 : 1;
+            names = myPlayer === 1 ? ['你', '電腦'] : ['電腦', '你'];
+            firstNext = 1; S = newGame(1); firstNext = 2; build(); show('game'); render(); scheduleCpu();
+        }
+        function scheduleCpu() {
+            clearTimeout(cpuTimer);
+            if (mode !== 'cpu' || !S || S.winner || S.draw || S.turn !== cpuPlayer) return;
+            cpuTimer = setTimeout(() => {
+                if (mode !== 'cpu' || !S || S.winner || S.draw || S.turn !== cpuPlayer) return;
+                const c = cpuChoose(S.board, cpuPlayer, cpuLevel);
+                if (c >= 0) play(S, cpuPlayer, c);
+                render();
+            }, 450);
         }
 
         // ---------- 房主 / 連線 ----------
@@ -330,17 +413,19 @@
 
         function onColumn(c) {
             if (mode === 'local') { if (play(S, S.turn, c)) render(); }
+            else if (mode === 'cpu') { if (S.turn === myPlayer && play(S, myPlayer, c)) { render(); scheduleCpu(); } }
             else if (mode === 'host') { if (play(S, 1, c)) publish(); }
             else if (mode === 'guest' && room && S && S.turn === myPlayer) room.send({ type: 'DROP', col: c });
         }
 
         // ---------- 事件 ----------
         $('#local').onclick = startLocal;
+        $('#cpu').onclick = startCpu;
         $('#host').onclick = hostRoom;
         $('#join').onclick = joinRoom;
         $('#again').onclick = () => {
             S = newGame(firstNext); firstNext = firstNext === 1 ? 2 : 1;   // 輸家 / 對方先手：每局輪流先手
-            if (mode === 'host') publish(); else render();
+            if (mode === 'host') publish(); else { render(); scheduleCpu(); }
         };
         $('#copy').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copy'), url, () => prompt('請手動複製邀請連結：', url)); };
         $('#leave').onclick = () => location.reload();

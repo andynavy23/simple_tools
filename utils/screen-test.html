@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="螢幕 / 鍵盤 / 滑鼠測試：全螢幕純色檢查壞點與漏光，鍵盤逐鍵亮燈，滑鼠按鍵與滾輪偵測。">
+    <meta name="description" content="螢幕 / 鍵盤 / 滑鼠測試：全螢幕純色檢查壞點與漏光，鍵盤逐鍵亮燈，滑鼠按鍵與滾輪偵測，並能計算螢幕 PPI 與實際尺寸。">
     <meta property="og:title" content="螢幕 / 鍵盤 / 滑鼠測試" />
-    <meta property="og:description" content="壞點檢查、鍵盤按鍵測試與滑鼠測試。" />
+    <meta property="og:description" content="壞點、鍵盤、滑鼠測試與螢幕 PPI 計算。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/screen-test.html" />
     <title>螢幕 / 鍵盤 / 滑鼠測試</title>
@@ -141,13 +141,14 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>螢幕 / 鍵盤 / 滑鼠測試</h1>
-        <p class="sub">買新螢幕、筆電或週邊時，快速檢查有沒有壞點、卡鍵或失靈的按鍵。</p>
+        <p class="sub">買新螢幕、筆電或週邊時，快速檢查有沒有壞點、卡鍵或失靈的按鍵，也能算螢幕的 PPI 與實際尺寸。</p>
 
         <div class="card">
             <div class="tabs" role="tablist">
                 <button data-t="screen" aria-pressed="true">螢幕壞點</button>
                 <button data-t="kb" aria-pressed="false">鍵盤</button>
                 <button data-t="mouse" aria-pressed="false">滑鼠</button>
+                <button data-t="ppi" aria-pressed="false">尺寸 / PPI</button>
             </div>
 
             <div class="pane" data-t="screen">
@@ -161,6 +162,18 @@
                 <div class="kb" id="kb"></div>
                 <div id="last"></div>
                 <div class="row"><button class="sm" id="kbReset">重新測試</button></div>
+            </div>
+
+            <div class="pane" data-t="ppi" hidden>
+                <p class="note">輸入螢幕的對角線吋數與解析度，算出像素密度（PPI）、實際長寬與長寬比。</p>
+                <div class="fgrid">
+                    <div><label for="diag">對角線（吋）</label><input id="diag" type="number" min="1" max="200" step="0.1" value="27"></div>
+                    <div><label for="preset">常見解析度</label><select id="preset" style="width:100%"></select></div>
+                    <div><label for="rw">寬（像素）</label><input id="rw" type="number" min="1" value="2560"></div>
+                    <div><label for="rh">高（像素）</label><input id="rh" type="number" min="1" value="1440"></div>
+                </div>
+                <div class="row" style="margin:10px 0"><button class="sm" id="fillScreen">填入目前這個螢幕的解析度</button></div>
+                <div id="ppiOut"></div>
             </div>
 
             <div class="pane" data-t="mouse" hidden>
@@ -195,6 +208,23 @@
         // 滑鼠測試項目
         const MOUSE_ITEMS = [['left', '左鍵'], ['middle', '中鍵'], ['right', '右鍵'], ['back', '上一頁鍵'], ['forward', '下一頁鍵'], ['dbl', '雙擊'], ['up', '滾輪向上'], ['down', '滾輪向下']];
         const BUTTON_NAME = { 0: 'left', 1: 'middle', 2: 'right', 3: 'back', 4: 'forward' };
+
+        // 螢幕尺寸：對角線（吋）+ 解析度 → PPI、實際寬高、點距、長寬比
+        const RES_PRESETS = [['1366 × 768（HD）', 1366, 768], ['1920 × 1080（Full HD）', 1920, 1080], ['1920 × 1200（WUXGA）', 1920, 1200], ['2560 × 1080（UW-FHD）', 2560, 1080], ['2560 × 1440（QHD）', 2560, 1440], ['3440 × 1440（UW-QHD）', 3440, 1440], ['3840 × 2160（4K UHD）', 3840, 2160], ['5120 × 2880（5K）', 5120, 2880]];
+        const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+        const ppi = (diag, w, h) => Math.hypot(w, h) / diag;
+        function physical(diag, w, h) {
+            const k = diag / Math.hypot(w, h), wIn = w * k, hIn = h * k;
+            return { wIn, hIn, wCm: wIn * 2.54, hCm: hIn * 2.54, pitchMm: 25.4 / ppi(diag, w, h) };
+        }
+        // 長寬比：約分後夠小就直接顯示，否則和常見比例比較，誤差 2% 以內顯示「≈ 16:9」，都不是就顯示 x.xx : 1
+        const COMMON_RATIOS = [[16, 9], [16, 10], [21, 9], [32, 9], [4, 3], [3, 2], [5, 4], [1, 1], [9, 16]];
+        function aspect(w, h) {
+            const g = gcd(w, h), a = w / g, b = h / g;
+            if (a <= 32 && b <= 32) return `${a}:${b}`;
+            const near = COMMON_RATIOS.find(([x, y]) => Math.abs(w / h / (x / y) - 1) <= 0.02);
+            return near ? `≈ ${near[0]}:${near[1]}` : `${(w / h).toFixed(2)} : 1`;
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -255,13 +285,29 @@
         pad.addEventListener('pointermove', (e) => { $('#pos').textContent = `座標：${Math.round(e.offsetX)}, ${Math.round(e.offsetY)}`; });
         $('#mouseReset').onclick = () => { seen.clear(); document.querySelectorAll('.lights span').forEach(s => s.classList.remove('hit')); };
 
+        // ---------- 尺寸 / PPI ----------
+        $('#preset').replaceChildren(new Option('自訂', ''), ...RES_PRESETS.map(([n, w, h]) => new Option(n, `${w}x${h}`)));
+        $('#preset').value = '2560x1440';
+        function renderPpi() {
+            const d = parseFloat($('#diag').value), w = parseInt($('#rw').value, 10), h = parseInt($('#rh').value, 10);
+            const box = $('#ppiOut');
+            if (!(d > 0) || !(w > 0) || !(h > 0)) { box.replaceChildren(); return; }
+            const ph = physical(d, w, h), row = (l, v) => { const r = document.createElement('div'), a = document.createElement('span'), b = document.createElement('b'); r.className = 'li stat'; a.textContent = l; b.textContent = v; r.append(a, b); return r; };
+            const known = RES_PRESETS.find(([, x, y]) => x === w && y === h); $('#preset').value = known ? `${w}x${h}` : '';
+            box.replaceChildren(row('像素密度', `${ppi(d, w, h).toFixed(1)} PPI`), row('點距', `${ph.pitchMm.toFixed(3)} mm`), row('實際寬 × 高', `${ph.wCm.toFixed(1)} × ${ph.hCm.toFixed(1)} cm（${ph.wIn.toFixed(1)} × ${ph.hIn.toFixed(1)} 吋）`), row('長寬比', aspect(w, h)), row('總像素', `${(w * h / 1e6).toFixed(2)} MP`));
+        }
+        $('#preset').onchange = () => { const v = $('#preset').value; if (v) { const [w, h] = v.split('x'); $('#rw').value = w; $('#rh').value = h; } renderPpi(); };
+        ['diag', 'rw', 'rh'].forEach(id => { $('#' + id).oninput = renderPpi; });
+        $('#fillScreen').onclick = () => { const r = window.devicePixelRatio || 1; $('#rw').value = Math.round(screen.width * r); $('#rh').value = Math.round(screen.height * r); renderPpi(); };
+        renderPpi();
+
         // ---------- 分頁 ----------
         function render() {
             document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab));
             document.querySelectorAll('.pane').forEach(p => { p.hidden = p.dataset.t !== tab; });
         }
         document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { tab = b.dataset.t; store.set('screentest_tab', tab); render(); }; });
-        const saved = store.get('screentest_tab', 'screen'); if (['screen', 'kb', 'mouse'].includes(saved)) tab = saved;
+        const saved = store.get('screentest_tab', 'screen'); if (['screen', 'kb', 'mouse', 'ppi'].includes(saved)) tab = saved;
         render();
     </script>
 </body>

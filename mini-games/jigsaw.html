@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="拼圖：用內建圖片或你自己的照片，切成 3×3 到 6×6，點兩塊互換位置還原整張圖，記錄最少步數與最快時間。圖片不會上傳。">
+    <meta property="og:title" content="拼圖" />
+    <meta property="og:description" content="用自己的照片玩互換式拼圖。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/jigsaw.html" />
+    <title>拼圖</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 560px;
+        }
+
+        .bar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .chip {
+            background: var(--card);
+            border-radius: 980px;
+            padding: 6px 14px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #cv {
+            width: 100%;
+            aspect-ratio: 1;
+            display: block;
+            border-radius: 12px;
+            background: var(--card);
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        #msg {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>拼圖</h1>
+        <p class="sub">點一塊、再點另一塊，兩塊會互換位置。把整張圖還原就過關。照片只在你的瀏覽器處理，不會上傳。</p>
+
+        <div class="bar">
+            <select id="size" aria-label="切割大小"><option value="3">3 × 3</option><option value="4" selected>4 × 4</option><option value="5">5 × 5</option><option value="6">6 × 6</option></select>
+            <button class="primary" id="start">重新打亂</button>
+            <label class="sm" style="cursor:pointer;background:var(--fill);border-radius:980px;padding:6px 14px">選照片<input type="file" id="file" accept="image/*" hidden></label>
+            <button class="sm" id="hint" aria-pressed="false">提示</button>
+            <button class="sm" id="builtin">內建圖片</button>
+        </div>
+        <div class="bar"><span class="chip">步數 <b id="moves">0</b></span><span class="chip">⏱ <b id="time">0:00</b></span><span class="chip">最佳 <b id="best">—</b></span><span class="chip">還有 <b id="wrong">0</b> 塊不對</span></div>
+        <canvas id="cv" width="600" height="600" aria-label="拼圖盤面"></canvas>
+        <div id="msg" role="status"></div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { shuffle, store } = Util;
+
+        // --- pure ---
+        // perm[位置] = 該位置目前放的是第幾塊（正確答案是 perm[i] === i）
+        const identity = (n) => Array.from({ length: n }, (_, i) => i);
+        const isSolved = (perm) => perm.every((v, i) => v === i);
+        const wrongCount = (perm) => perm.filter((v, i) => v !== i).length;
+        // 打亂成「不是已經完成」的排列（n ≥ 2）；shuf 預設用 Util.shuffle
+        function scramble(n, shuf = shuffle) { let p; do { p = shuf(identity(n)); } while (isSolved(p) && n > 1); return p; }
+        const swapTiles = (perm, i, j) => { const p = [...perm]; [p[i], p[j]] = [p[j], p[i]]; return p; };
+        // 滑鼠位置 → 格子索引（盤面為 size×size，座標 0..1）
+        const cellAt = (x, y, size) => (x < 0 || y < 0 || x >= 1 || y >= 1 ? -1 : Math.floor(y * size) * size + Math.floor(x * size));
+        // 最少需要幾次互換才能還原（= 長度 − 循環數）：給玩家一個「完美步數」參考
+        function minSwaps(perm) {
+            const seen = new Array(perm.length).fill(false); let cycles = 0;
+            for (let i = 0; i < perm.length; i++) if (!seen[i]) { cycles++; for (let j = i; !seen[j]; j = perm[j]) seen[j] = true; }
+            return perm.length - cycles;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s), cv = $('#cv'), g = cv.getContext('2d');
+        let img = null, size = 4, perm = [], sel = -1, moves = 0, started = 0, timer = null, done = false, hintOn = false, par = 0;
+
+        // 內建圖片：用 canvas 畫一張色彩豐富的圖（不需要任何檔案）
+        function builtin() {
+            const c = document.createElement('canvas'); c.width = c.height = 600; const x = c.getContext('2d');
+            const sky = x.createLinearGradient(0, 0, 0, 600); sky.addColorStop(0, '#1d2b64'); sky.addColorStop(.55, '#f8cdda'); sky.addColorStop(1, '#ff9a44'); x.fillStyle = sky; x.fillRect(0, 0, 600, 600);
+            x.fillStyle = '#fff6c8'; x.beginPath(); x.arc(420, 300, 80, 0, 7); x.fill();
+            for (let i = 0; i < 60; i++) { x.fillStyle = `rgba(255,255,255,${.3 + (i % 5) / 10})`; x.fillRect((i * 97) % 600, (i * 53) % 260, 2, 2); }
+            const hills = [['#3a2b57', 420, 90], ['#241a3d', 470, 70], ['#120c24', 520, 50]]; hills.forEach(([col, y, a], k) => { x.fillStyle = col; x.beginPath(); x.moveTo(0, 600); for (let t = 0; t <= 600; t += 10) x.lineTo(t, y + Math.sin(t / (70 + k * 25) + k * 2) * a * .4); x.lineTo(600, 600); x.fill(); });
+            x.fillStyle = '#0b0718'; for (const tx of [90, 150, 480]) { x.beginPath(); x.moveTo(tx, 470); x.lineTo(tx - 22, 540); x.lineTo(tx + 22, 540); x.fill(); x.beginPath(); x.moveTo(tx, 440); x.lineTo(tx - 16, 500); x.lineTo(tx + 16, 500); x.fill(); }
+            return c;
+        }
+        function setImage(source) { img = source; newGame(); }
+
+        function draw() {
+            const t = 600 / size; g.fillStyle = '#888'; g.fillRect(0, 0, 600, 600);
+            for (let pos = 0; pos < size * size; pos++) {
+                const piece = perm[pos], px = (piece % size) * t, py = Math.floor(piece / size) * t, dx = (pos % size) * t, dy = Math.floor(pos / size) * t;
+                g.drawImage(img, px, py, t, t, dx, dy, t, t);
+                g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 2; g.strokeRect(dx + 1, dy + 1, t - 2, t - 2);
+                if (hintOn && piece !== pos) { g.fillStyle = 'rgba(255,69,58,.25)'; g.fillRect(dx, dy, t, t); }
+                if (pos === sel) { g.strokeStyle = '#ffd60a'; g.lineWidth = 6; g.strokeRect(dx + 3, dy + 3, t - 6, t - 6); }
+            }
+            $('#moves').textContent = moves; $('#wrong').textContent = wrongCount(perm);
+        }
+
+        function newGame() {
+            size = +$('#size').value; perm = scramble(size * size); par = minSwaps(perm); sel = -1; moves = 0; started = 0; done = false; clearInterval(timer);
+            $('#time').textContent = '0:00'; $('#msg').textContent = `最少 ${par} 步可以完成`; showBest(); draw();
+        }
+        const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+        const bestKey = () => 'jigsaw_best_' + size;
+        function showBest() { const b = store.get(bestKey(), null); $('#best').textContent = b ? `${b.moves} 步 / ${fmt(b.secs)}` : '—'; }
+
+        function pick(e) {
+            if (done) return; const r = cv.getBoundingClientRect(), i = cellAt((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, size); if (i < 0) return;
+            if (!started) { started = Date.now(); timer = setInterval(() => { $('#time').textContent = fmt(Math.floor((Date.now() - started) / 1000)); }, 500); }
+            if (sel < 0) sel = i; else if (sel === i) sel = -1; else { perm = swapTiles(perm, sel, i); sel = -1; moves++; }
+            draw();
+            if (isSolved(perm)) {
+                done = true; clearInterval(timer); const secs = Math.floor((Date.now() - started) / 1000), best = store.get(bestKey(), null);
+                const better = !best || moves < best.moves || (moves === best.moves && secs < best.secs);
+                if (better) store.set(bestKey(), { moves, secs });
+                $('#msg').textContent = `🎉 完成！${moves} 步・${fmt(secs)}（最少 ${par} 步）${better ? '　新紀錄' : ''}`; showBest();
+            }
+        }
+        cv.addEventListener('pointerdown', pick);
+        $('#start').onclick = newGame; $('#size').onchange = newGame; $('#builtin').onclick = () => setImage(builtin());
+        $('#hint').onclick = () => { hintOn = !hintOn; $('#hint').setAttribute('aria-pressed', hintOn); if (img) draw(); };
+        $('#file').onchange = async (e) => {
+            const f = e.target.files[0]; if (!f) return;
+            try {
+                const bmp = await createImageBitmap(f, { imageOrientation: 'from-image' }), c = document.createElement('canvas'), s = Math.min(bmp.width, bmp.height); c.width = c.height = 600;
+                c.getContext('2d').drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, 600, 600); bmp.close(); setImage(c);
+            } catch (err) { $('#msg').textContent = '無法讀取這張圖片'; }
+        };
+        setImage(builtin());
+    </script>
+</body>
+
+</html>

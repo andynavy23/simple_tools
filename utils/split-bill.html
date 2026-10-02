@@ -84,7 +84,19 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>分帳計算</h1>
-        <p class="sub">記下每筆支出，最後一次算清楚。資料只存在這個瀏覽器。</p>
+        <p class="sub">記下每筆支出，最後一次算清楚；也有單筆帳單的小費快算。資料只存在這個瀏覽器。</p>
+
+        <div class="card">
+            <h2>小費快算</h2>
+            <p class="muted" style="margin:0 0 10px;font-size:13px">單筆帳單加小費後平均分，不用記成員。</p>
+            <div class="row">
+                <input id="tbill" type="number" inputmode="decimal" min="0" step="any" placeholder="帳單金額" aria-label="帳單金額" style="max-width:130px">
+                <label for="tpct" class="muted">小費 %</label><input id="tpct" type="number" min="0" max="100" step="any" value="10" style="max-width:80px">
+                <label for="tn" class="muted">人數</label><input id="tn" type="number" min="1" max="100" value="2" style="max-width:80px">
+            </div>
+            <label style="display:flex;gap:6px;align-items:center;margin:8px 0;color:var(--muted)"><input type="checkbox" id="tround"> 每人湊整數（進位到元）</label>
+            <div id="tout"></div>
+        </div>
 
         <div class="card">
             <h2>成員</h2>
@@ -160,6 +172,14 @@
                 if (c.v === 0) creditors.shift();
             }
             return { net, transfers };
+        }
+
+        // 小費快算（單位：分）：小費 = 帳單 × 百分比，四捨五入到分；每人 = 總額 ÷ 人數。roundUp 時每人無條件進位到整數元
+        function tipSplit(bill, pct, n, roundUp) {
+            const tip = Math.round(bill * pct / 100), total = bill + tip;
+            let per = Math.ceil(total / n);
+            if (roundUp) per = Math.ceil(per / 100) * 100;
+            return { tip, total, per, paid: per * n, extra: per * n - total };
         }
         // --- /pure ---
 
@@ -248,6 +268,14 @@
             flash('');
             save(); render();
         }
+
+        function renderTip() {
+            const bill = toCents($('#tbill').value), pct = parseFloat($('#tpct').value) || 0, n = Math.max(1, Math.floor(+$('#tn').value) || 1), box = $('#tout');
+            if (!(bill > 0) || pct < 0) { box.replaceChildren(); return; }
+            const r = tipSplit(bill, pct, n, $('#tround').checked);
+            box.replaceChildren(Util.statRow('小費', money(r.tip)), Util.statRow('含小費總額', money(r.total)), Util.statRow(`每人付（${n} 人）`, money(r.per), 'ok'), ...(r.extra > 0 ? [Util.statRow('多收的零頭', money(r.extra))] : []));
+        }
+        ['tbill', 'tpct', 'tn', 'tround'].forEach(id => { $('#' + id).oninput = renderTip; });
 
         $('#padd').onclick = addPerson;
         $('#pname').onkeydown = (e) => { if (e.key === 'Enter') addPerson(); };

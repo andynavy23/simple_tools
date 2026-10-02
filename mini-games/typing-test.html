@@ -82,7 +82,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>打字速度測試</h1>
-        <p class="sub">在輸入框開始打字就會開始計時。可選中文、英文、程式碼，或貼上自己的文章。</p>
+        <p class="sub">在輸入框開始打字就會開始計時。可選中文、英文、程式碼，或貼上自己的文章；會記錄歷史成績與最常打錯的字。</p>
 
         <div class="card">
             <div class="bar">
@@ -101,6 +101,13 @@
             </div>
             <div id="passage" aria-live="off"></div>
             <textarea id="input" placeholder="在這裡輸入…" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+        </div>
+
+        <div class="card" id="history">
+            <h2>歷史成績 <span class="muted" id="hLabel" style="font-weight:400;font-size:13px"></span></h2>
+            <div id="trend" style="display:flex;align-items:flex-end;gap:4px;height:90px;margin:8px 0 22px"></div>
+            <div id="weak"></div>
+            <button class="sm" id="hClear" style="margin-top:8px">清除歷史</button>
         </div>
 
         <div class="card" id="result" hidden>
@@ -129,6 +136,22 @@
                 wpm: Math.round(correct / 5 / minutes),
             };
         }
+
+        // 打錯的字：回傳 { 應該打的字: 次數 }（只算已輸入的位置；空白不算）
+        function mistakes(target, typed) {
+            const m = {}, t = [...target], y = [...typed];
+            for (let i = 0; i < y.length && i < t.length; i++) if (y[i] !== t[i] && t[i].trim()) m[t[i]] = (m[t[i]] || 0) + 1;
+            return m;
+        }
+        // 累加到總表；總表最多保留 80 個字（把次數最少的丟掉）
+        function addMistakes(total, m, keep = 80) {
+            const out = { ...total }; for (const [k, v] of Object.entries(m)) out[k] = (out[k] || 0) + v;
+            return Object.fromEntries(Object.entries(out).sort((a, b) => b[1] - a[1]).slice(0, keep));
+        }
+        const topMistakes = (total, n = 10) => Object.entries(total).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, n);
+        // 同一種文本（lang + 秒數）最近 n 次的成績，舊 → 新
+        const trendOf = (hist, lang, secs, n = 20) => hist.filter(h => h.lang === lang && h.secs === secs).slice(-n);
+        const validRec = (h) => !!h && typeof h.lang === 'string' && Number.isFinite(h.secs) && Number.isFinite(h.cpm) && Number.isFinite(h.acc) && typeof h.d === 'string';
 
         // 自訂文章：空白與換行整理成單一空格、去頭尾，最多 300 字（以 Unicode 字元計）
         function cleanCustom(text) {
@@ -173,6 +196,16 @@
         const { store } = Util;
         const loadBest = () => store.get(bestKey(), 0);
         let custom = cleanCustom(store.get('typing_custom', ''));
+        let hist = store.get('typing_hist', []).filter(validRec), weak = store.get('typing_miss', {});
+        if (!weak || typeof weak !== 'object' || Array.isArray(weak)) weak = {};
+
+        function renderHist() {
+            const tr = trendOf(hist, lang, secs), max = Math.max(1, ...tr.map(h => h.cpm));
+            $('#hLabel').textContent = lang === 'custom' ? '（自訂文章不記錄）' : `（${{ zh: '中文', en: 'English', code: '程式碼' }[lang]}・${secs} 秒・最近 ${tr.length} 次）`;
+            $('#trend').replaceChildren(...tr.map(h => { const b = document.createElement('div'); b.style.cssText = `flex:1;background:var(--blue);border-radius:4px 4px 0 0;min-height:2px;position:relative;height:${h.cpm / max * 100}%`; b.title = `${h.d}：${h.cpm} 字/分・正確率 ${h.acc}%`; const s = document.createElement('small'); s.textContent = h.cpm; s.style.cssText = 'position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--muted)'; b.append(s); return b; }));
+            const top = topMistakes(weak);
+            $('#weak').replaceChildren(...(top.length ? [Object.assign(document.createElement('div'), { className: 'muted', textContent: '最常打錯的字（累計）' }), ...top.map(([c, n]) => Util.statRow(c, n + ' 次'))] : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '還沒有資料，完成一次測驗就會開始統計。' })]));
+        }
 
         function pick() {
             if (lang === 'custom') return custom;                        // 自訂文章：固定使用貼上的那一段
@@ -194,6 +227,7 @@
         }
 
         function reset() {
+            renderHist();
             clearInterval(timer);
             finished = false; startAt = 0;
             target = pick();
@@ -217,6 +251,10 @@
             $('#result').hidden = false;
             $('#r-cpm').textContent = `${r.cpm} 字/分`;
             $('#r-detail').textContent = `約 ${r.wpm} WPM ・ 正確率 ${r.accuracy}% ・ 正確 ${r.correct} / 輸入 ${r.typed} 字`;
+            const miss = mistakes(target, $('#input').value);
+            weak = addMistakes(weak, miss); store.set('typing_miss', weak);
+            if (lang !== 'custom') { hist = [...hist, { d: Util.day.today(), lang, secs, cpm: r.cpm, acc: r.accuracy }].slice(-200); store.set('typing_hist', hist); }
+            renderHist();
             if (lang === 'custom') { $('#r-best').textContent = '自訂文章不記錄最佳成績'; return; }
             const best = loadBest();
             if (r.cpm > best) {
@@ -246,6 +284,7 @@
         $('#input').addEventListener('compositionend', () => { composing = false; onInput(); });
         $('#input').addEventListener('input', onInput);
         $('#again').onclick = reset;
+        $('#hClear').onclick = () => { if (confirm('清除所有歷史成績與錯字統計？（最佳紀錄不受影響）')) { hist = []; weak = {}; store.set('typing_hist', hist); store.set('typing_miss', weak); renderHist(); } };
         $('#customText').value = custom;
         $('#customApply').onclick = () => { custom = cleanCustom($('#customText').value); $('#customText').value = custom; store.set('typing_custom', custom); reset(); };
         document.querySelectorAll('[data-lang]').forEach(b => b.onclick = () => {

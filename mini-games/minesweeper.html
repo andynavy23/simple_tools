@@ -137,6 +137,7 @@
             <span class="stat">💣 <span id="left">0</span></span>
             <span class="stat">⏱ <span id="time">0</span></span>
             <button id="flagMode" aria-pressed="false" title="開啟後，點一下就是插旗（適合手機）">🚩 旗標模式</button>
+            <button id="daily" aria-pressed="false" title="每天同一個雷區，大家比誰快">每日挑戰</button>
             <button class="primary spacer" id="new">新遊戲</button>
         </div>
 
@@ -163,8 +164,21 @@
             return out;
         }
 
+        // 每日挑戰的佈雷：先用種子亂數在全部格子中固定選出雷區，再把落在「第一次點擊的格子與周圍」的雷，
+        // 依序搬到編號最小的空位。所以每個人看到的雷區幾乎一樣，只有第一次點擊附近會不同，且第一下一定安全
+        function placeMinesFixed(g, first, rand) {
+            const n = g.w * g.h, order = Array.from({ length: n }, (_, i) => i);
+            for (let k = 0; k < g.mines; k++) { const j = k + rand(n - k); [order[k], order[j]] = [order[j], order[k]]; g.mine[order[k]] = 1; }
+            let banned = new Set([first, ...around(g, first)]);
+            if (n - banned.size < g.mines) banned = new Set([first]);
+            for (const i of [...banned]) if (g.mine[i]) { g.mine[i] = 0; let t = 0; while (g.mine[t] || banned.has(t)) t++; g.mine[t] = 1; }
+            for (let i = 0; i < n; i++) g.adj[i] = around(g, i).filter(j => g.mine[j]).length;
+            g.placed = true;
+        }
+
         // 第一次翻開時才佈雷：避開被點的格子與它周圍（空間不夠時只避開被點的格子）
         function placeMines(g, first, rand) {
+            if (g.fixed) return placeMinesFixed(g, first, rand);
             let banned = new Set([first, ...around(g, first)]);
             if (g.w * g.h - banned.size < g.mines) banned = new Set([first]);
             const pool = [];
@@ -218,14 +232,17 @@
 
         const { rnd, store } = Util;
         const $ = (s) => document.querySelector(s);
-        let g, start = 0, timer = null, flagMode = false;
+        let g, start = 0, timer = null, flagMode = false, daily = null, R = rnd;               // daily：日期字串；R：佈雷用的亂數
 
         const level = () => $('#level').value.split(',').map(Number);
-        const bestKey = () => 'mines_best_' + $('#level').value;
+        const bestKey = () => (daily ? `mines_daily_${daily}_` : 'mines_best_') + $('#level').value;
 
-        function newGame() {
+        function newGame(isDaily = false) {
+            daily = isDaily === true ? Util.day.today() : null;
+            R = daily ? Util.seeded(`mines-${daily}-${$('#level').value}`).int : rnd;
+            $('#daily').setAttribute('aria-pressed', !!daily);
             const [w, h, m] = level();
-            g = create(w, h, m);
+            g = create(w, h, m); g.fixed = !!daily;
             clearInterval(timer); start = 0;
             $('#time').textContent = 0;
             $('#msg').textContent = '';
@@ -261,15 +278,15 @@
                     const best = store.get(bestKey(), 0);
                     const rec = !best || sec < best;
                     if (rec) store.set(bestKey(), sec);
-                    $('#msg').textContent = `🎉 過關！用時 ${sec} 秒${rec ? '（新紀錄）' : `（最佳 ${best} 秒）`}`;
+                    $('#msg').textContent = `🎉 ${daily ? daily + ' 每日挑戰' : ''}過關！用時 ${sec} 秒${rec ? '（新紀錄）' : `（最佳 ${best} 秒）`}`;
                 } else $('#msg').textContent = '💥 踩到地雷了';
             }
         }
 
         function act(i, flag) {
             if (flag) toggleFlag(g, i);
-            else if (g.st[i] === 1) chord(g, i, rnd);
-            else if (g.st[i] === 0) open(g, i, rnd);
+            else if (g.st[i] === 1) chord(g, i, R);
+            else if (g.st[i] === 0) open(g, i, R);
             if (g.status === 'playing' && !start) {
                 start = Date.now();
                 timer = setInterval(() => { $('#time').textContent = Math.floor((Date.now() - start) / 1000); }, 250);
@@ -291,9 +308,10 @@
         ['touchend', 'touchmove', 'touchcancel'].forEach(t => grid.addEventListener(t, () => clearTimeout(pressTimer), { passive: true }));
 
         $('#flagMode').onclick = () => { flagMode = !flagMode; $('#flagMode').setAttribute('aria-pressed', flagMode); };
-        $('#new').onclick = newGame;
-        $('#level').onchange = newGame;
-        newGame();
+        $('#new').onclick = () => newGame(false);
+        $('#daily').onclick = () => newGame(true);
+        $('#level').onchange = () => newGame(!!daily);
+        newGame(false);
     </script>
 </body>
 

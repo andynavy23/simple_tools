@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="貪吃蛇：方向鍵、WASD 或在畫面上滑動操作，吃到食物變長、速度變快，可選牆壁模式，記錄最高分。">
+    <meta property="og:title" content="貪吃蛇" />
+    <meta property="og:description" content="經典貪吃蛇，可選穿牆或撞牆模式。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/snake.html" />
+    <title>貪吃蛇</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 520px;
+        }
+
+        .bar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .chip {
+            background: var(--card);
+            border-radius: 980px;
+            padding: 6px 14px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #cv {
+            width: 100%;
+            aspect-ratio: 1;
+            display: block;
+            border-radius: 14px;
+            background: var(--card);
+            touch-action: none;
+        }
+
+        #msg {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>貪吃蛇</h1>
+        <p class="sub">方向鍵或 WASD 控制，手機在畫面上滑動。空白鍵暫停。</p>
+        <div class="bar">
+            <select id="wall" aria-label="牆壁模式"><option value="solid">撞牆會死</option><option value="wrap">可以穿牆</option></select>
+            <button class="primary" id="start">開始</button>
+            <span class="chip">分數 <b id="score">0</b></span>
+            <span class="chip">最高 <b id="best">0</b></span>
+        </div>
+        <canvas id="cv" width="600" height="600" aria-label="遊戲畫面"></canvas>
+        <div id="msg" role="status"></div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { rnd, store } = Util;
+
+        // --- pure ---
+        const SIZE = 20;
+        const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+        const isReverse = (a, b) => a[0] + b[0] === 0 && a[1] + b[1] === 0;
+
+        // 在不被蛇占用的格子中隨機選一格；沒有空位回傳 null
+        function placeFood(snake, rand, size = SIZE) {
+            const used = new Set(snake.map(([x, y]) => y * size + x)), free = [];
+            for (let i = 0; i < size * size; i++) if (!used.has(i)) free.push(i);
+            if (!free.length) return null;
+            const k = free[rand(free.length)];
+            return [k % size, Math.floor(k / size)];
+        }
+
+        // 前進一步。state = { snake（頭在最前）, dir, food, score, dead, won }。wall: 'solid' | 'wrap'
+        // 規則：反方向的轉向被忽略（由呼叫端先處理）；移動後尾巴會移開，所以頭可以追著尾巴走，但撞到身體其他部分就死
+        function step(st, wall, rand, size = SIZE) {
+            if (st.dead || st.won) return st;
+            let [hx, hy] = st.snake[0]; hx += st.dir[0]; hy += st.dir[1];
+            if (wall === 'wrap') { hx = (hx + size) % size; hy = (hy + size) % size; }
+            else if (hx < 0 || hy < 0 || hx >= size || hy >= size) return { ...st, dead: true };
+            const eat = st.food && st.food[0] === hx && st.food[1] === hy;
+            const body = eat ? st.snake : st.snake.slice(0, -1);
+            if (body.some(([x, y]) => x === hx && y === hy)) return { ...st, dead: true };
+            const snake = [[hx, hy], ...body];
+            if (!eat) return { ...st, snake };
+            const food = placeFood(snake, rand, size);
+            return { ...st, snake, food, score: st.score + 1, won: food === null };
+        }
+
+        // 速度：每吃一個加快一點，最快 60ms 一步
+        const tickMs = (score) => Math.max(60, 150 - score * 4);
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const cv = $('#cv'), g = cv.getContext('2d'), CELL = cv.width / SIZE;
+        let st = null, queue = [], timer = null, paused = false;
+        const bestKey = () => 'snake_best_' + $('#wall').value;
+        const showBest = () => { $('#best').textContent = store.get(bestKey(), 0); };
+
+        function draw() {
+            const cs = getComputedStyle(document.documentElement);
+            g.fillStyle = cs.getPropertyValue('--card').trim() || '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+            if (!st) return;
+            g.fillStyle = '#ff453a'; g.beginPath(); g.arc((st.food[0] + .5) * CELL, (st.food[1] + .5) * CELL, CELL * .38, 0, 7); g.fill();
+            st.snake.forEach(([x, y], i) => { g.fillStyle = i === 0 ? '#248a3d' : '#30d158'; g.beginPath(); g.roundRect(x * CELL + 2, y * CELL + 2, CELL - 4, CELL - 4, 6); g.fill(); });
+        }
+
+        function loop() {
+            clearTimeout(timer);
+            if (paused || !st || st.dead || st.won) return;
+            const want = queue.shift();
+            if (want && !isReverse(want, st.dir)) st = { ...st, dir: want };
+            st = step(st, $('#wall').value, rnd);
+            $('#score').textContent = st.score; draw();
+            if (st.dead || st.won) {
+                const best = store.get(bestKey(), 0);
+                if (st.score > best) { store.set(bestKey(), st.score); $('#msg').textContent = `${st.won ? '🏆 填滿整個畫面！' : '💥 遊戲結束'}　🎉 新紀錄 ${st.score}`; } else $('#msg').textContent = `${st.won ? '🏆 填滿整個畫面！' : '💥 遊戲結束'}　得分 ${st.score}`;
+                showBest(); $('#start').textContent = '再玩一次'; return;
+            }
+            timer = setTimeout(loop, tickMs(st.score));
+        }
+
+        function start() {
+            const mid = SIZE >> 1, snake = [[mid, mid], [mid - 1, mid], [mid - 2, mid]];
+            st = { snake, dir: DIRS.right, food: placeFood(snake, rnd), score: 0, dead: false, won: false };
+            queue = []; paused = false; $('#msg').textContent = ''; $('#score').textContent = 0; $('#start').textContent = '重新開始';
+            draw(); showBest(); timer = setTimeout(loop, tickMs(0));
+        }
+
+        const KEYMAP = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right', W: 'up', S: 'down', A: 'left', D: 'right' };
+        document.addEventListener('keydown', (e) => {
+            if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+            if (e.key === ' ') { e.preventDefault(); if (st && !st.dead && !st.won) { paused = !paused; $('#msg').textContent = paused ? '⏸ 暫停' : ''; if (!paused) loop(); } return; }
+            const d = KEYMAP[e.key];
+            if (d) { e.preventDefault(); if (queue.length < 3) queue.push(DIRS[d]); }
+        });
+        let t0 = null;
+        cv.addEventListener('pointerdown', (e) => { t0 = [e.clientX, e.clientY]; });
+        cv.addEventListener('pointerup', (e) => {
+            if (!t0) return; const dx = e.clientX - t0[0], dy = e.clientY - t0[1]; t0 = null;
+            if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
+            if (queue.length < 3) queue.push(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? DIRS.right : DIRS.left) : (dy > 0 ? DIRS.down : DIRS.up));
+        });
+        $('#start').onclick = start; $('#wall').onchange = () => { showBest(); };
+        showBest(); draw();
+    </script>
+</body>
+
+</html>

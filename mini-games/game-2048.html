@@ -168,13 +168,15 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>2048</h1>
-        <p class="sub">方向鍵 / WASD / 手機滑動。相同數字相撞就會合併。</p>
+        <p class="sub">方向鍵 / WASD / 手機滑動。相同數字相撞就會合併。可玩「每日挑戰」，每天同一組亂數。</p>
 
         <div class="top">
             <div class="score"><small>分數</small><b id="score">0</b></div>
             <div class="score"><small>最高分</small><b id="best">0</b></div>
             <button id="new">新遊戲</button>
+            <button id="daily" aria-pressed="false" title="每天同一組亂數，大家比同一局">每日挑戰</button>
         </div>
+        <p class="muted" id="dailyInfo" style="margin:-6px 0 10px;font-size:13px" hidden></p>
 
         <div id="board" aria-label="遊戲盤面">
             <div id="msg" hidden role="status"><span id="msgText"></span><span><button class="primary" id="again">再來一局</button> <button id="keep" hidden>繼續玩</button></span></div>
@@ -248,6 +250,9 @@
         const $ = (s) => document.querySelector(s);
         const boardEl = $('#board');
         let board, score, best = store.get('g2048_best', 0), won = false, over = false, lastPos = null;
+        let daily = null, R = { int: rnd, float: () => rnd(1000) / 1000 };            // daily：{ date, best }；R：目前使用的亂數（每日挑戰用種子亂數）
+        const today = () => Util.day.today();
+        const dailyBest = () => { const d = store.get('g2048_daily', null); return d && d.date === today() ? d.best : 0; };
         const cells = [];
         for (let i = 0; i < N * N; i++) { const c = document.createElement('div'); c.className = 'cell'; boardEl.insertBefore(c, $('#msg')); cells.push(c); }
 
@@ -268,9 +273,13 @@
             $('#msg').hidden = false;
         }
 
-        function start() {
+        function start(isDaily = false) {
+            daily = isDaily === true ? { date: today() } : null;
+            if (daily) { const r = Util.seeded('2048-' + daily.date); R = { int: r.int, float: r }; } else R = { int: rnd, float: () => rnd(1000) / 1000 };
+            $('#daily').setAttribute('aria-pressed', !!daily); $('#dailyInfo').hidden = !daily;
+            if (daily) $('#dailyInfo').textContent = `${daily.date} 每日挑戰：今天大家的亂數序列相同。今日最高 ${dailyBest()} 分`;
             board = emptyBoard(); score = 0; won = false; over = false; lastPos = null;
-            for (let i = 0; i < 2; i++) board = spawn(board, rnd, () => rnd(1000) / 1000).board;
+            for (let i = 0; i < 2; i++) board = spawn(board, R.int, R.float).board;
             $('#msg').hidden = true;
             render();
         }
@@ -280,9 +289,10 @@
             const r = move(board, dir);
             if (!r.moved) return;
             board = r.board; score += r.gained;
-            const s = spawn(board, rnd, () => rnd(1000) / 1000);
+            const s = spawn(board, R.int, R.float);
             if (s) { board = s.board; lastPos = s.pos; }
-            if (score > best) { best = score; store.set('g2048_best', best); }
+            if (!daily && score > best) { best = score; store.set('g2048_best', best); }
+            if (daily && score > dailyBest()) { store.set('g2048_daily', { date: daily.date, best: score }); $('#dailyInfo').textContent = `${daily.date} 每日挑戰：今天大家的亂數序列相同。今日最高 ${score} 分`; }
             render();
             if (!won && maxTile(board) >= 2048) { won = true; showMsg('🎉 達成 2048！', true); }
             else if (!canMove(board)) { over = true; showMsg('遊戲結束', false); }
@@ -305,10 +315,11 @@
             play(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
         });
 
-        $('#new').onclick = start;
-        $('#again').onclick = start;
+        $('#new').onclick = () => start(false);
+        $('#again').onclick = () => start(!!daily);
+        $('#daily').onclick = () => start(true);
         $('#keep').onclick = () => { $('#msg').hidden = true; };
-        start();
+        start(false);
     </script>
 </body>
 

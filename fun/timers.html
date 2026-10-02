@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="計時器：碼表（可分圈）與多組倒數同時進行，時間到有聲音與振動提醒。">
+    <meta name="description" content="計時器：碼表（可分圈）與多組倒數同時進行，並有簡報分段計時，時間到有聲音與振動提醒。">
     <meta property="og:title" content="計時器 / 碼表" />
-    <meta property="og:description" content="碼表分圈，與多組倒數同時進行。" />
+    <meta property="og:description" content="碼表、多組倒數與簡報分段計時。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/timers.html" />
     <title>計時器 / 碼表</title>
@@ -77,6 +77,38 @@
             word-break: break-all;
         }
 
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .seg {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--fill);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .seg.cur {
+            font-weight: 700;
+            color: var(--blue);
+        }
+
+        .seg.past {
+            color: var(--muted);
+            text-decoration: line-through;
+        }
+
+        progress {
+            width: 100%;
+            height: 10px;
+            accent-color: var(--blue);
+            margin: 8px 0;
+        }
+
         .del {
             background: none;
             color: var(--muted);
@@ -90,11 +122,12 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>計時器 / 碼表</h1>
-        <p class="sub">以時間戳計算，分頁在背景也不會越跑越慢。</p>
+        <p class="sub">以時間戳計算，分頁在背景也不會越跑越慢。有碼表、多組倒數與簡報分段計時。</p>
 
         <div class="tabs">
             <button data-tab="sw" aria-pressed="true">碼表</button>
             <button data-tab="cd" aria-pressed="false">倒數</button>
+            <button data-tab="pr" aria-pressed="false">簡報</button>
         </div>
 
         <div id="sw">
@@ -106,6 +139,22 @@
                     <button id="swReset">重置</button>
                 </div>
                 <div class="laps" id="laps"></div>
+            </div>
+        </div>
+
+        <div id="pr" hidden>
+            <div class="card">
+                <p class="muted" style="margin:0 0 8px;font-size:13px">一行一段：名稱 空白 分鐘數（可小數）。到時間會自動換下一段，每段剩 1 分鐘與結束時都會提醒。</p>
+                <textarea id="plan" spellcheck="false" aria-label="簡報流程" placeholder="開場 2&#10;產品介紹 8&#10;示範 6&#10;Q&A 4"></textarea>
+                <div class="row" style="margin-top:8px"><button class="primary" id="prGo">開始</button><button id="prSkip" disabled>下一段</button><button id="prReset">重置</button><span class="muted" id="prErr"></span></div>
+            </div>
+            <div class="card" id="prRun" hidden>
+                <div class="name" id="prName" style="color:var(--muted)"></div>
+                <div class="time" id="prTime">00:00</div>
+                <progress id="prSeg" value="0" max="1" aria-label="目前這一段的進度"></progress>
+                <div class="muted" id="prTotal" style="text-align:center"></div>
+                <progress id="prAll" value="0" max="1" aria-label="整體進度"></progress>
+                <div id="prList"></div>
             </div>
         </div>
 
@@ -138,6 +187,26 @@
         const lapTimes = (totals) => totals.map((t, i) => t - (i ? totals[i - 1] : 0));
 
         const toMs = (h, m, s) => ((+h || 0) * 3600 + (+m || 0) * 60 + (+s || 0)) * 1000;
+
+        // 簡報流程：每行「名稱 分鐘」。回傳 { segs: [{name, ms}], errors: [行號] }；分鐘數需 > 0 且 ≤ 600，最多 30 段
+        function parsePlan(text) {
+            const segs = [], errors = [];
+            String(text).split(/\r?\n/).forEach((raw, i) => {
+                const line = raw.trim(); if (!line) return;
+                const m = /^(.*?)[\s,，:：]+(\d+(?:\.\d+)?)\s*(?:分鐘|分|min|m)?$/i.exec(line) || /^(\d+(?:\.\d+)?)\s*(?:分鐘|分|min|m)?$/i.exec(line);
+                const name = m && m.length === 3 ? m[1].trim() : '', mins = m ? parseFloat(m[m.length === 3 ? 2 : 1]) : NaN;
+                if (!(mins > 0 && mins <= 600) || segs.length >= 30) { errors.push(i + 1); return; }
+                segs.push({ name: name || `第 ${segs.length + 1} 段`, ms: Math.round(mins * 60000) });
+            });
+            return { segs, errors };
+        }
+        const planTotal = (segs) => segs.reduce((a, s) => a + s.ms, 0);
+        // 已經過 elapsed 毫秒時，位在哪一段：{ index, into, left, done }（done 時 index = segs.length）
+        function locate(segs, elapsed) {
+            let acc = 0;
+            for (let i = 0; i < segs.length; i++) { if (elapsed < acc + segs[i].ms) return { index: i, into: elapsed - acc, left: acc + segs[i].ms - elapsed, done: false }; acc += segs[i].ms; }
+            return { index: segs.length, into: 0, left: 0, done: true };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -145,7 +214,7 @@
         // ---------- 分頁 ----------
         document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => {
             document.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-pressed', x === b));
-            $('#sw').hidden = b.dataset.tab !== 'sw'; $('#cd').hidden = b.dataset.tab !== 'cd';
+            $('#sw').hidden = b.dataset.tab !== 'sw'; $('#cd').hidden = b.dataset.tab !== 'cd'; $('#pr').hidden = b.dataset.tab !== 'pr';
         });
 
         // ---------- 碼表 ----------
@@ -185,6 +254,39 @@
             $('#swGo').textContent = '開始'; $('#swGo').classList.add('primary'); $('#swLap').disabled = true;
             $('#swTime').textContent = fmtMs(0); $('#laps').replaceChildren();
         };
+
+        // ---------- 簡報 ----------
+        let pr = { segs: [], run: false, start: 0, acc: 0, warned: -1, ended: -1, timer: 0 };
+        $('#plan').value = Util.store.get('timers_plan', '');
+        const prElapsed = () => pr.acc + (pr.run ? Date.now() - pr.start : 0);
+        function prRender() {
+            const t = locate(pr.segs, prElapsed()), total = planTotal(pr.segs);
+            $('#prName').textContent = t.done ? '全部結束 🎉' : `${t.index + 1} / ${pr.segs.length}　${pr.segs[t.index].name}`;
+            $('#prTime').textContent = t.done ? '00:00' : fmtMs(t.left, false);
+            $('#prSeg').value = t.done ? 1 : t.into / pr.segs[t.index].ms; $('#prAll').value = Math.min(1, prElapsed() / total);
+            $('#prTotal').textContent = t.done ? `總長 ${fmtMs(total, false)}` : `整體剩 ${fmtMs(total - prElapsed(), false)} / ${fmtMs(total, false)}`;
+            $('#prList').replaceChildren(...pr.segs.map((s, i) => Object.assign(document.createElement('div'), { className: 'seg' + (i === t.index ? ' cur' : i < t.index ? ' past' : ''), innerHTML: '<span></span><span></span>' })).map((d, i) => { d.children[0].textContent = pr.segs[i].name; d.children[1].textContent = fmtMs(pr.segs[i].ms, false); return d; }));
+            return t;
+        }
+        function prTick() {
+            const t = prRender();
+            if (t.done) { if (pr.ended < pr.segs.length) { pr.ended = pr.segs.length; Util.beep(); } pr.run = false; clearInterval(pr.timer); $('#prGo').textContent = '開始'; $('#prSkip').disabled = true; return; }
+            if (t.index !== pr.cur) { if (pr.cur !== undefined && pr.cur >= 0) Util.beep(2); pr.cur = t.index; }
+            if (pr.segs[t.index].ms > 90000 && t.left <= 60000 && pr.warned !== t.index) { pr.warned = t.index; Util.tone(660, 300); Util.tone(660, 300, { delay: 400 }); }
+        }
+        $('#prGo').onclick = () => {
+            if (pr.run) { pr.acc += Date.now() - pr.start; pr.run = false; clearInterval(pr.timer); $('#prGo').textContent = '繼續'; return; }
+            if (!pr.segs.length || prElapsed() === 0) {
+                const { segs, errors } = parsePlan($('#plan').value);
+                $('#prErr').textContent = errors.length ? `第 ${errors.join('、')} 行看不懂（格式：名稱 分鐘數）` : '';
+                if (!segs.length) { $('#prErr').textContent = $('#prErr').textContent || '請輸入至少一段'; return; }
+                Util.store.set('timers_plan', $('#plan').value); pr = { segs, run: false, start: 0, acc: 0, warned: -1, ended: -1, timer: 0, cur: -1 };
+            }
+            pr.run = true; pr.start = Date.now(); $('#prRun').hidden = false; $('#prGo').textContent = '暫停'; $('#prSkip').disabled = false;
+            clearInterval(pr.timer); pr.timer = setInterval(prTick, 250); prTick();
+        };
+        $('#prSkip').onclick = () => { const t = locate(pr.segs, prElapsed()); if (t.done) return; const target = pr.segs.slice(0, t.index + 1).reduce((a, s) => a + s.ms, 0); pr.acc += target - prElapsed(); prTick(); };
+        $('#prReset').onclick = () => { clearInterval(pr.timer); pr = { segs: [], run: false, start: 0, acc: 0, warned: -1, ended: -1, timer: 0, cur: -1 }; $('#prRun').hidden = true; $('#prGo').textContent = '開始'; $('#prSkip').disabled = true; $('#prErr').textContent = ''; };
 
         // ---------- 倒數 ----------
         let timers = Util.store.get('timers_defs', []).map(t => ({ ...t, left: t.total, endAt: 0, running: false, done: false }));

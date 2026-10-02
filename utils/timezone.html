@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="時區轉換：選一個時間與時區，同時看到各城市的當地時間，適合安排跨國會議。">
+    <meta name="description" content="時區轉換：選一個時間與時區，同時看到各城市的當地時間，也有每秒跳動的即時看板與日夜圖示，適合安排跨國會議。">
     <meta property="og:title" content="時區轉換" />
-    <meta property="og:description" content="一個時間，同時看各城市的當地時間。" />
+    <meta property="og:description" content="一個時間看各城市的當地時間，或開即時看板。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/timezone.html" />
     <title>時區轉換</title>
@@ -75,6 +75,7 @@
                 <input id="when" type="datetime-local" aria-label="日期時間">
                 <select id="base" aria-label="這個時間所在的時區"></select>
                 <button id="now">現在</button>
+                <label class="muted" style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="checkbox" id="live"> 即時看板（每秒更新）</label>
             </div>
         </div>
 
@@ -136,7 +137,10 @@
         const city = (z) => z.split('/').slice(1).join(' / ').replace(/_/g, ' ') || z;
         const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 
+        let live = false;
+        const isDay = (h) => h >= 6 && h < 18;                         // 6:00–17:59 當作白天
         function currentMs() {
+            if (live) return Date.now();
             const v = $('#when').value; // YYYY-MM-DDTHH:mm
             if (!v) return null;
             const [d, t] = v.split('T'), [y, m, dd] = d.split('-').map(Number), [h, mi] = t.split(':').map(Number);
@@ -164,10 +168,10 @@
                 const left = document.createElement('div');
                 left.innerHTML = '<div class="city"></div><div class="meta"></div>';
                 left.firstChild.textContent = city(z);
-                left.lastChild.textContent = `${z} ・ ${offsetLabel(ms, z)}`;
+                left.lastChild.textContent = `${isDay(p.h) ? '🌞' : '🌙'} ${z} ・ ${offsetLabel(ms, z)}`;
                 const right = document.createElement('div');
                 right.className = 'time';
-                right.textContent = `${pad(p.h)}:${pad(p.mi)}`;
+                right.textContent = `${pad(p.h)}:${pad(p.mi)}${live ? ':' + pad(p.s) : ''}`; right.dataset.z = z;
                 const small = document.createElement('small');
                 const wd = WEEK[new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay()];
                 small.textContent = `${p.m}/${p.d} 週${wd}` + (diff ? (diff > 0 ? ` ・ +${diff} 天` : ` ・ ${diff} 天`) : '');
@@ -202,6 +206,15 @@
             render();
         };
         $('#now').onclick = () => { setNow(); render(); };
+        // 即時看板：每秒只更新時間文字（不重建列，避免按鈕在點擊中途消失）；跨分鐘時整個重畫一次以更新日期與日夜圖示
+        let lastMin = -1;
+        $('#live').onchange = () => { live = $('#live').checked; $('#when').disabled = live; lastMin = -1; if (!live) setNow(); render(); };
+        setInterval(() => {
+            if (!live) return;
+            const ms = Date.now(), minute = Math.floor(ms / 60000);
+            if (minute !== lastMin) { lastMin = minute; render(); return; }
+            document.querySelectorAll('#zones .time').forEach(el => { const p = parts(ms, el.dataset.z); el.firstChild.textContent = `${pad(p.h)}:${pad(p.mi)}:${pad(p.s)}`; });
+        }, 250);
         $('#addbtn').onclick = () => {
             const z = $('#add').value.trim();
             if (!ALL.includes(z)) { $('#msg').textContent = '找不到這個時區，請從建議清單選擇（格式：洲/城市）'; return; }

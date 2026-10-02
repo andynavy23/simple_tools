@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="週期表：118 個元素的互動表，依類別上色，點選查看原子序、原子量、族與週期、常溫狀態與電子組態，可搜尋中英文名稱與符號。">
+    <meta property="og:title" content="週期表" />
+    <meta property="og:description" content="118 個元素的互動週期表與電子組態。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/periodic-table.html" />
+    <title>週期表</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 1000px;
+            --alkali: #ff9f0a;
+            --alkaline: #ffd60a;
+            --transition: #64d2ff;
+            --post: #30d158;
+            --metalloid: #5ac8a8;
+            --nonmetal: #0a84ff;
+            --halogen: #bf5af2;
+            --noble: #ff375f;
+            --lanthanide: #ac8e68;
+            --actinide: #ff6482;
+        }
+
+        .scroll {
+            overflow-x: auto;
+            padding-bottom: 8px;
+        }
+
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(18, minmax(46px, 1fr));
+            gap: 3px;
+            min-width: 860px;
+        }
+
+        .el {
+            aspect-ratio: 1;
+            border: 0;
+            border-radius: 6px;
+            padding: 2px;
+            color: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            line-height: 1.1;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+        .el b {
+            font-size: 16px;
+        }
+
+        .el small {
+            font-size: 9px;
+            opacity: .75;
+        }
+
+        .el.dim {
+            opacity: .15;
+        }
+
+        .el.hit {
+            outline: 3px solid var(--text);
+            outline-offset: 1px;
+        }
+
+        .el.sel {
+            outline: 3px solid var(--blue);
+        }
+
+        .gap {
+            visibility: hidden;
+        }
+
+        .ph {
+            background: var(--fill);
+            color: var(--muted);
+            font-size: 10px;
+            cursor: default;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 12px 0;
+        }
+
+        .legend button {
+            padding: 3px 12px;
+            font-size: 13px;
+            border-radius: 980px;
+            color: #000;
+        }
+
+        .legend button[aria-pressed=true] {
+            outline: 3px solid var(--text);
+        }
+
+        #detail .big {
+            font-size: 64px;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .dgrid {
+            display: grid;
+            grid-template-columns: 110px 1fr;
+            gap: 14px;
+            align-items: center;
+        }
+
+        .tile {
+            width: 110px;
+            height: 110px;
+            border-radius: 14px;
+            color: #000;
+            display: grid;
+            place-items: center;
+            text-align: center;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>週期表</h1>
+        <p class="sub">點元素看詳細資料；搜尋可輸入中文名、英文名、符號或原子序。</p>
+
+        <div class="card">
+            <div class="row"><input type="search" id="q" placeholder="搜尋（例如：鐵、Fe、26、gold）" aria-label="搜尋元素" style="flex:1 1 200px"><button class="sm" id="clr">清除</button></div>
+            <div class="legend" id="legend"></div>
+            <div class="scroll"><div id="grid"></div></div>
+        </div>
+
+        <div class="card" id="detail"></div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store } = Util;
+
+        // --- pure ---
+        // [符號, 中文名（沒有常用字形則留空）, 英文名, 原子量（放射性元素為最穩定同位素的質量數）]
+        const E = [
+            ['H', '氫', 'Hydrogen', 1.008], ['He', '氦', 'Helium', 4.0026], ['Li', '鋰', 'Lithium', 6.94], ['Be', '鈹', 'Beryllium', 9.0122], ['B', '硼', 'Boron', 10.81], ['C', '碳', 'Carbon', 12.011], ['N', '氮', 'Nitrogen', 14.007], ['O', '氧', 'Oxygen', 15.999], ['F', '氟', 'Fluorine', 18.998], ['Ne', '氖', 'Neon', 20.180],
+            ['Na', '鈉', 'Sodium', 22.990], ['Mg', '鎂', 'Magnesium', 24.305], ['Al', '鋁', 'Aluminium', 26.982], ['Si', '矽', 'Silicon', 28.085], ['P', '磷', 'Phosphorus', 30.974], ['S', '硫', 'Sulfur', 32.06], ['Cl', '氯', 'Chlorine', 35.45], ['Ar', '氬', 'Argon', 39.948],
+            ['K', '鉀', 'Potassium', 39.098], ['Ca', '鈣', 'Calcium', 40.078], ['Sc', '鈧', 'Scandium', 44.956], ['Ti', '鈦', 'Titanium', 47.867], ['V', '釩', 'Vanadium', 50.942], ['Cr', '鉻', 'Chromium', 51.996], ['Mn', '錳', 'Manganese', 54.938], ['Fe', '鐵', 'Iron', 55.845], ['Co', '鈷', 'Cobalt', 58.933], ['Ni', '鎳', 'Nickel', 58.693], ['Cu', '銅', 'Copper', 63.546], ['Zn', '鋅', 'Zinc', 65.38],
+            ['Ga', '鎵', 'Gallium', 69.723], ['Ge', '鍺', 'Germanium', 72.630], ['As', '砷', 'Arsenic', 74.922], ['Se', '硒', 'Selenium', 78.971], ['Br', '溴', 'Bromine', 79.904], ['Kr', '氪', 'Krypton', 83.798],
+            ['Rb', '銣', 'Rubidium', 85.468], ['Sr', '鍶', 'Strontium', 87.62], ['Y', '釔', 'Yttrium', 88.906], ['Zr', '鋯', 'Zirconium', 91.224], ['Nb', '鈮', 'Niobium', 92.906], ['Mo', '鉬', 'Molybdenum', 95.95], ['Tc', '鎝', 'Technetium', 98], ['Ru', '釕', 'Ruthenium', 101.07], ['Rh', '銠', 'Rhodium', 102.91], ['Pd', '鈀', 'Palladium', 106.42], ['Ag', '銀', 'Silver', 107.87], ['Cd', '鎘', 'Cadmium', 112.41],
+            ['In', '銦', 'Indium', 114.82], ['Sn', '錫', 'Tin', 118.71], ['Sb', '銻', 'Antimony', 121.76], ['Te', '碲', 'Tellurium', 127.60], ['I', '碘', 'Iodine', 126.90], ['Xe', '氙', 'Xenon', 131.29],
+            ['Cs', '銫', 'Caesium', 132.91], ['Ba', '鋇', 'Barium', 137.33], ['La', '鑭', 'Lanthanum', 138.91], ['Ce', '鈰', 'Cerium', 140.12], ['Pr', '鐠', 'Praseodymium', 140.91], ['Nd', '釹', 'Neodymium', 144.24], ['Pm', '鉕', 'Promethium', 145], ['Sm', '釤', 'Samarium', 150.36], ['Eu', '銪', 'Europium', 151.96], ['Gd', '釓', 'Gadolinium', 157.25], ['Tb', '鋱', 'Terbium', 158.93], ['Dy', '鏑', 'Dysprosium', 162.50], ['Ho', '鈥', 'Holmium', 164.93], ['Er', '鉺', 'Erbium', 167.26], ['Tm', '銩', 'Thulium', 168.93], ['Yb', '鐿', 'Ytterbium', 173.05], ['Lu', '鎦', 'Lutetium', 174.97],
+            ['Hf', '鉿', 'Hafnium', 178.49], ['Ta', '鉭', 'Tantalum', 180.95], ['W', '鎢', 'Tungsten', 183.84], ['Re', '錸', 'Rhenium', 186.21], ['Os', '鋨', 'Osmium', 190.23], ['Ir', '銥', 'Iridium', 192.22], ['Pt', '鉑', 'Platinum', 195.08], ['Au', '金', 'Gold', 196.97], ['Hg', '汞', 'Mercury', 200.59],
+            ['Tl', '鉈', 'Thallium', 204.38], ['Pb', '鉛', 'Lead', 207.2], ['Bi', '鉍', 'Bismuth', 208.98], ['Po', '釙', 'Polonium', 209], ['At', '砈', 'Astatine', 210], ['Rn', '氡', 'Radon', 222],
+            ['Fr', '鍅', 'Francium', 223], ['Ra', '鐳', 'Radium', 226], ['Ac', '錒', 'Actinium', 227], ['Th', '釷', 'Thorium', 232.04], ['Pa', '鏷', 'Protactinium', 231.04], ['U', '鈾', 'Uranium', 238.03], ['Np', '錼', 'Neptunium', 237], ['Pu', '鈽', 'Plutonium', 244], ['Am', '鋂', 'Americium', 243], ['Cm', '鋦', 'Curium', 247], ['Bk', '鉳', 'Berkelium', 247], ['Cf', '鉲', 'Californium', 251], ['Es', '鑀', 'Einsteinium', 252], ['Fm', '鐨', 'Fermium', 257], ['Md', '鍆', 'Mendelevium', 258], ['No', '鍩', 'Nobelium', 259], ['Lr', '鐒', 'Lawrencium', 266],
+            ['Rf', '鑪', 'Rutherfordium', 267], ['Db', '', 'Dubnium', 268], ['Sg', '', 'Seaborgium', 269], ['Bh', '', 'Bohrium', 270], ['Hs', '', 'Hassium', 277], ['Mt', '', 'Meitnerium', 278], ['Ds', '', 'Darmstadtium', 281], ['Rg', '錀', 'Roentgenium', 282], ['Cn', '鎶', 'Copernicium', 285], ['Nh', '鉨', 'Nihonium', 286], ['Fl', '鈇', 'Flerovium', 289], ['Mc', '鏌', 'Moscovium', 290], ['Lv', '鉝', 'Livermorium', 293], ['Ts', '', 'Tennessine', 294], ['Og', '', 'Oganesson', 294],
+        ];
+        const CATS = { alkali: '鹼金屬', alkaline: '鹼土金屬', transition: '過渡金屬', post: '後過渡金屬', metalloid: '類金屬', nonmetal: '非金屬', halogen: '鹵素', noble: '惰性氣體', lanthanide: '鑭系', actinide: '錒系' };
+        const inSet = (z, ...ranges) => ranges.some(r => (Array.isArray(r) ? z >= r[0] && z <= r[1] : z === r));
+        function category(z) {
+            if (inSet(z, 3, 11, 19, 37, 55, 87)) return 'alkali'; if (inSet(z, 4, 12, 20, 38, 56, 88)) return 'alkaline';
+            if (inSet(z, 2, 10, 18, 36, 54, 86, 118)) return 'noble'; if (inSet(z, 9, 17, 35, 53, 85, 117)) return 'halogen';
+            if (inSet(z, [57, 71])) return 'lanthanide'; if (inSet(z, [89, 103])) return 'actinide';
+            if (inSet(z, 5, 14, 32, 33, 51, 52)) return 'metalloid'; if (inSet(z, 1, 6, 7, 8, 15, 16, 34)) return 'nonmetal';
+            if (inSet(z, 13, 31, 49, 50, 81, 82, 83, 84, [113, 116])) return 'post';
+            return 'transition';
+        }
+        // 常溫常壓：氣體 / 液體 / 固體；119 前的人造元素性質未知
+        const phase = (z) => (inSet(z, 1, 2, 7, 8, 9, 10, 17, 18, 36, 54, 86) ? 'gas' : inSet(z, 35, 80) ? 'liquid' : z >= 104 ? 'unknown' : 'solid');
+
+        // 週期表位置（row / col 皆從 1 起算）。採 IUPAC 版面：鑭、錒系的 f 區（57–70、89–102）放在下方第 8、9 列，Lu、Lr 在第 3 族
+        function position(z) {
+            if (z === 1) return { row: 1, col: 1 };
+            if (z === 2) return { row: 1, col: 18 };
+            const FIRST = [3, 11, 19, 37, 55, 87], p = FIRST.filter(f => z >= f).length + 1, first = FIRST[p - 2], i = z - first;
+            if (p <= 3) return { row: p, col: i < 2 ? i + 1 : i + 11 };
+            if (p <= 5) return { row: p, col: i + 1 };
+            if (i < 2) return { row: p, col: i + 1 };
+            const f0 = first + 2, f1 = f0 + 14;                                   // f 區：La..Yb / Ac..No
+            if (z < f1) return { row: p === 6 ? 8 : 9, col: z - f0 + 3 };
+            return { row: p, col: z - f1 + 3 };                                   // Lu / Lr 從第 3 族開始，之後依序到第 18 族
+        }
+
+        // 電子組態（Madelung 順序 + 常見例外），回傳如 "[Ar] 3d6 4s2"
+        const ORDER = [[1, 0], [2, 0], [2, 1], [3, 0], [3, 1], [4, 0], [3, 2], [4, 1], [5, 0], [4, 2], [5, 1], [6, 0], [4, 3], [5, 2], [6, 1], [7, 0], [5, 3], [6, 2], [7, 1]];
+        const LNAME = 'spdf', CAP = (l) => 2 * (2 * l + 1);
+        const EXC = { 24: { '3d': 5, '4s': 1 }, 29: { '3d': 10, '4s': 1 }, 41: { '4d': 4, '5s': 1 }, 42: { '4d': 5, '5s': 1 }, 44: { '4d': 7, '5s': 1 }, 45: { '4d': 8, '5s': 1 }, 46: { '4d': 10, '5s': 0 }, 47: { '4d': 10, '5s': 1 }, 57: { '4f': 0, '5d': 1 }, 58: { '4f': 1, '5d': 1 }, 64: { '4f': 7, '5d': 1 }, 78: { '4f': 14, '5d': 9, '6s': 1 }, 79: { '4f': 14, '5d': 10, '6s': 1 }, 89: { '5f': 0, '6d': 1 }, 90: { '5f': 0, '6d': 2 }, 91: { '5f': 2, '6d': 1 }, 92: { '5f': 3, '6d': 1 }, 93: { '5f': 4, '6d': 1 }, 96: { '5f': 7, '6d': 1 }, 103: { '5f': 14, '6d': 0, '7p': 1 } };
+        function fillConfig(z) {
+            const cfg = {}; let left = z;
+            for (const [n, l] of ORDER) { if (!left) break; const k = Math.min(left, CAP(l)); cfg[n + LNAME[l]] = k; left -= k; }
+            return cfg;
+        }
+        function electronConfig(z) {
+            const cfg = fillConfig(z); Object.assign(cfg, EXC[z] || {});
+            const noble = [86, 54, 36, 18, 10, 2].find(n => n < z), NOBLE = { 2: 'He', 10: 'Ne', 18: 'Ar', 36: 'Kr', 54: 'Xe', 86: 'Rn' };
+            const core = noble ? fillConfig(noble) : {};
+            const parts = Object.entries(cfg).filter(([k, v]) => v > 0 && core[k] !== v).sort(([a], [b]) => (+a[0] - +b[0]) || (LNAME.indexOf(a[1]) - LNAME.indexOf(b[1])));
+            return (noble ? `[${NOBLE[noble]}] ` : '') + parts.map(([k, v]) => k + v).join(' ');
+        }
+        const electronCount = (str) => { let n = 0; const core = { He: 2, Ne: 10, Ar: 18, Kr: 36, Xe: 54, Rn: 86 }; const m = /^\[(\w+)\]/.exec(str); if (m) n += core[m[1]]; for (const t of str.replace(/^\[\w+\]\s*/, '').split(' ').filter(Boolean)) n += +t.slice(2); return n; };
+
+        // 搜尋：原子序、符號、中文名「完全相符」優先；沒有才用英文名前綴（大小寫不拘）或中文單字包含
+        function search(q) {
+            q = String(q).trim().toLowerCase(); if (!q) return [];
+            const all = E.map((_, i) => i + 1), exact = all.filter(z => String(z) === q || E[z - 1][0].toLowerCase() === q || E[z - 1][1] === q || E[z - 1][2].toLowerCase() === q);
+            return exact.length ? exact : all.filter(z => E[z - 1][2].toLowerCase().startsWith(q) || (q.length === 1 && E[z - 1][1] && E[z - 1][1].includes(q)));
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let sel = store.get('pt_sel', 26), filter = '', hits = new Set();
+        const PH = { gas: '氣體', liquid: '液體', solid: '固體', unknown: '未知' };
+
+        function build() {
+            const cells = []; const at = {};
+            E.forEach((_, i) => { const p = position(i + 1); at[p.row + ',' + p.col] = i + 1; });
+            for (let r = 1; r <= 9; r++) for (let c = 1; c <= 18; c++) {
+                if (r === 8 || r === 9) { if (c < 3 || c > 16) { cells.push(Object.assign(document.createElement('div'), { className: 'el gap' })); continue; } }
+                const z = at[r + ',' + c];
+                if (!z) { cells.push(Object.assign(document.createElement('div'), { className: 'el gap' })); continue; }
+                const [s, zh] = E[z - 1], b = document.createElement('button'); b.className = 'el'; b.dataset.z = z; b.style.background = `var(--${category(z)})`;
+                b.innerHTML = '<small></small><b></b><small></small>'; b.children[0].textContent = z; b.children[1].textContent = s; b.children[2].textContent = zh;
+                b.setAttribute('aria-label', `${z} ${s} ${zh}`); b.onclick = () => { sel = z; store.set('pt_sel', z); paint(); }; cells.push(b);
+            }
+            $('#grid').replaceChildren(...cells);
+            $('#legend').replaceChildren(...Object.entries(CATS).map(([k, v]) => { const b = Object.assign(document.createElement('button'), { textContent: v }); b.style.background = `var(--${k})`; b.setAttribute('aria-pressed', 'false'); b.onclick = () => { filter = filter === k ? '' : k; paint(); }; b.dataset.k = k; return b; }));
+        }
+        function paint() {
+            document.querySelectorAll('#grid .el[data-z]').forEach(b => { const z = +b.dataset.z; b.classList.toggle('dim', !!filter && category(z) !== filter || (hits.size > 0 && !hits.has(z))); b.classList.toggle('hit', hits.has(z)); b.classList.toggle('sel', z === sel); });
+            document.querySelectorAll('#legend button').forEach(b => b.setAttribute('aria-pressed', b.dataset.k === filter));
+            const [s, zh, en, mass] = E[sel - 1], cat = category(sel), pos = position(sel), grp = pos.row >= 8 ? '—（f 區）' : pos.col;
+            const per = pos.row >= 8 ? (pos.row === 8 ? 6 : 7) : pos.row, rad = Number.isInteger(mass) && sel > 82 || sel === 43 || sel === 61 ? '（質量數）' : '';
+            const rows = [['原子序', sel], ['原子量', mass + rad], ['類別', CATS[cat]], ['週期 / 族', `第 ${per} 週期 / ${grp}`], ['常溫狀態', PH[phase(sel)]], ['電子組態', electronConfig(sel)]];
+            $('#detail').innerHTML = '<div class="dgrid"><div class="tile"><div><div class="big"></div><div></div></div></div><div id="rows"></div></div>';
+            $('#detail .tile').style.background = `var(--${cat})`; $('#detail .big').textContent = s; $('#detail .tile .big + div').textContent = sel;
+            const box = $('#rows'); const h = document.createElement('h2'); h.textContent = `${zh ? zh + '　' : ''}${en}`; box.append(h, ...rows.map(([a, b]) => Util.statRow(a, String(b))));
+        }
+        $('#q').oninput = () => { hits = new Set(search($('#q').value)); if (hits.size === 1) { sel = [...hits][0]; store.set('pt_sel', sel); } paint(); };
+        $('#clr').onclick = () => { $('#q').value = ''; hits = new Set(); filter = ''; paint(); };
+        if (!(sel >= 1 && sel <= 118)) sel = 26;
+        build(); paint();
+    </script>
+</body>
+
+</html>

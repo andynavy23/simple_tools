@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="節拍器與調音器：可調 BPM、拍號與重音的節拍器；用麥克風偵測音高並顯示最接近的音名與偏差音分，吉他、烏克麗麗標準音可對照。">
+    <meta property="og:title" content="節拍器 / 調音器" />
+    <meta property="og:description" content="準確的節拍器，與用麥克風偵測音高的調音器。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/metronome.html" />
+    <title>節拍器 / 調音器</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .row label {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        #bpmBig {
+            text-align: center;
+            font-size: 64px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #beats {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 12px 0;
+        }
+
+        #beats i {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--fill);
+        }
+
+        #beats i.on {
+            background: var(--blue);
+            transform: scale(1.25);
+        }
+
+        #beats i.acc.on {
+            background: var(--bad);
+        }
+
+        input[type=range] {
+            flex: 1 1 200px;
+            accent-color: var(--blue);
+        }
+
+        #note {
+            text-align: center;
+            font-size: 72px;
+            font-weight: 800;
+            min-height: 1.1em;
+        }
+
+        #hz {
+            text-align: center;
+            color: var(--muted);
+            min-height: 1.4em;
+        }
+
+        .meter {
+            position: relative;
+            height: 14px;
+            border-radius: 7px;
+            background: var(--fill);
+            margin: 16px 0;
+        }
+
+        .meter .mid {
+            position: absolute;
+            left: 50%;
+            top: -4px;
+            bottom: -4px;
+            width: 3px;
+            background: var(--ok);
+            transform: translateX(-50%);
+        }
+
+        .meter .needle {
+            position: absolute;
+            top: -6px;
+            width: 8px;
+            height: 26px;
+            border-radius: 4px;
+            background: var(--blue);
+            left: 50%;
+            transform: translateX(-50%);
+            transition: left .08s;
+        }
+
+        .meter.ok .needle {
+            background: var(--ok);
+        }
+
+        .strings {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .strings button.hit {
+            background: var(--ok);
+            color: #fff;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>節拍器 / 調音器</h1>
+        <p class="sub">節拍器完全在本機發聲。調音器需要麥克風權限，音訊只在瀏覽器內分析，不會上傳。</p>
+
+        <div class="card">
+            <div class="tabs"><button data-t="met" aria-pressed="true">節拍器</button><button data-t="tun" aria-pressed="false">調音器</button></div>
+
+            <div class="pane" data-t="met">
+                <div id="bpmBig">100</div>
+                <input type="range" id="bpm" min="30" max="240" value="100" aria-label="BPM" style="width:100%">
+                <div class="row" style="margin-top:10px">
+                    <button class="sm" id="minus">−</button><button class="sm" id="plus">＋</button><button class="sm" id="tap">Tap 測速</button>
+                    <label for="sig">拍號</label><select id="sig"><option value="2">2/4</option><option value="3">3/4</option><option value="4" selected>4/4</option><option value="6">6/8</option></select>
+                    <label><input type="checkbox" id="acc" checked> 第一拍重音</label>
+                </div>
+                <div id="beats"></div>
+                <button class="primary" id="go" style="display:block;margin:0 auto;padding:10px 40px">開始</button>
+            </div>
+
+            <div class="pane" data-t="tun" hidden>
+                <div class="row"><label for="inst">樂器</label><select id="inst"></select><label for="a4">A4 =</label><input type="number" id="a4" value="440" min="415" max="466" style="width:80px"><span class="muted">Hz</span></div>
+                <div class="strings" id="strings"></div>
+                <div id="note">–</div><div id="hz"></div>
+                <div class="meter" id="meter"><div class="mid"></div><div class="needle" id="needle"></div></div>
+                <div id="cents" class="muted" style="text-align:center;min-height:1.4em"></div>
+                <button class="primary" id="mic" style="display:block;margin:12px auto 0;padding:10px 40px">開啟麥克風</button>
+                <p class="note" id="micMsg"></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, tone } = Util;
+
+        // --- pure ---
+        const NOTE_NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+        const beatMs = (bpm) => 60000 / bpm;
+
+        // 頻率 → 最接近的音名、八度，以及偏差（音分，-50 ~ +50）
+        function noteOf(freq, a4 = 440) {
+            if (!(freq > 0)) return null;
+            const n = 69 + 12 * Math.log2(freq / a4), r = Math.round(n), midi = r;
+            return { name: NOTE_NAMES[((midi % 12) + 12) % 12], octave: Math.floor(midi / 12) - 1, midi, cents: Math.round((n - r) * 100), target: a4 * Math.pow(2, (midi - 69) / 12) };
+        }
+        const midiFreq = (midi, a4 = 440) => a4 * Math.pow(2, (midi - 69) / 12);
+
+        // 自相關法偵測基頻：buf 為時間域取樣；回傳 Hz，音量太小或沒有明顯週期回傳 -1
+        function detectPitch(buf, sampleRate, minHz = 50, maxHz = 1200) {
+            const n = buf.length; let rms = 0;
+            for (let i = 0; i < n; i++) rms += buf[i] * buf[i];
+            rms = Math.sqrt(rms / n); if (rms < 0.01) return -1;
+            const minLag = Math.floor(sampleRate / maxHz), maxLag = Math.min(Math.floor(sampleRate / minHz), n >> 1);
+            const c = new Float32Array(maxLag + 2);
+            for (let lag = minLag - 1; lag <= maxLag + 1; lag++) { let s = 0; for (let i = 0; i < n - lag; i++) s += buf[i] * buf[i + lag]; c[lag] = s; }
+            let best = -1, bestV = -Infinity;
+            // 取「第一個明顯峰值」而不是最大值，避免誤抓到倍頻
+            let max0 = 0; for (let i = 0; i < n; i++) max0 += buf[i] * buf[i];
+            for (let lag = minLag; lag <= maxLag; lag++) if (c[lag] > c[lag - 1] && c[lag] >= c[lag + 1] && c[lag] > bestV) { bestV = c[lag]; if (bestV > 0.8 * max0 * (n - lag) / n) { best = lag; break; } }
+            if (best < 0) { for (let lag = minLag; lag <= maxLag; lag++) if (c[lag] > bestV) { bestV = c[lag]; best = lag; } if (bestV < 0.3 * max0) return -1; }
+            // 拋物線內插，得到次取樣點精度
+            const y1 = c[best - 1], y2 = c[best], y3 = c[best + 1], d = (y1 - 2 * y2 + y3), shift = d ? 0.5 * (y1 - y3) / d : 0;
+            return sampleRate / (best + shift);
+        }
+
+        // 常見樂器的標準空弦（MIDI 音高，由低到高）
+        const INSTRUMENTS = { '吉他（6 弦）': [40, 45, 50, 55, 59, 64], '烏克麗麗': [67, 60, 64, 69], '貝斯（4 弦）': [28, 33, 38, 43], '小提琴': [55, 62, 69, 76] };
+        const nearestString = (midiList, freq, a4 = 440) => { let best = 0, bc = Infinity; midiList.forEach((m, i) => { const c = Math.abs(1200 * Math.log2(freq / midiFreq(m, a4))); if (c < bc) { bc = c; best = i; } }); return { index: best, cents: Math.round(1200 * Math.log2(freq / midiFreq(midiList[best], a4)) * 1) }; };
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let tab = 'met';
+        document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { tab = b.dataset.t; document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-pressed', x === b)); document.querySelectorAll('.pane').forEach(p => { p.hidden = p.dataset.t !== tab; }); if (tab !== 'met') stopMet(); }; });
+
+        // ---------- 節拍器 ----------
+        let bpm = store.get('met_bpm', 100), running = false, nextAt = 0, beat = 0, sched = null, taps = [];
+        const sig = () => +$('#sig').value;
+        function buildBeats() { $('#beats').replaceChildren(...Array.from({ length: sig() }, (_, i) => Object.assign(document.createElement('i'), { className: i === 0 && $('#acc').checked ? 'acc' : '' }))); }
+        function setBpm(v) { bpm = Math.max(30, Math.min(240, Math.round(v))); $('#bpm').value = bpm; $('#bpmBig').textContent = bpm; store.set('met_bpm', bpm); }
+        function schedule() {
+            const now = performance.now();
+            while (nextAt < now + 120) {
+                const i = beat % sig(), accent = i === 0 && $('#acc').checked, at = nextAt;
+                tone(accent ? 1200 : 800, 60, { vol: accent ? 0.35 : 0.22, type: 'square', delay: Math.max(0, at - now) });
+                setTimeout(() => { document.querySelectorAll('#beats i').forEach((e, k) => e.classList.toggle('on', k === i)); }, Math.max(0, at - now));
+                beat++; nextAt += beatMs(bpm);
+            }
+        }
+        function startMet() { running = true; beat = 0; nextAt = performance.now() + 50; $('#go').textContent = '停止'; sched = setInterval(schedule, 25); schedule(); }
+        function stopMet() { running = false; clearInterval(sched); $('#go').textContent = '開始'; document.querySelectorAll('#beats i').forEach(e => e.classList.remove('on')); }
+        $('#go').onclick = () => (running ? stopMet() : startMet());
+        $('#bpm').oninput = () => setBpm(+$('#bpm').value);
+        $('#minus').onclick = () => setBpm(bpm - 1); $('#plus').onclick = () => setBpm(bpm + 1);
+        $('#sig').onchange = () => { buildBeats(); beat = 0; }; $('#acc').onchange = buildBeats;
+        $('#tap').onclick = () => { const t = performance.now(); if (taps.length && t - taps[taps.length - 1] > 2000) taps = []; taps.push(t); taps = taps.slice(-6); if (taps.length >= 2) setBpm(60000 / ((taps[taps.length - 1] - taps[0]) / (taps.length - 1))); };
+        setBpm(bpm); buildBeats();
+
+        // ---------- 調音器 ----------
+        $('#inst').replaceChildren(...Object.keys(INSTRUMENTS).map(k => new Option(k, k)));
+        const a4 = () => Math.min(466, Math.max(415, +$('#a4').value || 440));
+        function buildStrings() {
+            const list = INSTRUMENTS[$('#inst').value];
+            $('#strings').replaceChildren(...list.map((m, i) => { const n = noteOf(midiFreq(m, a4()), a4()); const b = Object.assign(document.createElement('button'), { className: 'sm', textContent: n.name + n.octave, title: '點一下播放參考音' }); b.onclick = () => tone(midiFreq(m, a4()), 1200, { vol: 0.25 }); b.dataset.i = i; return b; }));
+        }
+        $('#inst').onchange = buildStrings; $('#a4').onchange = buildStrings; buildStrings();
+
+        let stream = null, ctx = null, an = null, raf = 0;
+        function stopMic() { cancelAnimationFrame(raf); if (stream) stream.getTracks().forEach(t => t.stop()); if (ctx) ctx.close(); stream = ctx = an = null; $('#mic').textContent = '開啟麥克風'; $('#note').textContent = '–'; $('#hz').textContent = ''; $('#cents').textContent = ''; $('#needle').style.left = '50%'; document.querySelectorAll('.strings button').forEach(b => b.classList.remove('hit')); }
+        async function startMic() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+                ctx = new (window.AudioContext || window.webkitAudioContext)(); const src = ctx.createMediaStreamSource(stream); an = ctx.createAnalyser(); an.fftSize = 4096; src.connect(an);
+                $('#mic').textContent = '關閉麥克風'; $('#micMsg').textContent = '對著麥克風彈一根弦（安靜環境較準）。';
+                const buf = new Float32Array(an.fftSize); let smooth = 0;
+                (function loop() {
+                    raf = requestAnimationFrame(loop); an.getFloatTimeDomainData(buf);
+                    const f = detectPitch(buf, ctx.sampleRate);
+                    if (f < 0) return;
+                    smooth = smooth && Math.abs(Math.log2(f / smooth)) < 0.08 ? smooth * 0.6 + f * 0.4 : f;
+                    const n = noteOf(smooth, a4()), ns = nearestString(INSTRUMENTS[$('#inst').value], smooth, a4());
+                    $('#note').textContent = n.name + n.octave; $('#hz').textContent = smooth.toFixed(1) + ' Hz';
+                    const c = Math.max(-50, Math.min(50, n.cents)); $('#needle').style.left = (50 + c) + '%'; $('#meter').classList.toggle('ok', Math.abs(n.cents) <= 5);
+                    $('#cents').textContent = Math.abs(n.cents) <= 5 ? '✓ 準了' : n.cents > 0 ? `偏高 ${n.cents} 音分，放鬆一點` : `偏低 ${-n.cents} 音分，鎖緊一點`;
+                    document.querySelectorAll('.strings button').forEach((b, i) => b.classList.toggle('hit', i === ns.index && Math.abs(ns.cents) < 50));
+                })();
+            } catch (e) { $('#micMsg').textContent = e && e.name === 'NotAllowedError' ? '麥克風權限被拒絕，請在瀏覽器網址列允許後再試。' : '無法使用麥克風（需要 https 或 localhost，且裝置有麥克風）。'; stopMic(); }
+        }
+        $('#mic').onclick = () => (stream ? stopMic() : startMic());
+        window.addEventListener('pagehide', () => { stopMic(); stopMet(); });
+    </script>
+</body>
+
+</html>

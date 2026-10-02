@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="純文字整理工具：去重複行、排序、刪空行、全形半形轉換、大小寫，全部在本機處理。">
+    <meta name="description" content="純文字整理工具：去重複行、排序、刪空行、全形半形轉換、大小寫，並能產生測試用假文，全部在本機處理。">
     <meta property="og:title" content="純文字整理工具" />
-    <meta property="og:description" content="去重複、排序、刪空行、全半形轉換，全部在本機處理。" />
+    <meta property="og:description" content="去重複、排序、刪空行、全半形轉換與假文產生，全部在本機處理。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/text-tools.html" />
     <title>純文字整理工具</title>
@@ -51,7 +51,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>純文字整理工具</h1>
-        <p class="sub">貼上文字，點按鈕處理，可連續套用。所有處理都在你的瀏覽器內完成。</p>
+        <p class="sub">貼上文字，點按鈕處理，可連續套用；也能產生測試用的假文。所有處理都在你的瀏覽器內完成。</p>
 
         <div class="card">
             <textarea id="text" placeholder="在這裡貼上文字…" aria-label="文字內容"></textarea>
@@ -63,6 +63,17 @@
 
         <div class="card">
             <div class="btns" id="ops"></div>
+        </div>
+
+        <div class="card">
+            <h2>假文產生</h2>
+            <p class="muted" style="font-size:13px;margin:0 0 10px">產生測試排版用的假文，會放進上方文字框（可以用「復原」回到原本的內容）。</p>
+            <div class="btns">
+                <select id="lang" aria-label="語言"><option value="zh">中文</option><option value="en">English（lorem ipsum）</option></select>
+                <label class="muted" for="paras">段落</label><input id="paras" type="number" min="1" max="20" value="3" style="width:72px">
+                <label class="muted" for="sents">每段句數</label><input id="sents" type="number" min="1" max="12" value="4" style="width:72px">
+                <button class="primary" id="gen">產生</button>
+            </div>
         </div>
     </div>
 
@@ -83,6 +94,21 @@
             '轉大寫': t => t.toUpperCase(),
             '轉小寫': t => t.toLowerCase(),
         };
+
+        // 假文產生：中文用常見詞句片段隨機組合、英文用 lorem ipsum 字庫。rand(n) 回傳 [0, n) 的整數（預設用安全亂數）
+        const ZH_PIECES = ['這是一段用來測試版面的文字', '設計師正在調整字體與行距', '請把這裡換成真正的內容', '清晨的陽光灑在安靜的街道上', '我們需要先確認需求再開始實作', '這個段落只是為了填滿畫面', '好的介面應該讓人一眼就看懂', '每一次修改都要保留紀錄', '週末的市集總是擠滿了人', '把複雜的事情拆成簡單的步驟', '字數與換行會影響閱讀的節奏', '咖啡的香氣讓整個下午變得緩慢', '測試資料不應該包含真實的個人資訊', '長長的句子可以用來檢查自動換行', '文字的重點在於清楚而不是華麗', '雨停之後空氣裡有泥土的味道', '版型確定以後再來細修每個細節', '請檢查標點符號與全形半形是否一致', '一個好的預設值能省下許多麻煩', '安排好優先順序比加班更有效率'];
+        const EN_WORDS = 'lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua enim ad minim veniam quis nostrud exercitation ullamco laboris nisi aliquip ex ea commodo consequat duis aute irure in reprehenderit voluptate velit esse cillum fugiat nulla pariatur excepteur sint occaecat cupidatat non proident sunt culpa qui officia deserunt mollit anim id est laborum'.split(' ');
+        function lorem(lang, paragraphs, sentences, rand = Util.rnd) {
+            const pick = (arr) => arr[rand(arr.length)];
+            const sentence = () => {
+                if (lang === 'en') {
+                    const n = 6 + rand(9), w = Array.from({ length: n }, () => pick(EN_WORDS)); w[0] = w[0][0].toUpperCase() + w[0].slice(1);
+                    return w.join(' ') + '.';
+                }
+                const n = 1 + rand(3); return Array.from({ length: n }, () => pick(ZH_PIECES)).join('，') + '。';
+            };
+            return Array.from({ length: paragraphs }, () => Array.from({ length: sentences }, sentence).join(lang === 'en' ? ' ' : '')).join('\n\n');
+        }
 
         const $ = (s) => document.querySelector(s);
         const ta = $('#text');
@@ -105,6 +131,11 @@
             $('#ops').append(b);
         }
 
+        $('#gen').onclick = () => {
+            const clamp = (id, lo, hi, def) => Math.min(hi, Math.max(lo, parseInt($(id).value, 10) || def));
+            history.push(ta.value); if (history.length > 50) history.shift();
+            ta.value = lorem($('#lang').value, clamp('#paras', 1, 20, 3), clamp('#sents', 1, 12, 4)); stat();
+        };
         $('#undo').onclick = () => { if (history.length) { ta.value = history.pop(); stat(); } };
         $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), ta.value, () => ta.select());
         ta.oninput = stat;

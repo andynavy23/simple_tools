@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="比價 / 單價計算：輸入幾個商品的價格、容量與數量，算出每 100 g、每 100 ml 或每個的單價，標出最划算的。">
+    <meta property="og:title" content="比價 / 單價計算" />
+    <meta property="og:description" content="算出單價，找出哪個商品最划算。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/price-compare.html" />
+    <title>比價 / 單價計算</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 680px;
+        }
+
+        .item {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr 1fr 1fr 0.8fr auto;
+            gap: 8px;
+            align-items: end;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .item label {
+            font-size: 12px;
+            color: var(--muted);
+            display: block;
+            margin-bottom: 3px;
+        }
+
+        .item input,
+        .item select {
+            width: 100%;
+            min-width: 0;
+            padding-left: 8px;
+            padding-right: 8px;
+        }
+
+        .res {
+            grid-column: 1 / -1;
+            font-variant-numeric: tabular-nums;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .res b {
+            font-size: 18px;
+        }
+
+        .tag {
+            padding: 1px 10px;
+            border-radius: 980px;
+            font-size: 12px;
+            background: var(--fill);
+            color: var(--muted);
+        }
+
+        .tag.best {
+            background: var(--ok);
+            color: #fff;
+        }
+
+        @media (max-width: 560px) {
+            .item {
+                grid-template-columns: 1fr 1fr 1fr;
+            }
+
+            .item>div:first-child {
+                grid-column: 1 / -1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>比價 / 單價計算</h1>
+        <p class="sub">價格 ÷（每份容量 × 份數）。同一種單位（重量、容量、個數）才會互相比較。</p>
+
+        <div class="card">
+            <div id="items"></div>
+            <div style="display:flex;gap:8px;margin-top:12px"><button id="add" class="primary">新增商品</button><button id="clear">全部清空</button></div>
+        </div>
+        <p class="note">重量：g、kg、台斤（600 g）、兩（37.5 g）；容量：ml、L；個數：個、入、片、包、瓶、打（12 個）。</p>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store } = Util;
+
+        // --- pure ---
+        // 單位 → { group, f（換成基準單位 g / ml / 個 的倍數）}
+        const UNITS = {
+            'g': { group: 'w', f: 1 }, 'kg': { group: 'w', f: 1000 }, '台斤': { group: 'w', f: 600 }, '兩': { group: 'w', f: 37.5 },
+            'ml': { group: 'v', f: 1 }, 'L': { group: 'v', f: 1000 },
+            '個': { group: 'n', f: 1 }, '入': { group: 'n', f: 1 }, '片': { group: 'n', f: 1 }, '包': { group: 'n', f: 1 }, '瓶': { group: 'n', f: 1 }, '打': { group: 'n', f: 12 },
+        };
+        const GROUPS = { w: { base: 'g', per: 100 }, v: { base: 'ml', per: 100 }, n: { base: '個', per: 1 } };
+
+        // 一個商品的單價：回傳 { group, perBase }（每 1 基準單位的價格）或 null（資料不完整）
+        function unitPrice({ price, amount, count, unit }) {
+            const u = UNITS[unit];
+            if (!u || !(price >= 0) || !(amount > 0) || !(count > 0) || !Number.isFinite(price + amount + count)) return null;
+            return { group: u.group, perBase: price / (amount * u.f * count) };
+        }
+
+        // 一組商品：標出各單位群組中最便宜的，以及其他的貴多少 %。rows 中資料不完整的結果為 null
+        function compare(rows) {
+            const calc = rows.map(unitPrice), best = {};
+            calc.forEach(c => { if (c && (best[c.group] === undefined || c.perBase < best[c.group])) best[c.group] = c.perBase; });
+            return calc.map(c => (c ? { group: c.group, per: c.perBase * GROUPS[c.group].per, best: c.perBase === best[c.group], over: best[c.group] > 0 ? Math.round((c.perBase / best[c.group] - 1) * 1000) / 10 : 0, alone: calc.filter(x => x && x.group === c.group).length === 1 } : null));
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const BLANK = () => ({ name: '', price: '', amount: '', count: '1', unit: 'g' });
+        let rows = store.get('price_rows', []).filter(r => r && typeof r.unit === 'string' && UNITS[r.unit]);
+        if (!rows.length) rows = [BLANK(), BLANK()];
+        const save = () => store.set('price_rows', rows);
+        const money = (n) => (n >= 100 ? n.toFixed(1) : n >= 1 ? n.toFixed(2) : n.toFixed(3)).replace(/\.?0+$/, '');
+
+        function field(label, el) { const d = document.createElement('div'), l = document.createElement('label'); l.textContent = label; d.append(l, el); return d; }
+        function input(r, key, attrs) { const i = Object.assign(document.createElement('input'), { value: r[key], ...attrs }); i.oninput = () => { r[key] = i.value; save(); renderResults(); }; return i; }
+
+        function build() {
+            $('#items').replaceChildren(...rows.map((r, idx) => {
+                const d = document.createElement('div'); d.className = 'item';
+                const sel = document.createElement('select'); sel.setAttribute('aria-label', '單位'); sel.append(...Object.keys(UNITS).map(u => new Option(u, u))); sel.value = r.unit; sel.onchange = () => { r.unit = sel.value; save(); renderResults(); };
+                const del = Object.assign(document.createElement('button'), { className: 'sm', textContent: '✕' }); del.setAttribute('aria-label', '刪除這一列'); del.onclick = () => { rows.splice(idx, 1); if (!rows.length) rows.push(BLANK()); save(); build(); };
+                const res = Object.assign(document.createElement('div'), { className: 'res' });
+                d.append(field('商品（選填）', input(r, 'name', { type: 'text', maxLength: 20, placeholder: `商品 ${idx + 1}` })), field('價格', input(r, 'price', { type: 'number', min: 0, step: 'any', inputMode: 'decimal' })),
+                    field('每份容量', input(r, 'amount', { type: 'number', min: 0, step: 'any', inputMode: 'decimal' })), field('單位', sel), field('份數', input(r, 'count', { type: 'number', min: 1, step: 'any' })), del, res);
+                return d;
+            }));
+            renderResults();
+        }
+
+        function renderResults() {
+            const out = compare(rows.map(r => ({ price: parseFloat(r.price), amount: parseFloat(r.amount), count: parseFloat(r.count), unit: r.unit })));
+            document.querySelectorAll('.item .res').forEach((el, i) => {
+                const c = out[i];
+                if (!c) { el.replaceChildren(Object.assign(document.createElement('span'), { className: 'muted', textContent: '填入價格與容量就會顯示單價' })); return; }
+                const g = GROUPS[c.group], label = `每 ${g.per === 1 ? '' : g.per + ' '}${g.base}`;
+                el.replaceChildren(Object.assign(document.createElement('b'), { textContent: `${label} ${money(c.per)} 元` }), ...(c.alone ? [] : [Object.assign(document.createElement('span'), { className: 'tag' + (c.best ? ' best' : ''), textContent: c.best ? '最划算' : `貴 ${c.over}%` })]));
+            });
+        }
+
+        $('#add').onclick = () => { rows.push(BLANK()); save(); build(); };
+        $('#clear').onclick = () => { rows = [BLANK(), BLANK()]; save(); build(); };
+        build();
+    </script>
+</body>
+
+</html>

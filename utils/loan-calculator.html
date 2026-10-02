@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="貸款與複利試算：本息或本金平均攤還的月付金與逐期表，以及定期定額的複利成長。">
+    <meta name="description" content="貸款、複利與存款目標試算：月付金與逐期表、定期定額的複利成長，以及多久或每月要存多少才能達標。">
     <meta property="og:title" content="貸款 / 複利試算" />
-    <meta property="og:description" content="月付金、總利息、逐期表，以及複利成長。" />
+    <meta property="og:description" content="月付金、複利成長與存款目標。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/loan-calculator.html" />
     <title>貸款 / 複利試算</title>
@@ -60,6 +60,7 @@
         <div class="tabs">
             <button data-mode="loan" aria-pressed="true">貸款</button>
             <button data-mode="invest" aria-pressed="false">複利成長</button>
+            <button data-mode="goal" aria-pressed="false">存款目標</button>
         </div>
 
         <div class="card" id="loan">
@@ -83,6 +84,18 @@
                 <div><label for="irate">年報酬率 (%)</label><input id="irate" type="number" step="any" value="5"></div>
                 <div><label for="iyears">年數</label><input id="iyears" type="number" min="1" max="80" step="1" value="20"></div>
             </div>
+        </div>
+
+        <div class="card" id="goal" hidden>
+            <div class="fgrid">
+                <div><label for="gtarget">目標金額</label><input id="gtarget" type="number" min="0" step="any" value="5000000"></div>
+                <div><label for="gpv">目前已有</label><input id="gpv" type="number" min="0" step="any" value="300000"></div>
+                <div><label for="grate">預期年報酬率 (%)</label><input id="grate" type="number" step="any" value="4"></div>
+                <div><label for="ginf">年通膨率 (%)<small style="color:var(--muted)">　0 = 不考慮</small></label><input id="ginf" type="number" step="any" value="0"></div>
+                <div><label for="gask">想知道</label><select id="gask" style="width:100%"><option value="time">每月存這麼多，要多久達標</option><option value="pmt">想在這麼多年內達標，每月要存多少</option></select></div>
+                <div><label for="gval" id="gvalLabel">每月投入</label><input id="gval" type="number" min="0" step="any" value="20000"></div>
+            </div>
+            <p class="muted" style="font-size:13px;margin:10px 0 0">目標金額用「現在的購買力」計算；有填通膨率時，會先把報酬率換成扣掉通膨後的實質報酬。每月複利一次，不含稅與手續費，僅供規劃參考。</p>
         </div>
 
         <div class="card" id="out"></div>
@@ -123,6 +136,24 @@
             }
             return out;
         }
+
+        // 存款目標：把名目年報酬與通膨換成「實質」月報酬率（通膨 0 就是原本的報酬率 ÷ 12）
+        const monthlyRate = (annualPct, inflationPct = 0) => ((1 + annualPct / 100) / (1 + inflationPct / 100) - 1) / 12;
+        // 每月投入 pmt（月底投入），幾個月後資產達到 target；超過 maxMonths 回傳 null；起始就達標回傳 0
+        function monthsToGoal(target, pv, pmt, r, maxMonths = 1200) {
+            if (pv >= target) return 0;
+            let v = pv;
+            for (let m = 1; m <= maxMonths; m++) { v = v * (1 + r) + pmt; if (v >= target) return m; }
+            return null;
+        }
+        // m 個月後的資產（月底投入）
+        const valueAfter = (pv, pmt, r, m) => { const g = Math.pow(1 + r, m); return pv * g + pmt * (r === 0 ? m : (g - 1) / r); };
+        // n 個月內達標，每月需要投入多少（0 以上）
+        function requiredMonthly(target, pv, r, n) {
+            if (n <= 0) return NaN;
+            const g = Math.pow(1 + r, n), annuity = r === 0 ? n : (g - 1) / r, need = target - pv * g;
+            return need <= 0 ? 0 : need / annuity;
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -142,6 +173,24 @@
             out.replaceChildren();
             $('#loan').hidden = mode !== 'loan';
             $('#invest').hidden = mode !== 'invest';
+            $('#goal').hidden = mode !== 'goal';
+            if (mode === 'goal') {
+                const target = num('gtarget'), pv = num('gpv') || 0, rate = num('grate'), inf = num('ginf') || 0, val = num('gval'), byTime = $('#gask').value === 'time';
+                $('#gvalLabel').textContent = byTime ? '每月投入' : '幾年內達標';
+                if (!(target > 0 && pv >= 0 && Number.isFinite(rate) && val >= 0) || (!byTime && !(val > 0))) { out.textContent = '請輸入有效的數字'; $('#tblCard').hidden = true; return; }
+                const r = monthlyRate(rate, inf);
+                if (byTime) {
+                    const m = monthsToGoal(target, pv, val, r);
+                    out.append(...(m === null ? [Util.statRow('結果', '100 年內都無法達標，請提高每月投入', 'bad')] : [Util.statRow('需要時間', m === 0 ? '已經達標' : `${Math.floor(m / 12)} 年 ${m % 12} 個月`, 'big'), Util.statRow('累積投入', money(pv + val * m)), Util.statRow('投資收益', money(valueAfter(pv, val, r, m) - pv - val * m))]));
+                    const rows = []; let v = pv; for (let k = 1; k <= Math.min(m ?? 0, 1200); k++) { v = v * (1 + r) + val; if (k % 12 === 0 || k === m) rows.push([k % 12 === 0 ? `${k / 12} 年` : `${Math.floor(k / 12)} 年 ${k % 12} 月`, money(pv + val * k), money(v), money(v - pv - val * k), '']); }
+                    if (rows.length) { $('#tblTitle').textContent = '資產成長'; table(['時間', '投入', '資產', '收益', ''], rows); } else $('#tblCard').hidden = true;
+                } else {
+                    const n = Math.round(val * 12), pmt = requiredMonthly(target, pv, r, n);
+                    out.append(Util.statRow('每月需要投入', money(pmt), 'big'), Util.statRow('累積投入', money(pv + pmt * n)), Util.statRow('投資收益', money(target - pv - pmt * n)));
+                    $('#tblCard').hidden = true;
+                }
+                return;
+            }
             if (mode === 'loan') {
                 const P = num('p'), rate = num('rate'), years = num('years');
                 if (!(P > 0 && rate >= 0 && years > 0)) { out.textContent = '請輸入大於 0 的金額與年期，利率不可為負'; $('#tblCard').hidden = true; return; }

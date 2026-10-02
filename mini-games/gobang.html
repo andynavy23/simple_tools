@@ -202,6 +202,9 @@
                     <div id="init-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <button class="ms-btn primary" id="btn-host" onclick="startHost()"
                             style="flex: 1;">建立房間</button>
+                        <button class="ms-btn" onclick="startCpuMode()"
+                            style="flex: 1; background: linear-gradient(to bottom, #ffcc66 0%, #e69500 100%); color: white; text-shadow: 1px 1px 0 rgba(0,0,0,0.5);">對電腦</button>
+                        <select id="cpu-level" aria-label="電腦難度" style="padding: 4px;"><option value="easy">簡單</option><option value="normal" selected>普通</option><option value="hard">困難</option></select>
                         <button class="ms-btn" onclick="startLocalMode()" 
                             style="flex: 1; background: linear-gradient(to bottom, #aadd77 0%, #669933 100%); color: white; text-shadow: 1px 1px 0 rgba(0,0,0,0.5);">單機雙人</button>
                         <div style="display: flex; gap: 4px; width: 100%;">
@@ -243,6 +246,91 @@
     </div>
 
     <script>
+        // --- pure ---
+        // 電腦對手（五子棋）：以棋型評分挑落點。board[r][c] 為 'black' / 'white' / null，15×15
+        const GN = 15, GDIRS = [[1, 0], [0, 1], [1, 1], [1, -1]];
+        const GINB = (r, c) => r >= 0 && r < GN && c >= 0 && c < GN;
+        const GOPP = (color) => (color === 'black' ? 'white' : 'black');
+
+        // 假設 color 下在 (r,c)，四個方向各自的連線棋型分數加總（連子數 + 兩端開放程度）
+        function lineScore(board, r, c, color) {
+            let total = 0;
+            for (const [dr, dc] of GDIRS) {
+                let n = 1, open = 0;
+                for (const sg of [1, -1]) {
+                    let k = 1;
+                    while (GINB(r + dr * k * sg, c + dc * k * sg) && board[r + dr * k * sg][c + dc * k * sg] === color) { n++; k++; }
+                    if (GINB(r + dr * k * sg, c + dc * k * sg) && board[r + dr * k * sg][c + dc * k * sg] === null) open++;
+                }
+                if (n >= 5) total += 100000;
+                else if (n === 4) total += open === 2 ? 10000 : open === 1 ? 1000 : 0;
+                else if (n === 3) total += open === 2 ? 1000 : open === 1 ? 100 : 0;
+                else if (n === 2) total += open === 2 ? 100 : open === 1 ? 10 : 0;
+                else total += open;
+            }
+            return total;
+        }
+        // 候選點：已有棋子周圍 2 格內的空位；空盤只回傳中心
+        function candidates(board) {
+            const out = []; let any = false;
+            for (let r = 0; r < GN; r++) for (let c = 0; c < GN; c++) {
+                if (board[r][c]) { any = true; continue; }
+                let near = false;
+                for (let dr = -2; dr <= 2 && !near; dr++) for (let dc = -2; dc <= 2; dc++) if (GINB(r + dr, c + dc) && board[r + dr][c + dc]) { near = true; break; }
+                if (near) out.push([r, c]);
+            }
+            return any ? out : [[7, 7]];
+        }
+        // 單點分數 = 自己下的價值 + 擋對手的價值（略低一點，讓自己能贏時優先贏）；越靠近中心略加分
+        const cellValue = (board, r, c, me) => lineScore(board, r, c, me) + 0.9 * lineScore(board, r, c, GOPP(me)) - (Math.abs(r - 7) + Math.abs(c - 7)) * 0.1;
+
+        // level: easy / normal / hard。回傳 [r, c]；棋盤滿了回傳 null。forbid(r,c) 為黑棋禁手判斷（電腦執黑時才需要）
+        function cpuGomoku(board, me, level = 'normal', rand = Math.random, forbid = null) {
+            let cand = candidates(board).filter(([r, c]) => !(forbid && me === 'black' && forbid(r, c)));
+            if (!cand.length) return null;
+            const scored = cand.map(([r, c]) => ({ r, c, v: cellValue(board, r, c, me) })).sort((a, b) => b.v - a.v);
+            const top = scored[0];
+            if (top.v >= 100000 || (scored.some(s => lineScore(board, s.r, s.c, GOPP(me)) >= 100000))) return [top.r, top.c];     // 能贏就贏、對手下一手能贏就擋（任何難度）
+            if (level === 'easy' && rand() < 0.35) { const s = scored[Math.floor(rand() * Math.min(scored.length, 12))]; return [s.r, s.c]; }
+            if (level !== 'hard') { const best = scored.filter(s => s.v >= top.v - 0.5); const s = best[Math.floor(rand() * best.length)]; return [s.r, s.c]; }
+            // hard：對前 12 個候選做 4 層 alpha-beta 搜尋（我 → 對手 → 我 → 對手），葉節點用整盤棋型評分
+            const SEARCH_W = 12, DEPTH = 4;
+            const search = (turn, depth, alpha, beta) => {
+                if (depth === 0) return boardScore(board, me);
+                const cs = candidates(board).map(([r, c]) => ({ r, c, v: cellValue(board, r, c, turn) })).sort((a, b) => b.v - a.v).slice(0, SEARCH_W);
+                let best = turn === me ? -Infinity : Infinity;
+                for (const s of cs) {
+                    board[s.r][s.c] = turn;
+                    const v = gomokuWin(board, s.r, s.c, turn) ? (turn === me ? 1e7 : -1e7) * (depth + 1) : search(GOPP(turn), depth - 1, alpha, beta);
+                    board[s.r][s.c] = null;
+                    if (turn === me) { if (v > best) best = v; if (best > alpha) alpha = best; } else { if (v < best) best = v; if (best < beta) beta = best; }
+                    if (alpha >= beta) break;
+                }
+                return best === Infinity || best === -Infinity ? 0 : best;
+            };
+            let best = null;
+            for (const s of scored.slice(0, SEARCH_W)) {
+                board[s.r][s.c] = me;
+                const v = search(GOPP(me), DEPTH - 1, -Infinity, Infinity) + s.v * 0.01;
+                board[s.r][s.c] = null;
+                if (!best || v > best.v) best = { r: s.r, c: s.c, v };
+            }
+            return [best.r, best.c];
+        }
+        // 整盤評分：掃過每一個長度 5 的視窗；只含單一顏色才有分，子數越多越高。我方 − 1.1 × 對手（略偏防守）
+        function boardScore(board, me) {
+            const W = [0, 1, 10, 100, 1000, 100000]; let mine = 0, theirs = 0;
+            for (let r = 0; r < GN; r++) for (let c = 0; c < GN; c++) for (const [dr, dc] of GDIRS) {
+                const er = r + dr * 4, ec = c + dc * 4; if (!GINB(er, ec)) continue;
+                let a = 0, b = 0;
+                for (let k = 0; k < 5; k++) { const v = board[r + dr * k][c + dc * k]; if (v === me) a++; else if (v) b++; }
+                if (a && !b) mine += W[a]; else if (b && !a) theirs += W[b];
+            }
+            return mine - 1.1 * theirs;
+        }
+        const gomokuWin = (board, r, c, color) => GDIRS.some(([dr, dc]) => { let n = 1; for (const sg of [1, -1]) for (let k = 1; k < 5; k++) { const rr = r + dr * k * sg, cc = c + dc * k * sg; if (!GINB(rr, cc) || board[rr][cc] !== color) break; n++; } return n >= 5; });
+        // --- /pure ---
+
         // === 狀態變數 ===
         let room = null; // P2PRoom（房主或成員）
         let myNick = "";
@@ -256,6 +344,7 @@
         let scores = { host: 0, guest: 0 };
         let nextStarter = "black"; // Host is Black and starts first by default
         let isLocalMode = false;
+        let cpuMode = false, cpuLevel = 'normal', cpuTimer = 0; // 對電腦：玩家執黑、電腦執白（白棋沒有禁手限制）
         let lastMovePos = null;
 
         const els = {
@@ -429,6 +518,29 @@
             log("進入單機雙人模式", "success");
         }
 
+        function startCpuMode() {
+            cpuMode = true; cpuLevel = document.getElementById('cpu-level').value;
+            startLocalMode();
+            myNick = "你"; els.nickInput.value = myNick;
+            renderNicknameTags("電腦");
+            els.sHost.parentNode.firstChild.textContent = "你贏: "; els.sGuest.parentNode.firstChild.textContent = "電腦贏: ";
+            els.status.innerText = "對電腦：你執黑子先行";
+            log(`進入對電腦模式（${{ easy: '簡單', normal: '普通', hard: '困難' }[cpuLevel]}）`, "success");
+        }
+
+        function scheduleCpu() {
+            clearTimeout(cpuTimer);
+            if (!cpuMode || !gameActive || turn !== "white") return;
+            cpuTimer = setTimeout(() => {
+                if (!cpuMode || !gameActive || turn !== "white") return;
+                const mv = cpuGomoku(board, "white", cpuLevel);
+                if (!mv) return;
+                placePiece(mv[0], mv[1], "white");
+                turn = "black";
+                if (!checkWin(mv[0], mv[1], "white")) updateStatus();
+            }, 500);
+        }
+
         function resetTotalState() {
             scores = { host: 0, guest: 0 };
             nextStarter = "black";
@@ -488,6 +600,7 @@
         function handleCellClick(r, c) {
             if (!gameActive || board[r][c]) return;
             if (!isLocalMode && turn !== myColor) return;
+            if (cpuMode && turn !== "black") return;     // 輪到電腦時不能下
 
             const currentColor = turn;
 
@@ -503,7 +616,7 @@
             
             turn = (currentColor === "black") ? "white" : "black";
             
-            if (!checkWin(r, c, currentColor)) updateStatus();
+            if (!checkWin(r, c, currentColor)) { updateStatus(); scheduleCpu(); }
         }
 
         function placePiece(r, c, color) {
@@ -666,6 +779,7 @@
             updateStatus();
             updateScoreUI();
             log(`遊戲已重置。本局由 ${turn === 'black' ? '黑子' : '白子'} 先手。`, "info");
+            scheduleCpu();
         }
 
         function copyInvite() {
