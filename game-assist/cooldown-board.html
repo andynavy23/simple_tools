@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="技能冷卻時間板：自訂技能與冷卻秒數，點擊或按數字鍵開始倒數，冷卻完成時語音提醒。">
+    <meta property="og:title" content="技能冷卻時間板" />
+    <meta property="og:description" content="自訂技能冷卻，按鍵開始倒數並語音提醒。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/game-assist/cooldown-board.html" />
+    <title>技能冷卻時間板</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row input[type=text] {
+            flex: 1 1 140px;
+        }
+
+        .row input[type=number] {
+            width: 90px;
+        }
+
+        .row label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .skill {
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .skill .fill {
+            position: absolute;
+            inset: 0 auto 0 0;
+            background: color-mix(in srgb, var(--blue) 25%, transparent);
+            width: 0;
+            transition: width .1s linear;
+        }
+
+        .skill.ready {
+            outline: 2px solid var(--ok);
+        }
+
+        .skill>* {
+            position: relative;
+        }
+
+        .key {
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            background: var(--fill);
+            display: grid;
+            place-items: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .skill .name {
+            flex: 1;
+            font-weight: 600;
+            word-break: break-all;
+        }
+
+        .skill .t {
+            font-size: 26px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .del {
+            background: none;
+            color: var(--muted);
+            padding: 0 8px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>技能冷卻時間板</h1>
+        <p class="sub">點技能或按對應的數字鍵就開始倒數；冷卻完成會提示，適合小螢幕旁放著用。</p>
+
+        <div class="card">
+            <div class="row">
+                <input type="text" id="name" maxlength="16" placeholder="技能名稱" aria-label="技能名稱">
+                <input type="number" id="cd" min="1" max="3600" step="any" placeholder="冷卻秒數" aria-label="冷卻秒數">
+                <button class="primary" id="add">新增</button>
+            </div>
+            <div class="row" style="margin-top:10px">
+                <label><input type="checkbox" id="voice" checked> 冷卻完成時語音提醒</label>
+                <label><input type="checkbox" id="sound" checked> 提示音</label>
+                <button class="sm" id="reset" style="margin-left:auto">全部歸零</button>
+            </div>
+        </div>
+        <div id="list"></div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        // 還要等幾毫秒（已冷卻完成回傳 0）
+        const remaining = (now, readyAt) => Math.max(0, readyAt - now);
+        // 冷卻進度 0..1（1 = 剛按下去，0 = 已完成）
+        const fraction = (now, readyAt, cdMs) => (cdMs > 0 ? Math.min(1, remaining(now, readyAt) / cdMs) : 0);
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let skills = Util.store.get('cd_skills', [{ name: '範例技能', sec: 30 }]).map(s => ({ ...s, readyAt: 0, announced: true }));
+        const opts = Util.store.get('cd_opts', { voice: true, sound: true });
+        $('#voice').checked = opts.voice; $('#sound').checked = opts.sound;
+        const save = () => { Util.store.set('cd_skills', skills.map(({ name, sec }) => ({ name, sec }))); Util.store.set('cd_opts', { voice: $('#voice').checked, sound: $('#sound').checked }); };
+
+        function trigger(i) {
+            const s = skills[i]; if (!s) return;
+            s.readyAt = Date.now() + s.sec * 1000; s.announced = false;
+            Util.tone(660, 80, { vol: 0.08 });              // 按下去的短音（同時也讓瀏覽器允許之後發聲）
+        }
+
+        function render() {
+            $('#list').replaceChildren(...skills.map((s, i) => {
+                const el = document.createElement('div');
+                el.className = 'card skill'; el.id = 'sk' + i;
+                const fill = document.createElement('div'); fill.className = 'fill';
+                const key = document.createElement('div'); key.className = 'key'; key.textContent = i < 9 ? i + 1 : '';
+                const name = document.createElement('div'); name.className = 'name'; name.textContent = `${s.name}（${s.sec} 秒）`;
+                const t = document.createElement('div'); t.className = 't'; t.textContent = '就緒';
+                const del = document.createElement('button'); del.className = 'del'; del.textContent = '×'; del.setAttribute('aria-label', '刪除 ' + s.name);
+                del.onclick = (e) => { e.stopPropagation(); skills.splice(i, 1); save(); render(); };
+                el.onclick = () => trigger(i);
+                el.append(fill, key, name, t, del);
+                return el;
+            }));
+        }
+
+        setInterval(() => {
+            const now = Date.now();
+            skills.forEach((s, i) => {
+                const el = $('#sk' + i); if (!el) return;
+                const left = remaining(now, s.readyAt), t = el.querySelector('.t');
+                el.querySelector('.fill').style.width = (fraction(now, s.readyAt, s.sec * 1000) * 100) + '%';
+                el.classList.toggle('ready', left === 0 && s.readyAt > 0);
+                t.textContent = left ? (left / 1000).toFixed(left < 10000 ? 1 : 0) : (s.readyAt ? '好了' : '就緒');
+                if (!left && !s.announced) {
+                    s.announced = true;
+                    if ($('#voice').checked) Util.speak(`${s.name} 好了`); else if ($('#sound').checked) Util.beep(1);
+                    if ($('#voice').checked && $('#sound').checked) Util.tone(990, 120, { vol: 0.08 });
+                }
+            });
+        }, 100);
+
+        addEventListener('keydown', (e) => {
+            if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName) || e.ctrlKey || e.metaKey || e.altKey) return;
+            if (/^[1-9]$/.test(e.key)) trigger(+e.key - 1);
+        });
+
+        function add() {
+            const name = $('#name').value.trim(), sec = parseFloat($('#cd').value);
+            if (!name || !(sec > 0)) return;
+            skills.push({ name, sec, readyAt: 0, announced: true });
+            $('#name').value = ''; $('#cd').value = '';
+            save(); render();
+        }
+        $('#add').onclick = add;
+        $('#cd').onkeydown = $('#name').onkeydown = (e) => { if (e.key === 'Enter') add(); };
+        $('#voice').onchange = $('#sound').onchange = save;
+        $('#reset').onclick = () => { skills.forEach(s => { s.readyAt = 0; s.announced = true; }); };
+        render();
+    </script>
+</body>
+
+</html>

@@ -1,6 +1,6 @@
-/* 共用小工具：均勻亂數 / 洗牌 / 複製 / localStorage / HTML 跳脫 / 日期字串 / 統計列
+/* 共用小工具：均勻亂數 / 洗牌 / 複製 / localStorage / HTML 跳脫 / 日期字串 / 統計列 / 提示音 / 語音
  *
- * 使用：<script src="../shared/js/util.js"></script>，然後 const { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow } = Util;
+ * 使用：<script src="../shared/js/util.js"></script>，然後 const { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak } = Util;
  * 放進這裡的條件：至少兩個工具在用、且不需要各工具再調整格式。
  */
 (function (root) {
@@ -18,6 +18,39 @@
         between: (from, to) => day.num(to) - day.num(from),
         shift(s, n) { const t = new Date((day.num(s) + n) * 864e5); return day.ymd(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()); },
     };
+
+    // 提示音：共用同一個 AudioContext（瀏覽器限制同時數量）；需在使用者操作後才發得出聲音
+    let audioCtx = null;
+    function tone(freq, ms = 200, { vol = 0.15, type = 'sine', delay = 0 } = {}) {
+        try {
+            const AC = root.AudioContext || root.webkitAudioContext;
+            if (!AC) return;
+            audioCtx = audioCtx || new AC();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const t = audioCtx.currentTime + delay / 1000, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+            o.type = type; o.frequency.value = freq;
+            o.connect(g); g.connect(audioCtx.destination);
+            g.gain.setValueAtTime(vol, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + ms / 1000);
+            o.start(t); o.stop(t + ms / 1000);
+        } catch (e) { /* 沒有聲音就算了 */ }
+    }
+
+    // 時間到的提醒：連響數聲 + 手機振動
+    function beep(times = 3) {
+        for (let i = 0; i < times; i++) tone(880, 200, { delay: i * 250 });
+        try { if (root.navigator && navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { }
+    }
+
+    // 語音提醒（不支援的瀏覽器直接略過）
+    function speak(text, { lang = 'zh-TW', rate = 1.2 } = {}) {
+        try {
+            if (!root.speechSynthesis) return;
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = lang; u.rate = rate;
+            root.speechSynthesis.speak(u);
+        } catch (e) { }
+    }
 
     // 統計列：左邊說明、右邊數值（樣式見 theme.css 的 .li.stat）；cls 加在數值上
     function statRow(label, value, cls) {
@@ -82,7 +115,7 @@
         },
     };
 
-    const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow };
+    const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak };
     if (typeof module !== 'undefined' && module.exports) module.exports = Util;
     else root.Util = Util;
 })(typeof window !== 'undefined' ? window : globalThis);

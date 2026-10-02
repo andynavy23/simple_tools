@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="計時器：碼表（可分圈）與多組倒數同時進行，時間到有聲音與振動提醒。">
+    <meta property="og:title" content="計時器 / 碼表" />
+    <meta property="og:description" content="碼表分圈，與多組倒數同時進行。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/timers.html" />
+    <title>計時器 / 碼表</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 600px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .time {
+            font-size: 56px;
+            font-weight: 700;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -.02em;
+            margin: 6px 0 14px;
+        }
+
+        .btns {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .laps {
+            margin-top: 14px;
+            max-height: 280px;
+            overflow: auto;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row input[type=text] {
+            flex: 1 1 140px;
+        }
+
+        .row input[type=number] {
+            width: 64px;
+        }
+
+        .cd .t {
+            font-size: 32px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .cd.done {
+            outline: 2px solid var(--ok);
+        }
+
+        .cd .name {
+            color: var(--muted);
+            font-size: 14px;
+            word-break: break-all;
+        }
+
+        .del {
+            background: none;
+            color: var(--muted);
+            padding: 0 8px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>計時器 / 碼表</h1>
+        <p class="sub">以時間戳計算，分頁在背景也不會越跑越慢。</p>
+
+        <div class="tabs">
+            <button data-tab="sw" aria-pressed="true">碼表</button>
+            <button data-tab="cd" aria-pressed="false">倒數</button>
+        </div>
+
+        <div id="sw">
+            <div class="card">
+                <div class="time" id="swTime">00:00.00</div>
+                <div class="btns">
+                    <button class="primary" id="swGo">開始</button>
+                    <button id="swLap" disabled>分圈</button>
+                    <button id="swReset">重置</button>
+                </div>
+                <div class="laps" id="laps"></div>
+            </div>
+        </div>
+
+        <div id="cd" hidden>
+            <div class="card">
+                <div class="row">
+                    <input type="text" id="cdName" maxlength="20" placeholder="名稱（例如：泡麵）" aria-label="名稱">
+                    <input type="number" id="cdH" min="0" max="99" placeholder="時" aria-label="時">
+                    <input type="number" id="cdM" min="0" max="59" placeholder="分" aria-label="分" value="5">
+                    <input type="number" id="cdS" min="0" max="59" placeholder="秒" aria-label="秒">
+                    <button class="primary" id="cdAdd">新增</button>
+                </div>
+            </div>
+            <div id="cdList"></div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        // 毫秒 → "mm:ss.cc"（超過 1 小時為 "h:mm:ss.cc"）；cs=false 時不顯示百分秒
+        function fmtMs(ms, cs = true) {
+            ms = Math.max(0, Math.floor(ms));
+            const c = Math.floor(ms % 1000 / 10), s = Math.floor(ms / 1000) % 60, m = Math.floor(ms / 60000) % 60, h = Math.floor(ms / 3600000);
+            const p = (n) => String(n).padStart(2, '0');
+            return `${h ? h + ':' + p(m) : p(m)}:${p(s)}${cs ? '.' + p(c) : ''}`;
+        }
+
+        // 分圈：由「累計時間」陣列算出每圈花費
+        const lapTimes = (totals) => totals.map((t, i) => t - (i ? totals[i - 1] : 0));
+
+        const toMs = (h, m, s) => ((+h || 0) * 3600 + (+m || 0) * 60 + (+s || 0)) * 1000;
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+
+        // ---------- 分頁 ----------
+        document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => {
+            document.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-pressed', x === b));
+            $('#sw').hidden = b.dataset.tab !== 'sw'; $('#cd').hidden = b.dataset.tab !== 'cd';
+        });
+
+        // ---------- 碼表 ----------
+        let swRun = false, swStart = 0, swAcc = 0, swTotals = [], swRaf = 0;
+        const swNow = () => swAcc + (swRun ? performance.now() - swStart : 0);
+
+        function swTick() {
+            $('#swTime').textContent = fmtMs(swNow());
+            if (swRun) swRaf = requestAnimationFrame(swTick);
+        }
+
+        function renderLaps() {
+            const laps = lapTimes(swTotals);
+            const best = Math.min(...laps), worst = Math.max(...laps);
+            $('#laps').replaceChildren(...laps.map((l, i) => {
+                const row = document.createElement('div'); row.className = 'li';
+                const a = document.createElement('span'), b = document.createElement('b');
+                a.textContent = `第 ${i + 1} 圈`; a.className = 'muted';
+                b.textContent = `${fmtMs(l)}　${fmtMs(swTotals[i])}`;
+                if (laps.length > 2) b.style.color = l === best ? 'var(--ok)' : l === worst ? 'var(--bad)' : '';
+                row.append(a, b);
+                return row;
+            }).reverse());
+        }
+
+        $('#swGo').onclick = () => {
+            if (swRun) { swAcc += performance.now() - swStart; swRun = false; cancelAnimationFrame(swRaf); }
+            else { swStart = performance.now(); swRun = true; swTick(); }
+            $('#swGo').textContent = swRun ? '停止' : '繼續';
+            $('#swGo').classList.toggle('primary', !swRun);
+            $('#swLap').disabled = !swRun;
+            $('#swTime').textContent = fmtMs(swNow());
+        };
+        $('#swLap').onclick = () => { swTotals.push(swNow()); renderLaps(); };
+        $('#swReset').onclick = () => {
+            swRun = false; swAcc = 0; swTotals = []; cancelAnimationFrame(swRaf);
+            $('#swGo').textContent = '開始'; $('#swGo').classList.add('primary'); $('#swLap').disabled = true;
+            $('#swTime').textContent = fmtMs(0); $('#laps').replaceChildren();
+        };
+
+        // ---------- 倒數 ----------
+        let timers = Util.store.get('timers_defs', []).map(t => ({ ...t, left: t.total, endAt: 0, running: false, done: false }));
+        const saveDefs = () => Util.store.set('timers_defs', timers.map(({ name, total }) => ({ name, total })));
+
+        function renderCd() {
+            const list = $('#cdList');
+            list.replaceChildren(...timers.map((t, i) => {
+                const card = document.createElement('div'); card.className = 'card cd' + (t.done ? ' done' : '');
+                const row = document.createElement('div'); row.className = 'row'; row.style.justifyContent = 'space-between';
+                const left = document.createElement('div'), nm = document.createElement('div'), tm = document.createElement('div');
+                nm.className = 'name'; nm.textContent = t.name || '倒數'; tm.className = 't'; tm.textContent = fmtMs(t.left, false); tm.id = 'cd' + i;
+                left.append(nm, tm);
+                const go = document.createElement('button'); go.className = t.running ? '' : 'primary'; go.textContent = t.running ? '暫停' : (t.left < t.total && !t.done ? '繼續' : '開始');
+                go.onclick = () => { if (t.running) { t.left = Math.max(0, t.endAt - Date.now()); t.running = false; } else { if (t.done || t.left <= 0) { t.left = t.total; t.done = false; } t.endAt = Date.now() + t.left; t.running = true; } renderCd(); };
+                const rs = document.createElement('button'); rs.textContent = '重置'; rs.onclick = () => { t.left = t.total; t.running = false; t.done = false; renderCd(); };
+                const del = document.createElement('button'); del.className = 'del'; del.textContent = '×'; del.setAttribute('aria-label', '刪除'); del.onclick = () => { timers.splice(i, 1); saveDefs(); renderCd(); };
+                const btns = document.createElement('div'); btns.className = 'row'; btns.append(go, rs, del);
+                row.append(left, btns);
+                card.append(row);
+                return card;
+            }));
+        }
+
+        // 每 200ms 更新一次顯示並檢查是否到時間（時間戳計算，背景分頁被降頻也準確）
+        setInterval(() => {
+            let changed = false;
+            timers.forEach((t, i) => {
+                if (!t.running) return;
+                const left = t.endAt - Date.now();
+                if (left <= 0) { t.running = false; t.done = true; t.left = 0; changed = true; Util.beep(); document.title = '⏰ ' + (t.name || '時間到'); setTimeout(() => { document.title = '計時器 / 碼表'; }, 5000); }
+                else { const el = $('#cd' + i); if (el) el.textContent = fmtMs(left, false); }
+            });
+            if (changed) renderCd();
+        }, 200);
+
+        $('#cdAdd').onclick = () => {
+            const total = toMs($('#cdH').value, $('#cdM').value, $('#cdS').value);
+            if (total <= 0) return;
+            timers.push({ name: $('#cdName').value.trim(), total, left: total, endAt: 0, running: false, done: false });
+            $('#cdName').value = '';
+            saveDefs(); renderCd();
+        };
+        renderCd();
+    </script>
+</body>
+
+</html>

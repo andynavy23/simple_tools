@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="貸款與複利試算：本息或本金平均攤還的月付金與逐期表，以及定期定額的複利成長。">
+    <meta property="og:title" content="貸款 / 複利試算" />
+    <meta property="og:description" content="月付金、總利息、逐期表，以及複利成長。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/loan-calculator.html" />
+    <title>貸款 / 複利試算</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .big {
+            font-size: 26px;
+        }
+
+        .tbl {
+            max-height: 360px;
+            overflow: auto;
+            font-variant-numeric: tabular-nums;
+            font-size: 14px;
+        }
+
+        .tbl .li {
+            display: grid;
+            grid-template-columns: 2.2em repeat(4, 1fr);
+            text-align: right;
+            padding: 6px 0;
+        }
+
+        .tbl .li.h {
+            position: sticky;
+            top: 0;
+            background: var(--card);
+            font-weight: 700;
+            color: var(--muted);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>貸款 / 複利試算</h1>
+        <p class="sub">結果僅供參考，實際金額以金融機構的契約與試算為準。</p>
+
+        <div class="tabs">
+            <button data-mode="loan" aria-pressed="true">貸款</button>
+            <button data-mode="invest" aria-pressed="false">複利成長</button>
+        </div>
+
+        <div class="card" id="loan">
+            <div class="fgrid">
+                <div><label for="p">貸款金額</label><input id="p" type="number" min="0" step="any" value="1000000"></div>
+                <div><label for="rate">年利率 (%)</label><input id="rate" type="number" min="0" step="any" value="2.2"></div>
+                <div><label for="years">年期</label><input id="years" type="number" min="0.1" max="50" step="any" value="20"></div>
+                <div><label for="type">還款方式</label>
+                    <select id="type" style="width:100%">
+                        <option value="annuity">本息平均攤還（每期金額固定）</option>
+                        <option value="principal">本金平均攤還（每期遞減）</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" id="invest" hidden>
+            <div class="fgrid">
+                <div><label for="pv">起始本金</label><input id="pv" type="number" min="0" step="any" value="100000"></div>
+                <div><label for="pmt">每月投入</label><input id="pmt" type="number" min="0" step="any" value="10000"></div>
+                <div><label for="irate">年報酬率 (%)</label><input id="irate" type="number" step="any" value="5"></div>
+                <div><label for="iyears">年數</label><input id="iyears" type="number" min="1" max="80" step="1" value="20"></div>
+            </div>
+        </div>
+
+        <div class="card" id="out"></div>
+        <div class="card" id="tblCard" hidden>
+            <h2 id="tblTitle">逐期明細</h2>
+            <div class="tbl" id="tbl"></div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        // 貸款攤還。type: 'annuity'（本息平均）| 'principal'（本金平均）；months 為總期數
+        // 回傳 { rows: [{ n, payment, interest, principal, balance }], totalInterest, totalPaid }
+        function amortize(P, annualRate, months, type = 'annuity') {
+            const r = annualRate / 12 / 100;
+            const rows = [];
+            let bal = P, totalInterest = 0;
+            const pay = type === 'annuity' ? (r === 0 ? P / months : P * r / (1 - Math.pow(1 + r, -months))) : 0;
+            for (let n = 1; n <= months; n++) {
+                const interest = bal * r;
+                const principal = type === 'annuity' ? pay - interest : P / months;
+                bal = n === months ? 0 : bal - principal;
+                rows.push({ n, payment: principal + interest, interest, principal, balance: Math.max(0, bal) });
+                totalInterest += interest;
+            }
+            return { rows, totalInterest, totalPaid: P + totalInterest };
+        }
+
+        // 複利：起始本金 + 每月投入，每月複利一次；回傳每年底的 { year, contributed, value }
+        function compound(pv, monthly, annualRate, years) {
+            const r = annualRate / 12 / 100, out = [];
+            let v = pv, put = pv;
+            for (let m = 1; m <= years * 12; m++) {
+                v = v * (1 + r) + monthly;
+                put += monthly;
+                if (m % 12 === 0) out.push({ year: m / 12, contributed: put, value: v });
+            }
+            return out;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const num = (id) => parseFloat($('#' + id).value);
+        const money = (v) => Math.round(v).toLocaleString('zh-TW');
+        let mode = 'loan';
+
+        function table(heads, rows) {
+            const box = $('#tbl');
+            const mk = (cells, cls) => { const d = document.createElement('div'); d.className = 'li ' + (cls || ''); cells.forEach(c => { const s = document.createElement('span'); s.textContent = c; d.append(s); }); return d; };
+            box.replaceChildren(mk(heads, 'h'), ...rows.map(r => mk(r)));
+            $('#tblCard').hidden = false;
+        }
+
+        function render() {
+            const out = $('#out');
+            out.replaceChildren();
+            $('#loan').hidden = mode !== 'loan';
+            $('#invest').hidden = mode !== 'invest';
+            if (mode === 'loan') {
+                const P = num('p'), rate = num('rate'), years = num('years');
+                if (!(P > 0 && rate >= 0 && years > 0)) { out.textContent = '請輸入大於 0 的金額與年期，利率不可為負'; $('#tblCard').hidden = true; return; }
+                const months = Math.round(years * 12), a = amortize(P, rate, months, $('#type').value);
+                const first = a.rows[0], last = a.rows[months - 1];
+                out.append(
+                    Util.statRow($('#type').value === 'annuity' ? '每月應繳' : '首期應繳', money(first.payment), 'big'),
+                    ...($('#type').value === 'principal' ? [Util.statRow('末期應繳', money(last.payment))] : []),
+                    Util.statRow('總利息', money(a.totalInterest)),
+                    Util.statRow('總還款金額', money(a.totalPaid)),
+                    Util.statRow('利息佔本金', (a.totalInterest / P * 100).toFixed(1) + ' %'),
+                );
+                $('#tblTitle').textContent = `逐期明細（共 ${months} 期）`;
+                table(['期', '應繳', '利息', '本金', '餘額'], a.rows.map(r => [r.n, money(r.payment), money(r.interest), money(r.principal), money(r.balance)]));
+            } else {
+                const pv = num('pv') || 0, pmt = num('pmt') || 0, rate = num('irate'), years = Math.round(num('iyears'));
+                if (!(pv >= 0 && pmt >= 0 && years >= 1 && Number.isFinite(rate))) { out.textContent = '請輸入有效的數字'; $('#tblCard').hidden = true; return; }
+                const rows = compound(pv, pmt, rate, years), end = rows[rows.length - 1];
+                out.append(
+                    Util.statRow(`${years} 年後資產`, money(end.value), 'big'),
+                    Util.statRow('累積投入', money(end.contributed)),
+                    Util.statRow('複利收益', money(end.value - end.contributed)),
+                    Util.statRow('收益佔最終資產', (end.value ? (end.value - end.contributed) / end.value * 100 : 0).toFixed(1) + ' %'),
+                );
+                $('#tblTitle').textContent = '每年年底';
+                table(['年', '投入', '資產', '收益', ''], rows.map(r => [r.year, money(r.contributed), money(r.value), money(r.value - r.contributed), '']));
+            }
+        }
+
+        document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
+            mode = b.dataset.mode;
+            document.querySelectorAll('[data-mode]').forEach(x => x.setAttribute('aria-pressed', x === b));
+            render();
+        });
+        document.querySelectorAll('input, select').forEach(i => { i.oninput = render; });
+        render();
+    </script>
+</body>
+
+</html>

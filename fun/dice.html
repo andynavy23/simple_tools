@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="骰子工具：1–6 顆、d4 到 d100 任選，連續擲並統計總和分佈，桌遊與跑團都好用。">
+    <meta property="og:title" content="骰子工具" />
+    <meta property="og:description" content="1–6 顆骰子任選面數，統計總和分佈。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/dice.html" />
+    <title>骰子工具</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row label {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        #dice {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+            min-height: 84px;
+            margin: 18px 0 10px;
+        }
+
+        .die {
+            width: 72px;
+            height: 72px;
+            border-radius: 16px;
+            background: var(--bg);
+            box-shadow: inset 0 0 0 2px var(--fill);
+            display: grid;
+            place-items: center;
+            font-size: 30px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .die.roll {
+            animation: shake .35s ease;
+        }
+
+        @keyframes shake {
+            25% {
+                transform: rotate(-12deg) scale(1.08);
+            }
+
+            75% {
+                transform: rotate(12deg) scale(1.08);
+            }
+        }
+
+        #sum {
+            text-align: center;
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        #roll {
+            display: block;
+            margin: 14px auto 0;
+            font-size: 17px;
+            padding: 10px 40px;
+        }
+
+        .hist {
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+            height: 120px;
+            margin-top: 8px;
+        }
+
+        .hist div {
+            flex: 1;
+            background: var(--blue);
+            border-radius: 4px 4px 0 0;
+            min-height: 2px;
+            position: relative;
+        }
+
+        .hist small {
+            position: absolute;
+            bottom: -18px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: var(--muted);
+        }
+
+        .log {
+            max-height: 180px;
+            overflow: auto;
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>骰子工具</h1>
+        <p class="sub">選顆數與面數，擲出來就是公平的隨機（使用瀏覽器的安全亂數）。</p>
+
+        <div class="card">
+            <div class="row">
+                <label for="count">顆數</label>
+                <select id="count"></select>
+                <label for="sides">面數</label>
+                <select id="sides"></select>
+                <label for="mod">加成</label>
+                <input id="mod" type="number" value="0" style="width:80px">
+            </div>
+            <div id="dice" aria-live="polite"></div>
+            <div id="sum"></div>
+            <button class="primary" id="roll">擲骰子</button>
+        </div>
+
+        <div class="card">
+            <h2>總和分佈 <span class="muted" id="n" style="font-weight:400;font-size:14px"></span></h2>
+            <div class="hist" id="hist" style="margin-bottom:22px"></div>
+            <div class="row"><button class="sm" id="clear">清除紀錄</button></div>
+        </div>
+
+        <div class="card">
+            <h2>最近 20 次</h2>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { rnd } = Util;
+
+        // --- pure ---
+        // 擲 n 顆 sides 面骰，回傳每顆點數（1..sides）
+        const roll = (n, sides) => Array.from({ length: n }, () => rnd(sides) + 1);
+
+        // 把歷次總和彙整成 { 總和: 次數 }
+        function tally(totals) {
+            const t = {};
+            totals.forEach(v => { t[v] = (t[v] || 0) + 1; });
+            return t;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const SIDES = [4, 6, 8, 10, 12, 20, 100];
+        let history = Util.store.get('dice_history', []);        // [{ n, sides, mod, faces, total }]
+        $('#count').replaceChildren(...[1, 2, 3, 4, 5, 6].map(n => new Option(n + ' 顆', n)));
+        $('#sides').replaceChildren(...SIDES.map(s => new Option('d' + s, s)));
+        $('#count').value = 2; $('#sides').value = 6;
+
+        function show(faces, mod, animate) {
+            const box = $('#dice');
+            box.replaceChildren(...faces.map(f => {
+                const d = document.createElement('div');
+                d.className = 'die' + (animate ? ' roll' : '');
+                d.textContent = f;
+                return d;
+            }));
+            const sum = faces.reduce((a, b) => a + b, 0);
+            $('#sum').textContent = faces.length > 1 || mod ? `總和 ${sum + mod}${mod ? `（${sum} ${mod > 0 ? '+' : '−'} ${Math.abs(mod)}）` : ''}` : '';
+        }
+
+        function renderStats() {
+            const cur = history.filter(h => h.n === +$('#count').value && h.sides === +$('#sides').value);
+            const t = tally(cur.map(h => h.faces.reduce((a, b) => a + b, 0)));
+            const lo = +$('#count').value, hi = +$('#count').value * +$('#sides').value;
+            const keys = []; for (let k = lo; k <= hi && keys.length < 60; k++) keys.push(k);
+            const max = Math.max(1, ...Object.values(t));
+            $('#hist').replaceChildren(...keys.map(k => {
+                const bar = document.createElement('div');
+                bar.style.height = ((t[k] || 0) / max * 100) + '%';
+                bar.title = `${k}：${t[k] || 0} 次`;
+                if (keys.length <= 30 || k % 5 === 0) { const s = document.createElement('small'); s.textContent = k; bar.append(s); }
+                return bar;
+            }));
+            $('#n').textContent = `（${$('#count').value} 顆 d${$('#sides').value}，共 ${cur.length} 次）`;
+            $('#log').replaceChildren(...history.slice(-20).reverse().map(h => {
+                const row = document.createElement('div');
+                row.className = 'li';
+                const sum = h.faces.reduce((a, b) => a + b, 0) + h.mod;
+                row.append(Object.assign(document.createElement('span'), { className: 'muted', textContent: `${h.n}d${h.sides}${h.mod ? (h.mod > 0 ? '+' : '') + h.mod : ''}  [${h.faces.join(', ')}]` }), Object.assign(document.createElement('b'), { textContent: sum }));
+                return row;
+            }));
+        }
+
+        $('#roll').onclick = () => {
+            const n = +$('#count').value, sides = +$('#sides').value, mod = parseInt($('#mod').value, 10) || 0;
+            const faces = roll(n, sides);
+            history.push({ n, sides, mod, faces });
+            history = history.slice(-500);
+            Util.store.set('dice_history', history);
+            show(faces, mod, true);
+            renderStats();
+        };
+        $('#clear').onclick = () => { history = []; Util.store.set('dice_history', history); renderStats(); };
+        $('#count').onchange = $('#sides').onchange = renderStats;
+        renderStats();
+    </script>
+</body>
+
+</html>

@@ -39,6 +39,16 @@
 | [經驗效率計算機](game-assist/exp-calculator.html) | 遊戲輔助 | 以百分比計算：還需次數、時間、預計完成時刻 |
 | [抽卡機率計算機](game-assist/gacha-calculator.html) | 遊戲輔助 | 軟 / 硬保底、UP 與大保底，期望抽數與 50/80/90/99% 抽數 |
 | [習慣打卡表](fun/habit-tracker.html) | 趣味 | 每日打卡、連續天數、月曆（可補打過去日期） |
+| [骰子工具](fun/dice.html) | 趣味 | 1–6 顆、d4–d100、加成，統計總和分佈（安全亂數） |
+| [貸款 / 複利試算](utils/loan-calculator.html) | 工具 | 本息 / 本金平均攤還與逐期表；起始本金 + 每月投入的複利成長 |
+| [字數統計 / 閱讀時間](utils/word-count.html) | 工具 | 中英文分開計算，預估閱讀時間 |
+| [BMI / 熱量 / 心率計算](utils/health-calc.html) | 工具 | BMI（台灣標準）、BMR、TDEE、心率區間（含儲備心率法） |
+| [計時器 / 碼表](fun/timers.html) | 趣味 | 碼表與分圈、多組倒數（時間戳計算，背景分頁也準） |
+| [技能冷卻時間板](game-assist/cooldown-board.html) | 遊戲輔助 | 自訂技能冷卻，數字鍵觸發，冷卻完成語音 / 提示音 |
+| [記憶序列 Simon](mini-games/simon.html) | 小遊戲 | 四色按鈕與音效，越後面越快，記錄最高關卡 |
+| [數獨](mini-games/sudoku.html) | 小遊戲 | 保證唯一解的出題、筆記、提示、衝突標示，記錄最佳時間 |
+| [連線你畫我猜](mini-games/draw-guess.html) | 小遊戲 | 房主判定猜題與計分；題目只傳給畫的人；筆跡經房主驗證後轉送 |
+| [連線投票 / 搶答](fun/live-poll.html) | 趣味 | 投票（可改選、即時結果）與測驗（單選計分、排行榜），可限時 |
 | [摸魚閱讀器](reading/stealth-reader.html) | 閱讀 | 本機載入 txt 小說，偽裝 ERP 後台、老闆鍵、進度記憶（開發中） |
 
 ## 專案結構
@@ -51,7 +61,7 @@ game-assist/ mini-games/ fun/ utils/ reading/
 shared/                 共用模組（依檔案類型分資料夾；見下方「共用模組」）
   css/theme.css         蘋果風格：明暗模式色彩、頁面、卡片、按鈕、輸入框、清單列、表單格
   css/maple.css         楓之谷風格：視窗框、按鈕、暱稱欄、日誌、載入動畫、成員標籤
-  js/util.js            亂數 / 洗牌 / 複製 / localStorage / HTML 跳脫 / 日期字串 / 統計列
+  js/util.js            亂數 / 洗牌 / 複製 / localStorage / HTML 跳脫 / 日期字串 / 統計列 / 提示音 / 語音
   js/p2p-room.js        房主制 P2P 連線（PeerJS 由它自動載入）
 tests/                  自動測試（node，不需安裝套件）
 assets/<game>/          遊戲素材圖片（例如 assets/artale/，供 og:image 使用）
@@ -72,7 +82,7 @@ temp_*                  開發中的暫存檔，已被 .gitignore 忽略
 | --- | --- | --- |
 | `css/theme.css` | 色彩變數與明暗模式、頁面容器、卡片、膠囊按鈕、輸入框、`.li` 清單列、`.fgrid` 表單格 | 首頁與所有蘋果風格的工具 |
 | `css/maple.css` | 楓之谷視窗框 / 按鈕 / 暱稱欄 / 日誌 / 載入動畫 / 成員標籤 | 五子棋、RJPQ |
-| `js/util.js` | `rnd`、`shuffle`、`copyText`、`copyWithFeedback`、`store`、`esc`、`day`、`statRow` | 見檔頭說明與各頁面 |
+| `js/util.js` | `rnd`、`shuffle`、`copyText`、`copyWithFeedback`、`store`、`esc`、`day`、`statRow`、`tone`、`beep`、`speak` | 見檔頭說明與各頁面 |
 | `js/p2p-room.js` | 建房、加入、暱稱驗證、拒絕、名單、踢人、斷線、只信任房主、逾時 | 團練、RJPQ、五子棋、翻牌記憶、四子棋 |
 
 使用方式（路徑依頁面所在資料夾）：

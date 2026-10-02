@@ -7,7 +7,7 @@ global.Util = require(path.join(root, 'shared/js/util.js'));
 const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
 
 // 頁面外層用 const { ... } = Util 取得共用函式，這裡提供同樣的名稱
-const PRELUDE = 'const { rnd, shuffle, store, copyText, esc, day, statRow } = Util;\n';
+const PRELUDE = 'const { rnd, shuffle, store, copyText, esc, day, statRow, tone, beep, speak } = Util;\n';
 const load = (file, names, from = '// --- pure ---', to = '// --- /pure ---') => {
     const h = read(file);
     return new Function(PRELUDE + h.slice(h.indexOf(from), h.indexOf(to)) + `; return { ${names} };`)();
@@ -554,6 +554,170 @@ const NL = String.fromCharCode(10);
     for (const [x, y] of [[0, 0], [n - 7, 0], [0, n - 7]]) { assert.ok(q.modules[y][x] && q.modules[y + 6][x + 6] && !q.modules[y + 1][x + 1] && q.modules[y + 3][x + 3]); }
     for (let i = 8; i < n - 8; i++) assert.equal(q.modules[6][i], i % 2 === 0);
     ok('qr-code (golden hashes)');
+}
+
+// ===== 骰子 =====
+{
+    const m = load('fun/dice.html', 'roll, tally');
+    const cnt = Array(6).fill(0);
+    for (let i = 0; i < 60000; i++) { const f = m.roll(1, 6)[0]; assert.ok(f >= 1 && f <= 6); cnt[f - 1]++; }
+    cnt.forEach(c => assert.ok(c > 9000 && c < 11000, cnt.join()));
+    assert.equal(m.roll(4, 20).length, 4);
+    assert.ok(m.roll(6, 100).every(v => v >= 1 && v <= 100));
+    const sums = {};
+    for (let i = 0; i < 36000; i++) { const s = m.roll(2, 6).reduce((a, b) => a + b); sums[s] = (sums[s] || 0) + 1; }
+    assert.ok(sums[7] > sums[2] * 4 && sums[7] > sums[12] * 4);          // 兩顆骰：7 最常見，2 / 12 最少
+    assert.deepEqual(m.tally([7, 7, 3]), { 7: 2, 3: 1 });
+    ok('dice');
+}
+
+// ===== 貸款 / 複利 =====
+{
+    const m = load('utils/loan-calculator.html', 'amortize, compound');
+    const a = m.amortize(100000, 12, 12, 'annuity');
+    near(a.rows[0].payment, 8884.88, 1e-5);                                // 10 萬、年利率 12%、一年：每月 8,884.88
+    assert.ok(a.rows.every(r => Math.abs(r.payment - a.rows[0].payment) < 1e-6));
+    near(a.rows.reduce((s, r) => s + r.principal, 0), 100000, 1e-9);       // 本金還清
+    assert.equal(a.rows.at(-1).balance, 0);
+    near(a.totalInterest, a.rows.reduce((s, r) => s + r.interest, 0), 1e-9);
+    near(a.totalPaid, 100000 + a.totalInterest, 1e-9);
+    const z = m.amortize(1200, 0, 12, 'annuity');                          // 零利率
+    assert.ok(z.rows.every(r => Math.abs(r.payment - 100) < 1e-9) && z.totalInterest === 0);
+    const p = m.amortize(120000, 6, 12, 'principal');                      // 本金平均：每期本金固定、總額遞減
+    assert.ok(p.rows.every(r => Math.abs(r.principal - 10000) < 1e-9));
+    near(p.rows[0].payment, 10000 + 120000 * 0.005, 1e-9);
+    assert.ok(p.rows[11].payment < p.rows[0].payment);
+    assert.ok(p.totalInterest < m.amortize(120000, 6, 12, 'annuity').totalInterest);   // 本金平均總利息較少
+    const c = m.compound(0, 1000, 12, 1);
+    near(c[0].value, 1000 * ((Math.pow(1.01, 12) - 1) / 0.01), 1e-9);      // 普通年金終值
+    near(m.compound(1000, 0, 12, 1)[0].value, 1126.825, 1e-5);             // 單筆複利
+    assert.equal(m.compound(5000, 100, 0, 3)[2].value, 5000 + 100 * 36);   // 零報酬 = 單純累積
+    assert.equal(m.compound(0, 100, 5, 20).length, 20);
+    ok('loan-calculator');
+}
+
+// ===== 字數統計 =====
+{
+    const m = load('utils/word-count.html', 'count, fmtRead');
+    const c = m.count('你好 world, hello!\n\n第二段。');
+    assert.equal(c.cjk, 5); assert.equal(c.words, 2); assert.equal(c.paragraphs, 2); assert.equal(c.lines, 3);
+    assert.equal(m.count('').chars, 0); assert.equal(m.count('').lines, 0); assert.equal(m.count('').paragraphs, 0);
+    assert.equal(m.count("don't stop-me 3.5").words, 3);                   // 縮寫與連字號算一個字
+    assert.equal(m.count('a b\tc').charsNoSpace, 3);
+    assert.equal(m.count('😀你').chars, 2);                                  // emoji 算一個字元
+    assert.equal(m.count('一。二！三？').sentences, 3);
+    assert.equal(m.count('Hello. World').sentences, 2);
+    near(m.count('字'.repeat(400)).readMinutes, 1);
+    assert.equal(m.fmtRead(0), '—'); assert.equal(m.fmtRead(0.5), '30 秒'); assert.equal(m.fmtRead(2.5), '2 分 30 秒'); assert.equal(m.fmtRead(3), '3 分');
+    ok('word-count');
+}
+
+// ===== 健康計算 =====
+{
+    const m = load('utils/health-calc.html', 'bmi, bmiLabel, bmr, healthyRange, heartZones');
+    near(m.bmi(170, 65), 22.491, 1e-4);
+    assert.deepEqual([17, 18.5, 23.9, 24, 26.9, 27, 29.9, 30, 34.9, 35, 40].map(m.bmiLabel),
+        ['體重過輕', '健康體重', '健康體重', '過重', '過重', '輕度肥胖', '輕度肥胖', '中度肥胖', '中度肥胖', '重度肥胖', '重度肥胖']);
+    near(m.bmr('m', 70, 175, 30), 1648.75); near(m.bmr('f', 60, 165, 25), 1345.25);
+    const [lo, hi] = m.healthyRange(170); near(lo, 53.465, 1e-6); near(hi, 69.36, 1e-6);
+    const z = m.heartZones(30, 0); assert.equal(z.max, 190);
+    assert.deepEqual(z.zones[1], ['燃脂', 114, 133]);
+    const k = m.heartZones(30, 60);                                           // 儲備心率法：60 + 130 × 0.6 = 138
+    assert.deepEqual(k.zones[1], ['燃脂', 138, 151]);
+    ok('health-calc');
+}
+
+// ===== 計時器 =====
+{
+    const m = load('fun/timers.html', 'fmtMs, lapTimes, toMs');
+    assert.equal(m.fmtMs(0), '00:00.00'); assert.equal(m.fmtMs(61230), '01:01.23'); assert.equal(m.fmtMs(3661000), '1:01:01.00');
+    assert.equal(m.fmtMs(5000, false), '00:05'); assert.equal(m.fmtMs(-5), '00:00.00'); assert.equal(m.fmtMs(59999), '00:59.99');
+    assert.deepEqual(m.lapTimes([1000, 2500, 2600]), [1000, 1500, 100]); assert.deepEqual(m.lapTimes([]), []);
+    assert.equal(m.toMs(1, 2, 3), 3723000); assert.equal(m.toMs('', '5', ''), 300000); assert.equal(m.toMs(0, 0, 0), 0);
+    ok('timers');
+}
+
+// ===== 技能冷卻 =====
+{
+    const m = load('game-assist/cooldown-board.html', 'remaining, fraction');
+    assert.equal(m.remaining(1000, 3000), 2000); assert.equal(m.remaining(5000, 3000), 0);
+    assert.equal(m.fraction(0, 10000, 10000), 1); assert.equal(m.fraction(5000, 10000, 10000), 0.5); assert.equal(m.fraction(20000, 10000, 10000), 0); assert.equal(m.fraction(0, 5, 0), 0);
+    ok('cooldown-board');
+}
+
+// ===== Simon =====
+{
+    const m = load('mini-games/simon.html', 'extend, check, stepMs');
+    const s = m.extend([1, 2], () => 3); assert.deepEqual(s, [1, 2, 3]);
+    for (let i = 0; i < 200; i++) assert.ok([0, 1, 2, 3].includes(m.extend([], Util.rnd)[0]));
+    assert.equal(m.check([0, 1, 2], []), 'continue'); assert.equal(m.check([0, 1, 2], [0, 1]), 'continue');
+    assert.equal(m.check([0, 1, 2], [0, 1, 2]), 'done'); assert.equal(m.check([0, 1, 2], [0, 2]), 'wrong'); assert.equal(m.check([0], [0, 0]), 'wrong');
+    assert.equal(m.stepMs(0), 620); assert.equal(m.stepMs(100), 260); assert.ok(m.stepMs(5) < m.stepMs(1));
+    ok('simon');
+}
+
+// ===== 數獨 =====
+{
+    const m = load('mini-games/sudoku.html', 'solve, generate, conflicts, candidates, PEERS');
+    const parse = (s) => [...s].map(Number);
+    const puz = parse('530070000600195000098000060800060003400803001700020006060000280000419005000080079');
+    const sol = parse('534678912672195348198342567859761423426853791713924856961537284287419635345286179');
+    const r = m.solve(puz, 2);
+    assert.equal(r.count, 1); assert.deepEqual(r.first, sol);
+    assert.equal(puz[2], 0);                                                  // 不改動輸入
+    assert.equal(m.solve(new Array(81).fill(0), 2).count, 2);                  // 空盤有很多解
+    const dup = sol.slice(); dup[1] = dup[0];
+    assert.ok(m.conflicts(dup).has(0) && m.conflicts(dup).has(1)); assert.equal(m.conflicts(sol).size, 0);
+    assert.equal(m.PEERS[0].length, 20); assert.ok(m.PEERS.every((p, i) => p.length === 20 && !p.includes(i)));
+    const t0 = Date.now();
+    for (const clues of [40, 32, 26]) for (let k = 0; k < 2; k++) {
+        const g = m.generate(clues, Util.rnd);
+        assert.equal(g.solution.filter(v => !v).length, 0); assert.equal(m.conflicts(g.solution).size, 0);
+        g.puzzle.forEach((v, i) => assert.ok(v === 0 || v === g.solution[i]));      // 題目是解答的子集
+        const left = g.puzzle.filter(Boolean).length;
+        assert.ok(left >= 17 && left <= clues + 6, `線索數 ${left}（目標 ${clues}）`);
+        const s2 = m.solve(g.puzzle, 2); assert.equal(s2.count, 1, '必須唯一解'); assert.deepEqual(s2.first, g.solution);
+    }
+    assert.ok(Date.now() - t0 < 20000, '產生題目太慢：' + (Date.now() - t0) + 'ms');
+    ok('sudoku (' + (Date.now() - t0) + 'ms for 6 unique puzzles)');
+}
+
+// ===== 你畫我猜 =====
+{
+    const m = load('mini-games/draw-guess.html', 'WORDS, COLORS, norm, isCorrect, maskWord, guessPoints, pickWord, validStroke, ROUND_MS');
+    assert.ok(m.isCorrect('蘋果', ' 蘋 果 ')); assert.ok(m.isCorrect('Apple', 'aPPle')); assert.ok(!m.isCorrect('蘋果', '蘋')); assert.ok(!m.isCorrect('蘋果', '')); assert.ok(!m.isCorrect('蘋果', '   '));
+    assert.equal(m.maskWord('蘋果'), '＿ ＿'); assert.equal(m.maskWord('a'), '＿');
+    assert.equal(m.guessPoints(m.ROUND_MS), 100); assert.equal(m.guessPoints(0), 50); assert.equal(m.guessPoints(-5), 50); assert.equal(m.guessPoints(m.ROUND_MS / 2), 75);
+    assert.equal(new Set(m.WORDS).size, m.WORDS.length);                      // 沒有重複題目
+    const used = new Set();
+    for (let i = 0; i < m.WORDS.length; i++) { const w = m.pickWord(used, Util.rnd); assert.ok(!used.has(w)); used.add(w); }
+    assert.ok(m.WORDS.includes(m.pickWord(used, Util.rnd)));                  // 全用過就重來
+    const ok1 = { pts: [[0, 0], [1000, 640]], color: m.COLORS[0], w: 10, begin: true };
+    assert.equal(m.validStroke(ok1), true);
+    for (const bad of [null, {}, { ...ok1, pts: [] }, { ...ok1, pts: [[1001, 0]] }, { ...ok1, pts: [[-1, 0]] }, { ...ok1, pts: [['a', 0]] }, { ...ok1, pts: [[NaN, 0]] }, { ...ok1, pts: [[1, 2, 3]] },
+        { ...ok1, color: 'red' }, { ...ok1, color: 'url(x)' }, { ...ok1, w: 0 }, { ...ok1, w: 99 }, { ...ok1, w: 1.5 }, { ...ok1, pts: Array(101).fill([1, 1]) }])
+        assert.equal(m.validStroke(bad), false, JSON.stringify(bad).slice(0, 60));
+    assert.equal(m.validStroke({ ...ok1, pts: Array(100).fill([1, 1]) }), true);
+    ok('draw-guess');
+}
+
+// ===== 連線投票 =====
+{
+    const m = load('fun/live-poll.html', 'tally, quizPoints, pct, validVote, validState');
+    assert.deepEqual(m.tally([0, 1, 1, 2, 9, -1, 'x', 1.5], 3), [1, 2, 1]);
+    assert.deepEqual(m.tally([], 2), [0, 0]);
+    assert.deepEqual([0, 1, 2, 5, 9].map(m.quizPoints), [150, 140, 130, 100, 100]);
+    assert.equal(m.pct(1, 3), 33); assert.equal(m.pct(0, 0), 0); assert.equal(m.pct(5, 5), 100);
+    const st = { phase: 'open', qid: 3, n: 3 };
+    assert.equal(m.validVote(st, { qid: 3, opt: 2 }), true);
+    for (const bad of [null, {}, { qid: 2, opt: 0 }, { qid: 3, opt: 3 }, { qid: 3, opt: -1 }, { qid: 3, opt: 1.5 }, { qid: 3, opt: '1' }]) assert.equal(m.validVote(st, bad), false);
+    assert.equal(m.validVote({ ...st, phase: 'closed' }, { qid: 3, opt: 0 }), false);
+    const good = { qid: 1, phase: 'open', mode: 'poll', q: 'Q', opts: ['a', 'b'], counts: [1, 0], answered: 1, total: 3, ms: -1, correct: -1, board: [{ n: 'x', p: 100 }] };
+    assert.equal(m.validState(good), true); assert.equal(m.validState({ ...good, counts: null }), true);
+    for (const bad of [null, {}, { ...good, phase: 'x' }, { ...good, mode: 'y' }, { ...good, opts: Array(7).fill('a') }, { ...good, q: 'x'.repeat(81) }, { ...good, counts: [1.5] },
+        { ...good, board: [{ n: 5, p: 1 }] }, { ...good, board: Array(11).fill({ n: 'a', p: 1 }) }, { ...good, ms: 'x' }, { ...good, opts: [{ x: 1 }] }])
+        assert.equal(m.validState(bad), false, JSON.stringify(bad).slice(0, 60));
+    ok('live-poll');
 }
 
 console.log('ALL OK');

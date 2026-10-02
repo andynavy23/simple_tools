@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="數獨：三種難度，每題保證唯一解，支援筆記、提示與錯誤標示，記錄最佳時間。">
+    <meta property="og:title" content="數獨" />
+    <meta property="og:description" content="保證唯一解的數獨，有筆記與提示。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/sudoku.html" />
+    <title>數獨</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 520px;
+        }
+
+        .bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .stat {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 6px 14px;
+            font-variant-numeric: tabular-nums;
+            font-weight: 700;
+        }
+
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            background: var(--text);
+            gap: 1px;
+            border: 2px solid var(--text);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .c {
+            aspect-ratio: 1;
+            padding: 0;
+            border-radius: 0;
+            background: var(--card);
+            color: var(--text);
+            font-size: clamp(18px, 6vw, 28px);
+            font-weight: 500;
+            position: relative;
+            display: grid;
+            place-items: center;
+        }
+
+        .c.r2 {
+            border-bottom: 2px solid var(--text);
+            margin-bottom: 1px;
+        }
+
+        .c.c2 {
+            border-right: 2px solid var(--text);
+            margin-right: 1px;
+        }
+
+        .c.given {
+            font-weight: 800;
+            background: color-mix(in srgb, var(--muted) 18%, var(--card));
+        }
+
+        .c.peer {
+            background: color-mix(in srgb, var(--blue) 10%, var(--card));
+        }
+
+        .c.same {
+            background: color-mix(in srgb, var(--blue) 28%, var(--card));
+        }
+
+        .c.sel {
+            background: color-mix(in srgb, var(--blue) 45%, var(--card));
+        }
+
+        .c.bad {
+            color: var(--bad);
+        }
+
+        .c .notes {
+            position: absolute;
+            inset: 1px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            font-size: clamp(7px, 2.2vw, 11px);
+            line-height: 1;
+            color: var(--muted);
+            font-weight: 400;
+            pointer-events: none;
+        }
+
+        .c .notes span {
+            display: grid;
+            place-items: center;
+        }
+
+        #pad {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 6px;
+            margin-top: 12px;
+        }
+
+        #pad button {
+            padding: 10px 0;
+            font-size: 18px;
+            font-weight: 600;
+            border-radius: 12px;
+        }
+
+        #pad button:disabled {
+            opacity: .25;
+        }
+
+        #msg {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>數獨</h1>
+        <p class="sub">每行、每列、每個 3×3 宮都要放滿 1–9。點格子後按數字鍵或下方按鈕。</p>
+
+        <div class="bar">
+            <select id="level" aria-label="難度">
+                <option value="40">簡單</option>
+                <option value="32" selected>普通</option>
+                <option value="26">困難</option>
+            </select>
+            <span class="stat">⏱ <span id="time">0:00</span></span>
+            <span class="stat">最佳 <span id="best">—</span></span>
+            <button class="primary" id="new" style="margin-left:auto">新題目</button>
+        </div>
+
+        <div id="grid" role="grid" aria-label="數獨盤面"></div>
+        <div id="pad"></div>
+        <div class="bar" style="margin-top:12px;justify-content:center">
+            <button id="notes" aria-pressed="false">✏️ 筆記</button>
+            <button id="erase">清除</button>
+            <button id="hint">提示</button>
+            <button id="check">檢查</button>
+        </div>
+        <div id="msg" role="status" aria-live="polite"></div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { rnd, shuffle, store } = Util;
+
+        // --- pure ---
+        // 盤面：長度 81 的陣列，0 = 空格；候選數用位元遮罩（第 d 位 = 數字 d）
+        const PEERS = Array.from({ length: 81 }, (_, i) => {
+            const r = Math.floor(i / 9), c = i % 9, br = r - r % 3, bc = c - c % 3, set = new Set();
+            for (let k = 0; k < 9; k++) { set.add(r * 9 + k); set.add(k * 9 + c); set.add((br + Math.floor(k / 3)) * 9 + bc + k % 3); }
+            set.delete(i);
+            return [...set];
+        });
+
+        const popcount = (m) => { let n = 0; while (m) { m &= m - 1; n++; } return n; };
+
+        function candidates(b, i) {
+            let used = 0;
+            for (const p of PEERS[i]) used |= 1 << b[p];
+            return ~used & 0x3fe;                              // 只保留第 1..9 位
+        }
+
+        // 回溯搜尋（每次選候選最少的空格）；state.count 累計解的個數，達到 limit 就停
+        function search(b, limit, st) {
+            let best = -1, bestMask = 0, bestN = 10;
+            for (let i = 0; i < 81; i++) {
+                if (b[i]) continue;
+                const m = candidates(b, i), n = popcount(m);
+                if (n === 0) return;
+                if (n < bestN) { best = i; bestMask = m; bestN = n; if (n === 1) break; }
+            }
+            if (best < 0) { st.count++; if (!st.first) st.first = b.slice(); return; }
+            for (let d = 1; d <= 9; d++) {
+                if (!(bestMask >> d & 1)) continue;
+                b[best] = d;
+                search(b, limit, st);
+                if (st.count >= limit) { b[best] = 0; return; }
+            }
+            b[best] = 0;
+        }
+
+        // 回傳 { count（最多 limit）, first（第一組解或 null） }；不改動輸入
+        function solve(board, limit = 2) {
+            const st = { count: 0, first: null };
+            search(board.slice(), limit, st);
+            return st;
+        }
+
+        // 產生完整解：每格候選用隨機順序嘗試
+        function fullGrid(rand) {
+            const b = new Array(81).fill(0);
+            (function fill() {
+                let best = -1, bestMask = 0, bestN = 10;
+                for (let i = 0; i < 81; i++) {
+                    if (b[i]) continue;
+                    const m = candidates(b, i), n = popcount(m);
+                    if (n === 0) return false;
+                    if (n < bestN) { best = i; bestMask = m; bestN = n; }
+                }
+                if (best < 0) return true;
+                for (const d of shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9])) {
+                    if (!(bestMask >> d & 1)) continue;
+                    b[best] = d;
+                    if (fill()) return true;
+                }
+                b[best] = 0;
+                return false;
+            })();
+            return b;
+        }
+
+        // 產生題目：從完整解逐格挖空，只在「仍然唯一解」時才保留挖空，直到線索數降到 clues 為止
+        function generate(clues, rand) {
+            const solution = fullGrid(rand), puzzle = solution.slice();
+            let left = 81;
+            for (const i of shuffle([...Array(81).keys()])) {
+                if (left <= clues) break;
+                const v = puzzle[i];
+                puzzle[i] = 0;
+                if (solve(puzzle, 2).count !== 1) puzzle[i] = v; else left--;
+            }
+            return { puzzle, solution };
+        }
+
+        // 與同行 / 列 / 宮重複的格子
+        function conflicts(b) {
+            const bad = new Set();
+            for (let i = 0; i < 81; i++) if (b[i] && PEERS[i].some(p => b[p] === b[i])) bad.add(i);
+            return bad;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let puzzle, solution, board, notes, sel = -1, noteMode = false, start = 0, timer = null, done = false;
+        const cells = [];
+        for (let i = 0; i < 81; i++) {
+            const b = document.createElement('button');
+            b.className = 'c' + (Math.floor(i / 9) % 3 === 2 && i < 72 ? ' r2' : '') + (i % 3 === 2 && i % 9 < 8 ? ' c2' : '');
+            b.onclick = () => { sel = i; paint(); };
+            $('#grid').append(b); cells.push(b);
+        }
+        for (let d = 1; d <= 9; d++) {
+            const b = document.createElement('button'); b.textContent = d;
+            b.onclick = () => put(d);
+            $('#pad').append(b);
+        }
+
+        const bestKey = () => 'sudoku_best_' + $('#level').value;
+        const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+        function newGame() {
+            $('#msg').textContent = '產生題目中…';
+            setTimeout(() => {
+                ({ puzzle, solution } = generate(+$('#level').value, rnd));
+                board = puzzle.slice(); notes = new Array(81).fill(0); sel = -1; done = false;
+                clearInterval(timer); start = Date.now();
+                timer = setInterval(() => { if (!done) $('#time').textContent = fmt(Math.floor((Date.now() - start) / 1000)); }, 500);
+                $('#time').textContent = '0:00';
+                const b = store.get(bestKey(), 0); $('#best').textContent = b ? fmt(b) : '—';
+                $('#msg').textContent = '';
+                paint();
+            }, 20);
+        }
+
+        function paint() {
+            const bad = conflicts(board);
+            const cur = sel >= 0 ? board[sel] : 0;
+            cells.forEach((el, i) => {
+                const v = board[i];
+                el.className = el.className.replace(/ (given|peer|same|sel|bad)\b/g, '');
+                if (puzzle[i]) el.classList.add('given');
+                if (sel >= 0 && PEERS[sel].includes(i)) el.classList.add('peer');
+                if (cur && v === cur) el.classList.add('same');
+                if (i === sel) el.classList.add('sel');
+                if (bad.has(i)) el.classList.add('bad');
+                el.replaceChildren();
+                if (v) el.textContent = v;
+                else if (notes[i]) {
+                    const n = document.createElement('div'); n.className = 'notes';
+                    for (let d = 1; d <= 9; d++) { const s = document.createElement('span'); s.textContent = notes[i] >> d & 1 ? d : ''; n.append(s); }
+                    el.append(n);
+                }
+            });
+            const counts = new Array(10).fill(0);
+            board.forEach(v => counts[v]++);
+            [...$('#pad').children].forEach((b, k) => { b.disabled = counts[k + 1] >= 9; });
+        }
+
+        function put(d) {
+            if (done || sel < 0 || puzzle[sel]) return;
+            if (noteMode && !board[sel]) notes[sel] ^= 1 << d;
+            else {
+                board[sel] = board[sel] === d ? 0 : d; notes[sel] = 0;
+                if (board[sel]) PEERS[sel].forEach(p => { notes[p] &= ~(1 << d); });   // 填入後清掉同行列宮的相同筆記
+            }
+            paint(); finishCheck();
+        }
+
+        function finishCheck() {
+            if (board.some(v => !v) || conflicts(board).size) return;
+            done = true;
+            const sec = Math.floor((Date.now() - start) / 1000), best = store.get(bestKey(), 0);
+            if (!best || sec < best) { store.set(bestKey(), sec); $('#best').textContent = fmt(sec); }
+            $('#msg').textContent = `🎉 完成！用時 ${fmt(sec)}${!best || sec < best ? '（新紀錄）' : ''}`;
+        }
+
+        $('#new').onclick = newGame;
+        $('#level').onchange = newGame;
+        $('#notes').onclick = () => { noteMode = !noteMode; $('#notes').setAttribute('aria-pressed', noteMode); };
+        $('#erase').onclick = () => { if (!done && sel >= 0 && !puzzle[sel]) { board[sel] = 0; notes[sel] = 0; paint(); } };
+        $('#hint').onclick = () => {
+            if (done) return;
+            const target = sel >= 0 && !puzzle[sel] && board[sel] !== solution[sel] ? sel : board.findIndex((v, i) => v !== solution[i]);
+            if (target < 0) return;
+            board[target] = solution[target]; notes[target] = 0; sel = target;
+            paint(); finishCheck();
+            $('#msg').textContent = '已填入一格提示';
+        };
+        $('#check').onclick = () => {
+            if (done) return;
+            const wrong = board.filter((v, i) => v && v !== solution[i]).length;
+            $('#msg').textContent = wrong ? `有 ${wrong} 格和解答不同（紅字為與同行列宮重複的格子）` : '目前填的都正確 👍';
+        };
+
+        addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey || e.altKey || /SELECT/.test(e.target.tagName)) return;
+            if (/^[1-9]$/.test(e.key)) put(+e.key);
+            else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') $('#erase').click();
+            else if (e.key.startsWith('Arrow') && sel >= 0) {
+                const d = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -9, ArrowDown: 9 }[e.key];
+                const n = sel + d;
+                if (n >= 0 && n < 81 && !(d === -1 && sel % 9 === 0) && !(d === 1 && sel % 9 === 8)) { sel = n; paint(); e.preventDefault(); }
+            }
+        });
+
+        newGame();
+    </script>
+</body>
+
+</html>

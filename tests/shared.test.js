@@ -303,7 +303,31 @@ const ok = (name) => console.log('ok  ' + name);
         const row = Util.statRow('標籤', '123', 'big');
         assert.equal(row.className, 'li stat');
         assert.deepEqual(row.kids.map(k => [k.tag, k.textContent, k.className]), [['span', '標籤', ''], ['b', '123', 'big']]);
-        ok('util: rnd / shuffle / copyText / store / esc / day / statRow');
+        // tone / beep / speak：沒有 Web Audio / 語音時必須安靜略過；有的話要正確呼叫
+        Util.tone(440); Util.beep(); Util.speak('x');                          // 無 AudioContext：不丟錯
+        const log = [];
+        class FakeCtx {
+            constructor() { this.currentTime = 1; this.state = 'suspended'; this.destination = {}; log.push('new'); }
+            resume() { this.state = 'running'; log.push('resume'); }
+            createOscillator() { const o = { frequency: {}, connect() { }, start(t) { log.push(['start', t]); }, stop() { } }; return o; }
+            createGain() { return { gain: { setValueAtTime() { }, exponentialRampToValueAtTime() { } }, connect() { } }; }
+        }
+        global.AudioContext = FakeCtx;
+        global.navigator = { vibrate: (p) => log.push(['vibrate', p]) };
+        Util.tone(440, 100, { delay: 500 });
+        assert.deepEqual(log.slice(0, 2), ['new', 'resume']);
+        assert.deepEqual(log[2], ['start', 1.5]);                              // currentTime + delay
+        log.length = 0; Util.beep(3);
+        assert.equal(log.filter(x => Array.isArray(x) && x[0] === 'start').length, 3);
+        assert.ok(!log.includes('new'));                                       // 重複使用同一個 AudioContext
+        assert.ok(log.some(x => Array.isArray(x) && x[0] === 'vibrate'));
+        const said = [];
+        global.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+        global.speechSynthesis = { speak: (u) => said.push([u.text, u.lang, u.rate]) };
+        Util.speak('冷卻好了'); Util.speak('hi', { lang: 'en-US', rate: 1 });
+        assert.deepEqual(said, [['冷卻好了', 'zh-TW', 1.2], ['hi', 'en-US', 1]]);
+        delete global.AudioContext; delete global.speechSynthesis; delete global.SpeechSynthesisUtterance;
+        ok('util: rnd / shuffle / copyText / store / esc / day / statRow / tone / beep / speak');
     }
     console.log('ALL OK');
     process.exit(0);

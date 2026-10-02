@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="記憶序列（Simon）：看顏色與聽聲音的順序，照著按，越來越長，記錄最高關卡。">
+    <meta property="og:title" content="記憶序列 Simon" />
+    <meta property="og:description" content="記住顏色與聲音的順序，挑戰最高關卡。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/simon.html" />
+    <title>記憶序列 Simon</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 440px;
+        }
+
+        .top {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .score {
+            flex: 1;
+            background: var(--card);
+            border-radius: 14px;
+            padding: 8px 14px;
+            text-align: center;
+        }
+
+        .score small {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .score b {
+            font-size: 22px;
+        }
+
+        #pads {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            aspect-ratio: 1;
+        }
+
+        .pad {
+            border-radius: 28px;
+            padding: 0;
+            opacity: .55;
+            transition: opacity .08s, transform .08s;
+        }
+
+        .pad.lit {
+            opacity: 1;
+            transform: scale(1.03);
+            filter: brightness(1.25);
+        }
+
+        .pad:disabled {
+            cursor: default;
+        }
+
+        #msg {
+            text-align: center;
+            font-weight: 700;
+            font-size: 18px;
+            min-height: 1.6em;
+            margin: 14px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>記憶序列 Simon</h1>
+        <p class="sub">看完整段順序再照著按。也可以用鍵盤 1 2 3 4（或 Q W A S）。</p>
+
+        <div class="top">
+            <div class="score"><small>目前關卡</small><b id="level">0</b></div>
+            <div class="score"><small>最高關卡</small><b id="best">0</b></div>
+            <button class="primary" id="start">開始</button>
+        </div>
+
+        <div id="msg" role="status" aria-live="polite"></div>
+        <div id="pads"></div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { rnd, store } = Util;
+
+        // --- pure ---
+        // 延長序列：多加一個 0..3 的隨機墊子
+        const extend = (seq, rand) => [...seq, rand(4)];
+
+        // 玩家目前輸入對照序列：'wrong' | 'continue'（還沒按完）| 'done'（整段正確）
+        function check(seq, input) {
+            for (let i = 0; i < input.length; i++) if (input[i] !== seq[i]) return 'wrong';
+            return input.length === seq.length ? 'done' : 'continue';
+        }
+
+        // 第 n 關每個音的間隔（毫秒），越後面越快
+        const stepMs = (level) => Math.max(260, 620 - level * 22);
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const PADS = [
+            { color: '#30d158', freq: 329.6, key: ['1', 'q'] },
+            { color: '#ff453a', freq: 261.6, key: ['2', 'w'] },
+            { color: '#ffd60a', freq: 220.0, key: ['3', 'a'] },
+            { color: '#0a84ff', freq: 164.8, key: ['4', 's'] },
+        ];
+        let seq = [], input = [], playing = false, accepting = false, best = store.get('simon_best', 0);
+        const pads = PADS.map((p, i) => {
+            const b = document.createElement('button');
+            b.className = 'pad'; b.style.background = p.color; b.disabled = true;
+            b.setAttribute('aria-label', `第 ${i + 1} 個按鈕`);
+            b.onclick = () => press(i);
+            $('#pads').append(b);
+            return b;
+        });
+        const wait = (ms) => new Promise(r => setTimeout(r, ms));
+        $('#best').textContent = best;
+
+        async function flash(i, ms = 360) {
+            pads[i].classList.add('lit');
+            Util.tone(PADS[i].freq, ms, { type: 'triangle', vol: 0.2 });
+            await wait(ms);
+            pads[i].classList.remove('lit');
+        }
+
+        async function playSeq() {
+            accepting = false; pads.forEach(p => { p.disabled = true; });
+            $('#msg').textContent = '看清楚…';
+            await wait(500);
+            for (const i of seq) { await flash(i, Math.min(360, stepMs(seq.length) - 100)); await wait(100); }
+            input = []; accepting = true; pads.forEach(p => { p.disabled = false; });
+            $('#msg').textContent = '換你了';
+        }
+
+        async function next() {
+            seq = extend(seq, rnd);
+            $('#level').textContent = seq.length;
+            await playSeq();
+        }
+
+        async function press(i) {
+            if (!accepting) return;
+            input.push(i);
+            flash(i, 200);
+            const r = check(seq, input);
+            if (r === 'wrong') {
+                accepting = false; playing = false; pads.forEach(p => { p.disabled = true; });
+                Util.tone(110, 500, { type: 'sawtooth', vol: 0.15 });
+                const reached = seq.length - 1;
+                if (reached > best) { best = reached; store.set('simon_best', best); $('#best').textContent = best; }
+                $('#msg').textContent = `答錯了！你撐過了 ${reached} 關${reached >= best && reached > 0 ? '（最高紀錄）' : ''}`;
+                $('#start').textContent = '再來一次'; $('#start').disabled = false;
+            } else if (r === 'done') {
+                accepting = false;
+                $('#msg').textContent = '答對了！';
+                await wait(700);
+                next();
+            }
+        }
+
+        $('#start').onclick = () => {
+            Util.tone(440, 60, { vol: 0.05 });          // 在使用者操作內建立聲音環境，之後的音才發得出來
+            seq = []; input = []; playing = true;
+            $('#start').disabled = true; $('#start').textContent = '進行中';
+            next();
+        };
+
+        addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            const i = PADS.findIndex(p => p.key.includes(e.key.toLowerCase()));
+            if (i >= 0) press(i);
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="字數統計：中文字、英文單字、字元、行數、段落與預估閱讀時間，貼上文字立刻算。">
+    <meta property="og:title" content="字數統計 / 閱讀時間" />
+    <meta property="og:description" content="中英文字數、行數、段落與預估閱讀時間。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/word-count.html" />
+    <title>字數統計 / 閱讀時間</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 720px;
+        }
+
+        textarea {
+            min-height: 240px;
+            resize: vertical;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+        }
+
+        .cell {
+            background: var(--fill);
+            border-radius: 14px;
+            padding: 10px 14px;
+        }
+
+        .cell small {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .cell b {
+            font-size: 22px;
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>字數統計 / 閱讀時間</h1>
+        <p class="sub">貼上文字，中文與英文分開計算。全部在本機處理。</p>
+
+        <div class="card"><textarea id="text" placeholder="在這裡貼上或輸入文字…" aria-label="文字內容"></textarea></div>
+        <div class="card"><div class="grid" id="out"></div></div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        const CJK = /[㐀-䶿一-鿿豈-﫿]/g;
+        const WORD = /\d+(?:[.,]\d+)+|[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*/g;     // 小數 / 千分位數字算一個字
+
+        // 閱讀速度：中文約 400 字/分、英文約 230 字/分
+        function count(text) {
+            const cjk = (text.match(CJK) || []).length;
+            const words = (text.match(WORD) || []).length;
+            const lines = text === '' ? 0 : text.split(/\r?\n/).length;
+            const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim()).length;
+            const sentences = (text.match(/[^。！？!?.…\n]+[。！？!?.…]*/g) || []).filter(s => /[\p{L}\p{N}]/u.test(s)).length;
+            return {
+                chars: [...text].length,
+                charsNoSpace: [...text.replace(/\s/g, '')].length,
+                cjk, words, lines, paragraphs, sentences,
+                readMinutes: cjk / 400 + words / 230,
+            };
+        }
+
+        function fmtRead(min) {
+            if (min <= 0) return '—';
+            if (min < 1) return `${Math.max(1, Math.round(min * 60))} 秒`;
+            const m = Math.floor(min), s = Math.round((min - m) * 60);
+            return s ? `${m} 分 ${s} 秒` : `${m} 分`;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const LABELS = [['cjk', '中文字'], ['words', '英文單字 / 數字'], ['chars', '全部字元'], ['charsNoSpace', '字元（不含空白）'], ['lines', '行數'], ['paragraphs', '段落'], ['sentences', '句子']];
+
+        function render() {
+            const c = count($('#text').value);
+            $('#out').replaceChildren(...[...LABELS.map(([k, name]) => [name, c[k].toLocaleString('zh-TW')]), ['預估閱讀時間', fmtRead(c.readMinutes)]].map(([name, v]) => {
+                const d = document.createElement('div'); d.className = 'cell';
+                const s = document.createElement('small'), b = document.createElement('b');
+                s.textContent = name; b.textContent = v;
+                d.append(s, b);
+                return d;
+            }));
+        }
+
+        $('#text').value = Util.store.get('wc_text', '');
+        $('#text').oninput = () => { Util.store.set('wc_text', $('#text').value); render(); };
+        render();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="連線你畫我猜：2–8 人輪流畫畫，其他人即時猜答案，猜得越快分數越高。">
+    <meta property="og:title" content="連線你畫我猜" />
+    <meta property="og:description" content="輪流畫畫、即時猜題的多人連線遊戲。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/draw-guess.html" />
+    <title>連線你畫我猜</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        :root {
+            --wrap-w: 760px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .row input {
+            flex: 1 1 130px;
+        }
+
+        .players {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .pl {
+            padding: 4px 12px;
+            border-radius: 12px;
+            background: var(--fill);
+            font-variant-numeric: tabular-nums;
+            border: 2px solid transparent;
+        }
+
+        .pl.drawer {
+            border-color: var(--blue);
+        }
+
+        .pl.ok {
+            background: color-mix(in srgb, var(--ok) 25%, var(--fill));
+        }
+
+        .pl.off {
+            opacity: .45;
+            text-decoration: line-through;
+        }
+
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        #hint {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: .2em;
+        }
+
+        #timer {
+            font-size: 22px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 220px;
+            gap: 12px;
+        }
+
+        @media (max-width: 640px) {
+            .main {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        #cv {
+            width: 100%;
+            aspect-ratio: 1000 / 640;
+            background: #fff;
+            border-radius: 12px;
+            touch-action: none;
+            display: block;
+            box-shadow: inset 0 0 0 1px var(--fill);
+        }
+
+        .tools {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 8px;
+        }
+
+        .sw {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            padding: 0;
+            border: 3px solid transparent;
+        }
+
+        .sw[aria-pressed=true] {
+            border-color: var(--text);
+            background: inherit;
+        }
+
+        #chat {
+            height: 300px;
+            overflow: auto;
+            background: var(--fill);
+            border-radius: 12px;
+            padding: 8px 10px;
+            font-size: 14px;
+            word-break: break-all;
+        }
+
+        #chat div {
+            margin-bottom: 3px;
+        }
+
+        #chat .sys {
+            color: var(--ok);
+            font-weight: 600;
+        }
+
+        #msg {
+            text-align: center;
+            font-weight: 700;
+            margin-top: 10px;
+            min-height: 1.5em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>連線你畫我猜</h1>
+        <p class="sub">房主建立房間，朋友用房號或邀請連結加入（2–8 人）。每個人輪流畫一次。</p>
+
+        <div class="card" id="menu">
+            <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+            <div class="row">
+                <button class="primary" id="hostBtn">建立房間</button>
+                <input id="joinId" placeholder="貼上房號" aria-label="房號">
+                <button id="joinBtn">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+        </div>
+
+        <div class="card" id="lobby" hidden>
+            <h2>等待玩家加入</h2>
+            <div class="players" id="lobbyPlayers"></div>
+            <div class="row" style="margin-top:12px">
+                <button id="copyInvite" hidden>複製邀請連結</button>
+                <button class="primary" id="startBtn" hidden disabled>開始遊戲</button>
+            </div>
+            <p class="note" id="lobbyHint"></p>
+        </div>
+
+        <div id="game" hidden>
+            <div class="card">
+                <div class="top">
+                    <div><div class="muted" id="roundInfo"></div><div id="hint"></div></div>
+                    <div id="timer"></div>
+                </div>
+                <div class="players" id="scoreboard"></div>
+            </div>
+            <div class="main">
+                <div class="card" style="margin:0">
+                    <canvas id="cv" width="1000" height="640" aria-label="畫布"></canvas>
+                    <div class="tools" id="tools" hidden>
+                        <span id="palette" class="tools" style="margin:0"></span>
+                        <button class="sm" data-w="4" aria-pressed="false">細</button>
+                        <button class="sm" data-w="10" aria-pressed="true">中</button>
+                        <button class="sm" data-w="22" aria-pressed="false">粗</button>
+                        <button class="sm" id="clearBtn">清除</button>
+                    </div>
+                </div>
+                <div class="card" style="margin:0">
+                    <div id="chat" aria-live="polite"></div>
+                    <div class="row" style="margin-top:8px"><input id="guess" maxlength="20" placeholder="輸入答案" aria-label="答案"><button class="primary" id="guessBtn">猜</button></div>
+                </div>
+            </div>
+            <div id="msg" role="status"></div>
+            <div class="row" style="justify-content:center;margin-top:12px">
+                <button class="primary" id="again" hidden>再玩一次</button>
+                <button id="leave">離開</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { rnd, shuffle } = Util;
+
+        // --- pure ---
+        const WORDS = ['蘋果', '太陽', '月亮', '星星', '房子', '汽車', '腳踏車', '飛機', '魚', '貓', '狗', '兔子', '大象', '長頸鹿', '花', '樹', '雨傘', '眼鏡', '手機', '電腦', '書', '椅子', '桌子', '杯子', '冰淇淋', '蛋糕', '披薩', '漢堡', '香蕉', '西瓜', '鳥', '蝴蝶', '蜘蛛', '蛇', '烏龜', '企鵝', '鯨魚', '彩虹', '雲', '山', '海', '船', '火車', '公車', '時鐘', '鑰匙', '帽子', '襪子', '吉他', '鋼琴', '足球', '籃球', '電視', '冰箱', '燈泡', '皇冠', '愛心', '氣球', '禮物', '雪人', '火箭', '機器人', '恐龍', '城堡', '劍', '盾牌'];
+        const COLORS = ['#000000', '#8e8e93', '#ff453a', '#ff9f0a', '#ffd60a', '#30d158', '#0a84ff', '#bf5af2', '#ffffff'];
+        const ROUND_MS = 60000, MAX_PTS_PER_MSG = 100, MAX_PTS_PER_ROUND = 20000;
+
+        // 比對答案：忽略空白與英文大小寫
+        const norm = (s) => String(s).replace(/\s+/g, '').toLowerCase();
+        const isCorrect = (word, guess) => norm(guess) !== '' && norm(guess) === norm(word);
+
+        // 提示：用「＿」表示每個字
+        const maskWord = (word) => [...word].map(() => '＿').join(' ');
+
+        // 猜對得分：50 底分 + 剩餘時間比例的 50 分；畫的人每有一人猜對得 20 分
+        const guessPoints = (msLeft, total = ROUND_MS) => 50 + Math.round(50 * Math.max(0, Math.min(1, msLeft / total)));
+        const DRAWER_POINTS = 20;
+
+        // 從沒用過的字中抽一個（全用過就重來）
+        function pickWord(used, rand) {
+            const pool = WORDS.filter(w => !used.has(w));
+            const list = pool.length ? pool : WORDS;
+            return list[rand(list.length)];
+        }
+
+        // 筆跡訊息檢查：{ pts: [[x,y],…], color, w, begin }
+        function validStroke(m) {
+            if (!m || !Array.isArray(m.pts) || m.pts.length < 1 || m.pts.length > MAX_PTS_PER_MSG) return false;
+            if (!m.pts.every(p => Array.isArray(p) && p.length === 2 && p.every(v => Number.isFinite(v) && v >= 0 && v <= 1000))) return false;
+            return COLORS.includes(m.color) && Number.isInteger(m.w) && m.w >= 1 && m.w <= 30;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const cv = $('#cv'), ctx = cv.getContext('2d');
+        let room = null, isHost = false, my = -1, hostId = '';
+        let phase = 'menu';                                      // menu | lobby | draw | between | over
+        let V = null;                                            // 目前顯示的公開狀態
+        let myWord = '';                                         // 只有畫的人會收到
+        let color = COLORS[0], width = 10, drawing = false, buf = [], lastSend = 0, lastPt = null;
+
+        // ---------- 房主端的遊戲狀態 ----------
+        const H = { order: [], cur: 0, drawer: -1, word: '', endsAt: 0, guessed: new Set(), scores: [], used: new Set(), pts: 0, timer: null, nextTimer: null, chat: [] };
+
+        const show = (id, on) => { $(id).hidden = !on; };
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const names = () => (isHost ? room.players.map(p => p.nick) : (V && V.names) || lobbyNames);
+        let lobbyNames = [];
+
+        function readNick() {
+            const n = $('#nick').value.trim();
+            if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; }
+            return n;
+        }
+
+        // ---------- 畫布 ----------
+        function clearCanvas() { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 1000, 640); lastPt = null; }
+
+        function drawSeg(m) {
+            ctx.strokeStyle = m.color; ctx.fillStyle = m.color; ctx.lineWidth = m.w; ctx.lineCap = ctx.lineJoin = 'round';
+            m.pts.forEach(([x, y], i) => {
+                if (i === 0 && (m.begin || !lastPt)) { ctx.beginPath(); ctx.arc(x, y, m.w / 2, 0, 7); ctx.fill(); lastPt = [x, y]; return; }
+                ctx.beginPath(); ctx.moveTo(lastPt[0], lastPt[1]); ctx.lineTo(x, y); ctx.stroke(); lastPt = [x, y];
+            });
+        }
+
+        const pos = (e) => { const r = cv.getBoundingClientRect(); return [Math.max(0, Math.min(1000, Math.round((e.clientX - r.left) / r.width * 1000))), Math.max(0, Math.min(1000, Math.round((e.clientY - r.top) / r.height * 640)))]; };
+        const iAmDrawer = () => phase === 'draw' && V && V.drawer === my;
+
+        // 把累積的點送出（房主直接廣播；成員送給房主）
+        function flush(begin) {
+            if (!buf.length) return;
+            const m = { pts: buf, color, w: width, begin: !!begin };
+            buf = [];
+            if (isHost) { if (acceptStroke(m, my)) room.broadcast({ t: 'STROKE', m }, my); }
+            else room.send({ t: 'STROKE', m });
+        }
+
+        let strokeBegin = false;
+        cv.addEventListener('pointerdown', (e) => {
+            if (!iAmDrawer()) return;
+            cv.setPointerCapture(e.pointerId); drawing = true; strokeBegin = true;
+            const p = pos(e); buf = [p]; drawSeg({ pts: [p], color, w: width, begin: true }); flush(true); strokeBegin = false;
+        });
+        cv.addEventListener('pointermove', (e) => {
+            if (!drawing || !iAmDrawer()) return;
+            const p = pos(e);
+            drawSeg({ pts: [p], color, w: width, begin: false });
+            buf.push(p);
+            if (buf.length >= 10 || Date.now() - lastSend > 60) { flush(false); lastSend = Date.now(); }
+        });
+        const up = () => { if (drawing) { drawing = false; flush(false); } };
+        cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+
+        // ---------- 房主：規則與計分 ----------
+        function publicState() {
+            return {
+                phase, names: names(), scores: H.scores, drawer: H.drawer, round: H.cur + 1, rounds: H.order.length,
+                hint: phase === 'draw' ? maskWord(H.word) : '', ms: Math.max(0, H.endsAt - Date.now()),
+                guessed: [...H.guessed], word: phase === 'between' || phase === 'over' ? H.word : '',
+                active: room.players.map(p => p.connected),
+            };
+        }
+        function pushState() { V = publicState(); render(); room.broadcast({ t: 'STATE', s: V }); }
+        function chat(text, sys) { const m = { text, sys: !!sys }; addChat(m); room.broadcast({ t: 'CHAT', m }); }
+
+        function acceptStroke(m, from) {
+            if (phase !== 'draw' || from !== H.drawer || !validStroke(m)) return false;
+            H.pts += m.pts.length;
+            if (H.pts > MAX_PTS_PER_ROUND) return false;
+            if (from !== my) drawSeg(m);
+            return true;
+        }
+
+        function startGame() {
+            const order = room.players.filter(p => p.connected).map(p => p.index);
+            if (order.length < 2) return;
+            room.keepSlots = true;
+            H.order = shuffle(order); H.cur = 0; H.used = new Set(); H.scores = new Array(room.players.length).fill(0);
+            startRound();
+        }
+
+        function startRound() {
+            clearTimeout(H.nextTimer);
+            while (H.cur < H.order.length && !room.players[H.order[H.cur]].connected) H.cur++;
+            if (H.cur >= H.order.length) return endGame();
+            H.drawer = H.order[H.cur]; H.word = pickWord(H.used, rnd); H.used.add(H.word);
+            H.guessed = new Set(); H.pts = 0; H.endsAt = Date.now() + ROUND_MS; phase = 'draw';
+            clearCanvas(); room.broadcast({ t: 'CLEAR' });
+            if (H.drawer === my) myWord = H.word; else { myWord = ''; room.sendTo(H.drawer, { t: 'WORD', word: H.word }); }
+            $('#chat').replaceChildren();
+            chat(`第 ${H.cur + 1} 回合：${room.players[H.drawer].nick} 開始畫畫`, true);
+            pushState();
+            clearInterval(H.timer);
+            H.timer = setInterval(() => { if (Date.now() >= H.endsAt) endRound('時間到'); else if (isHost) { V.ms = H.endsAt - Date.now(); renderTimer(); } }, 250);
+        }
+
+        function endRound(why) {
+            if (phase !== 'draw') return;
+            clearInterval(H.timer); phase = 'between';
+            chat(`${why}！答案是「${H.word}」`, true);
+            pushState();
+            H.nextTimer = setTimeout(() => { H.cur++; if (H.cur >= H.order.length) endGame(); else startRound(); }, 4000);
+        }
+
+        function endGame() { clearInterval(H.timer); clearTimeout(H.nextTimer); phase = 'over'; H.drawer = -1; pushState(); }
+
+        function onGuess(from, text) {
+            if (phase !== 'draw' || from === H.drawer || H.guessed.has(from) || typeof text !== 'string' || !text.trim() || text.length > 20) return;
+            const nick = room.players[from].nick;
+            if (isCorrect(H.word, text)) {
+                H.guessed.add(from);
+                H.scores[from] += guessPoints(H.endsAt - Date.now());
+                H.scores[H.drawer] += DRAWER_POINTS;
+                chat(`${nick} 猜對了！`, true);
+                const need = room.players.filter(p => p.connected && p.index !== H.drawer).length;
+                if (H.guessed.size >= need) endRound('大家都猜對了'); else pushState();
+            } else chat(`${nick}：${text.trim()}`);
+        }
+
+        // ---------- 連線 ----------
+        function onNetError(err, message) { if (phase !== 'menu') return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } }
+
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: 8,
+                onReady(r) { isHost = true; my = 0; hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id); phase = 'lobby'; renderLobby(); },
+                canJoin: () => (phase === 'lobby' ? null : '遊戲已經開始'),
+                onJoin: () => renderLobby(),
+                onLeave(p) {
+                    if (phase === 'lobby') return renderLobby();
+                    if (phase === 'draw') {
+                        if (p.index === H.drawer) return endRound(`${p.nick} 離開了`);
+                        const need = room.players.filter(x => x.connected && x.index !== H.drawer).length;
+                        if (need === 0 || H.guessed.size >= need) return endRound('其他人都離開或猜對了');
+                    }
+                    if (room.players.filter(x => x.connected).length < 2 && phase !== 'over') { return endGame(); }
+                    pushState();
+                },
+                onMessage(p, d) {
+                    if (!d || typeof d.t !== 'string') return;
+                    if (d.t === 'STROKE') { if (acceptStroke(d.m, p.index)) room.broadcast({ t: 'STROKE', m: d.m }, p.index); }
+                    else if (d.t === 'CLEAR') { if (phase === 'draw' && p.index === H.drawer) { clearCanvas(); room.broadcast({ t: 'CLEAR' }, p.index); } }
+                    else if (d.t === 'GUESS') onGuess(p.index, d.text);
+                },
+                onError: onNetError,
+            });
+        }
+
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…'); hostId = id;
+            room = P2PRoom.join(id, {
+                nick,
+                onRoster(players, me) { my = me; lobbyNames = players.map(p => p.nick); if (phase === 'menu' || phase === 'lobby') { phase = 'lobby'; renderLobby(); } },
+                onMessage(d) {
+                    if (!d || typeof d.t !== 'string') return;
+                    if (d.t === 'STATE' && validState(d.s)) { phase = d.s.phase; V = d.s; V.at = Date.now(); if (phase !== 'draw' || V.drawer !== my) myWord = phase === 'draw' ? '' : myWord; render(); }
+                    else if (d.t === 'STROKE' && validStroke(d.m)) drawSeg(d.m);
+                    else if (d.t === 'CLEAR') clearCanvas();
+                    else if (d.t === 'CHAT' && d.m && typeof d.m.text === 'string' && d.m.text.length <= 80) addChat({ text: d.m.text, sys: !!d.m.sys });
+                    else if (d.t === 'WORD' && typeof d.word === 'string' && d.word.length <= 8) { myWord = d.word; render(); }
+                },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (phase !== 'menu') { alert('房主已離開，遊戲結束'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+
+        function validState(s) {
+            const arr = (a, n) => Array.isArray(a) && a.length <= n;
+            return !!s && ['lobby', 'draw', 'between', 'over'].includes(s.phase) && arr(s.names, 8) && s.names.every(n => typeof n === 'string' && n.length <= 12)
+                && arr(s.scores, 8) && s.scores.every(Number.isFinite) && Number.isInteger(s.drawer) && typeof s.hint === 'string' && s.hint.length <= 40
+                && Number.isFinite(s.ms) && arr(s.guessed, 8) && typeof s.word === 'string' && s.word.length <= 8 && arr(s.active, 8)
+                && Number.isInteger(s.round) && Number.isInteger(s.rounds);
+        }
+
+        // ---------- 畫面 ----------
+        function addChat(m) {
+            const d = document.createElement('div');
+            if (m.sys) d.className = 'sys';
+            d.textContent = m.text;
+            $('#chat').append(d); $('#chat').scrollTop = 1e9;
+        }
+
+        function renderLobby() {
+            const n = names();
+            $('#lobbyPlayers').replaceChildren(...n.map((x, i) => Object.assign(document.createElement('div'), { className: 'pl', textContent: x + (i === 0 ? ' 👑' : '') + (i === my ? '（我）' : '') })));
+            show('#menu', false); show('#lobby', true); show('#game', false);
+            show('#copyInvite', isHost); show('#startBtn', isHost); $('#startBtn').disabled = n.length < 2;
+            $('#lobbyHint').textContent = isHost ? (n.length < 2 ? '把邀請連結傳給朋友，至少 2 人才能開始' : '人到齊了就按「開始遊戲」') : '等待房主開始遊戲…';
+        }
+
+        function renderTimer() {
+            const ms = !V ? 0 : isHost ? H.endsAt - Date.now() : V.ms - (Date.now() - (V.at || Date.now()));
+            $('#timer').textContent = phase === 'draw' && V ? `⏱ ${Math.max(0, Math.ceil(ms / 1000))}` : '';
+        }
+        setInterval(renderTimer, 250);
+
+        function render() {
+            if (!V) return;
+            if (V.phase === 'lobby') return renderLobby();
+            show('#menu', false); show('#lobby', false); show('#game', true);
+            $('#roundInfo').textContent = V.phase === 'over' ? '遊戲結束' : `第 ${V.round} / ${V.rounds} 回合`;
+            const drawer = V.drawer === my;
+            $('#hint').textContent = V.phase === 'draw' ? (drawer ? `你要畫：${myWord}` : V.hint) : V.phase === 'between' ? `答案：${V.word}` : '';
+            renderTimer();
+            $('#scoreboard').replaceChildren(...V.names.map((nm, i) => {
+                const d = document.createElement('div');
+                d.className = 'pl' + (i === V.drawer && V.phase === 'draw' ? ' drawer' : '') + (V.guessed.includes(i) ? ' ok' : '') + (V.active[i] ? '' : ' off');
+                d.textContent = `${i === V.drawer && V.phase === 'draw' ? '✏️ ' : ''}${nm}${i === my ? '（我）' : ''}　${V.scores[i] || 0}`;
+                return d;
+            }));
+            show('#tools', iAmDrawer());
+            const canGuess = V.phase === 'draw' && !drawer && !V.guessed.includes(my);
+            $('#guess').disabled = $('#guessBtn').disabled = !canGuess;
+            if (V.phase === 'over') {
+                const top = Math.max(...V.scores), win = V.names.filter((_, i) => V.scores[i] === top);
+                $('#msg').textContent = `🏆 ${win.join('、')} 獲勝（${top} 分）`;
+            } else $('#msg').textContent = V.phase === 'between' ? '下一回合即將開始…' : '';
+            show('#again', isHost && V.phase === 'over');
+        }
+
+        // ---------- 事件 ----------
+        $('#hostBtn').onclick = hostRoom;
+        $('#joinBtn').onclick = joinRoom;
+        $('#startBtn').onclick = startGame;
+        $('#again').onclick = () => { phase = 'lobby'; room.keepSlots = false; room.prune(); V = null; clearCanvas(); $('#chat').replaceChildren(); room.broadcast({ t: 'STATE', s: { phase: 'lobby', names: names(), scores: [], drawer: -1, hint: '', ms: 0, guessed: [], word: '', active: [], round: 0, rounds: 0 } }); renderLobby(); };
+        $('#leave').onclick = () => location.reload();
+        $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
+        function sendGuess() { const t = $('#guess').value.trim(); if (!t) return; $('#guess').value = ''; if (isHost) onGuess(my, t); else room.send({ t: 'GUESS', text: t }); }
+        $('#guessBtn').onclick = sendGuess;
+        $('#guess').onkeydown = (e) => { if (e.key === 'Enter') sendGuess(); };
+        $('#palette').replaceChildren(...COLORS.map(c => { const b = document.createElement('button'); b.className = 'sw'; b.style.background = c; b.setAttribute('aria-label', '顏色 ' + c); b.setAttribute('aria-pressed', c === color); if (c === '#ffffff') b.textContent = '⌫'; b.onclick = () => { color = c; [...$('#palette').children].forEach(x => x.setAttribute('aria-pressed', x === b)); }; return b; }));
+        document.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { width = +b.dataset.w; document.querySelectorAll('[data-w]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+        $('#clearBtn').onclick = () => { if (!iAmDrawer()) return; clearCanvas(); if (isHost) room.broadcast({ t: 'CLEAR' }); else room.send({ t: 'CLEAR' }); };
+
+        if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+        clearCanvas();
+    </script>
+</body>
+
+</html>
