@@ -45,6 +45,9 @@
 | [俄羅斯方塊](mini-games/tetris.html) | 7 袋隨機、旋轉踢牆、暫存、下一個預覽、落點影子、等級加速；鍵盤與觸控按鈕 | — |  |
 | [打字速度測試](mini-games/typing-test.html) | 中文 / 英文 / 程式碼 / 自訂文章打字測速，每分鐘字數與正確率（自訂文章不記最佳）；歷史成績走勢與最常打錯的字 | `typing_custom`、`typing_hist`、`typing_miss` |  |
 | [連線終極密碼](mini-games/ultimate-code.html) | 2–8 人；密碼只存在房主端，結束才公布；累計輸的次數 | — | ✓ |
+| [數字滑塊](mini-games/sliding-puzzle.html) | 3×3 / 4×4 / 5×5；點擊或方向鍵 / WASD 滑動；隨機走法打亂（一定有解）；步數、時間與各尺寸最佳紀錄 | `slide_best_<n>` |  |
+| [終極井字棋](mini-games/ultimate-ttt.html) | 9 個小棋盤，下在哪格對手就得去對應棋盤；對應棋盤已結束則任選；本機雙人或連線（房主驗證每一步） | — | ✓ |
+| [連線 UNO](mini-games/uno.html) | 2–6 人；跳過 / 迴轉 / 抽二 / 萬用 / 萬用抽四；抽到能出的牌可出或過；牌堆空了自動洗回棄牌；手牌只傳給本人；離線玩家自動跳過 | — | ✓ |
 
 ## 趣味
 
@@ -72,6 +75,7 @@
 | [待辦清單](fun/todo.html) | 到期日分組（逾期 / 今天 / 明天 / 之後 / 無日期 / 已完成）、組內上下調整、點文字修改 | `todo_items` |  |
 | [決策轉盤](fun/wheel.html) | 輸入選項轉盤決定，支援權重，清單自動記住；內建午餐 / 晚餐 / 飲料 / 宵夜 / 週末活動 / 運動常用清單 | `wheel_items` |  |
 | [白噪音 / 環境音](fun/white-noise.html) | 即時合成白 / 粉紅 / 棕噪音、雨聲、風聲、機械鍵盤與打字機聲，可定時 | — |  |
+| [擲筊 / 求籤](fun/divination.html) | 擲筊（聖筊 / 笑筊 / 陰筊、連續聖筊計數與統計）；求籤（大吉到凶五級，事業 / 感情 / 財運 / 健康各一句）；可複製 | `divine_tab`、`divine_stats` |  |
 
 ## 工具
 
@@ -82,16 +86,16 @@
 | [進位 / 位元運算工具](utils/base-converter.html) | 2 / 8 / 10 / 16 / 36 進位互轉（BigInt）、位元運算（8–64 位元、二補數）、float32 / float64 拆解 | `base_tab` |  |
 | [計算機](utils/calculator.html) | 自製運算式解析器（不用 eval）、隱含乘法、sin / cos / ln / log / sqrt…、ans、角度 / 弧度，歷史紀錄可點回重算 | `calc_history`、`calc_angle` |  |
 | [色彩工具](utils/color-tools.html) | 色碼互轉、配色產生（互補 / 類似 / 三角 / 分裂 / 四角 / 單色 / 漸層）、色票庫（存檔、複製成 CSS 變數）、WCAG 對比度檢查、四種色覺缺陷模擬 | `color_lib` |  |
-| [倒數日 / 紀念日](utils/countdown.html) | 還有 / 已經幾天，可設定每年重複（週年）；「今日倒數」到下班時刻的時分秒與進度條；匯出 .ics（全天事件、每年重複用 RRULE） | `countdown_today`、`countdown_events` |  |
+| [倒數日 / 紀念日](utils/countdown.html) | 還有 / 已經幾天，可設定每年重複（週年）；「今日倒數」到下班時刻的時分秒與進度條；每個日期可附清單（旅行行李範本、勾選進度）；匯出 .ics（全天事件、每年重複用 RRULE） | `countdown_today`、`countdown_events` |  |
 | [Cron 表達式解析](utils/cron-parser.html) | 5 欄位 cron（* , - / ?、月份星期縮寫、@daily）中文說明與未來 10 次執行時間 | `cron_expr` |  |
 | [CSV / TSV 表格工具](utils/csv-tool.html) | RFC 4180 解析（引號、跳脫、儲存格內換行）、自動判斷分隔符號、排序與篩選、輸出 JSON / Markdown / TSV | — |  |
 | [日期計算機](utils/date-calc.html) | 相差（天 / 週 / 年月日 / 工作日）、加減（含工作日）、星期與 ISO 週次 | `datecalc_tab` |  |
-| [編碼解碼](utils/encode-decode.html) | Base64 / URL / Unicode / HTML 實體 / 十六進位；JWT 解析（顯示過期時間，不驗簽）；SHA-1 / 256 / 384 / 512 雜湊；摩斯密碼、凱薩密碼、ROT13 | — |  |
-| [記帳本](utils/expense-tracker.html) | 收支分類、月統計、分類佔比；資料只在本機，可匯出 CSV（防公式注入） | `expenses` |  |
+| [編碼解碼](utils/encode-decode.html) | Base64 / URL / Unicode / HTML 實體 / 十六進位；JWT 解析（顯示過期時間，不驗簽）；網址參數拆解 / 組合；SHA-1 / 256 / 384 / 512 雜湊（文字與檔案，可貼官方值比對）；摩斯密碼、凱薩密碼、ROT13 | — |  |
+| [記帳本](utils/expense-tracker.html) | 收支分類、月統計、分類佔比；固定支出 / 訂閱（每週 / 月 / 年、下次扣款日、折合每月 / 每年、一鍵記入明細）；資料只在本機，可匯出 CSV（防公式注入） | `expenses`、`expense_fixed` |  |
 | [油耗 / 行車成本](utils/fuel-log.html) | 加滿到加滿法計算每段油耗（沒加滿的併入下一次）、整體平均、最近 12 段走勢、匯出 CSV | `fuel_entries` |  |
-| [BMI / 熱量 / 心率計算](utils/health-calc.html) | BMI（台灣標準）、BMR、TDEE、心率區間（含儲備心率法） | — |  |
+| [BMI / 熱量 / 心率計算](utils/health-calc.html) | BMI（台灣標準）、BMR、TDEE、心率區間（含儲備心率法）；體重紀錄（折線圖、目標線、近 30 天趨勢、預估達標日） | `weight_log`、`weight_goal` |  |
 | [圖片壓縮 / 縮圖 / 轉檔](utils/image-resize.html) | 等比縮放、品質調整、JPEG / PNG / WebP 轉檔、SVG 轉 PNG（向量可放大到任意尺寸）；圖片不上傳，重新編碼會移除 EXIF | — |  |
-| [JSON 整理器](utils/json-formatter.html) | 美化 / 壓縮 / 驗證、錯誤定位、樹狀檢視 | — |  |
+| [JSON 整理器](utils/json-formatter.html) | 美化 / 壓縮 / 驗證、錯誤定位、樹狀檢視；JSON ↔ YAML、JSON ↔ CSV 轉換 | — |  |
 | [貸款 / 複利試算](utils/loan-calculator.html) | 本息 / 本金平均攤還與逐期表；起始本金 + 每月投入的複利成長；存款目標（多久達標 / 每月要存多少，可扣通膨） | — |  |
 | [發票 / 樂透對獎](utils/lottery-check.html) | 統一發票特別獎到六獎與增開六獎（含獎金）；大樂透、威力彩獎項判定；開獎號碼自行輸入、不連網 | `lc_tab` |  |
 | [Markdown 即時預覽](utils/markdown-preview.html) | 標題 / 清單 / 表格 / 程式碼，輸出前消毒，可複製 HTML | `md_src` |  |
@@ -110,6 +114,9 @@
 | [時區轉換](utils/timezone.html) | 一個時間對照多個城市，處理夏令時間；即時看板（每秒更新、日夜圖示） | `tz_zones` |  |
 | [文字轉語音](utils/tts.html) | speechSynthesis 朗讀；長文自動分段、可暫停繼續；選語音、語速、音調 | `tts_text`、`tts_voice` |  |
 | [單位與匯率換算](utils/unit-converter.html) | 長度、重量、坪、溫度等單位、烹飪（杯 / 匙 / 公克，依 15 種食材密度），以及即時匯率（需連網，有離線快取） | `fx_cache` |  |
+| [時間戳轉換](utils/timestamp.html) | Unix 時間戳（秒 / 毫秒自動判斷）與日期互轉；顯示 UTC、ISO 8601、相對時間；13 個常用時區 + 裝置時區（含夏令時間）；即時顯示現在時間戳 | `ts_tz` |  |
+| [CSS 產生器](utils/css-gen.html) | 陰影（含內陰影）、線性 / 放射漸層（2–3 色標）、圓角（四角獨立，px / %）；即時預覽；複製 CSS | `cssgen` |  |
+| [輪值表](utils/duty-roster.html) | 每天 / 每週 / 每兩週 / 每月輪換；跳過週六日；指定從第幾位開始；每人次數；標出下一個輪到的人；複製成文字 | `roster_cfg` |  |
 
 ## 閱讀
 

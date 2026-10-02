@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="連線 UNO（簡易版）：2–6 人，顏色或數字相同就能出牌，最先出完手牌的人獲勝。牌堆與手牌都由房主管理，不會被偷看。">
+    <meta property="og:title" content="連線 UNO（簡易版）" />
+    <meta property="og:description" content="2–6 人連線 UNO，房主負責洗牌與驗證。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/uno.html" />
+    <title>連線 UNO</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+            --R: #ff453a;
+            --Y: #ffd60a;
+            --G: #30d158;
+            --B: #0a84ff;
+            --W: #1c1c1e;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row input {
+            flex: 1 1 130px;
+        }
+
+        .status {
+            text-align: center;
+            font-weight: 700;
+            font-size: 18px;
+            min-height: 1.6em;
+            margin-bottom: 10px;
+        }
+
+        #opps {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 12px;
+        }
+
+        .opp {
+            padding: 6px 12px;
+            border-radius: 12px;
+            background: var(--fill);
+            font-size: 14px;
+        }
+
+        .opp.turn {
+            box-shadow: 0 0 0 3px var(--ok, #30d158);
+        }
+
+        .opp.off {
+            opacity: .45;
+        }
+
+        #table {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 22px;
+            margin: 10px 0 16px;
+        }
+
+        .card-u {
+            width: 62px;
+            height: 92px;
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            font-size: 24px;
+            font-weight: 800;
+            color: #fff;
+            border: 3px solid #fff;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, .35);
+            padding: 0;
+            min-width: 0;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, .4);
+        }
+
+        .card-u.Y {
+            color: #1c1c1e;
+            text-shadow: none;
+        }
+
+        .card-u.R {
+            background: var(--R);
+        }
+
+        .card-u.Y {
+            background: var(--Y);
+        }
+
+        .card-u.G {
+            background: var(--G);
+        }
+
+        .card-u.B {
+            background: var(--B);
+        }
+
+        .card-u.W {
+            background: conic-gradient(var(--R) 0 25%, var(--B) 0 50%, var(--G) 0 75%, var(--Y) 0);
+        }
+
+        .card-u.back {
+            background: #1c1c1e;
+            color: #ff453a;
+            font-size: 16px;
+        }
+
+        #hand {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+        }
+
+        #hand .card-u:disabled {
+            opacity: .4;
+            cursor: default;
+        }
+
+        #hand .card-u.ok {
+            transform: translateY(-6px);
+            box-shadow: 0 0 0 3px var(--ok, #30d158), 0 4px 10px rgba(0, 0, 0, .35);
+        }
+
+        .dotc {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            vertical-align: -3px;
+        }
+
+        #picker {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 10px 0;
+        }
+
+        #picker button {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            padding: 0;
+            border: 3px solid #fff;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, .35);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>連線 UNO（簡易版）</h1>
+        <p class="sub">顏色或數字相同就能出牌，最先出完手牌的人獲勝。2–6 人。</p>
+
+        <div class="card" id="menu">
+            <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+            <div class="row">
+                <button class="primary" id="hostBtn">建立房間</button>
+                <input id="joinId" placeholder="貼上房號" aria-label="房號">
+                <button id="joinBtn">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+        </div>
+
+        <div class="card" id="lobby" hidden>
+            <h2>等待玩家</h2>
+            <div class="players" id="lobbyPlayers"></div>
+            <div class="row" style="margin-top:12px">
+                <button id="copyInvite" hidden>複製邀請連結</button>
+                <button class="primary" id="startBtn" hidden>開始（至少 2 人）</button>
+            </div>
+            <p class="note" id="lobbyHint"></p>
+        </div>
+
+        <div class="card" id="game" hidden>
+            <div id="opps"></div>
+            <div id="table"><div class="card-u back" id="deck" title="牌堆">UNO</div><div id="top"></div><div id="colorInfo"></div></div>
+            <div class="status" id="status" role="status"></div>
+            <div id="picker" hidden></div>
+            <div id="hand" aria-label="我的手牌"></div>
+            <div class="row" style="justify-content:center;margin-top:14px">
+                <button id="drawBtn">抽一張</button>
+                <button id="passBtn" hidden>過（不出）</button>
+                <button class="primary" id="again" hidden>再來一局</button>
+                <button id="leave">離開</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- pure ---
+        // 牌：兩個字元「顏色 + 內容」。顏色 R Y G B（W = 萬用）；內容 0-9、S 跳過、R 迴轉、D 抽二；萬用牌是 WW（換色）與 WF（換色 + 抽四）
+        const COLORS = ['R', 'Y', 'G', 'B'];
+        const CARD_RE = /^([RYGB][0-9SRD]|W[WF])$/;
+        const validCard = (c) => typeof c === 'string' && CARD_RE.test(c);
+        function makeDeck() {
+            const d = [];
+            for (const c of COLORS) { d.push(c + '0'); for (const v of '123456789SRD') d.push(c + v, c + v); }
+            for (let i = 0; i < 4; i++) d.push('WW', 'WF');
+            return d;
+        }
+        // 能不能出：萬用牌隨時可以；否則顏色等於目前顏色、或內容與最上面那張相同
+        const canPlayCard = (card, top, color) => card[0] === 'W' || card[0] === color || card[1] === top[1];
+
+        const nextOf = (g, p, steps = 1) => { const n = g.hands.length; return (((p + g.dir * steps) % n) + n) % n; };
+        function drawFromDeck(g, rand) {
+            if (!g.deck.length && g.discard.length > 1) { const top = g.discard.pop(); g.deck = rand(g.discard.splice(0)); g.discard.push(top); }
+            return g.deck.pop() || null;
+        }
+        // 開局：每人 7 張，翻開的第一張一定是數字牌。shuffleFn 回傳洗好的新陣列
+        function newGame(n, shuffleFn) {
+            const deck = shuffleFn(makeDeck()), hands = Array.from({ length: n }, () => []);
+            for (let k = 0; k < 7; k++) for (let p = 0; p < n; p++) hands[p].push(deck.pop());
+            let i = deck.length - 1; while (!/^[RYGB][0-9]$/.test(deck[i])) i--;
+            const top = deck.splice(i, 1)[0];
+            return { hands, deck, discard: [top], color: top[0], turn: 0, dir: 1, drew: false, drawnIdx: -1, winner: -1, log: '開始！', shuffleFn };
+        }
+        // 出牌：成功回傳 true。idx 是手牌位置；萬用牌要給 color
+        function playCard(g, p, idx, color) {
+            if (g.winner >= 0 || p !== g.turn || !Number.isInteger(idx) || idx < 0 || idx >= g.hands[p].length) return false;
+            const card = g.hands[p][idx], top = g.discard[g.discard.length - 1];
+            if (g.drew && idx !== g.drawnIdx) return false;                          // 剛抽的牌：只能出那一張
+            if (!canPlayCard(card, top, g.color)) return false;
+            if (card[0] === 'W' && !COLORS.includes(color)) return false;
+            g.hands[p].splice(idx, 1); g.discard.push(card); g.color = card[0] === 'W' ? color : card[0]; g.drew = false; g.drawnIdx = -1;
+            if (!g.hands[p].length) { g.winner = p; g.log = '出完手牌！'; return true; }
+            let skip = 0, victim = -1;
+            if (card[1] === 'R') { g.dir *= -1; if (g.hands.length === 2) skip = 1; }
+            else if (card[1] === 'S') skip = 1;
+            else if (card[1] === 'D' || card[1] === 'F') { victim = nextOf(g, p); skip = 1; const k = card[1] === 'D' ? 2 : 4; for (let i = 0; i < k; i++) { const c = drawFromDeck(g, g.shuffleFn); if (c) g.hands[victim].push(c); } }
+            g.turn = nextOf(g, p, 1 + skip);
+            g.log = { S: '跳過下一位', R: '迴轉', D: '下一位抽 2 張並跳過', F: '下一位抽 4 張並跳過' }[card[1]] || '';
+            g.victim = victim;
+            return true;
+        }
+        // 抽牌：抽到能出的牌就留在原地（可出那張或過牌），否則換下一位。回傳 false 代表不合法
+        function drawCard(g, p) {
+            if (g.winner >= 0 || p !== g.turn || g.drew) return false;
+            const c = drawFromDeck(g, g.shuffleFn);
+            if (!c) { g.turn = nextOf(g, p); g.log = '牌堆沒牌了'; return true; }
+            g.hands[p].push(c); g.log = '抽了一張';
+            if (canPlayCard(c, g.discard[g.discard.length - 1], g.color)) { g.drew = true; g.drawnIdx = g.hands[p].length - 1; } else g.turn = nextOf(g, p);
+            return true;
+        }
+        function passTurn(g, p) {
+            if (g.winner >= 0 || p !== g.turn || !g.drew) return false;
+            g.drew = false; g.drawnIdx = -1; g.turn = nextOf(g, p); g.log = '過'; return true;
+        }
+        // 輪到已經離線的人就跳過（回傳是否換了人）
+        function skipOffline(g, active) {
+            let moved = false;
+            for (let k = 0; k < g.hands.length && g.winner < 0 && !active[g.turn]; k++) { g.turn = nextOf(g, g.turn); g.drew = false; g.drawnIdx = -1; moved = true; }
+            return moved;
+        }
+        function validPublic(s) {
+            return !!s && (s.phase === 'lobby' || s.phase === 'play' || s.phase === 'over') && Array.isArray(s.names) && s.names.length <= 6 && s.names.every(x => typeof x === 'string' && x.length <= 12)
+                && Array.isArray(s.counts) && s.counts.length === s.names.length && s.counts.every(Number.isInteger) && Array.isArray(s.active) && s.active.length === s.names.length
+                && (s.top === null || validCard(s.top)) && (s.color === null || COLORS.includes(s.color)) && Number.isInteger(s.turn) && Number.isInteger(s.winner) && (s.dir === 1 || s.dir === -1)
+                && typeof s.drew === 'boolean' && typeof s.log === 'string' && Number.isInteger(s.deckLeft);
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let room = null, isHost = false, my = -1, hostId = '', V = null, myHand = [], G = null, phase = 'lobby', pendingWild = -1, flash = '';
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const show = (id, on) => { $(id).hidden = !on; };
+        const LABEL = { S: '⊘', R: '⇄', D: '+2', W: '★', F: '+4' };
+        const label = (c) => LABEL[c[1]] || c[1];
+        const readNick = () => { const n = $('#nick').value.trim(); if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; } return n; };
+
+        // ---------- 房主 ----------
+        const actives = () => room.players.map(p => p.connected);
+        function publicState() {
+            if (!G) return { phase, names: room.players.map(p => p.nick), counts: room.players.map(() => 0), active: actives(), top: null, color: null, turn: -1, dir: 1, winner: -1, drew: false, log: '', deckLeft: 0 };
+            return { phase, names: room.players.map(p => p.nick), counts: G.hands.map(h => h.length), active: actives(), top: G.discard[G.discard.length - 1], color: G.color, turn: G.turn, dir: G.dir, winner: G.winner, drew: G.drew, log: G.log, deckLeft: G.deck.length };
+        }
+        function push() {
+            if (G && phase === 'play') {
+                const act = actives(); if (act.filter(Boolean).length < 2) { phase = 'over'; G.log = '只剩一位玩家，遊戲結束'; } else skipOffline(G, act);
+                if (G.winner >= 0) phase = 'over';
+            }
+            V = publicState(); if (G) myHand = G.hands[my] || [];
+            render(); room.broadcast({ t: 'STATE', s: V });
+            if (G) room.players.forEach((p, i) => { if (i !== my && p.connected && G.hands[i]) room.sendTo(i, { t: 'HAND', hand: G.hands[i] }); });
+        }
+        function startGame() {
+            room.keepSlots = true; const act = actives(); if (act.filter(Boolean).length < 2) return;
+            G = newGame(room.players.length, (a) => Util.shuffle(a)); phase = 'play'; push();
+        }
+        function hostAct(p, d) {
+            if (!G || phase !== 'play' || !d) return;
+            let ok = false;
+            if (d.t === 'PLAY') ok = playCard(G, p, d.i, d.color);
+            else if (d.t === 'DRAW') ok = drawCard(G, p);
+            else if (d.t === 'PASS') ok = passTurn(G, p);
+            if (ok) { push(); } else if (p === my) { flash = '這步不行'; render(); } else if (d.t === 'PLAY' || d.t === 'DRAW' || d.t === 'PASS') room.sendTo(p, { t: 'ERR', msg: '這步不行' });
+        }
+
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: 6,
+                onReady(r) { isHost = true; my = 0; hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id); push(); },
+                canJoin: () => (phase === 'play' ? '遊戲已經開始，請等這局結束' : null),
+                onJoin: () => push(),
+                onLeave() { push(); },
+                onMessage(p, d) { hostAct(p.index, d); },
+                onError: onNetError,
+            });
+        }
+        function onNetError(err, message) { if (V || isHost) return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } }
+
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…'); hostId = id;
+            room = P2PRoom.join(id, {
+                nick,
+                onRoster(players, me) { my = me; if (!V) { V = { phase: 'lobby', names: players.map(p => p.nick), counts: players.map(() => 0), active: players.map(p => p.connected), top: null, color: null, turn: -1, dir: 1, winner: -1, drew: false, log: '', deckLeft: 0 }; render(); } },
+                onMessage(d) {
+                    if (!d || typeof d.t !== 'string') return;
+                    if (d.t === 'STATE' && validPublic(d.s)) { if (d.s.phase === 'lobby') myHand = []; V = d.s; flash = ''; render(); }
+                    else if (d.t === 'HAND' && Array.isArray(d.hand) && d.hand.length <= 108 && d.hand.every(validCard)) { myHand = d.hand; render(); }
+                    else if (d.t === 'ERR' && typeof d.msg === 'string') { flash = d.msg.slice(0, 30); render(); }
+                },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (V) { alert('房主已離開'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+
+        // ---------- 動作（房主直接呼叫，成員送給房主）----------
+        function act(d) { if (isHost) hostAct(my, d); else room.send(d); }
+        function tryPlay(i) {
+            const card = myHand[i];
+            if (card[0] === 'W') { pendingWild = i; render(); return; }
+            act({ t: 'PLAY', i });
+        }
+
+        // ---------- 畫面 ----------
+        const cardEl = (c, cls = '') => { const b = document.createElement('button'); b.className = 'card-u ' + c[0] + ' ' + cls; b.textContent = label(c); b.setAttribute('aria-label', c); return b; };
+        function render() {
+            if (!V) return;
+            if (V.phase === 'lobby') {
+                show('#menu', false); show('#lobby', true); show('#game', false);
+                $('#lobbyPlayers').replaceChildren(...V.names.map((x, i) => Object.assign(document.createElement('div'), { className: 'pl' + (V.active[i] ? '' : ' off'), textContent: x + (i === 0 ? ' 👑' : '') + (i === my ? '（我）' : '') })));
+                show('#copyInvite', isHost); show('#startBtn', isHost);
+                $('#startBtn').disabled = V.active.filter(Boolean).length < 2;
+                $('#lobbyHint').textContent = isHost ? '把邀請連結傳給朋友，至少 2 人就能開始' : '等待房主開始…'; return;
+            }
+            show('#menu', false); show('#lobby', false); show('#game', true);
+            const over = V.phase === 'over', myTurn = !over && V.turn === my;
+            $('#opps').replaceChildren(...V.names.map((nm, i) => Object.assign(document.createElement('div'), { className: 'opp' + (i === V.turn && !over ? ' turn' : '') + (V.active[i] ? '' : ' off'), textContent: `${nm}${i === my ? '（我）' : ''}：${V.counts[i]} 張${V.counts[i] === 1 ? ' UNO!' : ''}` })));
+            $('#top').replaceChildren(V.top ? cardEl(V.top) : '');
+            $('#colorInfo').innerHTML = V.color ? `<span class="dotc" style="background:var(--${V.color})"></span> 目前顏色<br><small class="muted">${V.dir === 1 ? '順時針' : '逆時針'}・牌堆 ${V.deckLeft}</small>` : '';
+            $('#deck').title = `牌堆剩 ${V.deckLeft} 張`;
+            const top = V.top;
+            $('#hand').replaceChildren(...myHand.map((c, i) => {
+                const playable = myTurn && canPlayCard(c, top, V.color) && (!V.drew || i === myHand.length - 1);
+                const b = cardEl(c, playable ? 'ok' : ''); b.disabled = !playable; b.onclick = () => tryPlay(i); return b;
+            }));
+            show('#picker', pendingWild >= 0 && myTurn);
+            $('#picker').replaceChildren(...COLORS.map(c => { const b = document.createElement('button'); b.style.background = `var(--${c})`; b.setAttribute('aria-label', '選' + c); b.onclick = () => { const i = pendingWild; pendingWild = -1; act({ t: 'PLAY', i, color: c }); }; return b; }));
+            $('#drawBtn').disabled = !myTurn || V.drew; $('#passBtn').hidden = !(myTurn && V.drew);
+            show('#again', isHost && over);
+            $('#status').textContent = flash || (over ? (V.winner >= 0 ? `🏆 ${V.names[V.winner]}${V.winner === my ? '（你）' : ''} 獲勝！` : V.log) : myTurn ? (V.drew ? '剛抽的牌可以出，或按「過」' : '輪到你了') + (V.log ? `（${V.log}）` : '') : `輪到 ${V.names[V.turn] ?? ''}${V.log ? `（上一手：${V.log}）` : ''}`);
+        }
+
+        $('#hostBtn').onclick = hostRoom; $('#joinBtn').onclick = joinRoom; $('#startBtn').onclick = startGame;
+        $('#drawBtn').onclick = () => act({ t: 'DRAW' }); $('#passBtn').onclick = () => act({ t: 'PASS' });
+        $('#again').onclick = () => { phase = 'lobby'; G = null; myHand = []; room.keepSlots = false; room.prune(); push(); };
+        $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
+        $('#leave').onclick = () => location.reload();
+        if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+    </script>
+</body>
+
+</html>

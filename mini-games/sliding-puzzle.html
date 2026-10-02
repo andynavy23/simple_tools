@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="數字滑塊：8 / 15 / 24 數字推盤，點擊或方向鍵滑動，記錄步數、時間與最佳紀錄。">
+    <meta property="og:title" content="數字滑塊" />
+    <meta property="og:description" content="經典數字推盤，保證有解。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/sliding-puzzle.html" />
+    <title>數字滑塊</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 480px;
+        }
+
+        .bar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .spacer {
+            margin-left: auto;
+        }
+
+        #board {
+            display: grid;
+            gap: 6px;
+            padding: 6px;
+            border-radius: 18px;
+            background: var(--fill);
+            aspect-ratio: 1;
+            touch-action: manipulation;
+        }
+
+        .t {
+            display: grid;
+            place-items: center;
+            border-radius: 12px;
+            font-size: clamp(20px, 7vw, 34px);
+            font-weight: 700;
+            background: var(--card, #fff);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .18);
+            cursor: pointer;
+            user-select: none;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .t.ok {
+            color: var(--ok, #30d158);
+        }
+
+        .t.blank {
+            visibility: hidden;
+        }
+
+        #msg {
+            min-height: 24px;
+            margin: 12px 0 0;
+            text-align: center;
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>數字滑塊</h1>
+        <p class="sub">把數字排回 1、2、3…，空格在最後。點旁邊的數字、或用方向鍵移動。</p>
+
+        <div class="card">
+            <div class="bar">
+                <select id="size" aria-label="大小"><option value="3">3×3（8 數字）</option><option value="4" selected>4×4（15 數字）</option><option value="5">5×5（24 數字）</option></select>
+                <span class="muted" id="stat">步數 0 ・ 0:00</span>
+                <button class="primary spacer" id="new">重新打亂</button>
+            </div>
+            <div id="board" role="grid" aria-label="棋盤"></div>
+            <p id="msg" role="status"></p>
+            <p class="note" id="best"></p>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { rnd, store } = Util;
+
+        // --- pure ---
+        // 棋盤：長度 n*n 的陣列，0 是空格；解答是 1..n*n-1, 0
+        const solvedBoard = (n) => Array.from({ length: n * n }, (_, i) => (i + 1) % (n * n));
+        const isSolved = (b) => b.every((v, i) => v === (i + 1) % b.length);
+        const neighbors = (n, i) => { const r = Math.floor(i / n), c = i % n, o = []; if (r > 0) o.push(i - n); if (r < n - 1) o.push(i + n); if (c > 0) o.push(i - 1); if (c < n - 1) o.push(i + 1); return o; };
+        // 點第 i 格：若它與空格相鄰，回傳交換後的新棋盤，否則 null
+        function moveTile(b, n, i) {
+            const z = b.indexOf(0);
+            if (!neighbors(n, z).includes(i)) return null;
+            const nb = b.slice(); nb[z] = nb[i]; nb[i] = 0; return nb;
+        }
+        // 方向鍵：dir 是「方塊移動的方向」，所以被推的是空格的反方向那一格
+        function moveByKey(b, n, dir) {
+            const z = b.indexOf(0), r = Math.floor(z / n), c = z % n;
+            const src = { up: [r + 1, c], down: [r - 1, c], left: [r, c + 1], right: [r, c - 1] }[dir];
+            if (!src || src[0] < 0 || src[0] >= n || src[1] < 0 || src[1] >= n) return null;
+            return moveTile(b, n, src[0] * n + src[1]);
+        }
+        // 逆序數法：這個盤面是不是能解（打亂本身用隨機走法，一定有解；這個函式用來驗證）
+        function solvable(b, n) {
+            const a = b.filter(v => v), inv = a.reduce((s, v, i) => s + a.slice(i + 1).filter(w => w < v).length, 0);
+            if (n % 2 === 1) return inv % 2 === 0;
+            const rowFromBottom = n - Math.floor(b.indexOf(0) / n);
+            return (inv + rowFromBottom) % 2 === 1;
+        }
+        // 從解答隨機走 steps 步（不立刻走回頭路），保證有解；若剛好回到解答就再走一步
+        function scramble(n, steps = n * n * 30, rand = rnd) {
+            let b = solvedBoard(n), prev = -1;
+            for (let k = 0; k < steps || isSolved(b); k++) {
+                const z = b.indexOf(0), opts = neighbors(n, z).filter(i => i !== prev), i = opts[rand(opts.length)];
+                prev = z; b = moveTile(b, n, i);
+            }
+            return b;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let n = 4, b, moves = 0, t0 = 0, timer = null, done = false;
+        const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+        const bestKey = () => 'slide_best_' + n;
+
+        function render() {
+            const g = $('#board'); g.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+            g.replaceChildren(...b.map((v, i) => {
+                const d = document.createElement('div'); d.className = 't' + (v === 0 ? ' blank' : v === (i + 1) % b.length ? ' ok' : ''); d.textContent = v || ''; d.onclick = () => move(moveTile(b, n, i));
+                return d;
+            }));
+            const sec = t0 ? Math.floor((Date.now() - t0) / 1000) : 0;
+            $('#stat').textContent = `步數 ${moves} ・ ${fmt(sec)}`;
+        }
+        function move(nb) {
+            if (!nb || done) return;
+            if (!t0) { t0 = Date.now(); timer = setInterval(render, 500); }
+            b = nb; moves++;
+            if (isSolved(b)) {
+                done = true; clearInterval(timer);
+                const sec = Math.floor((Date.now() - t0) / 1000), best = store.get(bestKey(), null);
+                const rec = !best || moves < best.moves;
+                if (rec) store.set(bestKey(), { moves, sec });
+                $('#msg').textContent = `🎉 完成！${moves} 步、${fmt(sec)}${rec ? '（新紀錄）' : ''}`;
+                showBest();
+            }
+            render();
+        }
+        function showBest() { const x = store.get(bestKey(), null); $('#best').textContent = x ? `${n}×${n} 最佳：${x.moves} 步（${fmt(x.sec)}）` : ''; }
+        function newGame() {
+            n = +$('#size').value; clearInterval(timer); b = scramble(n); moves = 0; t0 = 0; done = false; $('#msg').textContent = ''; showBest(); render();
+        }
+
+        $('#new').onclick = newGame; $('#size').onchange = newGame;
+        document.addEventListener('keydown', (e) => {
+            const dir = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' }[e.key];
+            if (dir && e.target.tagName !== 'SELECT') { e.preventDefault(); move(moveByKey(b, n, dir)); }
+        });
+        newGame();
+    </script>
+</body>
+
+</html>

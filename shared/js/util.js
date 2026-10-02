@@ -1,4 +1,4 @@
-/* 共用小工具：均勻亂數 / 洗牌 / 複製 / localStorage / HTML 跳脫 / 日期字串 / 統計列 / 提示音 / 語音 / 名單解析 / 下載檔案 / 雜湊與隨機字串 / 可播種亂數
+/* 共用小工具：均勻亂數 / 洗牌 / 複製 / localStorage / HTML 跳脫 / 日期字串 / 統計列 / 提示音 / 語音 / 名單解析 / 下載檔案 / 雜湊與隨機字串 / 可播種亂數 / CSV 解析與輸出
  *
  * 使用：<script src="../shared/js/util.js"></script>，然後 const { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex } = Util;
  * 放進這裡的條件：至少兩個工具在用、且不需要各工具再調整格式。
@@ -102,6 +102,42 @@
         return x % n;
     }
 
+    // CSV：parseCSV 解析（RFC 4180）、toObjects 轉成物件陣列（標題重複自動加後綴、數字與 true/false 轉型）、csvStringify 輸出
+    // RFC 4180：欄位可用雙引號包起來，裡面可有分隔符號、換行與 ""（代表一個引號）。回傳二維陣列；不成對的引號丟出錯誤
+    function parseCSV(text, delim = ',') {
+        const rows = []; let row = [], field = '', q = false, i = 0, any = false;
+        const s = String(text).replace(/^﻿/, '');
+        while (i < s.length) {
+            const c = s[i];
+            if (q) {
+                if (c === '"') { if (s[i + 1] === '"') { field += '"'; i += 2; continue; } q = false; i++; continue; }
+                field += c; i++; continue;
+            }
+            if (c === '"' && field === '') { q = true; any = true; i++; continue; }
+            if (c === delim) { row.push(field); field = ''; any = true; i++; continue; }
+            if (c === '\r' || c === '\n') { if (c === '\r' && s[i + 1] === '\n') i++; if (any || field !== '' || row.length) { row.push(field); rows.push(row); } row = []; field = ''; any = false; i++; continue; }
+            field += c; any = true; i++;
+        }
+        if (q) throw new Error('有引號沒有成對（雙引號開了但沒有關閉）');
+        if (any || field !== '' || row.length) { row.push(field); rows.push(row); }
+        return rows;
+    }
+
+    const isNum = (v) => /^-?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(String(v).trim());
+
+    // 轉成 JSON（物件陣列）：標題重複時後面加 _2、_3；數字與 true/false 轉成對應型別
+    function toObjects(header, rows) {
+        const seen = {}, keys = header.map((h, i) => { let k = String(h).trim() || `col${i + 1}`; seen[k] = (seen[k] || 0) + 1; return seen[k] > 1 ? `${k}_${seen[k]}` : k; });
+        const conv = (v) => (isNum(v) ? parseFloat(v) : v === 'true' ? true : v === 'false' ? false : v);
+        return rows.map(r => Object.fromEntries(keys.map((k, i) => [k, conv(r[i] ?? '')])));
+    }
+
+    // 二維陣列 → CSV 文字：含逗號、引號、換行或前後空白的欄位會加引號（RFC 4180），換行用 \r\n
+    function csvStringify(header, rows) {
+        const cell = (v) => { const s = v === null || v === undefined ? '' : String(v); return /[",\r\n]|^\s|\s$/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+        return [header, ...rows].map(r => r.map(cell).join(',')).join('\r\n');
+    }
+
     // 可播種的亂數（mulberry32，種子字串先雜湊成 32 位元）：同一個種子永遠產生同一串數字，用在「每日挑戰」。
     // 回傳函式 rand01()，傳回 [0,1) 小數；rand01.int(n) 傳回 [0,n) 整數。非密碼學用途
     function seeded(seed) {
@@ -158,7 +194,7 @@
         },
     };
 
-    const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex, seeded };
+    const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex, seeded, parseCSV, toObjects, isNum, csvStringify };
     if (typeof module !== 'undefined' && module.exports) module.exports = Util;
     else root.Util = Util;
 })(typeof window !== 'undefined' ? window : globalThis);

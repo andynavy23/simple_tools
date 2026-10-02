@@ -37,7 +37,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>BMI / 熱量 / 心率計算</h1>
-        <p class="sub">估算值僅供參考，不能取代專業醫療建議。</p>
+        <p class="sub">估算值僅供參考，不能取代專業醫療建議。下方可記錄每日體重並看趨勢。</p>
 
         <div class="card">
             <div class="fgrid">
@@ -59,10 +59,25 @@
         </div>
 
         <div class="card" id="out"></div>
+
+        <div class="card">
+            <h2>體重紀錄</h2>
+            <div class="fgrid">
+                <div><label for="wd">日期</label><input id="wd" type="date"></div>
+                <div><label for="wk">體重 (kg)</label><input id="wk" type="number" min="10" max="400" step="any" placeholder="例如 64.5"></div>
+                <div><label for="wg">目標體重 (kg，選填)</label><input id="wg" type="number" min="10" max="400" step="any"></div>
+            </div>
+            <div style="margin-top:10px"><button class="primary" id="wadd">記錄</button> <span class="muted" id="wmsg"></span></div>
+            <div id="wchart" style="margin-top:12px"></div>
+            <div id="wstats"></div>
+            <div id="wlist"></div>
+        </div>
     </div>
 
     <script src="../shared/js/util.js"></script>
     <script>
+        const { day } = Util;
+
         // --- pure ---
         const bmi = (cm, kg) => kg / Math.pow(cm / 100, 2);
 
@@ -87,6 +102,31 @@
             const max = 220 - age;
             const at = (p) => (rhr ? Math.round(rhr + (max - rhr) * p) : Math.round(max * p));
             return { max, zones: [['暖身 / 恢復', .5, .6], ['燃脂', .6, .7], ['有氧', .7, .8], ['無氧', .8, .9], ['極限', .9, 1]].map(([n, a, b]) => [n, at(a), at(b)]) };
+        }
+
+        // ---------- 體重紀錄 ----------
+        const validWeight = (e) => !!e && /^\d{4}-\d{2}-\d{2}$/.test(e.d) && Number.isFinite(e.kg) && e.kg >= 10 && e.kg <= 400;
+        // 同一天只留一筆（後記的取代先記的），依日期排序，最多保留 1000 筆
+        function addWeight(log, d, kg) {
+            const out = log.filter(e => e.d !== d); out.push({ d, kg });
+            return out.sort((a, b) => a.d.localeCompare(b.d)).slice(-1000);
+        }
+        // 最近 days 天內的趨勢（最小平方法，kg / 天）；少於 2 個不同日期回傳 null
+        function slopePerDay(log, days, today) {
+            const pts = log.filter(e => { const ago = day.between(e.d, today); return ago >= 0 && ago <= days; }).map(e => [day.num(e.d), e.kg]);
+            if (pts.length < 2) return null;
+            const n = pts.length, mx = pts.reduce((a, p) => a + p[0], 0) / n, my = pts.reduce((a, p) => a + p[1], 0) / n;
+            const sxx = pts.reduce((a, p) => a + (p[0] - mx) ** 2, 0);
+            return sxx ? pts.reduce((a, p) => a + (p[0] - mx) * (p[1] - my), 0) / sxx : null;
+        }
+        // 照最近 30 天趨勢，大約哪天達到目標：{ reached } | { days, date } | { days: null }（趨勢沒有朝目標走，或要超過 10 年）| null（資料不足）
+        function etaGoal(log, goal, today) {
+            const slope = slopePerDay(log, 30, today); if (slope === null || !log.length) return null;
+            const last = log[log.length - 1], remain = goal - last.kg;
+            if (Math.abs(remain) < 0.05) return { reached: true };
+            if (slope === 0 || Math.sign(slope) !== Math.sign(remain)) return { days: null };
+            const days = Math.ceil(remain / slope);
+            return days > 3650 ? { days: null } : { days, date: day.shift(last.d, days) };
         }
         // --- /pure ---
 
@@ -116,7 +156,61 @@
         }
 
         document.querySelectorAll('input, select').forEach(i => { i.oninput = render; });
-        render();
+
+        let wlog = Util.store.get('weight_log', []).filter(validWeight).sort((a, b) => a.d.localeCompare(b.d));
+        let goal = Util.store.get('weight_goal', null); if (!(goal >= 10 && goal <= 400)) goal = null;
+        $('#wd').value = Util.day.today(); if (goal) $('#wg').value = goal;
+
+        function drawChart() {
+            const box = $('#wchart'), pts = wlog.slice(-60);
+            if (pts.length < 2) { box.replaceChildren(Object.assign(document.createElement('p'), { className: 'muted', textContent: pts.length ? '再記一筆就會畫出折線圖' : '還沒有紀錄' })); return; }
+            const W = 600, H = 180, P = 28, ns = 'http://www.w3.org/2000/svg';
+            const xs = pts.map(p => Util.day.num(p.d)), ys = pts.map(p => p.kg).concat(goal ? [goal] : []);
+            const x0 = xs[0], x1 = xs[xs.length - 1] || x0 + 1, lo = Math.min(...ys) - 1, hi = Math.max(...ys) + 1;
+            const X = (v) => P + (x1 === x0 ? 0 : (v - x0) / (x1 - x0)) * (W - 2 * P), Y = (v) => H - P - (v - lo) / (hi - lo) * (H - 2 * P);
+            const svg = document.createElementNS(ns, 'svg'); svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', '體重折線圖'); svg.style.width = '100%';
+            const el = (t, a, txt) => { const e = document.createElementNS(ns, t); for (const k in a) e.setAttribute(k, a[k]); if (txt) e.textContent = txt; svg.append(e); return e; };
+            el('text', { x: 2, y: Y(hi - 1) + 4, fill: 'currentColor', 'font-size': 11, opacity: .6 }, (hi - 1).toFixed(1));
+            el('text', { x: 2, y: Y(lo + 1) + 4, fill: 'currentColor', 'font-size': 11, opacity: .6 }, (lo + 1).toFixed(1));
+            if (goal) { el('line', { x1: P, x2: W - P, y1: Y(goal), y2: Y(goal), stroke: '#30d158', 'stroke-dasharray': '5 4' }); el('text', { x: W - P, y: Y(goal) - 4, fill: '#30d158', 'font-size': 11, 'text-anchor': 'end' }, '目標 ' + goal); }
+            el('polyline', { points: pts.map((p, i) => `${X(xs[i])},${Y(p.kg)}`).join(' '), fill: 'none', stroke: '#0a84ff', 'stroke-width': 2.5, 'stroke-linejoin': 'round' });
+            pts.forEach((p, i) => el('circle', { cx: X(xs[i]), cy: Y(p.kg), r: 3.5, fill: '#0a84ff' }));
+            el('text', { x: P, y: H - 6, fill: 'currentColor', 'font-size': 11, opacity: .6 }, pts[0].d.slice(5));
+            el('text', { x: W - P, y: H - 6, fill: 'currentColor', 'font-size': 11, opacity: .6, 'text-anchor': 'end' }, pts[pts.length - 1].d.slice(5));
+            box.replaceChildren(svg);
+        }
+        function renderWeight() {
+            drawChart();
+            const st = $('#wstats'); st.replaceChildren();
+            if (wlog.length) {
+                const last = wlog[wlog.length - 1], first = wlog[0], today = Util.day.today(), s30 = slopePerDay(wlog, 30, today);
+                const sign = (v) => (v > 0 ? '+' : '') + nf(v, 1);
+                st.append(Util.statRow('最新', `${nf(last.kg, 1)} kg（${last.d.slice(5)}）`), Util.statRow('比第一筆', `${sign(last.kg - first.kg)} kg`));
+                if (s30 !== null) st.append(Util.statRow('近 30 天趨勢', `${sign(s30 * 7)} kg / 週`));
+                if (goal) {
+                    st.append(Util.statRow('距離目標', `${sign(goal - last.kg)} kg`));
+                    const eta = etaGoal(wlog, goal, today);
+                    if (eta) st.append(Util.statRow('預估達標', eta.reached ? '已達標 🎉' : eta.days === null ? '依目前趨勢不會達標' : `約 ${eta.date}（${eta.days} 天後）`));
+                }
+            }
+            $('#wlist').replaceChildren(...[...wlog].reverse().slice(0, 8).map(e => {
+                const r = document.createElement('div'); r.className = 'li';
+                const x = Object.assign(document.createElement('button'), { className: 'sm', textContent: '刪除' }); x.setAttribute('aria-label', '刪除 ' + e.d + ' 的紀錄');
+                x.onclick = () => { wlog = wlog.filter(y => y.d !== e.d); Util.store.set('weight_log', wlog); renderWeight(); };
+                r.append(Object.assign(document.createElement('span'), { className: 'muted', textContent: e.d }), Object.assign(document.createElement('b'), { textContent: nf(e.kg, 1) + ' kg' }), x); return r;
+            }));
+        }
+        $('#wadd').onclick = () => {
+            const d = $('#wd').value, kg = parseFloat($('#wk').value), g = parseFloat($('#wg').value);
+            goal = g >= 10 && g <= 400 ? g : null; Util.store.set('weight_goal', goal);
+            if (!validWeight({ d, kg })) { $('#wmsg').textContent = goal ? '目標已更新；要記錄請輸入日期與 10–400 的體重' : '請輸入日期與 10–400 的體重'; renderWeight(); return; }
+            wlog = addWeight(wlog, d, kg); Util.store.set('weight_log', wlog);
+            $('#wk').value = ''; $('#wmsg').textContent = '已記錄';
+            if (d === wlog[wlog.length - 1].d) { $('#w').value = kg; render(); }       // 最新一筆同步到上面的計算
+            renderWeight();
+        };
+        $('#wd').oninput = $('#wk').oninput = $('#wg').oninput = null;
+        render(); renderWeight();
     </script>
 </body>
 

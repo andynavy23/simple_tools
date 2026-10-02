@@ -27,10 +27,10 @@
 | [正規表示式測試器](utils/regex-tester.html) | 工具 | 即時標示符合內容、群組與位置 |
 | [色彩工具](utils/color-tools.html) | 工具 | 色碼互轉、配色產生（互補 / 類似 / 三角 / 分裂 / 四角 / 單色 / 漸層）、色票庫（存檔、複製成 CSS 變數）、WCAG 對比度檢查、四種色覺缺陷模擬 |
 | [文字差異比對](utils/text-diff.html) | 工具 | 逐行或逐字詞（行內標示）差異比對 |
-| [編碼解碼](utils/encode-decode.html) | 工具 | Base64 / URL / Unicode / HTML 實體 / 十六進位；JWT 解析（顯示過期時間，不驗簽）；SHA-1 / 256 / 384 / 512 雜湊；摩斯密碼、凱薩密碼、ROT13 |
-| [倒數日 / 紀念日](utils/countdown.html) | 工具 | 還有 / 已經幾天，可設定每年重複（週年）；「今日倒數」到下班時刻的時分秒與進度條；匯出 .ics（全天事件、每年重複用 RRULE） |
+| [編碼解碼](utils/encode-decode.html) | 工具 | Base64 / URL / Unicode / HTML 實體 / 十六進位；JWT 解析（顯示過期時間，不驗簽）；網址參數拆解 / 組合；SHA-1 / 256 / 384 / 512 雜湊（文字與檔案，可貼官方值比對）；摩斯密碼、凱薩密碼、ROT13 |
+| [倒數日 / 紀念日](utils/countdown.html) | 工具 | 還有 / 已經幾天，可設定每年重複（週年）；「今日倒數」到下班時刻的時分秒與進度條；每個日期可附清單（旅行行李範本、勾選進度）；匯出 .ics（全天事件、每年重複用 RRULE） |
 | [QR Code 產生器](utils/qr-code.html) | 工具 | 自行實作的 QR 編碼器（版本 1–40、容錯 L/M/Q/H）；Code 128（B / C 自動選）與 EAN-13 條碼（與 JsBarcode 逐位元比對過）；可下載 PNG |
-| [JSON 整理器](utils/json-formatter.html) | 工具 | 美化 / 壓縮 / 驗證、錯誤定位、樹狀檢視 |
+| [JSON 整理器](utils/json-formatter.html) | 工具 | 美化 / 壓縮 / 驗證、錯誤定位、樹狀檢視；JSON ↔ YAML、JSON ↔ CSV 轉換 |
 | [Markdown 即時預覽](utils/markdown-preview.html) | 工具 | 標題 / 清單 / 表格 / 程式碼，輸出前消毒，可複製 HTML |
 | [2048](mini-games/game-2048.html) | 小遊戲 | 方向鍵 / WASD / 觸控滑動，記錄最高分；每日挑戰（每天同一組亂數） |
 | [踩地雷](mini-games/minesweeper.html) | 小遊戲 | 三種難度、第一步必安全、連鎖展開與快速開格，記錄最佳時間；每日挑戰（每天同一個雷區） |
@@ -40,7 +40,7 @@
 | [習慣打卡表](fun/habit-tracker.html) | 趣味 | 每日打卡、連續天數、月曆（可補打過去日期） |
 | [骰子工具](fun/dice.html) | 趣味 | 1–6 顆、d4–d100、加成，統計總和分佈（安全亂數） |
 | [貸款 / 複利試算](utils/loan-calculator.html) | 工具 | 本息 / 本金平均攤還與逐期表；起始本金 + 每月投入的複利成長；存款目標（多久達標 / 每月要存多少，可扣通膨） |
-| [BMI / 熱量 / 心率計算](utils/health-calc.html) | 工具 | BMI（台灣標準）、BMR、TDEE、心率區間（含儲備心率法） |
+| [BMI / 熱量 / 心率計算](utils/health-calc.html) | 工具 | BMI（台灣標準）、BMR、TDEE、心率區間（含儲備心率法）；體重紀錄（折線圖、目標線、近 30 天趨勢、預估達標日） |
 | [計時器 / 碼表](fun/timers.html) | 趣味 | 碼表與分圈、多組倒數（時間戳計算，背景分頁也準）、簡報分段計時（自動換段、剩 1 分鐘提醒） |
 | [技能冷卻時間板](game-assist/cooldown-board.html) | 遊戲輔助 | 自訂技能冷卻，數字鍵觸發，冷卻完成語音 / 提示音 |
 | [記憶序列 Simon](mini-games/simon.html) | 小遊戲 | 四色按鈕與音效，越後面越快，記錄最高關卡 |
@@ -53,7 +53,7 @@
 | [日期計算機](utils/date-calc.html) | 工具 | 相差（天 / 週 / 年月日 / 工作日）、加減（含工作日）、星期與 ISO 週次 |
 | [連線海戰](mini-games/battleship.html) | 小遊戲 | 艦隊只存在自己端；開局送雜湊承諾、賽後揭曉並重算每一槍的回報 |
 | [連線規劃撲克](fun/planning-poker.html) | 趣味 | 費氏數列 / T-shirt 牌組；翻牌前只看得到誰出了牌；平均 / 中位數 / 分佈 |
-| [記帳本](utils/expense-tracker.html) | 工具 | 收支分類、月統計、分類佔比；資料只在本機，可匯出 CSV（防公式注入） |
+| [記帳本](utils/expense-tracker.html) | 工具 | 收支分類、月統計、分類佔比；固定支出 / 訂閱（每週 / 月 / 年、下次扣款日、折合每月 / 每年、一鍵記入明細）；資料只在本機，可匯出 CSV（防公式注入） |
 | [反應速度測試](mini-games/reaction-time.html) | 小遊戲 | 隨機等待、搶跑偵測、5 次平均，記錄歷史最佳與中位數 |
 | [進位 / 位元運算工具](utils/base-converter.html) | 工具 | 2 / 8 / 10 / 16 / 36 進位互轉（BigInt）、位元運算（8–64 位元、二補數）、float32 / float64 拆解 |
 | [Cron 表達式解析](utils/cron-parser.html) | 工具 | 5 欄位 cron（* , - / ?、月份星期縮寫、@daily）中文說明與未來 10 次執行時間 |
@@ -89,6 +89,13 @@
 | [便條紙](fun/sticky-notes.html) | 趣味 | 最多 200 張、6 種顏色、釘選、搜尋、複製與匯出 .txt；不讀取剪貼簿 |
 | [網頁鬧鐘](fun/alarm.html) | 趣味 | 多組、重複星期、貪睡 5 分鐘、系統通知；明確警告網頁無法在關閉分頁或鎖屏後響鈴 |
 | [文字加密 / 解密](utils/aes-crypt.html) | 工具 | AES-256-GCM + PBKDF2-SHA256 60 萬次；隨機鹽與 IV；密文帶版本前綴；改動或密碼錯誤會被偵測 |
+| [時間戳轉換](utils/timestamp.html) | 工具 | Unix 時間戳（秒 / 毫秒自動判斷）與日期互轉；顯示 UTC、ISO 8601、相對時間；13 個常用時區 + 裝置時區（含夏令時間）；即時顯示現在時間戳 |
+| [CSS 產生器](utils/css-gen.html) | 工具 | 陰影（含內陰影）、線性 / 放射漸層（2–3 色標）、圓角（四角獨立，px / %）；即時預覽；複製 CSS |
+| [輪值表](utils/duty-roster.html) | 工具 | 每天 / 每週 / 每兩週 / 每月輪換；跳過週六日；指定從第幾位開始；每人次數；標出下一個輪到的人；複製成文字 |
+| [數字滑塊](mini-games/sliding-puzzle.html) | 小遊戲 | 3×3 / 4×4 / 5×5；點擊或方向鍵 / WASD 滑動；隨機走法打亂（一定有解）；步數、時間與各尺寸最佳紀錄 |
+| [終極井字棋](mini-games/ultimate-ttt.html) | 小遊戲 | 9 個小棋盤，下在哪格對手就得去對應棋盤；對應棋盤已結束則任選；本機雙人或連線（房主驗證每一步） |
+| [連線 UNO](mini-games/uno.html) | 小遊戲 | 2–6 人；跳過 / 迴轉 / 抽二 / 萬用 / 萬用抽四；抽到能出的牌可出或過；牌堆空了自動洗回棄牌；手牌只傳給本人；離線玩家自動跳過 |
+| [擲筊 / 求籤](fun/divination.html) | 趣味 | 擲筊（聖筊 / 笑筊 / 陰筊、連續聖筊計數與統計）；求籤（大吉到凶五級，事業 / 感情 / 財運 / 健康各一句）；可複製 |
 | [摸魚閱讀器](reading/stealth-reader.html) | 閱讀 | 本機載入 txt 小說，偽裝 ERP 後台、老闆鍵、進度記憶（開發中） |
 
 ## 使用

@@ -121,6 +121,19 @@
         </div>
 
         <div class="card">
+            <h2>固定支出 / 訂閱 <span class="muted" id="fixTotal" style="font-weight:400;font-size:14px"></span></h2>
+            <div id="fixList"></div>
+            <div class="row" style="margin-top:10px">
+                <input type="text" id="fname" maxlength="20" placeholder="名稱，例如 Netflix" style="width:150px" aria-label="固定支出名稱">
+                <input type="number" id="famt" min="0" step="any" placeholder="金額" style="width:90px" aria-label="固定支出金額">
+                <select id="fcycle" aria-label="週期"><option value="month">每月</option><option value="year">每年</option><option value="week">每週</option></select>
+                <input type="date" id="fstart" aria-label="第一次扣款日">
+                <button class="primary" id="fadd">新增</button>
+            </div>
+            <div class="row"><button class="sm" id="fpost">把本月已到期的記入明細</button><span class="muted" id="fmsg"></span></div>
+        </div>
+
+        <div class="card">
             <h2>支出分類</h2>
             <div id="cats"></div>
         </div>
@@ -160,6 +173,29 @@
             return rows.map(r => r.map(cell).join(',')).join('\r\n');
         }
 
+        // ---------- 固定支出 / 訂閱 ----------
+        // item = { id, name, amt, cycle: 'week' | 'month' | 'year', start: 'YYYY-MM-DD'（第一次扣款日） }
+        const CYCLES = { week: '每週', month: '每月', year: '每年' };
+        const validFixed = (f) => !!f && typeof f.id === 'string' && typeof f.name === 'string' && f.name.length >= 1 && f.name.length <= 20 && Number.isFinite(f.amt) && f.amt > 0 && f.amt < 1e9
+            && f.cycle in CYCLES && /^\d{4}-\d{2}-\d{2}$/.test(f.start);
+        // 第 k 次扣款日（k 從 0 起算）；月 / 年週期遇到 31 日這類月底會取該月最後一天
+        const dueAt = (f, k) => (f.cycle === 'week' ? day.shift(f.start, 7 * k) : day.addMonths(f.start, (f.cycle === 'year' ? 12 : 1) * k));
+        // 從 from（含）起的下一個扣款日
+        function nextDue(f, from) {
+            let k = 0;
+            if (from > f.start) { const approx = f.cycle === 'week' ? Math.floor(day.between(f.start, from) / 7) : Math.floor(day.between(f.start, from) / (f.cycle === 'year' ? 366 : 31)); k = Math.max(0, approx - 1); }
+            while (dueAt(f, k) < from) k++;
+            return dueAt(f, k);
+        }
+        // 折合每月金額（週 = 一年 52 週 ÷ 12）
+        const monthlyCost = (f) => (f.cycle === 'week' ? f.amt * 52 / 12 : f.cycle === 'year' ? f.amt / 12 : f.amt);
+        // 某個月（YYYY-MM）內所有的扣款日
+        function dueInMonth(f, ym) {
+            const out = [];
+            for (let d = nextDue(f, ym + '-01'); d.slice(0, 7) === ym; d = nextDue(f, day.shift(d, 1))) out.push(d);
+            return out;
+        }
+
         const shiftMonth = (ym, n) => { const [y, m] = ym.split('-').map(Number), t = y * 12 + m - 1 + n; return `${Math.floor(t / 12)}-${String(t % 12 + 1).padStart(2, '0')}`; };
         // --- /pure ---
 
@@ -169,7 +205,37 @@
         let ym = day.today().slice(0, 7);
         $('#date').value = day.today();
 
+        let fixed = store.get('expense_fixed', []).filter(validFixed);
+        $('#fstart').value = day.today();
         const save = () => store.set('expenses', entries);
+        const saveFixed = () => store.set('expense_fixed', fixed);
+
+        function renderFixed() {
+            const today = day.today(), total = fixed.reduce((a, f) => a + monthlyCost(f), 0);
+            $('#fixTotal').textContent = fixed.length ? `（每月約 ${money(total)}、每年約 ${money(total * 12)}）` : '';
+            $('#fixList').replaceChildren(...(fixed.length ? [...fixed].sort((a, b) => nextDue(a, today).localeCompare(nextDue(b, today))).map(f => {
+                const r = document.createElement('div'); r.className = 'li';
+                const nd = nextDue(f, today), left = day.between(today, nd);
+                const main = document.createElement('div'); main.style.flex = '1';
+                main.append(Object.assign(document.createElement('div'), { textContent: f.name }), Object.assign(document.createElement('small'), { className: 'muted', textContent: `${CYCLES[f.cycle]} ${money(f.amt)}　下次 ${nd.slice(5)}（${left === 0 ? '今天' : left + ' 天後'}）` }));
+                const x = Object.assign(document.createElement('button'), { className: 'sm', textContent: '刪除' });
+                x.setAttribute('aria-label', '刪除固定支出 ' + f.name);
+                x.onclick = () => { fixed = fixed.filter(y => y.id !== f.id); saveFixed(); renderFixed(); };
+                r.append(main, x); return r;
+            }) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '還沒有固定支出（房租、訂閱、保險…都可以記）' })]));
+        }
+        // 把本月（目前檢視的月份）已經到期的扣款記進明細；每筆用 rid 去重，重複按不會重複記
+        function postFixed() {
+            const today = day.today(); let n = 0;
+            for (const f of fixed) for (const d of dueInMonth(f, ym)) {
+                const rid = `${f.id}:${d}`;
+                if (d > today || entries.some(e => e.rid === rid)) continue;
+                entries.push({ id: Date.now().toString(36) + rnd(1e6).toString(36), d, type: 'out', cat: '其他', amt: f.amt, note: f.name, rid }); n++;
+            }
+            if (n) save();
+            $('#fmsg').textContent = n ? `已記入 ${n} 筆` : '沒有需要記入的（還沒到期或都記過了）';
+            render();
+        }
 
         function fillCats() { $('#cat').replaceChildren(...($('#type').value === 'in' ? IN_CATS : OUT_CATS).map(c => new Option(c, c))); }
 
@@ -204,13 +270,19 @@
             $('#amt').value = ''; $('#note').value = '';
             ym = e.d.slice(0, 7); render(); $('#amt').focus();
         };
+        $('#fadd').onclick = () => {
+            const f = { id: Date.now().toString(36) + rnd(1e6).toString(36), name: $('#fname').value.trim(), amt: parseFloat($('#famt').value), cycle: $('#fcycle').value, start: $('#fstart').value };
+            if (!validFixed(f)) { $('#fname').focus(); return; }
+            fixed.push(f); saveFixed(); $('#fname').value = ''; $('#famt').value = ''; renderFixed();
+        };
+        $('#fpost').onclick = postFixed;
         $('#amt').onkeydown = $('#note').onkeydown = (e) => { if (e.key === 'Enter') $('#add').click(); };
         $('#type').onchange = fillCats;
         $('#prev').onclick = () => { ym = shiftMonth(ym, -1); render(); };
         $('#next').onclick = () => { ym = shiftMonth(ym, 1); render(); };
         $('#export').onclick = () => download(new Blob(['﻿' + toCSV(entries)], { type: 'text/csv;charset=utf-8' }), `expenses-${day.today()}.csv`);
-        $('#clear').onclick = () => { if (entries.length && confirm(`確定刪除全部 ${entries.length} 筆紀錄？無法復原。`)) { entries = []; save(); render(); } };
-        fillCats(); render();
+        $('#clear').onclick = () => { if (entries.length && confirm(`確定刪除全部 ${entries.length} 筆紀錄？無法復原（固定支出清單不受影響）。`)) { entries = []; save(); render(); } };
+        fillCats(); render(); renderFixed();
     </script>
 </body>
 

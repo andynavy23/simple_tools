@@ -121,7 +121,7 @@
 
     <script src="../shared/js/util.js"></script>
     <script>
-        const { download } = Util;
+        const { download, parseCSV, toObjects, isNum } = Util;
 
         // --- pure ---
         // 判斷分隔符號：在前幾列中，各候選符號出現次數一致且最多者勝出
@@ -136,38 +136,11 @@
             return best;
         }
 
-        // RFC 4180：欄位可用雙引號包起來，裡面可有分隔符號、換行與 ""（代表一個引號）。回傳二維陣列；不成對的引號丟出錯誤
-        function parseCSV(text, delim = ',') {
-            const rows = []; let row = [], field = '', q = false, i = 0, any = false;
-            const s = String(text).replace(/^﻿/, '');
-            while (i < s.length) {
-                const c = s[i];
-                if (q) {
-                    if (c === '"') { if (s[i + 1] === '"') { field += '"'; i += 2; continue; } q = false; i++; continue; }
-                    field += c; i++; continue;
-                }
-                if (c === '"' && field === '') { q = true; any = true; i++; continue; }
-                if (c === delim) { row.push(field); field = ''; any = true; i++; continue; }
-                if (c === '\r' || c === '\n') { if (c === '\r' && s[i + 1] === '\n') i++; if (any || field !== '' || row.length) { row.push(field); rows.push(row); } row = []; field = ''; any = false; i++; continue; }
-                field += c; any = true; i++;
-            }
-            if (q) throw new Error('有引號沒有成對（雙引號開了但沒有關閉）');
-            if (any || field !== '' || row.length) { row.push(field); rows.push(row); }
-            return rows;
-        }
-
-        const isNum = (v) => /^-?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(String(v).trim());
         // 比較：兩邊都是數字就用數值比，否則用字串（含中文）比
         const cmp = (a, b) => (isNum(a) && isNum(b) ? parseFloat(a) - parseFloat(b) : String(a).localeCompare(String(b), 'zh-Hant', { numeric: true }));
         function sortRows(rows, col, dir) { return [...rows].sort((x, y) => dir * cmp(x[col] ?? '', y[col] ?? '')); }
         const filterRows = (rows, q) => { q = q.trim().toLowerCase(); return q ? rows.filter(r => r.some(c => String(c).toLowerCase().includes(q))) : rows; };
 
-        // 轉成 JSON（物件陣列）：標題重複時後面加 _2、_3；數字與 true/false 轉成對應型別
-        function toObjects(header, rows) {
-            const seen = {}, keys = header.map((h, i) => { let k = String(h).trim() || `col${i + 1}`; seen[k] = (seen[k] || 0) + 1; return seen[k] > 1 ? `${k}_${seen[k]}` : k; });
-            const conv = (v) => (isNum(v) ? parseFloat(v) : v === 'true' ? true : v === 'false' ? false : v);
-            return rows.map(r => Object.fromEntries(keys.map((k, i) => [k, conv(r[i] ?? '')])));
-        }
         // Markdown 表格：| 與換行要跳脫；數字欄靠右
         function toMarkdown(header, rows) {
             const esc = (v) => String(v ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');

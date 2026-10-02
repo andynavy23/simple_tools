@@ -7,7 +7,7 @@ global.Util = require(path.join(root, 'shared/js/util.js'));
 const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
 
 // 頁面外層用 const { ... } = Util 取得共用函式，這裡提供同樣的名稱
-const PRELUDE = 'const { rnd, shuffle, store, copyText, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex } = Util;\n';
+const PRELUDE = 'const { rnd, shuffle, store, copyText, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex, seeded, parseCSV, toObjects, isNum, csvStringify } = Util;\n';
 const load = (file, names, from = '// --- pure ---', to = '// --- /pure ---') => {
     const h = read(file);
     return new Function(PRELUDE + h.slice(h.indexOf(from), h.indexOf(to)) + `; return { ${names} };`)();
@@ -178,7 +178,7 @@ const NL = String.fromCharCode(10);
 {
     const m = load('utils/encode-decode.html', 'CODECS');
     const samples = ['Hello, World!', '你好，世界 🌏', 'a+b=c&d?e/f#g', '<script>alert("x")</script>', '', 'line1\nline2\t🎉'];
-    for (const [name, c] of Object.entries(m.CODECS).filter(([name, c]) => c.enc && c.dec && !c.param && name !== '摩斯密碼' && name !== 'ROT13')) for (const s of samples) assert.equal(c.dec(c.enc(s)), s, name);
+    for (const [name, c] of Object.entries(m.CODECS).filter(([name, c]) => c.enc && c.dec && !c.param && name !== '摩斯密碼' && name !== 'ROT13' && !name.startsWith('網址參數'))) for (const s of samples) assert.equal(c.dec(c.enc(s)), s, name);
     assert.equal(m.CODECS['Base64'].enc('你好'), '5L2g5aW9');
     assert.throws(() => m.CODECS['Base64'].dec('!!!'));
     assert.throws(() => m.CODECS['十六進位 (UTF-8 位元組)'].dec('zz'));
@@ -1632,7 +1632,8 @@ const NL = String.fromCharCode(10);
     for (let k = 0; k < 300; k++) {
         const t = m.NAMES[Util.rnd(7)]; let p = m.spawn(t); if (!m.fits(board, p)) break;
         for (let i = Util.rnd(4); i--;) p = m.tryMove(board, p, 0, 0, 1) || p; const dx = Util.rnd(9) - 4; for (let i = 0; i < Math.abs(dx); i++) p = m.tryMove(board, p, Math.sign(dx), 0) || p;
-        const r = m.lock(board, m.ghost(board, p)); board = r.board; placed++; cleared += r.cleared;
+        const gp = m.ghost(board, p); if (m.cellsOf(gp).some(c => c[1] < 0)) break;                  // 堆到頂、方塊有一部分在盤面上方：結束（lock 不計入盤面外的格子）
+        const r = m.lock(board, gp); board = r.board; placed++; cleared += r.cleared;
         assert.equal(board.flat().filter(Boolean).length, 4 * placed - 10 * cleared);
     }
     ok('tetris');
@@ -2072,6 +2073,241 @@ const NL = String.fromCharCode(10);
     const c = board('mines-2024-03-10-16,16,40', 250), diff = [...a.mine].filter((v, i) => v !== c.mine[i]).length; assert.ok(diff <= 20, '不同第一下，只有第一下附近的雷不同：' + diff); assert.notDeepEqual([...a.mine], [...board('mines-2024-03-11-16,16,40', 5).mine]);
     const g2 = mm.create(9, 9, 10); g2.fixed = true; mm.open(g2, 40, Util.seeded('z').int); assert.equal(g2.status, 'playing'); const g3 = mm.create(9, 9, 10); mm.open(g3, 40, Util.rnd); assert.equal(g3.status, 'playing', '一般模式不受影響');
     ok('daily challenge: seeded 2048 sequences / fixed minefield (safe first click, near-identical layouts)');
+}
+
+
+// ===== 時間戳轉換 =====
+{
+    const m = load('utils/timestamp.html', 'detectUnit, toMs, zoneOffsetMin, fmtInZone, fmtOffset, parseInZone, relative');
+    assert.equal(m.detectUnit(1700000000), 's'); assert.equal(m.detectUnit(1700000000000), 'ms'); assert.equal(m.detectUnit(-1700000000000), 'ms');
+    assert.equal(m.toMs(1700000000), 1700000000000); assert.equal(m.toMs(1700000000123), 1700000000123); assert.equal(m.toMs(1.5), 1500);
+    assert.equal(m.fmtInZone(1700000000000, 'Asia/Taipei'), '2023-11-15 06:13:20'); assert.equal(m.fmtInZone(1700000000000, 'UTC'), '2023-11-14 22:13:20');
+    assert.equal(m.fmtInZone(0, 'UTC'), '1970-01-01 00:00:00');
+    assert.equal(m.zoneOffsetMin(Date.UTC(2024, 6, 1, 12), 'America/New_York'), -240); assert.equal(m.zoneOffsetMin(Date.UTC(2024, 0, 1, 12), 'America/New_York'), -300);
+    assert.equal(m.zoneOffsetMin(Date.UTC(2024, 0, 1), 'Asia/Taipei'), 480); assert.equal(m.fmtOffset(480), 'UTC+08:00'); assert.equal(m.fmtOffset(-330), 'UTC-05:30');
+    assert.equal(m.parseInZone('2023-11-15 06:13:20', 'Asia/Taipei'), 1700000000000); assert.equal(m.parseInZone('2023-11-15T06:13', 'Asia/Taipei'), 1700000000000 - 20000);
+    for (const tz of ['America/New_York', 'Europe/London', 'Australia/Sydney', 'Asia/Tokyo']) for (const t of [1700000000000, 1720000000000, 1710000000000 + 86400000 * 3]) {
+        const s = m.fmtInZone(t, tz); assert.equal(m.parseInZone(s, tz), Math.floor(t / 1000) * 1000, tz + ' ' + s);
+    }
+    assert.ok(Number.isNaN(m.parseInZone('2024-02-30T00:00', 'UTC'))); assert.ok(Number.isNaN(m.parseInZone('hello', 'UTC')));
+    assert.equal(m.relative(-5 * 3600e3), '5 小時前'); assert.equal(m.relative(3 * 86400e3 + 5), '3 天後'); assert.equal(m.relative(-30e3), '30 秒前'); assert.equal(m.relative(0), '現在');
+    ok('timestamp');
+}
+
+// ===== CSS 產生器 =====
+{
+    const m = load('utils/css-gen.html', 'clamp, hexToRgba, shadowCss, gradientCss, radiusCss');
+    assert.equal(m.hexToRgba('#ff0000', 0.5), 'rgba(255, 0, 0, 0.5)'); assert.equal(m.hexToRgba('0a84ff', 1), 'rgba(10, 132, 255, 1)'); assert.equal(m.hexToRgba('#000000', 2), 'rgba(0, 0, 0, 1)');
+    assert.throws(() => m.hexToRgba('#fff')); assert.throws(() => m.hexToRgba('red'));
+    assert.equal(m.shadowCss({ x: 0, y: 10, blur: 30, spread: 0, color: '#000000', alpha: 0.25, inset: false }), 'box-shadow: 0px 10px 30px 0px rgba(0, 0, 0, 0.25);');
+    assert.equal(m.shadowCss({ x: 1, y: 2, blur: 999, spread: -3, color: '#ffffff', alpha: 1, inset: true }), 'box-shadow: inset 1px 2px 200px -3px rgba(255, 255, 255, 1);');
+    assert.equal(m.gradientCss({ type: 'linear', angle: 135, stops: [{ color: '#111111', pos: 0 }, { color: '#222222', pos: 100 }] }), 'background: linear-gradient(135deg, #111111 0%, #222222 100%);');
+    assert.equal(m.gradientCss({ type: 'radial', angle: 0, stops: [{ color: '#111111', pos: 0 }, { color: '#222222', pos: 50 }, { color: '#333333', pos: 120 }] }), 'background: radial-gradient(circle, #111111 0%, #222222 50%, #333333 100%);');
+    assert.throws(() => m.gradientCss({ type: 'linear', angle: 0, stops: [{ color: '#111111', pos: 0 }] }));
+    assert.equal(m.radiusCss([8, 8, 8, 8]), 'border-radius: 8px;'); assert.equal(m.radiusCss([1, 2, 3, 4]), 'border-radius: 1px 2px 3px 4px;'); assert.equal(m.radiusCss([99, 0, 0, 0], '%'), 'border-radius: 50% 0% 0% 0%;');
+    ok('css-gen');
+}
+
+// ===== 數字滑塊 =====
+{
+    const m = load('mini-games/sliding-puzzle.html', 'solvedBoard, isSolved, neighbors, moveTile, moveByKey, solvable, scramble');
+    assert.deepEqual(m.solvedBoard(3), [1, 2, 3, 4, 5, 6, 7, 8, 0]); assert.ok(m.isSolved(m.solvedBoard(4)));
+    assert.deepEqual(m.neighbors(3, 0).sort(), [1, 3]); assert.deepEqual(m.neighbors(3, 4).sort(), [1, 3, 5, 7]);
+    const b = m.solvedBoard(3);
+    assert.equal(m.moveTile(b, 3, 0), null); assert.deepEqual(m.moveTile(b, 3, 7), [1, 2, 3, 4, 5, 6, 7, 0, 8]); assert.deepEqual(b, m.solvedBoard(3), '不改動輸入');
+    assert.deepEqual(m.moveByKey(b, 3, 'right'), [1, 2, 3, 4, 5, 6, 7, 0, 8]); assert.deepEqual(m.moveByKey(b, 3, 'down'), [1, 2, 3, 4, 5, 0, 7, 8, 6]); assert.equal(m.moveByKey(b, 3, 'left'), null); assert.equal(m.moveByKey(b, 3, 'up'), null);
+    for (const n of [3, 4, 5]) for (let t = 0; t < 40; t++) { const s = m.scramble(n); assert.equal(s.length, n * n); assert.ok(!m.isSolved(s)); assert.ok(m.solvable(s, n), n + ':' + s); assert.deepEqual([...s].sort((x, y) => x - y), m.solvedBoard(n).slice().sort((x, y) => x - y)); }
+    assert.ok(m.solvable(m.solvedBoard(4), 4)); const bad = m.solvedBoard(4); [bad[0], bad[1]] = [bad[1], bad[0]]; assert.ok(!m.solvable(bad, 4)); const bad3 = m.solvedBoard(3); [bad3[0], bad3[1]] = [bad3[1], bad3[0]]; assert.ok(!m.solvable(bad3, 3));
+    assert.ok(!m.isSolved(m.scramble(3, 0)), '步數 0 也不會回傳已完成');
+    ok('sliding-puzzle');
+}
+
+// ===== 擲筊 / 求籤 =====
+{
+    const m = load('fun/divination.html', 'throwBlocks, nextStreak, LEVELS, TEXT, drawFortune');
+    assert.deepEqual(m.throwBlocks(() => 0), { a: 'round', b: 'round', result: '陰筊' }); assert.deepEqual(m.throwBlocks(() => 1), { a: 'flat', b: 'flat', result: '笑筊' });
+    const seq = [1, 0]; assert.equal(m.throwBlocks(() => seq.shift()).result, '聖筊');
+    const cnt = { 聖筊: 0, 笑筊: 0, 陰筊: 0 }; for (let i = 0; i < 20000; i++) cnt[m.throwBlocks().result]++;
+    assert.ok(cnt.聖筊 > 9500 && cnt.聖筊 < 10500 && cnt.笑筊 > 4500 && cnt.笑筊 < 5500 && cnt.陰筊 > 4500 && cnt.陰筊 < 5500, JSON.stringify(cnt));
+    assert.equal(m.nextStreak(2, '聖筊'), 3); assert.equal(m.nextStreak(2, '笑筊'), 0);
+    assert.equal(m.drawFortune(() => 0).level, '大吉'); assert.equal(m.drawFortune(() => 9).level, '大吉'); assert.equal(m.drawFortune(() => 10).level, '中吉'); assert.equal(m.drawFortune(() => 99).level, '凶');
+    const lv = {}; for (let i = 0; i < 20000; i++) { const f = m.drawFortune(); lv[f.level] = (lv[f.level] || 0) + 1; assert.deepEqual(Object.keys(f.items), ['事業', '感情', '財運', '健康']); Object.values(f.items).forEach(t => assert.ok(t.length > 4)); }
+    assert.ok(lv['小吉'] > 5400 && lv['小吉'] < 6600 && lv['大吉'] > 1700 && lv['大吉'] < 2300, JSON.stringify(lv));
+    for (const [name] of m.LEVELS) for (const k of Object.keys(m.TEXT)) assert.ok(m.TEXT[k][name], k + name);
+    ok('divination');
+}
+
+// ===== 輪值表 =====
+{
+    const m = load('utils/duty-roster.html', 'weekdayOf, isWeekend, nextWeekday, buildRoster, tally');
+    assert.equal(m.weekdayOf('2024-01-01'), 1); assert.equal(m.weekdayOf('2024-03-10'), 0); assert.equal(m.weekdayOf('1970-01-01'), 4); assert.ok(m.isWeekend('2024-03-09') && !m.isWeekend('2024-03-08')); assert.equal(m.nextWeekday('2024-03-09'), '2024-03-11');
+    const names = ['甲', '乙', '丙'];
+    let r = m.buildRoster({ names, start: '2024-01-01', period: 'week', count: 4 });
+    assert.deepEqual(r.map(x => x.date), ['2024-01-01', '2024-01-08', '2024-01-15', '2024-01-22']); assert.deepEqual(r.map(x => x.name), ['甲', '乙', '丙', '甲']);
+    r = m.buildRoster({ names, start: '2024-01-01', period: 'week', count: 3, offset: 4 }); assert.deepEqual(r.map(x => x.name), ['乙', '丙', '甲']);
+    r = m.buildRoster({ names, start: '2024-03-08', period: 'day', count: 4, skipWeekend: true }); assert.deepEqual(r.map(x => x.date), ['2024-03-08', '2024-03-11', '2024-03-12', '2024-03-13']);
+    r = m.buildRoster({ names, start: '2024-03-09', period: 'day', count: 2, skipWeekend: true }); assert.deepEqual(r.map(x => x.date), ['2024-03-11', '2024-03-12']);
+    r = m.buildRoster({ names, start: '2024-03-09', period: 'day', count: 2 }); assert.deepEqual(r.map(x => x.date), ['2024-03-09', '2024-03-10']);
+    r = m.buildRoster({ names, start: '2024-01-31', period: 'month', count: 4 }); assert.deepEqual(r.map(x => x.date), ['2024-01-31', '2024-02-29', '2024-03-31', '2024-04-30']);
+    r = m.buildRoster({ names, start: '2024-01-01', period: 'biweek', count: 3 }); assert.deepEqual(r.map(x => x.date), ['2024-01-01', '2024-01-15', '2024-01-29']);
+    assert.deepEqual(m.buildRoster({ names: [], start: '2024-01-01', period: 'week', count: 3 }), []);
+    assert.deepEqual(m.tally(m.buildRoster({ names, start: '2024-01-01', period: 'week', count: 7 })), { 甲: 3, 乙: 2, 丙: 2 });
+    ok('duty-roster');
+}
+
+// ===== 終極井字棋 =====
+{
+    const m = load('mini-games/ultimate-ttt.html', 'lineWinner, newGame, canPlay, play, validState');
+    assert.equal(m.lineWinner([1, 1, 1, 0, 0, 0, 0, 0, 0]), 1); assert.equal(m.lineWinner([3, 3, 3, 0, 0, 0, 0, 0, 0]), 0, '平手的小棋盤不算'); assert.equal(m.lineWinner([2, 0, 0, 0, 2, 0, 0, 0, 2]), 2);
+    let s = m.newGame(1);
+    assert.ok(m.validState(s)); assert.ok(!m.play(s, 2, 4, 4), '還沒輪到'); assert.ok(m.play(s, 1, 4, 0)); assert.equal(s.next, 0); assert.equal(s.turn, 2);
+    assert.ok(!m.play(s, 2, 1, 1), '必須下在第 0 區'); assert.ok(!m.play(s, 2, 0, 9)); assert.ok(!m.play(s, 2, -1, 0)); assert.ok(!m.play(s, 2, 0.5, 0)); assert.ok(m.play(s, 2, 0, 4)); assert.equal(s.next, 4);
+    assert.ok(!m.play(s, 1, 4, 0), '格子已被佔'); assert.ok(m.validState(s));
+    // 小棋盤獲勝後，指到已結束的棋盤 → 任選
+    s = m.newGame(1); s.cells[0] = [1, 1, 0, 2, 2, 0, 0, 0, 0]; s.turn = 1; s.next = 0;
+    assert.ok(m.play(s, 1, 0, 2)); assert.equal(s.small[0], 1); assert.equal(s.next, 2, '對應的小棋盤 2 還沒結束'); assert.equal(s.turn, 2);
+    s = m.newGame(1); s.small[2] = 1; s.cells[0] = [0, 0, 0, 0, 0, 0, 0, 0, 0]; s.turn = 1; s.next = 0; assert.ok(m.play(s, 1, 0, 2)); assert.equal(s.next, -1, '送到已結束的棋盤：對手任選');
+    // 大棋盤連線獲勝
+    s = m.newGame(1); s.small[0] = 1; s.small[1] = 1; s.cells[2] = [1, 1, 0, 2, 2, 0, 0, 0, 0]; s.turn = 1; s.next = 2;
+    assert.ok(m.play(s, 1, 2, 2)); assert.equal(s.winner, 1); assert.ok(!m.play(s, 2, 4, 4), '結束後不能再下'); assert.ok(m.validState(s));
+    // 小棋盤填滿平手 = 3
+    s = m.newGame(1); s.cells[5] = [1, 2, 1, 1, 2, 2, 2, 1, 0]; s.turn = 1; s.next = 5; assert.ok(m.play(s, 1, 5, 8)); assert.equal(s.small[5], 3);
+    // 隨機對局：一定會結束、狀態始終合法、贏家是真的連線
+    for (let g = 0; g < 400; g++) {
+        s = m.newGame(1 + (g % 2));
+        for (let k = 0; k < 90 && !s.winner && !s.draw; k++) {
+            const moves = []; for (let b = 0; b < 9; b++) for (let c = 0; c < 9; c++) if (m.canPlay(s, s.turn, b, c)) moves.push([b, c]);
+            assert.ok(moves.length > 0, '沒有合法步卻沒結束');
+            const [b, c] = moves[Util.rnd(moves.length)]; assert.ok(m.play(s, s.turn, b, c)); assert.ok(m.validState(s));
+        }
+        assert.ok(s.winner || s.draw); if (s.winner) assert.equal(m.lineWinner(s.small), s.winner);
+    }
+    assert.ok(!m.validState({ ...m.newGame(1), next: 9 })); assert.ok(!m.validState({ ...m.newGame(1), small: [0, 0, 0, 0, 0, 0, 0, 0, 4] })); assert.ok(!m.validState(null));
+    ok('ultimate-ttt');
+}
+
+// ===== UNO =====
+{
+    const m = load('mini-games/uno.html', 'COLORS, validCard, makeDeck, canPlayCard, nextOf, newGame, playCard, drawCard, passTurn, skipOffline, validPublic');
+    const deck = m.makeDeck(); assert.equal(deck.length, 108); assert.ok(deck.every(m.validCard)); assert.equal(deck.filter(c => c === 'WF').length, 4); assert.equal(deck.filter(c => c === 'R0').length, 1); assert.equal(deck.filter(c => c === 'G5').length, 2);
+    for (const bad of ['', 'X1', 'R', 'RA', 'W0', 'WWW', 5, null]) assert.ok(!m.validCard(bad), String(bad));
+    assert.ok(m.canPlayCard('R5', 'R9', 'R')); assert.ok(m.canPlayCard('B9', 'R9', 'R')); assert.ok(!m.canPlayCard('B8', 'R9', 'R')); assert.ok(m.canPlayCard('WW', 'R9', 'R')); assert.ok(m.canPlayCard('BS', 'RS', 'R')); assert.ok(m.canPlayCard('Y3', 'WW', 'Y'), '萬用牌選了黃色'); assert.ok(!m.canPlayCard('R3', 'WW', 'Y'));
+    const shuf = (a) => Util.shuffle(a);
+    const total = (g) => g.hands.reduce((s, h) => s + h.length, 0) + g.deck.length + g.discard.length;
+    let g = m.newGame(4, shuf); assert.equal(total(g), 108); assert.ok(g.hands.every(h => h.length === 7)); assert.ok(/^[RYGB][0-9]$/.test(g.discard[0])); assert.equal(g.color, g.discard[0][0]);
+    // 指定牌局測規則
+    const mk = (hands, top, color, n = hands.length) => ({ hands, deck: ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8'], discard: [top], color, turn: 0, dir: 1, drew: false, drawnIdx: -1, winner: -1, log: '', shuffleFn: shuf });
+    g = mk([['R5', 'B7', 'GS'], ['Y1', 'Y2'], ['G1', 'G2'], ['B1', 'B2']], 'R9', 'R');
+    assert.ok(!m.playCard(g, 1, 0), '不是你的回合'); assert.ok(!m.playCard(g, 0, 1), 'B7 不能出'); assert.ok(!m.playCard(g, 0, 9)); assert.ok(m.playCard(g, 0, 0)); assert.equal(g.turn, 1); assert.deepEqual(g.hands[0], ['B7', 'GS']);
+    g = mk([['RS', 'R1'], ['Y1'], ['G1'], ['B1']], 'R9', 'R'); assert.ok(m.playCard(g, 0, 0)); assert.equal(g.turn, 2, '跳過下一位');
+    g = mk([['RR', 'R1'], ['Y1'], ['G1'], ['B1']], 'R9', 'R'); assert.ok(m.playCard(g, 0, 0)); assert.equal(g.dir, -1); assert.equal(g.turn, 3, '迴轉後換上一位');
+    g = mk([['RR', 'R1'], ['Y1']], 'R9', 'R'); assert.ok(m.playCard(g, 0, 0)); assert.equal(g.turn, 0, '兩人時迴轉 = 跳過');
+    g = mk([['RD', 'R1'], ['Y1'], ['G1']], 'R9', 'R'); assert.ok(m.playCard(g, 0, 0)); assert.equal(g.hands[1].length, 3); assert.equal(g.turn, 2, '抽二並跳過');
+    g = mk([['WF', 'R1'], ['Y1'], ['G1']], 'R9', 'R'); assert.ok(!m.playCard(g, 0, 0), '萬用牌沒選色'); assert.ok(!m.playCard(g, 0, 0, 'X')); assert.ok(m.playCard(g, 0, 0, 'B')); assert.equal(g.color, 'B'); assert.equal(g.hands[1].length, 5); assert.equal(g.turn, 2);
+    g = mk([['R1'], ['Y1']], 'R9', 'R'); assert.ok(m.playCard(g, 0, 0)); assert.equal(g.winner, 0); assert.ok(!m.playCard(g, 1, 0) && !m.drawCard(g, 1), '結束後不能再動作');
+    // 抽牌：抽到能出的留著；不能出的換人
+    g = mk([['B7'], ['Y1'], ['G1']], 'R9', 'R'); g.deck = ['G3', 'R4']; assert.ok(m.drawCard(g, 0)); assert.equal(g.hands[0].length, 2); assert.equal(g.drew, true, 'R4 可出'); assert.equal(g.turn, 0);
+    assert.ok(!m.drawCard(g, 0), '已抽過不能再抽'); assert.ok(!m.playCard(g, 0, 0), '只能出剛抽的那張'); assert.ok(m.passTurn(g, 0)); assert.equal(g.turn, 1); assert.equal(g.drew, false);
+    g = mk([['B7'], ['Y1'], ['G1']], 'R9', 'R'); g.deck = ['G3']; assert.ok(m.drawCard(g, 0)); assert.equal(g.turn, 1, '抽到不能出的牌：直接換人'); assert.ok(!m.passTurn(g, 1), '沒抽牌不能過');
+    g = mk([['B7'], ['Y1'], ['G1']], 'R9', 'R'); g.deck = ['R4']; assert.ok(m.drawCard(g, 0)); assert.ok(m.playCard(g, 0, 1)); assert.equal(g.turn, 1); assert.equal(g.drew, false);
+    // 牌堆空了：把棄牌堆（留最上面一張）洗回去
+    g = mk([['B7'], ['Y1']], 'R9', 'R'); g.deck = []; g.discard = ['G2', 'G3', 'G4', 'R9']; assert.ok(m.drawCard(g, 0)); assert.equal(g.discard.length, 1); assert.equal(g.hands[0].length, 2);
+    g = mk([['B7'], ['Y1']], 'R9', 'R'); g.deck = []; assert.ok(m.drawCard(g, 0)); assert.equal(g.turn, 1, '完全沒牌可抽：換人');
+    // 離線的人被跳過
+    g = mk([['B7'], ['Y1'], ['G1']], 'R9', 'R'); g.turn = 1; assert.ok(m.skipOffline(g, [true, false, true])); assert.equal(g.turn, 2); assert.ok(!m.skipOffline(g, [true, true, true]));
+    // 隨機對局：牌數守恆、一定能結束
+    let finished = 0;
+    for (let t = 0; t < 150; t++) {
+        const n = 2 + (t % 5); g = m.newGame(n, shuf);
+        for (let step = 0; step < 4000 && g.winner < 0; step++) {
+            const p = g.turn, hand = g.hands[p], top = g.discard[g.discard.length - 1];
+            const idxs = hand.map((c, i) => i).filter(i => m.canPlayCard(hand[i], top, g.color) && (!g.drew || i === g.drawnIdx));
+            if (idxs.length && Util.rnd(10) < 9) { const i = idxs[Util.rnd(idxs.length)]; assert.ok(m.playCard(g, p, i, m.COLORS[Util.rnd(4)])); }
+            else if (!g.drew) assert.ok(m.drawCard(g, p)); else assert.ok(m.passTurn(g, p));
+            assert.equal(total(g), 108);
+        }
+        if (g.winner >= 0) { finished++; assert.equal(g.hands[g.winner].length, 0); }
+    }
+    assert.ok(finished >= 140, '隨機對局大多能結束：' + finished);
+    const pub = { phase: 'play', names: ['a', 'b'], counts: [3, 4], active: [true, true], top: 'R5', color: 'R', turn: 0, dir: 1, winner: -1, drew: false, log: '', deckLeft: 50 };
+    assert.ok(m.validPublic(pub)); assert.ok(!m.validPublic({ ...pub, top: 'ZZ' })); assert.ok(!m.validPublic({ ...pub, counts: [1] })); assert.ok(!m.validPublic({ ...pub, dir: 0 })); assert.ok(!m.validPublic(null)); assert.ok(!m.validPublic({ ...pub, phase: 'x' }));
+    ok('uno');
+}
+
+// ===== 編碼解碼：網址參數 / 檔案雜湊 =====
+{
+    const m = load('utils/encode-decode.html', 'CODECS, hashBytes, normHex, sameHash, urlParse, urlParseText, urlBuild');
+    assert.deepEqual(m.urlParse('https://example.com/a/b?q=%E4%BD%A0%E5%A5%BD&tag=a&tag=b#top'), { base: 'https://example.com/a/b', hash: 'top', params: [['q', '你好'], ['tag', 'a'], ['tag', 'b']] });
+    assert.deepEqual(m.urlParse('?a=1&b=x+y').params, [['a', '1'], ['b', 'x y']]); assert.deepEqual(m.urlParse('a=1').params, [['a', '1']]);
+    assert.throws(() => m.urlParse('')); assert.throws(() => m.urlParse('hello world'));
+    assert.equal(m.urlParseText('https://x.io/p?a=1&b=%26'), ['網址：https://x.io/p', '參數（2 個，已解碼；可直接改完按「編碼」組回去）：', 'a=1', 'b=&'].join(NL));
+    assert.equal(m.urlParseText('https://x.io/'), ['網址：https://x.io/', '沒有查詢參數'].join(NL));
+    assert.equal(m.urlBuild(['a=1', 'b=你 好', '', 'c', 'd=x=y'].join(NL)), 'a=1&b=%E4%BD%A0%20%E5%A5%BD&c=&d=x%3Dy');
+    assert.equal(m.urlBuild(m.urlParseText('https://x.io/p?a=1&b=%26&c=%E4%BD%A0')), 'a=1&b=%26&c=%E4%BD%A0', '拆解後直接組回去會得到同樣的參數');
+    assert.equal(m.CODECS['網址參數（拆解 / 組合）'].dec('?k=v'), ['參數（1 個，已解碼；可直接改完按「編碼」組回去）：', 'k=v'].join(NL));
+    assert.equal(m.normHex('0xAB:cd ef'), 'abcdef'); assert.ok(m.sameHash('AB CD', 'abcd')); assert.ok(!m.sameHash('', '')); assert.ok(!m.sameHash('ab', 'ac'));
+    pending.push(m.hashBytes(new TextEncoder().encode('abc'), 'SHA-256').then(h => { assert.equal(h, 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'); return m.hashBytes(new Uint8Array(0), 'SHA-1'); }).then(h => { assert.equal(h, 'da39a3ee5e6b4b0d3255bfef95601890afd80709'); ok('encode-decode: url params / file hash'); }));
+}
+
+// ===== JSON ↔ YAML / CSV =====
+{
+    const m = load('utils/json-formatter.html', 'jsonToYaml, parseYaml, jsonToCsv, csvToJson');
+    const samples = [
+        { a: 1, b: 'x y', c: [1, 2, { d: null, e: true }], f: { g: [], h: {} }, 'k: z': 'v: w', s: '', n: '123', t: 'true', u: '日本', m: 'line1' + NL + 'line2', date: '2024-01-05', neg: -1.5, tag: '#hash', q: "it's", dash: '- not list', colon: 'a:b', nul: 'null' },
+        [1, [2, 3], { a: [{ b: 1 }] }, []], 'hi', 42, null, true, { x: [[1, 2], [3]], phone: '0912345678', big: 1e21, small: 0.000001 }, [], {},
+    ];
+    for (const v of samples) { const y = m.jsonToYaml(v); assert.deepStrictEqual(m.parseYaml(y), v, y); }
+    assert.equal(m.jsonToYaml({ a: [1, { b: 2, c: 3 }], d: {} }), ['a:', '  - 1', '  - b: 2', '    c: 3', 'd: {}'].join(NL));
+    const doc = ['# 註解', 'name: demo   # 行尾註解', 'list:', '- a', '- b: 1', '  c: [1, 2, "x,y"]', 'nested:', '  inner: {k: v, n: 3}', '  empty:', 'phone: 0912345678', "quote: 'it''s'", 'url: http://a.b/c#d', 'on: yes'].join(NL);
+    assert.deepStrictEqual(m.parseYaml(doc), { name: 'demo', list: ['a', { b: 1, c: [1, 2, 'x,y'] }], nested: { inner: { k: 'v', n: 3 }, empty: null }, phone: '0912345678', quote: "it's", url: 'http://a.b/c#d', on: 'yes' });
+    assert.deepStrictEqual(m.parseYaml('---' + NL + 'a: 1'), { a: 1 }); assert.equal(m.parseYaml(''), null); assert.equal(m.parseYaml('# only comment'), null); assert.deepStrictEqual(m.parseYaml('- 1' + NL + '- 2'), [1, 2]); assert.deepStrictEqual(m.parseYaml('a:' + NL + '- 1' + NL + '- 2' + NL + 'b: 3'), { a: [1, 2], b: 3 });
+    for (const [bad, msg] of [['a: |' + NL + '  x', '多行'], ['a: &x 1', '錨點'], ['a: 1' + NL + 'a: 2', '重複'], ['a:' + NL + '  b: 1' + NL + ' c: 2', '縮排'], ['a: 1' + NL + '---' + NL + 'b: 2', '多份'], ['- a' + NL + 'b: 1', ''], ['a: [1, 2', '行內'], ['"x: 1', '引號'], ['a:' + NL + '\tb: 1', 'Tab']]) assert.throws(() => m.parseYaml(bad), (e) => e.message.includes(msg), JSON.stringify(bad));
+    assert.equal(m.jsonToCsv([{ a: 1, b: 'x,y' }, { a: 2, c: { z: 1 } }]), ['a,b,c', '1,"x,y",', '2,,"{""z"":1}"'].join('\r\n'));
+    assert.throws(() => m.jsonToCsv({ a: 1 })); assert.throws(() => m.jsonToCsv([])); assert.throws(() => m.jsonToCsv([1, 2]));
+    assert.deepEqual(m.csvToJson('a,b\r\n1,"x,y"\r\n2,'), [{ a: 1, b: 'x,y' }, { a: 2, b: '' }]); assert.deepEqual(m.csvToJson('a\tb\n1\ttrue'), [{ a: 1, b: true }]); assert.deepEqual(m.csvToJson('a,a\n1,2'), [{ a: 1, a_2: 2 }]);
+    const rt = [{ n: 'A "q"', v: 'line' + NL + 'two', z: ' pad ' }]; assert.deepEqual(m.csvToJson(m.jsonToCsv(rt)), rt.map(o => ({ ...o })));
+    ok('json-formatter: yaml / csv conversion');
+    assert.equal(Util.csvStringify(['a', 'b'], [['1', 'x"y'], [null, undefined]]), ['a,b', '1,"x""y"', ','].join('\r\n'));
+    ok('util: csvStringify');
+}
+
+// ===== 記帳本：固定支出 =====
+{
+    const m = load('utils/expense-tracker.html', 'validFixed, dueAt, nextDue, monthlyCost, dueInMonth, CYCLES');
+    const f = (cycle, start, amt = 100) => ({ id: 'x', name: 'N', amt, cycle, start });
+    assert.ok(m.validFixed(f('month', '2024-01-05'))); assert.ok(!m.validFixed({ ...f('month', '2024-01-05'), amt: 0 })); assert.ok(!m.validFixed({ ...f('day', '2024-01-05') })); assert.ok(!m.validFixed({ ...f('month', '2024-1-5') })); assert.ok(!m.validFixed(null)); assert.ok(!m.validFixed({ ...f('month', '2024-01-05'), name: '' }));
+    assert.equal(m.nextDue(f('month', '2024-01-31'), '2024-02-01'), '2024-02-29'); assert.equal(m.nextDue(f('month', '2024-01-31'), '2024-03-01'), '2024-03-31'); assert.equal(m.nextDue(f('month', '2024-01-31'), '2024-02-29'), '2024-02-29', '當天算下一次');
+    assert.equal(m.nextDue(f('month', '2024-06-15'), '2024-01-01'), '2024-06-15', '還沒開始：第一次'); assert.equal(m.nextDue(f('year', '2020-02-29'), '2024-03-01'), '2025-02-28'); assert.equal(m.nextDue(f('year', '2020-02-29'), '2024-02-01'), '2024-02-29');
+    assert.equal(m.nextDue(f('week', '2024-01-01'), '2024-01-02'), '2024-01-08'); assert.equal(m.nextDue(f('week', '2000-01-03'), '2024-03-10'), '2024-03-11'); assert.equal(m.nextDue(f('month', '1990-05-20'), '2026-10-03'), '2026-10-20');
+    near(m.monthlyCost(f('month', '2024-01-01', 300)), 300); near(m.monthlyCost(f('year', '2024-01-01', 1200)), 100); near(m.monthlyCost(f('week', '2024-01-01', 100)), 100 * 52 / 12);
+    assert.deepEqual(m.dueInMonth(f('week', '2024-01-01'), '2024-02'), ['2024-02-05', '2024-02-12', '2024-02-19', '2024-02-26']); assert.deepEqual(m.dueInMonth(f('month', '2024-01-31'), '2024-02'), ['2024-02-29']);
+    assert.deepEqual(m.dueInMonth(f('year', '2020-07-04'), '2024-07'), ['2024-07-04']); assert.deepEqual(m.dueInMonth(f('year', '2020-07-04'), '2024-08'), []); assert.deepEqual(m.dueInMonth(f('month', '2024-06-15'), '2024-05'), [], '開始之前沒有');
+    ok('expense-tracker: fixed expenses');
+}
+
+// ===== 體重紀錄 =====
+{
+    const m = load('utils/health-calc.html', 'validWeight, addWeight, slopePerDay, etaGoal');
+    assert.ok(m.validWeight({ d: '2024-01-01', kg: 60 })); assert.ok(!m.validWeight({ d: '2024-01-01', kg: 5 })); assert.ok(!m.validWeight({ d: '2024/01/01', kg: 60 })); assert.ok(!m.validWeight({ d: '2024-01-01', kg: NaN }));
+    let log = []; log = m.addWeight(log, '2024-01-03', 60); log = m.addWeight(log, '2024-01-01', 61); log = m.addWeight(log, '2024-01-03', 59.5);
+    assert.deepEqual(log, [{ d: '2024-01-01', kg: 61 }, { d: '2024-01-03', kg: 59.5 }], '同一天取代、依日期排序'); assert.equal(m.addWeight(Array.from({ length: 1000 }, (_, i) => ({ d: Util.day.shift('2000-01-01', i), kg: 60 })), '2030-01-01', 60).length, 1000);
+    const lin = Array.from({ length: 11 }, (_, i) => ({ d: Util.day.shift('2024-01-01', i), kg: 70 - i * 0.1 }));
+    near(m.slopePerDay(lin, 30, '2024-01-11'), -0.1); assert.equal(m.slopePerDay([{ d: '2024-01-01', kg: 60 }], 30, '2024-01-02'), null); assert.equal(m.slopePerDay(lin, 3, '2024-01-11') !== null, true); assert.equal(m.slopePerDay(lin, 30, '2023-12-01'), null, '未來的紀錄不算');
+    const e = m.etaGoal(lin, 68, '2024-01-11'); assert.equal(e.days, 10); assert.equal(e.date, '2024-01-21');
+    assert.deepEqual(m.etaGoal(lin, 72, '2024-01-11'), { days: null }, '趨勢往反方向'); assert.deepEqual(m.etaGoal(lin, 69, '2024-01-11'), { reached: true }); assert.equal(m.etaGoal([lin[0]], 60, '2024-01-01'), null);
+    const flat = lin.map(x => ({ ...x, kg: 70 })); assert.deepEqual(m.etaGoal(flat, 65, '2024-01-11'), { days: null });
+    ok('health-calc: weight log');
+}
+
+// ===== 倒數日：清單 =====
+{
+    const m = load('utils/countdown.html', 'PACKING, validItems, itemProgress, addItem, toggleItem, mergeTemplate');
+    let it = []; it = m.addItem(it, '  護照 '); assert.deepEqual(it, [{ t: '護照', done: false }]); assert.equal(m.addItem(it, '護照'), it, '不重複'); assert.equal(m.addItem(it, '   '), it);
+    assert.equal(m.addItem([], 'x'.repeat(50))[0].t.length, 30); const full = Array.from({ length: 60 }, (_, i) => ({ t: 'i' + i, done: false })); assert.equal(m.addItem(full, 'new'), full);
+    const t2 = m.toggleItem(it, 0); assert.equal(t2[0].done, true); assert.equal(it[0].done, false, '不改動原陣列'); assert.deepEqual(m.itemProgress(m.addItem(t2, '充電器')), { done: 1, total: 2 });
+    const merged = m.mergeTemplate(it, m.PACKING); assert.equal(merged.length, m.PACKING.length + (m.PACKING.includes('護照') ? 0 : 1)); assert.equal(m.mergeTemplate(merged, m.PACKING).length, merged.length, '重複加入範本不會變多');
+    assert.ok(m.validItems([])); assert.ok(m.validItems(merged)); assert.ok(!m.validItems([{ t: '', done: false }])); assert.ok(!m.validItems('x')); assert.ok(!m.validItems([{ t: 'a', done: 1 }]));
+    ok('countdown: checklist');
 }
 
 Promise.all(pending).then(() => console.log('ALL OK')).catch((e) => { console.error(e); process.exit(1); });

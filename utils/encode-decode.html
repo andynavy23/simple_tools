@@ -52,7 +52,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>編碼解碼</h1>
-        <p class="sub">中文、emoji 都以 UTF-8 處理，全部在本機完成。也能解析 JWT、計算 SHA 雜湊。</p>
+        <p class="sub">中文、emoji 都以 UTF-8 處理，全部在本機完成。也能解析 JWT、拆解網址參數、計算文字與檔案的 SHA 雜湊。</p>
 
         <div class="card">
             <label for="type">格式</label>
@@ -70,6 +70,16 @@
             <label for="out">輸出</label>
             <textarea id="out" readonly spellcheck="false"></textarea>
             <div class="btns"><button id="copy">複製輸出</button></div>
+        </div>
+
+        <div class="card">
+            <h2>檔案雜湊與比對</h2>
+            <p class="muted" style="font-size:13px;margin:0 0 10px">選一個檔案計算雜湊，可貼上官方公布的值比對（檔案不會上傳；上限 500 MB）。</p>
+            <input type="file" id="hfile" aria-label="選擇檔案">
+            <div class="btns" style="margin-top:10px"><select id="halgo" aria-label="演算法"></select><button class="primary" id="hgo">計算</button></div>
+            <label for="hexp">預期值（選填）</label>
+            <input id="hexp" style="width:100%" spellcheck="false" placeholder="貼上官方的雜湊值">
+            <div id="hres" role="status" style="margin-top:10px;word-break:break-all"></div>
         </div>
     </div>
 
@@ -150,6 +160,38 @@
 
         const HASHES = ['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512'];
 
+        // 檔案雜湊：bytes 是 Uint8Array / ArrayBuffer，回傳小寫 16 進位字串
+        async function hashBytes(bytes, algo = 'SHA-256') {
+            return [...new Uint8Array(await crypto.subtle.digest(algo, bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+        // 比對時忽略大小寫、空白、冒號與 0x 前綴（各種工具輸出的格式不同）
+        const normHex = (s) => String(s).toLowerCase().replace(/^0x/, '').replace(/[\s:]/g, '');
+        const sameHash = (a, b) => normHex(a) !== '' && normHex(a) === normHex(b);
+
+        // 網址參數：能解析完整網址，也能解析只有 a=1&b=2 的查詢字串；同名參數會保留多筆
+        function urlParse(text) {
+            const t = text.trim();
+            if (!t) throw new Error('請輸入網址或查詢字串');
+            let u = null;
+            try { u = new URL(t); } catch (e) { /* 不是完整網址 */ }
+            if (u) return { base: u.origin + u.pathname, hash: u.hash.slice(1), params: [...u.searchParams] };
+            if (/^[?&]?[^\s/]*=/.test(t)) return { base: '', hash: '', params: [...new URLSearchParams(t.replace(/^[?&]/, ''))] };
+            throw new Error('不是有效的網址（需要含 https:// 之類的開頭），也不像 a=1&b=2 的查詢字串');
+        }
+        function urlParseText(text) {
+            const r = urlParse(text), lines = [];
+            if (r.base) lines.push('網址：' + r.base);
+            lines.push(r.params.length ? `參數（${r.params.length} 個，已解碼；可直接改完按「編碼」組回去）：` : '沒有查詢參數');
+            for (const [k, v] of r.params) lines.push(`${k}=${v}`);
+            if (r.hash) lines.push('片段：' + r.hash);
+            return lines.join('\n');
+        }
+        // 一行一個 key=value → 查詢字串（會自動編碼，空行略過；沒有 = 的行視為值為空）
+        function urlBuild(text) {
+            const pairs = text.split('\n').map(l => l.trim()).filter(l => l && !/^(網址|片段|參數|沒有)/.test(l)).map(l => { const i = l.indexOf('='); return i < 0 ? [l, ''] : [l.slice(0, i), l.slice(i + 1)]; });
+            return pairs.map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v)).join('&');
+        }
+
         const NAMED = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&apos;': "'", '&nbsp;': ' ' };
 
         const CODECS = {
@@ -167,6 +209,7 @@
                 enc: (t) => encodeURIComponent(t),
                 dec: (t) => decodeURIComponent(t.replace(/\+/g, ' ')),
             },
+            '網址參數（拆解 / 組合）': { enc: urlBuild, dec: urlParseText },
             'Unicode 跳脫 (\\uXXXX)': {
                 enc: (t) => [...t].map(ch => {
                     const cp = ch.codePointAt(0);
@@ -226,6 +269,22 @@
                 $('#err').textContent = '處理失敗：' + (e.message.includes('The string') ? '不是有效的 Base64' : e.message);
             }
         }
+
+        $('#halgo').replaceChildren(...HASHES.map(h => new Option(h, h))); $('#halgo').value = 'SHA-256';
+        let hashed = '';
+        function showCompare() {
+            const exp = $('#hexp').value.trim();
+            $('#hres').replaceChildren(Object.assign(document.createElement('div'), { textContent: hashed ? `${$('#halgo').value}：${hashed}` : '' }));
+            if (hashed && exp) $('#hres').append(Object.assign(document.createElement('b'), { textContent: sameHash(hashed, exp) ? '✅ 一致' : '❌ 不一致', style: 'color:var(--' + (sameHash(hashed, exp) ? 'ok,#30d158' : 'bad,#ff453a') + ')' }));
+        }
+        $('#hgo').onclick = async () => {
+            const f = $('#hfile').files[0]; hashed = '';
+            if (!f) { $('#hres').textContent = '請先選擇檔案'; return; }
+            if (f.size > 500 * 1024 * 1024) { $('#hres').textContent = '檔案超過 500 MB，請改用命令列工具'; return; }
+            $('#hres').textContent = '計算中…';
+            try { hashed = await hashBytes(await f.arrayBuffer(), $('#halgo').value); showCompare(); } catch (e) { $('#hres').textContent = '讀取失敗：' + e.message; }
+        };
+        $('#hexp').oninput = showCompare; $('#halgo').onchange = () => { hashed = ''; showCompare(); };
 
         syncButtons();
         $('#enc').onclick = () => run('enc');

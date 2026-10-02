@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="CSS 產生器：陰影、漸層、圓角即時預覽，一鍵複製 CSS 程式碼。">
+    <meta property="og:title" content="CSS 產生器" />
+    <meta property="og:description" content="陰影、漸層、圓角即時預覽並複製 CSS。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/css-gen.html" />
+    <title>CSS 產生器</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .stage {
+            height: 200px;
+            border-radius: 18px;
+            display: grid;
+            place-items: center;
+            background: repeating-conic-gradient(var(--fill) 0 25%, transparent 0 50%) 0 0 / 20px 20px;
+        }
+
+        #box {
+            width: 140px;
+            height: 100px;
+            background: #fff;
+            color: #1c1c1e;
+            display: grid;
+            place-items: center;
+            font-weight: 600;
+        }
+
+        #box.fill {
+            width: 100%;
+            height: 100%;
+            border-radius: 18px;
+        }
+
+        .ctl {
+            display: grid;
+            grid-template-columns: 70px 1fr 56px;
+            gap: 8px;
+            align-items: center;
+            margin: 8px 0;
+        }
+
+        .ctl input[type=color] {
+            grid-column: 2 / 4;
+            width: 60px;
+            height: 32px;
+            padding: 0;
+        }
+
+        .ctl b {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        pre {
+            background: var(--fill);
+            border-radius: 12px;
+            padding: 12px 14px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            margin: 12px 0 8px;
+            font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>CSS 產生器</h1>
+        <p class="sub">調整參數即時預覽，複製寫好的 CSS。</p>
+
+        <div class="card">
+            <div class="tabs" id="tabs"><button data-t="shadow">陰影</button><button data-t="gradient">漸層</button><button data-t="radius">圓角</button></div>
+            <div class="stage"><div id="box">預覽</div></div>
+            <div id="ctls"></div>
+            <pre id="css"></pre>
+            <button class="primary" id="copy">複製 CSS</button>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, copyWithFeedback } = Util;
+
+        // --- pure ---
+        const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, Number.isFinite(+v) ? +v : lo));
+        function hexToRgba(hex, a = 1) {
+            const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+            if (!m) throw new Error('色碼要是 6 位 16 進位');
+            const n = parseInt(m[1], 16), al = Math.round(clamp(a, 0, 1) * 100) / 100;
+            return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${al})`;
+        }
+        const shadowCss = ({ x, y, blur, spread, color, alpha, inset }) => `box-shadow: ${inset ? 'inset ' : ''}${x}px ${y}px ${clamp(blur, 0, 200)}px ${spread}px ${hexToRgba(color, alpha)};`;
+        // stops: [{color, pos}]，pos 0–100；至少兩個
+        function gradientCss({ type, angle, stops }) {
+            if (stops.length < 2) throw new Error('至少需要兩個色標');
+            const list = stops.map(s => `${s.color} ${clamp(s.pos, 0, 100)}%`).join(', ');
+            return `background: ${type === 'radial' ? `radial-gradient(circle, ${list})` : `linear-gradient(${Math.round(clamp(angle, 0, 360))}deg, ${list})`};`;
+        }
+        // corners: [左上, 右上, 右下, 左下]；四個相同就寫成一個值
+        function radiusCss(corners, unit = 'px') {
+            const c = corners.map(v => clamp(v, 0, unit === '%' ? 50 : 500));
+            return `border-radius: ${c.every(v => v === c[0]) ? c[0] + unit : c.map(v => v + unit).join(' ')};`;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const S = store.get('cssgen', {});
+        const state = {
+            shadow: { x: 0, y: 10, blur: 30, spread: 0, color: '#000000', alpha: 0.25, inset: false, ...S.shadow },
+            gradient: { type: 'linear', angle: 135, c1: '#0a84ff', c2: '#bf5af2', c3: '', ...S.gradient },
+            radius: { tl: 24, tr: 24, br: 24, bl: 24, unit: 'px', ...S.radius },
+        };
+        let tab = ['shadow', 'gradient', 'radius'].includes(S.tab) ? S.tab : 'shadow';
+
+        const DEFS = {
+            shadow: [['x', '水平', -100, 100], ['y', '垂直', -100, 100], ['blur', '模糊', 0, 200], ['spread', '擴散', -50, 100], ['alpha', '透明度', 0, 1, 0.01], ['color', '顏色', 'color'], ['inset', '內陰影', 'check']],
+            gradient: [['type', '類型', 'select', [['linear', '線性'], ['radial', '放射']]], ['angle', '角度', 0, 360], ['c1', '色標 1', 'color'], ['c2', '色標 2', 'color'], ['c3', '色標 3（選用）', 'color-opt']],
+            radius: [['tl', '左上', 0, 200], ['tr', '右上', 0, 200], ['br', '右下', 0, 200], ['bl', '左下', 0, 200], ['unit', '單位', 'select', [['px', 'px'], ['%', '%']]]],
+        };
+
+        function css() {
+            const s = state[tab];
+            if (tab === 'shadow') return shadowCss(s);
+            if (tab === 'gradient') return gradientCss({ type: s.type, angle: s.angle, stops: [s.c1, s.c2, s.c3].filter(Boolean).map((c, i, a) => ({ color: c, pos: Math.round(i / (a.length - 1) * 100) })) });
+            return radiusCss([s.tl, s.tr, s.br, s.bl], s.unit);
+        }
+        function paint() {
+            const box = $('#box'); box.style.cssText = ''; box.className = tab === 'gradient' ? 'fill' : '';
+            const text = css(); $('#css').textContent = text;
+            box.style.cssText = tab === 'radius' ? text + 'background:var(--accent,#0a84ff);color:#fff' : text;
+            if (tab === 'shadow') box.style.borderRadius = '18px';
+            if (tab === 'gradient') box.style.color = '#fff';
+            store.set('cssgen', { tab, ...state });
+        }
+        function build() {
+            [...$('#tabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab));
+            $('#ctls').replaceChildren(...DEFS[tab].map(([key, name, a, b, step]) => {
+                const row = document.createElement('div'); row.className = 'ctl';
+                const lab = document.createElement('label'); lab.textContent = name; lab.htmlFor = 'f_' + key;
+                let inp, val = document.createElement('b');
+                if (a === 'select') { inp = document.createElement('select'); b.forEach(([v, t]) => inp.append(new Option(t, v))); inp.value = state[tab][key]; val = null; }
+                else if (a === 'color' || a === 'color-opt') { inp = document.createElement('input'); inp.type = 'color'; inp.value = state[tab][key] || '#ffffff'; val = null; }
+                else if (a === 'check') { inp = document.createElement('input'); inp.type = 'checkbox'; inp.checked = state[tab][key]; val = null; }
+                else { inp = document.createElement('input'); inp.type = 'range'; inp.min = a; inp.max = b; inp.step = step || 1; inp.value = state[tab][key]; val.textContent = inp.value; }
+                inp.id = 'f_' + key;
+                inp.oninput = inp.onchange = () => { state[tab][key] = inp.type === 'checkbox' ? inp.checked : inp.type === 'range' ? +inp.value : inp.value; if (val) val.textContent = inp.value; paint(); };
+                row.append(lab, inp); if (val) row.append(val);
+                if (a === 'color-opt') { const clr = document.createElement('button'); clr.className = 'sm'; clr.textContent = state[tab][key] ? '移除' : '未使用'; clr.onclick = () => { state[tab][key] = state[tab][key] ? '' : inp.value; clr.textContent = state[tab][key] ? '移除' : '未使用'; paint(); }; row.append(clr); row.style.gridTemplateColumns = '90px 60px 1fr'; }
+                return row;
+            }));
+            paint();
+        }
+        $('#tabs').onclick = (e) => { const t = e.target.dataset.t; if (t) { tab = t; build(); } };
+        $('#copy').onclick = () => copyWithFeedback($('#copy'), css());
+        build();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="時間戳轉換：Unix 秒 / 毫秒與日期互轉，可選時區，同時顯示 ISO 8601 與相對時間。">
+    <meta property="og:title" content="時間戳轉換" />
+    <meta property="og:description" content="Unix 時間戳與日期互轉，支援多時區。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/timestamp.html" />
+    <title>時間戳轉換</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row input {
+            flex: 1;
+            min-width: 160px;
+        }
+
+        .big {
+            font-size: 22px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .li b {
+            font-variant-numeric: tabular-nums;
+            word-break: break-all;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>時間戳轉換</h1>
+        <p class="sub">Unix 時間戳（秒 / 毫秒）與日期互轉，全部在本機計算。</p>
+
+        <div class="card">
+            <div class="li"><span class="muted">現在（秒）</span><span class="big" id="nowS"></span><button class="sm" id="copyS">複製</button></div>
+            <div class="li"><span class="muted">現在（毫秒）</span><span class="big" id="nowMs"></span><button class="sm" id="copyMs">複製</button></div>
+        </div>
+
+        <div class="card">
+            <label for="tz">顯示時區</label>
+            <select id="tz"></select>
+        </div>
+
+        <div class="card">
+            <h2>時間戳 → 日期</h2>
+            <div class="row"><input id="ts" inputmode="numeric" placeholder="例如 1700000000 或 1700000000000" aria-label="時間戳"><button id="useNow">帶入現在</button></div>
+            <p class="note" id="tsNote"></p>
+            <div id="tsOut"></div>
+        </div>
+
+        <div class="card">
+            <h2>日期 → 時間戳</h2>
+            <div class="row"><input id="dt" type="datetime-local" step="1" aria-label="日期時間"><span class="muted">以上方「顯示時區」解讀</span></div>
+            <p class="note" id="dtNote"></p>
+            <div id="dtOut"></div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, copyWithFeedback } = Util;
+
+        // --- pure ---
+        // 絕對值 >= 1e11（約西元 1973 年的毫秒值）視為毫秒，否則視為秒
+        const detectUnit = (n) => Math.abs(n) >= 1e11 ? 'ms' : 's';
+        const toMs = (n, unit = detectUnit(n)) => unit === 'ms' ? Math.trunc(n) : Math.round(n * 1000);
+
+        const P2 = (n) => String(n).padStart(2, '0');
+        // 在指定時區的牆上時間各欄位
+        function zoneParts(ms, tz) {
+            const o = {};
+            for (const p of new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(ms))) o[p.type] = +p.value;
+            return o;
+        }
+        // 該時刻該時區與 UTC 的差（分鐘）
+        function zoneOffsetMin(ms, tz) {
+            const p = zoneParts(Math.floor(ms / 1000) * 1000, tz);
+            return (Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(ms / 1000) * 1000) / 60000;
+        }
+        function fmtInZone(ms, tz) {
+            const p = zoneParts(ms, tz);
+            return `${p.year}-${P2(p.month)}-${P2(p.day)} ${P2(p.hour)}:${P2(p.minute)}:${P2(p.second)}`;
+        }
+        const fmtOffset = (min) => `UTC${min < 0 ? '-' : '+'}${P2(Math.floor(Math.abs(min) / 60))}:${P2(Math.abs(min) % 60)}`;
+        // 把「某時區的牆上時間 YYYY-MM-DDTHH:mm[:ss]」轉成時間戳（毫秒）；格式不對回傳 NaN。夏令時間重複 / 不存在的時刻取較早的解讀
+        function parseInZone(str, tz) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(str.trim());
+            if (!m) return NaN;
+            const [y, mo, d, h, mi, s] = m.slice(1).map(x => +x || 0);
+            const asUtc = Date.UTC(y, mo - 1, d, h, mi, s);
+            if (new Date(asUtc).getUTCMonth() !== mo - 1) return NaN;
+            let ms = asUtc - zoneOffsetMin(asUtc, tz) * 60000;
+            ms = asUtc - zoneOffsetMin(ms, tz) * 60000;
+            return ms;
+        }
+        function relative(diffMs) {
+            const a = Math.abs(diffMs) / 1000, ago = diffMs <= 0;
+            const u = [[31536000, '年'], [2592000, '個月'], [86400, '天'], [3600, '小時'], [60, '分鐘']].find(([sec]) => a >= sec);
+            if (!u) return a < 1 ? '現在' : `${Math.floor(a)} 秒${ago ? '前' : '後'}`;
+            return `${Math.floor(a / u[0])} ${u[1]}${ago ? '前' : '後'}`;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const DEVICE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const ZONES = ['Asia/Taipei', 'UTC', 'Asia/Tokyo', 'Asia/Seoul', 'Asia/Shanghai', 'Asia/Hong_Kong', 'Asia/Singapore', 'Europe/London', 'Europe/Paris', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Australia/Sydney'];
+        if (!ZONES.includes(DEVICE)) ZONES.unshift(DEVICE);
+        $('#tz').replaceChildren(...ZONES.map(z => new Option(z + (z === DEVICE ? '（裝置）' : ''), z)));
+        const saved = store.get('ts_tz', 'Asia/Taipei'); $('#tz').value = ZONES.includes(saved) ? saved : 'Asia/Taipei';
+
+        const li = (k, v) => { const d = document.createElement('div'); d.className = 'li'; const s = document.createElement('span'); s.className = 'muted'; s.textContent = k; const b = document.createElement('b'); b.textContent = v; d.append(s, b); return d; };
+
+        function showTs() {
+            const raw = $('#ts').value.trim(), out = $('#tsOut');
+            out.replaceChildren(); $('#tsNote').textContent = '';
+            if (!raw) return;
+            const n = Number(raw);
+            if (!Number.isFinite(n)) { $('#tsNote').textContent = '請輸入數字'; return; }
+            const ms = toMs(n), tz = $('#tz').value;
+            if (!Number.isFinite(new Date(ms).getTime())) { $('#tsNote').textContent = '數字超出可表示的日期範圍'; return; }
+            $('#tsNote').textContent = `判斷為${detectUnit(n) === 'ms' ? '毫秒' : '秒'}`;
+            out.append(li(tz, `${fmtInZone(ms, tz)}（${fmtOffset(zoneOffsetMin(ms, tz))}）`), li('UTC', fmtInZone(ms, 'UTC')), li('ISO 8601', new Date(ms).toISOString()), li('相對現在', relative(ms - Date.now())));
+        }
+        function showDt() {
+            const out = $('#dtOut'); out.replaceChildren(); $('#dtNote').textContent = '';
+            if (!$('#dt').value) return;
+            const ms = parseInZone($('#dt').value, $('#tz').value);
+            if (!Number.isFinite(ms)) { $('#dtNote').textContent = '日期格式不對'; return; }
+            out.append(li('秒', String(Math.floor(ms / 1000))), li('毫秒', String(ms)), li('ISO 8601', new Date(ms).toISOString()));
+        }
+        function tick() { const n = Date.now(); $('#nowS').textContent = Math.floor(n / 1000); $('#nowMs').textContent = n; }
+
+        $('#ts').oninput = showTs; $('#dt').oninput = showDt;
+        $('#tz').onchange = () => { store.set('ts_tz', $('#tz').value); showTs(); showDt(); };
+        $('#useNow').onclick = () => { $('#ts').value = Math.floor(Date.now() / 1000); showTs(); };
+        $('#copyS').onclick = () => copyWithFeedback($('#copyS'), String(Math.floor(Date.now() / 1000)));
+        $('#copyMs').onclick = () => copyWithFeedback($('#copyMs'), String(Date.now()));
+        tick(); setInterval(tick, 200);
+    </script>
+</body>
+
+</html>

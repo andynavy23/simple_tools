@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="擲筊 / 求籤：線上擲筊（聖筊、笑筊、陰筊與連續聖筊計數），以及事業、感情、財運、健康的運勢籤。純屬娛樂。">
+    <meta property="og:title" content="擲筊 / 求籤" />
+    <meta property="og:description" content="線上擲筊與運勢籤，純屬娛樂。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/divination.html" />
+    <title>擲筊 / 求籤</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        :root {
+            --wrap-w: 560px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .blocks {
+            display: flex;
+            justify-content: center;
+            gap: 28px;
+            height: 130px;
+            align-items: center;
+        }
+
+        .bwa {
+            width: 54px;
+            height: 96px;
+            border-radius: 48px 48px 48px 48px / 70px 70px 26px 26px;
+            background: linear-gradient(160deg, #ff453a, #b3261e);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, .3);
+            display: grid;
+            place-items: center;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .bwa.round {
+            background: linear-gradient(160deg, #ff6a5e, #d63a2e);
+            border-radius: 28px;
+            transform: scaleX(.8);
+        }
+
+        .bwa.spin {
+            animation: toss .7s ease-in-out;
+        }
+
+        @keyframes toss {
+            0% {
+                transform: translateY(0) rotate(0);
+            }
+
+            40% {
+                transform: translateY(-60px) rotate(360deg);
+            }
+
+            100% {
+                transform: translateY(0) rotate(720deg);
+            }
+        }
+
+        .res {
+            text-align: center;
+            font-size: 34px;
+            font-weight: 800;
+            min-height: 48px;
+            margin: 8px 0 2px;
+        }
+
+        .res.good {
+            color: var(--ok, #30d158);
+        }
+
+        .res.bad {
+            color: var(--bad, #ff453a);
+        }
+
+        .level {
+            text-align: center;
+            font-size: 44px;
+            font-weight: 800;
+            margin: 6px 0;
+        }
+
+        .center {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>擲筊 / 求籤</h1>
+        <p class="sub">心裡默念問題，再擲筊或求籤。結果由亂數決定，純屬娛樂。</p>
+
+        <div class="card">
+            <div class="tabs" id="tabs"><button data-t="bwa">擲筊</button><button data-t="fortune">求籤</button></div>
+
+            <div id="pBwa">
+                <div class="blocks"><div class="bwa" id="b1"></div><div class="bwa" id="b2"></div></div>
+                <div class="res" id="res">—</div>
+                <p class="note center" id="streak"></p>
+                <div class="center"><button class="primary" id="throw">擲筊</button><button id="resetStats">清除紀錄</button></div>
+                <p class="note" id="stats" style="text-align:center"></p>
+            </div>
+
+            <div id="pFortune" hidden>
+                <div class="level" id="level">—</div>
+                <div id="items"></div>
+                <div class="center" style="margin-top:12px"><button class="primary" id="draw">求一支籤</button><button id="copy" disabled>複製</button></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { rnd, store, copyWithFeedback } = Util;
+
+        // --- pure ---
+        // 筊杯：一面平（陽面）一面凸（陰面）。兩個一平一凸 = 聖筊；兩個都平 = 笑筊；兩個都凸 = 陰筊
+        function throwBlocks(rand = rnd) {
+            const a = rand(2) ? 'flat' : 'round', b = rand(2) ? 'flat' : 'round';
+            return { a, b, result: a === b ? (a === 'flat' ? '笑筊' : '陰筊') : '聖筊' };
+        }
+        // 連續聖筊次數：遇到非聖筊歸零
+        const nextStreak = (streak, result) => result === '聖筊' ? streak + 1 : 0;
+
+        const LEVELS = [['大吉', 10], ['中吉', 25], ['小吉', 30], ['末吉', 25], ['凶', 10]];
+        const TEXT = {
+            事業: { 大吉: '貴人相助，主動出手會有好結果', 中吉: '穩紮穩打，進度順利', 小吉: '小有成果，細節多檢查一次', 末吉: '先把手邊的事做完，別急著開新坑', 凶: '容易出錯，重要決定先放一放' },
+            感情: { 大吉: '心意相通，適合表達', 中吉: '相處融洽，多一點傾聽', 小吉: '平淡中有小驚喜', 末吉: '別急著下結論，給彼此一點空間', 凶: '說話前先深呼吸，避免爭執' },
+            財運: { 大吉: '有意外之財的機會，但仍要量力而為', 中吉: '收入穩定，可小額儲蓄', 小吉: '收支平衡，留意小額花費', 末吉: '少衝動消費，先列清單', 凶: '避免借貸與高風險投資' },
+            健康: { 大吉: '精神飽滿，適合運動', 中吉: '狀態不錯，維持規律作息', 小吉: '稍有疲勞，早點休息', 末吉: '注意飲食與水分', 凶: '多休息，不舒服請就醫' },
+        };
+        function drawFortune(rand = rnd) {
+            const total = LEVELS.reduce((s, [, w]) => s + w, 0);
+            let r = rand(total), level = LEVELS[0][0];
+            for (const [name, w] of LEVELS) { if (r < w) { level = name; break; } r -= w; }
+            return { level, items: Object.fromEntries(Object.keys(TEXT).map(k => [k, TEXT[k][level]])) };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let tab = store.get('divine_tab', 'bwa'); if (!['bwa', 'fortune'].includes(tab)) tab = 'bwa';
+        let stats = store.get('divine_stats', { n: 0, 聖筊: 0, 笑筊: 0, 陰筊: 0, best: 0 }), streak = 0, fortune = null, busy = false;
+
+        function showTab() {
+            [...$('#tabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab));
+            $('#pBwa').hidden = tab !== 'bwa'; $('#pFortune').hidden = tab !== 'fortune';
+        }
+        function showStats() {
+            $('#stats').textContent = stats.n ? `共擲 ${stats.n} 次：聖筊 ${stats.聖筊}、笑筊 ${stats.笑筊}、陰筊 ${stats.陰筊}；最多連續聖筊 ${stats.best} 次` : '';
+            $('#streak').textContent = streak ? `連續 ${streak} 個聖筊` : '';
+        }
+        function throwIt() {
+            if (busy) return; busy = true;
+            const t = throwBlocks();
+            [$('#b1'), $('#b2')].forEach(e => { e.className = 'bwa spin'; });
+            $('#res').textContent = '…'; $('#res').className = 'res';
+            setTimeout(() => {
+                $('#b1').className = 'bwa ' + t.a; $('#b2').className = 'bwa ' + t.b;
+                $('#b1').textContent = t.a === 'flat' ? '陽' : '陰'; $('#b2').textContent = t.b === 'flat' ? '陽' : '陰';
+                $('#res').textContent = t.result; $('#res').className = 'res ' + (t.result === '聖筊' ? 'good' : 'bad');
+                streak = nextStreak(streak, t.result); stats.n++; stats[t.result]++; stats.best = Math.max(stats.best, streak);
+                store.set('divine_stats', stats); showStats(); busy = false;
+            }, 700);
+        }
+        function drawIt() {
+            fortune = drawFortune(); $('#level').textContent = fortune.level; $('#copy').disabled = false;
+            $('#items').replaceChildren(...Object.entries(fortune.items).map(([k, v]) => {
+                const d = document.createElement('div'); d.className = 'li';
+                const s = document.createElement('span'); s.className = 'muted'; s.textContent = k; const b = document.createElement('span'); b.textContent = v; d.append(s, b); return d;
+            }));
+        }
+
+        $('#tabs').onclick = (e) => { if (e.target.dataset.t) { tab = e.target.dataset.t; store.set('divine_tab', tab); showTab(); } };
+        $('#throw').onclick = throwIt; $('#draw').onclick = drawIt;
+        $('#resetStats').onclick = () => { stats = { n: 0, 聖筊: 0, 笑筊: 0, 陰筊: 0, best: 0 }; streak = 0; store.set('divine_stats', stats); showStats(); };
+        $('#copy').onclick = () => copyWithFeedback($('#copy'), `${fortune.level}\n` + Object.entries(fortune.items).map(([k, v]) => `${k}：${v}`).join('\n'));
+        showTab(); showStats();
+    </script>
+</body>
+
+</html>

@@ -114,7 +114,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>JSON 整理器</h1>
-        <p class="sub">貼上 JSON，一鍵美化、壓縮或驗證。全部在本機處理。</p>
+        <p class="sub">貼上 JSON，一鍵美化、壓縮或驗證，也能和 YAML、CSV 互轉。全部在本機處理。</p>
 
         <div class="card">
             <textarea id="in" spellcheck="false" placeholder='{"name":"Simple Tools","tags":["a","b"]}' aria-label="JSON 內容"></textarea>
@@ -134,6 +134,17 @@
             <div id="status" role="status"></div>
         </div>
 
+        <div class="card">
+            <h2>格式轉換</h2>
+            <p class="muted" style="font-size:13px;margin:0 0 10px">把上方輸入的內容轉成別種格式（結果顯示在下方）。YAML 支援常用語法；CSV 需要第一列是標題。</p>
+            <div class="bar" style="margin:0">
+                <button id="toYaml">JSON → YAML</button>
+                <button id="toCsv">JSON → CSV</button>
+                <button id="yamlToJson">YAML → JSON</button>
+                <button id="csvToJson">CSV → JSON</button>
+            </div>
+        </div>
+
         <div class="card" id="outCard" hidden>
             <div class="bar" style="margin:0 0 10px">
                 <button class="sm" id="viewText" aria-pressed="true">文字</button>
@@ -148,6 +159,8 @@
 
     <script src="../shared/js/util.js"></script>
     <script>
+        const { parseCSV, toObjects, csvStringify } = Util;
+
         // --- pure ---
         // 遞迴排序鍵名（陣列順序不動）
         function sortKeys(v) {
@@ -241,6 +254,151 @@
             const out = mode === 'min' ? JSON.stringify(v) : mode === 'check' ? '' : JSON.stringify(v, null, indent);
             return { ok: true, text: out, value: v };
         }
+
+        // ---------- 格式轉換 ----------
+        // JSON → YAML。字串只在「會被誤讀」時才加雙引號（空字串、像數字 / 布林 / null / 日期、含 : # 或前後空白、換行…）
+        const yamlNeedsQuote = (s) => s === '' || /^\s|\s$|[\n\r\t]/.test(s) || /^[-?:,\[\]{}#&*!|>'"%@`]/.test(s) || /: |:$| #/.test(s)
+            || /^(null|~|true|false|yes|no|on|off|y|n)$/i.test(s) || /^[-+]?(\d[\d_.,]*|\.\d+)([eE][-+]?\d+)?$/.test(s) || /^0[xob]/i.test(s) || /^\d{4}-\d{2}-\d{2}/.test(s);
+        const yamlStr = (s) => (yamlNeedsQuote(s) ? JSON.stringify(s) : s);
+        const yamlScalar = (v) => (v === null ? 'null' : typeof v === 'string' ? yamlStr(v) : String(v));
+        const isLeaf = (v) => v === null || typeof v !== 'object' || (Array.isArray(v) ? !v.length : !Object.keys(v).length);
+        const yamlInline = (v) => (v !== null && typeof v === 'object' ? (Array.isArray(v) ? '[]' : '{}') : yamlScalar(v));
+        function yamlLines(v, ind) {
+            const pad = ' '.repeat(ind), out = [];
+            if (Array.isArray(v)) {
+                for (const x of v) {
+                    if (isLeaf(x)) out.push(pad + '- ' + yamlInline(x));
+                    else { const sub = yamlLines(x, ind + 2); sub[0] = pad + '- ' + sub[0].slice(ind + 2); out.push(...sub); }
+                }
+            } else {
+                for (const [k, x] of Object.entries(v)) {
+                    const key = /[:#]/.test(k) || yamlNeedsQuote(k) ? JSON.stringify(k) : k;
+                    if (isLeaf(x)) out.push(`${pad}${key}: ${yamlInline(x)}`);
+                    else { out.push(`${pad}${key}:`); out.push(...yamlLines(x, ind + 2)); }
+                }
+            }
+            return out;
+        }
+        const jsonToYaml = (v) => (isLeaf(v) ? yamlInline(v) : yamlLines(v, 0).join('\n'));
+
+        // YAML → JSON 值。支援常用子集：區塊的 map / list、巢狀、行內 [a, b] / {a: 1}、單雙引號字串、註解、null / 布林 / 數字。
+        // 不支援（會明確報錯）：多行文字 | >、錨點 & * 與標籤 !、多份文件
+        function parseYaml(text) {
+            const lines = [], src = String(text).replace(/\r\n?/g, '\n').split('\n');
+            const strip = (l) => { let q = ''; for (let i = 0; i < l.length; i++) { const c = l[i]; if (q) { if (c === '\\' && q === '"') i++; else if (c === q) q = ''; } else if (c === '"' || c === "'") { if (i === 0 || /[\s:\-\[{,]/.test(l[i - 1])) q = c; } else if (c === '#' && (i === 0 || /\s/.test(l[i - 1]))) return l.slice(0, i); } return l; };
+            let seenDoc = false;
+            src.forEach((l, i) => {
+                if (/^---\s*$/.test(l)) { if (seenDoc || lines.length) throw new Error(`第 ${i + 1} 行：不支援多份 YAML 文件（---）`); seenDoc = true; return; }
+                if (/^\.\.\.\s*$/.test(l)) return;
+                const s = strip(l).replace(/\s+$/, ''); if (!s.trim()) return;
+                if (/\t/.test(/^\s*/.exec(s)[0])) throw new Error(`第 ${i + 1} 行：縮排不能使用 Tab`);
+                lines.push({ ind: /^ */.exec(s)[0].length, t: s.trim(), n: i + 1 });
+            });
+            if (!lines.length) return null;
+            let pos = 0;
+            const fail = (ln, msg) => { throw new Error(`第 ${ln.n} 行：${msg}`); };
+            const isSeq = (t) => t === '-' || t.startsWith('- ');
+
+            // 以引號開頭的字串：回傳 [字串, 結束後的索引]
+            function quoted(s, i, ln) {
+                const q = s[i]; let j = i + 1, out = '';
+                if (q === '"') {
+                    for (; j < s.length; j++) {
+                        if (s[j] === '\\') { j++; if (s[j] === undefined) break; out += '\\' + s[j]; } else if (s[j] === '"') { try { return [JSON.parse('"' + out + '"'), j + 1]; } catch (e) { fail(ln, '雙引號字串裡有不合法的跳脫'); } } else out += s[j];
+                    }
+                } else {
+                    for (; j < s.length; j++) { if (s[j] === "'") { if (s[j + 1] === "'") { out += "'"; j++; } else return [out, j + 1]; } else out += s[j]; }
+                }
+                return fail(ln, '引號沒有結束');
+            }
+            function plain(s, ln) {
+                if (s === '' || s === '~' || /^null$/i.test(s)) return null;
+                if (/^(true|false)$/i.test(s)) return s.toLowerCase() === 'true';
+                if (/^[-+]?(0|[1-9]\d*)(\.\d+)?([eE][-+]?\d+)?$/.test(s) || /^[-+]?\.\d+$/.test(s)) return Number(s);   // 0123 這類前導 0 當字串，避免電話號碼被吃掉
+                if (/^[&*!]/.test(s)) fail(ln, '不支援錨點、別名與標籤（& * !）');
+                if (/^[|>][+-]?\d*$/.test(s)) fail(ln, '不支援多行文字（| 或 >），請改用雙引號與 \\n');
+                return s;
+            }
+            function flow(s, ln) {
+                let i = 0;
+                const ws = () => { while (i < s.length && /\s/.test(s[i])) i++; };
+                function val() {
+                    ws(); const c = s[i];
+                    if (c === '[') { i++; const a = []; ws(); if (s[i] === ']') { i++; return a; } for (; ;) { a.push(val()); ws(); if (s[i] === ',') { i++; ws(); if (s[i] === ']') { i++; return a; } continue; } if (s[i] === ']') { i++; return a; } fail(ln, '行內陣列缺少逗號或 ]'); } }
+                    if (c === '{') {
+                        i++; const o = {}; ws(); if (s[i] === '}') { i++; return o; }
+                        for (; ;) {
+                            ws(); let k; if (s[i] === '"' || s[i] === "'") { [k, i] = quoted(s, i, ln); } else { const m = /^[^:,{}\[\]]+/.exec(s.slice(i)); if (!m) fail(ln, '行內物件的鍵不合法'); k = m[0].trim(); i += m[0].length; }
+                            ws(); if (s[i] !== ':') fail(ln, '行內物件缺少 :'); i++; o[k] = val(); ws();
+                            if (s[i] === ',') { i++; ws(); if (s[i] === '}') { i++; return o; } continue; } if (s[i] === '}') { i++; return o; } fail(ln, '行內物件缺少逗號或 }');
+                        }
+                    }
+                    if (c === '"' || c === "'") { const [str, e] = quoted(s, i, ln); i = e; return str; }
+                    const m = /^[^,\]\}]*/.exec(s.slice(i)); i += m[0].length; return plain(m[0].trim(), ln);
+                }
+                const v = val(); ws(); if (i < s.length) fail(ln, '行內集合後面有多餘內容'); return v;
+            }
+            function scalar(s, ln) {
+                if (s[0] === '[' || s[0] === '{') return flow(s, ln);
+                if (s[0] === '"' || s[0] === "'") { const [str, e] = quoted(s, 0, ln); if (s.slice(e).trim()) fail(ln, '字串後面有多餘內容'); return str; }
+                return plain(s, ln);
+            }
+            // 把「key: rest」切開；不是鍵值行回傳 null
+            function splitKey(t, ln) {
+                if (isSeq(t) || t[0] === '[' || t[0] === '{') return null;
+                if (t[0] === '"' || t[0] === "'") { const [k, e] = quoted(t, 0, ln); const m = /^\s*:(\s+(.*))?$/.exec(t.slice(e)); return m ? { key: k, rest: (m[2] || '').trim() } : null; }
+                const m = /^(.*?):(?:\s+(.*))?$/.exec(t); if (!m) return null;
+                return { key: m[1].trim(), rest: (m[2] || '').trim() };
+            }
+            function block(ind) {
+                const ln = lines[pos];
+                if (isSeq(ln.t)) return seq(ln.ind);
+                if (splitKey(ln.t, ln)) return map(ln.ind);
+                pos++; return scalar(ln.t, ln);
+            }
+            function seq(ind) {
+                const arr = [];
+                while (pos < lines.length && lines[pos].ind === ind && isSeq(lines[pos].t)) {
+                    const ln = lines[pos], rest = ln.t.slice(1).trim();
+                    if (!rest) { pos++; arr.push(pos < lines.length && lines[pos].ind > ind ? block(lines[pos].ind) : null); }
+                    else if (isSeq(rest) || splitKey(rest, ln)) { lines[pos] = { ind: ind + (ln.t.length - rest.length), t: rest, n: ln.n }; arr.push(block(lines[pos].ind)); }
+                    else { pos++; arr.push(scalar(rest, ln)); }
+                }
+                if (pos < lines.length && lines[pos].ind > ind) fail(lines[pos], '縮排與上一行不一致');
+                return arr;
+            }
+            function map(ind) {
+                const obj = {};
+                while (pos < lines.length && lines[pos].ind === ind) {
+                    const ln = lines[pos], kv = splitKey(ln.t, ln);
+                    if (!kv) { if (isSeq(ln.t)) break; fail(ln, '這一行不是「鍵: 值」格式'); }
+                    if (Object.prototype.hasOwnProperty.call(obj, kv.key)) fail(ln, `鍵重複：${kv.key}`);
+                    pos++;
+                    if (kv.rest === '') obj[kv.key] = pos < lines.length && lines[pos].ind > ind ? block(lines[pos].ind) : (pos < lines.length && lines[pos].ind === ind && isSeq(lines[pos].t) ? seq(ind) : null);
+                    else obj[kv.key] = scalar(kv.rest, ln);
+                }
+                if (pos < lines.length && lines[pos].ind > ind) fail(lines[pos], '縮排與上一行不一致');
+                return obj;
+            }
+            const v = block(lines[0].ind);
+            if (pos < lines.length) fail(lines[pos], '多餘的內容或縮排不一致');
+            return v;
+        }
+
+        // JSON（物件陣列）→ CSV：標題 = 所有物件鍵的聯集（依出現順序）；巢狀物件 / 陣列以 JSON 字串放進欄位
+        function jsonToCsv(v) {
+            if (!Array.isArray(v) || !v.length || !v.every(o => o && typeof o === 'object' && !Array.isArray(o))) throw new Error('轉成 CSV 需要「物件陣列」，例如 [{"name":"A","age":1}, …]');
+            const header = [...new Set(v.flatMap(o => Object.keys(o)))];
+            const cell = (x) => (x === undefined || x === null ? '' : typeof x === 'object' ? JSON.stringify(x) : x);
+            return csvStringify(header, v.map(o => header.map(k => cell(o[k]))));
+        }
+        // CSV → JSON（物件陣列）：第一列當標題；若沒有逗號但有 Tab 就用 Tab 分隔
+        function csvToJson(text) {
+            const delim = !text.split('\n', 1)[0].includes(',') && text.split('\n', 1)[0].includes('\t') ? '\t' : ',';
+            const rows = parseCSV(text, delim);
+            if (rows.length < 1) throw new Error('沒有資料');
+            return toObjects(rows[0], rows.slice(1));
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -307,6 +465,24 @@
             $('#outText').hidden = tree; $('#outTree').hidden = !tree;
             $('#viewText').setAttribute('aria-pressed', !tree); $('#viewTree').setAttribute('aria-pressed', tree);
         }
+
+        // 轉換：from 讀輸入、to 產生輸出文字；結果當作純文字顯示（轉成 JSON 時另有樹狀）
+        function convert(from, to, label) {
+            const text = $('#in').value;
+            if (!text.trim()) { setStatus('請先貼上要轉換的內容', 'err'); $('#outCard').hidden = true; return; }
+            try {
+                const value = from(text), out = to(value);
+                result = out; $('#outCard').hidden = false; $('#outText').textContent = out;
+                const tree = $('#outTree'); tree.replaceChildren();
+                if (out.trimStart()[0] === '{' || out.trimStart()[0] === '[') { try { tree.append(buildTree(JSON.parse(out))); } catch (e) { /* 不是 JSON 就不畫樹 */ } }
+                view(false); setStatus(`✓ ${label} 完成`, 'ok');
+            } catch (e) { $('#outCard').hidden = true; setStatus(`✗ ${label} 失敗：${e.message}`, 'err'); }
+        }
+        const parseJsonStrict = (t) => { const r = formatJSON(t, { mode: 'check' }); if (!r.ok) throw new Error(`輸入不是有效的 JSON：${r.hint || r.message}${r.line ? `（第 ${r.line} 行）` : ''}`); return r.value; };
+        $('#toYaml').onclick = () => convert(parseJsonStrict, jsonToYaml, 'JSON → YAML');
+        $('#toCsv').onclick = () => convert(parseJsonStrict, jsonToCsv, 'JSON → CSV');
+        $('#yamlToJson').onclick = () => convert(parseYaml, (v) => JSON.stringify(v, null, 2), 'YAML → JSON');
+        $('#csvToJson').onclick = () => convert(csvToJson, (v) => JSON.stringify(v, null, 2), 'CSV → JSON');
 
         $('#pretty').onclick = () => run('pretty');
         $('#min').onclick = () => run('min');

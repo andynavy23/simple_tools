@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="終極井字棋：9 個小井字棋組成大棋盤，你下在哪一格，對手就得去對應的小棋盤。本機雙人或建立房間連線對戰。">
+    <meta property="og:title" content="終極井字棋" />
+    <meta property="og:description" content="9 個小棋盤組成的井字棋，本機雙人或連線對戰。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/ultimate-ttt.html" />
+    <title>終極井字棋</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        :root {
+            --wrap-w: 560px;
+            --x: #0a84ff;
+            --o: #ff9f0a;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .row input {
+            flex: 1 1 130px;
+        }
+
+        .status {
+            text-align: center;
+            font-weight: 700;
+            font-size: 18px;
+            margin-bottom: 12px;
+            min-height: 1.6em;
+        }
+
+        .x {
+            color: var(--x);
+        }
+
+        .o {
+            color: var(--o);
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .sb {
+            position: relative;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2px;
+            padding: 4px;
+            border-radius: 12px;
+            background: var(--fill);
+            opacity: .55;
+        }
+
+        .sb.active {
+            opacity: 1;
+            box-shadow: 0 0 0 3px var(--ok, #30d158);
+        }
+
+        .sb.done {
+            opacity: 1;
+        }
+
+        .c {
+            aspect-ratio: 1;
+            padding: 0;
+            font-size: clamp(14px, 5vw, 24px);
+            font-weight: 800;
+            border-radius: 8px;
+            background: var(--card, #fff);
+            min-width: 0;
+        }
+
+        .c:disabled {
+            opacity: 1;
+            cursor: default;
+        }
+
+        .c.last {
+            outline: 2px solid var(--ok, #30d158);
+        }
+
+        .big {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            border-radius: 12px;
+            font-size: clamp(48px, 16vw, 90px);
+            font-weight: 800;
+            background: color-mix(in srgb, var(--bg) 78%, transparent);
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>終極井字棋</h1>
+        <p class="sub">你下在小棋盤的哪一格，對手就必須下在大棋盤的對應位置。先在大棋盤連成一線的人獲勝。</p>
+
+        <div class="card" id="menu">
+            <div class="row"><button class="primary" id="local">本機雙人</button></div>
+            <div class="row"><input id="nick" maxlength="10" placeholder="連線暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+            <div class="row">
+                <button id="host">建立房間</button>
+                <input id="joinId" placeholder="貼上房號" aria-label="房號">
+                <button id="join">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+        </div>
+
+        <div class="card" id="game" hidden>
+            <div class="status" id="status" role="status"></div>
+            <div id="board"></div>
+            <div class="row" style="justify-content:center;margin-top:14px">
+                <button class="primary" id="again" hidden>再來一局</button>
+                <button id="copy" hidden>複製邀請連結</button>
+                <button id="leave">離開</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- pure ---
+        const LINES = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
+        // 9 格中誰連成一線（只看 1 / 2；3 = 平手的小棋盤，不算任何一方）
+        const lineWinner = (a) => { for (const [x, y, z] of LINES) if (a[x] && a[x] <= 2 && a[x] === a[y] && a[x] === a[z]) return a[x]; return 0; };
+
+        // state：cells[b][c]（b = 小棋盤、c = 小棋盤內的格），small[b]（0 進行中 / 1 / 2 / 3 平手），next（必須下的小棋盤，-1 = 任選）
+        function newGame(first = 1) { return { cells: Array.from({ length: 9 }, () => new Array(9).fill(0)), small: new Array(9).fill(0), turn: first, next: -1, winner: 0, draw: false, last: null }; }
+
+        function canPlay(s, who, b, c) {
+            return !s.winner && !s.draw && who === s.turn && Number.isInteger(b) && Number.isInteger(c) && b >= 0 && b < 9 && c >= 0 && c < 9
+                && s.small[b] === 0 && s.cells[b][c] === 0 && (s.next === -1 || s.next === b);
+        }
+        // 合法就落子並回傳 true
+        function play(s, who, b, c) {
+            if (!canPlay(s, who, b, c)) return false;
+            s.cells[b][c] = who; s.last = [b, c];
+            const w = lineWinner(s.cells[b]);
+            if (w) s.small[b] = w; else if (s.cells[b].every(v => v)) s.small[b] = 3;
+            const big = lineWinner(s.small);
+            if (big) s.winner = big;
+            else if (s.small.every(v => v)) s.draw = true;                  // 全部分出勝負仍沒有連線：平手
+            s.next = s.small[c] === 0 ? c : -1;                            // 對應的小棋盤已結束：對手任選
+            if (!s.winner && !s.draw) s.turn = who === 1 ? 2 : 1;
+            return true;
+        }
+
+        function validState(s) {
+            const okCell = (v) => v === 0 || v === 1 || v === 2;
+            return !!s && Array.isArray(s.cells) && s.cells.length === 9 && s.cells.every(r => Array.isArray(r) && r.length === 9 && r.every(okCell))
+                && Array.isArray(s.small) && s.small.length === 9 && s.small.every(v => Number.isInteger(v) && v >= 0 && v <= 3)
+                && (s.turn === 1 || s.turn === 2) && Number.isInteger(s.next) && s.next >= -1 && s.next <= 8 && (s.winner === 0 || s.winner === 1 || s.winner === 2) && typeof s.draw === 'boolean'
+                && (s.last === null || (Array.isArray(s.last) && s.last.length === 2 && s.last.every(v => Number.isInteger(v) && v >= 0 && v < 9)));
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let mode = 'menu', S = null, room = null, myPlayer = 0, names = ['', ''], firstNext = 1, hostId = '';
+        const MARK = ['', 'X', 'O'];
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#local', '#host', '#join', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+
+        function build() {
+            $('#board').replaceChildren(...Array.from({ length: 9 }, (_, b) => {
+                const sb = document.createElement('div'); sb.className = 'sb';
+                for (let c = 0; c < 9; c++) { const k = document.createElement('button'); k.className = 'c'; k.setAttribute('aria-label', `第 ${b + 1} 區第 ${c + 1} 格`); k.onclick = () => onCell(b, c); sb.append(k); }
+                return sb;
+            }));
+        }
+
+        function render() {
+            if (!S) return;
+            const myTurn = mode === 'local' || S.turn === myPlayer, over = S.winner || S.draw;
+            [...$('#board').children].forEach((sb, b) => {
+                const active = !over && myTurn && S.small[b] === 0 && (S.next === -1 || S.next === b);
+                sb.className = 'sb' + (active ? ' active' : '') + (S.small[b] ? ' done' : '');
+                sb.querySelector('.big')?.remove();
+                [...sb.querySelectorAll('.c')].forEach((k, c) => {
+                    const v = S.cells[b][c];
+                    k.textContent = MARK[v]; k.className = 'c' + (v ? ' ' + 'xo'[v - 1] : '') + (S.last && S.last[0] === b && S.last[1] === c ? ' last' : '');
+                    k.disabled = !active || v !== 0 || (mode === 'host' && (!room || room.players.length < 2));
+                });
+                if (S.small[b]) { const big = document.createElement('div'); big.className = 'big' + (S.small[b] <= 2 ? ' ' + 'xo'[S.small[b] - 1] : ''); big.textContent = S.small[b] === 3 ? '＝' : MARK[S.small[b]]; sb.append(big); }
+            });
+            const who = (p) => (mode === 'local' ? MARK[p] : (names[p - 1] || MARK[p]));
+            const mk = (p) => `<b class="${'xo'[p - 1]}">${MARK[p]}</b>`;
+            let text;
+            if (S.winner) text = `${mk(S.winner)} ${who(S.winner)} 獲勝！`;
+            else if (S.draw) text = '平手';
+            else if (mode === 'host' && room && room.players.length < 2) text = '等待玩家加入…';
+            else text = mode === 'local' ? `輪到 ${mk(S.turn)}${S.next === -1 ? '（任選小棋盤）' : `（第 ${S.next + 1} 區）`}` : (S.turn === myPlayer ? `${mk(S.turn)} 輪到你了${S.next === -1 ? '（任選小棋盤）' : `（第 ${S.next + 1} 區）`}` : `${mk(S.turn)} 輪到 ${who(S.turn)}`);
+            $('#status').innerHTML = text;
+            $('#again').hidden = !((S.winner || S.draw) && (mode === 'local' || mode === 'host'));
+            $('#copy').hidden = mode !== 'host';
+        }
+        const show = (screen) => { $('#menu').hidden = screen !== 'menu'; $('#game').hidden = screen !== 'game'; };
+
+        function startLocal() { mode = 'local'; S = newGame(1); firstNext = 2; build(); show('game'); render(); }
+
+        const readNick = () => { const n = $('#nick').value.trim(); if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; } return n; };
+        const onNetError = (err, message) => { netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } };
+        function publish() { render(); if (mode === 'host' && room) room.broadcast({ type: 'STATE', s: S, names }); }
+
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: 2,
+                onReady(r) { mode = 'host'; myPlayer = 1; hostId = r.id; names = [nick, '']; history.replaceState('', document.title, location.pathname + '#' + r.id); S = newGame(1); firstNext = 2; build(); show('game'); render(); },
+                onJoin(p) { names = [nick, p.nick]; S = newGame(1); firstNext = 2; publish(); },
+                onLeave() { names = [nick, '']; S = newGame(1); firstNext = 2; publish(); },
+                // 房主是 X（1）、成員是 O（2）：成員送來的一律當作 O 的一步，由 play() 驗證輪次與位置
+                onMessage(p, d) { if (d && d.type === 'MOVE' && play(S, 2, d.b, d.c)) publish(); },
+                onError: onNetError,
+            });
+        }
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.join(id, {
+                nick,
+                onJoined() { mode = 'guest'; myPlayer = 2; build(); show('game'); $('#status').textContent = '已加入，等待房主…'; },
+                onMessage(d) {
+                    if (!d || d.type !== 'STATE' || !validState(d.s)) return;
+                    S = d.s;
+                    if (Array.isArray(d.names) && d.names.length === 2 && d.names.every(n => typeof n === 'string' && n.length <= 12)) names = d.names;
+                    render();
+                },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (mode === 'guest') { alert('房主已離開，遊戲結束'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+
+        function onCell(b, c) {
+            if (mode === 'local') { if (play(S, S.turn, b, c)) render(); }
+            else if (mode === 'host') { if (play(S, 1, b, c)) publish(); }
+            else if (mode === 'guest' && room && S && canPlay(S, myPlayer, b, c)) room.send({ type: 'MOVE', b, c });
+        }
+
+        $('#local').onclick = startLocal; $('#host').onclick = hostRoom; $('#join').onclick = joinRoom;
+        $('#again').onclick = () => { S = newGame(firstNext); firstNext = firstNext === 1 ? 2 : 1; if (mode === 'host') publish(); else render(); };
+        $('#copy').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copy'), url, () => prompt('請手動複製邀請連結：', url)); };
+        $('#leave').onclick = () => location.reload();
+        if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+        show('menu');
+    </script>
+</body>
+
+</html>

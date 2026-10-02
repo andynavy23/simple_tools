@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="輪值表：貼上名單，依每天、每週或每月輪流排出值日、值班或報告順序，可跳過週末並複製成文字。">
+    <meta property="og:title" content="輪值表" />
+    <meta property="og:description" content="名單輪流排班，一鍵複製。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/duty-roster.html" />
+    <title>輪值表</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <style>
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .li.today {
+            background: var(--fill);
+            border-radius: 10px;
+        }
+
+        .li .wd {
+            width: 28px;
+            color: var(--muted);
+        }
+
+        .li.we .wd {
+            color: var(--bad, #ff453a);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>輪值表</h1>
+        <p class="sub">值日、值班、報告順序、倒垃圾……按名單輪流排下去。</p>
+
+        <div class="card">
+            <label for="names">名單（一行一個，或用逗號分隔）</label>
+            <textarea id="names" placeholder="小明&#10;小華&#10;小美"></textarea>
+            <div class="row">
+                <span><label for="start">起始日期</label><input id="start" type="date"></span>
+                <span><label for="period">輪換週期</label><select id="period"><option value="day">每天</option><option value="week">每週</option><option value="biweek">每兩週</option><option value="month">每月</option></select></span>
+                <span><label for="count">排幾期</label><input id="count" type="number" min="1" max="120" value="14" style="width:80px"></span>
+                <span><label for="offset">從第幾位開始</label><input id="offset" type="number" min="1" value="1" style="width:80px"></span>
+            </div>
+            <div class="row" style="margin-top:10px">
+                <label style="margin:0;font-weight:400"><input type="checkbox" id="skipWe"> 每天輪換時跳過週六日</label>
+                <button id="shuffle">隨機打亂名單順序</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>輪值表 <span class="muted" id="cnt" style="font-weight:400;font-size:14px"></span></h2>
+            <div id="out"></div>
+            <div class="row" style="margin-top:12px"><button class="primary" id="copy">複製成文字</button></div>
+            <p class="note" id="tally"></p>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, day, parseNames, shuffle, copyWithFeedback } = Util;
+
+        // --- pure ---
+        const weekdayOf = (ymd) => (day.num(ymd) + 4) % 7;                   // 0 = 週日（1970-01-01 是週四）
+        const isWeekend = (ymd) => [0, 6].includes(weekdayOf(ymd));
+        const nextWeekday = (ymd) => { while (isWeekend(ymd)) ymd = day.shift(ymd, 1); return ymd; };
+        // 排出 count 期：第 i 期輪到 names[(offset + i) % 人數]。月週期以「起始日的日」為準，月底自動取該月最後一天
+        function buildRoster({ names, start, period, count, skipWeekend = false, offset = 0 }) {
+            if (!names.length) return [];
+            const rows = [];
+            let cur = period === 'day' && skipWeekend ? nextWeekday(start) : start;
+            for (let i = 0; i < count; i++) {
+                let date;
+                if (period === 'month') date = day.addMonths(start, i);
+                else if (i === 0) date = cur;
+                else {
+                    date = day.shift(cur, period === 'day' ? 1 : period === 'week' ? 7 : 14);
+                    if (period === 'day' && skipWeekend) date = nextWeekday(date);
+                }
+                cur = date;
+                rows.push({ date, name: names[(((offset + i) % names.length) + names.length) % names.length], wd: weekdayOf(date) });
+            }
+            return rows;
+        }
+        const tally = (rows) => rows.reduce((m, r) => (m[r.name] = (m[r.name] || 0) + 1, m), {});
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const WD = ['日', '一', '二', '三', '四', '五', '六'];
+        const cfg = { names: '', start: day.today(), period: 'week', count: 14, offset: 1, skipWe: false, ...store.get('roster_cfg', {}) };
+        $('#names').value = cfg.names; $('#start').value = cfg.start; $('#period').value = cfg.period; $('#count').value = cfg.count; $('#offset').value = cfg.offset; $('#skipWe').checked = cfg.skipWe;
+        let rows = [];
+
+        function render() {
+            const names = parseNames($('#names').value), count = Math.max(1, Math.min(120, parseInt($('#count').value, 10) || 1));
+            const start = $('#start').value || day.today(), offset = Math.max(1, parseInt($('#offset').value, 10) || 1) - 1;
+            store.set('roster_cfg', { names: $('#names').value, start, period: $('#period').value, count, offset: offset + 1, skipWe: $('#skipWe').checked });
+            rows = buildRoster({ names, start, period: $('#period').value, count, skipWeekend: $('#skipWe').checked, offset });
+            const today = day.today(), upcoming = rows.find(r => r.date >= today);
+            $('#cnt').textContent = names.length ? `（${names.length} 人，${rows.length} 期）` : '';
+            $('#out').replaceChildren(...(names.length ? rows : []).map(r => {
+                const d = document.createElement('div'); d.className = 'li' + (r === upcoming ? ' today' : '') + (r.wd === 0 || r.wd === 6 ? ' we' : '');
+                const t = document.createElement('span'); t.className = 'muted'; t.textContent = r.date;
+                const w = document.createElement('span'); w.className = 'wd'; w.textContent = WD[r.wd];
+                const n = document.createElement('b'); n.textContent = r.name + (r === upcoming ? '（下一個）' : '');
+                d.append(t, w, n); return d;
+            }));
+            const tl = tally(rows);
+            $('#tally').textContent = names.length ? '每人次數：' + Object.entries(tl).map(([k, v]) => `${k} ${v}`).join('、') : '請先輸入名單';
+        }
+
+        ['#names', '#start', '#period', '#count', '#offset', '#skipWe'].forEach(s => { $(s).oninput = $(s).onchange = render; });
+        $('#shuffle').onclick = () => { $('#names').value = shuffle(parseNames($('#names').value)).join('\n'); render(); };
+        $('#copy').onclick = () => copyWithFeedback($('#copy'), rows.map(r => `${r.date}（${WD[r.wd]}）${r.name}`).join('\n'));
+        render();
+    </script>
+</body>
+
+</html>

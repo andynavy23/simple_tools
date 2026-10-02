@@ -102,7 +102,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>倒數日 / 紀念日</h1>
-        <p class="sub">記下重要的日子，也能倒數今天的下班時間。資料只存在這個瀏覽器。</p>
+        <p class="sub">記下重要的日子，也能倒數今天的下班時間；每個日期可附清單（例如出發前的行李）。資料只存在這個瀏覽器。</p>
 
         <div class="card" id="todayCard">
             <h2>今日倒數</h2>
@@ -201,6 +201,21 @@
             lines.push('END:VCALENDAR');
             return lines.map(icsFold).join('\r\n') + '\r\n';
         }
+
+        // ---------- 每個日期附的清單（旅行行李、出發前待辦…）----------
+        // items = [{ t: 文字, done: 布林 }]
+        const MAX_ITEMS = 60;
+        const PACKING = ['護照 / 證件', '簽證 / 機票 / 訂房憑證', '錢包與現金 / 外幣', '信用卡', '手機與充電線', '行動電源', '轉接頭', '網路卡 / 漫遊', '換洗衣物', '盥洗用品', '常備藥品', '雨具', '太陽眼鏡 / 防曬', '拖鞋', '保險資料'];
+        const validItems = (a) => Array.isArray(a) && a.length <= MAX_ITEMS && a.every(x => x && typeof x.t === 'string' && x.t.length >= 1 && x.t.length <= 30 && typeof x.done === 'boolean');
+        const itemProgress = (items) => ({ done: items.filter(x => x.done).length, total: items.length });
+        // 新增一項：去前後空白、不重複、最多 MAX_ITEMS 項；回傳新陣列（不合法就原樣回傳）
+        function addItem(items, text) {
+            const t = String(text).trim().slice(0, 30);
+            return !t || items.length >= MAX_ITEMS || items.some(x => x.t === t) ? items : [...items, { t, done: false }];
+        }
+        const toggleItem = (items, i) => items.map((x, k) => (k === i ? { ...x, done: !x.done } : x));
+        // 把範本中還沒有的項目補進來
+        const mergeTemplate = (items, tpl) => tpl.reduce((acc, t) => addItem(acc, t), items);
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -208,6 +223,33 @@
         let events = Util.store.get(KEY, []);
         const todayStr = day.today;
         $('#date').value = todayStr();
+
+        const openKeys = new Set();                                        // 重畫時保持「清單」展開的狀態
+        const save = () => Util.store.set(KEY, events);
+
+        function checklist(e) {
+            e.items = validItems(e.items) ? e.items : [];
+            const key = e.name + '|' + e.date, { done, total } = itemProgress(e.items);
+            const det = document.createElement('details'); det.open = openKeys.has(key);
+            det.ontoggle = () => { det.open ? openKeys.add(key) : openKeys.delete(key); };
+            const sum = document.createElement('summary'); sum.textContent = total ? `清單 ${done}/${total}` : '清單'; sum.style.cssText = 'cursor:pointer;font-size:13px;color:var(--muted)';
+            det.append(sum);
+            e.items.forEach((x, i) => {
+                const lab = document.createElement('label'); lab.style.cssText = 'display:flex;gap:8px;align-items:center;margin:4px 0;font-size:14px';
+                const cb = Object.assign(document.createElement('input'), { type: 'checkbox', checked: x.done });
+                cb.onchange = () => { e.items = toggleItem(e.items, i); save(); render(); };
+                const del = Object.assign(document.createElement('button'), { className: 'sm', textContent: '×' }); del.setAttribute('aria-label', '移除 ' + x.t); del.style.marginLeft = 'auto';
+                del.onclick = (ev) => { ev.preventDefault(); e.items = e.items.filter((_, k) => k !== i); save(); render(); };
+                lab.append(cb, Object.assign(document.createElement('span'), { textContent: x.t, style: x.done ? 'text-decoration:line-through;opacity:.55' : '' }), del);
+                det.append(lab);
+            });
+            const add = Object.assign(document.createElement('input'), { type: 'text', maxLength: 30, placeholder: '新增項目（Enter）' }); add.setAttribute('aria-label', '新增清單項目'); add.style.cssText = 'width:100%;margin-top:6px';
+            add.onkeydown = (ev) => { if (ev.key === 'Enter' && add.value.trim()) { openKeys.add(key); e.items = addItem(e.items, add.value); save(); render(); } };
+            const tpl = Object.assign(document.createElement('button'), { className: 'sm', textContent: '加入旅行行李範本' }); tpl.style.marginTop = '6px';
+            tpl.onclick = () => { openKeys.add(key); e.items = mergeTemplate(e.items, PACKING); save(); render(); };
+            det.append(add, tpl);
+            return det;
+        }
 
         function render() {
             const box = $('#list');
@@ -221,7 +263,7 @@
                 const name = document.createElement('div'), sub = document.createElement('small');
                 name.className = 'name'; name.textContent = e.name;
                 sub.textContent = d.sub;
-                left.append(name, sub);
+                left.append(name, sub, checklist(e));
                 const right = document.createElement('div');
                 right.className = 'big';
                 right.innerHTML = '<small></small><span></span>';
@@ -230,7 +272,7 @@
                 right.firstChild.style.display = 'block';
                 const del = document.createElement('button');
                 del.className = 'del'; del.textContent = '×'; del.setAttribute('aria-label', '刪除 ' + e.name);
-                del.onclick = () => { events.splice(i, 1); Util.store.set(KEY, events); render(); };
+                del.onclick = () => { events.splice(i, 1); save(); render(); };
                 const wrap = document.createElement('div');
                 wrap.style.cssText = 'display:flex;align-items:center;gap:6px';
                 wrap.append(right, del);
@@ -243,8 +285,8 @@
             const name = $('#name').value.trim(), date = $('#date').value;
             if (!name) { $('#msg').textContent = '請輸入名稱'; return; }
             if (!date) { $('#msg').textContent = '請選擇日期'; return; }
-            events.push({ name, date, yearly: $('#yearly').checked });
-            Util.store.set(KEY, events);
+            events.push({ name, date, yearly: $('#yearly').checked, items: [] });
+            save();
             $('#name').value = ''; $('#msg').textContent = '';
             render();
         };
