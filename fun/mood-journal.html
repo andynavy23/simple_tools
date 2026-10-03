@@ -139,7 +139,8 @@
             <div class="moods" id="moods"></div>
             <label>標籤（可複選）</label>
             <div class="chips" id="chips"></div>
-            <div class="row" style="margin-top:8px"><input id="newTag" maxlength="12" placeholder="自訂標籤（最多 12 字）" aria-label="自訂標籤"><button id="addTag">新增標籤</button></div>
+            <div class="row" style="margin-top:8px"><input id="newTag" maxlength="12" placeholder="自訂標籤（最多 12 字）" aria-label="自訂標籤"><button id="addTag">新增標籤</button><button id="mgTag" aria-expanded="false">管理標籤</button></div>
+            <div id="tagMgr" hidden style="margin-top:8px"></div>
             <label for="text">想說的話</label>
             <textarea id="text" rows="4" maxlength="2000" placeholder="今天發生了什麼？"></textarea>
             <div class="row" style="margin-top:10px">
@@ -201,6 +202,7 @@
         <li>每天最多一筆，最多保存 3650 筆（約十年），超過會捨棄最舊的。</li>
         <li>連續天數：今天還沒記沒關係，從昨天往回算。</li>
         <li>資料只在本機，換手機或清除瀏覽資料前請先用右上角備份。</li>
+        <li>標籤用久了太多？按「管理標籤」可以改名（新名稱已存在就合併）或刪除；刪除時可選擇舊日記要不要一起移除。標籤清單最多 40 個。</li>
         </ul>
     </template>
 
@@ -218,6 +220,23 @@
             const out = [];
             for (const t of a) { const s = typeof t === 'string' ? t.trim() : ''; if (s && s.length <= 12 && !out.includes(s)) out.push(s); }
             return out.slice(0, max);
+        }
+        // ---------- 標籤管理 ----------
+        const MAX_TAGS = 40;                                           // 可選標籤清單的上限
+        const tagUsage = (entries, t) => entries.filter(e => e.tags.includes(t)).length;
+        // 刪除標籤：從選項清單移除；fromEntries 為 true 時也從所有日記移除。回傳新的 { tagList, entries }（不改動輸入）
+        function removeTag(entries, tagList, t, fromEntries) {
+            return {
+                tagList: tagList.filter(x => x !== t),
+                entries: fromEntries ? entries.map(e => (e.tags.includes(t) ? { ...e, tags: e.tags.filter(x => x !== t) } : e)) : entries,
+            };
+        }
+        // 改名：選項清單與所有日記一起改；新名稱若已存在就合併（同一天不會出現兩個相同標籤）。名稱不合法回傳 null
+        function renameTag(entries, tagList, from, to) {
+            const n = cleanTags([to])[0];
+            if (!n || n === from) return null;
+            const swap = (a) => [...new Set(a.map(x => (x === from ? n : x)))];
+            return { tagList: swap(tagList), entries: entries.map(e => (e.tags.includes(from) ? { ...e, tags: swap(e.tags) } : e)), name: n };
         }
         // 驗證並補預設值；不合法回傳 null
         function normEntry(e) {
@@ -288,7 +307,7 @@
 
         const $ = (s) => document.querySelector(s);
         let entries = cleanEntries(store.get('mood_entries', []));
-        let tagList = cleanTags(store.get("mood_tags", DEF_TAGS), 40); if (!tagList.length) tagList = [...DEF_TAGS];
+        let tagList = cleanTags(store.get("mood_tags", DEF_TAGS), MAX_TAGS); if (!tagList.length) tagList = [...DEF_TAGS];
         const today = day.today();
         let curMood = 0, curTags = new Set(), vy, vm;
         { const p = day.parse(today); vy = p.y; vm = p.m; }
@@ -361,9 +380,33 @@
         $('#addTag').onclick = () => {
             const t = cleanTags([$('#newTag').value])[0];
             if (!t) { $('#saveNote').textContent = '標籤需為 1–12 字'; return; }
+            if (!tagList.includes(t) && tagList.length >= MAX_TAGS) { $('#saveNote').textContent = `標籤最多 ${MAX_TAGS} 個，請先在「管理標籤」刪除不用的`; return; }
             if (!tagList.includes(t)) tagList.push(t);
             curTags.add(t); $('#newTag').value = ''; $('#saveNote').textContent = ''; persist(); drawForm();
         };
+        function drawMgr() {
+            const box = $('#tagMgr');
+            box.replaceChildren(...(tagList.length ? tagList.map(t => {
+                const row = document.createElement('div'); row.className = 'li';
+                const n = tagUsage(entries, t);
+                const name = document.createElement('span'); name.textContent = `${t}　`; const cnt = document.createElement('small'); cnt.className = 'muted'; cnt.textContent = n ? `用過 ${n} 天` : '沒用過'; name.append(cnt);
+                const ren = document.createElement('button'); ren.className = 'sm'; ren.textContent = '改名'; ren.setAttribute('aria-label', '改名：' + t);
+                const del = document.createElement('button'); del.className = 'sm'; del.textContent = '刪除'; del.setAttribute('aria-label', '刪除標籤：' + t);
+                ren.onclick = () => {
+                    const to = prompt(`把「${t}」改成（最多 12 字）；若新名稱已存在，會合併成同一個標籤：`, t); if (to === null) return;
+                    const r = renameTag(entries, tagList, t, to);
+                    if (!r) { $('#saveNote').textContent = '新名稱需為 1–12 字，且和原名不同'; return; }
+                    tagList = r.tagList; entries = r.entries; if (curTags.has(t)) { curTags.delete(t); curTags.add(r.name); } persist(); drawForm(); drawMgr(); drawStats(); drawSearch(); drawCal();
+                };
+                del.onclick = () => {
+                    if (!confirm(`刪除標籤「${t}」？`)) return;
+                    const fromEntries = n > 0 && confirm(`有 ${n} 天的日記用過「${t}」。\n按「確定」＝也從這些日記移除；按「取消」＝只從選項移除，舊日記保留這個標籤。`);
+                    const r = removeTag(entries, tagList, t, fromEntries); tagList = r.tagList; entries = r.entries; curTags.delete(t); persist(); drawForm(); drawMgr(); drawStats(); drawSearch(); drawCal();
+                };
+                row.append(name, ren, del); return row;
+            }) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '目前沒有標籤' })]));
+        }
+        $('#mgTag').onclick = () => { const open = $('#tagMgr').hidden; $('#tagMgr').hidden = !open; $('#mgTag').setAttribute('aria-expanded', open); if (open) drawMgr(); };
         const shiftMonth = (n) => { const t = vy * 12 + vm - 1 + n; vy = Math.floor(t / 12); vm = t % 12 + 1; drawCal(); drawStats(); };
         $('#prev').onclick = () => shiftMonth(-1); $('#next').onclick = () => shiftMonth(1);
         $('#q').oninput = drawSearch;
