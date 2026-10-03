@@ -963,6 +963,12 @@ const NL = String.fromCharCode(10);
             for (const q of dyn) assert.ok(match(q + 'x'), `${dir}/${f} 的 st-keys 沒有涵蓋動態鍵前綴「${q}*」`);
         }
     assert.match(index, /<meta name="st-keys" content="\*">/, 'index.html 要宣告全站備份 st-keys="*"');
+    // 儲存失敗要讓使用者知道：直接用 localStorage.setItem 寫入的頁面，必須呼叫 Chrome.storageFailed()（用 Util.store.set 的會自動提示）
+    for (const dir of ['game-assist', 'mini-games', 'fun', 'utils', 'reading'])
+        for (const f of fs.readdirSync(path.join(root, dir)).filter(x => x.endsWith('.html'))) {
+            const h = read(`${dir}/${f}`);
+            if (/localStorage\.setItem\(/.test(h)) assert.ok(/storageFailed/.test(h), `${dir}/${f} 直接寫 localStorage 但沒有呼叫 Chrome.storageFailed()（寫入失敗時要提示使用者）`);
+        }
     for (const m of index.matchAll(/<a class="card" [^>]*>/g)) assert.match(m[0], /data-topic="[^"]+"/, '首頁卡片缺 data-topic：' + m[0]);
     ok('TOOLS.md / README / index 與頁面一致');
 }

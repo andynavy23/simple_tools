@@ -150,7 +150,7 @@
         <div class="eg">貼上「apple | 蘋果」→ 新卡片。第一次按「良好」：1 天後；隔天再按「良好」：3 天後；再按「良好」：8 天後。按「重來」則今天稍後會再出現。</div>
         <h3>小提醒</h3>
         <ul>
-        <li>每天最多出 20 張新卡；重複的正面會被略過。</li>
+        <li>每天最多出 20 張新卡；重複的正面會被略過。最多 30 個詞庫、每個詞庫 3000 張。</li>
         <li>「複製整個詞庫」可備份，資料只存在這個瀏覽器；刪除詞庫會一併刪掉進度。</li>
         </ul>
     </template>
@@ -161,7 +161,8 @@
 
         // --- pure ---
         // 一行一張，分隔符號優先順序：Tab > | > 逗號；沒有分隔符號的行略過；重複的正面略過
-        function parseCards(text, existing = []) {
+        const MAX_DECKS = 30, MAX_CARDS = 3000;
+        function parseCards(text, existing = [], room = Infinity) {
             const seen = new Set(existing.map(c => c.f)), out = [];
             for (const raw of String(text).split(/\r?\n/)) {
                 const line = raw.trim(); if (!line) continue;
@@ -169,6 +170,7 @@
                 if (i <= 0) continue;
                 const f = line.slice(0, i).trim(), b = line.slice(i + 1).trim();
                 if (!f || !b || f.length > 80 || b.length > 200 || seen.has(f)) continue;
+                if (out.length >= room) break;
                 seen.add(f); out.push({ f, b, ease: 2.5, iv: 0, reps: 0, due: '', seen: false });
             }
             return out;
@@ -195,11 +197,16 @@
         }
 
         const validCard = (c) => !!c && typeof c.f === 'string' && typeof c.b === 'string' && Number.isFinite(c.ease) && Number.isInteger(c.iv) && Number.isInteger(c.reps) && typeof c.seen === 'boolean' && typeof c.due === 'string';
+        // 驗證整份資料（還原備份可能寫回壞資料）：非物件 → 空；每個牌組只留合法卡片、最多 MAX_CARDS 張、最多 MAX_DECKS 副
+        function cleanDecks(d) {
+            if (!d || typeof d !== 'object' || Array.isArray(d)) return {};
+            return Object.fromEntries(Object.entries(d).slice(0, MAX_DECKS).map(([k, v]) => [k, Array.isArray(v) ? v.filter(validCard).slice(0, MAX_CARDS) : []]));
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
-        let decks = store.get('flash_decks', {}), cur = store.get('flash_cur', ''), queue = [], flipped = false;
-        for (const k of Object.keys(decks)) decks[k] = Array.isArray(decks[k]) ? decks[k].filter(validCard) : [];
+        let decks = cleanDecks(store.get('flash_decks', {})), cur = store.get('flash_cur', ''), queue = [], flipped = false;
+        if (typeof cur !== 'string') cur = '';
         const save = () => { store.set('flash_decks', decks); store.set('flash_cur', cur); };
         const cards = () => decks[cur] || [];
         const GRADES = [['重來', 0], ['困難', 1], ['良好', 2], ['簡單', 3]];
@@ -250,6 +257,7 @@
 
         $('#addDeck').onclick = () => {
             const n = $('#newName').value.trim();
+            if (n && !decks[n] && Object.keys(decks).length >= MAX_DECKS) { $('#info').textContent = `最多 ${MAX_DECKS} 個詞庫，請先刪除不用的`; return; }
             if (!n || decks[n]) { $('#info').textContent = n ? '已有同名詞庫' : '請輸入詞庫名稱'; return; }
             decks[n] = []; cur = n; $('#newName').value = ''; save(); renderDecks(); buildQueue(); render(); $('#info').textContent = '';
         };
@@ -257,8 +265,8 @@
         $('#deck').onchange = () => { cur = $('#deck').value; save(); buildQueue(); render(); };
         $('#importBtn').onclick = () => {
             if (!cur) { $('#info').textContent = '請先建立詞庫'; return; }
-            const add = parseCards($('#import').value, cards());
-            decks[cur].push(...add); save(); $('#import').value = ''; $('#info').textContent = `加入 ${add.length} 張`;
+            const add = parseCards($('#import').value, cards(), MAX_CARDS - cards().length);
+            decks[cur].push(...add); save(); $('#import').value = ''; $('#info').textContent = `加入 ${add.length} 張` + (cards().length >= MAX_CARDS ? `（每個詞庫最多 ${MAX_CARDS} 張）` : '');
             renderDecks(); buildQueue(); render();
         };
         $('#exportBtn').onclick = () => copyWithFeedback($('#exportBtn'), cards().map(c => `${c.f} | ${c.b}`).join('\n'), () => { $('#info').textContent = '複製失敗，請手動選取'; });

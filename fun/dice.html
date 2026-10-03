@@ -157,7 +157,7 @@
         <li>需要加減點數就填「加成」（可為負數）。</li>
         <li>按「擲骰子」，畫面顯示每顆點數與總和。</li>
         <li>下方長條圖是目前「顆數＋面數」設定的歷史總和分佈，「最近 20 次」列出擲骰紀錄。</li>
-        <li>「清除紀錄」會清掉全部歷史。</li>
+        <li>「清除紀錄」會清掉全部歷史（會先確認）。歷史最多保留最近 500 筆。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">2 顆 d6、加成 +3，擲出 4 與 5 → 顯示「總和 12（9 + 3）」。</div>
@@ -182,11 +182,14 @@
             totals.forEach(v => { t[v] = (t[v] || 0) + 1; });
             return t;
         }
+        // 歷史驗證：欄位要合法、點數在 1..sides、最多留最近 500 筆
+        const MAX_HIST = 500;
+        const cleanHistory = (h) => Array.isArray(h) ? h.filter(x => !!x && Number.isInteger(x.n) && x.n >= 1 && x.n <= 6 && [4, 6, 8, 10, 12, 20, 100].includes(x.sides) && Number.isInteger(x.mod) && Array.isArray(x.faces) && x.faces.length === x.n && x.faces.every(f => Number.isInteger(f) && f >= 1 && f <= x.sides)).slice(-MAX_HIST) : [];
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
         const SIDES = [4, 6, 8, 10, 12, 20, 100];
-        let history = Util.store.get('dice_history', []);        // [{ n, sides, mod, faces, total }]
+        let history = cleanHistory(Util.store.get('dice_history', []));        // [{ n, sides, mod, faces, total }]
         $('#count').replaceChildren(...[1, 2, 3, 4, 5, 6].map(n => new Option(n + ' 顆', n)));
         $('#sides').replaceChildren(...SIDES.map(s => new Option('d' + s, s)));
         $('#count').value = 2; $('#sides').value = 6;
@@ -230,12 +233,12 @@
             const n = +$('#count').value, sides = +$('#sides').value, mod = parseInt($('#mod').value, 10) || 0;
             const faces = roll(n, sides);
             history.push({ n, sides, mod, faces });
-            history = history.slice(-500);
+            history = history.slice(-MAX_HIST);
             Util.store.set('dice_history', history);
             show(faces, mod, true);
             renderStats();
         };
-        $('#clear').onclick = () => { history = []; Util.store.set('dice_history', history); renderStats(); };
+        $('#clear').onclick = () => { if (history.length && !confirm('清除全部擲骰紀錄與統計？')) return; history = []; Util.store.set('dice_history', history); renderStats(); };
         $('#count').onchange = $('#sides').onchange = renderStats;
         renderStats();
     </script>

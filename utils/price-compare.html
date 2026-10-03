@@ -264,7 +264,7 @@
         <ul>
         <li>只有同一類單位（重量、容量、個數）才會互相比較；台斤 = 600 g、兩 = 37.5 g、打 = 12 個。</li>
         <li>稅額與退稅只是估算，實際以統一發票與官方規定為準。</li>
-        <li>資料只在本機，不會上傳。</li>
+        <li>資料只在本機，不會上傳。單價比較最多 30 列、折扣最多 20 層；「全部清空」會重置比較列。</li>
         </ul>
     </template>
 
@@ -344,11 +344,18 @@
             const tax = gross * 5 / 105;
             return { eligible: gross >= REFUND_MIN, tax: rd(tax, mode), refund: rd(tax * (1 - feePct / 100), mode) };
         }
+        // 單價比較列：最多 MAX_ROWS 列；缺欄位 / 型別錯補預設值，單位不明的列丟掉
+        const MAX_ROWS = 30, MAX_LAYERS = 20;
+        function normRows(raw) {
+            const s = (v, d) => (typeof v === 'string' ? v : typeof v === 'number' ? String(v) : d);
+            return (Array.isArray(raw) ? raw : []).filter(r => r && typeof r.unit === 'string' && UNITS[r.unit]).slice(0, MAX_ROWS)
+                .map(r => ({ name: s(r.name, '').slice(0, 20), price: s(r.price, ''), amount: s(r.amount, ''), count: s(r.count, '1'), unit: r.unit }));
+        }
         // 讀取驗證：缺欄位 / 壞資料補預設值
         function normTax(raw) {
             const o = raw && typeof raw === 'object' ? raw : {}, str = (v, d) => typeof v === 'string' ? v : d;
             const kinds = ['zhe', 'off', 'full', 'minus', 'minusx'];
-            const layers = (Array.isArray(o.layers) ? o.layers : []).filter(l => l && kinds.includes(l.kind)).map(l => ({ kind: l.kind, a: str(l.a, ''), b: str(l.b, '') }));
+            const layers = (Array.isArray(o.layers) ? o.layers : []).filter(l => l && kinds.includes(l.kind)).slice(0, MAX_LAYERS).map(l => ({ kind: l.kind, a: str(l.a, ''), b: str(l.b, '') }));
             return {
                 tab: o.tab === 'tax' ? 'tax' : 'cmp', round: ['round', 'floor', 'ceil', 'none'].includes(o.round) ? o.round : 'round',
                 each: !!o.each, orig: str(o.orig, ''), layers: layers.length ? layers : [{ kind: 'zhe', a: '8', b: '' }],
@@ -361,9 +368,11 @@
 
         const $ = (s) => document.querySelector(s);
         const BLANK = () => ({ name: '', price: '', amount: '', count: '1', unit: 'g' });
-        let rows = store.get('price_rows', []).filter(r => r && typeof r.unit === 'string' && UNITS[r.unit]);
+        let rows = normRows(store.get('price_rows', []));
         if (!rows.length) rows = [BLANK(), BLANK()];
-        const save = () => store.set('price_rows', rows);
+        const warn = (t) => Chrome.toast(t, 4000, 'bad');
+        const put = (k, v) => store.set(k, v);
+        const save = () => put('price_rows', rows);
         const money = (n) => (n >= 100 ? n.toFixed(1) : n >= 1 ? n.toFixed(2) : n.toFixed(3)).replace(/\.?0+$/, '');
 
         function field(label, el) { const d = document.createElement('div'), l = document.createElement('label'); l.textContent = label; d.append(l, el); return d; }
@@ -392,13 +401,13 @@
             });
         }
 
-        $('#add').onclick = () => { rows.push(BLANK()); save(); build(); };
+        $('#add').onclick = () => { if (rows.length >= MAX_ROWS) return warn(`最多 ${MAX_ROWS} 列，請先刪除不用的`); rows.push(BLANK()); save(); build(); };
         $('#clear').onclick = () => { rows = [BLANK(), BLANK()]; save(); build(); };
         build();
 
         // ===== 折扣 / 稅額分頁 =====
         const T = normTax(store.get('price_tax', {}));
-        const tsave = () => store.set('price_tax', T);
+        const tsave = () => put('price_tax', T);
         const fm = (n) => n.toLocaleString('en-US', { maximumFractionDigits: 2 });
         const KIND = { zhe: '打折（幾折）', off: '折扣 %', full: '滿額折（滿 A 元打 B 折）', minus: '滿減（滿 A 減 B）', minusx: '每滿 A 減 B' };
         function showTab(t) {
@@ -445,7 +454,7 @@
         $('#round').value = T.round; $('#dEach').checked = T.each; $('#dOrig').value = T.orig; $('#bP').value = T.bP; $('#bN').value = T.bN; $('#bM').value = T.bM;
         $('#tAmt').value = T.tAmt; $('#tMode').value = T.tMode; $('#tRate').value = T.tRate; $('#tCustom').value = T.tCustom; $('#rAmt').value = T.rAmt; $('#rFee').value = T.rFee;
         ['#round', '#dEach', '#dOrig', '#bP', '#bN', '#bM', '#tAmt', '#tMode', '#tRate', '#tCustom', '#rAmt', '#rFee'].forEach(q => { $(q).oninput = $(q).onchange = tcalc; });
-        $('#dAdd').onclick = () => { T.layers.push({ kind: 'zhe', a: '', b: '' }); tsave(); buildLayers(); };
+        $('#dAdd').onclick = () => { if (T.layers.length >= MAX_LAYERS) return warn(`折扣最多 ${MAX_LAYERS} 層`); T.layers.push({ kind: 'zhe', a: '', b: '' }); tsave(); buildLayers(); };
         $('#tabCmp').onclick = () => { showTab('cmp'); tsave(); }; $('#tabTax').onclick = () => { showTab('tax'); tsave(); };
         buildLayers(); showTab(T.tab);
     </script>

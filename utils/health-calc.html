@@ -69,7 +69,7 @@
                 <div><label for="wk">體重 (kg)</label><input id="wk" type="number" min="10" max="400" step="any" placeholder="例如 64.5"></div>
                 <div><label for="wg">目標體重 (kg，選填)</label><input id="wg" type="number" min="10" max="400" step="any"></div>
             </div>
-            <div style="margin-top:10px"><button class="primary" id="wadd">記錄</button> <span class="muted" id="wmsg"></span></div>
+            <div style="margin-top:10px"><button class="primary" id="wadd">記錄</button> <span class="muted" id="wmsg"></span> <button class="sm" id="wclear">清除全部體重紀錄</button></div>
             <div id="wchart" style="margin-top:12px"></div>
             <div id="wstats"></div>
             <div id="wlist"></div>
@@ -102,7 +102,7 @@
         <ul>
         <li>都是估算值，不能取代醫師或營養師的建議。</li>
         <li>趨勢預測至少需要兩個不同日期的紀錄；趨勢若沒朝目標走就不會給日期。</li>
-        <li>資料只存在本機瀏覽器，不會上傳。</li>
+        <li>資料只存在本機瀏覽器，不會上傳。體重紀錄最多保留最近 1,000 天；清單只列最近 8 筆，要全部重來請按「清除全部體重紀錄」。</li>
         </ul>
     </template>
 
@@ -189,7 +189,9 @@
 
         document.querySelectorAll('input, select').forEach(i => { i.oninput = render; });
 
-        let wlog = Util.store.get('weight_log', []).filter(validWeight).sort((a, b) => a.d.localeCompare(b.d));
+        const arr = (v) => (Array.isArray(v) ? v : []);
+        const put = (k, v) => Util.store.set(k, v);
+        let wlog = arr(Util.store.get('weight_log', [])).filter(validWeight).sort((a, b) => a.d.localeCompare(b.d));
         let goal = Util.store.get('weight_goal', null); if (!(goal >= 10 && goal <= 400)) goal = null;
         $('#wd').value = Util.day.today(); if (goal) $('#wg').value = goal;
 
@@ -228,19 +230,20 @@
             $('#wlist').replaceChildren(...[...wlog].reverse().slice(0, 8).map(e => {
                 const r = document.createElement('div'); r.className = 'li';
                 const x = Object.assign(document.createElement('button'), { className: 'sm', textContent: '刪除' }); x.setAttribute('aria-label', '刪除 ' + e.d + ' 的紀錄');
-                x.onclick = () => { wlog = wlog.filter(y => y.d !== e.d); Util.store.set('weight_log', wlog); renderWeight(); };
+                x.onclick = () => { wlog = wlog.filter(y => y.d !== e.d); put('weight_log', wlog); renderWeight(); };
                 r.append(Object.assign(document.createElement('span'), { className: 'muted', textContent: e.d }), Object.assign(document.createElement('b'), { textContent: nf(e.kg, 1) + ' kg' }), x); return r;
             }));
         }
         $('#wadd').onclick = () => {
             const d = $('#wd').value, kg = parseFloat($('#wk').value), g = parseFloat($('#wg').value);
-            goal = g >= 10 && g <= 400 ? g : null; Util.store.set('weight_goal', goal);
+            goal = g >= 10 && g <= 400 ? g : null; put('weight_goal', goal);
             if (!validWeight({ d, kg })) { $('#wmsg').textContent = goal ? '目標已更新；要記錄請輸入日期與 10–400 的體重' : '請輸入日期與 10–400 的體重'; renderWeight(); return; }
-            wlog = addWeight(wlog, d, kg); Util.store.set('weight_log', wlog);
+            wlog = addWeight(wlog, d, kg); put('weight_log', wlog);
             $('#wk').value = ''; $('#wmsg').textContent = '已記錄';
             if (d === wlog[wlog.length - 1].d) { $('#w').value = kg; render(); }       // 最新一筆同步到上面的計算
             renderWeight();
         };
+        $('#wclear').onclick = () => { if (wlog.length && confirm(`確定刪除全部 ${wlog.length} 筆體重紀錄？無法復原（目標體重不受影響）。`)) { wlog = []; put('weight_log', wlog); renderWeight(); } };
         $('#wd').oninput = $('#wk').oninput = $('#wg').oninput = null;
         render(); renderWeight();
     </script>

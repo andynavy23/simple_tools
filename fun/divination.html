@@ -140,7 +140,7 @@
         <h3>怎麼用</h3>
         <ol>
         <li>先心裡默念問題。</li>
-        <li>在「擲筊」分頁按「擲筊」，兩個筊杯翻轉後顯示結果；「清除紀錄」可重設統計。</li>
+        <li>在「擲筊」分頁按「擲筊」，兩個筊杯翻轉後顯示結果；「清除紀錄」（會先確認）可重設統計。</li>
         <li>切到「求籤」分頁按「求一支籤」，會抽出籤等與事業、感情、財運、健康的短句。</li>
         <li>想保存籤詩可按「複製」。</li>
         </ol>
@@ -180,11 +180,14 @@
             for (const [name, w] of LEVELS) { if (r < w) { level = name; break; } r -= w; }
             return { level, items: Object.fromEntries(Object.keys(TEXT).map(k => [k, TEXT[k][level]])) };
         }
+        // 統計驗證：欄位必須是非負整數，否則整份重來
+        const NEW_STATS = () => ({ n: 0, 聖筊: 0, 笑筊: 0, 陰筊: 0, best: 0 });
+        const cleanStats = (s) => s && typeof s === 'object' && ['n', '聖筊', '笑筊', '陰筊', 'best'].every(k => Number.isInteger(s[k]) && s[k] >= 0) ? { n: s.n, 聖筊: s.聖筊, 笑筊: s.笑筊, 陰筊: s.陰筊, best: s.best } : NEW_STATS();
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
         let tab = store.get('divine_tab', 'bwa'); if (!['bwa', 'fortune'].includes(tab)) tab = 'bwa';
-        let stats = store.get('divine_stats', { n: 0, 聖筊: 0, 笑筊: 0, 陰筊: 0, best: 0 }), streak = 0, fortune = null, busy = false;
+        let stats = cleanStats(store.get('divine_stats', null)), streak = 0, fortune = null, busy = false;
 
         function showTab() {
             [...$('#tabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab));
@@ -217,7 +220,7 @@
 
         $('#tabs').onclick = (e) => { if (e.target.dataset.t) { tab = e.target.dataset.t; store.set('divine_tab', tab); showTab(); } };
         $('#throw').onclick = throwIt; $('#draw').onclick = drawIt;
-        $('#resetStats').onclick = () => { stats = { n: 0, 聖筊: 0, 笑筊: 0, 陰筊: 0, best: 0 }; streak = 0; store.set('divine_stats', stats); showStats(); };
+        $('#resetStats').onclick = () => { if (stats.n && !confirm('清除擲筊統計？')) return; stats = NEW_STATS(); streak = 0; store.set('divine_stats', stats); showStats(); };
         $('#copy').onclick = () => copyWithFeedback($('#copy'), `${fortune.level}\n` + Object.entries(fortune.items).map(([k, v]) => `${k}：${v}`).join('\n'));
         showTab(); showStats();
     </script>

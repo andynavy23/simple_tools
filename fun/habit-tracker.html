@@ -250,6 +250,7 @@
                 </select>
                 <span id="countOpts" hidden>目標 <input type="number" id="goal" min="1" value="2000" aria-label="目標值"> <input type="text" id="unit" maxlength="6" value="ml" aria-label="單位"></span>
             </div>
+            <p class="warn" id="addNote"></p>
         </div>
         <div class="card" id="banner" role="alert"></div>
         <div class="card" id="remind">
@@ -280,7 +281,7 @@
         <li>按「今天打卡」，或直接點月曆上的日期（綠色＝已打卡）。</li>
         <li>點已打卡的日期可取消；未來的日期不能打卡。</li>
         <li>用 ‹ › 切換月份補打過去的日子。</li>
-        <li>右上角的 × 會刪除這個習慣與紀錄。</li>
+        <li>右上角的 × 會刪除這個習慣與它的所有紀錄（無法復原）。最多 50 個習慣。</li>
         <li>要記數量：新增前把類型選「數量型」，填目標與單位；卡片上按 +250 / +500，或輸入數字按「加入」（負數可更正）。圓環是當日進度，累計達目標就算完成並計入連續天數；點月曆日期可改看／補記那一天，下方長條圖是最近 7 天。</li>
         <li>提醒：勾「開啟提醒」，選間隔（30 / 60 / 90 / 120 分鐘）與起訖時段，瀏覽器詢問時允許通知。時段內仍有未完成習慣就會提醒；可隨時取消勾選關閉。</li>
         </ol>
@@ -363,6 +364,7 @@
         }
         // 此刻該不該提醒：開啟、在時段內、距上次 ≥ 間隔
         const shouldRemind = (cfg, nowMin, lastMs, nowMs) => !!(cfg && cfg.on && inWindow(nowMin, cfg.from, cfg.to) && nowMs - lastMs >= (+cfg.every || 60) * 60000);
+        const MAX_HABITS = 50;
         // --- /pure ---
 
         const { store } = Util;
@@ -376,7 +378,7 @@ const sel = {};                                      // 數量型：目前操作
         const today = day.today;
         const view = {};                                     // 每個習慣目前看的月份 { id: [y, m] }
 
-        const save = () => store.set(KEY, habits);
+        const save = () => { $('#addNote').textContent = ''; store.set(KEY, habits); };
 
         function render() {
             const list = $('#list'), t = today();
@@ -398,7 +400,7 @@ const sel = {};                                      // 數量型：目前操作
                 btn.onclick = () => { toggle(h, t); };
                 if (isCount) btn.hidden = true;
                 const del = document.createElement('button'); del.className = 'del'; del.textContent = '×'; del.setAttribute('aria-label', '刪除 ' + h.name);
-                del.onclick = () => { if (confirm(`刪除「${h.name}」與它的所有紀錄？`)) { habits = habits.filter(x => x !== h); save(); render(); } };
+                del.onclick = () => { if (confirm(`刪除「${h.name}」與它的所有紀錄？`)) { habits = habits.filter(x => x !== h); delete view[h.id]; delete sel[h.id]; save(); render(); } };
                 head.append(title, btn, del);
                 const extra = isCount ? qtyBlock(h, t) : null;
 
@@ -466,6 +468,7 @@ const sel = {};                                      // 數量型：目前操作
         function add() {
             const name = $('#name').value.trim();
             if (!name) return;
+            if (habits.length >= MAX_HABITS) { $('#addNote').textContent = `最多 ${MAX_HABITS} 個習慣，請先刪除不用的`; return; }
             const raw = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, dates: [] };
             if ($('#kind').value === 'count') {
                 const goal = +$('#goal').value;

@@ -162,6 +162,7 @@
 
         <div class="field"><div id="grid" role="grid" aria-label="地雷區"></div></div>
         <div id="msg" role="status"></div>
+        <button class="sm" id="clearBest" style="margin-top:12px">清除最佳紀錄</button>
     </div>
 
     <template id="help">
@@ -187,7 +188,8 @@
         <li>手機上中、高級盤會自動「放大」（格子 40px），在盤面上拖動即可捲動，不會誤開格；按「回到全貌」可縮成整盤，「放大」可再切回。</li>
         <li>「每日挑戰」每天固定同一個雷區（第一下點擊附近會略有不同）。</li>
         <li>長按插旗時手指不要移動，否則會被當作捲動。</li>
-        </ul>
+            <li>最佳與每日挑戰紀錄存在這台裝置；每日挑戰只保留最近 30 天。可按頁面下方的「清除最佳紀錄」全部清掉（無法復原；頁面會重新載入，進行中的這一局會結束）。</li>
+</ul>
     </template>
 
     <script src="../shared/js/util.js"></script>
@@ -281,9 +283,16 @@
         }
         // 點擊 vs 拖動：位移不超過 10px 且按下不超過 450ms 才算點擊
         function isTap(dx, dy, dt) { return Math.hypot(dx, dy) <= 10 && dt <= 450; }
+        // 每日挑戰鍵 mines_daily_<日期>_<等級> 每天會多一個：只留最近 keep 天，回傳該刪的鍵
+        function staleDailyKeys(keys, today, keep = 30) {
+            const c = new Date(today + 'T00:00:00Z'); c.setUTCDate(c.getUTCDate() - keep);
+            const cut = c.toISOString().slice(0, 10);
+            return keys.filter(k => { const m = /^mines_daily_(\d{4}-\d{2}-\d{2})_/.exec(k); return m && m[1] < cut; });
+        }
         // --- /pure ---
 
         const { rnd, store } = Util;
+        try { staleDailyKeys(Object.keys(localStorage), Util.day.today()).forEach(k => localStorage.removeItem(k)); } catch (e) { }
         const $ = (s) => document.querySelector(s);
         let zoomOn = matchMedia('(pointer:coarse)').matches, down = null;
         let g, start = 0, timer = null, flagMode = false, daily = null, R = rnd;               // daily：日期字串；R：佈雷用的亂數
@@ -381,6 +390,7 @@
         $('#level').onchange = () => newGame(!!daily);
         newGame(false);
     </script>
+<script>document.getElementById('clearBest').onclick=()=>{if(!confirm('清除這個遊戲的所有最佳紀錄？無法復原。頁面會重新載入，正在進行的這一局會結束。'))return;try{const p=['mines_best_', 'mines_daily_'];Object.keys(localStorage).filter(k=>p.some(x=>k.startsWith(x))).forEach(k=>localStorage.removeItem(k));}catch(e){}location.reload();};</script>
 </body>
 
 </html>

@@ -38,7 +38,8 @@
         <li>練習紀錄只存在這台裝置的瀏覽器。</li>
         <li>連線計分：猜對 50–100 分（越快越高），畫的人每有一人猜對得 20 分。</li>
         <li>手機畫畫時，畫板上不會捲動頁面。</li>
-        </ul>
+            <li>單機練習的累計統計存在這台裝置，可按「清除練習統計」歸零（無法復原）。</li>
+</ul>
     </template>
 
     <script src="../shared/js/util.js"></script>
@@ -187,6 +188,7 @@
                 <button class="primary" id="soloBtn">單機開始</button>
             </div>
             <p class="note" id="soloStat"></p>
+            <button class="sm" id="soloClear">清除練習統計</button>
             <h2 style="margin-top:18px">和朋友連線</h2>
             <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
             <div class="row">
@@ -531,13 +533,13 @@
         // ---------- 單機練習：隨機題目 + 計時，自己畫；時間到或按「畫好了」揭曉答案，自評畫得出來 / 畫不出來 ----------
         const SD = { on: false, phase: '', word: '', endsAt: 0, used: new Set(), run: { n: 0, can: 0, cant: 0 }, undo: [] };
         const STAT_KEY = 'drawguess-practice';
-        const soloStat = () => $('#soloStat').textContent = '累計練習：' + fmtPractice(Util.store.get(STAT_KEY, {}));
+        const soloStat = () => $('#soloStat').textContent = '累計練習：' + fmtPractice(Util.store.get(STAT_KEY, {}) || {});
         function soloQuestion() {
             SD.word = pickWord(SD.used, rnd); SD.used.add(SD.word); SD.phase = 'draw'; SD.undo = []; SD.endsAt = Date.now() + $('#soloSecs').value * 1000;
             clearCanvas(); soloView();
         }
         function soloFinish(why) { if (SD.phase !== 'draw') return; SD.phase = 'rate'; drawing = false; soloView(why); }
-        function soloRate(ok) { if (SD.phase !== 'rate') return; SD.run = addPractice(SD.run, ok); Util.store.set(STAT_KEY, addPractice(Util.store.get(STAT_KEY, {}), ok)); soloQuestion(); }
+        function soloRate(ok) { if (SD.phase !== 'rate') return; SD.run = addPractice(SD.run, ok); Util.store.set(STAT_KEY, addPractice(Util.store.get(STAT_KEY, {}) || {}, ok)); soloQuestion(); }
         function soloView(why = '') {
             show('#menu', false); show('#lobby', false); show('#game', true);
             const d = SD.phase === 'draw';
@@ -554,6 +556,7 @@
         $('#doneBtn').onclick = () => soloFinish('');
         $('#canBtn').onclick = () => soloRate(true); $('#cantBtn').onclick = () => soloRate(false);
         $('#undoBtn').onclick = () => { if (SD.on && SD.phase === 'draw' && SD.undo.length) { ctx.putImageData(SD.undo.pop(), 0, 0); lastPt = null; } };
+        $('#soloClear').onclick = () => { if (confirm('清除單機練習的累計統計？無法復原。')) { localStorage.removeItem(STAT_KEY); soloStat(); } };
         soloStat();
 
         // ---------- 事件 ----------

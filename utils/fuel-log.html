@@ -150,7 +150,7 @@
         <h3>小提醒</h3>
         <ul>
         <li>油耗是「加滿到加滿」之間計算：第一次加滿只當起點，它的油量不算進去；中間沒加滿的油量併入下一次加滿。</li>
-        <li>資料只存在本機瀏覽器，不會上傳，請定期匯出。</li>
+        <li>資料只存在本機瀏覽器，不會上傳，請定期匯出。最多 5,000 筆；刪掉任何一筆後，油耗會依剩下的紀錄重新計算。</li>
         </ul>
     </template>
 
@@ -159,6 +159,7 @@
         const { store, day, statRow, rnd, download } = Util;
 
         // --- pure ---
+        const MAX_ENTRIES = 5000;
         const validEntry = (e) => !!e && typeof e.id === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.d) && Number.isFinite(e.odo) && e.odo >= 0 && Number.isFinite(e.l) && e.l > 0 && e.l < 1000 && Number.isFinite(e.p) && e.p >= 0 && e.p < 1000 && typeof e.full === 'boolean';
 
         // 以「加滿到加滿」計算每一段：依里程排序；每個加滿點和前一個加滿點之間，油量 = 之間（含此次）所有加油量；里程 = 兩點里程差
@@ -190,8 +191,9 @@
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
-        let entries = store.get('fuel_entries', []).filter(validEntry);
-        const save = () => store.set('fuel_entries', entries);
+        const put = (k, v) => Util.store.set(k, v);
+        let entries = (Array.isArray(store.get('fuel_entries', [])) ? store.get('fuel_entries', []) : []).filter(validEntry);
+        const save = () => put('fuel_entries', entries);
         $('#date').value = day.today();
         const fmt = (n, d = 2) => (Math.round(n * 10 ** d) / 10 ** d).toLocaleString('zh-TW', { maximumFractionDigits: d });
 
@@ -212,6 +214,7 @@
         $('#add').onclick = () => {
             const e = { id: Date.now().toString(36) + rnd(1e6).toString(36), d: $('#date').value, odo: parseFloat($('#odo').value), l: parseFloat($('#liters').value), p: parseFloat($('#price').value || '0'), full: $('#full').checked };
             if (!validEntry(e)) { $('#msg').textContent = '請填入日期、里程、公升（單價可留空）'; return; }
+            if (entries.length >= MAX_ENTRIES) { $('#msg').textContent = `紀錄已達 ${MAX_ENTRIES} 筆上限，請先匯出並刪除舊紀錄`; return; }
             if (entries.some(x => x.odo === e.odo)) { $('#msg').textContent = '這個里程已經有一筆紀錄了'; return; }
             $('#msg').textContent = ''; entries.push(e); save(); $('#odo').value = ''; $('#liters').value = ''; render(); $('#odo').focus();
         };

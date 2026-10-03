@@ -8,6 +8,8 @@
  * 資料備份：頁面若有寫入 localStorage，必須在 <head> 宣告 <meta name="st-keys" content="鍵1,鍵2,前綴_*">（動態鍵用 * 結尾的前綴；
  *   首頁用 content="*" 代表全站）。有宣告就會出現「💾」按鈕，可匯出 / 載入 JSON 備份（換瀏覽器、清除網站資料前先匯出）。
  *   載入時只會寫入符合宣告的鍵（首頁的全站備份例外），並會先讓使用者確認。
+ * 提示訊息：Chrome.toast(文字, 毫秒) 顯示非阻塞的小提示；Chrome.storageFailed() 是「儲存失敗」的標準提示
+ *   （Util.store.set 失敗時會自動呼叫；不用 Util.store 而直接寫 localStorage 的頁面，要在 catch 裡自己呼叫）。
  * 沒有 JS 時退回蘋果風格並跟隨系統明暗（見 theme.css）。
  */
 (function () {
@@ -96,6 +98,8 @@
 .st-help .eg{margin:8px 0;padding:10px 12px;border-radius:var(--radius-sm);background:var(--fill);font-size:14px;white-space:pre-wrap}
 .st-help kbd{padding:1px 6px;border-radius:5px;border:1px solid var(--line);background:var(--fill);font:12px ui-monospace,Menlo,Consolas,monospace}
 .st-help footer{position:sticky;bottom:0;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 16px;background:var(--card);border-top:1px solid var(--line)}
+.st-toast{position:fixed;left:50%;bottom:max(18px,calc(env(safe-area-inset-bottom) + 10px));transform:translateX(-50%);z-index:70;max-width:min(92vw,460px);padding:12px 16px;border-radius:var(--radius-sm);background:var(--text);color:var(--bg);font:14px/1.5 var(--font);box-shadow:0 6px 24px rgba(0,0,0,.35);text-align:center}
+.st-toast.bad{background:var(--bad);color:#fff}
 .st-data p{margin:8px 0}
 .st-data .st-btns{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
 .st-data .st-msg{min-height:1.4em;font-size:14px;margin:8px 0 0}
@@ -154,6 +158,20 @@
         const seen = get('st_help_seen', {}); seen[location.pathname] = 1; set('st_help_seen', seen);
         if (!dlg.open) dlg.showModal();
         dlg.querySelector('.st-body').scrollTop = 0;
+    }
+
+    // ---------- 提示訊息 ----------
+    let toastEl = null, toastTimer = 0, failedAt = 0;
+    function toast(msg, ms = 4000, kind = '') {
+        if (!toastEl) { toastEl = el('div', { class: 'st-toast', role: 'status', 'aria-live': 'polite' }); document.body.append(toastEl); }
+        toastEl.textContent = msg; toastEl.className = 'st-toast ' + kind; toastEl.hidden = false;
+        clearTimeout(toastTimer); toastTimer = setTimeout(() => { toastEl.hidden = true; }, ms);
+    }
+    // 儲存失敗的標準提示（5 秒內不重複顯示）
+    function storageFailed() {
+        const now = Date.now(); if (now - failedAt < 5000) return; failedAt = now;
+        const run = () => toast('儲存失敗：瀏覽器的儲存空間不足或被封鎖，這次的變更重新整理後可能會消失。可以先匯出備份（右上角 💾）或清掉不用的資料。', 7000, 'bad');
+        if (document.body) run(); else document.addEventListener('DOMContentLoaded', run);
     }
 
     // ---------- 資料備份 ----------
@@ -228,5 +246,5 @@
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 
-    window.Chrome = { STYLES, MODES, openHelp, openData, matcher, buildBackup, parseBackup, get style() { return style; }, get mode() { return mode; }, setStyle(v) { style = v; set('st_style', v); apply(); }, setMode(v) { mode = v; set('st_mode', v); apply(); } };
+    window.Chrome = { STYLES, MODES, openHelp, openData, toast, storageFailed, matcher, buildBackup, parseBackup, get style() { return style; }, get mode() { return mode; }, setStyle(v) { style = v; set('st_style', v); apply(); }, setMode(v) { mode = v; set('st_mode', v); apply(); } };
 })();

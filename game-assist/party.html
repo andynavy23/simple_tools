@@ -41,7 +41,8 @@
         <li>單人資料只存在這台裝置的瀏覽器，離開再回來還在；清除瀏覽資料會消失。</li>
         <li>手機畫面下方是切換頁面的導覽列；右下「日誌」可看操作紀錄。</li>
         <li>語音提醒用瀏覽器內建語音，需要裝置有開聲音。</li>
-        </ul>
+            <li>單人存檔在這台裝置：「歸零」與「重置全部」可清空經驗與掉落；掉落明細最多保留最近 5000 筆、紀錄最近 50 則。</li>
+</ul>
     </template>
 
     <script src="../shared/js/util.js"></script>
@@ -759,6 +760,7 @@
         // --- pure ---
         const LOOT_CATS = ['防具', '武器', '捲軸(貴)', '捲軸(廢)', '其他(貴)', '其他(廢)'];
         const EXP_STEPS = [1, 5];
+        const MAX_LOOT = 5000, MAX_LOGS = 50;
         // 經驗：+1% / +5%，封頂在目標；累計各人貢獻
         function expAdd(exp, pid, n) {
             if (!EXP_STEPS.includes(n)) return false;
@@ -779,6 +781,7 @@
         function lootAdd(loot, pid, name, cat) {
             if (!LOOT_CATS.includes(cat)) return false;
             loot.items.push({ type: cat, player: name, time: Date.now() });
+            if (loot.items.length > MAX_LOOT) loot.items.splice(0, loot.items.length - MAX_LOOT);   // 掉落明細只留最近 MAX_LOOT 筆（各人統計次數不受影響）
             if (!loot.playerStats[pid]) loot.playerStats[pid] = {};
             loot.playerStats[pid][cat] = (loot.playerStats[pid][cat] || 0) + 1;
             return true;
@@ -807,6 +810,17 @@
         function survivalExpire(members) { members.forEach(m => { if (m.status === 'Idle') m.status = 'DEAD'; }); }
         function survivalAck(members, pid) { const m = members.find(m => m.id === pid); if (m) m.status = '連線中'; return !!m; }
         function survivalPos(r1, r2, w, h) { return { left: r1 * (w - 120), top: r2 * (h - 300) + 100 }; }
+        // 單人存檔載入驗證：欄位缺漏 / 型別錯誤補預設，明細與日誌截到上限；無法用就回 null
+        function cleanSolo(sv) {
+            if (!sv || typeof sv !== 'object' || !sv.exp || !sv.loot) return null;
+            const obj = (o) => (o && typeof o === 'object' && !Array.isArray(o) ? o : {});
+            const e = obj(sv.exp), l = obj(sv.loot);
+            return {
+                exp: { target: Number.isInteger(e.target) && e.target >= 1 ? e.target : 100, current: Number.isFinite(e.current) ? e.current : 0, contributions: obj(e.contributions), finished: !!e.finished },
+                loot: { items: (Array.isArray(l.items) ? l.items : []).filter(i => i && typeof i.type === 'string').slice(-MAX_LOOT), playerStats: obj(l.playerStats) },
+                logs: (Array.isArray(sv.logs) ? sv.logs : []).filter(x => x && typeof x.msg === 'string').slice(-MAX_LOGS),
+            };
+        }
         // --- /pure ---
 
         // --- 初始化 ---
@@ -830,7 +844,7 @@
                 document.getElementById('nickname').value = input;
             }
             myName = input;
-            localStorage.setItem('artale_v4_name', myName);
+            try { localStorage.setItem('artale_v4_name', myName); } catch (e) { window.Chrome && Chrome.storageFailed(); }
 
             // 介面鎖定並解鎖 Step 2
             document.getElementById('nickname').disabled = true;
@@ -921,7 +935,7 @@
             if (!myName) confirmNickname();
             if (!myName) return;
             solo = true; isCaptain = true; myId = 'solo';
-            try { const sv = JSON.parse(localStorage.getItem(SOLO_KEY)); if (sv && sv.exp && sv.loot) { state.exp = sv.exp; state.loot = sv.loot; state.logs = sv.logs || []; } } catch (e) { }
+            try { const sv = JSON.parse(localStorage.getItem(SOLO_KEY)); const c = cleanSolo(sv); if (c) { state.exp = c.exp; state.loot = c.loot; state.logs = c.logs; } } catch (e) { }
             state.room = { id: 'solo', captain: 'solo', members: [] };
             addMember('solo', myName, 'Captain', '連線中');
             document.getElementById('displayRoomId').innerText = '單人使用（不連線）';
@@ -1020,7 +1034,7 @@
         // --- UI ---
         function updateUI() {
             document.getElementById('memberCount').innerText = state.room.members.length;
-            if (solo) try { localStorage.setItem(SOLO_KEY, JSON.stringify({ exp: state.exp, loot: state.loot, logs: state.logs })); } catch (e) { }
+            if (solo) Util.store.set(SOLO_KEY, { exp: state.exp, loot: state.loot, logs: state.logs });
             const mList = document.getElementById('memberList');
             mList.innerHTML = state.room.members.map(m => `
                 <div class="col-6 col-sm-4">
@@ -1170,7 +1184,7 @@
         function addLog(msg, type = 'success') {
             if (isCaptain) {
                 state.logs.push({ time: Date.now(), msg, type });
-                if (state.logs.length > 50) state.logs.shift();
+                if (state.logs.length > MAX_LOGS) state.logs.shift();
                 broadcastState();
             }
             updateUI();

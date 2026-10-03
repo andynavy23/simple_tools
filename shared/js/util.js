@@ -189,8 +189,10 @@
                 return fallback;
             }
         },
-        set(key, value) {
-            try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch (e) { return false; }
+        // 寫入失敗（空間滿、被封鎖）回傳 false，並自動顯示 chrome.js 的「儲存失敗」提示；quiet 為 true 時不提示（頁面要自己處理時用）
+        set(key, value, quiet = false) {
+            try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+            catch (e) { if (!quiet && root.Chrome && root.Chrome.storageFailed) root.Chrome.storageFailed(); return false; }
         },
     };
 

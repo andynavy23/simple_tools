@@ -169,6 +169,7 @@
                     <input type="number" id="cdS" min="0" max="59" placeholder="秒" aria-label="秒">
                     <button class="primary" id="cdAdd">新增</button>
                 </div>
+                <p class="muted" id="cdNote" style="margin:8px 0 0"></p>
             </div>
             <div id="cdList"></div>
         </div>
@@ -186,7 +187,7 @@
         <h3>怎麼用</h3>
         <ol>
         <li>「碼表」：按「開始」，跑步中按「分圈」，「停止」後可「繼續」，「重置」歸零。最快圈顯示綠色、最慢圈紅色（3 圈以上）。</li>
-        <li>「倒數」：填名稱與時、分、秒，按「新增」；每個倒數可「開始／暫停」「重置」，× 刪除。</li>
+        <li>「倒數」：填名稱與時、分、秒，按「新增」（最多 30 個）；每個倒數可「開始／暫停」「重置」，× 刪除（連同它的計時一起移除）。</li>
         <li>「簡報」：一行一段「名稱 分鐘數」，按「開始」；「下一段」可跳過目前段落。</li>
         </ol>
         <h3>範例</h3>
@@ -213,6 +214,9 @@
         // 分圈：由「累計時間」陣列算出每圈花費
         const lapTimes = (totals) => totals.map((t, i) => t - (i ? totals[i - 1] : 0));
 
+        // 倒數清單驗證（還原備份可能寫回壞資料）：名稱字串 ≤20 字、總長 > 0 且 ≤ 99 小時；最多 MAX_TIMERS 個
+        const MAX_TIMERS = 30;
+        const cleanDefs = (a) => Array.isArray(a) ? a.filter(t => !!t && typeof t.name === 'string' && Number.isFinite(t.total) && t.total > 0 && t.total <= 99 * 3600000).map(t => ({ name: t.name.slice(0, 20), total: Math.round(t.total) })).slice(0, MAX_TIMERS) : [];
         const toMs = (h, m, s) => ((+h || 0) * 3600 + (+m || 0) * 60 + (+s || 0)) * 1000;
 
         // 簡報流程：每行「名稱 分鐘」。回傳 { segs: [{name, ms}], errors: [行號] }；分鐘數需 > 0 且 ≤ 600，最多 30 段
@@ -316,8 +320,8 @@
         $('#prReset').onclick = () => { clearInterval(pr.timer); pr = { segs: [], run: false, start: 0, acc: 0, warned: -1, ended: -1, timer: 0, cur: -1 }; $('#prRun').hidden = true; $('#prGo').textContent = '開始'; $('#prSkip').disabled = true; $('#prErr').textContent = ''; };
 
         // ---------- 倒數 ----------
-        let timers = Util.store.get('timers_defs', []).map(t => ({ ...t, left: t.total, endAt: 0, running: false, done: false }));
-        const saveDefs = () => Util.store.set('timers_defs', timers.map(({ name, total }) => ({ name, total })));
+        let timers = cleanDefs(Util.store.get('timers_defs', [])).map(t => ({ ...t, left: t.total, endAt: 0, running: false, done: false }));
+        const saveDefs = () => { $('#cdNote').textContent = ''; Util.store.set('timers_defs', timers.map(({ name, total }) => ({ name, total }))); };
 
         function renderCd() {
             const list = $('#cdList');
@@ -353,6 +357,7 @@
         $('#cdAdd').onclick = () => {
             const total = toMs($('#cdH').value, $('#cdM').value, $('#cdS').value);
             if (total <= 0) return;
+            if (timers.length >= MAX_TIMERS) { $('#cdNote').textContent = `最多 ${MAX_TIMERS} 個倒數，請先刪除不用的`; return; }
             timers.push({ name: $('#cdName').value.trim(), total, left: total, endAt: 0, running: false, done: false });
             $('#cdName').value = '';
             saveDefs(); renderCd();

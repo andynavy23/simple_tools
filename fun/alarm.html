@@ -157,7 +157,7 @@
         <li>要每週重複，就先點選星期（日～六）；<b>都不選＝只響一次</b>，響完自動關閉。</li>
         <li>想要系統通知，勾「同時用系統通知提醒」並允許權限。</li>
         <li>響鈴時按「貪睡 5 分鐘」會新增一個 5 分鐘後的鬧鐘，按「關閉」就停止。</li>
-        <li>清單右側的勾選是開關，「刪除」可移除。最多 30 組。</li>
+        <li>清單右側的勾選是開關，「刪除」可移除。最多 30 組。貪睡產生的鬧鐘響過之後會自動從清單移除。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">時間 07:00、名稱「起床」、重複選「一～五」，按「新增鬧鐘」→ 清單出現 <b>07:00</b>「起床・平日・還有…」。</div>
@@ -206,12 +206,17 @@
             const mins = Math.max(0, Math.ceil((to - from) / 60000)), d = Math.floor(mins / 1440), h = Math.floor(mins % 1440 / 60), m = mins % 60;
             return `還有 ${d ? d + ' 天 ' : ''}${h ? h + ' 小時 ' : ''}${m} 分`.replace(/ 0 分$/, '').trim() || '即將響鈴';
         }
+        // 貪睡鬧鐘（id 以 z 開頭）只響一次，響過或被關掉就不該留在清單；標籤不重複疊加「（貪睡）」，且總長不超過 validAlarm 的 20 字
+        const isSnooze = (a) => a.id.startsWith('z');
+        const dropDoneSnooze = (list) => list.filter(a => !(isSnooze(a) && !a.on));
+        const snoozeLabel = (label) => (label || '鬧鐘').replace(/（貪睡）$/, '').slice(0, 16) + '（貪睡）';
         const daysText = (days) => (!days.length ? '只響一次' : days.length === 7 ? '每天' : days.join() === '1,2,3,4,5' ? '平日' : days.join() === '0,6' ? '週末' : '週' + days.map(d => WEEK[d]).join('、'));
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
-        let alarms = store.get('alarms', []).filter(validAlarm), picked = new Set(), lastKey = '', ringTimer = null, ringing = null, titleTimer = null;
-        const save = () => store.set('alarms', alarms);
+        const rawAlarms = store.get('alarms', []);
+        let alarms = dropDoneSnooze((Array.isArray(rawAlarms) ? rawAlarms : []).filter(validAlarm)), picked = new Set(), lastKey = '', ringTimer = null, ringing = null, titleTimer = null;
+        const save = () => { store.set('alarms', alarms); };
 
         $('#days').replaceChildren(...WEEK.map((w, i) => { const b = Object.assign(document.createElement('button'), { textContent: w }); b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', '週' + w); b.onclick = () => { picked.has(i) ? picked.delete(i) : picked.add(i); b.setAttribute('aria-pressed', picked.has(i)); }; return b; }));
 
@@ -234,13 +239,13 @@
             beepOnce(); clearInterval(ringTimer); ringTimer = setInterval(beepOnce, 1500);
             clearInterval(titleTimer); let on = false; titleTimer = setInterval(() => { document.title = (on = !on) ? '⏰ ' + (a.label || '時間到') : '網頁鬧鐘'; }, 700);
             if ($('#notif').checked && 'Notification' in window && Notification.permission === 'granted') { try { new Notification('⏰ ' + (a.label || '鬧鐘'), { body: a.time }); } catch (e) { } }
-            if (!a.days.length) { a.on = false; save(); render(); }                              // 只響一次的響完就關
+            if (!a.days.length) { if (isSnooze(a)) alarms = alarms.filter(x => x !== a); else a.on = false; save(); render(); }                              // 只響一次的響完就關
         }
         function stopRing() { clearInterval(ringTimer); clearInterval(titleTimer); document.title = '網頁鬧鐘'; $('#ringing').hidden = true; ringing = null; }
         $('#stop').onclick = stopRing;
         $('#snooze').onclick = () => {
             if (!ringing) return; const t = new Date(Date.now() + 5 * 60000);
-            alarms.push({ id: 'z' + Date.now().toString(36) + rnd(1e6).toString(36), time: hhmm(t), label: (ringing.label || '鬧鐘') + '（貪睡）', days: [], on: true }); save(); stopRing(); render();
+            alarms.push({ id: 'z' + Date.now().toString(36) + rnd(1e6).toString(36), time: hhmm(t), label: snoozeLabel(ringing.label), days: [], on: true }); save(); stopRing(); render();
         };
 
         setInterval(() => {

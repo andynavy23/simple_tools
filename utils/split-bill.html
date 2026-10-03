@@ -161,7 +161,7 @@
         <ul>
         <li>已出現在支出紀錄的成員要先刪掉相關支出才能移除。</li>
         <li>除不盡的零頭會由前面的人多負擔 1 分。</li>
-        <li>資料只存在這個瀏覽器；「全部清除」會刪光成員與支出。</li>
+        <li>資料只存在這個瀏覽器；成員最多 30 位、支出最多 500 筆；「全部清除」會刪光成員與支出。</li>
         </ul>
     </template>
 
@@ -211,14 +211,23 @@
             if (roundUp) per = Math.ceil(per / 100) * 100;
             return { tip, total, per, paid: per * n, extra: per * n - total };
         }
+        // 讀取驗證（還原備份也會走這裡）：壞資料略過；支出的付款人 / 分攤者必須都在成員名單內
+        const MAX_PEOPLE = 30, MAX_EXPENSES = 500;
+        function normBill(raw) {
+            const o = raw && typeof raw === 'object' ? raw : {};
+            const people = [...new Set((Array.isArray(o.people) ? o.people : []).filter(p => typeof p === 'string' && p.trim() && p.length <= 30))].slice(0, MAX_PEOPLE);
+            const expenses = (Array.isArray(o.expenses) ? o.expenses : []).filter(e => e && people.includes(e.payer) && Number.isSafeInteger(e.amount) && e.amount > 0
+                && Array.isArray(e.shares) && e.shares.length && e.shares.every(p => people.includes(p))).slice(0, MAX_EXPENSES)
+                .map(e => ({ desc: typeof e.desc === 'string' ? e.desc.slice(0, 40) : '', payer: e.payer, amount: e.amount, shares: [...new Set(e.shares)] }));
+            return { people, expenses };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
         const KEY = 'bill_state';
         const money = (c) => (c / 100).toLocaleString('zh-TW', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
         const { store } = Util;
-        let S = store.get(KEY, null) || { people: [], expenses: [] };
-
+        let S = normBill(store.get(KEY, null));
         const save = () => store.set(KEY, S);
         const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
 
@@ -293,6 +302,7 @@
             const n = $('#pname').value.trim();
             if (!n) return;
             if (S.people.includes(n)) return flash('名字重複了');
+            if (S.people.length >= MAX_PEOPLE) return flash(`成員最多 ${MAX_PEOPLE} 位`);
             S.people.push(n);
             $('#pname').value = '';
             flash('');
@@ -313,7 +323,8 @@
             const amount = toCents($('#amount').value);
             const shares = [...document.querySelectorAll('#shares input:checked')].map(i => i.value);
             if (S.people.length < 2) return flash('請先新增至少 2 位成員');
-            if (!(amount > 0)) return flash('請輸入大於 0 的金額');
+            if (!(amount > 0) || amount >= 1e11) return flash('請輸入大於 0、小於 10 億的金額');
+            if (S.expenses.length >= MAX_EXPENSES) return flash(`支出最多 ${MAX_EXPENSES} 筆，請先清除或刪除舊的`);
             if (!shares.length) return flash('請至少選一位分攤的人');
             S.expenses.push({ desc: $('#desc').value.trim(), payer: $('#payer').value, amount, shares });
             $('#desc').value = ''; $('#amount').value = '';
@@ -323,7 +334,7 @@
         $('#clear').onclick = () => {
             if (!confirm('確定要清除所有成員與支出嗎？')) return;
             S = { people: [], expenses: [] };
-            save(); render();
+            flash(''); save(); render();
         };
         render();
     </script>

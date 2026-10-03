@@ -166,6 +166,7 @@
             <div class="tabs"><button class="sm" data-n="7" aria-pressed="true">近 7 天</button><button class="sm" data-n="30" aria-pressed="false">近 30 天</button></div>
             <div class="chart" id="chart" aria-label="每日專注分鐘"></div>
             <div id="histStats"></div>
+            <div class="row" style="margin-top:10px"><button class="sm" id="clearHist">清除專注紀錄</button></div>
         </div>
 
         <div class="card">
@@ -197,7 +198,7 @@
         <h3>小提醒</h3>
         <ul>
         <li>以結束時間計算，分頁在背景也不會變慢；但<b>頁面需保持開啟</b>，手機鎖屏或關閉分頁可能中斷、也聽不到提示音。</li>
-        <li>只有「專注」完整結束才會計入紀錄，跳過不算。</li>
+        <li>只有「專注」完整結束才會計入紀錄，跳過不算。紀錄只保留最近 400 天；「清除專注紀錄」會清空全部統計，無法復原。</li>
         <li>紀錄只存在這個瀏覽器，保留約 400 天。</li>
         </ul>
     </template>
@@ -247,7 +248,7 @@
         const { store } = Util;
         const today = Util.day.today;
         // 歷史紀錄：舊版只存「今天」的 pomo_stats，第一次載入時併入歷史
-        let hist = cleanHist(store.get('pomo_hist', {}));
+        let hist = trim(cleanHist(store.get('pomo_hist', {})), 400, today(), Util.day.between);
         const old = store.get('pomo_stats', null);
         if (old && /^\d{4}-\d{2}-\d{2}$/.test(old.date) && !hist[old.date] && old.count > 0) hist[old.date] = { count: old.count, minutes: old.minutes };
         const stats = () => hist[today()] || { count: 0, minutes: 0 };
@@ -328,6 +329,8 @@
 
         document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { histDays = +b.dataset.n; document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-pressed', x === b)); renderHist(); }; });
         $('#toggle').onclick = toggle;
+        // 一併移除舊版的 pomo_stats，否則下次載入會被併回歷史
+        $('#clearHist').onclick = () => { if (!confirm('清除所有專注紀錄（圖表、連續天數、今日顆數）？無法復原。')) return; hist = {}; store.set('pomo_hist', hist); try { localStorage.removeItem('pomo_stats'); } catch (e) { } render(); renderHist(); };
         $('#skip').onclick = () => setMode(mode === 'work' ? 'short' : 'work');
         $('#reset').onclick = () => setMode(mode);
         for (const [key, m] of Object.entries(MODES)) {

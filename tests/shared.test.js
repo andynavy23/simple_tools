@@ -285,6 +285,13 @@ const ok = (name) => console.log('ok  ' + name);
         global.localStorage = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
         assert.equal(store.get('a', 1), 1);
         assert.equal(store.set('a', 1), false);                           // 被封鎖 → 不丟錯
+        // 寫入失敗時自動呼叫 Chrome.storageFailed()（quiet 時不呼叫）；沒有 Chrome 時也不丟錯
+        let failed = 0; global.Chrome = { storageFailed() { failed++; } };
+        assert.equal(store.set('a', 1), false); assert.equal(failed, 1);
+        assert.equal(store.set('a', 1, true), false); assert.equal(failed, 1, 'quiet 不提示');
+        delete global.Chrome; assert.equal(store.set('a', 1), false);
+        global.localStorage = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = v; } }; failed = 0; global.Chrome = { storageFailed() { failed++; } };
+        assert.equal(store.set('ok', 1), true); assert.equal(failed, 0, '成功時不提示'); delete global.Chrome;
         // esc / day / statRow
         assert.equal(Util.esc('<a href="x">&\'</a>'), '&lt;a href=&quot;x&quot;&gt;&amp;&#39;&lt;/a&gt;');
         assert.equal(Util.esc(5), '5');

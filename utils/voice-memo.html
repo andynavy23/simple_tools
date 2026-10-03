@@ -133,9 +133,10 @@
             <div class="row">
                 <input id="q" type="search" placeholder="搜尋備忘" aria-label="搜尋備忘">
                 <button id="export">匯出 .txt</button>
+                <button id="clearAll">清除全部備忘</button>
             </div>
             <div id="list"></div>
-            <p class="note" id="empty">還沒有備忘。最多保留 200 筆，超過會刪掉最舊的。</p>
+            <p class="note" id="empty">還沒有備忘。最多保留 200 筆，滿了要先刪除不用的才能再新增。</p>
         </div>
     </div>
 
@@ -164,7 +165,7 @@
         <li><b>隱私：</b>Chrome、Edge、Safari 會把聲音傳到廠商的伺服器辨識，不是完全離線；敏感內容請手動輸入。</li>
         <li>Firefox 等不支援語音辨識，但手動輸入備忘仍可使用。</li>
         <li>辨識需要網路與 HTTPS 網頁。麥克風被拒絕時，到瀏覽器的網站設定重新允許。</li>
-        <li>備忘只存在這台裝置，最多 200 筆；換瀏覽器或清除資料就會消失，重要的請「匯出 .txt」。</li>
+        <li>備忘只存在這台裝置，最多 200 筆（滿了會拒絕新增並保留草稿，請先刪除不用的，或用「清除全部備忘」，清除後無法復原）；換瀏覽器或清除資料就會消失，重要的請「匯出 .txt」。</li>
         </ul>
     </template>
 
@@ -185,6 +186,8 @@
             return raw.filter(m => m && typeof m.text === 'string' && m.text.trim() && Number.isFinite(m.t))
                 .map(m => ({ id: typeof m.id === 'string' && m.id ? m.id : newId(), t: m.t, text: m.text.trim().slice(0, 5000) })).slice(0, MEMO_MAX);
         }
+        // 達上限就拒絕新增（不刪舊的）
+        const memoFull = (list) => list.length >= MEMO_MAX;
         // 新備忘放最前面；超過上限刪最舊的；空白內容原樣回傳
         function addMemo(list, text, t) {
             const s = String(text).trim().slice(0, 5000);
@@ -272,9 +275,14 @@
             if (rec) stop();
             const t = $('#draft').value;
             if (!t.trim()) { setMsg('沒有內容可以儲存。'); return; }
-            items = addMemo(items, t, Date.now()); save(); $('#draft').value = ''; setMsg(''); render();
+            if (memoFull(items)) { setMsg(`已達 ${MEMO_MAX} 筆上限，請先刪除不用的備忘（草稿還在）。`); return; }
+            const before = items;
+            items = addMemo(items, t, Date.now());
+            if (!save()) { items = before; setMsg('備忘沒有存下來，草稿還在；請先「匯出 .txt」並刪除不用的備忘。'); return; }
+            $('#draft').value = ''; setMsg(''); render();
         };
         $('#clearDraft').onclick = () => { if (rec) stop(); $('#draft').value = ''; $('#interim').textContent = ''; setMsg(''); };
+        $('#clearAll').onclick = () => { if (!items.length) { setMsg('沒有備忘可以清除。'); return; } if (!confirm(`清除全部 ${items.length} 筆備忘？無法復原，建議先「匯出 .txt」。`)) return; items = []; save(); setMsg(''); render(); };
         $('#q').oninput = render;
         $('#export').onclick = () => { if (!items.length) { setMsg('沒有備忘可以匯出。'); return; } download(new Blob([memosToText(items)], { type: 'text/plain;charset=utf-8' }), 'voice-memo.txt'); };
         addEventListener('pagehide', () => { if (rec) rec.abort(); });

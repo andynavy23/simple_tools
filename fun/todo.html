@@ -100,7 +100,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>待辦清單</h1>
-        <p class="sub">輸入後按 Enter 新增。到期日可以不填；點文字可以修改，▲▼ 調整同一組內的順序。</p>
+        <p class="sub" id="sub">輸入後按 Enter 新增。到期日可以不填；點文字可以修改，▲▼ 調整同一組內的順序。</p>
 
         <div class="card">
             <div class="row">
@@ -128,7 +128,7 @@
         <li>勾選左側方塊表示完成，會移到「已完成」。</li>
         <li>點文字可修改內容。</li>
         <li>▲▼ 調整同一組內的順序，✕ 刪除。</li>
-        <li>「清除已完成」一次刪除所有已完成項目。</li>
+        <li>「清除已完成」一次刪除所有已完成項目（會先確認）。最多 500 項。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">輸入「繳電費」、到期日選明天 → 出現在「明天」群組，旁邊顯示「明天」；過期後會自動移到紅色的「逾期」群組。</div>
@@ -170,11 +170,14 @@
 
         const validItem = (i) => !!i && typeof i.id === 'string' && typeof i.t === 'string' && i.t.length >= 1 && i.t.length <= 100 && (i.due === '' || /^\d{4}-\d{2}-\d{2}$/.test(i.due)) && typeof i.done === 'boolean';
         const dueLabel = (due, today, between) => { if (!due) return ''; const d = between(today, due); return d === 0 ? '今天' : d === 1 ? '明天' : d === -1 ? '昨天' : d < 0 ? `逾期 ${-d} 天` : `${d} 天後`; };
+        const MAX_ITEMS = 500;
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
-        let items = store.get('todo_items', []).filter(validItem);
-        const save = () => store.set('todo_items', items);
+        const SUB = $('#sub').textContent;
+        const rawItems = store.get('todo_items', []);
+        let items = (Array.isArray(rawItems) ? rawItems : []).filter(validItem).slice(0, MAX_ITEMS);
+        const save = () => { $('#sub').textContent = SUB; store.set('todo_items', items); };
         const today = () => day.today();
 
         function render() {
@@ -203,12 +206,13 @@
         function add() {
             const t = $('#text').value.trim();
             if (!t) { $('#text').focus(); return; }
+            if (items.length >= MAX_ITEMS) { $('#sub').textContent = `⚠ 最多 ${MAX_ITEMS} 項，請先清除已完成或刪除不用的`; return; }
             items.push({ id: Date.now().toString(36) + rnd(1e6).toString(36), t, due: $('#due').value, done: false });
             save(); $('#text').value = ''; $('#text').focus(); render();
         }
         $('#add').onclick = add;
         $('#text').onkeydown = (e) => { if (e.key === 'Enter' && !e.isComposing) add(); };
-        $('#clearDone').onclick = () => { items = items.filter(i => !i.done); save(); render(); };
+        $('#clearDone').onclick = () => { if (!confirm(`清除 ${items.filter(i => i.done).length} 項已完成的待辦？無法復原。`)) return; items = items.filter(i => !i.done); save(); render(); };
         render();
     </script>
 </body>

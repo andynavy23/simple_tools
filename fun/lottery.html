@@ -142,7 +142,7 @@
         <ol>
         <li>在名單框貼上名字（換行、逗號、頓號都可分隔）。</li>
         <li>設定「抽出」人數與「方式」：「直接抽出」或「刮刮樂」（用手指或滑鼠刮開）。</li>
-        <li>預設勾選「已中獎者不再抽」；要重新開始按「重置中獎紀錄」。</li>
+        <li>預設勾選「已中獎者不再抽」；要重新開始按「重置中獎紀錄」（會先確認）。中獎紀錄只保留最近 300 次抽獎。</li>
         <li>按「抽！」，結果顯示在「本次結果」，歷次得獎者會累積在下方。</li>
         <li>要分組：下方選「分成 N 組」或「每組 M 人」，填數量按「分組」。</li>
         </ol>
@@ -177,10 +177,13 @@
             for (let i = 3; i < rgba.length; i += 4 * step) { seen++; if (rgba[i] < 128) clear++; }
             return seen ? clear / seen : 0;
         }
+        // 中獎紀錄驗證：每次抽獎一組名字（字串）；最多留最近 MAX_DRAWS 次
+        const MAX_DRAWS = 300;
+        const cleanWon = (w) => Array.isArray(w) ? w.filter(g => Array.isArray(g)).map(g => g.filter(x => typeof x === 'string')).filter(g => g.length).slice(-MAX_DRAWS) : [];
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
-        let won = store.get('lottery_won', []);                         // [[名字,…], …]（每次抽獎一組）
+        let won = cleanWon(store.get('lottery_won', []));                         // [[名字,…], …]（每次抽獎一組）
         $('#names').value = store.get('lottery_names', '') || store.get('groups_names', '');      // 舊的「隨機分組」名單一併帶過來
 
         const flat = () => won.flat();
@@ -226,7 +229,7 @@
             if (!names.length) { $('#info').textContent = '請先輸入名單'; return; }
             const winners = pick(names, n, $('#excl').checked ? flat() : []);
             if (!winners.length) { $('#info').textContent = '名單裡的人都中過獎了，請按「重置中獎紀錄」'; return; }
-            won.push(winners); store.set('lottery_won', won);
+            won.push(winners); won = cleanWon(won); store.set('lottery_won', won);
             $('#out').replaceChildren(...winners.map(w => prizeCard(w, $('#mode').value === 'scratch')));
             renderLog();
             if (winners.length < n) $('#info').textContent += `（名單不夠，只抽出 ${winners.length} 位）`;
@@ -247,7 +250,7 @@
 
         $('#go').onclick = go;
         $('#gsplit').onclick = groupUp;
-        $('#resetPool').onclick = () => { won = []; store.set('lottery_won', won); $('#out').replaceChildren(); renderLog(); };
+        $('#resetPool').onclick = () => { if (won.length && !confirm('清除所有中獎紀錄？無法復原。')) return; won = []; store.set('lottery_won', won); $('#out').replaceChildren(); renderLog(); };
         $('#names').oninput = () => { store.set('lottery_names', $('#names').value); renderLog(); };
         $('#excl').onchange = renderLog;
         renderLog();

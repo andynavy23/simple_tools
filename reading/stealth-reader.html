@@ -298,6 +298,9 @@
                     <button onclick="clearCache()" class="w-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 py-3 sm:py-1.5 rounded text-xs transition font-medium">
                         <i class="fas fa-trash-alt mr-1"></i> Purge Local Cache (Reset Progress)
                     </button>
+                    <button id="purge-all" onclick="clearAllProgress()" class="w-full mt-2 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 py-3 sm:py-1.5 rounded text-xs transition font-medium">
+                        <i class="fas fa-trash-alt mr-1"></i> Purge All Books' Progress
+                    </button>
                 </div>
             </div>
             
@@ -331,10 +334,21 @@
         <li>每頁固定 40 行，不顯示頁碼，以進度條代替。</li>
         <li>「自動躲避」靠滑鼠離開視窗偵測，手機上不會觸發。</li>
         <li>分頁標題刻意偽裝成 ERP 後台。</li>
-        </ul>
+            <li>每本書的閱讀進度存在這台裝置，最多保留最近 100 本；設定裡可清除目前這本，或「Purge All Books' Progress」清除全部。</li>
+</ul>
     </template>
 
     <script>
+        // --- pure ---
+        // 進度值 "頁碼@時間戳"（parseInt 讀舊格式純頁碼相容）；最多保留 MAX_PROG 本，超過丟掉最舊的（沒時間戳的視為最舊）
+        const MAX_PROG = 100;
+        const progTime = (v) => { const m = /@(\d+)$/.exec(String(v)); return m ? +m[1] : 0; };
+        // entries: [[key, value], ...] → 要刪掉的 key
+        function staleProgress(entries, keep = MAX_PROG) {
+            return [...entries].sort((a, b) => progTime(b[1]) - progTime(a[1])).slice(keep).map(e => e[0]);
+        }
+        // --- /pure ---
+
         // Data State
         let textChunks = [];
         let currentPage = 0;
@@ -393,7 +407,7 @@
                 typing: document.getElementById('cfg-typing').checked,
                 splitTask: document.getElementById('cfg-splittask').checked
             };
-            localStorage.setItem('erp_settings', JSON.stringify(settings));
+            try { localStorage.setItem('erp_settings', JSON.stringify(settings)); } catch (e) { window.Chrome && Chrome.storageFailed(); }
             applySettingsToUI();
             toggleSettings();
             renderCurrentPage(); // Re-render to apply privacy classes
@@ -444,14 +458,24 @@
         function loadProgress() {
             if(!currentFileName) return;
             const saved = localStorage.getItem('erp_prog_' + currentFileName);
-            currentPage = saved ? parseInt(saved, 10) : 0;
+            currentPage = saved ? (parseInt(saved, 10) || 0) : 0;
             validatePage();
         }
 
         function saveProgress() {
             if(!currentFileName) return;
-            localStorage.setItem('erp_prog_' + currentFileName, currentPage);
+            try {
+                localStorage.setItem('erp_prog_' + currentFileName, currentPage + '@' + Date.now());
+                const es = Object.keys(localStorage).filter(k => k.startsWith('erp_prog_')).map(k => [k, localStorage.getItem(k)]);
+                if (es.length > MAX_PROG) staleProgress(es).forEach(k => localStorage.removeItem(k));
+            } catch (e) { window.Chrome && Chrome.storageFailed(); }
             updateChart();
+        }
+
+        function clearAllProgress() {
+            if (!confirm('Delete reading progress of ALL books on this device? This cannot be undone.')) return;
+            Object.keys(localStorage).filter(k => k.startsWith('erp_prog_')).forEach(k => localStorage.removeItem(k));
+            currentPage = 0; updateChart(); renderCurrentPage();
         }
 
         function clearCache() {

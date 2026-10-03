@@ -209,7 +209,7 @@
         <h3>小提醒</h3>
         <ul>
         <li>一般文字至少 4.5:1（AA），大字至少 3:1</li>
-        <li>色票庫最多存 40 色，只存在你的瀏覽器</li>
+        <li>色票庫最多存 100 色，滿了要先刪除才能再存；只存在你的瀏覽器</li>
         <li>色覺模擬是近似值，僅供參考</li>
         </ul>
     </template>
@@ -309,6 +309,9 @@
 
         // 色票庫：驗證本機資料、轉成 CSS 變數（名稱只留英數與連字號，沒有可用字元就用 color-序號）
         const validSwatch = (s) => !!s && typeof s.name === 'string' && s.name.length <= 20 && /^#[0-9a-f]{6}$/.test(s.hex);
+        // 加入色票：同名同色不重複；滿了不收（回傳 null），不偷偷刪最舊的
+        const MAX_SW = 100;
+        const addSwatch = (list, name, hex) => (list.some(s => s.hex === hex && s.name === name) ? list : list.length >= MAX_SW ? null : [...list, { name, hex }]);
         function cssVars(list) {
             const used = new Set();
             const lines = list.map((s, i) => { let k = s.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || `color-${i + 1}`; let n = k, c = 2; while (used.has(n)) n = `${k}-${c++}`; used.add(n); return `  --${n}: ${s.hex};`; });
@@ -396,7 +399,7 @@
         $('#scheme').onchange = renderPalette;
 
         // 色票庫
-        let lib = Util.store.get('color_lib', []).filter(validSwatch);
+        let lib = (Array.isArray(Util.store.get('color_lib', [])) ? Util.store.get('color_lib', []) : []).filter(validSwatch).slice(0, MAX_SW);
         const saveLib = () => Util.store.set('color_lib', lib);
         function renderLib() {
             $('#swList').replaceChildren(...(lib.length ? lib.map((s, i) => {
@@ -411,7 +414,7 @@
             }) : [Object.assign(document.createElement('span'), { className: 'muted', textContent: '還沒有存任何顏色' })]));
             $('#swMsg').textContent = lib.length ? '點色票載入；點右上角 ✕ 刪除' : '';
         }
-        $('#swAdd').onclick = () => { const c = parseColor($('#color').value); if (!c) { $('#swMsg').textContent = '目前的色碼不正確'; return; } const hex = toHex(c); if (lib.some(s => s.hex === hex && s.name === $('#swName').value.trim())) return; lib.push({ name: $('#swName').value.trim(), hex }); lib = lib.slice(-40); saveLib(); $('#swName').value = ''; renderLib(); };
+        $('#swAdd').onclick = () => { const c = parseColor($('#color').value); if (!c) { $('#swMsg').textContent = '目前的色碼不正確'; return; } const hex = toHex(c); const nl = addSwatch(lib, $('#swName').value.trim(), hex); if (nl === lib) return; if (!nl) { $('#swMsg').textContent = `色票庫已滿（${MAX_SW} 色），請先刪除不用的`; return; } lib = nl; saveLib(); $('#swName').value = ''; renderLib(); };
         $('#swCss').onclick = () => Util.copyWithFeedback($('#swCss'), cssVars(lib));
         $('#swClear').onclick = () => { if (lib.length && confirm('確定清空色票庫？')) { lib = []; saveLib(); renderLib(); } };
         renderLib();

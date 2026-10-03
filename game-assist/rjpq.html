@@ -53,7 +53,8 @@
         <li>單人版完全不連線，離線也能用。</li>
         <li>電腦版有「懸浮視窗」可把地圖放在遊戲上方（需 Chrome / Edge 新版）。</li>
         <li>路線總覽會用死路標記做推論，只供參考。</li>
-        </ul>
+            <li>單人標記存在這台裝置，可用「重置全部」清空。</li>
+</ul>
     </template>
 
         <script src="../shared/js/util.js"></script>
@@ -1050,6 +1051,15 @@
                     ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
                     : null;
             }
+            // 單人存檔的標記：只留合法的 {f,d}（f 0–9、d 0–3）且不重複，最多 40 個（10 層 × 4 門）
+            function cleanMarkers(a) {
+                const seen = new Set(), out = [];
+                for (const m of Array.isArray(a) ? a : []) {
+                    if (!m || !Number.isInteger(m.f) || m.f < 0 || m.f > 9 || !Number.isInteger(m.d) || m.d < 0 || m.d > 3) continue;
+                    const k = m.f * 4 + m.d; if (!seen.has(k)) { seen.add(k); out.push({ f: m.f, d: m.d }); }
+                }
+                return out;
+            }
             // --- /pure ---
 
             // === 狀態變數 ===
@@ -1090,7 +1100,7 @@
                 entry.className = `log-entry log-${type}`;
                 entry.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
                 const logPanel = getDoc().getElementById("log-panel");
-                if (logPanel) logPanel.prepend(entry);
+                if (logPanel) { logPanel.prepend(entry); while (logPanel.children.length > 100) logPanel.lastChild.remove(); }
             };
 
             const toggleLog = () => {
@@ -1485,7 +1495,7 @@
                 gameState.slots[0] = { index: 0, nick: myNick, color: myColor, peerId: "solo", isHost: true, connected: true, passMarkers: [], deadEndMarkers: [] };
                 try {
                     const sv = JSON.parse(localStorage.getItem(SOLO_KEY));
-                    if (sv && Array.isArray(sv.passMarkers) && Array.isArray(sv.deadEndMarkers)) Object.assign(gameState.slots[0], { passMarkers: sv.passMarkers, deadEndMarkers: sv.deadEndMarkers });
+                    if (sv && Array.isArray(sv.passMarkers) && Array.isArray(sv.deadEndMarkers)) Object.assign(gameState.slots[0], { passMarkers: cleanMarkers(sv.passMarkers), deadEndMarkers: cleanMarkers(sv.deadEndMarkers) });
                 } catch (e) { }
                 ["btn-host", "btn-join", "join-id", "btn-solo"].forEach((i) => (getDoc().getElementById(i).disabled = true));
                 ["btn-leave", "btn-reset-all", "btn-summary"].forEach((i) => (getDoc().getElementById(i).style.display = "inline-flex"));
@@ -1502,7 +1512,7 @@
 
             function refreshUI() {
                 if (solo && gameState.slots[0]) {
-                    try { localStorage.setItem(SOLO_KEY, JSON.stringify({ passMarkers: gameState.slots[0].passMarkers, deadEndMarkers: gameState.slots[0].deadEndMarkers })); } catch (e) { }
+                    Util.store.set(SOLO_KEY, { passMarkers: gameState.slots[0].passMarkers, deadEndMarkers: gameState.slots[0].deadEndMarkers });
                 }
                 // 更新成員名單
                 const activeSlots = gameState.slots.filter(

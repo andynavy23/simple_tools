@@ -187,7 +187,7 @@
         <ul>
         <li>資料只存在這個瀏覽器，換裝置或清除資料就沒了，重要的可先匯出 .ics</li>
         <li>每年重複的 2/29 在非閏年算 2/28</li>
-        <li>清單每個日期最多 60 項，同名項目不會重複加入</li>
+        <li>清單每個日期最多 60 項，同名項目不會重複加入；日期最多 200 個，過期的請按 × 刪除</li>
         </ul>
     </template>
 
@@ -267,6 +267,8 @@
         const PACKING = ['護照 / 證件', '簽證 / 機票 / 訂房憑證', '錢包與現金 / 外幣', '信用卡', '手機與充電線', '行動電源', '轉接頭', '網路卡 / 漫遊', '換洗衣物', '盥洗用品', '常備藥品', '雨具', '太陽眼鏡 / 防曬', '拖鞋', '保險資料'];
         const validItems = (a) => Array.isArray(a) && a.length <= MAX_ITEMS && a.every(x => x && typeof x.t === 'string' && x.t.length >= 1 && x.t.length <= 30 && typeof x.done === 'boolean');
         const itemProgress = (items) => ({ done: items.filter(x => x.done).length, total: items.length });
+        const MAX_EVENTS = 200;
+        const validEvent = (e) => !!e && typeof e.name === 'string' && e.name.length >= 1 && /^\d{4}-\d{2}-\d{2}$/.test(e.date);
         // 新增一項：去前後空白、不重複、最多 MAX_ITEMS 項；回傳新陣列（不合法就原樣回傳）
         function addItem(items, text) {
             const t = String(text).trim().slice(0, 30);
@@ -279,7 +281,7 @@
 
         const $ = (s) => document.querySelector(s);
         const KEY = 'countdown_events';
-        let events = Util.store.get(KEY, []);
+        let events = (Array.isArray(Util.store.get(KEY, [])) ? Util.store.get(KEY, []) : []).filter(validEvent).slice(0, MAX_EVENTS);
         const todayStr = day.today;
         $('#date').value = todayStr();
 
@@ -344,13 +346,14 @@
             const name = $('#name').value.trim(), date = $('#date').value;
             if (!name) { $('#msg').textContent = '請輸入名稱'; return; }
             if (!date) { $('#msg').textContent = '請選擇日期'; return; }
+            if (events.length >= MAX_EVENTS) { $('#msg').textContent = `最多 ${MAX_EVENTS} 個日期，請先刪除不用的`; return; }
             events.push({ name, date, yearly: $('#yearly').checked, items: [] });
             save();
             $('#name').value = ''; $('#msg').textContent = '';
             render();
         };
         // ---------- 今日倒數 ----------
-        const cfg = Util.store.get('countdown_today', { label: '下班', start: '09:00', end: '18:00' });
+        const cfg = { label: '下班', start: '09:00', end: '18:00', ...(Util.store.get('countdown_today', null) || {}) };
         $('#tLabel').value = cfg.label; $('#tStart').value = cfg.start; $('#tEnd').value = cfg.end;
         function tickToday() {
             const d = new Date(), now = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds(), label = $('#tLabel').value.trim() || '目標';

@@ -154,7 +154,7 @@
                 </div>
                 <p class="note" id="cNote">依難度分數盡量讓每人總分接近，並避免同一人連續做同一件家事。</p>
                 <div id="cOut"></div>
-                <div class="row" style="margin-top:12px"><button class="primary" id="cCopy">複製成文字</button></div>
+                <div class="row" style="margin-top:12px"><button class="primary" id="cCopy">複製成文字</button><button class="sm" id="cReset">清除分配與完成紀錄</button></div>
             </div>
             <div class="card">
                 <h2>完成統計</h2>
@@ -196,7 +196,8 @@
         <li>每月週期以起始日的「日」為準，遇到月底自動取該月最後一天</li>
         <li>名單與設定會記在這個瀏覽器，不會上傳</li>
         <li>家事分配的次數：一週＝每天 7 次、每週 1 次、一次性 1 次（每月的家事不排入一週）；一個月＝每天 30 次、每週 4 次、每月 1 次、一次性 1 次</li>
-        <li>再次按「自動分配」會把已打勾的紀錄存進統計，並以目前的分配表當作「上一輪」</li>
+        <li>再次按「自動分配」會把已打勾的紀錄存進統計，並以目前的分配表當作「上一輪」；完成紀錄最多保留 1,000 筆，「清除分配與完成紀錄」可歸零</li>
+        <li>刪除家事會一併從分配表拿掉；把成員從名單拿掉（離開輸入框後生效）也會移除他的分配</li>
         <li>人員請假時，把名字從名單拿掉或調整「從第幾位開始」再重排</li>
         </ul>
     </template>
@@ -306,10 +307,18 @@
             });
             return lines.join('\n');
         }
+        // 從分配表拿掉符合條件的列（刪家事 / 刪成員後不留殘列）；已打勾完成的先併入紀錄，統計不會少
+        const MAX_CHORES = 60;
+        function dropRows(d, pred) {
+            if (!d.table) return d;
+            const gone = d.table.rows.filter(pred), rows = d.table.rows.filter(r => !pred(r));
+            const log = d.log.concat(gone.filter(r => r.done).map(r => ({ member: r.member, score: r.score, date: r.done, name: r.name }))).slice(-1000);
+            return { ...d, log, table: rows.length ? { ...d.table, rows } : null };
+        }
         // 讀取驗證：壞資料或缺欄位補預設值
         function normChoreData(raw) {
             const o = raw && typeof raw === 'object' ? raw : {}, str = (v) => typeof v === 'string';
-            const chores = (Array.isArray(o.chores) ? o.chores : []).filter(c => c && str(c.name) && c.name).map((c, i) => ({
+            const chores = (Array.isArray(o.chores) ? o.chores : []).filter(c => c && str(c.name) && c.name).slice(0, MAX_CHORES).map((c, i) => ({
                 id: str(c.id) && c.id ? c.id : 'c' + i, name: c.name, freq: FREQ[c.freq] ? c.freq : 'week', score: Math.min(3, Math.max(1, Math.round(+c.score) || 1))
             }));
             const rowOk = (r) => r && str(r.name) && str(r.member) && Number.isFinite(+r.score);
@@ -369,7 +378,7 @@
                 const d = document.createElement('div'); d.className = 'chore';
                 const n = document.createElement('span'); n.className = 'nm'; n.textContent = `${c.name} ・ ${FREQ[c.freq]} ・ ${c.score} 分`;
                 const x = document.createElement('button'); x.textContent = '×'; x.setAttribute('aria-label', '刪除 ' + c.name);
-                x.onclick = () => { cd.chores = cd.chores.filter(y => y !== c); cSave(); cRender(); };
+                x.onclick = () => { cd.chores = cd.chores.filter(y => y !== c); Object.assign(cd, dropRows(cd, r => r.cid === c.id)); cSave(); cRender(); };
                 d.append(n, x); return d;
             }));
             const out = $('#cOut'); out.replaceChildren();
@@ -410,11 +419,14 @@
         }
         $('#cAdd').onclick = () => {
             const name = $('#cName').value.trim(); if (!name) return;
+            if (cd.chores.length >= MAX_CHORES) { $('#cNote').textContent = `家事最多 ${MAX_CHORES} 項，請先刪除不用的。`; return; }
             cd.chores.push({ id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, freq: $('#cFreq').value, score: +$('#cScore').value });
             $('#cName').value = ''; cSave(); cRender();
         };
         $('#cName').onkeydown = (e) => { if (e.key === 'Enter') $('#cAdd').click(); };
         $('#cMembers').oninput = () => { cd.members = $('#cMembers').value; cSave(); };
+        $('#cMembers').onchange = () => { const ms = cMembers(); if (ms.length) { Object.assign(cd, dropRows(cd, r => !ms.includes(r.member))); cSave(); cRender(); } };
+        $('#cReset').onclick = () => { if (confirm('清除目前的分配表與全部完成紀錄（統計歸零）？家事清單與成員保留，無法復原。')) { cd.table = null; cd.log = []; $('#cNote').textContent = ''; cSave(); cRender(); } };
         $('#cPeriod').onchange = () => { cd.period = $('#cPeriod').value; cSave(); };
         $('#cAssign').onclick = cAssign;
         $('#cCopy').onclick = () => cd.table && cd.table.rows.length && copyWithFeedback($('#cCopy'), choresText(cd.table.rows, [...new Set([...cMembers(), ...cd.table.rows.map(r => r.member)])], cd.table.period));

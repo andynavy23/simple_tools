@@ -147,7 +147,8 @@
         <li>技能清單與提醒設定存在這個瀏覽器，下次開啟還在；倒數狀態不會保存，重新整理後全部回到就緒。</li>
         <li>手機第一次要先點過畫面，瀏覽器才允許發出聲音；靜音模式下可能聽不到。</li>
         <li>倒數中請不要切到別的 App 太久，部分手機會暫停背景網頁。</li>
-        </ul>
+            <li>技能最多 30 個，可按每個技能右側的 × 刪除；資料只存在這台裝置。</li>
+</ul>
     </template>
 
     <script src="../shared/js/util.js"></script>
@@ -157,11 +158,14 @@
         const remaining = (now, readyAt) => Math.max(0, readyAt - now);
         // 冷卻進度 0..1（1 = 剛按下去，0 = 已完成）
         const fraction = (now, readyAt, cdMs) => (cdMs > 0 ? Math.min(1, remaining(now, readyAt) / cdMs) : 0);
+        // 載入驗證：非陣列 / 缺欄位 / 秒數不合法的項目丟掉，最多 MAX_SKILLS 個
+        const MAX_SKILLS = 30;
+        const cleanSkills = (a) => (Array.isArray(a) ? a : []).filter(s => s && typeof s.name === 'string' && s.name && s.sec > 0).map(s => ({ name: s.name, sec: +s.sec })).slice(0, MAX_SKILLS);
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
-        let skills = Util.store.get('cd_skills', [{ name: '範例技能', sec: 30 }]).map(s => ({ ...s, readyAt: 0, announced: true }));
-        const opts = Util.store.get('cd_opts', { voice: true, sound: true });
+        let skills = cleanSkills(Util.store.get('cd_skills', [{ name: '範例技能', sec: 30 }])).map(s => ({ ...s, readyAt: 0, announced: true }));
+        const opts = Util.store.get('cd_opts', { voice: true, sound: true }) || {};
         $('#voice').checked = opts.voice; $('#sound').checked = opts.sound;
         const save = () => { Util.store.set('cd_skills', skills.map(({ name, sec }) => ({ name, sec }))); Util.store.set('cd_opts', { voice: $('#voice').checked, sound: $('#sound').checked }); };
 
@@ -210,7 +214,7 @@
 
         function add() {
             const name = $('#name').value.trim(), sec = parseFloat($('#cd').value);
-            if (!name || !(sec > 0)) return;
+            if (!name || !(sec > 0) || skills.length >= MAX_SKILLS) return;
             skills.push({ name, sec, readyAt: 0, announced: true });
             $('#name').value = ''; $('#cd').value = '';
             save(); render();

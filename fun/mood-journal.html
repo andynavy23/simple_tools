@@ -147,6 +147,7 @@
                 <button class="primary" id="save">儲存（覆蓋當天）</button>
                 <button id="append">追加到當天</button>
                 <button id="del">刪除當天</button>
+                <button id="delAll">清除全部日記</button>
             </div>
             <p class="note" id="saveNote"></p>
         </div>
@@ -200,6 +201,7 @@
         <h3>小提醒</h3>
         <ul>
         <li>每天最多一筆，最多保存 3650 筆（約十年），超過會捨棄最舊的。</li>
+        <li>想全部重來？按「清除全部日記」（會先確認，標籤清單保留，無法復原，建議先匯出）。</li>
         <li>連續天數：今天還沒記沒關係，從昨天往回算。</li>
         <li>資料只在本機，換手機或清除瀏覽資料前請先用右上角備份。</li>
         <li>標籤用久了太多？按「管理標籤」可以改名（新名稱已存在就合併）或刪除；刪除時可選擇舊日記要不要一起移除。標籤清單最多 40 個。</li>
@@ -311,7 +313,7 @@
         const today = day.today();
         let curMood = 0, curTags = new Set(), vy, vm;
         { const p = day.parse(today); vy = p.y; vm = p.m; }
-        const persist = () => { store.set('mood_entries', entries); store.set('mood_tags', tagList); };
+        const persist = () => store.set('mood_entries', entries) & store.set('mood_tags', tagList);
         const moodColor = (m) => `color-mix(in srgb, hsl(${(m - 1) * 30}, 70%, 50%) 55%, var(--card))`;
 
         $('#date').value = today; $('#date').max = today;
@@ -337,7 +339,7 @@
             const r = saveEntry(entries, { date: d, mood: curMood, tags: [...curTags], text: $('#text').value }, append);
             if (!r) { $('#saveNote').textContent = '資料不正確'; return; }
             entries = r; tagList = [...new Set([...tagList, ...curTags])];
-            persist(); $('#saveNote').textContent = '已儲存'; loadDate(); drawAll();
+            $('#saveNote').textContent = persist() ? '已儲存' : ''; loadDate(); drawAll();
         }
         function drawCal() {
             $('#monthTitle').textContent = `${vy} 年 ${vm} 月`;
@@ -377,6 +379,8 @@
         $('#save').onclick = () => doSave(false);
         $('#append').onclick = () => doSave(true);
         $('#del').onclick = () => { if (!confirm('刪除這一天的記錄？')) return; entries = removeEntry(entries, $('#date').value); persist(); loadDate(); drawAll(); };
+        // 清除全部日記：不動標籤清單（標籤另有「管理標籤」）
+        $('#delAll').onclick = () => { if (!entries.length || !confirm(`清除全部 ${entries.length} 天的日記？標籤清單會保留。無法復原，建議先匯出。`)) return; entries = []; persist(); loadDate(); drawAll(); };
         $('#addTag').onclick = () => {
             const t = cleanTags([$('#newTag').value])[0];
             if (!t) { $('#saveNote').textContent = '標籤需為 1–12 字'; return; }
