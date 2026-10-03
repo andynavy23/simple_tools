@@ -186,7 +186,7 @@
         </ul>
         <h3>怎麼用</h3>
         <ol>
-        <li>「碼表」：按「開始」，跑步中按「分圈」，「停止」後可「繼續」，「重置」歸零。最快圈顯示綠色、最慢圈紅色（3 圈以上）。</li>
+        <li>「碼表」：按「開始」，跑步中按「分圈」，「停止」後可「繼續」，「重置」歸零。最快圈顯示綠色、最慢圈紅色（3 圈以上）。分圈最多 500 圈，滿了按鈕會顯示「已達 500 圈上限」並停止新增（碼表仍可繼續跑，按「重置」清空）。</li>
         <li>「倒數」：填名稱與時、分、秒，按「新增」（最多 30 個）；每個倒數可「開始／暫停」「重置」，× 刪除（連同它的計時一起移除）。</li>
         <li>「簡報」：一行一段「名稱 分鐘數」，按「開始」；「下一段」可跳過目前段落。</li>
         </ol>
@@ -213,6 +213,11 @@
 
         // 分圈：由「累計時間」陣列算出每圈花費
         const lapTimes = (totals) => totals.map((t, i) => t - (i ? totals[i - 1] : 0));
+
+        // 碼表最多 500 圈：回傳新的累計陣列（已滿就原樣回傳）
+        const MAX_LAPS = 500;
+        const addLap = (totals, t) => totals.length >= MAX_LAPS ? totals : [...totals, t];
+        const lapsFull = (totals) => totals.length >= MAX_LAPS;
 
         // 倒數清單驗證（還原備份可能寫回壞資料）：名稱字串 ≤20 字、總長 > 0 且 ≤ 99 小時；最多 MAX_TIMERS 個
         const MAX_TIMERS = 30;
@@ -276,13 +281,17 @@
             else { swStart = performance.now(); swRun = true; swTick(); }
             $('#swGo').textContent = swRun ? '停止' : '繼續';
             $('#swGo').classList.toggle('primary', !swRun);
-            $('#swLap').disabled = !swRun;
+            $('#swLap').disabled = !swRun || lapsFull(swTotals);
             $('#swTime').textContent = fmtMs(swNow());
         };
-        $('#swLap').onclick = () => { swTotals.push(swNow()); renderLaps(); };
+        $('#swLap').onclick = () => {
+            swTotals = addLap(swTotals, swNow()); renderLaps();
+            const full = lapsFull(swTotals);
+            $('#swLap').disabled = full; $('#swLap').textContent = full ? `已達 ${MAX_LAPS} 圈上限` : '分圈';
+        };
         $('#swReset').onclick = () => {
             swRun = false; swAcc = 0; swTotals = []; cancelAnimationFrame(swRaf);
-            $('#swGo').textContent = '開始'; $('#swGo').classList.add('primary'); $('#swLap').disabled = true;
+            $('#swGo').textContent = '開始'; $('#swGo').classList.add('primary'); $('#swLap').disabled = true; $('#swLap').textContent = '分圈';
             $('#swTime').textContent = fmtMs(0); $('#laps').replaceChildren();
         };
 

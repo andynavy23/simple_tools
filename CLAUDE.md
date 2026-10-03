@@ -51,6 +51,7 @@ node tests/shared.test.js   # 共用模組（記憶體內的假 PeerJS）
 node tests/tools.test.js    # 各工具純邏輯，約 1–1.5 分鐘；順便檢查 TOOLS.md / README / index 與頁面一致
 ```
 
+- **只跑受這次變動影響的測試**：改哪一頁就跑涵蓋那一頁的單元測試與 E2E（`grep -l 頁名 <E2E 資料夾>/e2e_*.mjs`、`node tests/<對應檔>.test.js`），不要每次整套重跑；`tools.test.js`（約 1 分鐘）只在改到它涵蓋的頁面、登錄文件（index / README / TOOLS）或共用檔時才跑；改共用檔（theme.css / chrome.js / util.js / p2p-room.js）才做較大範圍回歸，且只挑受影響的類型。
 - 純邏輯寫在頁面的 `// --- pure ---` 與 `// --- /pure ---` 之間，測試用 `load(file, 'names')` 取出來執行。
 - 單機模式 / 電腦玩家的測試放 `tests/solo-<批次>.test.js`（用 `tests/_load.js` 的 `load`），`tools.test.js` 會自動載入全部 `solo-*.test.js`。
 - 畫面與 P2P 要在真實瀏覽器測（puppeteer-core + Edge，需 `--disable-extensions`，點擊用 DOM `.click()`）；連線工具開多個分頁。

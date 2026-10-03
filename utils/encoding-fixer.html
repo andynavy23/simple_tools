@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="亂碼修復與編碼轉換：自動偵測文字檔編碼（UTF-8 / Big5 / GBK / Shift-JIS…）並另存 UTF-8，或貼上亂碼嘗試逆向還原。">
+    <meta property="og:title" content="亂碼修復 / 編碼轉換" />
+    <meta property="og:description" content="偵測文字檔編碼、轉成 UTF-8；貼上亂碼逆向修復。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/encoding-fixer.html" />
+    <title>亂碼修復 / 編碼轉換</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .tabs button {
+            flex: 1;
+        }
+
+        pre.out {
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin: 8px 0 0;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            max-height: 320px;
+            overflow: auto;
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: 14px;
+        }
+
+        .cand {
+            padding: 10px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .cand:last-child {
+            border-bottom: 0;
+        }
+
+        .cand .why {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .cand .txt {
+            font-size: 17px;
+            overflow-wrap: anywhere;
+            white-space: pre-wrap;
+            margin: 4px 0 6px;
+        }
+
+        .cand.best {
+            border-left: 4px solid var(--ok);
+            padding-left: 10px;
+        }
+
+        .badge {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--ok);
+            border: 1px solid var(--ok);
+            border-radius: 99px;
+            padding: 0 8px;
+            margin-left: 6px;
+        }
+
+        .warn {
+            color: var(--bad);
+            font-size: 14px;
+            margin: 8px 0 0;
+        }
+
+        .ck {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 400;
+            min-height: 44px;
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>亂碼修復 / 編碼轉換</h1>
+        <p class="sub">全部在本機處理，檔案與文字不會上傳，也不會儲存。</p>
+
+        <div class="row tabs" style="margin-bottom:16px">
+            <button id="tabFile" aria-pressed="true">檔案轉碼</button>
+            <button id="tabPaste" aria-pressed="false">貼上亂碼修復</button>
+        </div>
+
+        <div id="paneFile">
+            <div class="card">
+                <label for="file" style="margin-top:0">選擇文字檔（上限 20MB）</label>
+                <input type="file" id="file" aria-label="選擇文字檔">
+                <p class="err warn" id="fileErr"></p>
+                <div id="detect" hidden>
+                    <div class="li"><span class="muted">檔名</span><b id="dName" style="overflow-wrap:anywhere"></b></div>
+                    <div class="li"><span class="muted">偵測編碼</span><b id="dEnc"></b></div>
+                    <div class="li"><span class="muted">信心</span><b id="dConf"></b></div>
+                    <p class="note" id="dWhy"></p>
+                    <p class="note" id="dRank"></p>
+                </div>
+            </div>
+
+            <div class="card" id="convCard" hidden>
+                <h2>轉換設定</h2>
+                <label for="enc" style="margin-top:0">以哪種編碼讀取</label>
+                <select id="enc" style="width:100%"></select>
+                <label for="nLines">預覽前幾行</label>
+                <select id="nLines"><option>10</option><option selected>20</option><option>50</option><option>100</option></select>
+                <pre class="out" id="preview" aria-label="預覽"></pre>
+                <p class="warn" id="badNote"></p>
+                <h2 style="margin-top:16px">另存成 UTF-8</h2>
+                <label class="ck"><input type="checkbox" id="bom"> 加上 BOM（Excel 開啟 CSV 較不易亂碼）</label>
+                <label for="eol">換行</label>
+                <select id="eol"><option value="keep">保持原樣</option><option value="LF">轉成 LF（Linux / macOS）</option><option value="CRLF">轉成 CRLF（Windows）</option></select>
+                <div class="row" style="margin-top:12px"><button class="primary" id="save">下載 UTF-8 檔案</button></div>
+            </div>
+        </div>
+
+        <div id="panePaste" hidden>
+            <div class="card">
+                <label for="mojIn" style="margin-top:0">貼上亂碼文字</label>
+                <textarea id="mojIn" rows="4" maxlength="20000" placeholder="例如 ä¸­æ–‡　或　涓枃" aria-label="亂碼文字"></textarea>
+                <p class="note">原理：把亂碼用「錯誤的編碼」轉回位元組，再用「正確的編碼」讀一次；全部組合都試，依中日文常用字比例排序。</p>
+            </div>
+            <div class="card" id="mojCard" hidden>
+                <div id="mojWarn"></div>
+                <div id="mojOut"></div>
+            </div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>處理文字亂碼的小工具。一個分頁把整個文字檔偵測編碼並轉成 UTF-8；另一個分頁讓你貼上已經亂掉的文字，嘗試逆向還原。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>舊系統匯出的 CSV / TXT 用編輯器打開全是亂碼（多半是 Big5 或 GBK）。</li>
+        <li>網頁、信件、資料庫裡出現 <kbd>ä¸­æ–‡</kbd>、<kbd>涓枃</kbd> 這類文字。</li>
+        <li>要把檔案統一轉成 UTF-8，並決定要不要 BOM、換行用 LF 或 CRLF。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>「檔案轉碼」：選擇文字檔，會自動偵測並顯示理由與信心；預覽不對就改「以哪種編碼讀取」。</li>
+        <li>確認預覽正常後，設定 BOM 與換行，按「下載 UTF-8 檔案」。</li>
+        <li>「貼上亂碼修復」：把亂碼貼進去，下方列出各種還原候選，綠色「最佳」是中日文字元最像正常文字的一個，按「複製」帶走。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">貼上 ä¸­æ–‡
+        → UTF-8 被當成 Windows-1252 讀取
+        → 還原成「中文」</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>偵測順序：BOM、無 BOM 的 UTF-16、嚴格 UTF-8，再比較 Big5 / GBK / Shift-JIS / EUC 等的常用字比例。這是猜測，字數很少的檔案可能誤判，請看預覽並手動改。</li>
+        <li>編碼選單只列出你的瀏覽器支援的項目。上限：檔案 20MB；貼上文字 20000 字。</li>
+        <li>不能修復的類型：資訊已經遺失的亂碼，例如出現 <kbd>�</kbd> 或 <kbd>锟斤拷</kbd>（原始位元組已被取代）；多次連環亂碼只嘗試一層。</li>
+        <li>預覽只看前 N 行，下載時轉換整個檔案；若原檔含無法解讀的位元組，會以 � 取代並提示。</li>
+        <li>隱私與儲存：檔案與文字只在這個分頁處理，不會上傳，也不會存進本機，關閉即清空。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { download, copyWithFeedback } = Util;
+
+        // --- pure ---
+        // 常用字（繁 + 簡）：用來替解碼結果評分，不是完整字表
+        const COMMON = new Set([...'的一是不了人我在有他這中大來上國個到說們為子和你地出道也時年得就那要下以生會自著去之過家學對可她裡後小麼心多天而能好都然沒日於起還發成事只作當想看文無開手十用主行方又如前所本見經頭面公同三已老從動兩長知民樣現分將外但身些與高意進把法此實回二理美點月明其種聲全工己話兒者向情部正名定女問力機給等幾很業最間新什打便位因重被走電四第門相次東政海口使教西再平真聽世氣信北少關並內加化由卻代軍產入先山無五太水萬市眼體別處總才場師書比住員九笑性通目華報立馬命張活難神數件安表原車白應路期叫死常提感金何更反合放做系字吃' +
+            '这来国个说们为时得会着过学对里后么没于还发当无开动两长样现将与进实点种声话儿关并内产军电门东听气万体别处总场师书员华报马张难数应']);
+        const LABELS = ['utf-8', 'utf-16le', 'utf-16be', 'big5', 'gbk', 'gb18030', 'shift_jis', 'euc-jp', 'euc-kr', 'windows-1252', 'iso-8859-1', 'windows-1251', 'windows-1250', 'iso-8859-15', 'windows-874', 'ibm866', 'koi8-r'];
+        // 只列瀏覽器的 TextDecoder 支援的編碼
+        const supportedEncs = (labels = LABELS) => labels.filter(l => { try { new TextDecoder(l); return true; } catch (e) { return false; } });
+        // BOM 偵測：回傳 { enc, len } 或 null
+        function bomOf(b) {
+            if (b.length >= 3 && b[0] === 0xEF && b[1] === 0xBB && b[2] === 0xBF) return { enc: 'utf-8', len: 3 };
+            if (b.length >= 2 && b[0] === 0xFF && b[1] === 0xFE) return { enc: 'utf-16le', len: 2 };
+            if (b.length >= 2 && b[0] === 0xFE && b[1] === 0xFF) return { enc: 'utf-16be', len: 2 };
+            return null;
+        }
+        // 評分：每個字元的平均分數，常用字高、� 與控制字元重扣、拉丁擴充（亂碼常見）小扣
+        function scoreText(s) {
+            let sc = 0, n = 0;
+            for (const ch of s) {
+                const c = ch.codePointAt(0); n++;
+                if (c === 0xFFFD) sc -= 10;
+                else if ((c < 0x20 && c !== 9 && c !== 10 && c !== 13) || (c >= 0x7F && c < 0xA0)) sc -= 5;
+                else if (c < 0x80) sc += 0.3;
+                else if (COMMON.has(ch)) sc += 2;
+                else if (c >= 0x4E00 && c <= 0x9FFF) sc += 0.5;
+                else if (c >= 0x3040 && c <= 0x30FF) sc += 1;
+                else if ((c >= 0x3000 && c <= 0x303F) || (c >= 0xFF00 && c <= 0xFF60) || (c >= 0xFFE0 && c <= 0xFFEF)) sc += 0.8;
+                else if (c >= 0xAC00 && c <= 0xD7AF) sc += 1;
+                else if (c >= 0xE000 && c <= 0xF8FF) sc -= 3;
+                else if (c < 0x250) sc -= 0.3;
+                else if ((c >= 0x3400 && c <= 0x4DBF) || c >= 0x20000) sc -= 1;
+                else if (c >= 0x2000 && c <= 0x206F) sc += 0;
+                else sc -= 0.5;
+            }
+            return n ? sc / n : 0;
+        }
+        const countBad = (s) => { let n = 0; for (const ch of s) if (ch === '�') n++; return n; };
+        // 解碼：去掉開頭 BOM（如果有對應）；非嚴格，無法解讀的位元組變成 �，bad 為其數量
+        function decodeBytes(bytes, enc) {
+            const bom = bomOf(bytes);
+            const skip = bom && bom.enc === enc ? bom.len : 0;
+            const text = new TextDecoder(enc).decode(bytes.subarray(skip));
+            return { text, bad: countBad(text) };
+        }
+        const SAMPLE = 65536;
+        // 偵測編碼：BOM → 無 BOM 的 UTF-16 → 嚴格 UTF-8 → 其他編碼依評分。回傳 { enc, reason, confidence(0–1), ranked }
+        function detectEncoding(bytes) {
+            const b = bomOf(bytes);
+            if (b) return { enc: b.enc, reason: `檔案開頭有 BOM，確定是 ${b.enc.toUpperCase()}`, confidence: 1, ranked: [] };
+            if (!bytes.length) return { enc: 'utf-8', reason: '空檔案', confidence: 0.5, ranked: [] };
+            const head = bytes.subarray(0, Math.min(bytes.length, 4096));
+            let even0 = 0, odd0 = 0;
+            for (let i = 0; i < head.length; i++) if (head[i] === 0) { if (i % 2) odd0++; else even0++; }
+            const half = head.length / 2;
+            if (odd0 > half * 0.3 && even0 < half * 0.05) return { enc: 'utf-16le', reason: '沒有 BOM，但奇數位置有大量 0x00，推測 UTF-16LE', confidence: 0.7, ranked: [] };
+            if (even0 > half * 0.3 && odd0 < half * 0.05) return { enc: 'utf-16be', reason: '沒有 BOM，但偶數位置有大量 0x00，推測 UTF-16BE', confidence: 0.7, ranked: [] };
+            let multi = 0;
+            for (let i = 0; i < bytes.length; i++) if (bytes[i] > 127) multi++;
+            if (!multi) return { enc: 'utf-8', reason: '全部是 ASCII，各種編碼讀出來都一樣，以 UTF-8 處理', confidence: 1, ranked: [] };
+            try { new TextDecoder('utf-8', { fatal: true }).decode(bytes); return { enc: 'utf-8', reason: `嚴格 UTF-8 解碼通過（含 ${multi} 個非 ASCII 位元組），其他編碼幾乎不可能剛好合法`, confidence: 0.95, ranked: [] }; } catch (e) { }
+            const sample = bytes.subarray(0, SAMPLE), ranked = [];
+            for (const enc of supportedEncs(['big5', 'gbk', 'shift_jis', 'euc-jp', 'euc-kr', 'windows-1252'])) {
+                const t = new TextDecoder(enc).decode(sample, { stream: true });
+                ranked.push({ enc, score: scoreText(t), bad: countBad(t), common: [...t].filter(c => COMMON.has(c)).length / Math.max(1, [...t].length) });
+            }
+            ranked.sort((x, y) => y.score - x.score);
+            const [a, c] = ranked;
+            const gap = c ? a.score - c.score : 1;
+            const conf = a.score <= 0.3 ? 0.2 : Math.max(0.3, Math.min(0.9, 0.4 + gap * 0.4));
+            const why = `不是合法 UTF-8；${a.enc} 解碼${a.bad ? `有 ${a.bad} 處無法解讀` : '沒有無法解讀的位元組'}，評分最高（${a.score.toFixed(2)}，常用字 ${Math.round(a.common * 100)}%）`;
+            return { enc: a.enc, reason: why, confidence: conf, ranked };
+        }
+        // 輸出文字：可加 BOM、換行轉換（keep / LF / CRLF）
+        function finalText(text, { bom = false, eol = 'keep' } = {}) {
+            let t = text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+            if (eol === 'LF') t = t.replace(/\r\n|\r/g, '\n');
+            else if (eol === 'CRLF') t = t.replace(/\r\n|\r|\n/g, '\r\n');
+            return (bom ? '﻿' : '') + t;
+        }
+        const previewLines = (text, n) => { const l = text.split(/\r\n|\r|\n/); return l.slice(0, n).join('\n') + (l.length > n ? `\n…（共 ${l.length} 行）` : ''); };
+
+        // ---- 亂碼逆向 ----
+        // windows-1252 的 0x80–0x9F（未定義的五個對應到同編號控制字元，與 WHATWG 一致）
+        const CP1252 = '€\u0081‚ƒ„…†‡ˆ‰Š‹Œ\u008DŽ\u008F\u0090‘’“”•–—˜™š›œ\u009DžŸ';
+        const REV1252 = new Map([...CP1252].map((c, i) => [c, 0x80 + i]));
+        function encSingle(str, label) {
+            const out = [];
+            for (const ch of str) {
+                const c = ch.codePointAt(0);
+                if (label === 'iso-8859-1') { if (c > 0xFF) return null; out.push(c); continue; }
+                if (c < 0x80 || (c >= 0xA0 && c <= 0xFF)) out.push(c);
+                else if (REV1252.has(ch)) out.push(REV1252.get(ch));
+                else return null;
+            }
+            return Uint8Array.from(out);
+        }
+        // 多位元組編碼的反查表：把所有 1–2 位元組組合交給 TextDecoder 解一遍，字元 → 位元組（TextEncoder 只支援 UTF-8，所以用這招）
+        const REVS = {};
+        function revTable(label) {
+            if (REVS[label]) return REVS[label];
+            const d = new TextDecoder(label), m = new Map();
+            for (let b = 0; b < 256; b++) { const s = d.decode(Uint8Array.of(b)); if (s.length === 1 && s !== '�' && !m.has(s)) m.set(s, [b]); }
+            for (let a = 0x81; a <= 0xFE; a++) for (let t = 0x40; t <= 0xFE; t++) {
+                const s = d.decode(Uint8Array.of(a, t));
+                if (s.length === 1 && s !== '�' && !m.has(s)) m.set(s, [a, t]);
+            }
+            return (REVS[label] = m);
+        }
+        // 用 label 編碼成位元組；有字元不在該編碼內回傳 null
+        function encodeWith(str, label) {
+            if (label === 'utf-8') return new TextEncoder().encode(str);
+            if (label === 'windows-1252' || label === 'iso-8859-1') return encSingle(str, label);
+            const rev = revTable(label), out = [];
+            for (const ch of str) { const b = rev.get(ch); if (!b) return null; out.push(...b); }
+            return Uint8Array.from(out);
+        }
+        const WRONG = ['windows-1252', 'iso-8859-1', 'utf-8', 'big5', 'gbk', 'shift_jis', 'euc-kr'];
+        const TRUE_ENC = ['utf-8', 'big5', 'gbk', 'shift_jis', 'euc-jp', 'euc-kr'];
+        const NAME = { 'utf-8': 'UTF-8', big5: 'Big5', gbk: 'GBK', shift_jis: 'Shift_JIS', 'euc-jp': 'EUC-JP', 'euc-kr': 'EUC-KR', 'windows-1252': 'Windows-1252', 'iso-8859-1': 'ISO-8859-1' };
+        // 逆向修復：試所有「正確編碼 X 的位元組被當成 Y 讀」的組合。回傳 { orig, lossy, cands: [{ wrong, right, text, score }] }（依分數排序，best 為 cands[0] 且明顯優於原文才設 best）
+        function repairs(str) {
+            const orig = scoreText(str), lossy = /�|锟斤拷/.test(str), seen = new Set([str]), cands = [];
+            const sup = new Set(supportedEncs());
+            for (const y of WRONG) {
+                if (!sup.has(y) || (y === 'utf-8' && lossy)) continue;
+                let bytes; try { bytes = encodeWith(str, y); } catch (e) { bytes = null; }
+                if (!bytes || !bytes.length) continue;
+                for (const x of TRUE_ENC) {
+                    if (x === y || !sup.has(x)) continue;
+                    let t; try { t = new TextDecoder(x, { fatal: true }).decode(bytes); } catch (e) { continue; }
+                    if (seen.has(t)) continue;
+                    seen.add(t); cands.push({ wrong: y, right: x, text: t, score: scoreText(t) + (x === 'utf-8' ? 1 : 0) }); // 亂碼位元組剛好是合法 UTF-8 很難是巧合，加分
+                }
+            }
+            cands.sort((a, b) => b.score - a.score);
+            return { orig, lossy, cands, best: cands.length && cands[0].score > orig + 0.3 ? cands[0] : null };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const MAX_FILE = 20 * 1024 * 1024;
+        let bytes = null, fname = 'text.txt';
+
+        const tab = (paste) => { $('#paneFile').hidden = paste; $('#panePaste').hidden = !paste; $('#tabFile').setAttribute('aria-pressed', !paste); $('#tabPaste').setAttribute('aria-pressed', paste); };
+        $('#tabFile').onclick = () => tab(false); $('#tabPaste').onclick = () => tab(true);
+
+        const ENCS = supportedEncs();
+        $('#enc').replaceChildren(...ENCS.map(e => new Option(NAME[e] || e.toUpperCase(), e)));
+
+        function showPreview() {
+            if (!bytes) return;
+            const { text, bad } = decodeBytes(bytes, $('#enc').value);
+            $('#preview').textContent = previewLines(text, +$('#nLines').value);
+            $('#badNote').textContent = bad ? `有 ${bad} 處位元組無法用這個編碼解讀，會以 � 取代。` : '';
+        }
+        $('#file').onchange = async () => {
+            const f = $('#file').files[0];
+            $('#fileErr').textContent = ''; $('#detect').hidden = true; $('#convCard').hidden = true; bytes = null;
+            if (!f) return;
+            if (f.size > MAX_FILE) { $('#fileErr').textContent = `檔案超過 20MB 上限（${(f.size / 1048576).toFixed(1)}MB）`; return; }
+            try { bytes = new Uint8Array(await f.arrayBuffer()); } catch (e) { $('#fileErr').textContent = '讀取檔案失敗'; return; }
+            fname = f.name;
+            const d = detectEncoding(bytes);
+            $('#dName').textContent = f.name;
+            $('#dEnc').textContent = NAME[d.enc] || d.enc.toUpperCase();
+            $('#dConf').textContent = `${Math.round(d.confidence * 100)}%`;
+            $('#dWhy').textContent = '理由：' + d.reason;
+            $('#dRank').textContent = d.ranked.length ? '候選評分：' + d.ranked.map(r => `${NAME[r.enc] || r.enc} ${r.score.toFixed(2)}`).join('、') : '';
+            $('#detect').hidden = false; $('#convCard').hidden = false;
+            $('#enc').value = ENCS.includes(d.enc) ? d.enc : 'utf-8';
+            if (!ENCS.includes(d.enc)) $('#fileErr').textContent = `瀏覽器不支援 ${d.enc}，請手動選擇其他編碼`;
+            showPreview();
+        };
+        $('#enc').onchange = showPreview; $('#nLines').onchange = showPreview;
+        $('#save').onclick = () => {
+            if (!bytes) return;
+            const { text } = decodeBytes(bytes, $('#enc').value);
+            const out = finalText(text, { bom: $('#bom').checked, eol: $('#eol').value });
+            const i = fname.lastIndexOf('.');
+            download(new Blob([out], { type: 'text/plain;charset=utf-8' }), (i > 0 ? fname.slice(0, i) : fname) + '.utf8' + (i > 0 ? fname.slice(i) : '.txt'));
+        };
+
+        function renderMoj() {
+            const s = $('#mojIn').value;
+            $('#mojCard').hidden = !s.trim();
+            if (!s.trim()) return;
+            const r = repairs(s);
+            const warn = $('#mojWarn'); warn.replaceChildren();
+            if (r.lossy) { const p = document.createElement('p'); p.className = 'warn'; p.textContent = '文字含有 �（U+FFFD）或 锟斤拷：原始位元組已遺失，這類亂碼無法完整修復，下列結果僅供參考。'; warn.append(p); }
+            const out = $('#mojOut'); out.replaceChildren();
+            if (!r.cands.length) { const p = document.createElement('p'); p.className = 'note'; p.textContent = '找不到可以還原的組合：可能原文本來就正常，或亂碼的成因不在支援範圍。'; out.append(p); return; }
+            if (!r.best) { const p = document.createElement('p'); p.className = 'note'; p.textContent = '沒有明顯比原文更像正常文字的候選，原文可能本來就正常。'; out.append(p); }
+            r.cands.slice(0, 8).forEach((c, i) => {
+                const d = document.createElement('div'); d.className = 'cand' + (r.best && i === 0 ? ' best' : '');
+                const why = document.createElement('div'); why.className = 'why'; why.textContent = `${NAME[c.right]} 的文字被當成 ${NAME[c.wrong]} 讀取　評分 ${c.score.toFixed(2)}`;
+                if (r.best && i === 0) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = '最佳'; why.append(b); }
+                const t = document.createElement('div'); t.className = 'txt'; t.textContent = c.text.length > 400 ? c.text.slice(0, 400) + '…' : c.text;
+                const btn = document.createElement('button'); btn.className = 'sm'; btn.textContent = '複製'; btn.onclick = () => copyWithFeedback(btn, c.text);
+                d.append(why, t, btn); out.append(d);
+            });
+        }
+        $('#mojIn').oninput = renderMoj;
+    </script>
+</body>
+
+</html>

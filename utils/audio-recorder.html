@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="錄音機：用麥克風錄音，可暫停、即時音量條，錄完直接下載原格式或 WAV；錄音只存在記憶體，不上傳。">
+    <meta property="og:title" content="錄音機" />
+    <meta property="og:description" content="麥克風錄音、暫停、下載 WAV，全部在本機。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/audio-recorder.html" />
+    <title>錄音機</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        .alert {
+            border: 2px solid var(--bad);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+
+        .alert span {
+            color: var(--bad);
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>button {
+            flex: 1;
+            min-width: 70px;
+            padding-left: 8px;
+            padding-right: 8px;
+            white-space: nowrap;
+        }
+
+        .timer {
+            font-size: 44px;
+            font-weight: 700;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+            margin: 4px 0 10px;
+        }
+
+        .meter {
+            height: 14px;
+            background: var(--fill);
+            border-radius: 99px;
+            overflow: hidden;
+        }
+
+        .meter i {
+            display: block;
+            height: 100%;
+            width: 0;
+            background: var(--ok);
+            transition: width .08s linear;
+        }
+
+        .meter i.hot {
+            background: var(--bad);
+        }
+
+        .rec-dot {
+            color: var(--bad);
+        }
+
+        .msg {
+            color: var(--bad);
+            margin: 10px 0 0;
+            min-height: 1.2em;
+        }
+
+        .item {
+            padding: 12px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .item:last-child {
+            border-bottom: 0;
+        }
+
+        .item input.nm {
+            width: 100%;
+        }
+
+        .item audio {
+            width: 100%;
+            margin: 8px 0;
+        }
+
+        .item .meta {
+            color: var(--muted);
+            font-size: 13px;
+            margin-top: 6px;
+        }
+
+        .item .row button {
+            min-width: 0;
+        }
+
+        .tag {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--bad);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>錄音機</h1>
+        <p class="sub">麥克風錄音，全部在本機，不上傳也不儲存。</p>
+
+        <div class="alert"><span>請先下載！</span> 錄音只存在這個分頁的記憶體裡，重新整理或關閉頁面就會消失，無法找回。</div>
+
+        <div class="card">
+            <div class="timer" id="timer">00:00</div>
+            <div class="meter" aria-label="音量"><i id="meterBar"></i></div>
+            <div class="row" style="margin-top:14px">
+                <button class="primary" id="rec">● 錄音</button>
+                <button id="pause" disabled>暫停</button>
+                <button id="stop" disabled>停止</button>
+            </div>
+            <p class="msg" id="msg" role="alert"></p>
+            <p class="note" id="fmt"></p>
+        </div>
+
+        <div class="card">
+            <h2>本次錄音（<span id="count">0</span> / <span id="maxItems"></span>）</h2>
+            <p class="note" id="empty" style="margin:0">還沒有錄音。</p>
+            <div id="list"></div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>用手機或電腦的麥克風錄音的小工具。錄好的聲音先留在這一頁，你可以試聽、重新命名，再下載成原格式或 WAV。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>開會、上課、訪談時臨時錄音。</li>
+        <li>錄一段語音訊息、練習講稿或唱歌。</li>
+        <li>需要 WAV 檔交給剪輯或語音辨識軟體。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>按「● 錄音」，瀏覽器會詢問麥克風權限，請選允許。</li>
+        <li>錄音中可按「暫停」、「繼續」；上方有計時與即時音量條，沒動表示沒收到聲音。</li>
+        <li>按「停止」後，錄音出現在「本次錄音」清單，可播放、改名。</li>
+        <li>按「下載原格式」或「下載 WAV」存檔；「刪除」會從清單移除。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">按「● 錄音」 → 說話 10 秒 → 停止
+        → 清單出現「錄音 14:05:09」，10 秒、約 100KB
+        → 下載 WAV：16-bit、單聲道或雙聲道 PCM</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>錄音只存在記憶體，重新整理或關閉就會消失。有尚未下載的錄音時，離開頁面前會提醒。</li>
+        <li>上限：單次錄音 60 分鐘（到時自動停止）、清單 20 段（滿了要先刪除或下載後刪除才能再錄）。WAV 轉換限 15 分鐘內的錄音，更長請下載原格式。</li>
+        <li>格式依瀏覽器而定：Chrome / Edge / Firefox 多為 webm（opus），Safari（含 iPhone）為 mp4（存成 .m4a），部分瀏覽器是 ogg；頁面會顯示格式，原格式檔小很多，WAV 無壓縮、檔案大。</li>
+        <li>mp4 / ogg 錄音轉 WAV 時，若瀏覽器無法解碼會顯示說明，請改下載原格式。瀏覽器完全不支援錄音（沒有 MediaRecorder）時，錄音鈕會停用並說明原因。</li>
+        <li>mp4 / ogg 路徑只用模擬的 MediaRecorder 測過，尚未在 iPhone 等真機上實測。</li>
+        <li>權限被拒時，請到網址列旁的網站設定允許麥克風，再按一次錄音。需要 https 網址（或本機）才能使用麥克風。</li>
+        <li>隱私與儲存：聲音不會上傳，也不寫入任何本機儲存，只存在記憶體。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { download } = Util;
+
+        // --- pure ---
+        const MAX_MS = 60 * 60 * 1000, MAX_ITEMS = 20, MAX_WAV_MS = 15 * 60 * 1000;
+        // 候選順序：webm / ogg 先試帶 codecs 的、再試不帶的；mp4 只列不帶 codecs 的 'audio/mp4'（iOS Safari 只有這個為 true，帶 codecs 的行為不一）；最後 audio/mpeg（少見）
+        const MIMES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/ogg', 'audio/mpeg'];
+        // 依瀏覽器支援度挑錄音格式；isSupported 通常是 MediaRecorder.isTypeSupported；都不支援回傳 ''（讓瀏覽器自己決定）
+        const pickMime = (isSupported) => typeof isSupported !== 'function' ? '' : MIMES.find(t => { try { return !!isSupported(t); } catch (e) { return false; } }) || '';
+        const extFor = (mime) => { const t = String(mime || '').toLowerCase(); return /mp4|m4a|aac/.test(t) ? 'm4a' : /ogg/.test(t) ? 'ogg' : /mpeg|mp3/.test(t) ? 'mp3' : /wav/.test(t) ? 'wav' : 'webm'; };
+        // 已錄時間（毫秒）：start 開始時間戳、paused 累計暫停毫秒、pauseAt 目前暫停開始的時間戳（沒暫停傳 0）
+        const elapsedMs = (start, paused, pauseAt, now) => Math.max(0, now - start - paused - (pauseAt ? now - pauseAt : 0));
+        const P2 = (n) => String(n).padStart(2, '0');
+        function fmtDur(ms) {
+            const s = Math.floor(ms / 1000), h = Math.floor(s / 3600);
+            return (h ? P2(h) + ':' : '') + P2(Math.floor(s / 60) % 60) + ':' + P2(s % 60);
+        }
+        const fmtSize = (b) => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
+        // 檔名：去掉不能用的字元與前後空白，最長 60 字；空的回傳預設
+        const cleanName = (s, fallback = '錄音') => String(s).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').trim().slice(0, 60) || fallback;
+        // 音量 0–1：時域資料（Uint8，128 為靜音）的 RMS，放大 2 倍讓一般說話看得到
+        function level(data) {
+            if (!data.length) return 0;
+            let s = 0;
+            for (let i = 0; i < data.length; i++) { const v = (data[i] - 128) / 128; s += v * v; }
+            return Math.min(1, Math.sqrt(s / data.length) * 2);
+        }
+        // 麥克風錯誤 → 中文說明
+        function micError(e) {
+            const n = e && e.name;
+            if (n === 'NotAllowedError' || n === 'SecurityError') return '麥克風權限被拒絕。請在網址列旁的網站設定允許麥克風後再試一次。';
+            if (n === 'NotFoundError' || n === 'OverconstrainedError') return '找不到麥克風，請確認裝置已連接。';
+            if (n === 'NotReadableError' || n === 'AbortError') return '麥克風無法使用，可能被其他程式占用。';
+            return '無法開始錄音：' + ((e && e.message) || n || '未知錯誤');
+        }
+        // 16-bit PCM WAV：channels 為多個 Float32Array（每個聲道一個，長度以第一個為準），回傳 Uint8Array（44 位元組檔頭 + 交錯資料）
+        function encodeWav(channels, sampleRate) {
+            const chs = channels && channels.length ? channels : [new Float32Array(0)];
+            const n = chs[0].length, nc = chs.length, dataLen = n * nc * 2;
+            const buf = new ArrayBuffer(44 + dataLen), v = new DataView(buf);
+            const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+            str(0, 'RIFF'); v.setUint32(4, 36 + dataLen, true); str(8, 'WAVE'); str(12, 'fmt ');
+            v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, nc, true);
+            v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * nc * 2, true); v.setUint16(32, nc * 2, true); v.setUint16(34, 16, true);
+            str(36, 'data'); v.setUint32(40, dataLen, true);
+            let o = 44;
+            for (let i = 0; i < n; i++) for (let c = 0; c < nc; c++) {
+                const x = Math.max(-1, Math.min(1, chs[c][i] || 0));
+                v.setInt16(o, x < 0 ? Math.round(x * 0x8000) : Math.round(x * 0x7FFF), true); o += 2;
+            }
+            return new Uint8Array(buf);
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let items = [], seq = 0, rec = null, stream = null, ctx = null, chunks = [], mime = '', st = null, raf = 0, timerId = 0, stopping = false;
+        $('#maxItems').textContent = MAX_ITEMS;
+        const say = (t) => { $('#msg').textContent = t || ''; };
+
+        const supported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+        if (!supported) { say(!window.MediaRecorder ? '這個瀏覽器不支援錄音（沒有 MediaRecorder；iOS 約需 Safari 14.5 以上）。可改用其他瀏覽器。' : '無法使用麥克風：需要 https 網址（或 localhost）。'); $('#rec').disabled = true; }
+        else $('#fmt').textContent = '預計錄製格式：' + (pickMime((t) => MediaRecorder.isTypeSupported(t)) || '瀏覽器預設') + '（實際以瀏覽器為準）';
+
+        function setUi(state) { // idle / rec / paused
+            $('#rec').disabled = state !== 'idle' || !supported;
+            $('#pause').disabled = state === 'idle'; $('#stop').disabled = state === 'idle';
+            $('#pause').textContent = state === 'paused' ? '繼續' : '暫停';
+            $('#rec').textContent = state === 'idle' ? '● 錄音' : '錄音中';
+        }
+        function tick() {
+            if (!st) return;
+            const ms = elapsedMs(st.start, st.paused, st.pauseAt, Date.now());
+            $('#timer').textContent = fmtDur(ms);
+            if (ms >= MAX_MS && !stopping) { say('已達單次錄音上限 60 分鐘，自動停止。'); stop(); }
+        }
+        function meter() {
+            if (!ctx) return;
+            const an = meter.an, data = meter.data; an.getByteTimeDomainData(data);
+            const l = level(data); $('#meterBar').style.width = Math.round(l * 100) + '%'; $('#meterBar').classList.toggle('hot', l > 0.85);
+            raf = requestAnimationFrame(meter);
+        }
+        async function start() {
+            say('');
+            if (items.length >= MAX_ITEMS) { say(`清單已滿 ${MAX_ITEMS} 段，請先下載並刪除一些錄音。`); return; }
+            try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { say(micError(e)); return; }
+            mime = pickMime((t) => MediaRecorder.isTypeSupported(t));
+            try { rec = null; if (mime) try { rec = new MediaRecorder(stream, { mimeType: mime }); } catch (e) { mime = ''; } if (!rec) rec = new MediaRecorder(stream); } catch (e) { say('無法建立錄音器：' + e.message); stream.getTracks().forEach(t => t.stop()); return; }
+            chunks = []; stopping = false;
+            rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+            rec.onstop = finish;
+            rec.onerror = (e) => say('錄音發生錯誤：' + ((e.error && e.error.message) || ''));
+            rec.start(1000);
+            $('#fmt').textContent = '實際格式：' + (rec.mimeType || '（瀏覽器預設）');
+            try { // 音量條：失敗也不影響錄音
+                ctx = new AC(); const an = ctx.createAnalyser(); an.fftSize = 1024; ctx.createMediaStreamSource(stream).connect(an);
+                meter.an = an; meter.data = new Uint8Array(an.fftSize); meter();
+            } catch (e) { ctx = null; }
+            st = { start: Date.now(), paused: 0, pauseAt: 0 }; tick(); timerId = setInterval(tick, 200); setUi('rec');
+        }
+        function togglePause() {
+            if (!rec) return;
+            if (rec.state === 'recording') { rec.pause(); st.pauseAt = Date.now(); setUi('paused'); }
+            else if (rec.state === 'paused') { rec.resume(); st.paused += Date.now() - st.pauseAt; st.pauseAt = 0; setUi('rec'); }
+        }
+        function stop() { if (rec && rec.state !== 'inactive' && !stopping) { stopping = true; rec.stop(); } }
+        function finish() {
+            const ms = elapsedMs(st.start, st.paused, st.pauseAt, Date.now());
+            clearInterval(timerId); cancelAnimationFrame(raf); if (ctx) { ctx.close().catch(() => { }); ctx = null; }
+            stream.getTracks().forEach(t => t.stop());
+            $('#meterBar').style.width = '0'; $('#timer').textContent = fmtDur(ms);
+            const type = rec.mimeType || (chunks[0] && chunks[0].type) || mime || 'audio/webm', blob = new Blob(chunks, { type });
+            chunks = []; st = null; rec = null; stream = null; setUi('idle');
+            if (!blob.size) { say('沒有錄到任何聲音資料。'); return; }
+            const d = new Date();
+            items.unshift({ id: ++seq, name: cleanName('錄音 ' + d.toLocaleTimeString('sv')), blob, url: URL.createObjectURL(blob), ms, at: d.toLocaleString('sv'), dl: false, type });
+            renderList();
+        }
+
+        function renderList() {
+            $('#count').textContent = items.length; $('#empty').hidden = items.length > 0;
+            $('#list').replaceChildren(...items.map(it => {
+                const d = document.createElement('div'); d.className = 'item'; d.dataset.id = it.id;
+                const nm = document.createElement('input'); nm.type = 'text'; nm.className = 'nm'; nm.value = it.name; nm.maxLength = 60; nm.setAttribute('aria-label', '錄音名稱');
+                nm.onchange = () => { it.name = cleanName(nm.value); nm.value = it.name; };
+                const au = document.createElement('audio'); au.controls = true; au.src = it.url; au.preload = 'metadata';
+                const meta = document.createElement('div'); meta.className = 'meta';
+                meta.textContent = `${it.at}　時長 ${fmtDur(it.ms)}　${fmtSize(it.blob.size)}　${it.type.split(';')[0]}　`;
+                const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = it.dl ? '' : '尚未下載'; meta.append(tag);
+                const row = document.createElement('div'); row.className = 'row';
+                const b1 = document.createElement('button'); b1.className = 'sm dlraw'; b1.textContent = '下載原格式';
+                b1.onclick = () => { download(it.blob, cleanName(nm.value) + '.' + extFor(it.type)); it.dl = true; tag.textContent = ''; };
+                const b2 = document.createElement('button'); b2.className = 'sm wav'; b2.textContent = '下載 WAV';
+                b2.onclick = () => toWav(it, b2, tag);
+                const b3 = document.createElement('button'); b3.className = 'sm del'; b3.textContent = '刪除';
+                b3.onclick = () => {
+                    if (!it.dl && !confirm('這段錄音還沒下載，刪除後無法復原。確定刪除？')) return;
+                    URL.revokeObjectURL(it.url); items = items.filter(x => x !== it); renderList();
+                };
+                row.append(b1, b2, b3); d.append(nm, au, meta, row); return d;
+            }));
+        }
+        async function toWav(it, btn, tag) {
+            if (it.ms > MAX_WAV_MS) { say(`這段錄音超過 ${MAX_WAV_MS / 60000} 分鐘，不轉 WAV（記憶體會不足），請下載原格式。`); return; }
+            if (!AC) { say('這個瀏覽器不支援轉換 WAV。'); return; }
+            const label = btn.textContent; btn.textContent = '轉換中…'; btn.disabled = true; say('');
+            let c = null;
+            try {
+                c = new AC(); const ab = await c.decodeAudioData(await it.blob.arrayBuffer());
+                const chs = []; for (let i = 0; i < Math.min(2, ab.numberOfChannels); i++) chs.push(ab.getChannelData(i));
+                download(new Blob([encodeWav(chs, ab.sampleRate)], { type: 'audio/wav' }), cleanName(it.name) + '.wav');
+                it.dl = true; tag.textContent = '';
+            } catch (e) { say(`轉換 WAV 失敗：這個瀏覽器無法解碼這段 ${it.type.split(';')[0]} 錄音（${e.message || e.name || '解碼錯誤'}）。請改下載原格式。`); }
+            finally { if (c) c.close().catch(() => { }); btn.textContent = label; btn.disabled = false; }
+        }
+
+        $('#rec').onclick = start; $('#pause').onclick = togglePause; $('#stop').onclick = stop;
+        addEventListener('beforeunload', (e) => { if (rec || items.some(i => !i.dl)) { e.preventDefault(); e.returnValue = ''; } });
+        setUi('idle'); renderList();
+    </script>
+</body>
+
+</html>

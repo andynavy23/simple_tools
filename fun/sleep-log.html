@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="睡眠記錄：記下每晚入睡與起床時間和睡眠品質，看平均睡眠時數、入睡規律度、睡眠債與近 14 天長條圖，資料只存在你的瀏覽器。僅供參考，不是醫療建議。">
+    <meta name="st-keys" content="sleep_log,sleep_goal">
+    <meta property="og:title" content="睡眠記錄" />
+    <meta property="og:description" content="記錄每晚睡眠，看時數、規律度與睡眠債。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/sleep-log.html" />
+    <title>睡眠記錄</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            margin-bottom: 8px;
+        }
+
+        .row .f {
+            flex: 1 1 130px;
+        }
+
+        .row .f label {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .row .f input,
+        .row .f select {
+            width: 100%;
+        }
+
+        .bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            height: 120px;
+            margin: 10px 0 24px;
+            position: relative;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .bars div {
+            flex: 1;
+            background: var(--blue);
+            border-radius: 4px 4px 0 0;
+            min-height: 2px;
+            position: relative;
+        }
+
+        .bars div.low {
+            background: var(--bad);
+        }
+
+        .bars div.none {
+            background: var(--fill);
+        }
+
+        .bars small {
+            position: absolute;
+            bottom: -18px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .bars .goal {
+            position: absolute;
+            left: 0;
+            right: 0;
+            flex: none;
+            height: 0;
+            border-top: 1px dashed var(--muted);
+            background: none;
+            border-radius: 0;
+            min-height: 0;
+        }
+
+        .it {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--line);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .it:last-child {
+            border-bottom: 0;
+        }
+
+        .it small {
+            color: var(--muted);
+            display: block;
+            word-break: break-all;
+        }
+
+        .it .btns {
+            display: flex;
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        .seg button {
+            flex: 1 1 auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>睡眠記錄</h1>
+        <p class="sub">每天起床後記一筆：昨晚幾點睡、今天幾點起。僅供參考，不是醫療建議；長期睡眠問題請諮詢醫師。</p>
+
+        <div class="card">
+            <div class="row">
+                <div class="f"><label for="wd">起床日期</label><input type="date" id="wd"></div>
+                <div class="f"><label for="bt">入睡時間</label><input type="time" id="bt" value="23:00"></div>
+                <div class="f"><label for="wt">起床時間</label><input type="time" id="wt" value="07:00"></div>
+            </div>
+            <div class="row">
+                <div class="f"><label for="q">睡眠品質</label><select id="q"><option value="1">1 很差</option><option value="2">2 不好</option><option value="3" selected>3 普通</option><option value="4">4 不錯</option><option value="5">5 很好</option></select></div>
+                <div class="f"><label for="note">備註</label><input type="text" id="note" maxlength="200"></div>
+            </div>
+            <div class="row"><button class="primary" id="save">記錄</button><button class="sm" id="cancel" hidden>取消編輯</button></div>
+            <p class="note" id="msg" aria-live="polite"></p>
+        </div>
+
+        <div class="card">
+            <h2>統計</h2>
+            <div class="row seg" role="group" aria-label="統計區間">
+                <button class="sm" data-n="7" aria-pressed="true">近 7 天</button>
+                <button class="sm" data-n="14" aria-pressed="false">近 14 天</button>
+                <button class="sm" data-n="30" aria-pressed="false">近 30 天</button>
+            </div>
+            <div id="stats"></div>
+            <div class="row" style="margin-top:10px">
+                <div class="f"><label for="goal">目標睡眠時數（5–12 小時）</label><input type="number" id="goal" min="5" max="12" step="0.5" inputmode="decimal"></div>
+            </div>
+            <h2 style="margin-top:10px">近 14 天每晚睡眠時數</h2>
+            <div class="bars" id="bars" aria-label="近 14 天每晚睡眠時數"></div>
+            <p class="note">虛線是目標時數，紅色長條表示低於目標。</p>
+        </div>
+
+        <div class="card">
+            <h2>歷史紀錄</h2>
+            <div id="hist"></div>
+            <div class="row"><button class="sm" id="more" hidden>顯示更多</button></div>
+        </div>
+
+        <div class="card">
+            <h2>資料管理</h2>
+            <p class="note" id="count"></p>
+            <div class="row"><button class="sm" id="delOld">刪除一年前的紀錄</button><button class="sm" id="delAll">清除全部</button></div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>記錄每晚的入睡與起床時間、睡眠品質，算出平均睡眠時數、平均入睡 / 起床時間、入睡規律度與睡眠債。僅供參考，不是醫療建議；長期睡眠問題請諮詢醫師。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>想知道自己實際平均睡幾小時、有沒有越睡越晚。</li>
+        <li>調整作息時，看入睡時間是否變得更規律。</li>
+        <li>補記忘了記的日子。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>選「起床日期」（預設今天），填「入睡時間」「起床時間」；入睡時間比起床時間晚就視為前一天入睡（跨午夜自動處理）。</li>
+        <li>選「睡眠品質」1–5、可寫備註，按「記錄」。同一個起床日期只留一筆，再記一次會詢問是否覆蓋。</li>
+        <li>「統計」可切換近 7 / 14 / 30 天；「目標睡眠時數」可調 5–12 小時，用來算睡眠債與長條圖警示色。</li>
+        <li>歷史紀錄每筆可「編輯」或「刪除」。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">23:30 入睡、06:30 起床 → 睡 7 小時
+        另一晚 00:30 入睡、07:30 起床 → 睡 7 小時
+        平均入睡時間 = 00:00（用圓周平均，不會算成 12:00）
+        目標 8 小時、這兩晚各少 1 小時 → 睡眠債 2 小時</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>規律度是入睡時間的標準差：30 分鐘內算規律、60 分鐘內普通、更大則不規律。</li>
+        <li>睡眠債只計「近 7 天內有記錄的夜晚」，沒記的日子不算；正值是不足、負值是盈餘。</li>
+        <li>資料只存在本機瀏覽器，請用右上角「💾」備份。上限 3,650 筆（約 10 年），達到會拒絕新增並提示，請先「刪除一年前的紀錄」或刪單筆。</li>
+        <li>清除：每筆可刪；「資料管理」可刪一年前的紀錄、清除全部（會一併重設目標時數），都會先確認且無法復原。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, day, statRow } = Util;
+
+        // --- pure ---
+        const MAX_LOG = 3650, TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/, DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+        const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+        const fmtMin = (m) => { const x = ((Math.round(m) % 1440) + 1440) % 1440; return String(Math.floor(x / 60)).padStart(2, '0') + ':' + String(x % 60).padStart(2, '0'); };
+        // 入睡日期：入睡時間比起床時間早 → 同一天；較晚 → 前一天（跨午夜）。全程用日期字串與分鐘數計算，不碰 Date，所以夏令時間不影響
+        const bedDate = (d, bt, wt) => (toMin(bt) < toMin(wt) ? d : day.shift(d, -1));
+        // 睡眠分鐘數；入睡 = 起床（0 分鐘）視為無效回 0
+        function durMin(d, bt, wt) {
+            if (toMin(bt) === toMin(wt)) return 0;
+            return (day.num(d) * 1440 + toMin(wt)) - (day.num(bedDate(d, bt, wt)) * 1440 + toMin(bt));
+        }
+        function cleanEntry(x) {
+            if (!x || typeof x !== 'object' || typeof x.d !== 'string' || !DATE_RE.test(x.d) || typeof x.bt !== 'string' || !TIME_RE.test(x.bt) || typeof x.wt !== 'string' || !TIME_RE.test(x.wt) || !durMin(x.d, x.bt, x.wt)) return null;
+            return { d: x.d, bt: x.bt, wt: x.wt, q: Number.isInteger(x.q) && x.q >= 1 && x.q <= 5 ? x.q : 3, n: typeof x.n === 'string' ? x.n.slice(0, 200) : '' };
+        }
+        // 載入：壞的丟掉、同一起床日只留最後一筆、依日期新到舊、截到上限（留最新的）
+        function cleanSleep(raw) {
+            const map = new Map();
+            for (const x of Array.isArray(raw) ? raw : []) { const e = cleanEntry(x); if (e) map.set(e.d, e); }
+            return [...map.values()].sort((a, b) => b.d.localeCompare(a.d)).slice(0, MAX_LOG);
+        }
+        const cleanGoal = (g) => (typeof g === 'number' && Number.isFinite(g) && g >= 5 && g <= 12 ? g : 8);
+        // 圓周平均（分鐘，0–1439）：把時間當成圓上的角度取向量平均。23:30 與 00:30 → 00:00。方向互相抵銷（如 00:00 與 12:00）無平均回 null
+        function circMean(mins) {
+            if (!mins.length) return null;
+            let sx = 0, sy = 0;
+            for (const m of mins) { const a = m / 1440 * 2 * Math.PI; sx += Math.cos(a); sy += Math.sin(a); }
+            if (Math.hypot(sx, sy) / mins.length < 1e-9) return null;
+            const a = Math.atan2(sy, sx), m = Math.round((a < 0 ? a + 2 * Math.PI : a) / (2 * Math.PI) * 1440);
+            return m % 1440;
+        }
+        // 標準差（分鐘，母體）：每個值到圓周平均的最短環狀差再取標準差
+        function circSd(mins) {
+            const mu = circMean(mins);
+            if (mu === null || mins.length < 2) return mins.length ? 0 : null;
+            const dev = mins.map(m => { let d = (m - mu) % 1440; if (d > 720) d -= 1440; if (d < -720) d += 1440; return d; });
+            return Math.sqrt(dev.reduce((a, d) => a + d * d, 0) / dev.length);
+        }
+        // 最近 n 天（含 today）的紀錄
+        const recent = (recs, today, n) => recs.filter(e => e.d <= today && e.d > day.shift(today, -n));
+        function summary(recs, today, n) {
+            const r = recent(recs, today, n);
+            if (!r.length) return null;
+            const durs = r.map(e => durMin(e.d, e.bt, e.wt)), bts = r.map(e => toMin(e.bt)), wts = r.map(e => toMin(e.wt));
+            return { count: r.length, avgDur: durs.reduce((a, b) => a + b, 0) / r.length, avgBed: circMean(bts), avgWake: circMean(wts), sd: circSd(bts), avgQ: r.reduce((a, e) => a + e.q, 0) / r.length };
+        }
+        const regularity = (sd) => (sd == null ? '—' : sd <= 30 ? '規律' : sd <= 60 ? '普通' : '不規律');
+        // 睡眠債：近 7 天內有記錄的夜晚，Σ(目標 − 實際)，單位分鐘；正 = 不足
+        function sleepDebt(recs, today, goalH) {
+            const r = recent(recs, today, 7);
+            return { debt: r.reduce((a, e) => a + goalH * 60 - durMin(e.d, e.bt, e.wt), 0), nights: r.length };
+        }
+        // 近 n 天（舊到新）每晚時數，沒記錄為 null
+        function lastDays(recs, today, n = 14) {
+            const by = new Map(recs.map(e => [e.d, e]));
+            return Array.from({ length: n }, (_, i) => { const d = day.shift(today, i - n + 1), e = by.get(d); return { d, mins: e ? durMin(e.d, e.bt, e.wt) : null }; });
+        }
+        const pruneOlder = (recs, today) => recs.filter(e => e.d >= day.shift(today, -365));
+        const hm = (m) => `${Math.floor(Math.abs(m) / 60)} 小時 ${Math.round(Math.abs(m) % 60)} 分`;
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const el = (t, p, ...k) => { const e = Object.assign(document.createElement(t), p); e.append(...k); return e; };
+        let recs = cleanSleep(store.get('sleep_log', [])), goal = cleanGoal(store.get('sleep_goal', 8)), range = 7, shown = 30, editing = null;
+        const saveLog = () => store.set('sleep_log', recs), saveGoal = () => store.set('sleep_goal', goal);
+        const today = () => day.today();
+
+        function render() {
+            document.querySelectorAll('.seg [data-n]').forEach(b => b.setAttribute('aria-pressed', Number(b.dataset.n) === range));
+            const s = summary(recs, today(), range), debt = sleepDebt(recs, today(), goal);
+            $('#stats').replaceChildren(...(s ? [
+                statRow(`平均睡眠（${s.count} 晚有記錄）`, hm(s.avgDur), s.avgDur >= goal * 60 ? 'ok' : 'bad'),
+                statRow('平均入睡 / 起床', `${fmtMin(s.avgBed)} / ${fmtMin(s.avgWake)}`),
+                statRow('入睡規律度（標準差）', s.sd == null ? '—' : `±${Math.round(s.sd)} 分（${regularity(s.sd)}）`),
+                statRow('平均品質', `${s.avgQ.toFixed(1)} / 5`),
+                statRow(`睡眠債（近 7 天 ${debt.nights} 晚，目標 ${goal} 小時）`, debt.debt > 0 ? `不足 ${hm(debt.debt)}` : debt.debt < 0 ? `盈餘 ${hm(debt.debt)}` : '剛好', debt.debt > 0 ? 'bad' : 'ok'),
+            ] : [el('p', { className: 'muted', textContent: `近 ${range} 天還沒有紀錄。` })]));
+            $('#goal').value = goal;
+            const days = lastDays(recs, today()), max = Math.max(goal * 60, ...days.map(x => x.mins || 0)) * 1.1;
+            $('#bars').replaceChildren(...days.map(x => { const b = el('div', { className: x.mins == null ? 'none' : x.mins < goal * 60 ? 'low' : '', title: x.mins == null ? `${x.d}：沒有記錄` : `${x.d}：${hm(x.mins)}` }); b.style.height = (x.mins == null ? 2 : x.mins / max * 100) + '%'; b.append(el('small', { textContent: x.d.slice(8) })); return b; }), Object.assign(el('div', { className: 'goal', title: '目標' }), { style: `bottom:${goal * 60 / max * 100}%` }));
+            $('#hist').replaceChildren(...(recs.length ? recs.slice(0, shown).map(e => {
+                const dur = durMin(e.d, e.bt, e.wt), ed = el('button', { className: 'sm', textContent: '編輯' }), dl = el('button', { className: 'sm', textContent: '刪除' });
+                ed.onclick = () => startEdit(e); dl.setAttribute('aria-label', '刪除 ' + e.d + ' 的紀錄');
+                dl.onclick = () => { if (confirm(`刪除 ${e.d} 的睡眠紀錄？無法復原。`)) { recs = recs.filter(x => x.d !== e.d); if (editing === e.d) stopEdit(); saveLog(); render(); } };
+                return el('div', { className: 'it' }, el('b', { textContent: `${e.d}　${hm(dur)}` }), el('small', { textContent: `${bedDate(e.d, e.bt, e.wt).slice(5)} ${e.bt} → ${e.d.slice(5)} ${e.wt}・品質 ${e.q}/5${e.n ? '・' + e.n : ''}` }), el('div', { className: 'btns' }, ed, dl));
+            }) : [el('p', { className: 'muted', textContent: '還沒有紀錄' })]));
+            $('#more').hidden = recs.length <= shown;
+            $('#count').textContent = `目前 ${recs.length} / ${MAX_LOG} 筆。`;
+        }
+        function startEdit(e) { editing = e.d; $('#wd').value = e.d; $('#bt').value = e.bt; $('#wt').value = e.wt; $('#q').value = e.q; $('#note').value = e.n; $('#save').textContent = '更新'; $('#cancel').hidden = false; $('#msg').textContent = '編輯中'; window.scrollTo({ top: 0 }); }
+        function stopEdit() { editing = null; $('#save').textContent = '記錄'; $('#cancel').hidden = true; $('#msg').textContent = ''; }
+
+        $('#save').onclick = () => {
+            const e = cleanEntry({ d: $('#wd').value, bt: $('#bt').value, wt: $('#wt').value, q: Number($('#q').value), n: $('#note').value.trim() });
+            if (!e) { $('#msg').textContent = '請填起床日期、入睡與起床時間（兩者不能相同）'; return; }
+            const old = recs.findIndex(x => x.d === e.d);
+            if (old >= 0) { if (editing !== e.d && !confirm(`${e.d} 已經有一筆紀錄，要覆蓋嗎？`)) return; recs[old] = e; }
+            else {
+                if (recs.length >= MAX_LOG) { $('#msg').textContent = `紀錄已達 ${MAX_LOG} 筆上限，請先刪除一年前的紀錄或單筆（資料管理）`; return; }
+                recs.push(e); recs.sort((a, b) => b.d.localeCompare(a.d));
+            }
+            if (editing && editing !== e.d) recs = recs.filter(x => x.d !== editing); // 編輯時改了日期：移走舊日期那筆
+            saveLog(); const was = editing; stopEdit(); $('#msg').textContent = `已${was ? '更新' : '記錄'}：睡 ${hm(durMin(e.d, e.bt, e.wt))}`; $('#note').value = ''; render();
+        };
+        $('#cancel').onclick = stopEdit;
+        document.querySelectorAll('.seg [data-n]').forEach(b => { b.onclick = () => { range = Number(b.dataset.n); render(); }; });
+        $('#goal').onchange = () => { const v = parseFloat($('#goal').value); goal = cleanGoal(v); saveGoal(); render(); };
+        $('#more').onclick = () => { shown += 30; render(); };
+        $('#delOld').onclick = () => { const keep = pruneOlder(recs, today()), n = recs.length - keep.length; if (n && confirm(`刪除一年前（${day.shift(today(), -365)} 之前）的 ${n} 筆睡眠紀錄？無法復原。`)) { recs = keep; stopEdit(); saveLog(); render(); } };
+        $('#delAll').onclick = () => { if (recs.length && confirm(`清除全部 ${recs.length} 筆睡眠紀錄並重設目標時數？無法復原。`)) { recs = []; goal = 8; stopEdit(); saveLog(); saveGoal(); render(); } };
+
+        $('#wd').value = today(); render();
+    </script>
+</body>
+
+</html>

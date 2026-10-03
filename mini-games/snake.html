@@ -34,6 +34,18 @@
             font-variant-numeric: tabular-nums;
         }
 
+        #pauseBtn {
+            display: none;
+            min-height: 44px;
+            min-width: 44px;
+        }
+
+        @media (pointer: coarse) {
+            #pauseBtn {
+                display: inline-block;
+            }
+        }
+
         #cv {
             width: 100%;
             aspect-ratio: 1;
@@ -60,6 +72,7 @@
         <div class="bar">
             <select id="wall" aria-label="牆壁模式"><option value="solid">撞牆會死</option><option value="wrap">可以穿牆</option></select>
             <button class="primary" id="start">開始</button>
+            <button id="pauseBtn" aria-label="暫停或繼續">⏸ 暫停</button>
             <span class="chip">分數 <b id="score">0</b></span>
             <span class="chip">最高 <b id="best">0</b></span>
         </div>
@@ -90,7 +103,7 @@
         <ul>
         <li>滑動時畫面不會跟著捲動；要捲動頁面請從棋盤外滑。</li>
         <li>追著自己的尾巴走是安全的，因為尾巴會同時移開。</li>
-        <li>手機上沒有暫停鍵，需要時直接按「重新開始」。</li>
+        <li>手機（觸控裝置）在「開始」旁有「⏸ 暫停」鈕，暫停後變成「▶ 繼續」；電腦用空白鍵。</li>
             <li>最佳紀錄存在這台裝置；想重來可按頁面下方的「清除最佳紀錄」（只清這個遊戲，無法復原；頁面會重新載入，進行中的這一局會結束）。</li>
 </ul>
     </template>
@@ -165,14 +178,20 @@
         function start() {
             const mid = SIZE >> 1, snake = [[mid, mid], [mid - 1, mid], [mid - 2, mid]];
             st = { snake, dir: DIRS.right, food: placeFood(snake, rnd), score: 0, dead: false, won: false };
-            queue = []; paused = false; $('#msg').textContent = ''; $('#score').textContent = 0; $('#start').textContent = '重新開始';
+            queue = []; paused = false; $('#pauseBtn').textContent = '⏸ 暫停'; $('#msg').textContent = ''; $('#score').textContent = 0; $('#start').textContent = '重新開始';
             draw(); showBest(); timer = setTimeout(loop, tickMs(0));
         }
 
+        function togglePause() {
+            if (!st || st.dead || st.won) return;
+            paused = !paused; $('#msg').textContent = paused ? '⏸ 暫停' : ''; $('#pauseBtn').textContent = paused ? '▶ 繼續' : '⏸ 暫停';
+            if (!paused) loop();
+        }
+        $('#pauseBtn').onclick = togglePause;
         const KEYMAP = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right', W: 'up', S: 'down', A: 'left', D: 'right' };
         document.addEventListener('keydown', (e) => {
             if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
-            if (e.key === ' ') { e.preventDefault(); if (st && !st.dead && !st.won) { paused = !paused; $('#msg').textContent = paused ? '⏸ 暫停' : ''; if (!paused) loop(); } return; }
+            if (e.key === ' ') { e.preventDefault(); togglePause(); return; }
             const d = KEYMAP[e.key];
             if (d) { e.preventDefault(); if (queue.length < 3) queue.push(DIRS[d]); }
         });

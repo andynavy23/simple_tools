@@ -46,6 +46,7 @@
             letter-spacing: .02em;
             word-break: break-all;
             padding: 6px 2px 14px;
+            position: relative;
         }
 
         #passage span.ok {
@@ -135,6 +136,7 @@
         <li>選「自訂文章」時，在上方貼文章，按「使用這段文字」（會整理成單行，最多 300 字）。</li>
         <li>在下方輸入框開始打字，第一個字出現就開始計時。上面的文字打對變綠色，打錯變紅色。</li>
         <li>時間到、或打完整段，就顯示成績；按「再來一次」。</li>
+        <li>手機點輸入框叫出鍵盤後，頁面會自動捲動，讓輸入框貼在鍵盤上方；上方的文章區會縮成可內部捲動的小框，正在打的字會自動停在框的中間，所以「要打的字」與輸入框同時看得到。</li>
         </ol>
         <h3>計分</h3>
         <div class="eg">「字/分」= 每分鐘打對的字數。例：30 秒打對 90 字 → 180 字/分，約 36 WPM（5 個字元算 1 個字）。正確率 = 打對字數 ÷ 輸入字數。</div>
@@ -253,7 +255,24 @@
                 else if (i === typed.length) s.className = 'cur';
                 return s;
             }));
+            keepCurVisible();
         }
+
+        // 手機鍵盤叫出後可視高度變小：限制文章區高度（內部捲動，讓正在打的字永遠在中間），並把輸入框捲到可視範圍底部
+        const kbOpen = () => !!window.visualViewport && visualViewport.height < innerHeight * .8;
+        function keepCurVisible() {
+            const box = $('#passage'), cur = box.querySelector('.cur');
+            if (box.style.maxHeight && cur) box.scrollTop = cur.offsetTop - box.clientHeight / 2;
+        }
+        function fitKeyboard(scroll) {
+            const box = $('#passage');
+            if (!kbOpen()) { box.style.maxHeight = ''; box.style.overflowY = ''; return; }
+            box.style.maxHeight = Math.max(72, visualViewport.height - $('#input').offsetHeight - 120) + 'px'; box.style.overflowY = 'auto';
+            keepCurVisible();
+            if (scroll) $('#input').scrollIntoView({ block: 'end', behavior: 'smooth' });
+        }
+        $('#input').addEventListener('focus', () => setTimeout(() => fitKeyboard(true), 350));
+        if (window.visualViewport) visualViewport.addEventListener('resize', () => fitKeyboard(document.activeElement === $('#input')));
 
         function reset() {
             renderHist();

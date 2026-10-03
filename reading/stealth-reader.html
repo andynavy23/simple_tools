@@ -248,7 +248,7 @@
                         <label class="flex items-center justify-between cursor-pointer">
                             <div>
                                 <span class="text-xs font-semibold text-slate-700">Auto-Panic Detection</span>
-                                <p class="text-xs text-slate-500">Trigger Boss Key when mouse leaves window.</p>
+                                <p class="text-xs text-slate-500">Trigger Boss Key when mouse leaves window, or (touch devices) when the page is hidden / app is switched away.</p>
                             </div>
                             <input type="checkbox" id="cfg-autopanic" class="w-6 h-6 shrink-0 ml-3 text-indigo-600 rounded">
                         </label>
@@ -324,7 +324,7 @@
         <li>用上方分頁切換外觀：Data Grid（表格）、SSH Console（終端機）、Audit Doc（文件）、Internal Comms（聊天）。</li>
         <li>翻頁：手機在閱讀區<b>左右滑動</b>或點底部的 Prev / Next；電腦用 <kbd>←</kbd> <kbd>→</kbd> 或 <kbd>PageUp</kbd> <kbd>PageDown</kbd>。</li>
         <li>老闆鍵：電腦按 <kbd>Z</kbd>，手機點底部 <b>Lock</b>，內容立刻換成假的系統資料，再按一次還原。</li>
-        <li>右上齒輪可改老闆鍵、自動躲避（滑鼠離開視窗就切換）、隱私模糊（只有指到的行清楚）、側邊便條。</li>
+        <li>右上齒輪可改老闆鍵、自動躲避（電腦：滑鼠離開視窗；手機：切到別的 App 或分頁、鎖屏時）、隱私模糊（只有指到的行清楚）、側邊便條。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">選了「小說.txt」後，上方細長進度條會隨頁數增加；關掉網頁、下次再選同一個檔名，會回到上次讀到的位置。</div>
@@ -332,7 +332,7 @@
         <ul>
         <li>進度依「檔名」記在這個瀏覽器；改檔名會被當作新書。</li>
         <li>每頁固定 40 行，不顯示頁碼，以進度條代替。</li>
-        <li>「自動躲避」靠滑鼠離開視窗偵測，手機上不會觸發。</li>
+        <li>「自動躲避」在電腦靠滑鼠離開視窗偵測；在觸控裝置改以頁面被切走（切 App、切分頁、鎖屏）偵測，回到頁面時仍是躲避畫面，要點 Lock 才會還原。這只在頁面被切走時觸發，不能保證瞬間，來不及的情況（例如畫面已被別人看到）無法挽回；尚未在 iPhone / Android 真機實測。</li>
         <li>分頁標題刻意偽裝成 ERP 後台。</li>
             <li>每本書的閱讀進度存在這台裝置，最多保留最近 100 本；設定裡可清除目前這本，或「Purge All Books' Progress」清除全部。</li>
 </ul>
@@ -578,6 +578,11 @@
                 toggleBossMode(true);
             }
         });
+        // 觸控裝置沒有 mouseleave：離開頁面（切 App / 分頁、鎖屏）時同樣躲避；回來後維持躲避畫面，需用老闆鍵 / Lock 解除
+        const isTouchDevice = () => matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+        const leavePanic = () => { if(settings.autoPanic && !isBossMode && isTouchDevice()) toggleBossMode(true); };
+        document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') leavePanic(); });
+        addEventListener('pagehide', leavePanic);
 
         function changePage(delta) {
             if(textChunks.length === 0) return;

@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="chmod 權限計算器：勾選權限、數字（755）、符號（rwxr-xr-x）三向同步，含 setuid / setgid / sticky、umask 計算與符號模式模擬。">
+    <meta property="og:title" content="chmod 權限計算器" />
+    <meta property="og:description" content="勾選 / 數字 / 符號三向同步，umask 與 chmod u+x 模擬。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/chmod-calc.html" />
+    <title>chmod 權限計算器</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row input[type=text] {
+            flex: 1;
+            min-width: 120px;
+            font-family: ui-monospace, Consolas, monospace;
+        }
+
+        .pgrid {
+            display: grid;
+            grid-template-columns: 4.5em repeat(3, 1fr);
+            gap: 6px;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .pgrid .h {
+            text-align: center;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .pgrid label.cb {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 44px;
+            margin: 0;
+            font-weight: 400;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            gap: 6px;
+        }
+
+        .sp {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .sp label.cb {
+            display: flex;
+            align-items: center;
+            min-height: 44px;
+            margin: 0;
+            padding: 0 12px;
+            font-weight: 400;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            gap: 6px;
+        }
+
+        .mono {
+            font-family: ui-monospace, Consolas, monospace;
+            overflow-wrap: anywhere;
+        }
+
+        .big {
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        .err {
+            color: var(--bad);
+            font-size: 13px;
+            min-height: 1.2em;
+            margin: 4px 0 0;
+        }
+
+        .warn {
+            color: var(--bad);
+            font-size: 14px;
+            margin: 4px 0 0;
+        }
+
+        .tbl {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .tbl td,
+        .tbl th {
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--fill);
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .tbl td.mono {
+            white-space: nowrap;
+        }
+
+        .tbl tr.pre {
+            cursor: pointer;
+        }
+
+        .tbl-wrap {
+            overflow-x: auto;
+        }
+
+        .cmd {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .cmd code {
+            flex: 1;
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: 14px;
+            overflow-wrap: anywhere;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>chmod 權限計算器</h1>
+        <p class="sub">勾選、數字、符號三向同步；全部在本機計算，不儲存任何資料。</p>
+
+        <div class="card">
+            <div class="pgrid" id="pgrid"></div>
+            <div class="sp" id="sp"></div>
+            <div class="row" style="margin-top:12px">
+                <div style="flex:1;min-width:110px"><label for="oct" style="margin-top:0">數字</label><input type="text" id="oct" maxlength="4" inputmode="numeric" autocomplete="off" aria-label="八進位權限" style="width:100%"></div>
+                <div style="flex:2;min-width:150px"><label for="sym" style="margin-top:0">符號</label><input type="text" id="sym" maxlength="10" autocomplete="off" autocapitalize="off" aria-label="符號權限" style="width:100%"></div>
+            </div>
+            <p class="err" id="err"></p>
+            <div class="li"><span class="muted">數字</span><span class="mono big" id="outOct"></span></div>
+            <div class="li"><span class="muted">符號</span><span class="mono big" id="outSym"></span></div>
+            <div class="li"><span class="muted">符號模式</span><span class="mono" id="outSymbolic"></span></div>
+            <div class="li"><span class="muted">ls -l 顯示</span><span><span class="mono" id="outLs"></span> <button class="sm" id="typeBtn" aria-pressed="false">當作目錄</button></span></div>
+            <div id="warns"></div>
+        </div>
+
+        <div class="card">
+            <h2>產生指令</h2>
+            <div id="cmds"></div>
+        </div>
+
+        <div class="card">
+            <h2>常見組合速查</h2>
+            <p class="note" style="margin:0 0 8px">點一列帶入上方計算器。</p>
+            <div class="tbl-wrap"><table class="tbl" id="presets"></table></div>
+        </div>
+
+        <div class="card">
+            <h2>umask 計算</h2>
+            <div class="row"><input type="text" id="um" maxlength="4" inputmode="numeric" value="022" autocomplete="off" aria-label="umask"></div>
+            <p class="err" id="umErr"></p>
+            <div id="umOut"></div>
+        </div>
+
+        <div class="card">
+            <h2>符號模式模擬</h2>
+            <label for="simFrom" style="margin-top:0">目前權限（數字或 rwxr-xr-x）</label>
+            <input type="text" id="simFrom" value="644" autocomplete="off" aria-label="目前權限" style="width:100%">
+            <label for="simExpr">chmod 指令內容</label>
+            <input type="text" id="simExpr" value="u+x,g-w" autocomplete="off" autocapitalize="off" aria-label="符號模式" style="width:100%">
+            <label class="cb" style="display:flex;align-items:center;gap:8px;font-weight:400;min-height:44px"><input type="checkbox" id="simDir"> 對象是目錄（影響 X）</label>
+            <p class="err" id="simErr"></p>
+            <div id="simOut"></div>
+            <p class="note">沒寫 u/g/o/a 時，依 umask 022 排除寫入位元（與實際 chmod 一致）。</p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>Linux / macOS 檔案權限的換算工具：勾選讀寫執行、輸入 <kbd>755</kbd>、輸入 <kbd>rwxr-xr-x</kbd>，三種寫法即時互相同步，並附上常用指令、umask 與符號模式模擬。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>要設定網站、SSH 金鑰、腳本的權限，記不得數字代表什麼。</li>
+        <li>看到 <kbd>ls -l</kbd> 的 <kbd>-rwsr-xr-x</kbd>，想知道是幾號。</li>
+        <li>想知道某個 umask 建出來的新檔案是 644 還是 664。</li>
+        <li>不確定 <kbd>chmod u+x,g-w</kbd> 執行後會變怎樣。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>在九宮格勾選擁有者 / 群組 / 其他人的讀（r）寫（w）執行（x）；特殊位元有 setuid / setgid / sticky。</li>
+        <li>或直接在「數字」輸入 3 或 4 位八進位數，或在「符號」輸入 9 字元（可含 s S t T）。輸入不合法會顯示紅字，不會改動目前的權限。</li>
+        <li>「產生指令」可複製 chmod、遞迴與 find 的組合。</li>
+        <li>「umask 計算」輸入 umask 看新檔案 / 資料夾預設權限。</li>
+        <li>「符號模式模擬」輸入目前權限與 <kbd>u+x,g-w</kbd> 之類，看結果。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">輸入 755 → rwxr-xr-x
+        輸入 4755 → rwsr-xr-x（setuid）
+        umask 022 → 檔案 644、資料夾 755
+        644 套用 u+x,g-w → 744</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>s / t 小寫代表同時有執行權限；大寫 S / T 代表有特殊位元但沒有執行權限（通常是設定錯誤）。</li>
+        <li>X 只在「對象是目錄」或「原本已有任何執行位元」時才加執行，適合 <kbd>chmod -R a+rX</kbd>。</li>
+        <li>不處理 ACL、擴充屬性、chattr；符號模式支援 r w x X s t，以及 u/g/o 複製權限（如 g=u）。</li>
+        <li>777 與 o+w 讓所有人可寫，通常是不安全的做法。</li>
+        <li>隱私與儲存：一切在本機計算，這個頁面不使用任何本機儲存，關閉即清空。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { copyWithFeedback } = Util;
+
+        // --- pure ---
+        const MAX = 0o7777;
+        // 3 或 4 位八進位字串 → 整數；不合法回傳 null
+        const parseOctal = (s) => /^[0-7]{3,4}$/.test(String(s).trim()) ? parseInt(String(s).trim(), 8) : null;
+        const toOctal = (m) => m.toString(8).padStart(m > 0o777 ? 4 : 3, '0');
+        // 整數 → 'rwxr-xr-x'（含 s S t T）
+        function toSym(m) {
+            const c = (r, w, x, sp, ch) => (r ? 'r' : '-') + (w ? 'w' : '-') + (sp ? (x ? ch : ch.toUpperCase()) : (x ? 'x' : '-'));
+            return c(m & 0o400, m & 0o200, m & 0o100, m & 0o4000, 's') + c(m & 0o40, m & 0o20, m & 0o10, m & 0o2000, 's') + c(m & 4, m & 2, m & 1, m & 0o1000, 't');
+        }
+        // 'rwxr-xr-x'（也接受 ls 的 10 字元 '-rwxr-xr-x' / 'drwxr-xr-x'）→ 整數；不合法回傳 null
+        function fromSym(str) {
+            let s = String(str).trim();
+            if (s.length === 10 && /^[-dlbcps]/.test(s)) s = s.slice(1);
+            if (!/^[r-][w-][xsS-][r-][w-][xsS-][r-][w-][xtT-]$/.test(s)) return null;
+            let m = 0;
+            for (let i = 0; i < 9; i++) {
+                const ch = s[i], bit = 1 << (8 - i);
+                if (ch === 'r' || ch === 'w') m |= bit;
+                else if (i % 3 === 2) {
+                    if (ch === 'x') m |= bit;
+                    else if (ch === 's' || ch === 'S') { m |= i === 2 ? 0o4000 : 0o2000; if (ch === 's') m |= bit; }
+                    else if (ch === 't' || ch === 'T') { m |= 0o1000; if (ch === 't') m |= bit; }
+                }
+            }
+            return m;
+        }
+        // 'ls -l' 的 10 字元（第一個字元：檔案 '-'、目錄 'd'）
+        const toLs = (m, isDir) => (isDir ? 'd' : '-') + toSym(m);
+        // 整數 → 符號模式（u=rwx,go=rx）；相同的類別合併，全部相同寫 a=
+        function toSymbolic(m) {
+            const part = (sh, sp, spCh) => ((m >> sh) & 4 ? 'r' : '') + ((m >> sh) & 2 ? 'w' : '') + ((m >> sh) & 1 ? 'x' : '') + (m & sp ? spCh : '');
+            const g = new Map();
+            for (const [k, v] of [['u', part(6, 0o4000, 's')], ['g', part(3, 0o2000, 's')], ['o', part(0, 0o1000, 't')]]) g.set(v, (g.get(v) || '') + k);
+            if (g.size === 1) return 'a=' + [...g.keys()][0];
+            return [...g].map(([v, k]) => k + '=' + v).join(',');
+        }
+        // 特殊情況提醒（給畫面顯示）
+        function risks(m, isDir) {
+            const r = [];
+            if (m & 2) r.push('其他人可寫入（o+w）：任何使用者都能修改，通常不安全' + (isDir && !(m & 0o1000) ? '；目錄若要共用請加 sticky（1777）' : '') + '。');
+            if (m & 0o4000) r.push('setuid：執行時以檔案擁有者身分運作' + ((m & 0o4000) && (m & 2) ? '，且他人可寫，風險很高' : '，只應用在受信任的程式') + '。');
+            if (m & 0o2000) r.push(isDir ? 'setgid（目錄）：新建檔案繼承目錄的群組，適合共用資料夾。' : 'setgid：執行時以檔案群組身分運作，只應用在受信任的程式。');
+            if (m & 0o1000) r.push(isDir ? 'sticky（目錄）：只有檔案擁有者或目錄擁有者能刪除裡面的檔案（如 /tmp）。' : 'sticky 用在檔案上，現代系統通常沒有作用。');
+            if ((m & 0o4000 && !(m & 0o100)) || (m & 0o2000 && !(m & 0o10) && !isDir)) r.push('大寫 S：有特殊位元但沒有對應的執行權限，多半是設定錯誤。');
+            if ((m & 0o1000) && !(m & 1)) r.push('大寫 T：有 sticky 但其他人沒有執行（進入）權限。');
+            if ((m & 0o777) === 0) r.push('沒有任何人有權限（root 除外）。');
+            return r;
+        }
+        // umask → 新檔案 / 新資料夾的預設權限；不合法回傳 null
+        function fromUmask(s) {
+            const u = parseOctal(s);
+            if (u === null) return null;
+            const um = u & 0o777;
+            return { umask: um, file: 0o666 & ~um, dir: 0o777 & ~um };
+        }
+        // 把「數字或符號」輸入轉成權限整數
+        const parseAny = (s) => { const t = String(s).trim(); const o = parseOctal(t); return o !== null ? o : fromSym(t); };
+        // 套用符號模式（如 u+x,g-w / a=rX / go-rwx / g=u），回傳新權限；語法錯誤回傳 null。
+        // isDir：X 的判斷；umask：沒寫 u/g/o/a 時要排除的位元（與 GNU chmod 一致，預設 022）
+        function applySym(mode, expr, isDir = false, umask = 0o022) {
+            let m = mode & MAX, e = String(expr).trim().replace(/^chmod\s+/i, '');
+            if (!e) return null;
+            const MASK = { u: 0o4700, g: 0o2070, o: 0o1007 };
+            for (const clause of e.split(',')) {
+                const head = /^[ugoa]*/.exec(clause)[0];
+                let rest = clause.slice(head.length), mask = 0;
+                if (!rest) return null;
+                for (const w of head) mask |= w === 'a' ? MAX : MASK[w];
+                if (!head) mask = MAX & ~umask;
+                const re = /^([-+=])([rwxXstugo]*)/;
+                while (rest) {
+                    const mm = re.exec(rest);
+                    if (!mm) return null;
+                    rest = rest.slice(mm[0].length);
+                    let v = 0;
+                    for (const p of mm[2]) {
+                        if (p === 'r') v |= 0o444; else if (p === 'w') v |= 0o222; else if (p === 'x') v |= 0o111;
+                        else if (p === 'X') { if (isDir || (m & 0o111)) v |= 0o111; }
+                        else if (p === 's') v |= 0o6000; else if (p === 't') v |= 0o1000;
+                        else v |= ((m >> ({ u: 6, g: 3, o: 0 }[p])) & 7) * 0o111;
+                    }
+                    v &= mask;
+                    if (mm[1] === '+') m |= v; else if (mm[1] === '-') m &= ~v; else m = (m & ~mask) | v;
+                }
+            }
+            return m;
+        }
+        // 常見指令範例
+        function cmds(m) {
+            const o = toOctal(m);
+            return [
+                ['單一檔案', `chmod ${o} file`],
+                ['符號寫法', `chmod ${toSymbolic(m)} file`],
+                ['遞迴整個資料夾', `chmod -R ${o} dir/`],
+                ['只改某目錄下的檔案', `find . -type f -exec chmod ${o} {} +`],
+                ['只改某目錄下的資料夾', `find . -type d -exec chmod ${o} {} +`],
+                ['常見網站設定（目錄 755、檔案 644）', 'find . -type d -exec chmod 755 {} + && find . -type f -exec chmod 644 {} +'],
+            ];
+        }
+        const PRESETS = [
+            [0o644, '一般文件、網頁檔', '擁有者可編輯，其他人唯讀。'],
+            [0o755, '腳本、程式、資料夾', '所有人可執行 / 進入；只有擁有者可修改。'],
+            [0o600, 'SSH 私鑰、密碼檔', '只有擁有者可讀寫；ssh 對私鑰權限過寬會拒絕使用。'],
+            [0o700, '私人資料夾（~/.ssh）', '只有擁有者可進入與修改。'],
+            [0o664, '群組共同編輯的檔案', '群組成員可寫；注意是否真的需要。'],
+            [0o750, '僅限群組使用的程式', '其他人完全不能存取。'],
+            [0o400, '唯讀的機密檔', '擁有者也無法直接寫入（root 除外）。'],
+            [0o777, '幾乎不該使用', '所有人可讀寫執行，有安全風險；多半是為了「先讓它動起來」。'],
+            [0o1777, '共用暫存目錄（/tmp）', '人人可寫，但只能刪自己的檔案（sticky）。'],
+            [0o2775, '共用專案資料夾', '新檔案繼承群組（setgid），群組成員可寫。'],
+            [0o4755, 'setuid 程式（如 passwd）', '執行時以擁有者身分運作；只給受信任的程式。'],
+        ];
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let mode = 0o644, isDir = false;
+
+        // 九宮格
+        const grid = $('#pgrid');
+        grid.append(document.createElement('span'));
+        for (const t of ['讀 r', '寫 w', '執行 x']) { const h = document.createElement('span'); h.className = 'h'; h.textContent = t; grid.append(h); }
+        [['擁有者 u', 6], ['群組 g', 3], ['其他人 o', 0]].forEach(([name, sh]) => {
+            const n = document.createElement('span'); n.textContent = name; grid.append(n);
+            [4, 2, 1].forEach(b => grid.append(cb(b << sh, name + ' ' + b)));
+        });
+        function cb(bit, label) {
+            const l = document.createElement('label'); l.className = 'cb';
+            const i = document.createElement('input'); i.type = 'checkbox'; i.dataset.bit = bit; i.setAttribute('aria-label', label);
+            i.onchange = () => { mode = i.checked ? mode | bit : mode & ~bit; render(); };
+            l.append(i); return l;
+        }
+        for (const [bit, name] of [[0o4000, 'setuid（4000）'], [0o2000, 'setgid（2000）'], [0o1000, 'sticky（1000）']]) {
+            const l = cb(bit, name); l.append(name); $('#sp').append(l);
+        }
+
+        function render(skip) {
+            document.querySelectorAll('input[data-bit]').forEach(i => { i.checked = !!(mode & +i.dataset.bit); });
+            if (skip !== 'oct') $('#oct').value = toOctal(mode);
+            if (skip !== 'sym') $('#sym').value = toSym(mode);
+            $('#err').textContent = '';
+            $('#outOct').textContent = toOctal(mode); $('#outSym').textContent = toSym(mode);
+            $('#outSymbolic').textContent = toSymbolic(mode); $('#outLs').textContent = toLs(mode, isDir);
+            $('#typeBtn').setAttribute('aria-pressed', isDir);
+            $('#warns').replaceChildren(...risks(mode, isDir).map(t => { const p = document.createElement('p'); p.className = 'warn'; p.textContent = '⚠ ' + t; return p; }));
+            $('#cmds').replaceChildren(...cmds(mode).map(([k, c]) => {
+                const d = document.createElement('div'); d.className = 'cmd';
+                const s = document.createElement('div'); s.style.flex = '1';
+                const t = document.createElement('div'); t.className = 'note'; t.style.margin = '0'; t.textContent = k;
+                const code = document.createElement('code'); code.textContent = c; s.append(t, code);
+                const b = document.createElement('button'); b.className = 'sm'; b.textContent = '複製'; b.onclick = () => copyWithFeedback(b, c);
+                d.append(s, b); return d;
+            }));
+        }
+        $('#oct').oninput = () => {
+            const v = $('#oct').value.trim(), m = parseOctal(v);
+            if (m === null) { $('#err').textContent = v ? '數字需為 3 或 4 位八進位（每位 0–7）' : ''; return; }
+            mode = m; render('oct');
+        };
+        $('#sym').oninput = () => {
+            const v = $('#sym').value.trim(), m = fromSym(v);
+            if (m === null) { $('#err').textContent = v ? '符號需為 9 字元：r/w/x/s/S/t/T/-，例如 rwxr-xr-x' : ''; return; }
+            mode = m; render('sym');
+        };
+        $('#typeBtn').onclick = () => { isDir = !isDir; render(); };
+
+        // 速查表
+        $('#presets').replaceChildren(...PRESETS.map(([m, use, note]) => {
+            const tr = document.createElement('tr'); tr.className = 'pre'; tr.tabIndex = 0;
+            for (const t of [toOctal(m), toSym(m), use + '：' + note]) { const td = document.createElement('td'); td.textContent = t; if (t !== use + '：' + note) td.className = 'mono'; tr.append(td); }
+            tr.onclick = () => { mode = m; render(); scrollTo({ top: 0, behavior: 'smooth' }); };
+            tr.onkeydown = (e) => { if (e.key === 'Enter') tr.onclick(); };
+            return tr;
+        }));
+
+        // umask
+        function showUmask() {
+            const r = fromUmask($('#um').value), out = $('#umOut');
+            out.replaceChildren(); $('#umErr').textContent = '';
+            if (!r) { $('#umErr').textContent = '請輸入 3 或 4 位八進位（例如 022、077）'; return; }
+            const li = (k, v) => { const d = document.createElement('div'); d.className = 'li'; const a = document.createElement('span'); a.className = 'muted'; a.textContent = k; const b = document.createElement('b'); b.className = 'mono'; b.textContent = v; d.append(a, b); return d; };
+            out.append(li('新檔案', `${toOctal(r.file)}　${toSym(r.file)}`), li('新資料夾', `${toOctal(r.dir)}　${toSym(r.dir)}`));
+        }
+        $('#um').oninput = showUmask;
+
+        // 模擬
+        function showSim() {
+            const out = $('#simOut'); out.replaceChildren(); $('#simErr').textContent = '';
+            const from = parseAny($('#simFrom').value);
+            if (from === null) { $('#simErr').textContent = '目前權限請輸入 3–4 位八進位或 9 字元符號'; return; }
+            const to = applySym(from, $('#simExpr').value, $('#simDir').checked);
+            if (to === null) { $('#simErr').textContent = '符號模式語法不對，例如 u+x,g-w 或 a=rX'; return; }
+            const d = $('#simDir').checked;
+            const li = (k, v) => { const e = document.createElement('div'); e.className = 'li'; const a = document.createElement('span'); a.className = 'muted'; a.textContent = k; const b = document.createElement('b'); b.className = 'mono'; b.textContent = v; e.append(a, b); return e; };
+            out.append(li('之前', `${toOctal(from)}　${toLs(from, d)}`), li('之後', `${toOctal(to)}　${toLs(to, d)}`));
+        }
+        for (const id of ['#simFrom', '#simExpr']) $(id).oninput = showSim;
+        $('#simDir').onchange = showSim;
+
+        render(); showUmask(); showSim();
+    </script>
+</body>
+
+</html>

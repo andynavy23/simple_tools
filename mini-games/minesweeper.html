@@ -130,6 +130,31 @@
             color: var(--muted);
         }
 
+        #miniWrap {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        #miniWrap[hidden] {
+            display: none;
+        }
+
+        #miniWrap.off #minimap {
+            display: none;
+        }
+
+        #minimap {
+            display: block;
+            max-width: 150px;
+            border-radius: 6px;
+            border: 1px solid var(--fill);
+            touch-action: none;
+            cursor: pointer;
+        }
+
         #msg {
             text-align: center;
             font-weight: 700;
@@ -160,6 +185,10 @@
             <button class="primary spacer" id="new">新遊戲</button>
         </div>
 
+        <div id="miniWrap" hidden>
+            <button class="sm" id="miniToggle" aria-expanded="true" title="收合或展開小地圖">🗺 小地圖</button>
+            <canvas id="minimap" aria-label="小地圖：點一下把視窗捲到該位置"></canvas>
+        </div>
         <div class="field"><div id="grid" role="grid" aria-label="地雷區"></div></div>
         <div id="msg" role="status"></div>
         <button class="sm" id="clearBest" style="margin-top:12px">清除最佳紀錄</button>
@@ -187,6 +216,7 @@
         <ul>
         <li>手機上中、高級盤會自動「放大」（格子 40px），在盤面上拖動即可捲動，不會誤開格；按「回到全貌」可縮成整盤，「放大」可再切回。</li>
         <li>「每日挑戰」每天固定同一個雷區（第一下點擊附近會略有不同）。</li>
+        <li>放大模式下，盤面上方有「🗺 小地圖」：藍框是目前看到的範圍，灰色是未翻開、白色是已翻開、紅色是旗標；點或拖小地圖就能把盤面捲到那裡，按「🗺 小地圖」可收合。</li>
         <li>長按插旗時手指不要移動，否則會被當作捲動。</li>
             <li>最佳與每日挑戰紀錄存在這台裝置；每日挑戰只保留最近 30 天。可按頁面下方的「清除最佳紀錄」全部清掉（無法復原；頁面會重新載入，進行中的這一局會結束）。</li>
 </ul>
@@ -289,6 +319,18 @@
             const cut = c.toISOString().slice(0, 10);
             return keys.filter(k => { const m = /^mines_daily_(\d{4}-\d{2}-\d{2})_/.exec(k); return m && m[1] < cut; });
         }
+        // 小地圖：每格像素（整個盤面塞進 maxW × maxW，至少 2px）
+        function miniCellPx(w, h, maxW = 150) { return Math.max(2, Math.floor(maxW / Math.max(w, h))); }
+        // 小地圖上「目前視窗」的方框：v = {sl, st, cw, ch, sw, sh}（捲動位置、可視大小、可捲總大小），mw/mh = 小地圖大小
+        function miniViewRect(v, mw, mh) {
+            const x = v.sw ? v.sl / v.sw * mw : 0, y = v.sh ? v.st / v.sh * mh : 0;
+            return { x, y, w: v.sw ? Math.min(mw - x, v.cw / v.sw * mw) : mw, h: v.sh ? Math.min(mh - y, v.ch / v.sh * mh) : mh };
+        }
+        // 點小地圖 (px,py)：回傳讓該點落在視窗中央的捲動位置（夾在可捲範圍內）
+        function miniScrollTarget(px, py, mw, mh, v) {
+            const cl = (a, lo, hi) => Math.max(lo, Math.min(hi, a));
+            return { left: cl(px / mw * v.sw - v.cw / 2, 0, Math.max(0, v.sw - v.cw)), top: cl(py / mh * v.sh - v.ch / 2, 0, Math.max(0, v.sh - v.ch)) };
+        }
         // --- /pure ---
 
         const { rnd, store } = Util;
@@ -329,7 +371,34 @@
             $('#zoomBtn').setAttribute('aria-pressed', zoomOn);
             $('#fitBtn').hidden = !z;
             $('#grid').style.setProperty('--s', cellSizeFor(innerWidth - 44, g.w, z) + 'px');
+            $('#miniWrap').hidden = !z;
+            drawMini();
         }
+
+        // 小地圖：畫整盤狀態 + 視窗方框；點 / 拖小地圖捲動盤面
+        const fieldView = () => { const f = $('.field'); return { sl: f.scrollLeft, st: f.scrollTop, cw: f.clientWidth, ch: f.clientHeight, sw: f.scrollWidth, sh: f.scrollHeight }; };
+        function drawMini() {
+            const wrap = $('#miniWrap'); if (wrap.hidden || !g) return;
+            const cv = $('#minimap'), px = miniCellPx(g.w, g.h), cs = getComputedStyle(document.documentElement), col = (n, d) => cs.getPropertyValue(n).trim() || d;
+            cv.width = g.w * px; cv.height = g.h * px;
+            const x = cv.getContext('2d');
+            for (let i = 0; i < g.st.length; i++) {
+                const s = g.st[i], lost = g.status === 'lost';
+                x.fillStyle = (lost && g.mine[i]) || s === 2 ? col('--bad', '#e44') : s === 1 ? col('--bg', '#fff') : col('--muted', '#888');
+                x.fillRect((i % g.w) * px, Math.floor(i / g.w) * px, px - (px > 3 ? 1 : 0), px - (px > 3 ? 1 : 0));
+            }
+            const r = miniViewRect(fieldView(), cv.width, cv.height);
+            x.lineWidth = 2; x.strokeStyle = col('--blue', '#07f'); x.strokeRect(r.x + 1, r.y + 1, Math.max(2, r.w - 2), Math.max(2, r.h - 2));
+        }
+        function miniGo(e) {
+            const cv = $('#minimap'), b = cv.getBoundingClientRect(), f = $('.field');
+            const t = miniScrollTarget((e.clientX - b.left) / b.width * cv.width, (e.clientY - b.top) / b.height * cv.height, cv.width, cv.height, fieldView());
+            f.scrollTo(t.left, t.top);
+        }
+        $('#minimap').addEventListener('pointerdown', (e) => { e.currentTarget.setPointerCapture(e.pointerId); miniGo(e); });
+        $('#minimap').addEventListener('pointermove', (e) => { if (e.buttons) miniGo(e); });
+        $('.field').addEventListener('scroll', () => requestAnimationFrame(drawMini), { passive: true });
+        $('#miniToggle').onclick = () => { const off = $('#miniWrap').classList.toggle('off'); $('#miniToggle').setAttribute('aria-expanded', !off); };
 
         function paint() {
             const cells = $('#grid').children;
@@ -344,6 +413,7 @@
                 c.setAttribute('aria-label', s === 1 ? `已翻開 ${g.adj[i]}` : s === 2 ? '旗標' : '未翻開');
             }
             $('#left').textContent = flagsLeft(g);
+            drawMini();
             if (g.status === 'won' || g.status === 'lost') {
                 clearInterval(timer);
                 const sec = Math.floor((Date.now() - start) / 1000);

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="股票交易成本與損益試算：臺股現股、零股、當沖、ETF 的手續費、證交稅、淨損益、報酬率與損益平衡價，另有股利補充保費與分批買進平均成本。費率可自行修改。">
+    <meta name="st-keys" content="stockcost_opts">
+    <meta property="og:title" content="股票交易成本與損益試算" />
+    <meta property="og:description" content="手續費、證交稅、淨損益、損益平衡價一次算。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/stock-cost.html" />
+    <title>股票交易成本與損益試算</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            margin-bottom: 8px;
+        }
+
+        .row .f {
+            flex: 1 1 130px;
+        }
+
+        .row .f label {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .row .f input,
+        .row .f select {
+            width: 100%;
+        }
+
+        details summary {
+            cursor: pointer;
+            padding: 8px 0;
+            font-weight: 600;
+        }
+
+        .batch {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .batch input {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .batch button {
+            flex: none;
+        }
+
+        .modes button {
+            flex: 1 1 70px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>股票交易成本與損益試算</h1>
+        <p class="sub">臺股買賣的手續費、證交稅、淨損益與損益平衡價。費率與稅率都可以改，預設值僅供參考。</p>
+
+        <div class="card">
+            <div class="row modes" id="modes" role="group" aria-label="交易模式"></div>
+            <div class="row">
+                <div class="f"><label for="buy">買進價（元）</label><input type="number" id="buy" min="0" step="any" inputmode="decimal" value="100"></div>
+                <div class="f"><label for="sell">賣出價（元）</label><input type="number" id="sell" min="0" step="any" inputmode="decimal" value="110"></div>
+            </div>
+            <div class="row">
+                <div class="f"><label for="qty">數量</label><input type="number" id="qty" min="0" step="any" inputmode="decimal" value="1"></div>
+                <div class="f"><label for="unit">單位</label><select id="unit"><option value="lot">張（1000 股）</option><option value="share">股</option></select></div>
+            </div>
+            <details id="setd">
+                <summary>費率設定（手續費、稅率、進位）</summary>
+                <div class="row">
+                    <div class="f"><label for="feeRate">手續費率（%）</label><input type="number" id="feeRate" min="0" step="any" inputmode="decimal"></div>
+                    <div class="f"><label for="discount">折扣（折，10＝無折扣）</label><input type="number" id="discount" min="0.1" max="10" step="any" inputmode="decimal"></div>
+                </div>
+                <div class="row">
+                    <div class="f"><label for="minFee">最低手續費（元）</label><input type="number" id="minFee" min="0" step="any" inputmode="decimal"></div>
+                    <div class="f"><label for="taxRate">證交稅率（%）</label><input type="number" id="taxRate" min="0" step="any" inputmode="decimal"></div>
+                </div>
+                <div class="row">
+                    <div class="f"><label for="round">手續費與稅的進位</label><select id="round"><option value="floor">無條件捨去</option><option value="round">四捨五入</option></select></div>
+                    <div class="f"><label for="nhiRate">補充保費率（%）</label><input type="number" id="nhiRate" min="0" step="any" inputmode="decimal"></div>
+                    <div class="f"><label for="nhiMin">補充保費起徵點（元）</label><input type="number" id="nhiMin" min="0" step="any" inputmode="decimal"></div>
+                </div>
+                <p class="note">以當時法規與券商為準，請自行確認。最低手續費依券商規定（現股常見 20 元、零股常見 1 元）。</p>
+                <button class="sm" id="reset">還原預設</button>
+            </details>
+        </div>
+
+        <div class="card">
+            <h2>損益試算</h2>
+            <div id="res"></div>
+            <p class="note" id="msg"></p>
+        </div>
+
+        <div class="card">
+            <h2>股利試算</h2>
+            <div class="row">
+                <div class="f"><label for="dps">每股現金股利（元）</label><input type="number" id="dps" min="0" step="any" inputmode="decimal" value="3"></div>
+                <div class="f"><label for="dshares">持股數（股）</label><input type="number" id="dshares" min="0" step="1" inputmode="numeric" value="10000"></div>
+            </div>
+            <div id="divres"></div>
+            <p class="note">殖利率以上方「買進價」計算。</p>
+        </div>
+
+        <div class="card">
+            <h2>分批買進平均成本</h2>
+            <div id="batches"></div>
+            <div class="row"><button class="sm" id="addBatch">＋ 加一批</button><button class="sm" id="clearBatch">清空</button></div>
+            <div id="avgres"></div>
+            <p class="note">批次只在本頁暫存、不會儲存；最多 20 批，每批各自計算手續費（含最低手續費），不含賣出成本。</p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>試算臺股買賣的交易成本與損益：手續費、證交稅、淨損益、報酬率，並反推「賣在多少才不虧」的損益平衡價。另外可算股利的補充保費，以及分批買進的加權平均成本。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>下單前想知道價差扣掉費用後還賺不賺。</li>
+        <li>當沖、零股、ETF 的稅率與最低手續費不同，想比較。</li>
+        <li>分批加碼後想知道平均成本。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>選模式（現股、零股、當沖、ETF），會帶入該模式常見的稅率、最低手續費與單位。</li>
+        <li>填「買進價」「賣出價」「數量」並選單位（張或股）。</li>
+        <li>展開「費率設定」可改手續費率、折扣、最低手續費、證交稅率、進位方式與補充保費；「還原預設」回到預設值。</li>
+        <li>「損益試算」立即顯示結果；「股利試算」與「分批買進」各自獨立。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">現股 買 100 元、賣 110 元、1 張，折扣 10、無條件捨去：
+        買進手續費 142、賣出手續費 156、證交稅 330
+        淨損益 = 10,000 − 142 − 156 − 330 = 9,372 元
+        （改成四捨五入則為 143 / 157，淨損益 9,370）</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>預設費率與稅率（手續費 0.1425%、一般股票稅 0.3%、ETF 0.1%、當沖 0.15%、補充保費 2.11%）以當時法規與券商為準，請自行確認；最低手續費依券商規定。</li>
+        <li>損益平衡價是「賣出淨損益剛好不為負」的最低價，實際下單還要符合升降單位。</li>
+        <li>只有偏好設定（模式、折扣、費率、最低手續費、進位）存在本機；按「還原預設」即清除。分批買進與股利欄位不存檔，沒有累積資料，也就沒有上限。</li>
+        <li>結果僅供試算參考，不構成投資建議。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, statRow } = Util;
+
+        // --- pure ---
+        const MAX_BATCH = 20;
+        const MODES = {
+            stock: { label: '現股', minFee: 20, tax: 0.3, unit: 'lot' },
+            odd: { label: '零股', minFee: 1, tax: 0.3, unit: 'share' },
+            day: { label: '當沖', minFee: 20, tax: 0.15, unit: 'lot' },
+            etf: { label: 'ETF', minFee: 20, tax: 0.1, unit: 'lot' },
+        };
+        const DEFAULTS = { mode: 'stock', unit: 'lot', discount: 10, feeRate: 0.1425, minFee: 20, taxRate: 0.3, round: 'floor', nhiRate: 2.11, nhiMin: 20000 };
+        // 各數值欄位的合法範圍；超出或型別不對就用預設值
+        const RANGES = { discount: [0.1, 10], feeRate: [0, 1], minFee: [0, 1000], taxRate: [0, 5], nhiRate: [0, 10], nhiMin: [0, 1e8] };
+        function cleanOpts(raw) {
+            const r = raw && typeof raw === 'object' ? raw : {}, o = { ...DEFAULTS };
+            if (MODES[r.mode]) o.mode = r.mode;
+            if (r.unit === 'lot' || r.unit === 'share') o.unit = r.unit;
+            if (r.round === 'floor' || r.round === 'round') o.round = r.round;
+            for (const k in RANGES) if (typeof r[k] === 'number' && Number.isFinite(r[k]) && r[k] >= RANGES[k][0] && r[k] <= RANGES[k][1]) o[k] = r[k];
+            return o;
+        }
+        // 切換模式時帶入該模式的預設稅率、最低手續費與單位
+        const withMode = (o, mode) => ({ ...o, mode, minFee: MODES[mode].minFee, taxRate: MODES[mode].tax, unit: MODES[mode].unit });
+        // 進位：先去掉浮點雜訊（142.49999999 → 142.5），再依設定處理
+        const roundBy = (x, how) => { const v = Math.round(x * 1e6) / 1e6; return how === 'round' ? Math.round(v) : Math.floor(v); };
+        const feeOf = (amount, o) => (amount > 0 ? Math.max(o.minFee, roundBy(amount * o.feeRate * o.discount / 1000, o.round)) : 0);
+        const taxOf = (amount, o) => (amount > 0 ? roundBy(amount * o.taxRate / 100, o.round) : 0);
+        const sharesOf = (qty, unit) => (unit === 'lot' ? qty * 1000 : qty);
+        const amountOf = (price, shares) => Math.round(price * shares + 1e-9); // 成交金額四捨五入為整數元
+
+        // 單次買賣；回傳 null 代表輸入不合法
+        function trade(buy, sell, qty, o) {
+            const shares = sharesOf(qty, o.unit);
+            if (!(buy > 0) || !(sell >= 0) || !(shares > 0) || !Number.isFinite(buy + sell + shares)) return null;
+            const buyAmt = amountOf(buy, shares), sellAmt = amountOf(sell, shares);
+            const buyFee = feeOf(buyAmt, o), sellFee = feeOf(sellAmt, o), tax = taxOf(sellAmt, o);
+            const invested = buyAmt + buyFee, costs = buyFee + sellFee + tax, net = sellAmt - sellFee - tax - invested;
+            return { shares, buyAmt, sellAmt, buyFee, sellFee, tax, invested, costs, net, roi: net / invested * 100, bePrice: breakEven(buy, shares, o) };
+        }
+        // 損益平衡賣價：賣出淨損益 ≥ 0 的最小價格（二分法；淨損益只會在手續費進位處往下跳，所以收斂點必是向上穿越 0 的位置）
+        function breakEven(buy, shares, o) {
+            const buyAmt = amountOf(buy, shares), invested = buyAmt + feeOf(buyAmt, o);
+            const net = (p) => { const a = amountOf(p, shares); return a - feeOf(a, o) - taxOf(a, o) - invested; };
+            let lo = 0, hi = Math.max(buy, 0.01);
+            for (let i = 0; i < 60 && net(hi) < 0; i++) hi *= 2;
+            if (net(hi) < 0) return null;
+            for (let i = 0; i < 80; i++) { const mid = (lo + hi) / 2; if (net(mid) >= 0) hi = mid; else lo = mid; }
+            return hi;
+        }
+        // 股利：現金股利（取整數元）、補充保費（單次 ≥ 起徵點才課）、殖利率（以買價）
+        function dividend(dps, shares, buy, o) {
+            if (!(dps >= 0) || !(shares > 0)) return null;
+            const cash = Math.floor(dps * shares + 1e-9), nhi = cash >= o.nhiMin && cash > 0 ? roundBy(cash * o.nhiRate / 100, o.round) : 0;
+            return { cash, nhi, net: cash - nhi, yieldPct: buy > 0 ? dps / buy * 100 : null };
+        }
+        // 分批買進加權平均成本（含各批買進手續費）；batches = [{ price, qty }]，單位沿用 o.unit；無效批次略過
+        function avgCost(batches, o) {
+            let shares = 0, total = 0, n = 0;
+            for (const b of batches.slice(0, MAX_BATCH)) {
+                const s = sharesOf(b.qty, o.unit);
+                if (!(b.price > 0) || !(s > 0)) continue;
+                const amt = amountOf(b.price, s);
+                shares += s; total += amt + feeOf(amt, o); n++;
+            }
+            return n ? { shares, total, avg: total / shares, count: n } : null;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let opts = cleanOpts(store.get('stockcost_opts', null));
+        const save = () => store.set('stockcost_opts', opts);
+        const fmt = (n, d = 0) => n.toLocaleString('zh-TW', { minimumFractionDigits: d, maximumFractionDigits: d });
+        const num = (s) => { const v = parseFloat($(s).value); return Number.isFinite(v) ? v : NaN; };
+        const NUMF = ['feeRate', 'discount', 'minFee', 'taxRate', 'nhiRate', 'nhiMin'];
+        let batches = [{ price: 100, qty: 1 }, { price: 90, qty: 1 }];
+
+        function syncForm() {
+            $('#modes').replaceChildren(...Object.keys(MODES).map(k => { const b = document.createElement('button'); b.textContent = MODES[k].label; b.setAttribute('aria-pressed', opts.mode === k); b.onclick = () => { opts = withMode(opts, k); save(); syncForm(); render(); }; return b; }));
+            $('#unit').value = opts.unit; $('#round').value = opts.round;
+            for (const k of NUMF) $('#' + k).value = opts[k];
+        }
+        // 欄位變更：數值合法才採用並存檔，不合法的欄位維持原值（syncForm 會把欄位寫回）
+        function readSettings() {
+            const n = { ...opts, unit: $('#unit').value, round: $('#round').value };
+            for (const k of NUMF) { const v = num('#' + k); if (cleanOpts({ [k]: v })[k] === v) n[k] = v; }
+            opts = cleanOpts(n);
+            save(); render();
+        }
+
+        function render() {
+            const t = trade(num('#buy'), num('#sell'), num('#qty'), opts), res = $('#res');
+            if (!t) { res.replaceChildren(Object.assign(document.createElement('p'), { className: 'muted', textContent: '請填入買進價、賣出價與數量（需大於 0）。' })); }
+            else {
+                res.replaceChildren(
+                    statRow('股數', `${fmt(t.shares)} 股`),
+                    statRow('買進金額 + 手續費', `${fmt(t.buyAmt)} + ${fmt(t.buyFee)} = ${fmt(t.invested)} 元`),
+                    statRow('賣出金額', `${fmt(t.sellAmt)} 元`),
+                    statRow('賣出手續費', `${fmt(t.sellFee)} 元`),
+                    statRow('證交稅', `${fmt(t.tax)} 元`),
+                    statRow('交易成本合計（手續費 + 稅）', `${fmt(t.costs)} 元`),
+                    statRow('淨損益', `${t.net >= 0 ? '+' : ''}${fmt(t.net)} 元`, t.net >= 0 ? 'ok' : 'bad'),
+                    statRow('報酬率（對投入本金）', `${t.roi >= 0 ? '+' : ''}${fmt(t.roi, 2)}%`, t.roi >= 0 ? 'ok' : 'bad'),
+                    statRow('損益平衡賣價（含費稅）', t.bePrice == null ? '—' : `${fmt(Math.ceil(t.bePrice * 100 - 1e-6) / 100, 2)} 元`));
+            }
+            const d = dividend(num('#dps'), num('#dshares'), num('#buy'), opts);
+            $('#divres').replaceChildren(...(d ? [statRow('現金股利', `${fmt(d.cash)} 元`), statRow(`補充保費（${opts.nhiRate}%，≥ ${fmt(opts.nhiMin)} 元才課）`, `${fmt(d.nhi)} 元`), statRow('實領', `${fmt(d.net)} 元`, 'ok'), statRow('殖利率（以買進價）', d.yieldPct == null ? '—' : `${fmt(d.yieldPct, 2)}%`)] : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '請填入每股股利與持股數。' })]));
+            renderBatches();
+        }
+
+        function renderBatches() {
+            const box = $('#batches');
+            box.replaceChildren(...batches.map((b, i) => {
+                const r = document.createElement('div'); r.className = 'batch';
+                const p = Object.assign(document.createElement('input'), { type: 'number', min: 0, step: 'any', value: b.price, placeholder: '價格' }), q = Object.assign(document.createElement('input'), { type: 'number', min: 0, step: 'any', value: b.qty, placeholder: '數量' });
+                p.setAttribute('aria-label', `第 ${i + 1} 批價格`); q.setAttribute('aria-label', `第 ${i + 1} 批數量（${opts.unit === 'lot' ? '張' : '股'}）`);
+                p.oninput = () => { b.price = parseFloat(p.value); showAvg(); }; q.oninput = () => { b.qty = parseFloat(q.value); showAvg(); };
+                const del = Object.assign(document.createElement('button'), { className: 'sm', textContent: '×' }); del.setAttribute('aria-label', `刪除第 ${i + 1} 批`);
+                del.onclick = () => { batches.splice(i, 1); renderBatches(); };
+                r.append(`#${i + 1}`, p, q, del); return r;
+            }));
+            $('#addBatch').disabled = batches.length >= MAX_BATCH;
+            showAvg();
+        }
+        function showAvg() {
+            const a = avgCost(batches, opts);
+            $('#avgres').replaceChildren(...(a ? [statRow('總股數', `${fmt(a.shares)} 股（${a.count} 批，單位：${opts.unit === 'lot' ? '張' : '股'}）`), statRow('總成本（含手續費）', `${fmt(a.total)} 元`), statRow('平均成本', `${fmt(a.avg, 4)} 元/股`, 'ok')] : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '請填入至少一批的價格與數量。' })]));
+        }
+
+        for (const id of ['buy', 'sell', 'qty', 'dps', 'dshares']) $('#' + id).oninput = render;
+        for (const id of [...NUMF, 'unit', 'round']) $('#' + id).onchange = () => { readSettings(); syncForm(); if (id === 'unit') renderBatches(); };
+        $('#reset').onclick = () => { opts = { ...DEFAULTS }; save(); syncForm(); render(); };
+        $('#addBatch').onclick = () => { if (batches.length >= MAX_BATCH) { $('#msg').textContent = `最多 ${MAX_BATCH} 批`; return; } batches.push({ price: NaN, qty: 1 }); renderBatches(); };
+        $('#clearBatch').onclick = () => { batches = []; renderBatches(); };
+        syncForm(); render();
+    </script>
+</body>
+
+</html>

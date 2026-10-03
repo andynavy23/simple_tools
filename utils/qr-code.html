@@ -65,7 +65,15 @@
 
         <div id="qrPane">
         <div class="card">
-            <textarea id="text" placeholder="例如：https://andynavy23.github.io/simple_tools/" aria-label="內容"></textarea>
+            <div class="row" style="margin-top:0"><label for="tpl">範本</label>
+                <select id="tpl"><option value="">自由文字</option><option value="wifi">Wi-Fi</option><option value="vcard">名片 vCard</option><option value="tel">電話</option><option value="sms">簡訊</option><option value="mail">Email</option><option value="geo">地理位置</option><option value="event">行事曆事件</option><option value="url">網址</option></select></div>
+            <div id="tplBox" hidden>
+                <div id="tplForm" class="fgrid" style="margin-top:12px"></div>
+                <p class="note">全部在本機產生，不上傳；Wi-Fi 密碼與名片資料不會存進瀏覽器，重新整理就清空。</p>
+                <pre id="tplPrev" style="white-space:pre-wrap;word-break:break-all;font-size:13px;margin:8px 0 0;max-height:160px;overflow:auto"></pre>
+                <p id="tplErr" role="alert" style="color:var(--bad);font-size:14px;margin:6px 0 0"></p>
+            </div>
+            <textarea id="text" style="margin-top:12px" placeholder="例如：https://andynavy23.github.io/simple_tools/" aria-label="內容"></textarea>
             <div class="row">
                 <label for="ecc">容錯</label>
                 <select id="ecc">
@@ -119,19 +127,22 @@
         </ul>
         <h3>怎麼用</h3>
         <ol>
+        <li>範本：「範本」選 Wi-Fi、名片 vCard、電話、簡訊、Email、地理位置、行事曆事件或網址，填表單就會自動組出標準格式並產生 QR Code；選「自由文字」回到自己輸入。</li>
         <li>QR Code：在輸入框填內容，選「容錯」（L 7%、M 15%、Q 25%、H 30%，越高越耐髒污但圖案越密）與「大小」，圖即時產生，按「下載 PNG」。</li>
         <li>條碼：切到「條碼」分頁，選「種類」，輸入內容，選「寬度」，可勾或取消「顯示文字」。</li>
         <li>Code 128 可放英文、數字與符號；EAN-13 輸入 12 或 13 位數字，檢查碼會自動算出並驗證。</li>
         <li>按「下載 PNG」存圖。</li>
         </ol>
         <h3>範例</h3>
-        <div class="eg">QR Code 輸入 https://andynavy23.github.io/simple_tools/
+        <div class="eg">範本選 Wi-Fi、名稱 Home、密碼 a;b、加密 WPA → 組出 <b>WIFI:T:WPA;S:Home;P:a\;b;;</b>
+        QR Code 輸入 https://andynavy23.github.io/simple_tools/
         → 即時產生可掃描的 QR Code
         條碼選 Code 128、輸入 HELLO-123 → 產生含文字的條碼</div>
         <h3>小提醒</h3>
         <ul>
         <li>內容愈長 QR Code 愈密，印太小可能掃不到；手機畫面上會自動縮放顯示，下載的圖仍是原尺寸。</li>
-        <li>全部在本機產生，內容不會上傳。</li>
+        <li>全部在本機產生，內容不會上傳。Wi-Fi 密碼與名片資料不會寫入瀏覽器儲存，重新整理就消失。</li>
+        <li>範本裡的 \ ; , : " 等特殊字元會依規範自動跳脫；名片內容愈多 QR 愈密，超過容量會顯示錯誤。行事曆時間預設為「浮動時間」（不綁時區），勾選 UTC 則轉成世界標準時間。</li>
         <li>EAN-13 的商品條碼需向 GS1 申請，這裡只是產生圖案。</li>
         </ul>
     </template>
@@ -411,12 +422,69 @@
             return '101' + left + '01010' + right + '101';
         }
 
+
+        // ---------- 範本：組出標準格式字串（錯誤以 Error 丟出，訊息給使用者看） ----------
+        const need = (v, msg) => { if (!String(v ?? '').trim()) throw new Error(msg); return String(v).trim(); };
+        // Wi-Fi：\ ; , : " 要加反斜線；純十六進位的值要加雙引號，否則掃描端會當成 hex
+        const wifiEsc = (v) => { const e = String(v).replace(/[\\;,:"]/g, '\\$&'); return /^[0-9a-fA-F]+$/.test(v) ? '"' + e + '"' : e; };
+        function wifiString({ ssid, pass = '', type = 'WPA', hidden = false }) {
+            ssid = need(ssid, '請輸入 Wi-Fi 名稱');
+            if (!['WPA', 'WEP', 'nopass'].includes(type)) throw new Error('不支援的加密類型');
+            if (type !== 'nopass') need(pass, '請輸入密碼，或把加密改成「無」');
+            return `WIFI:T:${type};S:${wifiEsc(ssid)};${type === 'nopass' ? '' : `P:${wifiEsc(pass)};`}${hidden ? 'H:true;' : ''};`;
+        }
+        // vCard / iCalendar 的文字跳脫：\ ; , 與換行
+        const textEsc = (v) => String(v).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+        function vcardString({ name, org, title, tel, email, url, adr }) {
+            name = need(name, '請輸入姓名');
+            const L = ['BEGIN:VCARD', 'VERSION:3.0', `N:${textEsc(name)};;;;`, `FN:${textEsc(name)}`];
+            if (org) L.push(`ORG:${textEsc(org)}`);
+            if (title) L.push(`TITLE:${textEsc(title)}`);
+            if (tel) L.push(`TEL;TYPE=CELL:${textEsc(tel)}`);
+            if (email) L.push(`EMAIL:${textEsc(email)}`);
+            if (url) L.push(`URL:${textEsc(url)}`);
+            if (adr) L.push(`ADR;TYPE=WORK:;;${textEsc(adr)};;;;`);
+            L.push('END:VCARD');
+            return L.join('\r\n');
+        }
+        const telString = ({ tel }) => 'tel:' + need(tel, '請輸入電話號碼').replace(/[\s-]/g, '');
+        const smsString = ({ tel, body = '' }) => `SMSTO:${need(tel, '請輸入電話號碼').replace(/[\s-]/g, '')}:${body}`;
+        function mailString({ to, subject = '', body = '' }) {
+            const q = [subject && 'subject=' + encodeURIComponent(subject), body && 'body=' + encodeURIComponent(body)].filter(Boolean).join('&');
+            return 'mailto:' + need(to, '請輸入收件人 Email') + (q ? '?' + q : '');
+        }
+        function geoString({ lat, lon }) {
+            const a = Number(lat), o = Number(lon);
+            if (String(lat).trim() === '' || String(lon).trim() === '' || !Number.isFinite(a) || !Number.isFinite(o)) throw new Error('請輸入緯度與經度（數字）');
+            if (Math.abs(a) > 90 || Math.abs(o) > 180) throw new Error('緯度須在 −90–90、經度須在 −180–180');
+            return `geo:${a},${o}`;
+        }
+        const urlString = ({ url }) => { const u = need(url, '請輸入網址'); return /^[a-z][a-z0-9+.-]*:\/\//i.test(u) ? u : 'https://' + u; };
+        // datetime-local 值（YYYY-MM-DDTHH:mm）→ iCalendar 時間；utc=true 時把本地時間換成 UTC（結尾 Z），否則為浮動時間
+        function icsTime(v, utc) {
+            const m = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(v || '');
+            if (!m) throw new Error('請輸入有效的開始與結束時間');
+            if (!utc) return m[1] + m[2] + m[3] + 'T' + m[4] + m[5] + '00';
+            return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).toISOString().replace(/[-:]|\.\d+/g, '');
+        }
+        function eventString({ title, start, end, place, desc, utc = false }, now = new Date()) {
+            title = need(title, '請輸入標題');
+            const s = icsTime(start, utc), e = icsTime(end, utc);
+            if (e <= s) throw new Error('結束時間必須晚於開始時間');   // 兩邊格式相同，字串比較即時間先後
+            const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//simple_tools//QR//EN', 'BEGIN:VEVENT', `UID:${s}-${e}@simple-tools`, `DTSTAMP:${now.toISOString().replace(/[-:]|\.\d+/g, '')}`, `SUMMARY:${textEsc(title)}`, `DTSTART:${s}`, `DTEND:${e}`];
+            if (place) L.push(`LOCATION:${textEsc(place)}`);
+            if (desc) L.push(`DESCRIPTION:${textEsc(desc)}`);
+            L.push('END:VEVENT', 'END:VCALENDAR');
+            return L.join('\r\n');
+        }
+        const QR_TPL = { wifi: wifiString, vcard: vcardString, tel: telString, sms: smsString, mail: mailString, geo: geoString, event: eventString, url: urlString };
+        const utf8Len = (t) => new TextEncoder().encode(t).length;
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
 
         function render() {
-            const text = $('#text').value;
+            const text = tplKey ? built : $('#text').value;
             $('#stage').hidden = !text;
             if (!text) { $('#info').textContent = ''; return; }
             try {
@@ -428,7 +496,7 @@
                 ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, px, px);
                 ctx.fillStyle = '#000';
                 qr.modules.forEach((row, y) => row.forEach((on, x) => { if (on) ctx.fillRect((x + border) * scale, (y + border) * scale, scale, scale); }));
-                $('#info').textContent = `版本 ${qr.version}（${qr.size}×${qr.size}）・ 這個版本最多可放 ${qr.capacityBytes} 位元組（中文每字約 3 位元組）`;
+                $('#info').textContent = `版本 ${qr.version}（${qr.size}×${qr.size}）・ 這個版本最多可放 ${qr.capacityBytes} 位元組（中文每字約 3 位元組）${tplKey ? `・ 目前 ${utf8Len(text)} 位元組` : ''}`;
                 $('#stage').hidden = false;
             } catch (e) {
                 $('#info').textContent = e.message;
@@ -460,6 +528,44 @@
         $('#bsave').onclick = () => $('#bc').toBlob((blob) => Util.download(blob, 'barcode.png'));
         document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-pressed', x === b)); $('#qrPane').hidden = b.dataset.t !== 'qr'; $('#barPane').hidden = b.dataset.t !== 'bar'; }; });
 
+        // ---------- 範本表單（內容只留在記憶體，不寫 localStorage） ----------
+        const TPL_FIELDS = {
+            wifi: [['ssid', '名稱 (SSID)'], ['pass', '密碼'], ['type', '加密', 'sel', [['WPA', 'WPA / WPA2'], ['WEP', 'WEP'], ['nopass', '無']]], ['hidden', '隱藏網路', 'chk']],
+            vcard: [['name', '姓名'], ['org', '公司'], ['title', '職稱'], ['tel', '電話', 'tel'], ['email', 'Email', 'email'], ['url', '網址'], ['adr', '地址']],
+            tel: [['tel', '電話號碼', 'tel']],
+            sms: [['tel', '電話號碼', 'tel'], ['body', '簡訊內容', 'area']],
+            mail: [['to', '收件人', 'email'], ['subject', '主旨'], ['body', '內文', 'area']],
+            geo: [['lat', '緯度（例 25.0330）'], ['lon', '經度（例 121.5654）']],
+            event: [['title', '標題'], ['start', '開始', 'datetime-local'], ['end', '結束', 'datetime-local'], ['place', '地點'], ['desc', '說明', 'area'], ['utc', '以 UTC 時間輸出（預設為浮動時間）', 'chk']],
+            url: [['url', '網址（可省略 https://）']],
+        };
+        let tplKey = '', built = '';
+        function buildTpl() {
+            const v = {};
+            document.querySelectorAll('#tplForm [data-k]').forEach(e => { v[e.dataset.k] = e.type === 'checkbox' ? e.checked : e.value; });
+            try { built = QR_TPL[tplKey](v); $('#tplErr').textContent = ''; } catch (e) { built = ''; $('#tplErr').textContent = e.message; }
+            $('#tplPrev').textContent = built;
+            render();
+        }
+        $('#tpl').onchange = () => {
+            tplKey = $('#tpl').value; built = '';
+            $('#tplBox').hidden = !tplKey; $('#text').hidden = !!tplKey;
+            $('#tplForm').replaceChildren(...(TPL_FIELDS[tplKey] || []).map(([k, label, kind, opts]) => {
+                const w = document.createElement('div'), l = document.createElement('label'), id = 'tf_' + k;
+                const f = document.createElement(kind === 'sel' ? 'select' : kind === 'area' ? 'textarea' : 'input');
+                f.id = id; f.dataset.k = k; f.autocomplete = 'off'; f.spellcheck = false;
+                if (kind === 'sel') opts.forEach(([a, b]) => f.add(new Option(b, a)));
+                else if (kind === 'chk') f.type = 'checkbox';
+                else if (kind !== 'area') f.type = kind || 'text';
+                if (kind === 'area') f.style.minHeight = '70px';
+                if (kind !== 'chk') f.style.width = '100%';
+                l.htmlFor = id; l.textContent = label;
+                if (kind === 'chk') { l.style.display = 'flex'; l.style.gap = '8px'; l.style.alignItems = 'center'; l.prepend(f); w.append(l); } else w.append(l, f);
+                f.oninput = f.onchange = buildTpl;
+                return w;
+            }));
+            if (tplKey) buildTpl(); else { $('#tplErr').textContent = ''; render(); }
+        };
         $('#text').oninput = render;
         $('#ecc').onchange = render;
         $('#scale').onchange = render;

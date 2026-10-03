@@ -79,6 +79,8 @@
 | [擲筊 / 求籤](fun/divination.html) | 擲筊（聖筊 / 笑筊 / 陰筊、連續聖筊計數與統計）；求籤（大吉到凶五級，事業 / 感情 / 財運 / 健康各一句）；可複製 | `divine_tab`、`divine_stats` |  |
 | [心情日記](fun/mood-journal.html) | 每天一筆（可補寫過去、同日覆蓋或追加）；心情 5 級 + 可複選且可自訂的標籤 + 文字（最多 2000 字）；月曆以顏色顯示心情，點日期查看 / 編輯；統計：本月平均、各標籤對心情的影響、連續記錄天數、近 30 天折線；搜尋；匯出 .txt / .md；上限 3650 筆 | `mood_entries`、`mood_tags` |  |
 | [書單追蹤](fun/reading-list.html) | 書名 / 作者 / 總頁數 / 目前頁數 / 狀態（想讀、在讀、讀完、擱置）/ 評分 1–5 / 心得 / 開始與完成日；進度條；依狀態分頁、搜尋、排序；統計（今年讀完幾本、平均評分、累積頁數）；進度到總頁數自動變讀完；匯出 .md / CSV；上限 2000 本 | `books_list` |  |
+| [重訓記錄](fun/workout-log.html) | 內建 30 個動作加自訂（上限 50）；多組重量 × 次數、RPE、備註；預估 1RM（Epley / Brzycki）、三種 PR 並標 🏆、近 12 次 1RM 折線圖、每週訓練量；kg / lb 顯示切換；訓練紀錄上限 5000 次；刪某動作全部紀錄、刪一年前、清除全部 | `workout_log`、`workout_moves`、`workout_prefs` |  |
+| [睡眠記錄](fun/sleep-log.html) | 入睡與起床時間（跨午夜自動算日期）、品質 1–5、備註；近 7 / 14 / 30 天平均時數、平均入睡 / 起床、規律度、睡眠債（目標可調）、近 14 天長條圖；上限 3650 筆；刪單筆、刪一年前、清除全部；僅供參考，不是醫療建議 | `sleep_log`、`sleep_goal` |  |
 
 ## 工具
 
@@ -93,10 +95,10 @@
 | [Cron 表達式解析](utils/cron-parser.html) | 5 欄位 cron（* , - / ?、月份星期縮寫、@daily）中文說明與未來 10 次執行時間 | `cron_expr` |  |
 | [CSV / TSV 表格工具](utils/csv-tool.html) | RFC 4180 解析（引號、跳脫、儲存格內換行）、自動判斷分隔符號、排序與篩選、輸出 JSON / Markdown / TSV | — |  |
 | [日期計算機](utils/date-calc.html) | 相差（天 / 週 / 年月日 / 工作日）、加減（含工作日）、星期與 ISO 週次 | `datecalc_tab` |  |
-| [編碼解碼](utils/encode-decode.html) | Base64 / URL / Unicode / HTML 實體 / 十六進位；JWT 解析（顯示過期時間，不驗簽）；網址參數拆解 / 組合；SHA-1 / 256 / 384 / 512 雜湊（文字與檔案，可貼官方值比對）；摩斯密碼、凱薩密碼、ROT13 | — |  |
+| [編碼解碼](utils/encode-decode.html) | Base64 / URL / Unicode / HTML 實體 / 十六進位；JWT 解析（顯示過期時間，不驗簽）；網址參數拆解 / 組合；SHA-1 / 256 / 384 / 512 雜湊（文字與檔案，可貼官方值比對）；摩斯密碼、凱薩密碼、ROT13；字元檢視：逐字素列出碼位 / UTF-8 / UTF-16 / 類別 / 腳本，標示零寬、BOM、NBSP、方向控制、同形異義字元；可移除零寬與方向控制字元；NFC / NFD / NFKC / NFKD 正規化（不存資料） | — |  |
 | [記帳本](utils/expense-tracker.html) | 收支分類、月統計、分類佔比；固定支出 / 訂閱（每週 / 月 / 年、下次扣款日、折合每月 / 每年、一鍵記入明細）；資料只在本機，可匯出 CSV（防公式注入）；外幣記帳：17 種外幣，匯率取自單位換算器的匯率快取並於記帳當下鎖定，同存外幣金額 / 幣別 / 匯率 / 台幣金額，離線可手動輸入匯率，CSV 多三欄 | `expenses`、`expense_fixed`、`fx_cache` |  |
 | [油耗 / 行車成本](utils/fuel-log.html) | 加滿到加滿法計算每段油耗（沒加滿的併入下一次）、整體平均、最近 12 段走勢、匯出 CSV | `fuel_entries` |  |
-| [BMI / 熱量 / 心率計算](utils/health-calc.html) | BMI（台灣標準）、BMR、TDEE、心率區間（含儲備心率法）；體重紀錄（折線圖、目標線、近 30 天趨勢、預估達標日） | `weight_log`、`weight_goal` |  |
+| [BMI / 熱量 / 心率計算](utils/health-calc.html) | BMI（台灣標準）、BMR、TDEE、心率區間（含儲備心率法）；體重紀錄（折線圖、目標線、近 30 天趨勢、預估達標日）；飲食記錄：約 170 種臺灣常見食物估計熱量、搜尋別名、自訂食物最多 50 個、與 TDEE 對照、各餐別小計、近 7 天圖；紀錄上限 5000 筆（估計值，不是醫療建議） | `weight_log`、`weight_goal`、`food_log`、`food_custom` |  |
 | [圖片壓縮 / 縮圖 / 轉檔](utils/image-resize.html) | 等比縮放、品質調整、JPEG / PNG / WebP 轉檔、SVG 轉 PNG（向量可放大到任意尺寸）；圖片不上傳，重新編碼會移除 EXIF | — |  |
 | [JSON 整理器](utils/json-formatter.html) | 美化 / 壓縮 / 驗證、錯誤定位、樹狀檢視；JSON ↔ YAML、JSON ↔ CSV 轉換 | — |  |
 | [貸款 / 複利試算](utils/loan-calculator.html) | 本息 / 本金平均攤還與逐期表；起始本金 + 每月投入的複利成長；存款目標（多久達標 / 每月要存多少，可扣通膨） | — |  |
@@ -105,7 +107,7 @@
 | [密碼產生器](utils/password-gen.html) | 以瀏覽器安全亂數在本機產生密碼，可排除易混淆字元；強度檢測（熵、常見弱密碼、連號 / 鍵盤順序、估計破解時間，只在本機計算） | — |  |
 | [週期表](utils/periodic-table.html) | 118 元素、10 種類別著色與篩選、原子量 / 族 / 週期 / 常溫狀態 / 電子組態（含例外），中英文與符號搜尋 | `pt_sel` |  |
 | [比價 / 單價計算](utils/price-compare.html) | 重量 / 容量 / 個數三組單位（含台斤、兩、打），多份數，同組比較並標示貴多少 %；折扣 / 稅額分頁：折上折、滿額折 / 滿減、買 N 送 M 實際折數、含稅 / 未稅互算（5% / 自訂）、外國旅客退稅估算（僅供估算）、取整方式可選 | `price_rows`、`price_tax` |  |
-| [QR Code 產生器](utils/qr-code.html) | 自行實作的 QR 編碼器（版本 1–40、容錯 L/M/Q/H）；Code 128（B / C 自動選）與 EAN-13 條碼（與 JsBarcode 逐位元比對過）；可下載 PNG | — |  |
+| [QR Code 產生器](utils/qr-code.html) | 自行實作的 QR 編碼器（版本 1–40、容錯 L/M/Q/H）；Code 128（B / C 自動選）與 EAN-13 條碼（與 JsBarcode 逐位元比對過）；可下載 PNG；範本：Wi-Fi / vCard 3.0 / 電話 / 簡訊 / Email / 地理位置 / 行事曆事件 / 網址，自動跳脫；敏感資料不寫入 localStorage | — |  |
 | [UUID / 隨機資料產生](utils/random-data.html) | UUID v4、整數、日期、假姓名 / 手機 / Email；最多 1000 筆 | `rd_kind` |  |
 | [正規表示式測試器](utils/regex-tester.html) | 即時標示符合內容、群組與位置 | — |  |
 | [薪資 / 加班費試算](utils/salary-calc.html) | 時薪 = 月薪 ÷ 240；平日 / 休息日 / 假日加班費分段倍率；實領概算；113 年度綜合所得稅概算與年終獎金多繳的稅 | `salary_calc` |  |
@@ -128,6 +130,11 @@
 | [批次重新命名](utils/batch-rename.html) | 貼檔名清單（或選檔只取檔名），規則串接（前後綴 / 取代含 regex / 移除字元 / 大小寫 / 編號 / 日期 / 副檔名）、自然排序、衝突偵測並擋匯出；輸出 PowerShell、CMD、bash 指令與 CSV；只在本機計算、不存資料 | — |  |
 | [號碼驗證與測試資料](utils/id-validator.html) | 驗證與產生身分證 / 居留證（含舊式 A–D 與新式 8/9）、統一編號（2023 新規則）、信用卡 Luhn（只產生測試用格式）、臺灣電話簡易格式檢查；全在本機計算、不存資料 | — |  |
 | [水平儀 / 指南針](utils/level-compass.html) | 水平儀（平放 / 立起、歸零校正）、指南針（絕對方位，磁偏角未修正）、坡度（度 / % / 高:長）；iOS 需授權感測器，無感測器時可用模擬輸入預覽；不存資料 | — |  |
+| [照片 EXIF 檢視與清除](utils/exif-viewer.html) | JPEG / PNG / WebP 自行解析 EXIF（相機、鏡頭、時間、曝光、方向、GPS 與地圖文字連結、縮圖）與 XMP / IPTC / ICC 區段；無損移除中繼資料（可保留方向）或 canvas 重新編碼；清除後重新解析；最多 20 張、單張 30MB；不存資料 | — |  |
+| [錄音機](utils/audio-recorder.html) | getUserMedia + MediaRecorder 錄音（webm/opus、mp4、ogg 依瀏覽器）、暫停 / 繼續、即時音量條；清單可播放、改名、刪除、下載原格式或 16-bit WAV；單次 60 分鐘、清單 20 段；只存記憶體，未下載會提醒；不存資料 | — |  |
+| [亂碼修復 / 編碼轉換](utils/encoding-fixer.html) | 檔案轉碼（自動偵測 BOM / UTF-8 / Big5 / GBK / SJIS 等，手動指定、預覽、另存 UTF-8，可選 BOM 與換行，上限 20MB）；貼上亂碼逆向修復（互錯組合評分排序）；含 � 的無法修復；不存資料 | — |  |
+| [chmod 權限計算器](utils/chmod-calc.html) | 勾選、八進位、符號三向同步，含 setuid / setgid / sticky；常見組合速查；umask 計算；符號模式模擬（u/g/o/a、+ - =、r w x X s t、g=u）；產生 chmod 與 find 指令；不存資料 | — |  |
+| [股票交易成本與損益試算](utils/stock-cost.html) | 臺股現股 / 零股 / 當沖 / ETF 手續費（折扣、最低手續費）、證交稅、淨損益、報酬率、損益平衡賣價；進位可選；股利補充保費與殖利率；分批買進（最多 20 批）平均成本；費率稅率皆可改（以當時法規與券商為準）；只存偏好設定 | `stockcost_opts` |  |
 
 ## 閱讀
 

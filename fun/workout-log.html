@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="重訓記錄：記下每次訓練的動作、重量與次數，自動算預估 1RM、個人最佳（PR）、1RM 趨勢圖與每週訓練量，資料只存在你的瀏覽器。">
+    <meta name="st-keys" content="workout_log,workout_moves,workout_prefs">
+    <meta property="og:title" content="重訓記錄" />
+    <meta property="og:description" content="記錄每組重量與次數，看預估 1RM 與 PR。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/workout-log.html" />
+    <title>重訓記錄</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            margin-bottom: 8px;
+        }
+
+        .row .f {
+            flex: 1 1 130px;
+        }
+
+        .row .f label {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .row .f input,
+        .row .f select {
+            width: 100%;
+        }
+
+        .setrow {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .setrow input {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .setrow span {
+            color: var(--muted);
+            min-width: 2.2em;
+        }
+
+        .it {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--line);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .it:last-child {
+            border-bottom: 0;
+        }
+
+        .it small {
+            color: var(--muted);
+            display: block;
+            word-break: break-all;
+        }
+
+        .it .btns {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 6px;
+        }
+
+        .dh {
+            margin: 14px 0 2px;
+            font-weight: 700;
+            color: var(--muted);
+        }
+
+        .chart {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .chart .ln {
+            stroke: var(--blue);
+            fill: none;
+            stroke-width: 2;
+        }
+
+        .chart .dot {
+            fill: var(--blue);
+        }
+
+        .chart text {
+            fill: var(--muted);
+            font-size: 11px;
+        }
+
+        .wk {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .wk i {
+            display: block;
+            height: 10px;
+            background: var(--blue);
+            border-radius: 3px;
+        }
+
+        .wk span {
+            min-width: 4.5em;
+            color: var(--muted);
+        }
+
+        .seg button {
+            flex: 1 1 auto;
+        }
+
+        .mv {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+        }
+
+        .mv span {
+            flex: 1;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>重訓記錄</h1>
+        <p class="sub">記下每次訓練的動作與每一組的重量、次數，自動算預估 1RM、個人最佳與每週訓練量。</p>
+
+        <div class="card">
+            <div class="row">
+                <div class="f"><label for="date">日期</label><input type="date" id="date"></div>
+                <div class="f"><label for="move">動作</label><select id="move"></select></div>
+            </div>
+            <div id="sets"></div>
+            <div class="row">
+                <button class="sm" id="addSet">＋ 加一組</button>
+                <button class="sm" id="dupSet">複製上一組</button>
+            </div>
+            <div class="row">
+                <div class="f"><label for="rpe">RPE（1–10，可留空）</label><input type="number" id="rpe" min="1" max="10" step="0.5" inputmode="decimal"></div>
+                <div class="f"><label for="note">備註</label><input type="text" id="note" maxlength="200"></div>
+            </div>
+            <div class="row"><button class="primary" id="save">記錄這次訓練</button><button class="sm" id="cancel" hidden>取消編輯</button></div>
+            <p class="note" id="msg" aria-live="polite"></p>
+        </div>
+
+        <div class="card">
+            <h2 id="mvTitle">動作統計</h2>
+            <div class="row seg" role="group" aria-label="顯示設定">
+                <button class="sm" id="uKg" aria-pressed="true">kg</button>
+                <button class="sm" id="uLb" aria-pressed="false">lb</button>
+                <button class="sm" id="fEp" aria-pressed="true">Epley</button>
+                <button class="sm" id="fBr" aria-pressed="false">Brzycki</button>
+            </div>
+            <div id="stats"></div>
+            <h2 style="margin-top:14px">近 12 次預估 1RM</h2>
+            <div id="chart"></div>
+            <h2 style="margin-top:14px">每週訓練量（近 8 週）</h2>
+            <div id="weekly"></div>
+        </div>
+
+        <div class="card">
+            <h2>訓練歷史</h2>
+            <div id="hist"></div>
+            <div class="row"><button class="sm" id="more" hidden>顯示更多</button></div>
+        </div>
+
+        <div class="card">
+            <h2>動作清單</h2>
+            <div class="row">
+                <div class="f"><label for="nmZh">自訂動作名稱</label><input type="text" id="nmZh" maxlength="30"></div>
+                <div class="f"><label for="nmEn">英文（可留空）</label><input type="text" id="nmEn" maxlength="30"></div>
+                <button class="sm" id="addMove">新增動作</button>
+            </div>
+            <div id="custom"></div>
+            <p class="note" id="mvMsg" aria-live="polite"></p>
+        </div>
+
+        <div class="card">
+            <h2>資料管理</h2>
+            <p class="note" id="count"></p>
+            <div class="row">
+                <button class="sm" id="delMove">刪除這個動作的全部紀錄</button>
+                <button class="sm" id="delOld">刪除一年前的紀錄</button>
+                <button class="sm" id="delAll">清除全部</button>
+            </div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>重訓日誌：每次訓練記一個動作的多組「重量 × 次數」，自動算預估 1RM（一次最大重量）、個人最佳（PR）、趨勢圖與每週訓練量。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>想知道深蹲、硬舉、臥推的力量有沒有進步。</li>
+        <li>在健身房快速記下每一組，回家看趨勢。</li>
+        <li>想複製某次訓練貼給教練或朋友。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>選「日期」與「動作」（內建 30 個常見動作，也可在「動作清單」自訂新增）。</li>
+        <li>每組填重量與次數，「＋ 加一組」或「複製上一組」；可填 RPE 與備註。</li>
+        <li>按「記錄這次訓練」。同一天同一動作可記多次。</li>
+        <li>「動作統計」顯示該動作的預估 1RM、重量 / 1RM / 次數 PR、近 12 次趨勢與每週訓練量；破紀錄的那筆歷史會標 🏆。</li>
+        <li>歷史可「編輯」「刪除」「複製」成文字。kg / lb 與 Epley / Brzycki 只影響顯示與計算方式，不改你輸入的資料。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">深蹲 100 kg × 5：Epley 預估 1RM = 100 × (1 + 5/30) = 116.7 kg
+        Brzycki = 100 × 36 / (37 − 5) = 112.5 kg
+        只做 1 下就直接取實際重量。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>資料只存在本機瀏覽器，請用右上角「💾」備份。</li>
+        <li>上限：訓練紀錄 5,000 次、每次最多 40 組、自訂動作 50 個；達到上限會拒絕新增並提示，請先刪除舊紀錄。</li>
+        <li>清除：每筆有「刪除」；「資料管理」可刪某動作的全部紀錄、刪一年前的紀錄、清除全部（連同自訂動作），都會先確認且無法復原。刪除自訂動作時，它的紀錄也會一併刪除。</li>
+        <li>重量以 kg 儲存；切到 lb 時，輸入也以 lb 為單位並換算存成 kg。預估 1RM 只是估算，次數越多越不準（Brzycki 超過 36 次以 36 次計）。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, day, statRow, rnd, copyWithFeedback } = Util;
+
+        // --- pure ---
+        const MAX_LOG = 5000, MAX_SETS = 40, MAX_CUSTOM = 50, LB = 2.20462;
+        const BUILTIN = [
+            ['squat', '深蹲', 'Squat'], ['deadlift', '硬舉', 'Deadlift'], ['bench', '臥推', 'Bench Press'], ['ohp', '肩推', 'Overhead Press'], ['row', '槓鈴划船', 'Barbell Row'],
+            ['pullup', '引體向上', 'Pull-up'], ['rowmachine', '划船機', 'Rowing Machine'], ['incline', '上斜臥推', 'Incline Bench Press'], ['dips', '雙槓撐體', 'Dips'], ['lunge', '弓箭步', 'Lunge'],
+            ['rdl', '羅馬尼亞硬舉', 'Romanian Deadlift'], ['legpress', '腿推', 'Leg Press'], ['latpd', '滑輪下拉', 'Lat Pulldown'], ['cablerow', '坐姿划船', 'Seated Cable Row'], ['dbbench', '啞鈴臥推', 'Dumbbell Bench Press'],
+            ['dbohp', '啞鈴肩推', 'Dumbbell Shoulder Press'], ['lateral', '側平舉', 'Lateral Raise'], ['curl', '二頭彎舉', 'Biceps Curl'], ['pushdown', '三頭下壓', 'Triceps Pushdown'], ['legext', '腿伸屈', 'Leg Extension'],
+            ['legcurl', '腿彎舉', 'Leg Curl'], ['calf', '提踵', 'Calf Raise'], ['hipthrust', '臀推', 'Hip Thrust'], ['fsquat', '前蹲', 'Front Squat'], ['chinup', '反手引體向上', 'Chin-up'],
+            ['facepull', '面拉', 'Face Pull'], ['shrug', '聳肩', 'Shrug'], ['pushup', '伏地挺身', 'Push-up'], ['cablefly', '繩索飛鳥', 'Cable Fly'], ['sumo', '相撲硬舉', 'Sumo Deadlift'],
+        ].map(([id, zh, en]) => ({ id, zh, en }));
+        const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+        const r1 = (x) => Math.round(x * 10) / 10;
+
+        // 預估 1RM：reps=1 取實際重量；Epley w×(1+reps/30)；Brzycki w×36/(37−reps)（reps 超過 36 以 36 計）；無效輸入回 0
+        function e1rm(w, reps, formula = 'epley') {
+            if (!(w > 0) || !(reps >= 1) || !Number.isFinite(w + reps)) return 0;
+            if (reps === 1) return w;
+            return formula === 'brzycki' ? w * 36 / (37 - Math.min(reps, 36)) : w * (1 + reps / 30);
+        }
+        // 單次訓練的統計：最大重量、單組最大次數、最佳預估 1RM、總訓練量
+        function entryStats(e, formula) {
+            let maxW = 0, maxR = 0, best = 0, vol = 0;
+            for (const [w, r] of e.s) { maxW = Math.max(maxW, w); maxR = Math.max(maxR, r); best = Math.max(best, e1rm(w, r, formula)); vol += w * r; }
+            return { maxW, maxR, e1rm: best, vol };
+        }
+        // 依日期（同日依陣列順序）排序
+        const chrono = (log) => log.map((e, i) => [e, i]).sort((a, b) => a[0].d.localeCompare(b[0].d) || a[1] - b[1]).map(x => x[0]);
+        // 某動作的 PR：回傳 { id → { w, e, r } }（嚴格超越之前所有紀錄才算；第一筆沒有比較對象不標）
+        function prFlags(log, moveId, formula) {
+            const out = {}; let mw = 0, me = 0, mr = 0, first = true;
+            for (const e of chrono(log).filter(x => x.m === moveId)) {
+                const s = entryStats(e, formula);
+                if (!first) { const f = { w: s.maxW > mw, e: s.e1rm > me, r: s.maxR > mr }; if (f.w || f.e || f.r) out[e.id] = f; }
+                first = false; mw = Math.max(mw, s.maxW); me = Math.max(me, s.e1rm); mr = Math.max(mr, s.maxR);
+            }
+            return out;
+        }
+        // 個人最佳（目前最大值）
+        function bests(log, moveId, formula) {
+            const b = { w: 0, e: 0, r: 0, count: 0 };
+            for (const e of log) if (e.m === moveId) { const s = entryStats(e, formula); b.w = Math.max(b.w, s.maxW); b.e = Math.max(b.e, s.e1rm); b.r = Math.max(b.r, s.maxR); b.count++; }
+            return b;
+        }
+        // 近 n 次訓練的預估 1RM（由舊到新）
+        const trend = (log, moveId, formula, n = 12) => chrono(log).filter(e => e.m === moveId).slice(-n).map(e => ({ d: e.d, v: entryStats(e, formula).e1rm }));
+        // 每週（週一起算）總訓練量：最近 n 週（含本週）；moveId 為空表示全部動作
+        function weeklyVolume(log, today, moveId, n = 8) {
+            const mon = (d) => day.shift(d, -((day.num(d) + 3) % 7)), thisWk = mon(today), weeks = [];
+            for (let i = n - 1; i >= 0; i--) weeks.push({ wk: day.shift(thisWk, -7 * i), vol: 0 });
+            for (const e of log) {
+                if (moveId && e.m !== moveId) continue;
+                const w = weeks.find(x => x.wk === mon(e.d)); if (w) w.vol += entryStats(e, 'epley').vol;
+            }
+            return weeks;
+        }
+        // 驗證 / 清理一筆紀錄；無效回 null
+        function cleanEntry(x) {
+            if (!x || typeof x !== 'object' || typeof x.id !== 'string' || !x.id || typeof x.m !== 'string' || !x.m || typeof x.d !== 'string' || !DATE_RE.test(x.d) || !Array.isArray(x.s)) return null;
+            const s = x.s.filter(a => Array.isArray(a) && Number.isFinite(a[0]) && a[0] >= 0 && a[0] <= 2000 && Number.isInteger(a[1]) && a[1] >= 1 && a[1] <= 1000).slice(0, MAX_SETS).map(a => [Math.round(a[0] * 1000) / 1000, a[1]]);
+            if (!s.length) return null;
+            return { id: x.id, d: x.d, m: x.m, s, n: typeof x.n === 'string' ? x.n.slice(0, 200) : '', rpe: Number.isFinite(x.rpe) && x.rpe >= 1 && x.rpe <= 10 ? x.rpe : null };
+        }
+        function cleanLog(raw) {
+            const seen = new Set(), out = [];
+            for (const x of Array.isArray(raw) ? raw : []) { const e = cleanEntry(x); if (e && !seen.has(e.id)) { seen.add(e.id); out.push(e); } }
+            return out.slice(0, MAX_LOG);
+        }
+        function cleanMoves(raw) {
+            const seen = new Set(BUILTIN.map(b => b.id)), out = [];
+            for (const x of Array.isArray(raw) ? raw : []) {
+                if (!x || typeof x.id !== 'string' || !x.id || seen.has(x.id) || typeof x.zh !== 'string' || !x.zh.trim()) continue;
+                seen.add(x.id); out.push({ id: x.id, zh: x.zh.trim().slice(0, 30), en: typeof x.en === 'string' ? x.en.trim().slice(0, 30) : '' });
+            }
+            return out.slice(0, MAX_CUSTOM);
+        }
+        const cleanPrefs = (p) => ({ lb: !!(p && p.lb), formula: p && p.formula === 'brzycki' ? 'brzycki' : 'epley' });
+        const pruneOlder = (log, today) => log.filter(e => e.d >= day.shift(today, -365));
+        const dispW = (kg, lb) => r1(lb ? kg * LB : kg);
+        const toKg = (v, lb) => Math.round((lb ? v / LB : v) * 1000) / 1000;
+        function entryText(e, name, lb) {
+            const u = lb ? 'lb' : 'kg';
+            return `${e.d} ${name}\n` + e.s.map(([w, r], i) => `${i + 1}. ${dispW(w, lb)}${u} × ${r}`).join('\n') + (e.rpe ? `\nRPE ${e.rpe}` : '') + (e.n ? `\n${e.n}` : '');
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const el = (t, p, ...k) => { const e = Object.assign(document.createElement(t), p); e.append(...k); return e; };
+        let log = cleanLog(store.get('workout_log', [])), custom = cleanMoves(store.get('workout_moves', [])), prefs = cleanPrefs(store.get('workout_prefs', null));
+        let editing = null, shown = 60, setRows = [];
+        const saveLog = () => store.set('workout_log', log), saveMoves = () => store.set('workout_moves', custom), savePrefs = () => store.set('workout_prefs', prefs);
+        const moves = () => [...BUILTIN, ...custom];
+        const mvName = (id) => { const m = moves().find(x => x.id === id); return m ? m.zh : id + '（已刪除的動作）'; };
+        const u = () => (prefs.lb ? 'lb' : 'kg');
+        const fmt = (n) => n.toLocaleString('zh-TW', { maximumFractionDigits: 1 });
+        const newId = () => Date.now().toString(36) + rnd(1e6).toString(36);
+
+        function renderMoveSelect() {
+            const cur = $('#move').value;
+            $('#move').replaceChildren(...moves().map(m => el('option', { value: m.id, textContent: m.en ? `${m.zh} ${m.en}` : m.zh })));
+            if (moves().some(m => m.id === cur)) $('#move').value = cur;
+        }
+        function renderSets() {
+            $('#sets').replaceChildren(...setRows.map((r, i) => {
+                const w = el('input', { type: 'number', min: 0, step: 'any', inputmode: 'decimal', value: r[0], placeholder: u() }), n = el('input', { type: 'number', min: 1, step: 1, inputmode: 'numeric', value: r[1], placeholder: '次數' });
+                w.setAttribute('aria-label', `第 ${i + 1} 組重量（${u()}）`); n.setAttribute('aria-label', `第 ${i + 1} 組次數`);
+                w.oninput = () => { r[0] = w.value; }; n.oninput = () => { r[1] = n.value; };
+                const del = el('button', { className: 'sm', textContent: '×' }); del.setAttribute('aria-label', `刪除第 ${i + 1} 組`); del.onclick = () => { setRows.splice(i, 1); if (!setRows.length) setRows.push(['', '']); renderSets(); };
+                return el('div', { className: 'setrow' }, el('span', { textContent: `#${i + 1}` }), w, el('span', { textContent: u() }), n, el('span', { textContent: '下' }), del);
+            }));
+        }
+        function render() {
+            $('#uKg').setAttribute('aria-pressed', !prefs.lb); $('#uLb').setAttribute('aria-pressed', prefs.lb);
+            $('#fEp').setAttribute('aria-pressed', prefs.formula === 'epley'); $('#fBr').setAttribute('aria-pressed', prefs.formula === 'brzycki');
+            const mid = $('#move').value, f = prefs.formula, b = bests(log, mid, f);
+            $('#mvTitle').textContent = `${mvName(mid)} 統計`;
+            $('#stats').replaceChildren(...(b.count ? [statRow('訓練次數', `${b.count} 次`), statRow('預估 1RM PR', `${fmt(dispW(b.e, prefs.lb))} ${u()}`, 'ok'), statRow('重量 PR', `${fmt(dispW(b.w, prefs.lb))} ${u()}`), statRow('單組最大次數 PR', `${b.r} 下`)] : [el('p', { className: 'muted', textContent: '這個動作還沒有紀錄。' })]));
+            // 折線圖
+            const t = trend(log, mid, f);
+            if (t.length < 2) $('#chart').replaceChildren(el('p', { className: 'muted', textContent: '至少兩次訓練才畫得出趨勢。' }));
+            else {
+                const W = 320, H = 140, P = 28, vs = t.map(x => dispW(x.v, prefs.lb)), lo = Math.min(...vs), hi = Math.max(...vs), span = hi - lo || 1;
+                const X = (i) => P + i * (W - P - 8) / (t.length - 1), Y = (v) => H - 22 - (v - lo) / span * (H - 40);
+                $('#chart').innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="近 ${t.length} 次預估 1RM 折線圖"><polyline class="ln" points="${vs.map((v, i) => `${X(i)},${Y(v)}`).join(' ')}"/>${vs.map((v, i) => `<circle class="dot" cx="${X(i)}" cy="${Y(v)}" r="3"><title>${t[i].d}：${fmt(v)} ${u()}</title></circle>`).join('')}<text x="2" y="${Y(hi) + 4}">${fmt(hi)}</text><text x="2" y="${Y(lo) + 4}">${fmt(lo)}</text><text x="${P}" y="${H - 4}">${t[0].d.slice(5)}</text><text x="${W - 8}" y="${H - 4}" text-anchor="end">${t[t.length - 1].d.slice(5)}</text></svg>`;
+            }
+            const wk = weeklyVolume(log, day.today(), mid), mx = Math.max(1, ...wk.map(x => x.vol));
+            $('#weekly').replaceChildren(...wk.map(x => el('div', { className: 'wk' }, el('span', { textContent: x.wk.slice(5) }), el('i', { style: `width:${Math.max(x.vol ? 2 : 0, x.vol / mx * 55)}%` }), el('span', { textContent: `${fmt(dispW(x.vol, prefs.lb))} ${u()}` }))));
+            // 歷史
+            const flags = {}; for (const id of new Set(log.map(e => e.m))) Object.assign(flags, prFlags(log, id, f));
+            const list = chrono(log).reverse(); let lastD = '';
+            $('#hist').replaceChildren(...(list.length ? list.slice(0, shown).flatMap(e => {
+                const s = entryStats(e, f), fl = flags[e.id], out = [];
+                if (e.d !== lastD) { lastD = e.d; out.push(el('div', { className: 'dh', textContent: e.d })); }
+                const row = el('div', { className: 'it' }, el('b', { textContent: mvName(e.m) + (fl ? ' 🏆' : '') }), el('small', { textContent: e.s.map(([w, r]) => `${fmt(dispW(w, prefs.lb))}×${r}`).join('、') }),
+                    el('small', { textContent: `預估 1RM ${fmt(dispW(s.e1rm, prefs.lb))} ${u()}・訓練量 ${fmt(dispW(s.vol, prefs.lb))} ${u()}` + (fl ? `・破紀錄：${[fl.e && '1RM', fl.w && '重量', fl.r && '次數'].filter(Boolean).join('、')}` : '') + (e.rpe ? `・RPE ${e.rpe}` : '') + (e.n ? `・${e.n}` : '') }));
+                const bt = el('div', { className: 'btns' }), ed = el('button', { className: 'sm', textContent: '編輯' }), cp = el('button', { className: 'sm', textContent: '複製' }), dl = el('button', { className: 'sm', textContent: '刪除' });
+                ed.onclick = () => startEdit(e); cp.onclick = () => copyWithFeedback(entryText(e, mvName(e.m), prefs.lb), cp, '複製');
+                dl.setAttribute('aria-label', `刪除 ${e.d} ${mvName(e.m)}`); dl.onclick = () => { if (confirm('刪除這次訓練紀錄？無法復原。')) { log = log.filter(x => x.id !== e.id); if (editing === e.id) stopEdit(); saveLog(); render(); } };
+                bt.append(ed, cp, dl); row.append(bt); out.push(row); return out;
+            }) : [el('p', { className: 'muted', textContent: '還沒有訓練紀錄' })]));
+            $('#more').hidden = list.length <= shown;
+            $('#count').textContent = `目前 ${log.length} / ${MAX_LOG} 次訓練、自訂動作 ${custom.length} / ${MAX_CUSTOM} 個。`;
+            $('#custom').replaceChildren(...custom.map(m => {
+                const d = el('button', { className: 'sm', textContent: '刪除' }); d.setAttribute('aria-label', '刪除動作 ' + m.zh);
+                d.onclick = () => { const n = log.filter(e => e.m === m.id).length; if (confirm(`刪除自訂動作「${m.zh}」？它的 ${n} 筆訓練紀錄也會一併刪除，無法復原。`)) { custom = custom.filter(x => x.id !== m.id); log = log.filter(e => e.m !== m.id); saveMoves(); saveLog(); renderMoveSelect(); render(); } };
+                return el('div', { className: 'mv' }, el('span', { textContent: m.en ? `${m.zh} ${m.en}` : m.zh }), d);
+            }));
+        }
+        function startEdit(e) {
+            editing = e.id; $('#date').value = e.d; $('#move').value = e.m; $('#rpe').value = e.rpe || ''; $('#note').value = e.n;
+            setRows = e.s.map(([w, r]) => [dispW(w, prefs.lb), r]); renderSets(); $('#save').textContent = '更新這次訓練'; $('#cancel').hidden = false; $('#msg').textContent = '編輯中'; window.scrollTo({ top: 0 }); render();
+        }
+        function stopEdit() { editing = null; $('#save').textContent = '記錄這次訓練'; $('#cancel').hidden = true; $('#msg').textContent = ''; }
+
+        $('#save').onclick = () => {
+            const sets = setRows.filter(r => r[0] !== '' || r[1] !== '').map(r => [toKg(parseFloat(r[0]), prefs.lb), Number(r[1])]);
+            const rpe = $('#rpe').value === '' ? null : parseFloat($('#rpe').value);
+            const e = cleanEntry({ id: editing || newId(), d: $('#date').value, m: $('#move').value, s: sets, n: $('#note').value.trim(), rpe });
+            if (!e || e.s.length !== sets.length) { $('#msg').textContent = '請填日期，每組需有重量（≥ 0）與次數（1 以上的整數）'; return; }
+            if (sets.length > MAX_SETS) { $('#msg').textContent = `每次最多 ${MAX_SETS} 組`; return; }
+            if ($('#rpe').value !== '' && e.rpe === null) { $('#msg').textContent = 'RPE 需介於 1 到 10'; return; }
+            if (editing) log = log.map(x => (x.id === editing ? e : x));
+            else { if (log.length >= MAX_LOG) { $('#msg').textContent = `訓練紀錄已達 ${MAX_LOG} 次上限，請先刪除舊紀錄（資料管理）`; return; } log.push(e); }
+            saveLog(); const was = editing; stopEdit(); $('#msg').textContent = was ? '已更新' : '已記錄'; $('#note').value = ''; render();
+        };
+        $('#cancel').onclick = () => { stopEdit(); render(); };
+        $('#addSet').onclick = () => { if (setRows.length >= MAX_SETS) { $('#msg').textContent = `每次最多 ${MAX_SETS} 組`; return; } setRows.push(['', '']); renderSets(); };
+        $('#dupSet').onclick = () => { if (setRows.length >= MAX_SETS) { $('#msg').textContent = `每次最多 ${MAX_SETS} 組`; return; } setRows.push([...setRows[setRows.length - 1]]); renderSets(); };
+        $('#move').onchange = () => { shown = 60; render(); };
+        const setUnit = (lb) => { setRows = setRows.map(r => (r[0] === '' ? r : [dispW(toKg(parseFloat(r[0]), prefs.lb), lb), r[1]])); prefs.lb = lb; savePrefs(); renderSets(); render(); };
+        $('#uKg').onclick = () => setUnit(false); $('#uLb').onclick = () => setUnit(true);
+        $('#fEp').onclick = () => { prefs.formula = 'epley'; savePrefs(); render(); }; $('#fBr').onclick = () => { prefs.formula = 'brzycki'; savePrefs(); render(); };
+        $('#more').onclick = () => { shown += 60; render(); };
+        $('#addMove').onclick = () => {
+            const zh = $('#nmZh').value.trim(), msg = $('#mvMsg');
+            if (!zh) { msg.textContent = '請輸入動作名稱'; return; }
+            if (custom.length >= MAX_CUSTOM) { msg.textContent = `自訂動作已達 ${MAX_CUSTOM} 個上限，請先刪除不用的`; return; }
+            if (moves().some(m => m.zh === zh)) { msg.textContent = '已經有同名的動作'; return; }
+            custom.push({ id: 'c_' + newId(), zh: zh.slice(0, 30), en: $('#nmEn').value.trim().slice(0, 30) }); saveMoves(); $('#nmZh').value = ''; $('#nmEn').value = ''; msg.textContent = '已新增'; renderMoveSelect(); render();
+        };
+        $('#delMove').onclick = () => { const id = $('#move').value, n = log.filter(e => e.m === id).length; if (n && confirm(`刪除「${mvName(id)}」的全部 ${n} 筆訓練紀錄？無法復原。`)) { log = log.filter(e => e.m !== id); stopEdit(); saveLog(); render(); } };
+        $('#delOld').onclick = () => { const keep = pruneOlder(log, day.today()), n = log.length - keep.length; if (n && confirm(`刪除一年前（${day.shift(day.today(), -365)} 之前）的 ${n} 筆訓練紀錄？無法復原。`)) { log = keep; stopEdit(); saveLog(); render(); } };
+        $('#delAll').onclick = () => { if ((log.length || custom.length) && confirm(`清除全部 ${log.length} 筆訓練紀錄與 ${custom.length} 個自訂動作？無法復原。`)) { log = []; custom = []; stopEdit(); saveLog(); saveMoves(); renderMoveSelect(); render(); } };
+
+        $('#date').value = day.today(); setRows = [['', '']]; renderMoveSelect(); renderSets(); render();
+    </script>
+</body>
+
+</html>

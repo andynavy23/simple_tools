@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="照片 EXIF 檢視與清除：查看相機、拍攝時間、GPS 位置等隱藏資料，並移除後再下載；全部在本機處理。">
+    <meta property="og:title" content="照片 EXIF 檢視與清除" />
+    <meta property="og:description" content="看照片藏了哪些資料（含 GPS），一鍵清除後下載。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/exif-viewer.html" />
+    <title>照片 EXIF 檢視與清除</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        .drop {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            min-height: 120px;
+            text-align: center;
+            border: 2px dashed var(--line);
+            border-radius: var(--radius);
+            background: var(--card);
+            padding: 16px;
+            margin-bottom: 16px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .drop.over,
+        .drop:focus-within {
+            border-color: var(--blue);
+        }
+
+        .sr {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .ck {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 44px;
+        }
+
+        .msg {
+            color: var(--bad);
+            min-height: 1.2em;
+            margin: 0 0 12px;
+        }
+
+        .head {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .head img {
+            width: 72px;
+            height: 72px;
+            object-fit: cover;
+            border-radius: var(--radius-sm);
+            background: var(--fill);
+            flex: none;
+        }
+
+        .head .nm {
+            font-weight: 700;
+            overflow-wrap: anywhere;
+        }
+
+        .gps {
+            border: 2px solid var(--bad);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin: 10px 0;
+        }
+
+        .gps b {
+            color: var(--bad);
+        }
+
+        .gps a {
+            overflow-wrap: anywhere;
+            color: var(--blue);
+        }
+
+        .good {
+            color: var(--ok);
+            font-weight: 600;
+        }
+
+        .bad {
+            color: var(--bad);
+            font-weight: 600;
+        }
+
+        .kv {
+            display: grid;
+            grid-template-columns: 6.5em 1fr;
+            gap: 4px 10px;
+            font-size: 14px;
+            margin: 8px 0;
+        }
+
+        .kv span:nth-child(odd) {
+            color: var(--muted);
+        }
+
+        .kv span:nth-child(even) {
+            overflow-wrap: anywhere;
+        }
+
+        .kv .sens {
+            color: var(--bad);
+        }
+
+        .secs {
+            font-size: 14px;
+            margin: 6px 0;
+            padding-left: 18px;
+        }
+
+        .result {
+            border-top: 1px solid var(--fill);
+            margin-top: 10px;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>照片 EXIF 檢視與清除</h1>
+        <p class="sub">看照片藏了哪些資料，必要時清除後再分享；全部在本機處理，不上傳、不儲存。</p>
+
+        <label class="drop" id="drop">
+            <input type="file" id="file" class="sr" accept="image/*" multiple aria-label="選擇圖片">
+            <b>點此選擇圖片，或拖曳 / 貼上（Ctrl+V）</b>
+            <span class="muted">JPEG / PNG / WebP；最多 20 張，單張 ≤ 30MB</span>
+        </label>
+        <p class="msg" id="msg" role="alert"></p>
+
+        <div class="card" id="opts" hidden>
+            <h2>清除方式</h2>
+            <label class="ck"><input type="radio" name="mode" id="modeLossless" checked> 無損移除中繼資料（不重新壓縮，畫質不變）</label>
+            <label class="ck" style="margin-left:28px"><input type="checkbox" id="keepOri" checked> 保留方向標記（只留 Orientation 一項，避免照片轉向）</label>
+            <label class="ck" style="margin-left:28px"><input type="checkbox" id="dropIcc"> 連色彩描述檔（ICC）也移除（顏色可能略變）</label>
+            <label class="ck"><input type="radio" name="mode" id="modeReenc"> 重新編碼（先轉正方向再徹底清乾淨，會損失一些畫質）</label>
+            <div class="row" id="qRow" style="margin-left:28px" hidden>
+                <label for="quality">畫質 <b id="qVal">92</b>%（JPEG / WebP）</label>
+                <input type="range" id="quality" min="50" max="100" value="92" style="flex:1;min-width:140px">
+            </div>
+            <div class="row" style="margin-top:8px"><button class="primary" id="cleanAll">全部清除</button><button id="clearList">清空列表</button></div>
+        </div>
+
+        <div id="list"></div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>檢視照片裡藏的中繼資料（EXIF）：相機型號、拍攝時間、光圈快門、<b>GPS 拍攝位置</b>等，也能移除後再下載一份乾淨的副本。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>要把照片貼到網路、社群、二手市集前，確認有沒有洩漏住家或公司位置。</li>
+        <li>想知道一張照片是用什麼相機、什麼設定拍的。</li>
+        <li>把一批照片的資料一次清掉再寄出去。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>點上方區塊選圖片（可多張），或把圖片拖進來、按 <kbd>Ctrl</kbd>+<kbd>V</kbd> 貼上。</li>
+        <li>每張照片會列出含有哪些資料區段與主要欄位。若有 GPS，紅框會標出，並給一個地圖文字連結（按了才會開啟，頁面不會自動載入地圖）。</li>
+        <li>選「清除方式」，按該張的「清除」或「全部清除」。</li>
+        <li>清除後會重新檢查並顯示「已無 EXIF / GPS」，再按「下載」存檔。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">手機拍的 IMG_0001.jpg：
+        EXIF 有 GPS 25.0330, 121.5654
+        無損清除（保留方向）→ IMG_0001.clean.jpg
+        重新檢查：只剩方向標記，已無 GPS</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>無損移除是直接改寫檔案、不重新壓縮：JPEG 移除 EXIF / XMP / IPTC / 註解等；PNG 移除 eXIf 與文字區塊；WebP 移除 EXIF / XMP。</li>
+        <li>預設會保留 Orientation（方向）一項，否則直立拍的照片在某些軟體會變成橫的；不想留就取消勾選。「重新編碼」會先把方向轉正再畫出新圖，所有中繼資料都不會留下，但 JPEG / WebP 會再壓縮一次、畫質稍降，ICC 也不會保留。</li>
+        <li>只支援 JPEG、PNG、WebP 的解析與無損清除；其他格式（GIF、HEIC 等）只能用「重新編碼」輸出 PNG（取決於瀏覽器能否解碼）。</li>
+        <li>上限：20 張、單張 30MB。圖片超大（約 1 億畫素以上）無法重新編碼。</li>
+        <li>XMP：會讀出標題、作者、版權、說明、建立工具、日期、城市 / 國家、GPS、關鍵字（含 Lightroom 階層關鍵字）；含位置或作者等個人資料時用紅框標示。只用文字比對讀取（不載入任何外部資源），超過 1MB 或壓縮儲存的 XMP 只提示、不解析。</li>
+        <li>MakerNote：只辨識廠商標頭（Nikon、Apple iOS、Olympus、Sony 等；Canon 沒有標頭，靠機型判斷）與大小。製造商私有資料不解碼，但「清除」會一併移除（連同 EXIF）；清除後會重新檢查，確認 XMP 與 MakerNote 都已不在。</li>
+        <li>解析是自行實作，遇到損毀或被截斷的資料會顯示警告而不會當掉，但不保證涵蓋所有廠商私有欄位（MakerNote 是廠商私有格式，只辨識廠商與大小、不解碼，但清除時會一併移除）。</li>
+        <li>隱私與儲存：照片只在瀏覽器內處理，不會上傳；這個頁面不使用任何本機儲存，關閉或重新整理即清空。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { download } = Util;
+
+        // --- pure ---
+        const MAX_IMGS = 20, MAX_BYTES = 30 * 1024 * 1024, MAX_PIXELS = 100e6;
+        const TSIZE = [0, 1, 1, 2, 4, 8, 1, 1, 2, 4, 8, 4, 8];
+        const u16 = (b, o, le = false) => le ? b[o] | b[o + 1] << 8 : b[o] << 8 | b[o + 1];
+        const u32be = (b, o) => ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
+        const u32le = (b, o) => ((b[o + 3] << 24) | (b[o + 2] << 16) | (b[o + 1] << 8) | b[o]) >>> 0;
+        const asc = (b, s, n) => { let t = ''; for (let i = s; i < s + n && i < b.length; i++) t += String.fromCharCode(b[i]); return t; };
+        const startsWith = (b, o, str) => asc(b, o, str.length) === str;
+        const fmtSize = (n) => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
+        const concat = (parts) => { const out = new Uint8Array(parts.reduce((s, p) => s + p.length, 0)); let o = 0; for (const p of parts) { out.set(p, o); o += p.length; } return out; };
+
+        // TIFF / EXIF 解析（b 為位元組，TIFF 標頭在 base）。永遠不丟例外：壞資料回傳已讀到的部分與 warnings
+        // 回傳 { ok, little, ifd0, exif, gps, thumb: {length}|null, warnings }；各 IFD 為 { 標籤編號: 值 }，有理數為 {n,d}
+        function parseTiff(b, base = 0) {
+            const res = { ok: false, little: true, ifd0: {}, exif: {}, gps: {}, thumb: null, warnings: [] };
+            const warn = (t) => { if (res.warnings.length < 20) res.warnings.push(t); };
+            try {
+                if (b.length - base < 8) { warn('EXIF 資料太短'); return res; }
+                const bo = asc(b, base, 2);
+                if (bo !== 'II' && bo !== 'MM') { warn('TIFF 位元組序標記不合法（不是 II / MM）'); return res; }
+                const le = bo === 'II', dv = new DataView(b.buffer, b.byteOffset + base, b.length - base), N = dv.byteLength;
+                res.little = le;
+                if (dv.getUint16(2, le) !== 42) { warn('TIFF 魔數不是 42'); return res; }
+                res.ok = true;
+                const seen = new Set();
+                const readVal = (type, cnt, vo) => {
+                    if (type === 2) { const sub = b.subarray(base + vo, base + vo + cnt); const z = sub.indexOf(0); return new TextDecoder().decode(z >= 0 ? sub.subarray(0, z) : sub); }
+                    if ((type === 7 || type === 1) && cnt > 256) return b.subarray(base + vo, base + vo + cnt);
+                    const vals = [], k = Math.min(cnt, 256), sz = TSIZE[type];
+                    for (let i = 0; i < k; i++) {
+                        const p = vo + i * sz;
+                        vals.push(type === 1 || type === 7 ? dv.getUint8(p) : type === 3 ? dv.getUint16(p, le) : type === 4 ? dv.getUint32(p, le)
+                            : type === 5 ? { n: dv.getUint32(p, le), d: dv.getUint32(p + 4, le) } : type === 6 ? dv.getInt8(p) : type === 8 ? dv.getInt16(p, le)
+                                : type === 9 ? dv.getInt32(p, le) : type === 10 ? { n: dv.getInt32(p, le), d: dv.getInt32(p + 4, le) } : type === 11 ? dv.getFloat32(p, le) : dv.getFloat64(p, le));
+                    }
+                    return cnt === 1 ? vals[0] : vals;
+                };
+                // 讀一個 IFD，回傳「下一個 IFD」的位移（0 = 沒有）
+                const readIfd = (off, into, label) => {
+                    if (seen.has(off)) return 0;
+                    if (off < 8 || off + 2 > N) { warn(`${label} 的位移超出資料範圍`); return 0; }
+                    seen.add(off);
+                    const n = dv.getUint16(off, le);
+                    for (let i = 0; i < n; i++) {
+                        const e = off + 2 + i * 12;
+                        if (e + 12 > N) { warn(`${label} 被截斷：只讀到 ${i} / ${n} 個欄位`); return 0; }
+                        const tag = dv.getUint16(e, le), type = dv.getUint16(e + 2, le), cnt = dv.getUint32(e + 4, le), sz = TSIZE[type];
+                        if (!sz || cnt === 0) continue;
+                        const len = sz * cnt, vo = len > 4 ? dv.getUint32(e + 8, le) : e + 8;
+                        if (cnt > 0x100000 || vo + len > N) { warn(`${label} 欄位 0x${tag.toString(16)} 的資料超出範圍，已略過`); continue; }
+                        into[tag] = readVal(type, cnt, vo);
+                    }
+                    const nx = off + 2 + n * 12;
+                    return nx + 4 <= N ? dv.getUint32(nx, le) : 0;
+                };
+                const next = readIfd(dv.getUint32(4, le), res.ifd0, 'IFD0');
+                if (typeof res.ifd0[0x8769] === 'number') readIfd(res.ifd0[0x8769], res.exif, 'Exif IFD');
+                if (typeof res.ifd0[0x8825] === 'number') readIfd(res.ifd0[0x8825], res.gps, 'GPS IFD');
+                if (next) {
+                    const t = {}; readIfd(next, t, 'IFD1');
+                    if (typeof t[0x201] === 'number' && typeof t[0x202] === 'number') {
+                        if (t[0x201] + t[0x202] <= N) res.thumb = { length: t[0x202] }; else warn('縮圖位置超出資料範圍');
+                    }
+                }
+            } catch (e) { res.warnings.push('EXIF 解析中斷：' + e.message); }
+            return res;
+        }
+        const ratNum = (r) => r && typeof r === 'object' && r.d ? r.n / r.d : NaN;
+        const mapUrl = (lat, lon) => `https://www.openstreetmap.org/?mlat=${lat.toFixed(6)}&mlon=${lon.toFixed(6)}`;
+        // GPS IFD → { lat, lon, alt, url, zero, warnings }；沒有 GPS 欄位回傳 null；座標不合法時 lat / lon 為 null
+        function gpsInfo(g) {
+            if (!g || !Object.keys(g).length) return null;
+            const dms = (v) => Array.isArray(v) && v.length >= 2 ? ratNum(v[0]) + ratNum(v[1]) / 60 + (v.length > 2 ? ratNum(v[2]) / 3600 : 0) : NaN;
+            const sign = (x, neg) => typeof x === 'string' && x.trim().toUpperCase().startsWith(neg) ? -1 : 1;
+            const warnings = [];
+            let lat = dms(g[2]), lon = dms(g[4]);
+            if (g[2] && typeof g[1] !== 'string') warnings.push('缺少 N / S 參照，假設為北緯');
+            if (g[4] && typeof g[3] !== 'string') warnings.push('缺少 E / W 參照，假設為東經');
+            lat *= sign(g[1], 'S'); lon *= sign(g[3], 'W');
+            const ok = Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
+            if (!ok && (g[2] || g[4])) warnings.push('GPS 座標不合法或不完整');
+            let alt = ratNum(g[6]); if (Number.isFinite(alt) && g[5] === 1) alt = -alt;
+            return { lat: ok ? lat : null, lon: ok ? lon : null, alt: Number.isFinite(alt) ? alt : null, zero: ok && lat === 0 && lon === 0, url: ok && !(lat === 0 && lon === 0) ? mapUrl(lat, lon) : null, warnings };
+        }
+        const ORI = { 1: '正常（0°）', 2: '水平鏡射', 3: '旋轉 180°', 4: '垂直鏡射', 5: '鏡射並逆時針 90°', 6: '順時針 90°', 7: '鏡射並順時針 90°', 8: '逆時針 90°' };
+        // EXIF → 顯示用的列 [標籤, 值, 是否敏感]
+        function exifRows(t) {
+            const a = t.ifd0, e = t.exif, rows = [], str = (v) => typeof v === 'string' ? v.trim() : '';
+            const add = (k, v, sens = false) => { if (v !== '' && v != null && v !== false) rows.push([k, String(v), sens]); };
+            const make = str(a[0x10F]), model = str(a[0x110]);
+            add('相機', model.toLowerCase().startsWith(make.toLowerCase()) ? model : [make, model].filter(Boolean).join(' '));
+            add('鏡頭', str(e[0xA434]) || str(e[0xA433]));
+            const dt = str(e[0x9003]) || str(a[0x132]);
+            add(e[0x9003] ? '拍攝時間' : '日期時間', dt.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3'));
+            const ex = e[0x829A]; if (ex && ex.d) add('曝光時間', ex.n && ex.n / ex.d < 1 ? `1/${Math.round(ex.d / ex.n)} 秒` : `${+(ex.n / ex.d).toFixed(2)} 秒`);
+            const fn = ratNum(e[0x829D]); if (Number.isFinite(fn)) add('光圈', 'f/' + +fn.toFixed(1));
+            const iso = Array.isArray(e[0x8827]) ? e[0x8827][0] : e[0x8827]; if (typeof iso === 'number') add('ISO', iso);
+            const fl = ratNum(e[0x920A]); if (Number.isFinite(fl)) add('焦距', `${+fl.toFixed(1)} mm` + (typeof e[0xA405] === 'number' && e[0xA405] ? `（35mm 等效 ${e[0xA405]} mm）` : ''));
+            if (typeof a[0x112] === 'number') add('方向', ORI[a[0x112]] || a[0x112]);
+            add('軟體', str(a[0x131]));
+            add('作者', str(a[0x13B]), true); add('版權', str(a[0x8298]), true); add('圖說', str(a[0x10E]), true);
+            add('機身序號', str(e[0xA431]), true); add('鏡頭序號', str(e[0xA435]), true);
+            if (t.thumb) add('內嵌縮圖', '有（' + fmtSize(t.thumb.length) + '）');
+            return rows;
+        }
+
+        // JPEG 區段切割：回傳 { ok, segs: [{ marker, kind, start, end, dataStart }], tail（SOS 區段起點，之後的位元組原樣保留）, warnings }
+        function jpegScan(b) {
+            const r = { ok: false, segs: [], tail: 0, warnings: [] };
+            if (b.length < 4 || b[0] !== 0xFF || b[1] !== 0xD8) { r.warnings.push('不是有效的 JPEG（缺少 SOI）'); return r; }
+            let pos = 2;
+            while (pos < b.length) {
+                if (b[pos] !== 0xFF) { r.warnings.push(`在 ${pos} 處發現不合法的位元組，JPEG 結構損毀`); return r; }
+                while (pos < b.length && b[pos] === 0xFF) pos++;
+                const start = pos - 1, m = b[pos++];
+                if (m === undefined) break;
+                if (m === 0xD9) { r.warnings.push('沒有影像資料就遇到 EOI'); return r; }
+                if (m === 0x00 || m === 0x01 || (m >= 0xD0 && m <= 0xD8)) { r.segs.push({ marker: m, kind: 'other', start, end: pos, dataStart: pos }); continue; }
+                if (pos + 2 > b.length) { r.warnings.push('JPEG 在區段標頭處被截斷'); return r; }
+                const len = u16(b, pos);
+                if (len < 2 || pos + len > b.length) { r.warnings.push(`區段 0xFF${m.toString(16).toUpperCase()} 長度不合法或被截斷`); return r; }
+                const ds = pos + 2, seg = { marker: m, kind: 'other', start, end: pos + len, dataStart: ds };
+                if (m === 0xDA) { r.tail = start; r.ok = true; return r; }
+                if (m === 0xE0) seg.kind = startsWith(b, ds, 'JFIF\0') ? 'jfif' : 'app';
+                else if (m === 0xE1) seg.kind = startsWith(b, ds, 'Exif\0\0') ? 'exif' : startsWith(b, ds, 'http://ns.adobe.com/xap/1.0/\0') ? 'xmp' : startsWith(b, ds, 'http://ns.adobe.com/xmp/extension/\0') ? 'xmpext' : 'app';
+                else if (m === 0xE2) seg.kind = startsWith(b, ds, 'ICC_PROFILE\0') ? 'icc' : startsWith(b, ds, 'MPF\0') ? 'mpf' : 'app';
+                else if (m === 0xED) seg.kind = startsWith(b, ds, 'Photoshop 3.0\0') ? 'iptc' : 'app';
+                else if (m === 0xEE) seg.kind = startsWith(b, ds, 'Adobe') ? 'adobe' : 'app';
+                else if (m >= 0xE3 && m <= 0xEF) seg.kind = 'app';
+                else if (m === 0xFE) seg.kind = 'comment';
+                r.segs.push(seg); pos += len;
+            }
+            r.warnings.push('找不到影像資料（SOS），檔案可能被截斷');
+            return r;
+        }
+        const JPEG_NAMES = { jfif: 'JFIF（APP0）', exif: 'EXIF（APP1）', xmp: 'XMP（APP1）', xmpext: 'XMP 延伸（APP1）', icc: 'ICC 色彩描述檔（APP2）', mpf: 'MPF 多圖資訊（APP2）', iptc: 'IPTC / Photoshop（APP13）', adobe: 'Adobe（APP14）', comment: '註解（COM）', app: '其他應用程式區段（APPn）' };
+        // 哪些種類算「中繼資料」（無損清除時移除）；JFIF、Adobe 是解碼需要的，ICC 預設保留
+        const JPEG_META = new Set(['exif', 'xmp', 'xmpext', 'iptc', 'comment', 'mpf', 'app']);
+
+        // PNG / WebP 的區塊切割
+        function pngChunks(b) {
+            const r = { ok: false, chunks: [], warnings: [] };
+            if (!startsWith(b, 1, 'PNG') || b[0] !== 0x89 || b.length < 8) { r.warnings.push('不是有效的 PNG'); return r; }
+            let pos = 8;
+            while (pos + 12 <= b.length) {
+                const len = u32be(b, pos), type = asc(b, pos + 4, 4), end = pos + 12 + len;
+                if (end > b.length) { r.warnings.push(`區塊 ${type} 被截斷`); return r; }
+                r.chunks.push({ type, start: pos, end, dataStart: pos + 8, len });
+                pos = end;
+                if (type === 'IEND') { r.ok = true; return r; }
+            }
+            r.warnings.push('PNG 沒有 IEND，檔案可能被截斷');
+            return r;
+        }
+        function riffChunks(b) {
+            const r = { ok: false, chunks: [], warnings: [] };
+            if (b.length < 12 || !startsWith(b, 0, 'RIFF') || !startsWith(b, 8, 'WEBP')) { r.warnings.push('不是有效的 WebP'); return r; }
+            let pos = 12; r.ok = true;
+            while (pos + 8 <= b.length) {
+                const size = u32le(b, pos + 4); let end = pos + 8 + size + (size & 1);
+                if (end > b.length) { r.warnings.push(`區塊 ${asc(b, pos, 4)} 被截斷`); end = b.length; r.ok = false; }
+                r.chunks.push({ id: asc(b, pos, 4), start: pos, end, dataStart: pos + 8, size });
+                pos = end;
+            }
+            return r;
+        }
+        const PNG_META = new Set(['eXIf', 'tEXt', 'zTXt', 'iTXt', 'tIME']);
+        const keyword = (b, c) => { let t = ''; for (let i = c.dataStart; i < c.dataStart + c.len && b[i] !== 0 && t.length < 80; i++) t += String.fromCharCode(b[i]); return t; };
+        const exifBlock = (b, s, len) => startsWith(b, s, 'Exif\0\0') && len >= 14 ? s + 6 : s;
+
+        // XMP 封包抽取（JPEG APP1 / PNG iTXt / WebP 'XMP '）。回傳 { text, warnings }；沒有 XMP 回傳 null。上限 1MB；不展開壓縮的 PNG iTXt
+        const MAX_XMP = 1048576;
+        function findXmp(b) {
+            const warnings = []; let s = -1, e = -1;
+            try {
+                if (b[0] === 0xFF && b[1] === 0xD8) { const g = jpegScan(b).segs.find(x => x.kind === 'xmp'); if (g) { s = g.dataStart + 29; e = g.end; } }
+                else if (b[0] === 0x89 && startsWith(b, 1, 'PNG')) {
+                    for (const c of pngChunks(b).chunks) {
+                        if (c.type !== 'iTXt' || keyword(b, c) !== 'XML:com.adobe.xmp') continue;
+                        const ce = c.dataStart + c.len; let p = c.dataStart; while (p < ce && b[p] !== 0) p++;
+                        if (b[p + 1] === 1) { warnings.push('XMP 以壓縮方式儲存，未解析內容'); return { text: '', warnings }; }
+                        p += 3; for (let k = 0; k < 2; k++) { while (p < ce && b[p] !== 0) p++; p++; }
+                        s = p; e = ce; break;
+                    }
+                } else if (startsWith(b, 0, 'RIFF') && startsWith(b, 8, 'WEBP')) { const c = riffChunks(b).chunks.find(x => x.id === 'XMP '); if (c) { s = c.dataStart; e = Math.min(c.dataStart + c.size, b.length); } }
+            } catch (x) { return null; }
+            if (s < 0) return null;
+            if (e - s > MAX_XMP) { warnings.push('XMP 超過 1MB，未解析內容'); return { text: '', warnings }; }
+            return { text: new TextDecoder().decode(b.subarray(s, Math.max(s, e))).replace(/\0+$/, ''), warnings };
+        }
+        // [標籤, 命名空間欄位, 是否隱私, 是否位置]
+        const XMP_FIELDS = [['標題', 'dc:title', 0, 0], ['作者', 'dc:creator', 1, 0], ['版權', 'dc:rights', 1, 0], ['說明', 'dc:description', 0, 0], ['建立工具', 'xmp:CreatorTool', 0, 0], ['建立日期', 'xmp:CreateDate', 0, 0], ['修改日期', 'xmp:ModifyDate', 0, 0],
+        ['城市', 'photoshop:City', 1, 1], ['省 / 州', 'photoshop:State', 1, 1], ['國家', 'photoshop:Country', 1, 1], ['GPS 緯度', 'exif:GPSLatitude', 1, 1], ['GPS 經度', 'exif:GPSLongitude', 1, 1], ['GPS 高度', 'exif:GPSAltitude', 1, 1],
+        ['關鍵字', 'dc:subject', 0, 0], ['階層關鍵字', 'lr:hierarchicalSubject', 0, 0]];
+        const xmlText = (s) => s.replace(/<[^>]*>/g, ' ').replace(/&(lt|gt|amp|quot|apos|#\d+);/g, (m, k) => ({ lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" }[k] || String.fromCodePoint(Math.min(+k.slice(1), 0x10FFFF)))).replace(/\s+/g, ' ').trim();
+        // 只用字串比對讀常見欄位（不用 DOM、不載入任何外部資源、不展開實體）。回傳 { ok, rows: [[標籤, 值, 隱私]], loc, sens, warnings }
+        function parseXmp(text) {
+            const res = { ok: false, rows: [], loc: false, sens: false, warnings: [] };
+            if (typeof text !== 'string' || !text.trim()) { res.warnings.push('XMP 是空的'); return res; }
+            if (text.length > MAX_XMP) { res.warnings.push('XMP 超過 1MB，未解析內容'); return res; }
+            if (/<!DOCTYPE|<!ENTITY/i.test(text)) { res.warnings.push('XMP 含 DOCTYPE / 實體宣告，已忽略這些宣告'); text = text.replace(/<!DOCTYPE[\s\S]*?(\]\s*>|>)/gi, ''); }
+            if (!/<(?:x:)?xmpmeta|<rdf:RDF/.test(text)) { res.warnings.push('無法辨識為 XMP（格式不正確）'); return res; }
+            res.ok = true;
+            for (const [label, q, sens, loc] of XMP_FIELDS) {
+                let v = '';
+                const m = text.match(new RegExp('<' + q + '(?:\\s[^>]*)?>([\\s\\S]*?)</' + q + '>'));
+                if (m) { const lis = [...m[1].matchAll(/<rdf:li(?:\s[^>]*)?>([\s\S]*?)<\/rdf:li>/g)].slice(0, 50).map(x => xmlText(x[1])).filter(Boolean); v = lis.length ? lis.join('、') : xmlText(m[1]); }
+                else { const a = text.match(new RegExp('\\s' + q + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\')')); if (a) v = xmlText(a[1] != null ? a[1] : a[2]); }
+                if (!v) continue;
+                res.rows.push([label, v.length > 300 ? v.slice(0, 300) + '…' : v, !!sens]);
+                if (sens) res.sens = true;
+                if (loc) res.loc = true;
+            }
+            return res;
+        }
+        // MakerNote：只辨識廠商標頭與大小，不解碼。b 為位元組（陣列 / Uint8Array / 單一數字）
+        function makerInfo(b, make) {
+            const a = typeof b === 'number' ? [b] : b; if (!a || !a.length) return null;
+            const h = asc(a, 0, 12), mk = typeof make === 'string' ? make.trim() : '';
+            const T = [[/^Nikon\0/, 'Nikon'], [/^Apple iOS\0/, 'Apple（iOS）'], [/^OLYMPUS/, 'Olympus'], [/^OM SYSTEM/, 'OM System'], [/^SONY/, 'Sony'], [/^FUJIFILM/, 'Fujifilm'], [/^Panasonic/, 'Panasonic'], [/^(SIGMA|FOVEON)/, 'Sigma'], [/^LEICA/, 'Leica'], [/^RICOH/i, 'Ricoh']];
+            const hit = T.find(([re]) => re.test(h));
+            const brand = hit ? hit[1] : /canon/i.test(mk) ? 'Canon（無標頭，依機型判斷）' : mk ? mk + '（無可辨識標頭）' : '未知廠商';
+            return { brand, size: a.length };
+        }
+
+        // 綜合分析：{ format, ok, sections: [{ name, size, kind, meta }], exif, gps, thumb, rows, warnings, hasMeta, orientation }
+        function analyze(b) {
+            const out = { format: null, ok: false, sections: [], exif: null, gps: null, thumb: null, rows: [], warnings: [], hasMeta: false, orientation: 0, xmp: null, maker: null };
+            let tiff = null, sawExif = false;
+            if (b.length > 3 && b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) {
+                out.format = 'jpeg';
+                const s = jpegScan(b); out.ok = s.ok; out.warnings.push(...s.warnings);
+                for (const g of s.segs) {
+                    if (g.kind === 'other') continue;
+                    out.sections.push({ name: JPEG_NAMES[g.kind], size: g.end - g.start, kind: g.kind, meta: JPEG_META.has(g.kind) });
+                    if (g.kind === 'exif' && !tiff) { sawExif = true; tiff = parseTiff(b, g.dataStart + 6); }
+                }
+            } else if (b.length > 8 && b[0] === 0x89 && startsWith(b, 1, 'PNG')) {
+                out.format = 'png';
+                const s = pngChunks(b); out.ok = s.ok; out.warnings.push(...s.warnings);
+                for (const c of s.chunks) {
+                    if (PNG_META.has(c.type)) {
+                        const kw = c.type === 'eXIf' || c.type === 'tIME' ? '' : '：' + keyword(b, c);
+                        out.sections.push({ name: (c.type === 'eXIf' ? 'EXIF（eXIf）' : c.type === 'tIME' ? '修改時間（tIME）' : '文字（' + c.type + '）') + kw, size: c.len + 12, kind: c.type, meta: true });
+                        if (c.type === 'eXIf' && !tiff) { sawExif = true; tiff = parseTiff(b, c.dataStart); }
+                    } else if (c.type === 'iCCP') out.sections.push({ name: 'ICC 色彩描述檔（iCCP）', size: c.len + 12, kind: 'icc', meta: false });
+                }
+            } else if (b.length > 12 && startsWith(b, 0, 'RIFF') && startsWith(b, 8, 'WEBP')) {
+                out.format = 'webp';
+                const s = riffChunks(b); out.ok = s.ok; out.warnings.push(...s.warnings);
+                for (const c of s.chunks) {
+                    if (c.id === 'EXIF') { out.sections.push({ name: 'EXIF', size: c.end - c.start, kind: 'exif', meta: true }); if (!tiff) { sawExif = true; const st = exifBlock(b, c.dataStart, c.size); tiff = parseTiff(b.subarray(0, c.dataStart + c.size), st); } }
+                    else if (c.id === 'XMP ') out.sections.push({ name: 'XMP', size: c.end - c.start, kind: 'xmp', meta: true });
+                    else if (c.id === 'ICCP') out.sections.push({ name: 'ICC 色彩描述檔（ICCP）', size: c.end - c.start, kind: 'icc', meta: false });
+                }
+            } else { out.warnings.push('不是 JPEG / PNG / WebP，無法解析中繼資料'); return out; }
+            if (tiff) {
+                out.warnings.push(...tiff.warnings);
+                if (tiff.ok) {
+                    out.exif = tiff; out.rows = exifRows(tiff); out.gps = gpsInfo(tiff.gps); out.thumb = tiff.thumb; out.orientation = Number(tiff.ifd0[0x112]) || 0;
+                    if (out.gps) out.warnings.push(...out.gps.warnings);
+                } else if (sawExif) out.warnings.push('有 EXIF 區段但無法解析（可能已損毀）');
+            }
+            const mn = tiff && tiff.ok ? makerInfo(tiff.exif[0x927C], tiff.ifd0[0x10F]) : null;
+            if (mn) { out.maker = mn; out.rows.push(['MakerNote', `${mn.brand}　${fmtSize(mn.size)}（私有格式，不解碼）`, false]); out.sections.push({ name: 'MakerNote（廠商私有，在 EXIF 內）', size: mn.size, kind: 'makernote', meta: false }); }
+            const xp = findXmp(b);
+            if (xp) { out.xmp = xp.text ? parseXmp(xp.text) : { ok: false, rows: [], loc: false, sens: false, warnings: [] }; out.warnings.push(...xp.warnings, ...out.xmp.warnings); }
+            if (out.thumb) out.sections.push({ name: '內嵌縮圖（在 EXIF 內）', size: out.thumb.length, kind: 'thumb', meta: false });
+            out.hasMeta = out.sections.some(s => s.meta);
+            return out;
+        }
+
+        // 只含 Orientation 的最小 TIFF（26 位元組，小端）與 JPEG APP1 區段
+        const minimalTiff = (ori) => Uint8Array.of(0x49, 0x49, 42, 0, 8, 0, 0, 0, 1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0, ori & 255, 0, 0, 0, 0, 0, 0, 0);
+        const minimalExifSeg = (ori) => concat([Uint8Array.of(0xFF, 0xE1, 0, 34), Uint8Array.of(0x45, 0x78, 0x69, 0x66, 0, 0), minimalTiff(ori)]);
+
+        // 無損移除中繼資料。opts: keepOrientation（只留方向）、dropIcc。回傳 { bytes, removed: [名稱], keptOrientation } 或 null（無法處理）
+        function stripMeta(b, { keepOrientation = false, dropIcc = false } = {}) {
+            const info = analyze(b), removed = [];
+            if (!info.format || !info.ok) return null;
+            const ori = keepOrientation && info.orientation > 1 && info.orientation <= 8 ? info.orientation : 0;
+            if (info.format === 'jpeg') {
+                const s = jpegScan(b), parts = [b.subarray(0, 2)];
+                let inserted = !ori;
+                for (const g of s.segs) {
+                    const drop = JPEG_META.has(g.kind) || (g.kind === 'icc' && dropIcc);
+                    if (drop) { removed.push(JPEG_NAMES[g.kind]); continue; }
+                    parts.push(b.subarray(g.start, g.end));
+                    if (!inserted && g.kind === 'jfif') { parts.push(minimalExifSeg(ori)); inserted = true; }
+                }
+                if (!inserted) parts.splice(1, 0, minimalExifSeg(ori));
+                parts.push(b.subarray(s.tail));
+                return { bytes: concat(parts), removed, keptOrientation: ori };
+            }
+            if (info.format === 'png') {
+                const s = pngChunks(b), parts = [b.subarray(0, 8)];
+                for (const c of s.chunks) { if (PNG_META.has(c.type)) removed.push(c.type); else parts.push(b.subarray(c.start, c.end)); }
+                return { bytes: concat(parts), removed, keptOrientation: 0 };
+            }
+            const s = riffChunks(b), parts = [], dropIds = new Set(['EXIF', 'XMP ']);
+            let flagsClear = 0, kept = 0;
+            for (const c of s.chunks) {
+                if (c.id === 'EXIF' && ori) { const t = minimalTiff(ori); parts.push(Uint8Array.of(0x45, 0x58, 0x49, 0x46, 26, 0, 0, 0), t); removed.push('EXIF'); kept = ori; continue; }
+                if (dropIds.has(c.id)) { removed.push(c.id.trim()); flagsClear |= c.id === 'EXIF' ? 0x08 : 0x04; continue; }
+                if (c.id === 'ICCP' && dropIcc) { removed.push('ICCP'); flagsClear |= 0x20; continue; }
+                parts.push(b.subarray(c.start, c.end));
+            }
+            const vp = s.chunks.find(c => c.id === 'VP8X');
+            if (vp && flagsClear) { const i = parts.findIndex(p => p.length === vp.end - vp.start && p.buffer === b.buffer && p.byteOffset === b.byteOffset + vp.start); if (i >= 0) { const cp = parts[i].slice(); cp[8] &= ~flagsClear; parts[i] = cp; } }
+            const bodyFinal = concat(parts), head = new Uint8Array(12);
+            head.set(b.subarray(0, 12)); const sz = bodyFinal.length + 4;
+            head[4] = sz & 255; head[5] = sz >> 8 & 255; head[6] = sz >> 16 & 255; head[7] = sz >>> 24;
+            return { bytes: concat([head, bodyFinal]), removed, keptOrientation: kept };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let items = [], seq = 0;
+        const say = (t) => { $('#msg').textContent = t || ''; };
+        const MIME = { jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' }, EXT = { jpeg: 'jpg', png: 'png', webp: 'webp' };
+
+        async function addFiles(files) {
+            const msgs = [];
+            for (const f of files) {
+                if (items.length >= MAX_IMGS) { msgs.push(`最多 ${MAX_IMGS} 張，其餘已略過。`); break; }
+                if (f.type && !f.type.startsWith('image/')) { msgs.push(`${f.name} 不是圖片，已略過。`); continue; }
+                if (f.size > MAX_BYTES) { msgs.push(`${f.name} 超過 30MB，已略過。`); continue; }
+                let a; try { a = analyze(new Uint8Array(await f.arrayBuffer())); } catch (e) { msgs.push(`${f.name} 讀取失敗。`); continue; }
+                items.push({ id: ++seq, file: f, name: f.name || ('image-' + seq), url: URL.createObjectURL(f), a, out: null, err: '' });
+            }
+            say(msgs.join(' ')); render();
+        }
+        async function reencode(f, format, q) {
+            const bmp = await createImageBitmap(f);
+            try {
+                if (bmp.width * bmp.height > MAX_PIXELS) throw new Error('圖片太大，無法重新編碼');
+                const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+                c.getContext('2d').drawImage(bmp, 0, 0);
+                const type = MIME[format] || 'image/png';
+                const blob = await new Promise(r => c.toBlob(r, type, q));
+                if (!blob) throw new Error('瀏覽器無法輸出 ' + type);
+                return { blob, format: blob.type === 'image/jpeg' ? 'jpeg' : blob.type === 'image/webp' ? 'webp' : 'png' };
+            } finally { bmp.close(); }
+        }
+        async function clean(it) {
+            it.err = ''; it.out = null;
+            try {
+                let blob, format = it.a.format;
+                if ($('#modeReenc').checked) ({ blob, format } = await reencode(it.file, format, $('#quality').value / 100));
+                else {
+                    if (!format) throw new Error('這個格式無法無損清除，請改用「重新編碼」');
+                    const r = stripMeta(new Uint8Array(await it.file.arrayBuffer()), { keepOrientation: $('#keepOri').checked, dropIcc: $('#dropIcc').checked });
+                    if (!r) throw new Error('檔案結構損毀或被截斷，無法無損清除');
+                    blob = new Blob([r.bytes], { type: MIME[format] });
+                }
+                const i = it.name.lastIndexOf('.');
+                it.out = { blob, a: analyze(new Uint8Array(await blob.arrayBuffer())), name: (i > 0 ? it.name.slice(0, i) : it.name) + '.clean.' + EXT[format] };
+            } catch (e) { it.err = '清除失敗：' + (e.message || e); }
+        }
+
+        const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+        function infoBlock(a, withHint) {
+            const box = el('div');
+            if (!a.format) { box.append(el('p', 'note', a.warnings[0] || '無法解析')); return box; }
+            if (a.gps) {
+                const g = el('div', 'gps'); g.setAttribute('role', 'alert');
+                g.append(el('b', '', a.gps.lat != null ? '⚠ 這張照片含有拍攝位置（GPS）' : '⚠ 這張照片含有 GPS 欄位'));
+                if (a.gps.lat != null) {
+                    g.append(el('div', '', `${a.gps.lat.toFixed(6)}, ${a.gps.lon.toFixed(6)}` + (a.gps.alt != null ? `　高度 ${Math.round(a.gps.alt)} m` : '')));
+                    if (a.gps.url) { const l = el('a', 'maplink', a.gps.url); l.href = a.gps.url; l.target = '_blank'; l.rel = 'noopener noreferrer'; g.append(l, el('div', 'note', '按連結才會開啟地圖，本頁不會自動載入。')); }
+                    else g.append(el('div', 'note', '座標為 0, 0，通常代表沒有定位成功。'));
+                }
+                box.append(g);
+            }
+            if (a.xmp && a.xmp.rows.length) {
+                if (a.xmp.loc || a.xmp.sens) { const g = el('div', 'gps'); g.setAttribute('role', 'alert'); g.append(el('b', '', a.xmp.loc ? '⚠ XMP 內含位置資訊' : '⚠ XMP 內含作者 / 版權等個人資訊'), el('div', 'note', '清除後這些 XMP 欄位會一併移除。')); box.append(g); }
+                box.append(el('div', 'note', 'XMP 內容：'));
+                const kv = el('div', 'kv xmpkv'); for (const [k, v, s] of a.xmp.rows) kv.append(el('span', '', k), el('span', s ? 'sens' : '', v)); box.append(kv);
+            }
+            if (a.rows.length) { const kv = el('div', 'kv'); for (const [k, v, s] of a.rows) { kv.append(el('span', '', k), el('span', s ? 'sens' : '', v)); } box.append(kv); }
+            else if (withHint) box.append(el('p', 'note', 'EXIF：沒有'));
+            if (a.sections.length) { const ul = el('ul', 'secs'); for (const s of a.sections) ul.append(el('li', '', `${s.name}　${fmtSize(s.size)}`)); box.append(el('div', 'note', '含有的中繼資料區段：'), ul); }
+            else if (withHint) box.append(el('p', 'note', '沒有任何中繼資料區段。'));
+            for (const w of a.warnings) box.append(el('p', 'note', '注意：' + w));
+            return box;
+        }
+        function render() {
+            $('#opts').hidden = !items.length;
+            $('#list').replaceChildren(...items.map(it => {
+                const c = el('div', 'card img'); c.dataset.id = it.id;
+                const head = el('div', 'head'), img = el('img'); img.src = it.url; img.alt = '';
+                const nm = el('div'); nm.append(el('div', 'nm', it.name), el('div', 'note', `${(it.a.format || '未知格式').toUpperCase()}　${fmtSize(it.file.size)}`));
+                head.append(img, nm); c.append(head, infoBlock(it.a, true));
+                const row = el('div', 'row');
+                const b1 = el('button', 'primary sm clean', '清除'); b1.onclick = async () => { b1.disabled = true; await clean(it); render(); };
+                const b2 = el('button', 'sm rm', '移除此張'); b2.onclick = () => { URL.revokeObjectURL(it.url); items = items.filter(x => x !== it); render(); };
+                row.append(b1, b2); c.append(row);
+                if (it.err) c.append(el('p', 'bad', it.err));
+                if (it.out) {
+                    const o = it.out.a, r = el('div', 'result');
+                    const isClean = !o.gps && !(o.exif && o.rows.length > (o.orientation ? 1 : 0));
+                    const only = o.orientation ? '（僅保留方向標記）' : '';
+                    r.append(el('p', o.gps ? 'bad' : 'good', o.gps ? '✗ 清除後仍含 GPS' : isClean ? '✓ 已無 EXIF / GPS' + only : '✓ 已無 GPS，仍有部分 EXIF'));
+                    const left = [o.xmp && 'XMP', o.maker && 'MakerNote'].filter(Boolean);
+                    r.append(el('p', left.length ? 'bad' : 'good', left.length ? '仍含 ' + left.join('、') : '✓ 已無 XMP / MakerNote'));
+                    r.append(el('p', 'note', `${fmtSize(it.file.size)} → ${fmtSize(it.out.blob.size)}`), infoBlock(o, true));
+                    const d = el('button', 'primary dl', '下載 ' + it.out.name); d.onclick = () => download(it.out.blob, it.out.name);
+                    r.append(d); c.append(r);
+                }
+                return c;
+            }));
+        }
+
+        $('#file').onchange = () => { addFiles([...$('#file').files]); $('#file').value = ''; };
+        const drop = $('#drop');
+        drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); };
+        drop.ondragleave = () => drop.classList.remove('over');
+        drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); addFiles([...e.dataTransfer.files]); };
+        document.addEventListener('paste', (e) => { const fs = [...(e.clipboardData ? e.clipboardData.files : [])]; if (fs.length) addFiles(fs); });
+        const syncMode = () => { $('#qRow').hidden = !$('#modeReenc').checked; $('#keepOri').disabled = $('#dropIcc').disabled = $('#modeReenc').checked; };
+        $('#modeLossless').onchange = $('#modeReenc').onchange = syncMode;
+        $('#quality').oninput = () => { $('#qVal').textContent = $('#quality').value; };
+        $('#cleanAll').onclick = async () => { $('#cleanAll').disabled = true; for (const it of items) await clean(it); $('#cleanAll').disabled = false; render(); };
+        $('#clearList').onclick = () => { items.forEach(i => URL.revokeObjectURL(i.url)); items = []; say(''); render(); };
+        syncMode();
+    </script>
+</body>
+
+</html>
