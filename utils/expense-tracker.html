@@ -10,7 +10,7 @@
     <meta property="og:description" content="離線記帳，月統計與分類佔比，可匯出 CSV。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/expense-tracker.html" />
-    <meta name="st-keys" content="expenses,expense_fixed">
+    <meta name="st-keys" content="expenses,expense_fixed,fx_cache">
     <title>記帳本</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -70,6 +70,15 @@
             color: var(--ok);
         }
 
+        #fxRow input {
+            flex: 0 1 110px;
+        }
+
+        .item .main small.fxline {
+            color: var(--text);
+            white-space: normal;
+        }
+
         .del {
             padding: 2px 10px;
             font-size: 13px;
@@ -113,6 +122,12 @@
                 <select id="type" aria-label="收支"><option value="out">支出</option><option value="in">收入</option></select>
                 <input type="number" id="amt" min="0" step="any" placeholder="金額" style="width:110px" aria-label="金額">
                 <select id="cat" aria-label="分類"></select>
+                <select id="cur" aria-label="幣別"></select>
+            </div>
+            <div class="row" id="fxRow" hidden>
+                <label class="muted" for="rate">匯率（1 外幣 = ? 台幣）</label>
+                <input type="number" id="rate" min="0" step="any" placeholder="匯率" style="width:110px" aria-label="匯率：1 外幣等於多少台幣">
+                <span class="muted" id="fxNote"></span>
             </div>
             <div class="row">
                 <input type="date" id="date" aria-label="日期">
@@ -151,32 +166,37 @@
         </div>
     </div>
 
+
     <template id="help">
         <h3>這是什麼</h3>
-        <p>簡單的記帳本：記每天的收入與支出，按月份看收支結餘與支出分類，也能管理房租、訂閱這類「固定支出」。</p>
+        <p>簡單的記帳本：記每天的收入與支出，按月份看收支結餘與支出分類，也能管理房租、訂閱這類「固定支出」。出國消費可用外幣記帳，記下當下匯率換算成台幣。</p>
         <h3>什麼時候用</h3>
         <ul>
         <li>每天隨手記一筆午餐、交通費，月底看錢花去哪。</li>
+        <li>旅行時用日圓、美金等外幣刷卡，回國後想看「當時」實際花多少台幣。</li>
         <li>把 Netflix、保險、房租列成清單，一眼看出每月、每年固定要付多少。</li>
         <li>想把資料帶到試算表整理，匯出 CSV。</li>
         </ul>
         <h3>怎麼用</h3>
         <ol>
-        <li>最上面選「支出」或「收入」，填金額、選分類、日期，備註可不填，按「新增」。</li>
-        <li>用「‹ ›」切換月份，看該月收入、支出與結餘，以及「支出分類」比例。</li>
-        <li>固定支出：填名稱、金額、週期（每月 / 每年 / 每週）與第一次扣款日，按「新增」。清單會顯示下次扣款日，標題旁顯示折合每月與每年的總額。</li>
-        <li>按「把本月已到期的記入明細」，目前檢視月份中已到期的扣款會自動記成支出（分類「其他」）；重複按不會重複記。</li>
-        <li>「匯出全部 CSV」下載全部紀錄；「刪除一年前的紀錄」只清掉一年前的舊明細；「清除全部資料」會刪光。</li>
+        <li>最上面選「支出」或「收入」，填金額、選分類與日期，備註可不填，按「新增」。</li>
+        <li>外幣：在「幣別」選 USD、JPY…，金額欄就是外幣金額；匯率欄會帶入「匯率換算器」存的最近匯率（1 外幣 = 多少台幣），可手動改。按「新增」後匯率與台幣金額就鎖定，之後統計都用台幣。</li>
+        <li>如果顯示「離線無匯率，請手動輸入」，代表沒有匯率快取或超過 7 天：先到「單位換算 → 匯率」開一次（需要網路），或自己在匯率欄填。這一頁本身不連網。</li>
+        <li>用「‹ ›」切換月份，看該月收入、支出與結餘，以及「支出分類」比例；外幣明細會多一行「¥1,200 ≈ NT$260（匯率 0.2167）」。</li>
+        <li>固定支出：填名稱、金額（台幣）、週期與第一次扣款日，按「新增」；「把本月已到期的記入明細」會自動記成支出。</li>
+        <li>「匯出全部 CSV」多出幣別、外幣金額、匯率三欄（台幣明細幣別是 TWD）；「刪除一年前的紀錄」、「清除全部資料」會先確認。</li>
         </ol>
         <h3>範例</h3>
-        <div class="eg">固定支出：Netflix、390、每月、第一次 2026-10-05
-        → 清單顯示「每月 390」，每月約 390、每年約 4,680
-        → 10 月 5 日之後按「把本月已到期的記入明細」，本月明細多一筆 390 元「Netflix」</div>
+        <div class="eg">幣別選 JPY、金額 1200、匯率 0.2167、分類「購物」→ 按「新增」
+        → 明細顯示「¥1,200 ≈ NT$260（匯率 0.2167）」，本月支出加 260.04
+        → 之後匯率變動，這筆仍然是 260.04 元</div>
         <h3>小提醒</h3>
         <ul>
         <li>資料只存在這個瀏覽器，不會上傳；換瀏覽器或清除網站資料會消失，請定期匯出。明細最多 20,000 筆、固定支出最多 200 項；刪除固定支出不會刪掉已記入的明細。</li>
-        <li>每年 / 每週的固定支出會折合成每月顯示（每週以一年 52 週 ÷ 12 計）。</li>
-        <li>金額欄按 <kbd>Enter</kbd> 或備註欄按 <kbd>Enter</kbd> 可直接新增。</li>
+        <li>匯率範圍 0.0001–100000；外幣金額換算後要至少 0.01 元。舊的只有台幣的明細完全相容，缺外幣欄位的視為 TWD。</li>
+        <li>匯率只供記帳參考，不等於信用卡實際請款金額（有手續費與結算日差異）。</li>
+        <li>備份會一併包含「匯率快取」這個資料；還原時若外幣資料壞掉，會保留台幣金額、丟掉外幣資訊。</li>
+        <li>金額欄或備註欄按 <kbd>Enter</kbd> 可直接新增。</li>
         </ul>
     </template>
 
@@ -206,11 +226,43 @@
         const pruneBefore = (entries, cutoff) => entries.filter(e => e.d >= cutoff);
 
         // CSV（RFC 4180 引號跳脫）；開頭是 = + - @ 的文字前面補單引號，避免在試算表中被當成公式
-        function toCSV(entries) {
+        // fxCols = true 時多三欄：幣別 / 外幣金額 / 匯率（台幣明細的幣別是 TWD，後兩欄留空）；「金額」一律是台幣
+        function toCSV(entries, fxCols = false) {
             const cell = (v) => { let s = String(v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-            const rows = [['日期', '收支', '分類', '金額', '備註'], ...[...entries].sort((a, b) => a.d.localeCompare(b.d)).map(e => [e.d, e.type === 'in' ? '收入' : '支出', e.cat, e.amt, e.note])];
+            const fx = (e) => (e.cur && e.fx ? [e.cur, e.fx, e.rate] : ['TWD', '', '']);
+            const rows = [['日期', '收支', '分類', '金額', '備註', ...(fxCols ? ['幣別', '外幣金額', '匯率'] : [])], ...[...entries].sort((a, b) => a.d.localeCompare(b.d)).map(e => [e.d, e.type === 'in' ? '收入' : '支出', e.cat, e.amt, e.note, ...(fxCols ? fx(e) : [])])];
             return rows.map(r => r.map(cell).join(',')).join('\r\n');
         }
+
+        // ---------- 外幣記帳 ----------
+        // 明細可選帶 cur（幣別）、fx（外幣金額）、rate（記帳當下 1 外幣 = 多少台幣，鎖定不再變）；amt 一律是台幣。舊資料沒有這三欄 = TWD
+        const CURRENCIES = { TWD: ['新台幣', 'NT$'], USD: ['美元', 'US$'], JPY: ['日圓', '¥'], EUR: ['歐元', '€'], KRW: ['韓元', '₩'], CNY: ['人民幣', 'CN¥'], HKD: ['港幣', 'HK$'], GBP: ['英鎊', '£'], AUD: ['澳幣', 'A$'], THB: ['泰銖', '฿'], SGD: ['新加坡幣', 'S$'], CAD: ['加幣', 'C$'], NZD: ['紐幣', 'NZ$'], CHF: ['瑞士法郎', 'CHF '], MYR: ['馬來幣', 'RM'], PHP: ['披索', '₱'], VND: ['越南盾', '₫'], IDR: ['印尼盾', 'Rp'] };
+        const MAX_AGE = 7 * 86400e3;                                       // 匯率快取超過 7 天就不用，改手動輸入
+        const validRate = (r) => typeof r === 'number' && Number.isFinite(r) && r >= 1e-4 && r <= 1e5;
+        // 從 unit-converter 的 fx_cache（{ rates: { 幣別: 1 台幣可換多少該幣 }, fetched }）算出「1 外幣 = 多少台幣」；快取壞掉 / 太舊 / 沒這個幣別 → null
+        function fxRate(cache, cur, now) {
+            if (!(cur in CURRENCIES)) return null;
+            if (cur === 'TWD') return 1;
+            if (!cache || typeof cache !== 'object' || !cache.rates || typeof cache.rates !== 'object' || !Number.isFinite(cache.fetched)) return null;
+            if (now - cache.fetched > MAX_AGE || cache.fetched - now > 864e5) return null;
+            const per = cache.rates[cur];
+            return typeof per === 'number' && per > 0 && validRate(1 / per) ? 1 / per : null;
+        }
+        // 外幣金額 × 匯率 → 台幣（四捨五入到分）；金額 / 匯率不合法或換算後不足 0.01 → null
+        function toTwd(fx, rate) {
+            if (typeof fx !== 'number' || !Number.isFinite(fx) || fx <= 0 || fx >= 1e12 || !validRate(rate)) return null;
+            const t = Math.round(fx * rate * 100) / 100;
+            return t >= 0.01 && t < 1e12 ? t : null;
+        }
+        // 讀取舊資料 / 備份還原時：外幣欄位不完整或不合法就丟掉，只留台幣金額（不弄丟帳）
+        function cleanFx(e) {
+            if (e.cur === undefined && e.fx === undefined && e.rate === undefined) return e;
+            const { cur, fx, rate, ...rest } = e;
+            return typeof cur === 'string' && cur !== 'TWD' && cur in CURRENCIES && typeof fx === 'number' && Number.isFinite(fx) && fx > 0 && fx < 1e12 && validRate(rate) ? { ...rest, cur, fx, rate } : rest;
+        }
+        const numFmt = (n, d) => n.toLocaleString('en-US', { maximumFractionDigits: d });
+        // 明細列的說明：「¥1,200 ≈ NT$260（匯率 0.2167）」；台幣明細回傳空字串
+        const fmtFx = (e) => (e.cur && e.fx ? `${CURRENCIES[e.cur][1]}${numFmt(e.fx, 2)} ≈ NT$${numFmt(e.amt, 1)}（匯率 ${e.rate}）` : '');
 
         // ---------- 固定支出 / 訂閱 ----------
         // item = { id, name, amt, cycle: 'week' | 'month' | 'year', start: 'YYYY-MM-DD'（第一次扣款日） }
@@ -243,7 +295,7 @@
         const arr = (v) => (Array.isArray(v) ? v : []);
         const warn = (t) => Chrome.toast(t, 4000, 'bad');
         const put = (k, v) => Util.store.set(k, v);
-        let entries = arr(store.get('expenses', [])).filter(validEntry);
+        let entries = arr(store.get('expenses', [])).filter(validEntry).map(cleanFx);
         let ym = day.today().slice(0, 7);
         $('#date').value = day.today();
 
@@ -297,6 +349,7 @@
                 const r = document.createElement('div'); r.className = 'item';
                 const main = document.createElement('div'); main.className = 'main';
                 main.append(Object.assign(document.createElement('div'), { textContent: e.cat }), Object.assign(document.createElement('small'), { textContent: e.d.slice(5) + (e.note ? '　' + e.note : '') }));
+                if (e.cur) main.append(Object.assign(document.createElement('small'), { className: 'fxline', textContent: fmtFx(e) }));
                 const a = Object.assign(document.createElement('b'), { className: 'amt ' + e.type, textContent: (e.type === 'in' ? '+' : '−') + money(e.amt) });
                 const x = Object.assign(document.createElement('button'), { className: 'sm del', textContent: '刪除' });
                 x.setAttribute('aria-label', '刪除 ' + e.cat + ' ' + money(e.amt));
@@ -306,12 +359,37 @@
             }) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '本月沒有紀錄' })]));
         }
 
+        // 幣別：選外幣時顯示匯率欄，預設帶 unit-converter 存的 fx_cache（不另外連網）；沒有 / 太舊就要手動輸入
+        function fillCur() { $('#cur').replaceChildren(...Object.entries(CURRENCIES).map(([c, [n]]) => new Option(`${c} ${n}`, c))); }
+        function onCur() {
+            const cur = $('#cur').value, fx = cur !== 'TWD';
+            $('#fxRow').hidden = !fx; $('#amt').placeholder = fx ? '外幣金額' : '金額';
+            if (!fx) return;
+            const r = fxRate(store.get('fx_cache', null), cur, Date.now());
+            $('#rate').value = r ? Number(r.toPrecision(4)) : '';
+            $('#fxNote').textContent = r ? '取自匯率換算器的快取，可手動修改；記帳後匯率就鎖定' : '離線無匯率，請手動輸入';
+            showTwd();
+        }
+        function showTwd() {
+            if ($('#cur').value === 'TWD') return;
+            const t = toTwd(parseFloat($('#amt').value), parseFloat($('#rate').value));
+            if (t !== null) $('#fxNote').textContent = `≈ NT$${money(t)}（記帳後匯率鎖定）`;
+        }
+        $('#cur').onchange = onCur; $('#amt').addEventListener('input', showTwd); $('#rate').addEventListener('input', showTwd);
+
         $('#add').onclick = () => {
             const e = { id: Date.now().toString(36) + rnd(1e6).toString(36), d: $('#date').value, type: $('#type').value, cat: $('#cat').value, amt: parseFloat($('#amt').value), note: $('#note').value.trim() };
+            const cur = $('#cur').value;
+            if (cur !== 'TWD') {
+                const rate = parseFloat($('#rate').value), twd = toTwd(e.amt, rate);
+                if (!validRate(rate)) { warn('離線無匯率，請手動輸入匯率（1 外幣 = 多少台幣）'); $('#rate').focus(); return; }
+                if (twd === null) { $('#amt').focus(); return; }
+                Object.assign(e, { fx: e.amt, amt: twd, cur, rate });
+            }
             if (!validEntry(e)) { $('#amt').focus(); return; }
             if (entries.length >= MAX_ENTRIES) return warn(`明細已達 ${MAX_ENTRIES} 筆上限，請先匯出並用「刪除一年前的紀錄」清理`);
             entries.push(e); save();
-            $('#amt').value = ''; $('#note').value = '';
+            $('#amt').value = ''; $('#note').value = ''; if (cur !== 'TWD') onCur();
             ym = e.d.slice(0, 7); render(); $('#amt').focus();
         };
         $('#fadd').onclick = () => {
@@ -325,14 +403,14 @@
         $('#type').onchange = fillCats;
         $('#prev').onclick = () => { ym = shiftMonth(ym, -1); render(); };
         $('#next').onclick = () => { ym = shiftMonth(ym, 1); render(); };
-        $('#export').onclick = () => download(new Blob(['﻿' + toCSV(entries)], { type: 'text/csv;charset=utf-8' }), `expenses-${day.today()}.csv`);
+        $('#export').onclick = () => download(new Blob(['﻿' + toCSV(entries, true)], { type: 'text/csv;charset=utf-8' }), `expenses-${day.today()}.csv`);
         $('#prune').onclick = () => {
             const cut = day.addMonths(day.today(), -12), n = entries.length - pruneBefore(entries, cut).length;
             if (!n) return warn('沒有一年前的紀錄');
             if (confirm(`刪除 ${cut} 以前的 ${n} 筆紀錄？無法復原，建議先匯出 CSV。`)) { entries = pruneBefore(entries, cut); save(); render(); }
         };
         $('#clear').onclick = () => { if (entries.length && confirm(`確定刪除全部 ${entries.length} 筆紀錄？無法復原（固定支出清單不受影響）。`)) { entries = []; save(); render(); } };
-        fillCats(); render(); renderFixed();
+        fillCur(); $('#cur').value = 'TWD'; fillCats(); render(); renderFixed();
     </script>
 </body>
 

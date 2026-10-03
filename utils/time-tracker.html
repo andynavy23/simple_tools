@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="工時紀錄：建立專案、一鍵開始 / 停止計時，也能手動補登；統計今天、本週、本月時數與金額，近 14 天長條圖，可匯出 CSV。資料只存在本機。">
+    <meta property="og:title" content="工時紀錄" />
+    <meta property="og:description" content="專案計時、補登、時數與金額統計、匯出 CSV。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/time-tracker.html" />
+    <meta name="st-keys" content="tt_projects,tt_logs,tt_active">
+    <title>工時紀錄</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>input[type=text],
+        .row>input[type=number],
+        .row>select {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .clock {
+            font-size: 40px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            text-align: center;
+            margin: 4px 0;
+        }
+
+        .now {
+            text-align: center;
+            color: var(--muted);
+            margin-bottom: 10px;
+        }
+
+        .dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            flex: none;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+
+        .li .grow {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .li .acts {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .li.run {
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding-left: 8px;
+            padding-right: 8px;
+        }
+
+        .seg {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .seg button {
+            flex: 1;
+        }
+
+        .chart {
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+            height: 120px;
+            margin-top: 8px;
+        }
+
+        .chart .col {
+            flex: 1;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            min-width: 0;
+        }
+
+        .chart .stack {
+            display: flex;
+            flex-direction: column-reverse;
+            border-radius: 3px 3px 0 0;
+            overflow: hidden;
+        }
+
+        .chart .stack i {
+            display: block;
+        }
+
+        .axis {
+            display: flex;
+            gap: 3px;
+            font-size: 12px;
+            color: var(--muted);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .axis span {
+            flex: 1;
+            text-align: center;
+            min-width: 0;
+        }
+
+        .small {
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .money {
+            font-variant-numeric: tabular-nums;
+        }
+
+        #msg {
+            min-height: 20px;
+            color: var(--bad);
+            font-size: 14px;
+            margin-top: 6px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>工時紀錄</h1>
+        <p class="sub">建立專案、按「開始」計時，停止後自動記一筆。關掉分頁再回來，計時仍會接續。資料只存在這台裝置。</p>
+
+        <div class="card">
+            <div class="now" id="nowName">目前沒有計時</div>
+            <div class="clock" id="clock">0:00:00</div>
+            <div class="row" style="justify-content:center"><button class="primary" id="stop" disabled>停止</button></div>
+        </div>
+
+        <div class="card">
+            <h2>專案</h2>
+            <div id="projects"></div>
+            <div class="row" style="margin-top:10px">
+                <input type="text" id="pName" placeholder="專案名稱" maxlength="30" aria-label="專案名稱">
+                <input type="color" id="pColor" value="#4f8cff" aria-label="顏色">
+                <input type="number" id="pRate" placeholder="時薪（選填）" min="0" step="any" inputmode="decimal" aria-label="時薪">
+                <button class="primary" id="addProject">新增專案</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 id="manualTitle">手動補登</h2>
+            <div class="fgrid">
+                <div style="grid-column:1/-1"><label for="mProject">專案</label><select id="mProject" style="width:100%"></select></div>
+                <div><label for="mDate">日期</label><input type="date" id="mDate"></div>
+                <div></div>
+                <div><label for="mStart">開始</label><input type="time" id="mStart" value="09:00"></div>
+                <div><label for="mEnd">結束</label><input type="time" id="mEnd" value="10:00"></div>
+                <div style="grid-column:1/-1"><label for="mNote">備註（選填）</label><input type="text" id="mNote" maxlength="100" style="width:100%"></div>
+            </div>
+            <div class="row" style="margin-top:10px"><button class="primary" id="mSave">新增紀錄</button><button id="mCancel" hidden>取消編輯</button></div>
+            <div id="msg" role="status"></div>
+        </div>
+
+        <div class="card">
+            <h2>統計</h2>
+            <div class="seg" role="group" aria-label="統計期間">
+                <button id="per-day" aria-pressed="true">今天</button><button id="per-week" aria-pressed="false">本週</button><button id="per-month" aria-pressed="false">本月</button>
+            </div>
+            <div id="stats"></div>
+            <h2 style="margin-top:16px">近 14 天</h2>
+            <div class="chart" id="chart" role="img" aria-label="近 14 天每日時數長條圖"></div>
+            <div class="axis" id="axis"></div>
+        </div>
+
+        <div class="card">
+            <h2>紀錄</h2>
+            <div id="logs"></div>
+            <div class="row" style="margin-top:8px"><button class="sm" id="more" hidden>顯示更多</button></div>
+        </div>
+
+        <div class="card">
+            <h2>資料管理</h2>
+            <p class="small" id="usage"></p>
+            <div class="row">
+                <button class="sm" id="exportCsv">匯出 CSV</button>
+                <button class="sm" id="pruneYear">刪除一年前的紀錄</button>
+                <button class="sm" id="clearLogs">清除全部紀錄</button>
+            </div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>替不同專案計時的工時紀錄本：按「開始」計時、按「停止」存成一筆，也能手動補登，並統計今天、本週、本月的時數與金額。資料只存在這台裝置。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>接案、打工想算每個案子花了多少時間，月底對帳。</li>
+        <li>想知道自己一週的時間花在哪些事情上（讀書、運動、副業）。</li>
+        <li>忘了按計時，事後補登一段時間。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>在「專案」區填名稱，可選顏色與時薪，按「新增專案」。</li>
+        <li>按專案旁的「開始」開始計時。同時只會有一個計時；按另一個專案的「開始」會自動結束前一個。</li>
+        <li>按「停止」存成一筆紀錄。計時用開始時間計算，重新整理或關掉分頁再回來，時間仍會正確接續。</li>
+        <li>忘記計時：在「手動補登」選專案、日期、開始與結束時間（可填備註）後按「新增紀錄」。</li>
+        <li>「紀錄」清單可按「編輯」修改或「刪除」單筆。</li>
+        <li>「統計」切換今天 / 本週（週一起算）/ 本月；下方是近 14 天長條圖。計時跨午夜時會自動拆到兩天。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">專案「網站改版」時薪 500，補登 09:00–11:30 → 這筆是 2:30，金額 1,250 元。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>「匯出 CSV」可下載全部紀錄（專案、日期、開始、結束、時數、金額、備註）；開頭是 = + - @ 的文字會自動補單引號，避免被試算表當成公式。</li>
+        <li>上限：專案 50 個、紀錄 20000 筆。滿了會拒絕新增並提示，不會偷偷刪舊資料。</li>
+        <li>刪除專案時會問你要把該專案的紀錄一併刪除，或保留（保留的紀錄會顯示為「已刪除的專案」）。</li>
+        <li>「資料管理」可刪除一年前的紀錄、清除全部紀錄（專案會保留）；皆無法復原，建議先匯出。</li>
+        <li>手動補登的結束時間必須晚於開始時間；跨午夜的一段請用計時，或拆成兩筆。</li>
+        <li>備份資料的鍵：工時專案、紀錄、進行中的計時；壞掉的資料載入時會自動略過。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { csvStringify } = Util;
+        // --- pure ---
+        const TT = { PROJ_MAX: 50, LOG_MAX: 20000, NOTE_MAX: 100, NAME_MAX: 30 };
+        const isTs = (v) => typeof v === 'number' && Number.isFinite(v) && v > 0 && v < 4e12;
+        const cleanColor = (c) => (/^#[0-9a-f]{6}$/i.test(c) ? c : '#4f8cff');
+        const cleanRate = (r) => { r = Number(r); return Number.isFinite(r) && r > 0 && r <= 1e7 ? r : 0; };
+        const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+        // 載入驗證：壞資料（非陣列、null、缺欄位、時間不合理）一律丟掉或補預設，並截到上限
+        function cleanProjects(raw) {
+            if (!Array.isArray(raw)) return [];
+            const seen = new Set(), out = [];
+            for (const p of raw) {
+                if (!p || typeof p !== 'object') continue;
+                const id = typeof p.id === 'string' ? p.id : '', name = String(p.name ?? '').trim().slice(0, TT.NAME_MAX);
+                if (!id || !name || seen.has(id)) continue;
+                seen.add(id); out.push({ id, name, color: cleanColor(p.color), rate: cleanRate(p.rate) });
+                if (out.length >= TT.PROJ_MAX) break;
+            }
+            return out;
+        }
+        function cleanLogs(raw) {
+            if (!Array.isArray(raw)) return [];
+            const seen = new Set(), out = [];
+            for (const l of raw) {
+                if (!l || typeof l !== 'object') continue;
+                if (typeof l.id !== 'string' || !l.id || seen.has(l.id) || typeof l.p !== 'string' || !isTs(l.s) || !isTs(l.e) || l.e <= l.s) continue;
+                seen.add(l.id); out.push({ id: l.id, p: l.p, s: l.s, e: l.e, note: typeof l.note === 'string' ? l.note.slice(0, TT.NOTE_MAX) : '' });
+                if (out.length >= TT.LOG_MAX) break;
+            }
+            return out;
+        }
+        // 進行中的計時：{p, s}；專案不存在或開始時間在未來（時鐘被改）就視為沒有
+        function cleanActive(raw, projects, now) {
+            if (!raw || typeof raw !== 'object' || !isTs(raw.s) || raw.s > now + 60000) return null;
+            return projects.some(p => p.id === raw.p) ? { p: raw.p, s: raw.s } : null;
+        }
+
+        // 本機日期時間（以 Date 的本機欄位計算，夏令時間 / 跨月都正確）
+        const dayStart = (ms) => { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+        const addDays = (ms, n) => { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n).getTime(); };
+        const weekStart = (ms) => addDays(ms, -((new Date(ms).getDay() + 6) % 7)); // 週一起算
+        const monthStart = (ms) => { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); };
+        const nextMonth = (ms) => { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime(); };
+        const p2 = (n) => String(n).padStart(2, '0');
+        const dateStr = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`; };
+        const timeStr = (ms) => { const d = new Date(ms); return `${p2(d.getHours())}:${p2(d.getMinutes())}`; };
+        // 期間範圍 [a, b)：day / week / month
+        function periodRange(kind, now) {
+            if (kind === 'week') { const a = weekStart(now); return [a, addDays(a, 7)]; }
+            if (kind === 'month') return [monthStart(now), nextMonth(now)];
+            const a = dayStart(now); return [a, addDays(a, 1)];
+        }
+
+        // 區間重疊：跨午夜的紀錄會依各天的範圍自動拆開
+        const overlap = (s, e, a, b) => Math.max(0, Math.min(e, b) - Math.max(s, a));
+        const withActive = (logs, active, now) => (active && now > active.s ? [...logs, { id: '_run', p: active.p, s: active.s, e: now, note: '' }] : logs);
+        function totals(logs, a, b) {
+            const t = {};
+            for (const l of logs) { const o = overlap(l.s, l.e, a, b); if (o) t[l.p] = (t[l.p] || 0) + o; }
+            return t;
+        }
+        // 近 N 天（含今天），每天各專案毫秒
+        function chartData(logs, now, days = 14) {
+            const out = [], today = dayStart(now);
+            for (let i = days - 1; i >= 0; i--) { const a = addDays(today, -i), b = addDays(a, 1); out.push({ start: a, label: new Date(a).getDate(), t: totals(logs, a, b) }); }
+            return out;
+        }
+
+        const fmtHM = (ms) => { const m = Math.round(ms / 60000); return `${Math.floor(m / 60)}:${p2(m % 60)}`; };
+        const fmtHMS = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 3600)}:${p2(Math.floor(s / 60) % 60)}:${p2(s % 60)}`; };
+        const money = (ms, rate) => Math.round(ms / 36e5 * rate * 100) / 100;
+
+        // 手動補登：日期 YYYY-MM-DD、時間 HH:MM（本機時間）。結束要晚於開始，且不超過 24 小時
+        function parseManual(date, st, en) {
+            const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || ''), sm = /^(\d{2}):(\d{2})$/.exec(st || ''), em = /^(\d{2}):(\d{2})$/.exec(en || '');
+            if (!dm || !sm || !em) return { err: '請填日期與起訖時間' };
+            const [y, mo, d] = dm.slice(1).map(Number), mk = (m) => new Date(y, mo - 1, d, +m[1], +m[2]).getTime();
+            const chk = new Date(y, mo - 1, d);
+            if (chk.getMonth() !== mo - 1 || chk.getDate() !== d || y < 2000) return { err: '日期不正確' };
+            const s = mk(sm), e = mk(em);
+            if (!(e > s)) return { err: '結束時間要晚於開始時間（跨午夜請用「開始 / 停止」計時，或拆成兩筆）' };
+            return { s, e };
+        }
+
+        // 新增 / 刪除：回傳 { list, err }。滿了就拒絕，不默默刪舊資料
+        function addProject(projects, name, color, rate) {
+            name = String(name ?? '').trim().slice(0, TT.NAME_MAX);
+            if (!name) return { list: projects, err: '請輸入專案名稱' };
+            if (projects.length >= TT.PROJ_MAX) return { list: projects, err: `專案最多 ${TT.PROJ_MAX} 個，請先刪除不用的` };
+            if (projects.some(p => p.name === name)) return { list: projects, err: '已經有同名的專案' };
+            return { list: [...projects, { id: uid(), name, color: cleanColor(color), rate: cleanRate(rate) }] };
+        }
+        function addLog(logs, p, s, e, note) {
+            if (logs.length >= TT.LOG_MAX) return { list: logs, err: `紀錄已滿 ${TT.LOG_MAX} 筆，請先用「刪除一年前的紀錄」或匯出後清除` };
+            return { list: [...logs, { id: uid(), p, s, e, note: String(note ?? '').trim().slice(0, TT.NOTE_MAX) }] };
+        }
+        const removeProject = (projects, logs, id, withLogs) => ({ projects: projects.filter(p => p.id !== id), logs: withLogs ? logs.filter(l => l.p !== id) : logs });
+        const pruneOlder = (logs, cutoff) => logs.filter(l => l.e >= cutoff);
+
+        // CSV：專案名與備註開頭是 = + - @ 時前補單引號，避免試算表當成公式
+        const csvGuard = (v) => { const s = String(v ?? ''); return /^[=+\-@\t\r]/.test(s) ? "'" + s : s; };
+        function toCsv(logs, projects) {
+            const byId = Object.fromEntries(projects.map(p => [p.id, p]));
+            const rows = [...logs].sort((a, b) => a.s - b.s).map(l => {
+                const p = byId[l.p], h = (l.e - l.s) / 36e5;
+                return [csvGuard(p ? p.name : '（已刪除的專案）'), dateStr(l.s), timeStr(l.s), (dateStr(l.e) === dateStr(l.s) ? '' : dateStr(l.e) + ' ') + timeStr(l.e), h.toFixed(2), p && p.rate ? money(l.e - l.s, p.rate).toFixed(2) : '', csvGuard(l.note)];
+            });
+            return csvStringify(['專案', '日期', '開始', '結束', '時數', '金額', '備註'], rows);
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const say = (t) => { if (window.Chrome && Chrome.toast) Chrome.toast(t, 2500); };
+        const NOW = () => Date.now();
+        let projects = cleanProjects(Util.store.get('tt_projects', []));
+        let logs = cleanLogs(Util.store.get('tt_logs', []));
+        let active = cleanActive(Util.store.get('tt_active', null), projects, NOW());
+        let period = 'day', shown = 30, editId = null;
+
+        const saveP = () => Util.store.set('tt_projects', projects);
+        const saveL = () => Util.store.set('tt_logs', logs);
+        const saveA = () => Util.store.set('tt_active', active);
+        const pById = (id) => projects.find(p => p.id === id);
+        const pName = (id) => { const p = pById(id); return p ? p.name : '（已刪除的專案）'; };
+        const pColor = (id) => { const p = pById(id); return p ? p.color : '#888888'; };
+        const msg = (t) => { $('#msg').textContent = t || ''; };
+
+        // 停止計時並寫入紀錄；紀錄已滿時拒絕並保留計時。回傳是否成功
+        function stopTimer(at = NOW()) {
+            if (!active) return true;
+            if (at > active.s) {
+                const r = addLog(logs, active.p, active.s, at, '');
+                if (r.err) { msg(r.err); return false; }
+                logs = r.list; saveL();
+            }
+            active = null; saveA(); return true;
+        }
+
+        function renderProjects() {
+            const now = NOW(), t = totals(withActive(logs, active, now), dayStart(now), addDays(dayStart(now), 1));
+            $('#projects').innerHTML = projects.length ? projects.map(p => `<div class="li${active && active.p === p.id ? ' run' : ''}" data-id="${p.id}">
+                <div class="grow"><span class="dot" style="background:${p.color}"></span><b>${Util.esc(p.name)}</b>${p.rate ? ` <span class="small">時薪 ${p.rate}</span>` : ''}<div class="small">今天 ${fmtHM(t[p.id] || 0)}</div></div>
+                <div class="acts">${active && active.p === p.id ? '<button class="sm" data-act="stop">停止</button>' : '<button class="sm primary" data-act="start">開始</button>'}<button class="sm" data-act="del" aria-label="刪除專案 ${Util.esc(p.name)}">刪除</button></div></div>`).join('')
+                : '<p class="muted">還沒有專案，先在下面新增一個。</p>';
+            $('#mProject').innerHTML = projects.map(p => `<option value="${p.id}">${Util.esc(p.name)}</option>`).join('');
+            if (editId) { const l = logs.find(x => x.id === editId); if (l) $('#mProject').value = l.p; }
+        }
+        function renderClock() {
+            const now = NOW();
+            $('#nowName').textContent = active ? '計時中：' + pName(active.p) : '目前沒有計時';
+            $('#clock').textContent = active ? fmtHMS(now - active.s) : '0:00:00';
+            $('#stop').disabled = !active;
+        }
+        function renderStats() {
+            const now = NOW(), all = withActive(logs, active, now), [a, b] = periodRange(period, now), t = totals(all, a, b);
+            const ids = Object.keys(t).sort((x, y) => t[y] - t[x]);
+            let sum = 0, money$ = 0, any = false;
+            const rows = ids.map(id => {
+                const p = pById(id); sum += t[id];
+                const m = p && p.rate ? money(t[id], p.rate) : null; if (m !== null) { money$ += m; any = true; }
+                return `<div class="li stat"><span><span class="dot" style="background:${pColor(id)}"></span>${Util.esc(pName(id))}</span><b>${fmtHM(t[id])}${m !== null ? ` <span class="money">・${m.toLocaleString('zh-TW')} 元</span>` : ''}</b></div>`;
+            });
+            $('#stats').innerHTML = rows.length ? rows.join('') + `<div class="li stat"><span>合計</span><b>${fmtHM(sum)}${any ? ` <span class="money">・${Math.round(money$ * 100) / 100} 元</span>` : ''}</b></div>` : '<p class="muted">這段期間沒有紀錄。</p>';
+            const data = chartData(all, now), maxMs = Math.max(36e5, ...data.map(d => Object.values(d.t).reduce((x, y) => x + y, 0)));
+            $('#chart').innerHTML = data.map(d => {
+                const tot = Object.values(d.t).reduce((x, y) => x + y, 0);
+                return `<div class="col" title="${dateStr(d.start)}　${fmtHM(tot)}"><div class="stack" style="height:${(tot / maxMs * 100).toFixed(1)}%">${Object.keys(d.t).map(id => `<i style="height:${(d.t[id] / tot * 100).toFixed(1)}%;background:${pColor(id)}"></i>`).join('')}</div></div>`;
+            }).join('');
+            $('#axis').innerHTML = data.map(d => `<span>${d.label}</span>`).join('');
+        }
+        function renderLogs() {
+            const sorted = [...logs].sort((a, b) => b.s - a.s), part = sorted.slice(0, shown);
+            $('#logs').innerHTML = part.length ? part.map(l => `<div class="li" data-id="${l.id}"><div class="grow"><span class="dot" style="background:${pColor(l.p)}"></span><b>${Util.esc(pName(l.p))}</b> <span class="small">${fmtHM(l.e - l.s)}</span><div class="small">${dateStr(l.s)} ${timeStr(l.s)}–${dateStr(l.e) === dateStr(l.s) ? '' : dateStr(l.e).slice(5) + ' '}${timeStr(l.e)}${l.note ? '　' + Util.esc(l.note) : ''}</div></div><div class="acts"><button class="sm" data-act="edit">編輯</button><button class="sm" data-act="rm" aria-label="刪除這筆紀錄">刪除</button></div></div>`).join('') : '<p class="muted">還沒有紀錄。</p>';
+            $('#more').hidden = sorted.length <= shown;
+            $('#usage').textContent = `專案 ${projects.length} / ${TT.PROJ_MAX}　紀錄 ${logs.length} / ${TT.LOG_MAX}`;
+        }
+        const renderAll = () => { renderProjects(); renderClock(); renderStats(); renderLogs(); };
+
+        function resetForm() {
+            editId = null; $('#manualTitle').textContent = '手動補登'; $('#mSave').textContent = '新增紀錄'; $('#mCancel').hidden = true; $('#mNote').value = ''; msg('');
+        }
+
+        $('#projects').onclick = (e) => {
+            const b = e.target.closest('button[data-act]'); if (!b) return;
+            const id = b.closest('[data-id]').dataset.id, act = b.dataset.act, now = NOW();
+            if (act === 'start') { if (!stopTimer(now)) return; active = { p: id, s: now }; saveA(); msg(''); }
+            else if (act === 'stop') stopTimer(now);
+            else if (act === 'del') {
+                const p = pById(id), n = logs.filter(l => l.p === id).length;
+                if (!confirm(`刪除專案「${p.name}」？\n它有 ${n} 筆紀錄。無法復原。`)) return;
+                const withLogs = n ? confirm(`該專案的 ${n} 筆紀錄要一併刪除嗎？\n按「確定」＝一併刪除；按「取消」＝保留紀錄（統計與匯出會顯示為「已刪除的專案」）。`) : true;
+                if (active && active.p === id && !stopTimer(now)) return;
+                const r = removeProject(projects, logs, id, withLogs); projects = r.projects; logs = r.logs; saveP(); saveL();
+            }
+            renderAll();
+        };
+        $('#stop').onclick = () => { stopTimer(); renderAll(); };
+        $('#addProject').onclick = () => {
+            const r = addProject(projects, $('#pName').value, $('#pColor').value, $('#pRate').value);
+            if (r.err) { say(r.err); return; }
+            projects = r.list; saveP(); $('#pName').value = ''; $('#pRate').value = ''; renderAll();
+        };
+        $('#pName').onkeydown = (e) => { if (e.key === 'Enter') $('#addProject').click(); };
+
+        $('#mSave').onclick = () => {
+            if (!projects.length) { msg('請先建立專案'); return; }
+            const r = parseManual($('#mDate').value, $('#mStart').value, $('#mEnd').value);
+            if (r.err) { msg(r.err); return; }
+            const p = $('#mProject').value, note = $('#mNote').value;
+            if (editId) {
+                const l = logs.find(x => x.id === editId);
+                if (l) { l.p = p; l.s = r.s; l.e = r.e; l.note = note.trim().slice(0, TT.NOTE_MAX); saveL(); }
+            } else {
+                const a = addLog(logs, p, r.s, r.e, note);
+                if (a.err) { msg(a.err); return; }
+                logs = a.list; saveL();
+            }
+            resetForm(); renderAll();
+        };
+        $('#mCancel').onclick = resetForm;
+        $('#logs').onclick = (e) => {
+            const b = e.target.closest('button[data-act]'); if (!b) return;
+            const id = b.closest('[data-id]').dataset.id, l = logs.find(x => x.id === id); if (!l) return;
+            if (b.dataset.act === 'rm') {
+                if (!confirm('刪除這筆紀錄？無法復原。')) return;
+                logs = logs.filter(x => x.id !== id); if (editId === id) resetForm(); saveL(); renderAll();
+            } else {
+                editId = id; $('#manualTitle').textContent = '編輯紀錄'; $('#mSave').textContent = '儲存修改'; $('#mCancel').hidden = false;
+                renderProjects(); $('#mProject').value = l.p; $('#mDate').value = dateStr(l.s); $('#mStart').value = timeStr(l.s); $('#mEnd').value = timeStr(l.e); $('#mNote').value = l.note; msg('');
+                $('#mDate').scrollIntoView({ block: 'center' });
+            }
+        };
+        $('#more').onclick = () => { shown += 50; renderLogs(); };
+        for (const k of ['day', 'week', 'month']) $('#per-' + k).onclick = () => { period = k; for (const j of ['day', 'week', 'month']) $('#per-' + j).setAttribute('aria-pressed', j === k); renderStats(); };
+
+        $('#exportCsv').onclick = () => {
+            if (!logs.length) { say('沒有紀錄可匯出'); return; }
+            Util.download(new Blob(['﻿' + toCsv(logs, projects)], { type: 'text/csv;charset=utf-8' }), `工時紀錄_${dateStr(NOW())}.csv`);
+        };
+        $('#pruneYear').onclick = () => {
+            const cutoff = addDays(dayStart(NOW()), -365), n = logs.filter(l => l.e < cutoff).length;
+            if (!n) { say('沒有一年前的紀錄'); return; }
+            if (!confirm(`刪除 ${dateStr(cutoff)} 以前結束的 ${n} 筆紀錄？無法復原（建議先匯出 CSV）。`)) return;
+            logs = pruneOlder(logs, cutoff); saveL(); renderAll();
+        };
+        $('#clearLogs').onclick = () => {
+            if (!logs.length) { say('沒有紀錄'); return; }
+            if (!confirm(`清除全部 ${logs.length} 筆紀錄？專案會保留；進行中的計時不受影響。無法復原（建議先匯出 CSV）。`)) return;
+            logs = []; saveL(); resetForm(); renderAll();
+        };
+
+        $('#mDate').value = dateStr(NOW());
+        renderAll();
+        // 用時間戳算，不累加：每秒只更新顯示；有計時時每 30 秒重算統計（跨午夜會自動換天）
+        let lastDay = dayStart(NOW());
+        setInterval(() => { renderClock(); const d = dayStart(NOW()); if (active && (new Date().getSeconds() % 30 === 0 || d !== lastDay)) { renderProjects(); renderStats(); } lastDay = d; }, 1000);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) { renderClock(); renderStats(); renderProjects(); } });
+    </script>
+</body>
+
+</html>

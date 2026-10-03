@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="水平儀與指南針：用手機的方向感測器量水平、方位角與坡度（度與百分比），可歸零校正；沒有感測器時可用模擬輸入預覽。">
+    <meta property="og:title" content="水平儀 / 指南針" />
+    <meta property="og:description" content="手機水平儀、指南針與坡度計，全部在本機運作，不上傳。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/level-compass.html" />
+    <title>水平儀 / 指南針</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        .tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        .status {
+            font-size: 14px;
+            color: var(--muted);
+            margin: 0 0 12px;
+        }
+
+        .status.ok {
+            color: var(--ok);
+        }
+
+        .notice {
+            border-left: 4px solid var(--bad);
+        }
+
+        .lvgrid {
+            display: grid;
+            gap: 16px;
+        }
+
+        .box {
+            position: relative;
+            width: min(100%, 320px);
+            aspect-ratio: 1;
+            margin: 0 auto;
+            border: 3px solid var(--line);
+            border-radius: 50%;
+            background: var(--fill);
+        }
+
+        .box.tube {
+            aspect-ratio: 4 / 1;
+            border-radius: 999px;
+            width: 100%;
+            max-width: 420px;
+        }
+
+        .box::before,
+        .box::after {
+            content: "";
+            position: absolute;
+            background: var(--line);
+        }
+
+        .box::before {
+            left: 50%;
+            top: 8%;
+            bottom: 8%;
+            width: 1px;
+        }
+
+        .box::after {
+            top: 50%;
+            left: 8%;
+            right: 8%;
+            height: 1px;
+        }
+
+        .box.tube::before {
+            top: 15%;
+            bottom: 15%;
+        }
+
+        .box.tube::after {
+            display: none;
+        }
+
+        .ring {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 18%;
+            aspect-ratio: 1;
+            transform: translate(-50%, -50%);
+            border: 2px solid var(--muted);
+            border-radius: 50%;
+            z-index: 1;
+        }
+
+        .box.tube .ring {
+            width: 12%;
+            height: 70%;
+            aspect-ratio: auto;
+            border-radius: 999px;
+        }
+
+        .bub {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 14%;
+            aspect-ratio: 1;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--primary-bg);
+            opacity: .9;
+            z-index: 2;
+        }
+
+        .box.tube .bub {
+            width: 9%;
+            height: 60%;
+            aspect-ratio: auto;
+            border-radius: 999px;
+        }
+
+        .bub.lv {
+            background: var(--ok);
+        }
+
+        .rd {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            text-align: center;
+            margin: 12px 0;
+        }
+
+        .rd .n {
+            font-size: 26px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .rd .l {
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .lvok {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.5em;
+            color: var(--ok);
+        }
+
+        #p-compass {
+            overflow: hidden;
+        }
+
+        .dialwrap {
+            position: relative;
+            width: min(100%, 300px);
+            margin: 8px auto;
+        }
+
+        .dial {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 50%;
+            border: 3px solid var(--line);
+            background: var(--fill);
+        }
+
+        .dial span {
+            position: absolute;
+            font-weight: 700;
+            transform: translate(-50%, -50%);
+        }
+
+        .dial .tN {
+            left: 50%;
+            top: 11%;
+            color: var(--bad);
+        }
+
+        .dial .tE {
+            left: 89%;
+            top: 50%;
+        }
+
+        .dial .tS {
+            left: 50%;
+            top: 89%;
+        }
+
+        .dial .tW {
+            left: 11%;
+            top: 50%;
+        }
+
+        .dial .sm {
+            font-weight: 400;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .ptr {
+            position: absolute;
+            left: 50%;
+            top: -10px;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-top: 18px solid var(--text);
+        }
+
+        .hdg {
+            text-align: center;
+            font-size: 40px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .hdgn {
+            text-align: center;
+            font-size: 20px;
+        }
+
+        .sl {
+            text-align: center;
+        }
+
+        .sl > .n {
+            font-size: 56px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .simrow {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 4px;
+            margin: 8px 0;
+        }
+
+        .simrow input[type=range] {
+            width: 100%;
+            min-height: 32px;
+        }
+
+        .chk {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 44px;
+        }
+
+        .chk input {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* 橫向手機：左右並排，避免圖太大要捲動 */
+        @media (orientation: landscape) and (max-height: 520px) {
+            .lvgrid.two {
+                grid-template-columns: 1fr 1fr;
+                align-items: center;
+            }
+
+            .box,
+            .dialwrap {
+                width: min(100%, 52vh);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>水平儀 / 指南針</h1>
+        <p class="sub">用手機的方向感測器量水平、方位與坡度。全部在本機計算，不上傳，也不存任何資料。</p>
+
+        <div class="card notice" id="perm" hidden>
+            <p>這支手機（iOS）需要你允許「動作與方向」存取才能讀取感測器。</p>
+            <button class="primary" id="permBtn">啟用感測器</button>
+            <p class="note" id="permMsg"></p>
+        </div>
+
+        <div class="card notice" id="nodata" hidden>
+            <h2>沒有收到感測器資料</h2>
+            <p>可能原因：桌機 / 筆電沒有方向感測器；瀏覽器要求 HTTPS 才提供感測器；系統關閉了「動作與方向」存取；或瀏覽器不支援（iOS 請先按上方「啟用感測器」）。你仍可用下方「模擬輸入」拖滑桿預覽畫面。</p>
+            <button id="simOn">用模擬輸入預覽</button>
+        </div>
+
+        <p class="status" id="status">等待感測器資料…</p>
+
+        <div class="tabs" id="tabs">
+            <button class="sm" data-t="level" aria-pressed="true">水平儀</button>
+            <button class="sm" data-t="compass" aria-pressed="false">指南針</button>
+            <button class="sm" data-t="slope" aria-pressed="false">坡度</button>
+        </div>
+
+        <div class="card" id="p-level">
+            <div class="row" style="margin-bottom:12px">
+                <button class="sm" id="mFlat" aria-pressed="true">平放（桌面 / 地板）</button>
+                <button class="sm" id="mUp" aria-pressed="false">立起（牆面 / 相框）</button>
+            </div>
+            <div class="lvgrid two">
+                <div class="box" id="box"><div class="ring"></div><div class="bub" id="bub"></div></div>
+                <div>
+                    <div class="rd">
+                        <div><div class="n" id="lvX">—</div><div class="l" id="lvXl">左右 X</div></div>
+                        <div><div class="n" id="lvY">—</div><div class="l" id="lvYl">前後 Y</div></div>
+                        <div><div class="n" id="lvT">—</div><div class="l" id="lvTl">總傾斜</div></div>
+                    </div>
+                    <div class="lvok" id="lvOk"></div>
+                    <div class="row" style="justify-content:center">
+                        <button class="primary zero" id="zero">歸零校正</button>
+                        <button class="sm" id="zeroClear">清除校正</button>
+                    </div>
+                    <p class="note" id="lvNote"></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" id="p-compass" hidden>
+            <div class="lvgrid two">
+                <div class="dialwrap"><div class="ptr"></div>
+                    <div class="dial" id="dial"><span class="tN">N</span><span class="tE">E</span><span class="tS">S</span><span class="tW">W</span>
+                        <span class="sm" style="left:82%;top:18%">NE</span><span class="sm" style="left:82%;top:82%">SE</span><span class="sm" style="left:18%;top:82%">SW</span><span class="sm" style="left:18%;top:18%">NW</span></div>
+                </div>
+                <div>
+                    <div class="hdg" id="hdg">—</div>
+                    <div class="hdgn" id="hdgn">&nbsp;</div>
+                    <p class="note" id="cNote"></p>
+                </div>
+            </div>
+            <p class="note">磁偏角未修正：顯示的是磁北，不是地圖上的真北（臺灣約差數度，隨地點與年份變動）。金屬、磁鐵、喇叭、車內與電子設備會干擾；準確度不佳時，拿著手機在空中畫「8」字形來校準。</p>
+        </div>
+
+        <div class="card" id="p-slope" hidden>
+            <div class="sl">
+                <div class="n" id="slDeg">—</div>
+                <div class="rd" style="grid-template-columns:1fr 1fr">
+                    <div><div class="n" id="slPct">—</div><div class="l">坡度（%）</div></div>
+                    <div><div class="n" id="slRatio">—</div><div class="l">高 : 長</div></div>
+                </div>
+                <div class="row" style="justify-content:center"><button class="primary zero" id="zero2">歸零校正</button></div>
+                <p class="note">把手機<b>螢幕朝上平放</b>在斜面上，讀「傾斜角」；坡度 % = tan(角度) × 100。歸零校正會把目前平放狀態當作 0°（先放在已知水平的桌面）。</p>
+            </div>
+        </div>
+
+        <div class="card" id="sim" hidden>
+            <h2>模擬輸入</h2>
+            <label class="chk"><input type="checkbox" id="simCk"> 啟用模擬（忽略真實感測器）</label>
+            <div class="simrow"><label for="simG">左右傾斜 gamma：<b id="simGv">0</b>°</label><input type="range" id="simG" min="-90" max="90" step="1" value="0"></div>
+            <div class="simrow"><label for="simB">前後傾斜 beta：<b id="simBv">0</b>°</label><input type="range" id="simB" min="-180" max="180" step="1" value="0"></div>
+            <div class="simrow"><label for="simH">方位角：<b id="simHv">0</b>°</label><input type="range" id="simH" min="0" max="359" step="1" value="0"></div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>把手機當<b>水平儀、指南針、坡度計</b>用：讀取手機的方向感測器（<kbd>DeviceOrientation</kbd>），顯示氣泡、傾斜角度、方位角與坡度。全部在本機計算，不上傳、不儲存。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>掛相框、架層板，確認有沒有歪。</li>
+        <li>機車、露營車、帳篷、檯面是否水平。</li>
+        <li>量斜坡、輪椅坡道的傾斜角與坡度百分比。</li>
+        <li>戶外大致確認方位（東南西北）。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>用手機開啟。iOS 會顯示「啟用感測器」，<b>按下並允許</b>「動作與方向」；Android 通常直接可用（需 HTTPS，本站已是）。</li>
+        <li><b>水平儀</b>：選「平放」（把手機放桌面，看氣泡與 X / Y 角度）或「立起」（手機立在牆上，看水平條）。氣泡往較高的一側移動，置中且變綠就是水平。</li>
+        <li><b>校正</b>：先放在你確定水平的面上，按「歸零校正」把目前讀數當作 0°；「清除校正」恢復。</li>
+        <li><b>指南針</b>：平拿手機，看方位角與 N / NE / E… 文字；刻度盤上的 N 會指向北方。</li>
+        <li><b>坡度</b>：螢幕朝上平放在斜面上，讀傾斜角、百分比與高:長。</li>
+        <li>桌機或沒有感測器時，2 秒沒資料會出現說明與「用模擬輸入預覽」，拖滑桿即可看畫面。</li>
+        <li>手機直向、橫向都能用，不會鎖定方向。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">平放在斜面，傾斜角 5.0°
+        → 坡度 = tan 5° × 100 = 8.7%
+        → 高:長 約 1 : 11.4
+        方位角 135° → 東南（SE）</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>指南針是<b>磁北</b>，磁偏角未修正；金屬、磁鐵、電子設備會干擾，可畫 8 字形校準。需要「絕對方位」的感測器（Android 的 <kbd>deviceorientationabsolute</kbd> 或 iOS 的羅盤方位）；沒有時只會顯示水平與坡度。</li>
+        <li>手機感測器有誤差，精密施工請用專業水平儀；建議先「歸零校正」。手機殼不平、鏡頭凸起也會影響平放讀數。</li>
+        <li>讀數經過平滑處理，移動後請稍等半秒再讀。</li>
+        <li>不需要相機或定位權限，只用方向 / 動作感測器。本頁不儲存任何資料，重新整理後校正會歸零。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        const rad = (d) => d * Math.PI / 180, deg = (r) => r * 180 / Math.PI;
+        const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+        const normAngle = (a) => ((a % 360) + 360) % 360;
+        // a 相對 b 的最短有號角差，範圍 (-180, 180]
+        const angDiff = (a, b) => { const d = normAngle(a - b); return d > 180 ? d - 360 : d; };
+        // 低通濾波：alpha 越小越平滑；prev 為空（第一筆）直接採用新值
+        const lowPass = (prev, next, alpha) => (prev == null || !Number.isFinite(prev) ? next : prev + alpha * (next - prev));
+        const lowPassAngle = (prev, next, alpha) => (prev == null || !Number.isFinite(prev) ? normAngle(next) : normAngle(prev + alpha * angDiff(next, prev)));
+        const lowPassVec = (p, n, alpha) => (p ? { x: lowPass(p.x, n.x, alpha), y: lowPass(p.y, n.y, alpha), z: lowPass(p.z, n.z, alpha) } : n);
+
+        // 「世界的上方」在裝置座標系的單位向量（x 右、y 上緣、z 螢幕外）。由 W3C 的 Z-X'-Y'' 旋轉推得：(-cosβ·sinγ, sinβ, cosβ·cosγ)
+        function upVector(beta, gamma) {
+            const b = rad(beta), g = rad(gamma);
+            return { x: -Math.cos(b) * Math.sin(g), y: Math.sin(b), z: Math.cos(b) * Math.cos(g) };
+        }
+        // 由含重力的加速度（DeviceMotion 的 accelerationIncludingGravity，靜止時指向「上」）得到同樣的向量；自由落體 / 無效回傳 null
+        function gravityVector(ax, ay, az) {
+            const m = Math.hypot(ax, ay, az);
+            return Number.isFinite(m) && m > 1 ? { x: ax / m, y: ay / m, z: az / m } : null;
+        }
+        const wrap90 = (a) => a - 90 * Math.round(a / 90);
+        // 水平儀角度（度）。flat：平放，x = 右側往下為正、y = 上緣抬高為正，total = 與水平面的夾角；
+        // upright：立起，x = 順時針旋轉為正（對最近的 90° 取餘，橫豎握都可），y = 螢幕朝上的後仰角，total = |x|
+        function levelAngles(u, mode) {
+            if (mode === 'upright') {
+                const x = wrap90(deg(Math.atan2(-u.x, u.y)));
+                return { x, y: deg(Math.asin(clamp(u.z, -1, 1))), total: Math.abs(x) };
+            }
+            return { x: deg(Math.atan2(-u.x, u.z)), y: deg(Math.atan2(u.y, u.z)), total: deg(Math.acos(clamp(u.z, -1, 1))) };
+        }
+        // 由兩軸角度還原與水平面的夾角（歸零校正後用）
+        function totalFromXY(x, y) {
+            if (Math.abs(x) >= 90 || Math.abs(y) >= 90) return 90;
+            return deg(Math.atan(Math.hypot(Math.tan(rad(x)), Math.tan(rad(y)))));
+        }
+        const applyOffset = (a, off) => ({ x: a.x - off.x, y: a.y - off.y });
+        const calibrate = (offsets, mode, a) => ({ ...offsets, [mode]: { x: a.x, y: a.y } });
+        const isLevel = (x, y, tol = 0.5) => Math.abs(x) <= tol && Math.abs(y) <= tol;
+        // 螢幕座標：把裝置座標系的向量轉到螢幕方向（angle = screen.orientation.angle，逆時針度數）
+        function toScreen(x, y, angle) {
+            const a = rad(angle), c = Math.cos(a), s = Math.sin(a);
+            return { x: x * c - y * s, y: x * s + y * c };
+        }
+        // 氣泡位置（-1..1，螢幕座標：x 向右、y 向上），氣泡往較高的一側移動；full = 滿刻度角度
+        function bubblePos(mode, x, y, full = 15, screenAngle = 0) {
+            if (mode === 'upright') return { x: clamp(-x / full, -1, 1), y: 0 };
+            const v = toScreen(-x / full, y / full, screenAngle), m = Math.hypot(v.x, v.y);
+            return m > 1 ? { x: v.x / m, y: v.y / m } : v;
+        }
+        // 方位角（0–360，順時針自北）。alpha / beta / gamma 為「絕對」方向事件的角度。
+        // 手機接近平放：取上緣的方向；立起：取機背（相機）的方向——避免兩者在垂直時失去定義
+        function compassHeading(alpha, beta, gamma) {
+            const a = rad(alpha), b = rad(beta), g = rad(gamma);
+            let east, north;
+            if (Math.abs(Math.cos(b) * Math.cos(g)) >= Math.SQRT1_2) { east = -Math.sin(a) * Math.cos(b); north = Math.cos(a) * Math.cos(b); }
+            else {
+                east = -Math.cos(a) * Math.sin(g) - Math.sin(a) * Math.sin(b) * Math.cos(g);
+                north = -Math.sin(a) * Math.sin(g) + Math.cos(a) * Math.sin(b) * Math.cos(g);
+            }
+            return normAngle(deg(Math.atan2(east, north)));
+        }
+        const DIR_ZH = ['北', '東北', '東', '東南', '南', '西南', '西', '西北'], DIR_EN = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+        function headingName(h) {
+            const i = Math.round(normAngle(h) / 45) % 8;
+            return { zh: DIR_ZH[i], en: DIR_EN[i] };
+        }
+        // 傾斜角 → 坡度。percent = tan × 100（90° 為 Infinity）；ratio = 每 1 單位高的水平長（1 : ratio），0° 為 Infinity
+        function slopeInfo(d) {
+            const a = clamp(Math.abs(d), 0, 90), t = Math.tan(rad(a));
+            return { deg: a, percent: a >= 90 ? Infinity : t * 100, ratio: t === 0 ? Infinity : a >= 90 ? 0 : 1 / t };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const SMOOTH = 0.25, FULL = 15;
+        const st = { u: null, heading: null, seen: false, sim: false, mode: 'flat', off: { flat: { x: 0, y: 0 }, upright: { x: 0, y: 0 } }, lastOri: 0, motionOnly: false };
+        const screenAngle = () => normAngle((screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (+window.orientation || 0));
+        const f1 = (n) => (Math.abs(n) < 0.05 ? 0 : n).toFixed(1);
+
+        function render() {
+            const tab = document.querySelector('#tabs [aria-pressed=true]').dataset.t;
+            if (!st.u) return;
+            const mode = st.mode, a0 = levelAngles(st.u, mode), a = applyOffset(a0, st.off[mode]);
+            if (tab === 'level') {
+                const box = $('#box'); box.classList.toggle('tube', mode === 'upright');
+                const total = mode === 'flat' ? totalFromXY(a.x, a.y) : Math.abs(a.x), lv = mode === 'flat' ? isLevel(a.x, a.y) : Math.abs(a.x) <= 0.5;
+                const p = bubblePos(mode, a.x, a.y, FULL, mode === 'flat' ? screenAngle() : 0);
+                const b = $('#bub'); b.style.left = (50 + p.x * (mode === 'flat' ? 36 : 40)) + '%'; b.style.top = (50 - p.y * 36) + '%'; b.classList.toggle('lv', lv);
+                $('#lvX').textContent = f1(a.x) + '°'; $('#lvY').textContent = f1(a.y) + '°'; $('#lvT').textContent = f1(total) + '°';
+                $('#lvXl').textContent = mode === 'flat' ? '左右 X（右低為正）' : '水平偏差（順時針為正）';
+                $('#lvYl').textContent = mode === 'flat' ? '前後 Y（上緣高為正）' : '前後仰（螢幕朝上為正）';
+                $('#lvTl').textContent = mode === 'flat' ? '總傾斜' : '偏差大小';
+                $('#lvOk').textContent = lv ? '水平 ✓' : '';
+                $('#lvNote').textContent = mode === 'flat' ? '氣泡往較高的一側移動；滿刻度 ±' + FULL + '°。' : '把手機立在牆上，橫豎握皆可；氣泡置中且變綠為水平。';
+            } else if (tab === 'compass') {
+                const h = st.heading;
+                $('#hdg').textContent = h == null ? '—' : Math.round(h) % 360 + '°';
+                const n = h == null ? null : headingName(h);
+                $('#hdgn').textContent = n ? `${n.zh} ${n.en}` : ' ';
+                $('#dial').style.transform = h == null ? '' : `rotate(${-h}deg)`;
+                $('#cNote').textContent = h == null ? '這台裝置沒有提供絕對方位（需要 deviceorientationabsolute 或 iOS 的羅盤方位），無法指北；水平儀與坡度仍可使用。' : '';
+            } else {
+                const fa = applyOffset(levelAngles(st.u, 'flat'), st.off.flat), d = totalFromXY(fa.x, fa.y), s = slopeInfo(d);
+                $('#slDeg').textContent = f1(d) + '°';
+                $('#slPct').textContent = Number.isFinite(s.percent) ? f1(s.percent) + '%' : '∞';
+                $('#slRatio').textContent = d < 0.05 ? '—' : `1 : ${Number.isFinite(s.ratio) ? s.ratio.toFixed(s.ratio < 10 ? 2 : 1) : '∞'}`;
+            }
+        }
+        function setStatus(t, ok) { const s = $('#status'); s.textContent = t; s.classList.toggle('ok', !!ok); }
+        function gotData() {
+            if (!st.seen) { st.seen = true; $('#nodata').hidden = true; $('#perm').hidden = true; }
+            setStatus(st.sim ? '模擬輸入中（沒有使用真實感測器）' : st.motionOnly ? '已收到感測器資料（僅重力加速度：只能量水平與坡度）' : '已收到感測器資料', true);
+        }
+        // 一筆方向資料。s = { alpha, beta, gamma, absolute, webkit }（webkit 為 iOS 的 webkitCompassHeading）；instant 略過平滑（模擬用）
+        function onSample(s, instant) {
+            if (!Number.isFinite(s.beta) || !Number.isFinite(s.gamma)) return; // 桌機常送全是 null 的事件
+            st.lastOri = Date.now(); st.motionOnly = false;
+            const u = upVector(s.beta, s.gamma); st.u = instant ? u : lowPassVec(st.u, u, SMOOTH);
+            let h = null;
+            if (Number.isFinite(s.webkit)) h = s.webkit; else if (s.absolute && Number.isFinite(s.alpha)) h = compassHeading(s.alpha, s.beta, s.gamma);
+            if (h != null) st.heading = instant ? normAngle(h) : lowPassAngle(st.heading, h, SMOOTH);
+            gotData(); render();
+        }
+        const onOri = (e, abs) => { if (!st.sim) onSample({ alpha: e.alpha, beta: e.beta, gamma: e.gamma, absolute: abs || e.absolute === true, webkit: e.webkitCompassHeading }); };
+        addEventListener('deviceorientationabsolute', (e) => onOri(e, true));
+        addEventListener('deviceorientation', (e) => onOri(e, false));
+        // 後備：沒有方向事件時用重力加速度（只有水平 / 坡度，沒有方位）
+        addEventListener('devicemotion', (e) => {
+            if (st.sim || Date.now() - st.lastOri < 1500) return;
+            const g = e.accelerationIncludingGravity, u = g && gravityVector(g.x, g.y, g.z);
+            if (!u) return;
+            st.motionOnly = true; st.u = lowPassVec(st.u, u, SMOOTH); gotData(); render();
+        });
+
+        // 權限與「沒收到資料」偵測
+        let waitTimer = 0;
+        function startWait() { clearTimeout(waitTimer); waitTimer = setTimeout(() => { if (!st.seen && !st.sim) { $('#nodata').hidden = false; $('#sim').hidden = false; setStatus('沒有收到感測器資料', false); } }, 2000); }
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            $('#perm').hidden = false; setStatus('請先按「啟用感測器」', false);
+            $('#permBtn').onclick = () => {
+                const ps = [DeviceOrientationEvent.requestPermission()];
+                if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') ps.push(DeviceMotionEvent.requestPermission().catch(() => 'denied'));
+                Promise.all(ps).then(([r]) => {
+                    if (r === 'granted') { $('#permMsg').textContent = '已允許，請移動手機。'; startWait(); }
+                    else $('#permMsg').textContent = '被拒絕了。請到 設定 > Safari > 動作與方向存取 開啟後重新整理；或用模擬輸入預覽。';
+                    if (r !== 'granted') { $('#nodata').hidden = false; $('#sim').hidden = false; }
+                }).catch(() => { $('#permMsg').textContent = '無法取得權限（需要 HTTPS 與使用者點擊）。'; $('#nodata').hidden = false; $('#sim').hidden = false; });
+            };
+        }
+        startWait();
+
+        // 模擬輸入
+        function simFeed() {
+            const g = +$('#simG').value, b = +$('#simB').value, h = +$('#simH').value;
+            $('#simGv').textContent = g; $('#simBv').textContent = b; $('#simHv').textContent = h;
+            if (st.sim) { onSample({ alpha: 0, beta: b, gamma: g, absolute: true, webkit: h }, true); }
+        }
+        function setSim(on) { st.sim = on; $('#simCk').checked = on; $('#sim').hidden = false; if (on) { st.u = null; simFeed(); } else { st.u = null; st.heading = null; st.seen = false; setStatus('等待感測器資料…', false); startWait(); } }
+        $('#simOn').onclick = () => setSim(true);
+        $('#simCk').onchange = (e) => setSim(e.target.checked);
+        for (const id of ['#simG', '#simB', '#simH']) $(id).oninput = simFeed;
+
+        // 介面
+        $('#tabs').onclick = (e) => {
+            const b = e.target.closest('button[data-t]'); if (!b) return;
+            document.querySelectorAll('#tabs button').forEach(x => { x.setAttribute('aria-pressed', x === b); $('#p-' + x.dataset.t).hidden = x !== b; });
+            render();
+        };
+        const setMode = (m) => { st.mode = m; $('#mFlat').setAttribute('aria-pressed', m === 'flat'); $('#mUp').setAttribute('aria-pressed', m === 'upright'); render(); };
+        $('#mFlat').onclick = () => setMode('flat'); $('#mUp').onclick = () => setMode('upright');
+        const zero = (mode) => { if (!st.u) return; st.off = calibrate(st.off, mode, levelAngles(st.u, mode)); render(); };
+        $('#zero').onclick = () => zero(st.mode); $('#zero2').onclick = () => zero('flat');
+        $('#zeroClear').onclick = () => { st.off = { flat: { x: 0, y: 0 }, upright: { x: 0, y: 0 } }; render(); };
+        if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', render);
+        addEventListener('orientationchange', render); addEventListener('resize', render);
+    </script>
+</body>
+
+</html>

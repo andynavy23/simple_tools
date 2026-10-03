@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="心算練習：加減乘除可複選、1 到 3 位數，10 / 20 / 50 題或限時 60 秒，螢幕數字鍵盤手機好按，結束顯示正確率、平均秒數與錯題回顧。">
+    <meta property="og:title" content="心算練習" />
+    <meta property="og:description" content="加減乘除心算，題數或限時，記錄最佳成績。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/mental-math.html" />
+    <meta name="st-keys" content="mentalmath_best_*">
+    <title>心算練習</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 480px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .seg {
+            display: flex;
+            gap: 6px;
+            margin: 6px 0 12px;
+        }
+
+        .seg button {
+            flex: 1;
+            padding-left: 4px;
+            padding-right: 4px;
+        }
+
+        h2.s {
+            font-size: 14px;
+            color: var(--muted);
+            margin: 10px 0 0;
+        }
+
+        .chk {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 44px;
+            margin: 4px 0 10px;
+            cursor: pointer;
+        }
+
+        .chip {
+            background: var(--card);
+            border-radius: 980px;
+            padding: 6px 14px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .qbox {
+            text-align: center;
+            padding: 8px 0;
+        }
+
+        #q {
+            font-size: 44px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            word-break: keep-all;
+        }
+
+        #ans {
+            min-height: 60px;
+            margin: 8px auto;
+            max-width: 280px;
+            font-size: 36px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #last {
+            text-align: center;
+            min-height: 1.6em;
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        #last.ok {
+            color: var(--ok);
+        }
+
+        #last.bad {
+            color: var(--bad);
+        }
+
+        .pad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            max-width: 340px;
+            margin: 10px auto 0;
+        }
+
+        .pad button {
+            min-height: 60px;
+            font-size: 26px;
+            font-weight: 600;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .pad button.enter {
+            grid-column: 1 / -1;
+            font-size: 20px;
+        }
+
+        .wrong .li {
+            font-variant-numeric: tabular-nums;
+            align-items: flex-start;
+        }
+
+        #msg {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>心算練習</h1>
+        <p class="sub">選好運算與位數就開始。用下方數字鍵或鍵盤作答，答完立刻出下一題。</p>
+
+        <div class="card" id="setup">
+            <h2 class="s">難度預設</h2>
+            <div class="seg" id="presets"><button data-p="easy">簡單</button><button data-p="normal">普通</button><button data-p="hard">困難</button></div>
+            <h2 class="s">運算（可複選）</h2>
+            <div class="seg" id="ops"><button data-op="+" aria-pressed="true" aria-label="加">＋</button><button data-op="-" aria-pressed="true" aria-label="減">－</button><button data-op="*" aria-pressed="false" aria-label="乘">×</button><button data-op="/" aria-pressed="false" aria-label="除">÷</button></div>
+            <h2 class="s">位數</h2>
+            <div class="seg" id="digits"><button data-d="1" aria-pressed="false">1 位</button><button data-d="2" aria-pressed="true">2 位</button><button data-d="3" aria-pressed="false">3 位</button></div>
+            <h2 class="s">模式</h2>
+            <div class="seg" id="modes"><button data-m="10" aria-pressed="true">10 題</button><button data-m="20" aria-pressed="false">20 題</button><button data-m="50" aria-pressed="false">50 題</button><button data-m="t60" aria-pressed="false">限時 60 秒</button></div>
+            <label class="chk"><input type="checkbox" id="noNeg" checked> 減法不出負數</label>
+            <div class="row"><span class="chip">這個模式的最佳：<b id="bestNow">—</b></span></div>
+            <div class="row" style="margin-top:12px"><button class="primary" id="start" style="flex:1">開始</button></div>
+        </div>
+
+        <div class="card" id="play" hidden>
+            <div class="row" style="justify-content:space-between"><span class="chip" id="prog">1 / 10</span><span class="chip">答對 <b id="okN">0</b></span><button class="sm" id="quit">結束</button></div>
+            <div class="qbox"><div id="q" aria-live="polite">—</div></div>
+            <div id="ans" aria-label="你的答案"></div>
+            <div id="last" role="status"></div>
+            <div class="pad" id="pad">
+                <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+                <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+                <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+                <button data-k="neg" aria-label="正負號">±</button><button data-k="0">0</button><button data-k="del" aria-label="刪除一位">⌫</button>
+                <button class="primary enter" data-k="enter">送出（Enter）</button>
+            </div>
+        </div>
+
+        <div class="card" id="result" hidden>
+            <h2 style="text-align:center">結果</h2>
+            <div id="msg"></div>
+            <div id="stats"></div>
+            <div class="wrong" id="wrongBox"></div>
+            <div class="row" style="margin-top:12px"><button class="primary" id="again" style="flex:1">再玩一次</button><button id="back" style="flex:1">回設定</button></div>
+        </div>
+
+        <button class="sm" id="clearBest" style="margin-top:12px">清除最佳紀錄</button>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>加減乘除的心算練習：電腦出題、你作答，結束後看正確率、平均每題秒數與錯題回顧，並記錄各種模式的最佳成績。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>通勤、排隊時花一分鐘動動腦。</li>
+        <li>小朋友練習九九乘法與加減法。</li>
+        <li>想測試自己的心算速度是否進步。</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+        <li>選「難度預設」（簡單 / 普通 / 困難）快速設定，或自己選運算（可複選）、位數（1–3 位）、模式。</li>
+        <li>模式有 10 題、20 題、50 題，或「限時 60 秒」（時間內盡量多答）。</li>
+        <li>「減法不出負數」打勾時，減法一定是大數減小數。</li>
+        <li>按「開始」。用畫面上的數字鍵作答（± 切換負號、⌫ 刪一位），按「送出」；電腦鍵盤可直接按數字、Backspace 與 <kbd>Enter</kbd>。</li>
+        <li>答完立刻出下一題，不能重答。結束後顯示正確率、平均每題秒數與錯題回顧。</li>
+        </ol>
+        <h3>題目規則</h3>
+        <div class="eg">加減：兩個數都是所選位數（1 位為 2–9）。乘法：被乘數是所選位數，乘數 1 位（選 3 位時為 2 位）。除法：一定整除，除數同乘數規則，商為所選位數（選 3 位時商為 2 位）。</div>
+        <h3>範例與計分</h3>
+        <div class="eg">設定：加法 + 乘法、2 位數、20 題。
+題目：47 + 36 → 輸入 83，按 Enter；下一題 12 × 7 → 輸入 84。
+結束：答對 18 題、總共用 64 秒 → 正確率 90%、平均每題 3.2 秒；錯的 2 題會列出你的答案與正確答案。</div>
+        <p>最佳成績依「題數或限時、位數、運算組合」分開記錄：題數模式先比正確率、再比總用時，限時模式比答對題數；中途按「結束」不計入最佳。</p>
+        <h3>小提醒</h3>
+        <ul>
+        <li>最佳成績依「模式 + 位數 + 運算組合」分開記錄：題數模式比正確率（同分比總用時），限時模式比答對題數。中途按「結束」的題數模式不計入最佳。</li>
+        <li>最佳紀錄存在這台裝置；想重來可按頁面下方的「清除最佳紀錄」（只清這個遊戲，無法復原；頁面會重新載入，進行中的這一局會結束）。</li>
+        <li>手機上用自訂的數字鍵盤，不會跳出系統鍵盤。</li>
+        <li>備份資料的鍵：mentalmath_best_ 開頭（最多約幾百個組合，不會無限增加）。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        // 出題與判分。rand 是回傳 [0,1) 的函式（測試可注入）；ops 用 + - * /
+        const MM = { TIMED_MS: 60000, COUNTS: [10, 20, 50] };
+        const ri = (rand, lo, hi) => lo + Math.floor(rand() * (hi - lo + 1));
+        // n 位數的範圍：1 位 = 2..9（避開 0 和 1 的送分題）、2 位 = 10..99、3 位 = 100..999
+        const rng = (n) => (n <= 1 ? [2, 9] : [Math.pow(10, n - 1), Math.pow(10, n) - 1]);
+        const cleanDigits = (d) => { d = Math.floor(Number(d)); return d >= 1 && d <= 3 ? d : 2; };
+        const OPS = ['+', '-', '*', '/'];
+        const cleanOps = (ops) => { const o = Array.isArray(ops) ? OPS.filter(x => ops.includes(x)) : []; return o.length ? o : ['+']; };
+
+        // 乘：被乘數 d 位、乘數 d ≥ 3 為 2 位，否則 1 位；除：除數同乘數規則，商 d 位（d = 3 時商 2 位），被除數 = 除數 × 商（一定整除）
+        // 減：noNeg 時大的在前（答案不會是負數）；不限制時可能出現負數
+        function genQuestion(rand, { ops = ['+'], digits = 2, noNeg = true } = {}) {
+            ops = cleanOps(ops); digits = cleanDigits(digits);
+            const op = ops[ri(rand, 0, ops.length - 1)], [lo, hi] = rng(digits);
+            let a, b, ans;
+            if (op === '*') { const [l2, h2] = rng(digits >= 3 ? 2 : 1); a = ri(rand, lo, hi); b = ri(rand, l2, h2); ans = a * b; }
+            else if (op === '/') { const [l2, h2] = rng(digits >= 3 ? 2 : 1), [lq, hq] = rng(digits >= 3 ? 2 : digits); b = ri(rand, l2, h2); ans = ri(rand, lq, hq); a = b * ans; }
+            else {
+                a = ri(rand, lo, hi); b = ri(rand, lo, hi);
+                if (op === '-' && noNeg && a < b) [a, b] = [b, a];
+                ans = op === '+' ? a + b : a - b;
+            }
+            return { a, b, op, ans };
+        }
+        const SYM = { '+': '+', '-': '−', '*': '×', '/': '÷' };
+        const qText = (q) => `${q.a} ${SYM[q.op]} ${q.b}`;
+        // 作答字串 → 整數；空字串、只有負號、非數字回傳 NaN
+        const parseAnswer = (s) => (/^-?\d{1,9}$/.test(String(s).trim()) ? parseInt(s, 10) : NaN);
+        const judge = (q, s) => parseAnswer(s) === q.ans;
+
+        // 一局結果：results = [{ q, user, ok, ms }]
+        function summarize(results) {
+            const total = results.length, correct = results.filter(r => r.ok).length, ms = results.reduce((a, r) => a + r.ms, 0);
+            return { total, correct, acc: total ? Math.round(correct / total * 1000) / 10 : 0, avgSec: total ? Math.round(ms / total / 100) / 10 : 0, totalSec: Math.round(ms / 100) / 10, wrong: results.filter(r => !r.ok) };
+        }
+        // 模式 key：mentalmath_best_<n10|n20|n50|t60>_d<位數>_<運算字母 a s m d>[_neg（減法可出負數）]
+        function modeKey(mode, ops, digits, noNeg) {
+            ops = cleanOps(ops);
+            mode = mode === 't60' ? 't60' : 'n' + String(mode).replace(/^n/, '');
+            return `mentalmath_best_${mode}_d${cleanDigits(digits)}_${ops.map(o => ({ '+': 'a', '-': 's', '*': 'm', '/': 'd' }[o])).join('')}${ops.includes('-') && !noNeg ? '_neg' : ''}`;
+        }
+        // 最佳成績 { acc, correct, sec }：題數模式比正確率（高）再比總秒數（短）；限時模式比答對題數（多）再比正確率
+        const cleanBest = (b) => (b && typeof b === 'object' && Number.isFinite(b.acc) && Number.isFinite(b.correct) && Number.isFinite(b.sec) ? { acc: b.acc, correct: b.correct, sec: b.sec } : null);
+        function isBetter(mode, old, cur) {
+            old = cleanBest(old); if (!old) return true;
+            if (mode === 't60') return cur.correct > old.correct || (cur.correct === old.correct && cur.acc > old.acc);
+            return cur.acc > old.acc || (cur.acc === old.acc && cur.sec < old.sec);
+        }
+        // 鍵盤輸入：數字加到尾端（最多 9 字元）、neg 切換負號、del 刪一位
+        function pressKey(cur, k) {
+            if (/^\d$/.test(k)) return cur.replace('-', '').length >= 8 ? cur : (cur === '0' ? k : cur === '-0' ? '-' + k : cur + k);
+            if (k === 'del') return cur.slice(0, -1);
+            if (k === 'neg') return cur.startsWith('-') ? cur.slice(1) : '-' + cur;
+            return cur;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const PRESETS = { easy: { ops: ['+', '-'], digits: 1, mode: '10' }, normal: { ops: ['+', '-', '*'], digits: 2, mode: '20' }, hard: { ops: ['+', '-', '*', '/'], digits: 3, mode: '20' } };
+        let cfg = { ops: ['+', '-'], digits: 2, mode: '10', noNeg: true };
+        let cur = null, qs = null, results = [], ans = '', startedAt = 0, qStart = 0, deadline = 0, timer = 0, playing = false;
+
+        const show = (id) => { for (const x of ['setup', 'play', 'result']) $('#' + x).hidden = x !== id; };
+        const fmtBest = (b, mode) => { b = cleanBest(b); return b ? (mode === 't60' ? `${b.correct} 題・${b.acc}%` : `${b.acc}%・${b.sec} 秒`) : '—'; };
+        function syncSetup() {
+            for (const b of $('#ops').children) b.setAttribute('aria-pressed', cfg.ops.includes(b.dataset.op));
+            for (const b of $('#digits').children) b.setAttribute('aria-pressed', +b.dataset.d === cfg.digits);
+            for (const b of $('#modes').children) b.setAttribute('aria-pressed', b.dataset.m === cfg.mode);
+            $('#noNeg').checked = cfg.noNeg;
+            $('#bestNow').textContent = fmtBest(Util.store.get(modeKey(cfg.mode, cfg.ops, cfg.digits, cfg.noNeg), null), cfg.mode);
+        }
+        $('#presets').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; Object.assign(cfg, PRESETS[b.dataset.p]); syncSetup(); };
+        $('#ops').onclick = (e) => {
+            const b = e.target.closest('button'); if (!b) return;
+            const o = b.dataset.op, on = cfg.ops.includes(o);
+            if (on && cfg.ops.length === 1) return; // 至少留一個
+            cfg.ops = OPS.filter(x => (x === o ? !on : cfg.ops.includes(x))); syncSetup();
+        };
+        $('#digits').onclick = (e) => { const b = e.target.closest('button'); if (b) { cfg.digits = +b.dataset.d; syncSetup(); } };
+        $('#modes').onclick = (e) => { const b = e.target.closest('button'); if (b) { cfg.mode = b.dataset.m; syncSetup(); } };
+        $('#noNeg').onchange = () => { cfg.noNeg = $('#noNeg').checked; syncSetup(); };
+
+        function next() {
+            cur = genQuestion(Math.random, cfg); ans = ''; qStart = Date.now();
+            $('#q').textContent = qText(cur); drawAns();
+            const n = results.length + 1;
+            $('#prog').textContent = cfg.mode === 't60' ? `第 ${n} 題` : `${n} / ${cfg.mode}`;
+        }
+        function drawAns() { $('#ans').textContent = ans; }
+        function tick() {
+            if (cfg.mode !== 't60') return;
+            const left = Math.max(0, deadline - Date.now());
+            $('#prog').textContent = `剩 ${Math.ceil(left / 1000)} 秒・第 ${results.length + 1} 題`;
+            if (left <= 0) finish();
+        }
+        function start() {
+            results = []; $('#okN').textContent = '0'; $('#last').textContent = ''; $('#last').className = '';
+            show('play'); playing = true; startedAt = Date.now(); deadline = startedAt + MM.TIMED_MS;
+            clearInterval(timer); timer = setInterval(tick, 200);
+            next(); tick();
+        }
+        function submit() {
+            if (!playing || ans === '' || ans === '-') return;
+            const ok = judge(cur, ans), ms = Date.now() - qStart;
+            results.push({ q: cur, user: parseAnswer(ans), ok, ms });
+            $('#okN').textContent = results.filter(r => r.ok).length;
+            $('#last').className = ok ? 'ok' : 'bad';
+            $('#last').textContent = ok ? '✔ 答對了' : `✘ ${qText(cur)} = ${cur.ans}`;
+            if (cfg.mode !== 't60' && results.length >= +cfg.mode) { finish(); return; }
+            if (cfg.mode === 't60' && Date.now() >= deadline) { finish(); return; }
+            next();
+        }
+        function finish() {
+            if (!playing) return; playing = false; clearInterval(timer);
+            const s = summarize(results), elapsed = Math.round((Date.now() - startedAt) / 100) / 10;
+            show('result');
+            if (!s.total) { $('#msg').textContent = '還沒有作答。'; $('#stats').innerHTML = ''; $('#wrongBox').innerHTML = ''; return; }
+            const key = modeKey(cfg.mode, cfg.ops, cfg.digits, cfg.noNeg), cur2 = { acc: s.acc, correct: s.correct, sec: cfg.mode === 't60' ? 60 : s.totalSec };
+            const old = Util.store.get(key, null), partial = cfg.mode !== 't60' && s.total < +cfg.mode; // 中途結束的題數局不計最佳
+            let msgText = '';
+            if (!partial && s.correct > 0 && isBetter(cfg.mode, old, cur2)) { Util.store.set(key, cur2); msgText = '新的最佳成績！'; }
+            $('#msg').textContent = msgText;
+            $('#stats').innerHTML = [['答對', `${s.correct} / ${s.total}`], ['正確率', s.acc + '%'], ['平均每題', s.avgSec + ' 秒'], ['總用時', (cfg.mode === 't60' ? Math.min(60, elapsed) : s.totalSec) + ' 秒'], ['此模式最佳', fmtBest(Util.store.get(key, null), cfg.mode)]].map(([a, b]) => `<div class="li stat"><span>${a}</span><b>${b}</b></div>`).join('');
+            $('#wrongBox').innerHTML = s.wrong.length ? `<h2 style="margin-top:12px">錯題回顧（${s.wrong.length}）</h2>` + s.wrong.map(r => `<div class="li"><span>${qText(r.q)} = <b>${r.q.ans}</b></span><span class="muted">你答 ${r.user}</span></div>`).join('') : '<p class="muted" style="text-align:center">全對，沒有錯題！</p>';
+        }
+        function press(k) {
+            if (!playing) return;
+            if (k === 'enter') submit(); else { ans = pressKey(ans, k); drawAns(); }
+        }
+        $('#pad').onclick = (e) => { const b = e.target.closest('button[data-k]'); if (b) press(b.dataset.k); };
+        document.addEventListener('keydown', (e) => {
+            if (!playing || e.ctrlKey || e.metaKey || e.altKey) return;
+            if (/^\d$/.test(e.key)) press(e.key); else if (e.key === 'Backspace') press('del'); else if (e.key === '-') press('neg'); else if (e.key === 'Enter') { e.preventDefault(); press('enter'); } else return;
+            e.preventDefault();
+        });
+        $('#start').onclick = start; $('#again').onclick = start;
+        $('#quit').onclick = finish;
+        $('#back').onclick = () => { show('setup'); syncSetup(); };
+        syncSetup();
+    </script>
+<script>document.getElementById('clearBest').onclick=()=>{if(!confirm('清除這個遊戲的所有最佳紀錄？無法復原。頁面會重新載入，正在進行的這一局會結束。'))return;try{const p=['mentalmath_best_'];Object.keys(localStorage).filter(k=>p.some(x=>k.startsWith(x))).forEach(k=>localStorage.removeItem(k));}catch(e){}location.reload();};</script>
+</body>
+
+</html>

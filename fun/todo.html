@@ -88,6 +88,80 @@
             font-size: 13px;
         }
 
+        .vtabs button {
+            flex: 1;
+            min-height: 44px;
+        }
+
+        .cnav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .cnav button {
+            min-width: 44px;
+            min-height: 44px;
+        }
+
+        .cgrid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 2px;
+        }
+
+        .cgrid .wd {
+            text-align: center;
+            color: var(--muted);
+            font-size: 12px;
+            padding: 4px 0;
+        }
+
+        .cgrid .cd {
+            min-height: 48px;
+            padding: 2px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            font-size: 14px;
+            background: var(--fill);
+            color: var(--text);
+            border-radius: var(--radius-sm);
+            line-height: 1.1;
+        }
+
+        .cgrid .cd.today {
+            box-shadow: inset 0 0 0 2px var(--blue);
+        }
+
+        .cgrid .cd[aria-pressed=true] {
+            box-shadow: inset 0 0 0 3px var(--text);
+            font-weight: 700;
+        }
+
+        .cgrid .cd b {
+            font-size: 12px;
+            min-width: 18px;
+            border-radius: 9px;
+            padding: 1px 4px;
+            background: var(--blue);
+            color: var(--on-blue);
+        }
+
+        .cgrid .cd b.late {
+            background: var(--bad);
+            color: #fff;
+        }
+
+        .cgrid .cd b.ok {
+            background: none;
+            color: var(--ok);
+        }
+
         .empty {
             text-align: center;
             color: var(--muted);
@@ -110,32 +184,41 @@
             </div>
         </div>
 
+        <div class="row vtabs" style="margin-bottom:12px">
+            <button id="vList" aria-pressed="true">清單</button>
+            <button id="vCal" aria-pressed="false">月曆</button>
+        </div>
+
+        <div id="calView" hidden></div>
         <div id="lists"></div>
         <div class="row" style="justify-content:center"><button class="sm" id="clearDone">清除已完成</button></div>
     </div>
 
+
     <template id="help">
         <h3>這是什麼</h3>
-        <p>簡單的待辦清單，依到期日自動分成「逾期／今天／明天／之後／沒有日期／已完成」。</p>
+        <p>簡單的待辦清單，依到期日自動分成「逾期／今天／明天／之後／沒有日期／已完成」；也有「月曆」視圖，一眼看出哪天事情多。</p>
         <h3>什麼時候用</h3>
         <ul>
         <li>每天列出要做的事，勾掉就有成就感。</li>
-        <li>有截止日的作業或繳費提醒。</li>
+        <li>有截止日的作業或繳費提醒，用月曆看這個月的分布。</li>
         </ul>
         <h3>怎麼用</h3>
         <ol>
         <li>輸入「要做什麼？」，需要的話選「到期日」，按「新增」或 <kbd>Enter</kbd>。</li>
         <li>勾選左側方塊表示完成，會移到「已完成」。</li>
-        <li>點文字可修改內容。</li>
-        <li>▲▼ 調整同一組內的順序，✕ 刪除。</li>
+        <li>點文字可修改內容；▲▼ 調整同一組內的順序，✕ 刪除。</li>
         <li>「清除已完成」一次刪除所有已完成項目（會先確認）。最多 500 項。</li>
+        <li>按上方「月曆」：每天的格子顯示未完成的待辦數（逾期是紅色，全部完成顯示 ✓）；「‹ ›」換月份、「今天」回到本月。</li>
+        <li>點某一天看當天待辦，可勾選、刪除，也能在下方輸入框直接新增（到期日就是那一天）。按「清單」切回原本的分組畫面。</li>
         </ol>
         <h3>範例</h3>
-        <div class="eg">輸入「繳電費」、到期日選明天 → 出現在「明天」群組，旁邊顯示「明天」；過期後會自動移到紅色的「逾期」群組。</div>
+        <div class="eg">輸入「繳電費」、到期日選明天 → 出現在「明天」群組。切到「月曆」，明天那格出現「1」；過期後數字變紅色，並移到紅色的「逾期」群組。</div>
         <h3>小提醒</h3>
         <ul>
-        <li>每項最多 100 字；到期日可不填。</li>
-        <li>資料只存在這個瀏覽器，不會上傳，也不會主動通知你。</li>
+        <li>每項最多 100 字；到期日可不填，沒有到期日的待辦只會在「清單」的「沒有日期」裡，不會出現在月曆。</li>
+        <li>清單與月曆用同一份資料，月曆不另外儲存東西，也記不住你上次看哪個視圖。</li>
+        <li>資料只存在這個瀏覽器，不會上傳，也不會主動通知你；資料壞掉的項目載入時會被略過。</li>
         </ul>
     </template>
 
@@ -171,6 +254,19 @@
         const validItem = (i) => !!i && typeof i.id === 'string' && typeof i.t === 'string' && i.t.length >= 1 && i.t.length <= 100 && (i.due === '' || /^\d{4}-\d{2}-\d{2}$/.test(i.due)) && typeof i.done === 'boolean';
         const dueLabel = (due, today, between) => { if (!due) return ''; const d = between(today, due); return d === 0 ? '今天' : d === 1 ? '明天' : d === -1 ? '昨天' : d < 0 ? `逾期 ${-d} 天` : `${d} 天後`; };
         const MAX_ITEMS = 500;
+
+        // 月曆：某個月（YYYY-MM）每天的待辦數；lead = 該月 1 號前面要空幾格（週日起算）
+        // n = 未完成、done = 已完成，late = 還有未完成且日期早於 today（逾期）；沒有日期的待辦不計
+        function calMonth(items, ym, today) {
+            const [y, m] = ym.split('-').map(Number), nd = new Date(Date.UTC(y, m, 0)).getUTCDate(), lead = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), by = {};
+            for (const i of Array.isArray(items) ? items : []) {
+                if (!i || typeof i.due !== 'string' || !i.due.startsWith(ym + '-')) continue;
+                const r = by[i.due] || (by[i.due] = { n: 0, done: 0 });
+                if (i.done) r.done++; else r.n++;
+            }
+            return { lead, days: Array.from({ length: nd }, (_, k) => { const d = `${ym}-${String(k + 1).padStart(2, '0')}`, r = by[d] || { n: 0, done: 0 }; return { d, n: r.n, done: r.done, late: r.n > 0 && d < today }; }) };
+        }
+        const shiftYm = (ym, n) => { const [y, m] = ym.split('-').map(Number), t = y * 12 + m - 1 + n; return `${Math.floor(t / 12)}-${String(t % 12 + 1).padStart(2, '0')}`; };
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -200,16 +296,72 @@
                 }));
                 return card;
             }) : [Object.assign(document.createElement('div'), { className: 'card empty', textContent: '目前沒有待辦事項 🎉' })]));
-            $('#clearDone').hidden = !items.some(i => i.done);
+            $('#clearDone').hidden = view === 'cal' || !items.some(i => i.done);
+            renderCal();
         }
 
+        function addItem(t, due) {
+            if (items.length >= MAX_ITEMS) { $('#sub').textContent = `⚠ 最多 ${MAX_ITEMS} 項，請先清除已完成或刪除不用的`; return false; }
+            items.push({ id: Date.now().toString(36) + rnd(1e6).toString(36), t, due, done: false });
+            save(); return true;
+        }
         function add() {
             const t = $('#text').value.trim();
             if (!t) { $('#text').focus(); return; }
-            if (items.length >= MAX_ITEMS) { $('#sub').textContent = `⚠ 最多 ${MAX_ITEMS} 項，請先清除已完成或刪除不用的`; return; }
-            items.push({ id: Date.now().toString(36) + rnd(1e6).toString(36), t, due: $('#due').value, done: false });
-            save(); $('#text').value = ''; $('#text').focus(); render();
+            if (!addItem(t, $('#due').value)) return;
+            $('#text').value = ''; $('#text').focus(); render();
         }
+
+        // ---------- 月曆視圖 ----------
+        let view = 'list', calYm = today().slice(0, 7), sel = null;
+        const WD = ['日', '一', '二', '三', '四', '五', '六'];
+        function renderCal() {
+            const box = $('#calView');
+            if (view !== 'cal') { box.replaceChildren(); return; }
+            const el = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+            const { lead, days } = calMonth(items, calYm, today());
+            const card = el('div', { className: 'card' });
+            const prev = el('button', { id: 'calPrev', textContent: '‹', onclick: () => { calYm = shiftYm(calYm, -1); sel = null; render(); } });
+            const next = el('button', { id: 'calNext', textContent: '›', onclick: () => { calYm = shiftYm(calYm, 1); sel = null; render(); } });
+            prev.setAttribute('aria-label', '上個月'); next.setAttribute('aria-label', '下個月');
+            card.append(el('div', { className: 'cnav' }, prev,
+                el('b', { id: 'calTitle', textContent: calYm.replace('-', ' 年 ') + ' 月' }),
+                el('button', { id: 'calToday', className: 'sm', textContent: '今天', onclick: () => { calYm = today().slice(0, 7); sel = today(); render(); } }), next));
+            const grid = el('div', { className: 'cgrid', id: 'calGrid' }, ...WD.map(w => el('div', { className: 'wd', textContent: w })), ...Array.from({ length: lead }, () => el('div')));
+            days.forEach(c => {
+                const dn = +c.d.slice(8), b = c.n ? el('b', { textContent: c.n, className: c.late ? 'late' : '' }) : c.done ? el('b', { textContent: '✓', className: 'ok' }) : null;
+                const btn = el('button', { className: 'cd' + (c.d === today() ? ' today' : '') }, String(dn), ...(b ? [b] : []));
+                btn.dataset.d = c.d; btn.setAttribute('aria-pressed', c.d === sel);
+                btn.setAttribute('aria-label', `${+calYm.slice(5)} 月 ${dn} 日，${c.n} 項未完成${c.late ? '（逾期）' : ''}`);
+                btn.onclick = () => { sel = c.d; render(); };
+                grid.append(btn);
+            });
+            card.append(grid);
+            if (sel) {
+                const list = items.filter(i => i.due === sel);
+                const panel = el('div', { id: 'dayPanel', style: 'margin-top:12px' }, el('h2', { textContent: sel.slice(5).replace('-', ' / ') + '（週' + WD[new Date(sel + 'T00:00:00Z').getUTCDay()] + '）' }));
+                if (!list.length) panel.append(el('p', { className: 'muted', textContent: '這天沒有待辦' }));
+                list.forEach(it => {
+                    const cb = el('input', { type: 'checkbox', checked: it.done }); cb.setAttribute('aria-label', '完成：' + it.t);
+                    cb.onchange = () => { it.done = cb.checked; save(); render(); };
+                    const del = el('button', { className: 'sm', textContent: '✕', onclick: () => { items = items.filter(x => x.id !== it.id); save(); render(); } }); del.setAttribute('aria-label', '刪除');
+                    panel.append(el('div', { className: 'it' + (it.done ? ' done' : '') }, cb, el('span', { className: 't', textContent: it.t }), del));
+                });
+                const inp = el('input', { type: 'text', id: 'calText', maxLength: 100, placeholder: '在這天新增待辦' }); inp.setAttribute('aria-label', '在這天新增待辦');
+                const go = () => { const t = inp.value.trim(); if (!t) { inp.focus(); return; } if (addItem(t, sel)) { render(); $('#calText').focus(); } };
+                inp.onkeydown = (e) => { if (e.key === 'Enter' && !e.isComposing) go(); };
+                panel.append(el('div', { className: 'row', style: 'margin-top:8px' }, inp, el('button', { id: 'calAdd', className: 'primary', textContent: '新增', onclick: go })));
+                card.append(panel);
+            } else card.append(el('p', { className: 'muted', style: 'margin:10px 0 0', textContent: '點一天看當天的待辦、或新增。' }));
+            box.replaceChildren(card);
+        }
+        function setView(v) {
+            view = v; $('#vList').setAttribute('aria-pressed', v === 'list'); $('#vCal').setAttribute('aria-pressed', v === 'cal');
+            $('#lists').hidden = v === 'cal'; $('#calView').hidden = v !== 'cal';
+            if (v === 'cal' && !sel) sel = today();
+            render();
+        }
+        $('#vList').onclick = () => setView('list'); $('#vCal').onclick = () => setView('cal');
         $('#add').onclick = add;
         $('#text').onkeydown = (e) => { if (e.key === 'Enter' && !e.isComposing) add(); };
         $('#clearDone').onclick = () => { if (!confirm(`清除 ${items.filter(i => i.done).length} 項已完成的待辦？無法復原。`)) return; items = items.filter(i => !i.done); save(); render(); };

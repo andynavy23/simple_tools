@@ -7,7 +7,7 @@
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/artale/maple-leaf.png" />
     <meta property="og:title" content="Artale Party Tool - 團練小工具" />
     <meta property="og:description" content="aespaaa 公會製作, 可能破壞友誼，謹慎使用" />
-    <meta name="st-keys" content="artale_v4_name,artale_party_solo">
+    <meta name="st-keys" content="artale_v4_name">
     <title>Artale Party Tool - 團練小工具</title>
     <!-- 連線與工具函式：共用模組（PeerJS 由 p2p-room.js 載入） -->
 
@@ -38,10 +38,10 @@
         <div class="eg">單人：目標設 20% → 按 +5%、+5%、+1% 共 11，進度條約 55%；再按 +5% 兩次，進度封頂在目標 20 → 出現慶祝特效。掉落點「武器」兩次、「捲軸(貴)」一次 → 總數 3。</div>
         <h3>小提醒</h3>
         <ul>
-        <li>單人資料只存在這台裝置的瀏覽器，離開再回來還在；清除瀏覽資料會消失。</li>
+        <li>單人使用的資料只在這次開啟期間，關掉頁面就會清除（暱稱會記住）。</li>
         <li>手機畫面下方是切換頁面的導覽列；右下「日誌」可看操作紀錄。</li>
         <li>語音提醒用瀏覽器內建語音，需要裝置有開聲音。</li>
-            <li>單人存檔在這台裝置：「歸零」與「重置全部」可清空經驗與掉落；掉落明細最多保留最近 5000 筆、紀錄最近 50 則。</li>
+            <li>「歸零」與「重置全部」可清空經驗與掉落；掉落明細最多保留最近 5000 筆、紀錄最近 50 則。</li>
 </ul>
     </template>
 
@@ -810,17 +810,6 @@
         function survivalExpire(members) { members.forEach(m => { if (m.status === 'Idle') m.status = 'DEAD'; }); }
         function survivalAck(members, pid) { const m = members.find(m => m.id === pid); if (m) m.status = '連線中'; return !!m; }
         function survivalPos(r1, r2, w, h) { return { left: r1 * (w - 120), top: r2 * (h - 300) + 100 }; }
-        // 單人存檔載入驗證：欄位缺漏 / 型別錯誤補預設，明細與日誌截到上限；無法用就回 null
-        function cleanSolo(sv) {
-            if (!sv || typeof sv !== 'object' || !sv.exp || !sv.loot) return null;
-            const obj = (o) => (o && typeof o === 'object' && !Array.isArray(o) ? o : {});
-            const e = obj(sv.exp), l = obj(sv.loot);
-            return {
-                exp: { target: Number.isInteger(e.target) && e.target >= 1 ? e.target : 100, current: Number.isFinite(e.current) ? e.current : 0, contributions: obj(e.contributions), finished: !!e.finished },
-                loot: { items: (Array.isArray(l.items) ? l.items : []).filter(i => i && typeof i.type === 'string').slice(-MAX_LOOT), playerStats: obj(l.playerStats) },
-                logs: (Array.isArray(sv.logs) ? sv.logs : []).filter(x => x && typeof x.msg === 'string').slice(-MAX_LOGS),
-            };
-        }
         // --- /pure ---
 
         // --- 初始化 ---
@@ -928,21 +917,19 @@
             });
         }
 
-        // 單人使用：不建立 P2PRoom，自己就是隊長；狀態存在 localStorage
-        const SOLO_KEY = 'artale_party_solo';
+        // 單人使用：不建立 P2PRoom，自己就是隊長；資料只在記憶體
         function startSolo() {
             if (room || isCaptain) return;
             if (!myName) confirmNickname();
             if (!myName) return;
             solo = true; isCaptain = true; myId = 'solo';
-            try { const sv = JSON.parse(localStorage.getItem(SOLO_KEY)); const c = cleanSolo(sv); if (c) { state.exp = c.exp; state.loot = c.loot; state.logs = c.logs; } } catch (e) { }
             state.room = { id: 'solo', captain: 'solo', members: [] };
             addMember('solo', myName, 'Captain', '連線中');
             document.getElementById('displayRoomId').innerText = '單人使用（不連線）';
             ['roomInfo', 'captainExp', 'captainMonitor', 'expResetBtn', 'lootResetAllBtn', 'soloMonitorNote'].forEach(i => document.getElementById(i).classList.remove('d-none'));
             ['roomActions', 'copyInviteBtn'].forEach(i => document.getElementById(i).classList.add('d-none'));
-            document.getElementById('leaveDisbandBtn').innerText = '離開（資料保留）';
-            addLog('[系統] 單人使用（資料只存在本機）');
+            document.getElementById('leaveDisbandBtn').innerText = '離開單人使用';
+            addLog('[系統] 單人使用（資料只在這次開啟期間）');
         }
 
         function joinRoom() {
@@ -1034,7 +1021,6 @@
         // --- UI ---
         function updateUI() {
             document.getElementById('memberCount').innerText = state.room.members.length;
-            if (solo) Util.store.set(SOLO_KEY, { exp: state.exp, loot: state.loot, logs: state.logs });
             const mList = document.getElementById('memberList');
             mList.innerHTML = state.room.members.map(m => `
                 <div class="col-6 col-sm-4">
@@ -1189,7 +1175,7 @@
             }
             updateUI();
         }
-        function leaveRoom() { if (confirm(solo ? "離開單人使用？（資料會保留在這台裝置）" : "確定要離隊嗎？")) location.reload(); }
+        function leaveRoom() { if (confirm(solo ? "離開單人使用？（資料會清除）" : "確定要離隊嗎？")) location.reload(); }
         function copyInviteLink() {
             const link = P2PRoom.inviteLink(myId);
             Util.copyText(link).then(ok => ok ? alert("邀請連結已複製!") : prompt("請手動複製邀請連結：", link));

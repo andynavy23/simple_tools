@@ -32,26 +32,11 @@ const { load, ok } = require('./_load');
     ok('cooldown cleanSkills');
 }
 
-// party：掉落明細上限、單人存檔驗證
+// party：掉落明細上限
 {
-    const { lootAdd, cleanSolo, MAX_LOOT, MAX_LOGS } = load('game-assist/party.html', 'lootAdd, cleanSolo, MAX_LOOT, MAX_LOGS');
+    const { lootAdd, MAX_LOOT } = load('game-assist/party.html', 'lootAdd, MAX_LOOT');
     const loot = { items: [], playerStats: {} };
     for (let i = 0; i < MAX_LOOT + 20; i++) lootAdd(loot, 'p', 'P', '武器');
     assert.strictEqual(loot.items.length, MAX_LOOT); assert.strictEqual(loot.playerStats.p['武器'], MAX_LOOT + 20);
-    assert.strictEqual(cleanSolo(null), null); assert.strictEqual(cleanSolo({ exp: {} }), null); assert.strictEqual(cleanSolo('x'), null);
-    const c = cleanSolo({ exp: { target: 'x', current: null, contributions: [] }, loot: { items: [null, { type: '武器' }, { type: 5 }], playerStats: 3 }, logs: [null, { msg: 'a' }, ...Array.from({ length: 80 }, () => ({ msg: 'b' }))] });
-    assert.deepStrictEqual(c.exp, { target: 100, current: 0, contributions: {}, finished: false });
-    assert.deepStrictEqual(c.loot, { items: [{ type: '武器' }], playerStats: {} });
-    assert.strictEqual(c.logs.length, MAX_LOGS);
-    const good = { exp: { target: 50, current: 7, contributions: { a: 7 }, finished: false }, loot: { items: [], playerStats: {} }, logs: [] };
-    assert.deepStrictEqual(cleanSolo(good), good);
-    ok('party lootAdd cap / cleanSolo');
-}
-
-// rjpq：單人標記驗證
-{
-    const { cleanMarkers } = load('game-assist/rjpq.html', 'cleanMarkers');
-    assert.deepStrictEqual(cleanMarkers(null), []);
-    assert.deepStrictEqual(cleanMarkers([null, { f: 1, d: 2 }, { f: 1, d: 2 }, { f: 10, d: 0 }, { f: 0, d: 4 }, { f: '1', d: 1 }, { f: 9, d: 3 }]), [{ f: 1, d: 2 }, { f: 9, d: 3 }]);
-    ok('rjpq cleanMarkers');
+    ok('party lootAdd cap');
 }

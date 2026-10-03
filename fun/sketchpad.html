@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="簡易畫板：畫筆、橡皮擦、調色盤、復原重做，支援滑鼠、觸控與手寫筆（感壓），可存成 PNG。">
+    <meta name="description" content="簡易畫板：畫筆、橡皮擦、調色盤、復原重做，支援滑鼠、觸控與手寫筆（感壓），可存成 PNG；另有簽名模式，可匯出裁切後的透明 PNG。">
     <meta property="og:title" content="簡易畫板" />
     <meta property="og:description" content="單人塗鴉畫板，可復原並存成 PNG。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
@@ -18,7 +18,8 @@
             --wrap-w: 820px;
         }
 
-        #cv {
+        #cv,
+        #sig {
             width: 100%;
             aspect-ratio: 3 / 2;
             background: #fff;
@@ -27,6 +28,18 @@
             display: block;
             box-shadow: inset 0 0 0 1px var(--fill);
             cursor: crosshair;
+        }
+
+        #sig {
+            aspect-ratio: 12 / 5;
+            background-color: #fff;
+            background-image: conic-gradient(#e3e3e8 25%, transparent 0 50%, #e3e3e8 0 75%, transparent 0);
+            background-size: 24px 24px;
+        }
+
+        .modes button {
+            flex: 1;
+            min-height: 44px;
         }
 
         .tools {
@@ -96,7 +109,12 @@
         <h1>簡易畫板</h1>
         <p class="sub">畫筆、橡皮擦、復原（Ctrl+Z）與重做（Ctrl+Y）。手寫筆會依筆壓改變粗細。畫面只在這個頁面，不會上傳。</p>
 
-        <div class="card">
+        <div class="tools modes">
+            <button id="modeBoard" aria-pressed="true">畫板</button>
+            <button id="modeSig" aria-pressed="false">簽名</button>
+        </div>
+
+        <div class="card" id="boardCard">
             <div class="tools">
                 <button class="sm" id="pen" aria-pressed="true">畫筆</button>
                 <button class="sm" id="eraser" aria-pressed="false">橡皮擦</button>
@@ -110,31 +128,51 @@
                 <button class="primary sm" id="save">存成 PNG</button>
             </div>
         </div>
+
+        <div class="card" id="sigCard" hidden>
+            <div class="tools">
+                <span id="sgPalette" class="tools" style="margin:0"></span>
+                <input type="color" id="sgCustom" value="#1d4ed8" aria-label="自訂筆色">
+                <label class="muted" for="sgThick">粗細</label><input type="range" id="sgThick" min="1" max="20" value="4">
+            </div>
+            <canvas id="sig" width="1200" height="500" aria-label="簽名畫布（透明背景，棋盤格是示意）"></canvas>
+            <div class="tools" style="margin:10px 0 0">
+                <button class="sm" id="sgUndo">復原</button><button class="sm" id="sgClear">清除</button>
+                <label class="muted" for="sgW">匯出寬度</label>
+                <select id="sgW" aria-label="匯出寬度"><option value="400">400 px</option><option value="600" selected>600 px</option><option value="800">800 px</option><option value="1200">1200 px</option></select>
+            </div>
+            <div class="tools" style="margin:10px 0 0">
+                <button class="primary sm" id="sgSave">裁切並匯出透明 PNG</button><button class="sm" id="sgCopy">複製到剪貼簿</button>
+            </div>
+            <p class="muted" style="margin:8px 0 0;font-size:13px">簽名不會儲存，離開頁面就消失。</p>
+        </div>
     </div>
+
 
     <template id="help">
         <h3>這是什麼</h3>
-        <p>簡易畫板：畫筆、橡皮擦、復原與重做，可存成 PNG。</p>
+        <p>簡易畫板：畫筆、橡皮擦、復原與重做，可存成 PNG。另有「簽名」模式：在透明背景上用單色筆簽名，自動裁掉空白，匯出透明 PNG。</p>
         <h3>什麼時候用</h3>
         <ul>
         <li>臨時畫草圖、示意圖給朋友看。</li>
-        <li>簡單的塗鴉或手寫簽名。</li>
+        <li>做一張透明背景的電子簽名，貼進文件或 PDF。</li>
         </ul>
         <h3>怎麼用</h3>
         <ol>
-        <li>點色塊或自訂顏色選色；「橡皮擦」會擦掉筆跡。</li>
-        <li>拖曳「粗細」調整筆寬。</li>
-        <li>在畫布上用手指、滑鼠或手寫筆繪製。手寫筆會依筆壓改變粗細。</li>
-        <li>「復原」「重做」可回到上一步；鍵盤為 <kbd>Ctrl</kbd>+<kbd>Z</kbd> 與 <kbd>Ctrl</kbd>+<kbd>Y</kbd>。</li>
-        <li>「清除全部」清空畫布（可復原），「存成 PNG」下載圖片。</li>
+        <li>「畫板」：點色塊或自訂顏色選色；「橡皮擦」會擦掉筆跡；拖曳「粗細」調整筆寬；用手指、滑鼠或手寫筆繪製（手寫筆依筆壓改變粗細）。</li>
+        <li>「復原」「重做」可回到上一步；鍵盤為 <kbd>Ctrl</kbd>+<kbd>Z</kbd> 與 <kbd>Ctrl</kbd>+<kbd>Y</kbd>。「清除全部」清空畫布（可復原），「存成 PNG」下載圖片。</li>
+        <li>按上方「簽名」：棋盤格代表透明背景。選黑色、藍色或自訂筆色，調整粗細後在畫布上簽名；「復原」退一筆、「清除」全部重來。</li>
+        <li>選「匯出寬度」，按「裁切並匯出透明 PNG」下載 signature-日期.png（自動切掉空白，只留一圈邊距）。</li>
+        <li>「複製到剪貼簿」可直接貼到支援圖片的程式；瀏覽器不支援時會改成下載。</li>
         </ol>
         <h3>範例</h3>
-        <div class="eg">選紅色、粗細 6 畫一個圈，再用「橡皮擦」擦掉一半，按「存成 PNG」，會下載 sketch-日期.png。</div>
+        <div class="eg">切到「簽名」，用藍色簽下名字，匯出寬度選 600 → 下載一張寬 600 px、背景透明、只包住簽名的 PNG；還沒簽名就按匯出，會提示「先簽名再匯出」。</div>
         <h3>小提醒</h3>
         <ul>
         <li>畫布內的觸控只用來畫圖，不會捲動頁面；要捲動請手指落在畫布外。</li>
-        <li>筆畫過多時最舊的會固定進底圖，無法再復原。</li>
-        <li>畫面只在這個頁面，不會上傳，離開頁面就消失，請先存檔。</li>
+        <li>畫板筆畫過多時最舊的會固定進底圖，無法再復原；簽名模式最多保留最近 400 筆。</li>
+        <li>畫面與簽名都只在這個頁面，不會上傳也不會儲存，離開頁面就消失，請先存檔。</li>
+        <li>匯出的圖片最大高度 4096 px；簽名很窄長時寬度會比選的小。</li>
         </ul>
     </template>
 
@@ -153,6 +191,18 @@
         // 筆畫數太多時，取出最舊的一批要烤進底圖的筆畫；回傳 { bake, keep }
         function splitForBake(ops, max = MAX_OPS, chunk = 100) {
             return ops.length > max ? { bake: ops.slice(0, chunk), keep: ops.slice(chunk) } : { bake: [], keep: ops };
+        }
+
+        // 簽名：單色筆色（黑 / 藍；也可自訂）
+        const SIG_COLORS = ['#000000', '#1d4ed8'];
+        // 內容邊界：rgba 是 ImageData.data（長度 w*h*4），任何 alpha > 0 的像素都算內容；pad 往外留邊距（不超出畫布）；全透明或資料不合回傳 null
+        function contentBounds(rgba, w, h, pad = 0) {
+            if (!rgba || !(w > 0) || !(h > 0) || rgba.length !== w * h * 4) return null;
+            let x0 = w, y0 = h, x1 = -1, y1 = -1;
+            for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (rgba[(y * w + x) * 4 + 3] > 0) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+            if (x1 < 0) return null;
+            x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(w - 1, x1 + pad); y1 = Math.min(h - 1, y1 + pad);
+            return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
         }
         // --- /pure ---
 
@@ -210,6 +260,7 @@
         $('#clear').onclick = () => { commit({ k: 'c' }); redraw(); };
         document.addEventListener('keydown', (e) => {
             if (!(e.ctrlKey || e.metaKey) || /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+            if (sigMode) { if (e.key === 'z' || e.key === 'Z') { e.preventDefault(); sgUndo(); } return; }
             if (e.key === 'z' || e.key === 'Z') { e.preventDefault(); e.shiftKey ? redoOp() : undo(); }
             else if (e.key === 'y' || e.key === 'Y') { e.preventDefault(); redoOp(); }
         });
@@ -220,6 +271,57 @@
         $('#palette').replaceChildren(...COLORS.map(c => { const b = document.createElement('button'); b.className = 'sw'; b.style.background = c; b.setAttribute('aria-label', '顏色 ' + c); b.setAttribute('aria-pressed', c === color); b.onclick = () => { color = c; setTool('pen'); [...$('#palette').children].forEach(x => x.setAttribute('aria-pressed', x === b)); }; return b; }));
         $('#custom').oninput = (e) => { color = e.target.value; setTool('pen'); [...$('#palette').children].forEach(x => x.setAttribute('aria-pressed', false)); };
         fillBase(); redraw();
+
+        // ---------- 簽名模式（透明背景、單色筆；不存任何資料） ----------
+        const sg = $('#sig'), sgx = sg.getContext('2d');
+        let sigMode = false, sigOps = [], sigColor = SIG_COLORS[0], sigCur = null;
+        const sgPos = (e) => { const r = sg.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * sg.width, (e.clientY - r.top) / r.height * sg.height]; };
+        const sgRedraw = () => { sgx.clearRect(0, 0, sg.width, sg.height); sigOps.forEach(o => drawOp(sgx, o)); };
+        function sgUndo() { if (sigOps.pop()) sgRedraw(); }
+        sg.addEventListener('pointerdown', (e) => {
+            if (e.button > 0) return;
+            sg.setPointerCapture(e.pointerId);
+            const [x, y] = sgPos(e);
+            sigCur = { k: 's', color: sigColor, pts: [[x, y, strokeWidth(+$('#sgThick').value, e.pressure, e.pointerType)]] };
+            drawOp(sgx, sigCur);
+        });
+        sg.addEventListener('pointermove', (e) => {
+            if (!sigCur) return;
+            for (const ev of (e.getCoalescedEvents ? e.getCoalescedEvents() : [e])) {
+                const [x, y] = sgPos(ev);
+                sigCur.pts.push([x, y, strokeWidth(+$('#sgThick').value, ev.pressure, e.pointerType)]);
+                drawOp(sgx, { ...sigCur, pts: sigCur.pts.slice(-2) });
+            }
+        });
+        const sgUp = () => { const op = sigCur; sigCur = null; if (op) { sigOps.push(op); if (sigOps.length > MAX_OPS) sigOps.shift(); } };   // 簽名筆畫很少，超過上限直接丟最舊的
+        sg.addEventListener('pointerup', sgUp); sg.addEventListener('pointercancel', sgUp);
+        $('#sgUndo').onclick = sgUndo;
+        $('#sgClear').onclick = () => { sigOps = []; sgRedraw(); };
+
+        // 裁切空白（留 16px 邊距）、縮放到選定寬度，回傳 canvas；沒有內容回傳 null
+        function sigCanvas() {
+            const b = contentBounds(sgx.getImageData(0, 0, sg.width, sg.height).data, sg.width, sg.height, 16);
+            if (!b) return null;
+            const k = Math.min(+$('#sgW').value / b.w, 4096 / b.h), out = document.createElement('canvas');
+            out.width = Math.max(1, Math.round(b.w * k)); out.height = Math.max(1, Math.round(b.h * k));
+            const g = out.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(sg, b.x, b.y, b.w, b.h, 0, 0, out.width, out.height);
+            return out;
+        }
+        const sgName = () => 'signature-' + Util.day.today() + '.png';
+        $('#sgSave').onclick = () => { const c = sigCanvas(); if (!c) return Chrome.toast('先簽名再匯出'); c.toBlob(b => Util.download(b, sgName())); };
+        $('#sgCopy').onclick = async () => {
+            const c = sigCanvas(); if (!c) return Chrome.toast('先簽名再複製');
+            const blob = await new Promise(r => c.toBlob(r));
+            try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); Chrome.toast('已複製簽名圖片'); }
+            catch (err) { Util.download(blob, sgName()); Chrome.toast('這個瀏覽器無法複製圖片，已改為下載'); }
+        };
+        $('#sgPalette').replaceChildren(...SIG_COLORS.map(c => { const b = document.createElement('button'); b.className = 'sw'; b.style.background = c; b.setAttribute('aria-label', '筆色 ' + c); b.setAttribute('aria-pressed', c === sigColor); b.onclick = () => { sigColor = c; [...$('#sgPalette').children].forEach(x => x.setAttribute('aria-pressed', x === b)); }; return b; }));
+        $('#sgCustom').oninput = (e) => { sigColor = e.target.value; [...$('#sgPalette').children].forEach(x => x.setAttribute('aria-pressed', false)); };
+        function setMode(sig) {
+            sigMode = sig; $('#boardCard').hidden = sig; $('#sigCard').hidden = !sig;
+            $('#modeBoard').setAttribute('aria-pressed', !sig); $('#modeSig').setAttribute('aria-pressed', sig);
+        }
+        $('#modeBoard').onclick = () => setMode(false); $('#modeSig').onclick = () => setMode(true);
     </script>
 </body>
 

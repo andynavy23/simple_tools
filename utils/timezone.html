@@ -5,12 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="時區轉換：選一個時間與時區，同時看到各城市的當地時間，也有每秒跳動的即時看板與日夜圖示，適合安排跨國會議。">
+    <meta name="description" content="時區轉換：選一個時間與時區，同時看到各城市的當地時間，也有即時看板，以及找出各城市共同上班時段的會議時間尋找。">
     <meta property="og:title" content="時區轉換" />
     <meta property="og:description" content="一個時間看各城市的當地時間，或開即時看板。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/timezone.html" />
-    <meta name="st-keys" content="tz_zones">
+    <meta name="st-keys" content="tz_zones,tz_meet">
     <title>時區轉換</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -73,6 +73,99 @@
             color: var(--muted);
         }
 
+        .tabs {
+            margin-bottom: 12px;
+        }
+
+        .tabs button {
+            flex: 1;
+            min-height: 44px;
+        }
+
+        .mt .mtc {
+            display: block;
+        }
+
+        .mt .mtc .mtrow {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 6px;
+        }
+
+        .mt input[type=time],
+        .mt input[type=date],
+        .mt select {
+            flex: 0 0 auto;
+            width: auto;
+            min-width: 0;
+        }
+
+        .mt label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 44px;
+            font-size: 14px;
+        }
+
+        .bars .bn {
+            font-size: 13px;
+            margin: 8px 0 2px;
+            overflow-wrap: anywhere;
+        }
+
+        .bar24 {
+            position: relative;
+            height: 22px;
+            border-radius: 6px;
+            background: var(--fill);
+            overflow: hidden;
+        }
+
+        .bar24 i {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: var(--blue);
+            opacity: .55;
+        }
+
+        .bar24.all i {
+            background: var(--ok);
+            opacity: 1;
+        }
+
+        .axis {
+            position: relative;
+            height: 18px;
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 4px;
+        }
+
+        .axis span {
+            position: absolute;
+            transform: translateX(-50%);
+            white-space: nowrap;
+        }
+
+        .axis span:first-child {
+            transform: none;
+        }
+
+        .axis span:last-child {
+            transform: translateX(-100%);
+        }
+
+        .rec {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--fill);
+            font-size: 14px;
+            white-space: pre-line;
+        }
+
         .del {
             background: none;
             color: var(--muted);
@@ -89,6 +182,12 @@
         <h1>時區轉換</h1>
         <p class="sub">選好時間與時區，所有城市同時對照。</p>
 
+        <div class="row tabs">
+            <button id="tabConv" aria-pressed="true">時間對照</button>
+            <button id="tabMeet" aria-pressed="false">會議時間尋找</button>
+        </div>
+
+        <div id="paneConv">
         <div class="card">
             <div class="row">
                 <input id="when" type="datetime-local" aria-label="日期時間">
@@ -107,32 +206,66 @@
             </div>
             <p class="meta" id="msg" style="margin:8px 0 0"></p>
         </div>
+        </div>
+
+        <div id="paneMeet" class="mt" hidden>
+            <div class="card">
+                <div class="row">
+                    <input type="date" id="mtDate" aria-label="會議日期（以第一個城市的日期為準）">
+                    <select id="mtLen" aria-label="會議長度">
+                        <option value="30">30 分鐘</option>
+                        <option value="60" selected>60 分鐘</option>
+                        <option value="90">90 分鐘</option>
+                        <option value="120">120 分鐘</option>
+                    </select>
+                </div>
+                <div id="mtCities"></div>
+                <div class="row" style="margin-top:12px">
+                    <select id="mtAdd" aria-label="加入城市"></select>
+                    <button id="mtAddBtn">加入城市</button>
+                </div>
+                <p class="meta" id="mtMsg" style="margin:8px 0 0"></p>
+            </div>
+            <div class="card">
+                <div id="mtBars" class="bars"></div>
+                <h3 id="mtHead" style="margin:14px 0 4px"></h3>
+                <div id="mtRecs"></div>
+                <div class="row" style="margin-top:12px"><button class="primary" id="mtCopy">複製建議會議時間</button></div>
+            </div>
+        </div>
     </div>
+
 
     <template id="help">
         <h3>這是什麼</h3>
-        <p>選一個時間與時區，同時看到各城市的當地時間；也能開即時看板，每秒跳動並顯示白天 / 夜晚圖示。</p>
+        <p>選一個時間與時區，同時看到各城市的當地時間；也能開即時看板。另有「會議時間尋找」：選 2–6 個城市與各自的上班時段，畫出 24 小時橫條並找出大家都在上班的重疊時段。</p>
         <h3>什麼時候用</h3>
         <ul>
         <li>安排跨國會議，找大家都方便的時間。</li>
         <li>確認海外朋友現在是白天還是半夜。</li>
+        <li>臺北與紐約這種上班時間完全錯開的組合，找「最少人需要加班」的折衷時段。</li>
         </ul>
         <h3>怎麼用</h3>
         <ol>
-        <li>在日期時間欄選時間，並在下方下拉選單選「這個時間所在的時區」，或按「現在」。</li>
-        <li>下面清單會列出每個城市的當地時間、日期與與基準時區相差幾天。</li>
-        <li>在「新增時區」輸入或從建議清單選（格式：洲/城市，例如 Asia/Seoul），按「新增」。</li>
-        <li>按每列右邊的 × 移除城市；勾「即時看板（每秒更新）」改看現在時間。</li>
+        <li>「時間對照」：選日期時間與「這個時間所在的時區」（或按「現在」），清單列出每個城市的當地時間。用「新增時區」加城市、× 移除；勾「即時看板」改看現在時間。</li>
+        <li>切到「會議時間尋找」：選日期（預設今天）與會議長度，每個城市可調上班時段（預設 09:00–18:00），勾「午休 12:00–13:00 不上班」會略過午休。</li>
+        <li>從下拉選單「加入城市」（來源是「時間對照」的城市清單，最多 6 個，至少留 2 個）；第一個城市（🧭）是橫軸的基準。</li>
+        <li>藍色橫條是各城市的上班時段，綠色是全員重疊。沒有重疊時顯示「沒有共同上班時間」，並列出前 3 個最少人加班 / 半夜的時段。</li>
+        <li>按「複製建議會議時間」貼給同事，每個城市都是當地時間，跨日會標「前一天 / 後一天」。</li>
         </ol>
         <h3>範例</h3>
-        <div class="eg">基準 Asia/Taipei，2026/10/03 21:00
-        → Tokyo 22:00、London 14:00（UTC+1）、New York 09:00（UTC-4）
-        → Los Angeles 06:00、Sydney 23:00</div>
+        <div class="eg">臺北、東京、雪梨，2026/10/03，皆 09:00–18:00
+        → 共同上班時間：臺北時間 09:00–16:00（雪梨這天還是 UTC+10）
+        → 方案 1：Taipei 09:00–10:00、Tokyo 10:00–11:00、Sydney 11:00–12:00</div>
+        <div class="eg">臺北 + 紐約，2026/10/03 → 沒有共同上班時間
+        → 方案 1：Taipei 09:00–10:00、New York 21:00–22:00（前一天）（紐約 1 人加班）</div>
         <h3>小提醒</h3>
         <ul>
-        <li>夏令時間自動處理，所以 UTC 位移會隨日期變。</li>
-        <li>至少要留一個城市；清單會記在這個瀏覽器。</li>
-        <li>即時看板開啟時，日期時間欄會停用。</li>
+        <li>夏令時間自動處理（含轉換當天只有 23 或 25 小時的情況），所以 UTC 位移會隨日期變。</li>
+        <li>日期以第一個城市的當地日期為準；橫軸只顯示那一天。</li>
+        <li>「加班」指下班後但 07:00–22:00 之間，「半夜」指 22:00–07:00，半夜的扣分比較重。</li>
+        <li>時區清單最多 30 個、會議城市最多 6 個，都記在這個瀏覽器；時間對照至少要留一個城市。</li>
+        <li>上班時段與城市只存在本機，可在右上角 💾 匯出備份；存檔資料壞掉時會自動回到預設值。</li>
         </ul>
     </template>
 
@@ -167,6 +300,70 @@
             const mins = Math.round(offsetMs(ms, zone) / 60000), sign = mins < 0 ? '-' : '+', a = Math.abs(mins);
             return `UTC${sign}${Math.floor(a / 60)}${a % 60 ? ':' + String(a % 60).padStart(2, '0') : ''}`;
         }
+
+        // ---------- 會議時間尋找 ----------
+        const MAX_MEET = 6, MAX_ZONES = 30, STEP = 30 * 60000;
+        const toMin = (s) => { const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(s); return m ? +m[1] * 60 + +m[2] : null; };
+        // 讀取已存的設定：壞資料、重複或不認得的時區一律丟掉，時段不合理改回預設 09:00–18:00，最多 6 個城市
+        function normMeet(raw, isZone) {
+            const a = raw && Array.isArray(raw.cities) ? raw.cities : [], seen = new Set(), cities = [];
+            for (const c of a) {
+                if (cities.length >= MAX_MEET) break;
+                if (!c || typeof c.z !== 'string' || !isZone(c.z) || seen.has(c.z)) continue;
+                seen.add(c.z);
+                const s = toMin(c.s), e = toMin(c.e), good = s !== null && e !== null && s < e;
+                cities.push({ z: c.z, s: good ? c.s : '09:00', e: good ? c.e : '18:00', l: c.l === true });
+            }
+            return { cities };
+        }
+        const addDays = (y, m, d, n) => { const t = new Date(Date.UTC(y, m - 1, d + n)); return [t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()]; };
+        // 某城市的上班時段（UTC 毫秒區間）：以 dateStr（YYYY-MM-DD）前一天、當天、後一天各算一次，跨日 / 夏令轉換日都由 zonedToMs 處理；l = 扣掉 12:00–13:00 午休
+        function cityWindows(dateStr, zone, cfg) {
+            const [y, m, d] = dateStr.split('-').map(Number), s = toMin(cfg.s), e = toMin(cfg.e), out = [];
+            const pieces = (cfg.l ? [[s, Math.min(e, 720)], [Math.max(s, 780), e]] : [[s, e]]).filter(p => p[1] > p[0]);
+            for (let k = -1; k <= 1; k++) {
+                const [Y, M, D] = addDays(y, m, d, k), at = (mm) => zonedToMs(Y, M, D, Math.floor(mm / 60), mm % 60, zone);
+                pieces.forEach(([a, b]) => out.push([at(a), at(b)]));
+            }
+            return out.sort((p, q) => p[0] - q[0]);
+        }
+        const intersect = (A, B) => A.flatMap(([a, b]) => B.map(([c, d]) => [Math.max(a, c), Math.min(b, d)])).filter(([s, e]) => e > s).sort((p, q) => p[0] - q[0]);
+        const clip = (A, t0, t1) => intersect(A, [[t0, t1]]);
+        // 某時間點該城市的「不方便程度」：上班中 0、下班後但 7:00–22:00 算加班 1、22:00–7:00 算半夜 3
+        function penalty(ms, zone, wins) {
+            if (wins.some(([a, b]) => ms >= a && ms < b)) return 0;
+            const p = parts(ms, zone), mm = p.h * 60 + p.mi;
+            return mm < 420 || mm >= 1320 ? 3 : 1;
+        }
+        // 規劃：座標軸 = 第一個城市在 dateStr 這一天（00:00 起 24 小時；夏令轉換日可能是 23 / 25 小時）
+        // 回傳 { t0, t1, wins（各城市在軸上的上班區間）, overlap（全員上班區間）, slots（最方便的前 3 個時段）}
+        function meetPlan(dateStr, cities, lenMin) {
+            const ref = cities[0].z, [y, m, d] = dateStr.split('-').map(Number), [Y, M, D] = addDays(y, m, d, 1);
+            const t0 = zonedToMs(y, m, d, 0, 0, ref), t1 = zonedToMs(Y, M, D, 0, 0, ref);
+            const full = cities.map(c => cityWindows(dateStr, c.z, c));
+            const wins = full.map(w => clip(w, t0, t1));
+            const overlap = clip(full.reduce((a, w) => intersect(a, w)), t0, t1);
+            const L = lenMin * 60000, all = [];
+            for (let st = t0; st + L <= t1; st += STEP) {
+                let score = 0; const worst = cities.map(() => 0);
+                for (let c = st + STEP / 2; c < st + L; c += STEP) cities.forEach((ct, i) => { const p = penalty(c, ct.z, full[i]); score += p; worst[i] = Math.max(worst[i], p); });
+                all.push({ start: st, end: st + L, score, ot: worst.filter(w => w === 1).length, night: worst.filter(w => w === 3).length });
+            }
+            all.sort((a, b) => a.score - b.score || a.start - b.start);
+            const slots = [];
+            for (const s of all) { if (slots.length >= 3) break; if (slots.every(p => s.start >= p.end || s.end <= p.start)) slots.push(s); }
+            return { t0, t1, wins, overlap, slots };
+        }
+        const hhmm = (ms, zone) => { const p = parts(ms, zone); return String(p.h).padStart(2, '0') + ':' + String(p.mi).padStart(2, '0'); };
+        // 該時間點在 zone 的日期與 refZone 差幾天，回傳 '' / '（前一天）' / '（後一天）'
+        function dayTag(ms, zone, refZone) {
+            const a = parts(ms, zone), b = parts(ms, refZone), n = Math.round((Date.UTC(a.y, a.m - 1, a.d) - Date.UTC(b.y, b.m - 1, b.d)) / 864e5);
+            return n === 0 ? '' : n < 0 ? '（前一天）' : '（後一天）';
+        }
+        // 一個建議時段的文字：每個城市的當地時間
+        function slotText(slot, cities, names) {
+            return cities.map((c, i) => `${names[i]} ${hhmm(slot.start, c.z)}–${hhmm(slot.end, c.z)}${dayTag(slot.start, c.z, cities[0].z)}`).join('\n');
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -175,7 +372,7 @@
         const ALL = Intl.supportedValuesOf ? Intl.supportedValuesOf('timeZone') : DEFAULT;
         let zones = DEFAULT;
         const saved = Util.store.get(KEY, null);
-        if (Array.isArray(saved) && saved.length) zones = saved.filter(x => ALL.includes(x) || DEFAULT.includes(x));
+        if (Array.isArray(saved) && saved.length) zones = saved.filter(x => ALL.includes(x) || DEFAULT.includes(x)).slice(0, MAX_ZONES);
         if (!zones.length) zones = DEFAULT;
         let base = zones.includes('Asia/Taipei') ? 'Asia/Taipei' : zones[0];
 
@@ -265,10 +462,90 @@
             const z = $('#add').value.trim();
             if (!ALL.includes(z)) { $('#msg').textContent = '找不到這個時區，請從建議清單選擇（格式：洲/城市）'; return; }
             if (zones.includes(z)) { $('#msg').textContent = '已經在清單中'; return; }
+            if (zones.length >= MAX_ZONES) { $('#msg').textContent = `最多 ${MAX_ZONES} 個時區，請先移除不用的`; return; }
             zones.push(z);
             $('#add').value = ''; $('#msg').textContent = '';
             render();
         };
+
+        // ---------- 會議時間尋找（介面） ----------
+        const MKEY = 'tz_meet';
+        const isZone = (z) => ALL.includes(z) || DEFAULT.includes(z);
+        let meet = normMeet(Util.store.get(MKEY, null), isZone).cities;
+        if (meet.length < 2) meet = ['Asia/Taipei', 'America/New_York'].map(z => ({ z, s: '09:00', e: '18:00', l: false }));
+        const saveMeet = () => Util.store.set(MKEY, { cities: meet });
+        let lastText = '';
+
+        function renderMeet() {
+            const box = $('#mtCities'), names = meet.map(c => city(c.z));
+            box.replaceChildren(...meet.map((c, i) => {
+                const row = document.createElement('div'); row.className = 'li mtc';
+                const top = document.createElement('div'); top.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:8px';
+                const nm = document.createElement('div'); nm.className = 'city'; nm.textContent = (i === 0 ? '🧭 ' : '') + names[i]; nm.title = c.z;
+                const del = document.createElement('button'); del.className = 'del'; del.textContent = '×'; del.setAttribute('aria-label', '移除 ' + c.z); del.disabled = meet.length <= 2;
+                del.onclick = () => { meet.splice(i, 1); saveMeet(); renderMeet(); };
+                top.append(nm, del);
+                const r = document.createElement('div'); r.className = 'mtrow';
+                const mk = (k) => {
+                    const inp = Object.assign(document.createElement('input'), { type: 'time', value: c[k], required: true });
+                    inp.setAttribute('aria-label', names[i] + (k === 's' ? ' 上班' : ' 下班') + '時間');
+                    inp.onchange = () => {
+                        const o = { ...c, [k]: inp.value };
+                        if (toMin(o.s) === null || toMin(o.e) === null || toMin(o.s) >= toMin(o.e)) { $('#mtMsg').textContent = '上班時間要早於下班時間'; inp.value = c[k]; return; }
+                        $('#mtMsg').textContent = ''; c[k] = inp.value; saveMeet(); renderMeet();
+                    };
+                    return inp;
+                };
+                const lb = document.createElement('label'), cb = Object.assign(document.createElement('input'), { type: 'checkbox', checked: c.l });
+                cb.onchange = () => { c.l = cb.checked; saveMeet(); renderMeet(); };
+                lb.append(cb, '午休 12:00–13:00 不上班');
+                r.append(mk('s'), '–', mk('e'), lb);
+                row.append(top, r); return row;
+            }));
+            const free = zones.concat(DEFAULT).filter((z, i, a) => a.indexOf(z) === i && !meet.some(c => c.z === z));
+            $('#mtAdd').replaceChildren(...free.map(z => new Option(city(z) + ' (' + z + ')', z)));
+            $('#mtAddBtn').disabled = meet.length >= MAX_MEET || !free.length;
+            if (meet.length >= MAX_MEET) $('#mtMsg').textContent = `最多 ${MAX_MEET} 個城市`;
+
+            const ds = $('#mtDate').value;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(ds)) { $('#mtBars').textContent = '請選日期'; $('#mtRecs').replaceChildren(); $('#mtHead').textContent = ''; lastText = ''; return; }
+            const plan = meetPlan(ds, meet, +$('#mtLen').value), ref = meet[0].z, span = plan.t1 - plan.t0, pc = (ms) => (ms - plan.t0) / span * 100;
+            const seg = (list, cls) => { const d = document.createElement('div'); d.className = 'bar24 ' + cls; list.forEach(([a, b]) => { const i = document.createElement('i'); i.style.left = pc(a) + '%'; i.style.width = pc(b) - pc(a) + '%'; d.append(i); }); return d; };
+            const [y, m, dd] = ds.split('-').map(Number);
+            const axis = document.createElement('div'); axis.className = 'axis';
+            for (let h = 0; h <= 24; h += 3) { const sp = document.createElement('span'), ms = h === 24 ? plan.t1 : zonedToMs(y, m, dd, h, 0, ref); sp.textContent = h === 24 ? '24' : pad(h); sp.style.left = pc(ms) + '%'; axis.append(sp); }
+            const label = (t, cls) => Object.assign(document.createElement('div'), { className: 'bn ' + (cls || ''), textContent: t });
+            $('#mtBars').replaceChildren(
+                ...meet.flatMap((c, i) => [label(`${names[i]}　上班 ${c.s}–${c.e}${c.l ? '（午休）' : ''}`), seg(plan.wins[i], 'w')]),
+                label('全員都在上班', 'ok'), seg(plan.overlap, 'all'), axis,
+                Object.assign(document.createElement('div'), { className: 'meta', textContent: `橫軸是「${names[0]}」當地時間 ${m}/${dd} 這一天（小時）` }));
+            const top = plan.slots;
+            $('#mtHead').textContent = plan.overlap.length ? '共同上班時間' : '沒有共同上班時間';
+            const lines = plan.overlap.map(([a, b]) => `${hhmm(a, ref)}–${hhmm(b, ref)}`);
+            const recs = [];
+            if (lines.length) recs.push(Object.assign(document.createElement('div'), { className: 'rec', textContent: `${names[0]} 時間 ${lines.join('、')}` }));
+            else recs.push(Object.assign(document.createElement('div'), { className: 'meta', textContent: '下面是「最少人需要加班 / 半夜」的前 3 個時段：' }));
+            const out = [`建議會議時間（${ds}，${$('#mtLen').value} 分鐘）`];
+            top.forEach((s, i) => {
+                const why = s.score === 0 ? '全員都在上班時間' : `${s.ot ? s.ot + ' 人需加班' : ''}${s.ot && s.night ? '、' : ''}${s.night ? s.night + ' 人在半夜' : ''}`;
+                const t = slotText(s, meet, names);
+                recs.push(Object.assign(document.createElement('div'), { className: 'rec', textContent: `方案 ${i + 1}：${why}\n${t}` }));
+                out.push(`方案 ${i + 1}（${why}）\n${t}`);
+            });
+            if (!top.length) recs.push(Object.assign(document.createElement('div'), { className: 'meta', textContent: '這一天找不到可用的時段' }));
+            $('#mtRecs').replaceChildren(...recs);
+            lastText = top.length ? out.join('\n\n') : '';
+        }
+        $('#mtDate').value = (() => { const p = parts(Date.now(), meet[0].z); return `${p.y}-${pad(p.m)}-${pad(p.d)}`; })();
+        $('#mtDate').onchange = $('#mtLen').onchange = renderMeet;
+        $('#mtAddBtn').onclick = () => {
+            const z = $('#mtAdd').value;
+            if (!z || meet.length >= MAX_MEET || meet.some(c => c.z === z)) return;
+            meet.push({ z, s: '09:00', e: '18:00', l: false }); $('#mtMsg').textContent = ''; saveMeet(); renderMeet();
+        };
+        $('#mtCopy').onclick = () => { if (lastText) Util.copyWithFeedback($('#mtCopy'), lastText, () => { $('#mtMsg').textContent = '無法自動複製，請手動選取上面的建議時間'; }); };
+        const tab = (meetOn) => { $('#paneConv').hidden = meetOn; $('#paneMeet').hidden = !meetOn; $('#tabConv').setAttribute('aria-pressed', !meetOn); $('#tabMeet').setAttribute('aria-pressed', meetOn); if (meetOn) renderMeet(); };
+        $('#tabConv').onclick = () => tab(false); $('#tabMeet').onclick = () => tab(true);
         setNow();
         render();
     </script>

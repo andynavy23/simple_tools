@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="號碼驗證與測試資料：驗證身分證 / 居留證、統一編號、信用卡（Luhn）、臺灣電話格式，並產生格式合法的測試用號碼。全部在本機計算。">
+    <meta property="og:title" content="號碼驗證與測試資料" />
+    <meta property="og:description" content="身分證、統編、信用卡、電話的檢查碼驗證與測試資料產生器，不上傳。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/id-validator.html" />
+    <title>號碼驗證與測試資料</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        .privacy {
+            border-left: 4px solid var(--bad);
+        }
+
+        .privacy b {
+            color: var(--bad);
+        }
+
+        .tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        label.f {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            margin: 8px 0 4px;
+        }
+
+        .big {
+            width: 100%;
+            font-size: 20px;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: .5px;
+        }
+
+        .res {
+            margin-top: 10px;
+        }
+
+        .verdict {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 6px 0;
+        }
+
+        .verdict.ok {
+            color: var(--ok);
+        }
+
+        .verdict.bad {
+            color: var(--bad);
+        }
+
+        .gen {
+            border-top: 1px solid var(--fill);
+            margin-top: 16px;
+            padding-top: 12px;
+        }
+
+        .gen .fs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 0 12px;
+        }
+
+        .gen select,
+        .gen input:where([type=text], [type=number]) {
+            width: 100%;
+        }
+
+        .outs {
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: 17px;
+            margin-top: 10px;
+            overflow-wrap: anywhere;
+        }
+
+        .outs div {
+            padding: 6px 0;
+            border-bottom: 1px solid var(--fill);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .warn {
+            color: var(--bad);
+            font-size: 13px;
+            margin: 6px 0 0;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>號碼驗證與測試資料</h1>
+        <p class="sub">身分證 / 居留證、統一編號、信用卡、電話：驗證格式與檢查碼，也能產生<b>測試用</b>的合法格式號碼。</p>
+
+        <div class="card privacy">
+            <b>隱私說明</b>：全部在你的瀏覽器本機計算，不會上傳，也不會存在瀏覽器裡（重新整理就清空）。<b>請勿輸入他人的真實證號或卡號</b>；產生的號碼只是通過檢查碼的格式，用於開發測試，不代表真實存在，也<b>不能</b>拿來冒用或交易。
+        </div>
+
+        <div class="tabs" id="tabs">
+            <button class="sm" data-t="tw" aria-pressed="true">身分證 / 居留證</button>
+            <button class="sm" data-t="ubn" aria-pressed="false">統一編號</button>
+            <button class="sm" data-t="card" aria-pressed="false">信用卡</button>
+            <button class="sm" data-t="phone" aria-pressed="false">電話</button>
+        </div>
+
+        <!-- 身分證 -->
+        <div class="card" id="p-tw">
+            <h2>身分證字號 / 居留證統一證號</h2>
+            <label class="f" for="twIn">輸入 10 碼（大小寫皆可）</label>
+            <input id="twIn" class="big" maxlength="12" autocomplete="off" spellcheck="false" autocapitalize="characters" placeholder="A123456789">
+            <div class="res" id="twRes"></div>
+            <p class="note">格式：英文字母（發證縣市）＋第 2 碼 ＋ 7 碼數字 ＋ 檢查碼。第 2 碼：國民身分證 <b>1 男 / 2 女</b>；新式外來人口統一證號（2021 年起）<b>8 男 / 9 女</b>；舊式居留證第 2 碼為英文字母 <b>A–D</b>（A、C 男，B、D 女），計算時取該字母代碼的個位數。三者檢查碼演算法相同，本工具都接受。</p>
+            <div class="gen">
+                <h2>產生測試用號碼</h2>
+                <div class="fs">
+                    <div><label class="f" for="twKind">類型</label><select id="twKind"><option value="citizen">國民身分證（第 2 碼 1 / 2）</option><option value="resident-new">新式居留證（第 2 碼 8 / 9）</option><option value="resident-old">舊式居留證（第 2 碼 A–D）</option></select></div>
+                    <div><label class="f" for="twSex">性別</label><select id="twSex"><option value="any">隨機</option><option value="M">男</option><option value="F">女</option></select></div>
+                    <div><label class="f" for="twCity">縣市碼</label><select id="twCity"></select></div>
+                    <div><label class="f" for="twN">數量</label><select id="twN"><option>1</option><option>5</option><option>10</option></select></div>
+                </div>
+                <div class="row" style="margin-top:10px"><button class="primary" id="twGen">產生</button><button id="twCopy">複製全部</button></div>
+                <div class="outs" id="twOut"></div>
+                <p class="warn">測試用格式合法號碼，可能剛好與真實證號相同，請勿冒用。</p>
+            </div>
+        </div>
+
+        <!-- 統編 -->
+        <div class="card" id="p-ubn" hidden>
+            <h2>統一編號（營業人）</h2>
+            <label class="f" for="ubnIn">輸入 8 碼數字</label>
+            <input id="ubnIn" class="big" inputmode="numeric" maxlength="10" autocomplete="off" placeholder="04595257">
+            <div class="res" id="ubnRes"></div>
+            <p class="note">演算法：8 位數字依序乘以 1、2、1、2、1、2、4、1，每個乘積的十位與個位相加，再全部加總。<b>2023 年起新規則</b>（財政部公告，因編號用罄）：總和能被 <b>5</b> 整除即合法（原為 10）；若<b>第 7 碼是 7</b>，總和「或總和 + 1」能被 5 整除皆合法。舊規則（除以 10）合法的號碼在新規則下仍然合法。實際以財政部公告為準。</p>
+            <div class="gen">
+                <h2>產生測試用統編</h2>
+                <div class="fs">
+                    <div><label class="f" for="ubnMode">合法規則</label><select id="ubnMode"><option value="both">新舊規則都合法</option><option value="new">僅新規則合法（舊系統會判錯）</option></select></div>
+                    <div><label class="f" for="ubnN">數量</label><select id="ubnN"><option>1</option><option>5</option><option>10</option></select></div>
+                </div>
+                <div class="row" style="margin-top:10px"><button class="primary" id="ubnGen">產生</button><button id="ubnCopy">複製全部</button></div>
+                <div class="outs" id="ubnOut"></div>
+                <p class="warn">只是通過檢查碼的格式，不代表真實登記的公司。</p>
+            </div>
+        </div>
+
+        <!-- 信用卡 -->
+        <div class="card" id="p-card" hidden>
+            <h2>信用卡號（Luhn 校驗）</h2>
+            <label class="f" for="cardIn">輸入卡號（可含空白或 -）</label>
+            <input id="cardIn" class="big" inputmode="numeric" maxlength="30" autocomplete="off" placeholder="4111 1111 1111 1111">
+            <div class="res" id="cardRes"></div>
+            <p class="note">只檢查<b>格式、發卡組織前綴與長度、Luhn 校驗碼</b>，無法得知卡片是否真實存在、是否有效或可用。請勿輸入你自己或他人的真實卡號。</p>
+            <div class="gen">
+                <h2>產生測試用卡號</h2>
+                <div class="fs">
+                    <div><label class="f" for="cardNet">發卡組織</label><select id="cardNet"><option value="visa">Visa</option><option value="master">MasterCard</option><option value="jcb">JCB</option><option value="amex">American Express</option><option value="custom">自訂前綴</option></select></div>
+                    <div><label class="f" for="cardPre">前綴（數字，選填）</label><input id="cardPre" type="text" inputmode="numeric" maxlength="12" autocomplete="off" placeholder="預設"></div>
+                    <div><label class="f" for="cardLen">長度</label><input id="cardLen" type="number" min="12" max="19" placeholder="預設"></div>
+                    <div><label class="f" for="cardN">數量</label><select id="cardN"><option>1</option><option>5</option><option>10</option></select></div>
+                </div>
+                <div class="row" style="margin-top:10px"><button class="primary" id="cardGen">產生</button><button id="cardCopy">複製全部</button></div>
+                <div class="outs" id="cardOut"></div>
+                <p class="warn" id="cardWarn">這不是真實卡號，只是通過 Luhn 的測試用格式，不能用於任何交易。</p>
+            </div>
+        </div>
+
+        <!-- 電話 -->
+        <div class="card" id="p-phone" hidden>
+            <h2>臺灣電話號碼格式</h2>
+            <label class="f" for="phoneIn">手機或市話（可含 - 空白 括號、+886）</label>
+            <input id="phoneIn" class="big" inputmode="tel" maxlength="30" autocomplete="off" placeholder="0912-345-678 或 02-2345-6789">
+            <div class="res" id="phoneRes"></div>
+            <p class="note">簡易格式檢查：手機為 09 開頭共 10 碼；市話依區碼（02、03、037、04、049、05、06、07、08、082、089、0826、0836）檢查總碼數；0800 為免付費。不保證號碼真的存在或有人使用。不提供電話產生器（避免產生出真實人的號碼）。</p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>一個本機運作的號碼檢查與測試資料工具：驗證<b>身分證 / 居留證、統一編號、信用卡、臺灣電話</b>的格式與檢查碼，並能產生<b>格式合法的測試用號碼</b>給開發、填表單測試使用。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>寫表單或 API 驗證時，需要「檢查碼會過」的測試資料。</li>
+        <li>確認某個統編、證號是不是手誤打錯一碼。</li>
+        <li>想知道一個卡號的前綴是 Visa、Master、JCB 還是 AE。</li>
+        <li>QA 測試案例要大量合法 / 非法樣本。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>上方分頁選「身分證 / 居留證」「統一編號」「信用卡」或「電話」。</li>
+        <li>在輸入框貼上或輸入號碼，下方即時顯示是否合法、類型與原因（檢查碼錯誤時會告訴你檢查碼應為何）。</li>
+        <li>要測試資料時，到下方「產生測試用號碼」選條件（身分證可選類型、性別、縣市碼；信用卡可選組織、前綴、長度）後按「產生」，再「複製全部」。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">A123456789 → 合法，國民身分證、男、臺北市
+        A123456788 → 檢查碼錯誤，應為 9
+        04595257 → 統編合法（加權總和 40）
+        4111 1111 1111 1111 → Visa，Luhn 通過
+        0912-345-678 → 手機格式正確</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>全部在本機計算、不上傳、不儲存；<b>請勿輸入他人真實證號或卡號</b>。</li>
+        <li>產生的號碼只保證通過檢查碼，<b>不代表真實存在</b>，可能碰巧與真實號碼相同；不可用於冒用、詐欺或任何交易。</li>
+        <li>居留證：新式第 2 碼為 8 / 9，舊式為 A–D，演算法相同，工具兩種都接受。</li>
+        <li>統編採 2023 年起財政部公告的新規則（總和被 5 整除；第 7 碼為 7 的特例）；頁面會標示該號碼在舊規則下是否也合法。以官方公告為準。</li>
+        <li>信用卡只做格式與 Luhn 校驗，無法判斷卡片是否真的存在或有額度。電話為簡易格式檢查。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { copyWithFeedback, rnd } = Util;
+
+        // --- pure ---
+        // ---- 身分證 / 居留證 ----
+        const TW_LETTER = { A: 10, B: 11, C: 12, D: 13, E: 14, F: 15, G: 16, H: 17, I: 34, J: 18, K: 19, L: 20, M: 21, N: 22, O: 35, P: 23, Q: 24, R: 25, S: 26, T: 27, U: 28, V: 29, W: 32, X: 30, Y: 31, Z: 33 };
+        const TW_CITY = { A: '臺北市', B: '臺中市', C: '基隆市', D: '臺南市', E: '高雄市', F: '新北市', G: '宜蘭縣', H: '桃園市', I: '嘉義市', J: '新竹縣', K: '苗栗縣', L: '臺中縣（舊）', M: '南投縣', N: '彰化縣', O: '新竹市', P: '雲林縣', Q: '嘉義縣', R: '臺南縣（舊）', S: '高雄縣（舊）', T: '屏東縣', U: '花蓮縣', V: '臺東縣', W: '金門縣', X: '澎湖縣', Y: '陽明山（舊）', Z: '連江縣' };
+        // 字母代碼十位 ×1 + 個位 ×9，其後 9 碼權重 8,7,6,5,4,3,2,1,1（第 2 碼若為 A–D 取代碼個位數）；總和 % 10 == 0 為合法
+        function twIdSum(id) {
+            const n = TW_LETTER[id[0]];
+            let s = Math.floor(n / 10) + (n % 10) * 9;
+            [...id.slice(1)].forEach((c, i) => { s += (/\d/.test(c) ? +c : TW_LETTER[c] % 10) * (i < 8 ? 8 - i : 1); });
+            return s;
+        }
+        // 回傳 { valid, reason: 'format'|'checksum'|'', expected（正確檢查碼）, kind: citizen|resident-new|resident-old, gender: M|F, city }
+        function twIdCheck(input) {
+            const id = String(input ?? '').trim().toUpperCase();
+            if (!/^[A-Z][1289A-D]\d{8}$/.test(id)) return { valid: false, reason: 'format' };
+            const c = id[1], kind = c === '1' || c === '2' ? 'citizen' : c === '8' || c === '9' ? 'resident-new' : 'resident-old';
+            const gender = '18AC'.includes(c) ? 'M' : 'F';
+            const expected = (10 - twIdSum(id.slice(0, 9) + '0') % 10) % 10;
+            const valid = twIdSum(id) % 10 === 0;
+            return { valid, reason: valid ? '' : 'checksum', expected, kind, gender, city: TW_CITY[id[0]], id };
+        }
+        // 產生：rnd(n) 回傳 [0,n) 整數。kind: citizen / resident-new / resident-old；gender: M / F / any；city: 縣市字母（空 = 隨機）
+        function twIdGen({ kind = 'citizen', gender = 'any', city = '' } = {}, rnd) {
+            const L = TW_LETTER[city] ? city : Object.keys(TW_LETTER)[rnd(26)];
+            const g = gender === 'M' || gender === 'F' ? gender : rnd(2) ? 'F' : 'M';
+            const second = kind === 'resident-old' ? (g === 'M' ? 'AC' : 'BD')[rnd(2)] : kind === 'resident-new' ? (g === 'M' ? '8' : '9') : (g === 'M' ? '1' : '2');
+            let body = L + second;
+            for (let i = 0; i < 7; i++) body += rnd(10);
+            return body + (10 - twIdSum(body + '0') % 10) % 10;
+        }
+
+        // ---- 統一編號 ----
+        // 權重 1,2,1,2,1,2,4,1；乘積的十位 + 個位相加。新規則（2023 起）：總和 % 5 == 0，或第 7 碼為 7 且 (總和 + 1) % 5 == 0；舊規則同理但除數 10
+        function ubnSum(s) {
+            const w = [1, 2, 1, 2, 1, 2, 4, 1];
+            return [...s].reduce((t, c, i) => { const p = +c * w[i]; return t + Math.floor(p / 10) + p % 10; }, 0);
+        }
+        function ubnCheck(input) {
+            const s = String(input ?? '').trim();
+            if (!/^\d{8}$/.test(s)) return { valid: false, reason: 'format' };
+            const sum = ubnSum(s), special = s[6] === '7';
+            const oldOk = sum % 10 === 0 || (special && (sum + 1) % 10 === 0);
+            const newOk = sum % 5 === 0 || (special && (sum + 1) % 5 === 0);
+            return { valid: newOk, newOk, oldOk, sum, special, reason: newOk ? '' : 'checksum' };
+        }
+        // mode: 'both'＝新舊規則都合法；'new'＝只有新規則合法
+        function ubnGen({ mode = 'both' } = {}, rnd) {
+            for (let t = 0; t < 1000; t++) {
+                let s7 = '';
+                for (let i = 0; i < 7; i++) s7 += rnd(10);
+                const c = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].filter(d => { const r = ubnCheck(s7 + d); return r.newOk && (mode === 'new' ? !r.oldOk : r.oldOk); });
+                if (c.length) return s7 + c[rnd(c.length)];
+            }
+            throw new Error('產生失敗');
+        }
+
+        // ---- 信用卡 ----
+        function luhnCheck(digits) {
+            let s = 0, alt = false;
+            for (let i = digits.length - 1; i >= 0; i--) { let d = +digits[i]; if (alt) { d *= 2; if (d > 9) d -= 9; } s += d; alt = !alt; }
+            return s % 10 === 0;
+        }
+        const luhnDigit = (partial) => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].find(d => luhnCheck(partial + d));
+        const CARD_NETS = {
+            visa: { name: 'Visa', re: /^4/, lens: [13, 16, 19], prefix: '4', len: 16 },
+            master: { name: 'MasterCard', re: /^(5[1-5]|222[1-9]|22[3-9]\d|2[3-6]\d\d|27[01]\d|2720)/, lens: [16], prefix: '51', len: 16 },
+            jcb: { name: 'JCB', re: /^35(2[89]|[3-8]\d)/, lens: [16, 17, 18, 19], prefix: '3528', len: 16 },
+            amex: { name: 'American Express', re: /^3[47]/, lens: [15], prefix: '34', len: 15 },
+        };
+        function cardNetwork(digits) {
+            const k = Object.keys(CARD_NETS).find(k => CARD_NETS[k].re.test(digits));
+            return k ? { key: k, name: CARD_NETS[k].name, lens: CARD_NETS[k].lens } : null;
+        }
+        // 回傳 { valid, reason: format|length|luhn|networkLength|'', luhn, network, digits }；valid = 長度 12–19 且 Luhn 通過，且（辨識得出發卡組織時）長度符合該組織
+        function cardCheck(input) {
+            const digits = String(input ?? '').replace(/[\s-]/g, '');
+            if (!/^\d+$/.test(digits)) return { valid: false, reason: 'format' };
+            if (digits.length < 12 || digits.length > 19) return { valid: false, reason: 'length', digits };
+            const luhn = luhnCheck(digits), network = cardNetwork(digits);
+            const reason = !luhn ? 'luhn' : network && !network.lens.includes(digits.length) ? 'networkLength' : '';
+            return { valid: !reason, reason, luhn, network, digits };
+        }
+        // 產生測試卡號：network = visa/master/jcb/amex/custom；prefix 空 = 該組織預設；length 空 = 預設（custom 預設 16）
+        function cardGen({ network = 'visa', prefix = '', length = 0 } = {}, rnd) {
+            const def = CARD_NETS[network];
+            const pre = String(prefix || (def ? def.prefix : '')).replace(/\s/g, ''), len = +length || (def ? def.len : 16);
+            if (!/^\d{1,12}$/.test(pre)) throw new Error('前綴要是 1–12 位數字');
+            if (!Number.isInteger(len) || len < 12 || len > 19) throw new Error('長度要在 12–19');
+            if (pre.length > len - 1) throw new Error('前綴太長');
+            let s = pre;
+            while (s.length < len - 1) s += rnd(10);
+            return s + luhnDigit(s);
+        }
+
+        // ---- 臺灣電話（簡易格式）----
+        // [區碼, 地區, 允許的總碼數（含 0）]；較長的區碼放前面
+        const TW_AREA = [['0826', '烏坵', [9]], ['0836', '馬祖', [9]], ['082', '金門', [9]], ['089', '臺東', [9]], ['037', '苗栗', [9]], ['049', '南投', [10]], ['02', '臺北、新北、基隆', [10]], ['03', '桃園、新竹、宜蘭、花蓮', [9, 10]], ['04', '臺中、彰化', [9, 10]], ['05', '雲林、嘉義', [9]], ['06', '臺南、澎湖', [9]], ['07', '高雄', [9, 10]], ['08', '屏東', [9]]];
+        // 去掉空白 - . ( )，+886 / 00886 / 886 開頭換成 0；回傳純數字字串或 null（含其他字元）
+        function normalizePhone(input) {
+            let s = String(input ?? '').trim().replace(/[\s\-.()]/g, '');
+            const m = /^(?:\+886|00886|886)0?(\d+)$/.exec(s);
+            if (m) s = '0' + m[1];
+            return /^\d+$/.test(s) ? s : null;
+        }
+        // 回傳 { valid, kind: mobile|landline|tollfree, formatted, area, reason: format|length|area|'' }
+        function twPhoneCheck(input) {
+            const s = normalizePhone(input);
+            if (s === null || s.length < 7) return { valid: false, reason: 'format' };
+            if (/^09/.test(s)) return /^09\d{8}$/.test(s) ? { valid: true, kind: 'mobile', formatted: `${s.slice(0, 4)}-${s.slice(4, 7)}-${s.slice(7)}`, reason: '' } : { valid: false, kind: 'mobile', reason: 'length' };
+            if (/^0800/.test(s)) return /^0800\d{6}$/.test(s) ? { valid: true, kind: 'tollfree', formatted: `${s.slice(0, 4)}-${s.slice(4, 7)}-${s.slice(7)}`, reason: '' } : { valid: false, kind: 'tollfree', reason: 'length' };
+            const hits = TW_AREA.filter(a => s.startsWith(a[0]));
+            if (!hits.length) return { valid: false, reason: 'area' };
+            const a = hits.find(h => h[2].includes(s.length));
+            if (!a) return { valid: false, kind: 'landline', area: hits[0][0], region: hits[0][1], reason: 'length' };
+            return { valid: true, kind: 'landline', area: a[0], region: a[1], formatted: `${a[0]}-${s.slice(a[0].length)}`, reason: '' };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const mk = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+        const KIND = { citizen: '國民身分證', 'resident-new': '新式外來人口統一證號（第 2 碼 8 / 9）', 'resident-old': '舊式居留證（第 2 碼 A–D）' };
+
+        function show(box, ok, title, rows, extra) {
+            box.replaceChildren(mk('div', { className: 'verdict ' + (ok ? 'ok' : 'bad'), textContent: title }));
+            for (const [k, v] of rows) box.append(mk('div', { className: 'li stat' }, mk('span', { textContent: k }), mk('b', { textContent: v })));
+            if (extra) box.append(mk('p', { className: 'note', textContent: extra }));
+        }
+
+        function vTw() {
+            const v = $('#twIn').value, box = $('#twRes');
+            if (!v.trim()) return box.replaceChildren();
+            const r = twIdCheck(v);
+            if (r.reason === 'format') return show(box, false, '格式不對', [], '要是 1 個英文字母 + 第 2 碼（1、2、8、9 或 A–D）+ 8 個數字，共 10 碼。');
+            if (!r.valid) return show(box, false, '檢查碼錯誤', [['類型', KIND[r.kind]], ['檢查碼應為', String(r.expected)]]);
+            show(box, true, '合法', [['類型', KIND[r.kind]], ['性別', r.gender === 'M' ? '男' : '女'], ['縣市碼', `${r.id[0]}（${r.city}）`]], '只代表格式與檢查碼正確，不代表真有此人。');
+        }
+        function vUbn() {
+            const v = $('#ubnIn').value, box = $('#ubnRes');
+            if (!v.trim()) return box.replaceChildren();
+            const r = ubnCheck(v);
+            if (r.reason === 'format') return show(box, false, '格式不對', [], '統一編號是 8 位數字。');
+            const rows = [['加權總和', String(r.sum)], ['第 7 碼為 7 特例', r.special ? '是' : '否'], ['舊規則（÷10）', r.oldOk ? '合法' : '不合法'], ['新規則（÷5，2023 起）', r.newOk ? '合法' : '不合法']];
+            show(box, r.valid, r.valid ? (r.oldOk ? '合法（新舊規則皆合法）' : '合法（僅新規則）') : '檢查碼錯誤', rows);
+        }
+        const fmtCard = (d) => /^3[47]/.test(d) && d.length === 15 ? `${d.slice(0, 4)} ${d.slice(4, 10)} ${d.slice(10)}` : d.replace(/(\d{4})(?=\d)/g, '$1 ');
+        function vCard() {
+            const v = $('#cardIn').value, box = $('#cardRes');
+            if (!v.trim()) return box.replaceChildren();
+            const r = cardCheck(v);
+            if (r.reason === 'format') return show(box, false, '格式不對', [], '只能有數字、空白與 -。');
+            if (r.reason === 'length') return show(box, false, '長度不對', [['位數', String(r.digits.length)]], '卡號通常為 12–19 位數。');
+            const rows = [['位數', String(r.digits.length)], ['Luhn 校驗', r.luhn ? '通過' : '未通過'], ['發卡組織', r.network ? r.network.name : '無法辨識（Visa / Master / JCB / AE 以外）']];
+            if (r.reason === 'networkLength') rows.push(['長度', `${r.network.name} 通常為 ${r.network.lens.join(' / ')} 位`]);
+            show(box, r.valid, r.valid ? '格式與校驗碼正確' : r.reason === 'luhn' ? '校驗碼錯誤' : '長度與發卡組織不符', rows, '只做格式檢查，無法判斷是否為真實有效的卡。');
+        }
+        function vPhone() {
+            const v = $('#phoneIn').value, box = $('#phoneRes');
+            if (!v.trim()) return box.replaceChildren();
+            const r = twPhoneCheck(v), KD = { mobile: '手機', landline: '市話', tollfree: '免付費電話' };
+            if (r.valid) return show(box, true, '格式正確', [['類型', KD[r.kind]], ['建議格式', r.formatted], ...(r.region ? [['區碼', `${r.area}（${r.region}）`]] : [])]);
+            show(box, false, r.reason === 'format' ? '格式不對' : r.reason === 'area' ? '找不到對應的區碼' : '位數不符', r.kind ? [['類型', KD[r.kind]]] : [], r.reason === 'length' ? '手機為 10 碼（09 開頭）；市話總碼數依區碼不同（含區碼 9–10 碼）。' : '');
+        }
+
+        // 產生器：lines 為產生出的文字陣列
+        const outs = { tw: [], ubn: [], card: [] };
+        function genList(key, box, n, fn) {
+            outs[key] = []; box.replaceChildren();
+            try { for (let i = 0; i < n; i++) outs[key].push(fn()); } catch (e) { box.append(mk('p', { className: 'warn', textContent: e.message })); return; }
+            for (const t of outs[key]) box.append(mk('div', {}, mk('span', { textContent: t.text ?? t }), mk('button', { className: 'sm', textContent: '複製', onclick: (ev) => copyWithFeedback(ev.target, String(t.raw ?? t.text ?? t)) })));
+        }
+        $('#twCity').replaceChildren(new Option('隨機', ''), ...Object.keys(TW_CITY).map(k => new Option(`${k} ${TW_CITY[k]}`, k)));
+        $('#twGen').onclick = () => genList('tw', $('#twOut'), +$('#twN').value, () => twIdGen({ kind: $('#twKind').value, gender: $('#twSex').value, city: $('#twCity').value }, rnd));
+        $('#ubnGen').onclick = () => genList('ubn', $('#ubnOut'), +$('#ubnN').value, () => ubnGen({ mode: $('#ubnMode').value }, rnd));
+        $('#cardGen').onclick = () => genList('card', $('#cardOut'), +$('#cardN').value, () => { const d = cardGen({ network: $('#cardNet').value, prefix: $('#cardPre').value, length: $('#cardLen').value }, rnd); return { text: fmtCard(d), raw: d }; });
+        for (const k of ['tw', 'ubn', 'card']) $('#' + k + 'Copy').onclick = (e) => copyWithFeedback(e.target, outs[k].map(t => t.raw ?? t).join('\n'));
+        $('#twIn').oninput = vTw; $('#ubnIn').oninput = vUbn; $('#cardIn').oninput = vCard; $('#phoneIn').oninput = vPhone;
+        $('#cardNet').onchange = () => { const d = CARD_NETS[$('#cardNet').value]; $('#cardPre').placeholder = d ? `預設 ${d.prefix}` : '請輸入前綴'; $('#cardLen').placeholder = d ? `預設 ${d.len}` : '預設 16'; };
+        $('#cardNet').onchange();
+        $('#tabs').onclick = (e) => {
+            const b = e.target.closest('button[data-t]'); if (!b) return;
+            document.querySelectorAll('#tabs button').forEach(x => { x.setAttribute('aria-pressed', x === b); $('#p-' + x.dataset.t).hidden = x !== b; });
+        };
+    </script>
+</body>
+
+</html>

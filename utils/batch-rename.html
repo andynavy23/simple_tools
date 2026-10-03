@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="批次重新命名：貼上檔名清單，用規則預覽新檔名、偵測衝突，並產生 PowerShell / CMD / bash 指令與 CSV 對照表。">
+    <meta property="og:title" content="批次重新命名" />
+    <meta property="og:description" content="貼檔名、設規則、預覽「舊名 → 新名」，輸出可直接執行的改名指令。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/batch-rename.html" />
+    <title>批次重新命名</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        label.f {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            margin: 8px 0 4px;
+        }
+
+        .chk {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 44px;
+            padding-right: 8px;
+        }
+
+        .chk input {
+            width: 20px;
+            height: 20px;
+        }
+
+        #names {
+            min-height: 120px;
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: 16px;
+        }
+
+        .rule {
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin-bottom: 10px;
+        }
+
+        .rule .hd {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+
+        .rule .hd b {
+            flex: 1;
+        }
+
+        .rule .hd button {
+            padding: 7px 12px;
+            min-width: 44px;
+        }
+
+        .rule .fs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0 12px;
+        }
+
+        .rule input:where([type=text], [type=number], [type=date]),
+        .rule select {
+            width: 100%;
+        }
+
+        .adds {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .err {
+            color: var(--bad);
+            font-size: 14px;
+            margin: 4px 0 0;
+        }
+
+        .pv {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--fill);
+            overflow-wrap: anywhere;
+        }
+
+        .pv:last-child {
+            border-bottom: 0;
+        }
+
+        .pv .o {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .pv .n {
+            font-weight: 600;
+        }
+
+        .pv.same .n {
+            color: var(--muted);
+            font-weight: 400;
+        }
+
+        .pv .p {
+            color: var(--bad);
+            font-size: 13px;
+        }
+
+        #out {
+            min-height: 140px;
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: 14px;
+            white-space: pre;
+        }
+
+        #sum.bad {
+            color: var(--bad);
+        }
+
+        #sum.good {
+            color: var(--ok);
+        }
+
+        .fmts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 8px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>批次重新命名</h1>
+        <p class="sub">貼檔名、設規則、預覽新名稱，再複製改名指令。只讀檔名，不讀內容、不上傳，也不會存任何資料。</p>
+
+        <div class="card">
+            <h2>1. 檔名清單</h2>
+            <label class="f" for="names">一行一個檔名（可貼上資料夾 <kbd>dir /b</kbd> 或 <kbd>ls</kbd> 的結果）</label>
+            <textarea id="names" spellcheck="false" autocapitalize="off" placeholder="IMG 2.JPG&#10;IMG 10.JPG&#10;IMG 1.JPG"></textarea>
+            <div class="row">
+                <input type="file" id="pick" multiple hidden><button class="sm" id="pickBtn" type="button">選擇檔案（只取檔名）</button>
+                <button class="sm" id="sample" type="button">填入範例</button>
+                <button class="sm" id="clearNames" type="button">清空</button>
+            </div>
+            <label class="chk"><input type="checkbox" id="sort"> 先依自然排序重排（2 排在 10 前面）</label>
+            <p class="note" id="count"></p>
+        </div>
+
+        <div class="card">
+            <h2>2. 規則（由上往下依序套用）</h2>
+            <div id="rules"></div>
+            <div class="adds" id="adds"></div>
+            <p class="note">規則都只改「主檔名」，副檔名不動；要改副檔名請加「副檔名」規則。</p>
+        </div>
+
+        <div class="card">
+            <h2>3. 預覽 <span class="muted" id="sum"></span></h2>
+            <div id="preview"></div>
+        </div>
+
+        <div class="card">
+            <h2>4. 輸出</h2>
+            <label class="f" for="dir">檔案所在資料夾（選填；留空代表在該資料夾內執行）</label>
+            <input id="dir" type="text" style="width:100%" spellcheck="false" autocapitalize="off" placeholder="例如 C:\Users\me\Pictures 或 /home/me/pics">
+            <div class="fmts" id="fmts">
+                <button class="sm" data-k="ps" aria-pressed="true">PowerShell</button>
+                <button class="sm" data-k="cmd" aria-pressed="false">CMD</button>
+                <button class="sm" data-k="bash" aria-pressed="false">macOS / Linux</button>
+                <button class="sm" data-k="csv" aria-pressed="false">CSV 對照表</button>
+            </div>
+            <textarea id="out" readonly spellcheck="false" aria-label="輸出內容"></textarea>
+            <div class="row" style="margin-top:8px"><button class="primary" id="copy">複製</button><span class="note" id="outNote" style="margin:0"></span></div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>幫你一次改很多檔名。你貼上檔名清單、設幾條規則，工具顯示「舊名 → 新名」，確認沒問題再複製<b>改名指令</b>（PowerShell、CMD、macOS / Linux）或 CSV 對照表，到資料夾裡執行。工具本身不會動到你的檔案。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>相機或手機照片 <kbd>IMG_xxxx</kbd> 要改成有意義的名稱並加編號。</li>
+        <li>下載的檔案有一堆空白、括號、「 - 複製」要清掉。</li>
+        <li>整批副檔名大小寫不一致（.JPG / .jpg）。</li>
+        <li>檔名要加上日期，方便排序歸檔。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>在「檔名清單」貼上檔名，一行一個；或按「選擇檔案」多選（只會取檔名，不讀內容）。</li>
+        <li>需要時勾選「先依自然排序重排」，編號就會照 1、2、10 的順序給。</li>
+        <li>按規則按鈕新增：加前綴 / 後綴、取代（可用正規表示式、忽略大小寫）、移除字元、大小寫、編號、日期、副檔名。可用 ↑ ↓ 調整順序、× 刪除。</li>
+        <li>看「預覽」；有紅字就是衝突（名稱重複、非法字元、保留字、結尾空白或點、超過 255 字、改名順序會互相覆蓋），要先排除，否則無法輸出。</li>
+        <li>選 PowerShell / CMD / macOS・Linux / CSV，按「複製」，到檔案所在資料夾貼上執行。在別的位置執行時，請填「檔案所在資料夾」。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">清單：IMG 2.JPG、IMG 10.JPG、IMG 1.JPG
+        勾「自然排序」，規則：取代 「IMG 」→「旅行」；副檔名 轉小寫
+        → IMG 1.JPG → 旅行1.jpg
+        → IMG 2.JPG → 旅行2.jpg
+        → IMG 10.JPG → 旅行10.jpg</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>全部在你的瀏覽器計算，只讀檔名，不上傳；本頁不會把任何東西存在瀏覽器裡，重新整理就清空。</li>
+        <li>PowerShell 用單引號並以 <kbd>-LiteralPath</kbd>，中文、空白、<kbd>$</kbd>、反引號、<kbd>[ ]</kbd> 都安全；Windows 的 PowerShell 5.1 若存成 .ps1 請用 UTF-8 含 BOM，直接貼到視窗則沒問題。</li>
+        <li>CMD 指令請存成 .bat 執行（<kbd>%</kbd> 已轉成 <kbd>%%</kbd>）；macOS / Linux 的 <kbd>mv -n</kbd> 不會覆蓋已存在的檔案。</li>
+        <li>長度上限以 255 個字元計；Linux 的檔案系統實際以位元組計，中文一字約 3 位元組，超長中文檔名在 Linux 可能仍失敗。</li>
+        <li>正規表示式用 JavaScript 語法，取代欄可用 <kbd>$1</kbd> 代入群組。清單最多 1000 筆。</li>
+        <li>大小寫不同視為同名（Windows、macOS 預設不分大小寫）。執行前建議先備份或在副本上試。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { copyWithFeedback, csvStringify } = Util;
+
+        // --- pure ---
+        const WIN_ILLEGAL = /[\\/:*?"<>|\u0000-\u001f]/;
+        const WIN_RESERVED = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
+        const MAX_NAME = 255;
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+        // 自然排序：數字片段依數值比較（2 < 10），不分大小寫；相同時用碼位排，結果穩定
+        const naturalCompare = (a, b) => collator.compare(a, b) || (a < b ? -1 : a > b ? 1 : 0);
+
+        // 文字 → 檔名清單：一行一個，略過空行；整行被雙引號包住（檔案總管「複製為路徑」）就去掉引號
+        function parseNameList(text) {
+            return String(text).split(/\r?\n/).filter(s => s.trim()).map(s => { const t = s.trim(); return /^".*"$/.test(t) && t.length > 1 ? t.slice(1, -1) : s; });
+        }
+        // 主檔名 / 副檔名（含點）；開頭的點（.gitignore）與結尾的點不算副檔名
+        function splitExt(name) {
+            const i = name.lastIndexOf('.');
+            return i <= 0 || i === name.length - 1 ? { base: name, ext: '' } : { base: name.slice(0, i), ext: name.slice(i) };
+        }
+
+        const RULE_DEFAULTS = {
+            prefix: { text: '' }, suffix: { text: '' },
+            replace: { find: '', to: '', regex: false, icase: false },
+            remove: { chars: '' },
+            case: { mode: 'lower' },
+            number: { start: 1, step: 1, digits: 3, pos: 'after', sep: '_' },
+            date: { date: '', fmt: 'YYYYMMDD', pos: 'before', sep: '_' },
+            ext: { mode: 'lower', value: '' },
+        };
+        const newRule = (type) => ({ type, ...RULE_DEFAULTS[type] });
+        function moveRule(rules, i, d) {
+            const j = i + d, a = [...rules];
+            if (i < 0 || i >= a.length || j < 0 || j >= a.length) return a;
+            [a[i], a[j]] = [a[j], a[i]];
+            return a;
+        }
+
+        const toInt = (v, d, min, max) => { const n = Math.trunc(Number(v)); return Number.isFinite(n) && String(v).trim() !== '' ? Math.min(max, Math.max(min, n)) : d; };
+        const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        function validYmd(s) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+            if (!m) return false;
+            const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+            return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3];
+        }
+        const joinSep = (a, b, sep) => [a, b].filter(Boolean).join(sep);
+        const titleCase = (s) => s.toLowerCase().replace(/(^|[^A-Za-z0-9'])([a-z])/g, (m, a, b) => a + b.toUpperCase());
+
+        // 對一個檔名（已拆成 {base, ext}）套用一條規則；i 為它在清單中的位置（編號用）。規則不正確時丟出 Error
+        function applyRule(r, p, i, today) {
+            let { base, ext } = p;
+            switch (r.type) {
+                case 'prefix': base = String(r.text ?? '') + base; break;
+                case 'suffix': base += String(r.text ?? ''); break;
+                case 'replace': {
+                    const find = String(r.find ?? ''), to = String(r.to ?? '');
+                    if (!find) break;
+                    if (r.regex) {
+                        let re;
+                        try { re = new RegExp(find, r.icase ? 'gi' : 'g'); } catch (e) { throw new Error('正規表示式不正確：' + e.message); }
+                        base = base.replace(re, to);
+                    } else base = base.replace(new RegExp(escRe(find), r.icase ? 'gi' : 'g'), () => to);
+                    break;
+                }
+                case 'remove': { const set = new Set([...String(r.chars ?? '')]); base = [...base].filter(c => !set.has(c)).join(''); break; }
+                case 'case': base = r.mode === 'upper' ? base.toUpperCase() : r.mode === 'title' ? titleCase(base) : base.toLowerCase(); break;
+                case 'number': {
+                    const n = toInt(r.start, 1, 0, 1e9) + i * toInt(r.step, 1, 0, 1e6);
+                    const s = String(n).padStart(toInt(r.digits, 0, 0, 12), '0'), sep = String(r.sep ?? '');
+                    base = r.pos === 'before' ? joinSep(s, base, sep) : joinSep(base, s, sep);
+                    break;
+                }
+                case 'date': {
+                    const ymd = r.date ? String(r.date) : today;
+                    if (!validYmd(ymd)) throw new Error('日期格式不對（要 YYYY-MM-DD 且是真的日期）');
+                    const s = r.fmt === 'YYYY-MM-DD' ? ymd : ymd.replace(/-/g, ''), sep = String(r.sep ?? '');
+                    base = r.pos === 'after' ? joinSep(base, s, sep) : joinSep(s, base, sep);
+                    break;
+                }
+                case 'ext': {
+                    if (r.mode === 'lower') ext = ext.toLowerCase();
+                    else if (r.mode === 'upper') ext = ext.toUpperCase();
+                    else if (r.mode === 'remove') ext = '';
+                    else if (r.mode === 'set') { const v = String(r.value ?? '').replace(/^\.+/, ''); ext = v ? '.' + v : ''; }
+                    break;
+                }
+                default: throw new Error('未知的規則：' + r.type);
+            }
+            return { base, ext };
+        }
+        // 全部檔名套用全部規則；回傳 { out: 新名稱陣列, errors: [{index: 規則序號, message}] }（出錯的規則視為不改）
+        function applyRules(names, rules, today) {
+            const errors = [];
+            const out = names.map((n, i) => {
+                let p = splitExt(n);
+                rules.forEach((r, ri) => {
+                    try { p = applyRule(r, p, i, today); } catch (e) { if (!errors.some(x => x.index === ri)) errors.push({ index: ri, message: e.message }); }
+                });
+                return p.base + p.ext;
+            });
+            return { out, errors };
+        }
+
+        // Windows 檔名問題代碼：empty 空白、illegal 非法字元、trail 結尾空白或點、reserved 保留字、long 超過 255
+        function checkName(n) {
+            const c = [];
+            if (!n || !n.trim()) { c.push('empty'); return c; }
+            if (WIN_ILLEGAL.test(n)) c.push('illegal');
+            if (/[ .]$/.test(n)) c.push('trail');
+            if (WIN_RESERVED.test(n.split('.')[0].replace(/ +$/, ''))) c.push('reserved');
+            if (n.length > MAX_NAME) c.push('long');
+            return c;
+        }
+        // 規劃：回傳 { rows: [{old, new, changed, problems[]}], errors, changed, conflicts, blocked }
+        // 額外代碼：dup 新名稱重複（不分大小寫）、chain 新名稱等於另一個「也要改名」檔案的舊名（執行順序會覆蓋）、dupOld 清單內舊名重複、path 舊名含路徑符號
+        function planRename(names, rules, { sort = false, today = '' } = {}) {
+            const list = sort ? [...names].sort(naturalCompare) : [...names];
+            const { out, errors } = applyRules(list, rules, today);
+            const lc = (s) => s.toLowerCase();
+            const rows = list.map((o, i) => ({ old: o, new: out[i], changed: o !== out[i], problems: [] }));
+            const cnt = (f) => rows.reduce((m, r) => m.set(lc(f(r)), (m.get(lc(f(r))) || 0) + 1), new Map());
+            const newCnt = cnt(r => r.new), oldCnt = cnt(r => r.old);
+            const groupChanged = new Set(rows.filter(r => r.changed).map(r => lc(r.new)));
+            const changedOld = new Map();
+            rows.forEach((r, i) => { if (r.changed) changedOld.set(lc(r.old), [...(changedOld.get(lc(r.old)) || []), i]); });
+            rows.forEach((r, i) => {
+                if (/[\\/]/.test(r.old)) r.problems.push('path');
+                if (oldCnt.get(lc(r.old)) > 1) r.problems.push('dupOld');
+                if (!r.changed) return;
+                r.problems.push(...checkName(r.new));
+                if (newCnt.get(lc(r.new)) > 1 && groupChanged.has(lc(r.new))) r.problems.push('dup');
+                if ((changedOld.get(lc(r.new)) || []).some(j => j !== i)) r.problems.push('chain');
+            });
+            const changed = rows.filter(r => r.changed).length, conflicts = rows.filter(r => r.problems.length).length;
+            return { rows, errors, changed, conflicts, blocked: errors.length > 0 || conflicts > 0 };
+        }
+
+        // 三種 shell 的跳脫。PowerShell：單引號字串內只有單引號要加倍（含 Unicode 彎引號，PowerShell 也視為單引號）；
+        // bash：單引號字串內 ' → '\''；CMD：雙引號包住，% → %%（.bat 內）
+        const psQuote = (s) => "'" + String(s).replace(/['\u2018\u2019\u201A\u201B]/g, m => m + m) + "'";
+        const bashQuote = (s) => "'" + String(s).replace(/'/g, "'\\''") + "'";
+        const cmdQuote = (s) => '"' + String(s).replace(/%/g, '%%') + '"';
+        const joinDir = (dir, name, sep) => { const d = String(dir || '').trim().replace(/^"|"$/g, ''); return d ? d.replace(/[\\/]+$/, '') + sep + name : name; };
+        // 只輸出「有改名」的列。kind：ps / cmd / bash / csv
+        function genScript(kind, rows, dir = '') {
+            const ch = rows.filter(r => r.changed);
+            if (kind === 'ps') return ch.map(r => `Rename-Item -LiteralPath ${psQuote(joinDir(dir, r.old, '\\'))} -NewName ${psQuote(r.new)}`).join('\n');
+            if (kind === 'cmd') return ['@echo off', 'chcp 65001 >nul', ...ch.map(r => `ren ${cmdQuote(joinDir(dir, r.old, '\\'))} ${cmdQuote(r.new)}`)].join('\r\n');
+            if (kind === 'bash') return ch.map(r => `mv -n -- ${bashQuote(joinDir(dir, r.old, '/'))} ${bashQuote(joinDir(dir, r.new, '/'))}`).join('\n');
+            if (kind === 'csv') return csvStringify(['舊名稱', '新名稱'], ch.map(r => [r.old, r.new]));
+            return '';
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const PROB = { empty: '新名稱是空的', illegal: '含 Windows 不能用的字元 \\ / : * ? " < > |', trail: '結尾不能是空白或點', reserved: 'Windows 保留字（CON、PRN、AUX、NUL、COM1–9、LPT1–9）', long: '超過 255 字', dup: '新名稱與其他檔案重複', chain: '新名稱等於另一個要改名檔案的舊名（執行順序會互相覆蓋）', dupOld: '清單中有重複的舊檔名', path: '舊檔名含 / 或 \\，請只貼檔名' };
+        const RT = {
+            prefix: { name: '加前綴', f: [['text', '前綴', 'text']] },
+            suffix: { name: '加後綴（副檔名之前）', f: [['text', '後綴', 'text']] },
+            replace: { name: '取代', f: [['find', '尋找', 'text'], ['to', '取代為', 'text'], ['regex', '正規表示式', 'check'], ['icase', '忽略大小寫', 'check']] },
+            remove: { name: '移除字元', f: [['chars', '要移除的字元（每個字元都會被移除）', 'text']] },
+            case: { name: '大小寫', f: [['mode', '轉換', 'select', [['lower', '全小寫'], ['upper', '全大寫'], ['title', '英文單字首字大寫']]]] },
+            number: { name: '編號', f: [['start', '起始值', 'number'], ['step', '步進', 'number'], ['digits', '位數（補零）', 'number'], ['pos', '位置', 'select', [['after', '加在檔名後'], ['before', '加在檔名前']]], ['sep', '分隔符號', 'text']] },
+            date: { name: '日期', f: [['date', '日期（留空 = 今天）', 'date'], ['fmt', '格式', 'select', [['YYYYMMDD', '20250131'], ['YYYY-MM-DD', '2025-01-31']]], ['pos', '位置', 'select', [['before', '加在檔名前'], ['after', '加在檔名後']]], ['sep', '分隔符號', 'text']] },
+            ext: { name: '副檔名', f: [['mode', '處理', 'select', [['lower', '轉小寫'], ['upper', '轉大寫'], ['set', '改成指定副檔名'], ['remove', '移除副檔名']]], ['value', '指定副檔名（不含點）', 'text']] },
+        };
+        const MAX_NAMES = 1000, MAX_RULES = 30;
+        let rules = [], fmt = 'ps', res = null;
+        const today = () => new Date().toLocaleDateString('sv');
+
+        function mk(tag, props, ...kids) { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; }
+
+        function renderRules() {
+            const box = $('#rules'); box.replaceChildren();
+            rules.forEach((r, i) => {
+                const def = RT[r.type];
+                const hd = mk('div', { className: 'hd' }, mk('b', { textContent: `${i + 1}. ${def.name}` }),
+                    mk('button', { textContent: '↑', title: '上移', disabled: i === 0, onclick: () => { rules = moveRule(rules, i, -1); renderRules(); update(); } }),
+                    mk('button', { textContent: '↓', title: '下移', disabled: i === rules.length - 1, onclick: () => { rules = moveRule(rules, i, 1); renderRules(); update(); } }),
+                    mk('button', { textContent: '×', title: '刪除', onclick: () => { rules.splice(i, 1); renderRules(); update(); } }));
+                for (const b of hd.querySelectorAll('button')) b.setAttribute('aria-label', b.title);
+                const fs = mk('div', { className: 'fs' });
+                for (const [k, label, kind, opts] of def.f) {
+                    const id = `r${i}_${k}`;
+                    let inp;
+                    if (kind === 'check') {
+                        inp = mk('input', { type: 'checkbox', id, checked: !!r[k], onchange: (e) => { r[k] = e.target.checked; update(); } });
+                        fs.append(mk('label', { className: 'chk' }, inp, label));
+                        continue;
+                    }
+                    if (kind === 'select') {
+                        inp = mk('select', { id, onchange: (e) => { r[k] = e.target.value; update(); } }, ...opts.map(([v, t]) => new Option(t, v)));
+                        inp.value = r[k];
+                    } else inp = mk('input', { type: kind, id, value: r[k], autocapitalize: 'off', spellcheck: false, oninput: (e) => { r[k] = e.target.value; update(); } });
+                    fs.append(mk('div', {}, mk('label', { className: 'f', htmlFor: id, textContent: label }), inp));
+                }
+                const el = mk('div', { className: 'rule' }, hd, fs);
+                const er = res && res.errors.find(x => x.index === i);
+                if (er) el.append(mk('p', { className: 'err', textContent: er.message }));
+                box.append(el);
+            });
+        }
+
+        function update() {
+            const all = parseNameList($('#names').value);
+            const names = all.slice(0, MAX_NAMES);
+            $('#count').textContent = all.length ? `${names.length} 個檔名${all.length > MAX_NAMES ? `（超過上限 ${MAX_NAMES}，只處理前 ${MAX_NAMES} 個）` : ''}` : '';
+            res = planRename(names, rules, { sort: $('#sort').checked, today: today() });
+            // 規則錯誤訊息：只更新已存在的錯誤列，不重建（避免輸入時失去焦點）
+            document.querySelectorAll('#rules .err').forEach(e => e.remove());
+            res.errors.forEach(er => { const el = $('#rules').children[er.index]; if (el) el.append(mk('p', { className: 'err', textContent: er.message })); });
+            const pv = $('#preview'); pv.replaceChildren();
+            res.rows.forEach(r => {
+                const d = mk('div', { className: 'pv' + (r.changed ? '' : ' same') }, mk('div', { className: 'o', textContent: r.old }), mk('div', { className: 'n', textContent: '→ ' + (r.new || '（空）') }));
+                if (r.problems.length) d.append(mk('div', { className: 'p', textContent: r.problems.map(c => PROB[c]).join('；') }));
+                pv.append(d);
+            });
+            if (!res.rows.length) pv.append(mk('p', { className: 'note', textContent: '貼上檔名後，這裡會顯示「舊名 → 新名」。' }));
+            const s = $('#sum');
+            s.className = res.conflicts || res.errors.length ? 'bad' : res.changed ? 'good' : 'muted';
+            s.textContent = !res.rows.length ? '' : res.errors.length ? '規則有誤' : res.conflicts ? `${res.conflicts} 個檔案有問題` : `${res.changed} 個會改名`;
+            const out = $('#out'), note = $('#outNote');
+            if (res.blocked || !res.changed) {
+                out.value = ''; $('#copy').disabled = true;
+                note.textContent = !res.rows.length ? '' : res.errors.length ? '規則有誤，請先修正才能輸出。' : res.conflicts ? '有衝突，請先排除才能輸出。' : '沒有任何檔名會改變。';
+            } else {
+                out.value = genScript(fmt, res.rows, $('#dir').value); $('#copy').disabled = false;
+                note.textContent = fmt === 'csv' ? '' : `共 ${res.changed} 行指令`;
+            }
+        }
+
+        $('#adds').append(...Object.keys(RT).map(t => mk('button', { className: 'sm', type: 'button', textContent: '＋ ' + RT[t].name.replace(/（.*）/, ''), onclick: () => { if (rules.length >= MAX_RULES) return alert(`規則最多 ${MAX_RULES} 條`); rules.push(newRule(t)); renderRules(); update(); } })));
+        $('#names').oninput = update; $('#sort').onchange = update; $('#dir').oninput = update;
+        $('#pickBtn').onclick = () => $('#pick').click();
+        $('#pick').onchange = (e) => { const f = [...e.target.files].map(x => x.name); if (f.length) { const cur = $('#names').value.replace(/\s+$/, ''); $('#names').value = (cur ? cur + '\n' : '') + f.join('\n'); } e.target.value = ''; update(); };
+        $('#sample').onclick = () => { $('#names').value = 'IMG 2.JPG\nIMG 10.JPG\nIMG 1.JPG\nit\'s a $file (1).txt'; update(); };
+        $('#clearNames').onclick = () => { $('#names').value = ''; update(); };
+        $('#fmts').onclick = (e) => { const b = e.target.closest('button[data-k]'); if (!b) return; fmt = b.dataset.k; document.querySelectorAll('#fmts button').forEach(x => x.setAttribute('aria-pressed', x === b)); update(); };
+        $('#copy').onclick = () => copyWithFeedback($('#copy'), $('#out').value, () => $('#out').select());
+        update();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="食譜份量縮放：貼上食材清單，輸入原份數與目標份數（或倍率），自動縮放並合理進位，支援分數、帶分數、範圍，可轉公制或杯匙，可儲存食譜。">
+    <meta property="og:title" content="食譜份量縮放" />
+    <meta property="og:description" content="貼上食材、輸入份數，一鍵縮放並轉換單位。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/recipe-scaler.html" />
+    <meta name="st-keys" content="recipe_saved">
+    <title>食譜份量縮放</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>input,
+        .row>select {
+            flex: 1;
+            min-width: 110px;
+        }
+
+        .seg {
+            display: flex;
+            gap: 6px;
+            margin: 6px 0;
+        }
+
+        .seg button {
+            flex: 1;
+        }
+
+        .out .ln {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--fill);
+            font-size: 17px;
+            white-space: pre-wrap;
+        }
+
+        .out .ln:last-child {
+            border-bottom: 0;
+        }
+
+        .out .ln.keep {
+            color: var(--muted);
+        }
+
+        .out .tag {
+            display: inline-block;
+            font-size: 12px;
+            color: var(--bad);
+            border: 1px solid var(--bad);
+            border-radius: 6px;
+            padding: 0 6px;
+            margin-left: 6px;
+            white-space: nowrap;
+        }
+
+        .out .nt {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .small {
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .li .grow {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .li .acts {
+            display: flex;
+            gap: 6px;
+        }
+
+        textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>食譜份量縮放</h1>
+        <p class="sub">貼上食材清單，輸入份數，自動縮放並整理成好量的數字。全部在本機計算。</p>
+
+        <div class="card">
+            <label for="src" style="margin-top:0">食材（一行一項）</label>
+            <textarea id="src" placeholder="麵粉 250g&#10;牛奶 1 杯&#10;糖 1/2 湯匙&#10;雞蛋 2 顆&#10;奶油 1 1/2 湯匙&#10;香草精 2-3 滴"></textarea>
+            <div class="small" id="count"></div>
+            <div class="seg" role="group" aria-label="縮放方式">
+                <button id="byServ" aria-pressed="true">用份數</button><button id="byRatio" aria-pressed="false">直接輸入倍率</button>
+            </div>
+            <div class="fgrid" id="servBox">
+                <div><label for="orig">原份數</label><input type="number" id="orig" value="2" min="0" step="any" inputmode="decimal"></div>
+                <div><label for="target">目標份數</label><input type="number" id="target" value="3" min="0" step="any" inputmode="decimal"></div>
+            </div>
+            <div id="ratioBox" hidden><label for="ratio">倍率</label><input type="number" id="ratio" value="1.5" min="0" step="any" inputmode="decimal" style="width:100%"></div>
+            <label for="mode">單位</label>
+            <select id="mode" style="width:100%"><option value="keep">保持原單位</option><option value="metric">公制（g / kg / ml / L）</option><option value="common">常用（杯 / 湯匙 / 茶匙）</option></select>
+        </div>
+
+        <div class="card out">
+            <h2>縮放結果　<span class="small" id="factorTxt"></span></h2>
+            <div id="out"><p class="muted">輸入食材後，結果會顯示在這裡。</p></div>
+            <div id="hint" class="small" style="margin-top:8px"></div>
+            <div class="row" style="margin-top:10px"><button class="primary" id="copy">複製結果</button></div>
+        </div>
+
+        <div class="card">
+            <h2>我的食譜</h2>
+            <div class="row"><input type="text" id="rName" placeholder="食譜名稱" maxlength="30" aria-label="食譜名稱"><button id="save">儲存這份食譜</button></div>
+            <div id="saveMsg" class="small" style="min-height:20px;margin-top:6px"></div>
+            <div id="list"></div>
+            <div class="row" style="margin-top:8px"><span class="small" id="usage" style="flex:1"></span><button class="sm" id="clearAll">清除全部食譜</button></div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>貼上食譜的食材清單，輸入原本幾人份、想做幾人份（或直接輸入倍率），自動把每一項的數量縮放，並進位成好量的數字。全部在本機計算。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>網路上的食譜是 2 人份，家裡要煮 5 人份。</li>
+        <li>只想做半份試做看看。</li>
+        <li>想把「杯、湯匙」換成公克 / 毫升，或把毫升換成杯匙。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>在「食材」欄一行寫一項，例如「麵粉 250g」「牛奶 1 杯」「糖 1/2 湯匙」「雞蛋 2 顆」。數量可以是整數、小數、分數 1/2、帶分數 1 1/2、範圍 2-3；數量放在名稱前或後都可以。</li>
+        <li>輸入「原份數」與「目標份數」；或按「直接輸入倍率」改填倍率。</li>
+        <li>「單位」可選保持原單位、公制（g / kg / ml / L）或常用（杯 / 湯匙 / 茶匙）。</li>
+        <li>結果會即時顯示，按「複製結果」帶走。</li>
+        <li>想留著下次用：填名稱按「儲存這份食譜」（存的是原始食材）；之後可「載入」或「刪除」。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">原 2 份 → 目標 3 份（× 1.5）：<br>麵粉 250g → 麵粉 375g<br>牛奶 1 杯 → 牛奶 1 1/2 杯<br>糖 1/2 湯匙 → 糖 3/4 湯匙<br>雞蛋 2 顆 → 雞蛋 3 顆</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>支援的單位：g kg oz lb ml L cup tbsp tsp、公克 公斤 毫升 公升 杯 湯匙（大匙、匙）茶匙（小匙）、顆 個 片 隻 條 粒 根 塊 瓣 張 滴 罐 把 包。1 杯 = 250 ml、1 湯匙 = 15 ml、1 茶匙 = 5 ml。</li>
+        <li>杯匙會進位到常見的分數（1/8、1/4、1/3、1/2、2/3、3/4），例如 0.33 杯 → 1/3 杯；公克與毫升會依大小進位。</li>
+        <li>顆、個、片等計數單位不會拆成小數：接近整數就取整數（3.97 顆 → 4 顆），不然會進位並在該行下方提示實際數字，請自行取捨。</li>
+        <li>沒有數量（如「鹽 適量」）、溫度與時間（180°C、烤 25 分鐘）的行會原樣保留並標示「無法解析・原樣保留」。</li>
+        <li>重量與體積不會互相換算（不知道食材密度），「常用」只轉換體積單位。</li>
+        <li>食譜最多存 100 份，每份食材 ≤ 3000 字；超過會提示並拒絕儲存。每份可單獨刪除，也可「清除全部食譜」（無法復原）。載入時壞掉的資料會自動略過。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        const RS = { MAX: 100, TEXT_MAX: 3000, NAME_MAX: 30, LINES_MAX: 300 };
+        // 單位表：t = m 重量(g) / v 體積(ml) / c 計數；f = 換成 g 或 ml 的倍數。杯 = 250 ml、湯匙 = 15 ml、茶匙 = 5 ml（與「單位換算」的烹飪區一致）
+        const RU = {
+            g: { t: 'm', f: 1, n: ['g', 'gram', 'grams', '公克', '克'] },
+            kg: { t: 'm', f: 1000, n: ['kg', '公斤', '千克'] },
+            oz: { t: 'm', f: 28.349523125, n: ['oz', '盎司'] },
+            lb: { t: 'm', f: 453.59237, n: ['lb', 'lbs', 'pound', 'pounds', '磅'] },
+            ml: { t: 'v', f: 1, n: ['ml', 'cc', '毫升'] },
+            l: { t: 'v', f: 1000, n: ['l', 'liter', 'litre', '公升', '升'] },
+            cup: { t: 'v', f: 250, n: ['cup', 'cups', '杯'] },
+            tbsp: { t: 'v', f: 15, n: ['tbsp', 'tbs', 'tablespoon', 'tablespoons', '湯匙', '大匙', '大湯匙', '匙'] },
+            tsp: { t: 'v', f: 5, n: ['tsp', 'teaspoon', 'teaspoons', '茶匙', '小匙'] },
+            pc: { t: 'c', f: 1, n: ['顆', '個', '片', '隻', '條', '粒', '根', '塊', '瓣', '張', '滴', '罐', '把', '包', 'pcs', 'pc', 'piece', 'pieces', 'slice', 'slices', 'clove', 'cloves'] },
+        };
+        const UNIT_OF = {}; for (const k in RU) for (const n of RU[k].n) UNIT_OF[n.toLowerCase()] = k;
+        const esc$ = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const UNIT_RE = Object.keys(UNIT_OF).sort((a, b) => b.length - a.length).map(esc$).join('|');
+        const VULGAR = { '½': 0.5, '¼': 0.25, '¾': 0.75, '⅓': 1 / 3, '⅔': 2 / 3, '⅛': 0.125 };
+        const NUM_SRC = '(?:\\d+\\s+\\d+\\/\\d+|\\d+\\/\\d+|\\d+[½¼¾⅓⅔⅛]|\\d+(?:\\.\\d+)?|\\.\\d+|[½¼¾⅓⅔⅛])';
+        const QTY_RE = () => new RegExp(`(${NUM_SRC})(?:\\s*[-~～〜–—到至]\\s*(${NUM_SRC}))?(?:(\\s*)(${UNIT_RE})(?![a-zA-Z]))?`, 'gi');
+
+        // 數字字串 → 數值：整數、小數、1/2、1 1/2、½、1½；無法解析回傳 NaN
+        function parseNum(s) {
+            s = String(s).trim();
+            let m;
+            if ((m = /^(\d+)\s+(\d+)\/(\d+)$/.exec(s))) return +m[3] ? +m[1] + +m[2] / +m[3] : NaN;
+            if ((m = /^(\d+)\/(\d+)$/.exec(s))) return +m[2] ? +m[1] / +m[2] : NaN;
+            if ((m = /^(\d*)([½¼¾⅓⅔⅛])$/.exec(s))) return (m[1] ? +m[1] : 0) + VULGAR[m[2]];
+            return /^(\d+(\.\d+)?|\.\d+)$/.test(s) ? parseFloat(s) : NaN;
+        }
+
+        // 一行食材 → { ok, pre, lo, hi, gap, unit, unitText, post }；原行 = pre + 數量 + gap + unitText + post，縮放時只換數量與單位
+        // 找不到數量、或數字其實是溫度 / 時間（180°C、10 分鐘）時 ok = false，呼叫端原樣保留
+        function parseLine(line) {
+            const raw = String(line);
+            const mk = /^\s*(?:[-*•・●]|\d+[.)、）])\s+/.exec(raw), mark = mk ? mk[0] : '', body = raw.slice(mark.length);
+            let pick = null, first = null, m; const re = QTY_RE();
+            while ((m = re.exec(body))) { if (m[0] === '') { re.lastIndex++; continue; } first = first || m; if (m[4]) { pick = m; break; } }
+            pick = pick || first;
+            if (!pick) return { ok: false, raw };
+            const lo = parseNum(pick[1]), hi = pick[2] ? parseNum(pick[2]) : null;
+            if (!(lo >= 0) || (hi !== null && !(hi >= 0))) return { ok: false, raw };
+            const unitText = pick[4] || '', end = pick.index + pick[0].length, post = body.slice(end);
+            if (!unitText && /^\s*(?:[°℃℉度]|分鐘|分|秒|小時|min|mins|minutes?|hours?|hr|%|％|cm|公分|吋|人份|份)/i.test(post)) return { ok: false, raw };
+            if (!unitText && /\d\s*$/.test(body.slice(0, pick.index))) return { ok: false, raw };
+            return { ok: true, raw, pre: mark + body.slice(0, pick.index), lo, hi, gap: pick[3] || '', unit: unitText ? UNIT_OF[unitText.toLowerCase()] : '', unitText, post };
+        }
+
+        // 顯示用數字
+        const plain = (x, d = 2) => String(+x.toFixed(d));
+        const FRAC = [[0, ''], [1 / 8, '1/8'], [1 / 4, '1/4'], [1 / 3, '1/3'], [3 / 8, '3/8'], [1 / 2, '1/2'], [5 / 8, '5/8'], [2 / 3, '2/3'], [3 / 4, '3/4'], [7 / 8, '7/8'], [1, '']];
+        // 杯 / 匙：進位到最近的常見分數（1/8 1/4 1/3 1/2 2/3 3/4…）；太小（< 1/16）用小數
+        function fracStr(x) {
+            if (x >= 10) return plain(Math.round(x * 2) / 2, 1);
+            let w = Math.floor(x), best = FRAC[0];
+            for (const c of FRAC) if (Math.abs(x - w - c[0]) < Math.abs(x - w - best[0])) best = c;
+            if (best[0] === 1) { w++; best = FRAC[0]; }
+            if (!w && !best[1]) return plain(x, 2);
+            return (w ? String(w) : '') + (w && best[1] ? ' ' : '') + best[1];
+        }
+        // 公克 / 毫升：數字越大進位越粗（< 2 → 0.1；< 20 → 0.5；< 100 → 1；其餘 → 5）
+        function niceStr(x) {
+            const st = x < 2 ? 0.1 : x < 20 ? 0.5 : x < 100 ? 1 : 5;
+            return plain(Math.round(x / st) * st, 1);
+        }
+        // 計數單位（顆 個 片…）：接近整數就取整數；接近 1/2 保留 1/2；否則進位成整數並提示
+        function countStr(x) {
+            const r = Math.round(x);
+            if (Math.abs(x - r) <= 0.05 && r > 0) return { s: String(r), note: '' };
+            if (r === 0 && x < 0.05) return { s: '0', note: '' };
+            const h = Math.round(x * 2) / 2;
+            if (Math.abs(x - h) <= 0.05 && h !== r) return { s: fracStr(h), note: '含 1/2，計數單位不好拆，請自行取捨' };
+            return { s: String(Math.max(1, r)), note: `實際約 ${plain(x, 2)}，計數單位不拆成小數，已進位為整數` };
+        }
+
+        // 單位標籤
+        const LBL = { g: 'g', kg: 'kg', ml: 'ml', l: 'L', cup: '杯', tbsp: '湯匙', tsp: '茶匙' };
+        const gapFor = (label) => (['g', 'kg', 'ml', 'L'].includes(label) ? '' : ' ');
+
+        // 縮放一行：回傳 { text, note }；mode = keep 保持 / metric 公制 / common 杯匙
+        function scaleLine(p, f, mode = 'keep') {
+            if (!p.ok) return { text: p.raw, note: '' };
+            const vals = p.hi === null ? [p.lo * f] : [p.lo * f, p.hi * f], U = RU[p.unit];
+            let fmt, label = p.unitText, gap = p.gap, notes = [];
+            if (!U) { // 沒有單位：視為計數
+                fmt = (x) => { const c = countStr(x); if (c.note) notes.push(c.note); return c.s; };
+            } else if (U.t === 'c') {
+                fmt = (x) => { const c = countStr(x); if (c.note) notes.push(c.note); return c.s; };
+            } else {
+                let key = p.unit, v = vals;
+                if (mode === 'metric' || (mode === 'common' && U.t === 'v')) { // 先換成 g / ml
+                    v = vals.map(x => x * U.f); key = U.t === 'm' ? 'g' : 'ml';
+                    if (mode === 'common') { // 體積選最適合的杯 / 匙
+                        const big = v[v.length - 1]; key = big >= 60 ? 'cup' : big >= 14 ? 'tbsp' : 'tsp'; v = v.map(x => x / RU[key].f);
+                    } else if (v[v.length - 1] >= 1000) { v = v.map(x => x / 1000); key = key === 'g' ? 'kg' : 'l'; }
+                }
+                if (key !== p.unit || mode === 'metric' || (mode === 'common' && U.t === 'v')) { label = LBL[key] || p.unitText; gap = gapFor(label); }
+                const frac = key === 'cup' || key === 'tbsp' || key === 'tsp';
+                fmt = frac ? fracStr : (key === 'g' || key === 'ml') ? niceStr : (x) => plain(x, x < 10 ? 2 : 1);
+                vals.splice(0, vals.length, ...v);
+            }
+            const qs = vals.map(fmt), q = qs.join(qs.some(x => x.includes(' ')) ? ' – ' : '–');
+            return { text: p.pre + q + (label ? gap + label : '') + p.post, note: notes[0] || '' };
+        }
+
+        // 縮放倍率：份數 target / orig；任一不是正數回傳 null
+        const factorOf = (orig, target) => { orig = Number(orig); target = Number(target); return orig > 0 && target > 0 && Number.isFinite(orig / target) && target / orig <= 1000 ? target / orig : null; };
+
+        // 整份食譜：每行 { raw, text, ok, note }；空行保留為空；超過行數上限的後段不處理
+        function scaleRecipe(text, f, mode) {
+            return String(text).split(/\r?\n/).slice(0, RS.LINES_MAX).map(raw => {
+                if (!raw.trim()) return { raw, text: '', ok: true, note: '', blank: true };
+                const p = parseLine(raw), r = scaleLine(p, f, mode);
+                return { raw, text: r.text, ok: p.ok, note: r.note };
+            });
+        }
+        const recipeText = (rows) => rows.map(r => r.text).join('\n').trim();
+
+        // 食譜清單：載入驗證 / 新增 / 刪除。滿了就拒絕
+        function cleanRecipes(raw) {
+            if (!Array.isArray(raw)) return [];
+            const seen = new Set(), out = [];
+            for (const r of raw) {
+                if (!r || typeof r !== 'object' || typeof r.id !== 'string' || !r.id || seen.has(r.id)) continue;
+                const name = String(r.name ?? '').trim().slice(0, RS.NAME_MAX), text = typeof r.text === 'string' ? r.text.slice(0, RS.TEXT_MAX) : '';
+                if (!name || !text.trim()) continue;
+                seen.add(r.id); out.push({ id: r.id, name, text });
+                if (out.length >= RS.MAX) break;
+            }
+            return out;
+        }
+        function addRecipe(list, name, text) {
+            name = String(name ?? '').trim().slice(0, RS.NAME_MAX); text = String(text ?? '');
+            if (!name) return { list, err: '請輸入食譜名稱' };
+            if (!text.trim()) return { list, err: '食材內容是空的' };
+            if (text.length > RS.TEXT_MAX) return { list, err: `食材太長（${text.length} 字），單份最多 ${RS.TEXT_MAX} 字` };
+            if (list.length >= RS.MAX) return { list, err: `最多儲存 ${RS.MAX} 份，請先刪除不用的` };
+            return { list: [...list, { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, text }] };
+        }
+        const removeRecipe = (list, id) => list.filter(r => r.id !== id);
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let saved = cleanRecipes(Util.store.get('recipe_saved', [])), useRatio = false, rows = [];
+
+        function factor() { return useRatio ? factorOf(1, $('#ratio').value) : factorOf($('#orig').value, $('#target').value); }
+        function render() {
+            const f = factor(), src = $('#src').value, n = src.length;
+            $('#count').textContent = `${n} / ${RS.TEXT_MAX} 字` + (n > RS.TEXT_MAX ? '（超過上限，無法儲存）' : '');
+            $('#count').style.color = n > RS.TEXT_MAX ? 'var(--bad)' : '';
+            if (f === null) { $('#out').innerHTML = '<p class="muted">份數或倍率要是大於 0 的數字。</p>'; $('#factorTxt').textContent = ''; rows = []; $('#hint').textContent = ''; return; }
+            $('#factorTxt').textContent = `× ${plain(f, 3)}`;
+            rows = scaleRecipe(src, f, $('#mode').value);
+            const shown = rows.filter(r => !r.blank).length;
+            $('#out').innerHTML = shown ? rows.map(r => r.blank ? '' : `<div class="ln${r.ok ? '' : ' keep'}">${Util.esc(r.text)}${r.ok ? '' : '<span class="tag">無法解析・原樣保留</span>'}${r.note ? `<span class="nt">${Util.esc(r.note)}</span>` : ''}</div>`).join('') : '<p class="muted">輸入食材後，結果會顯示在這裡。</p>';
+            const bad = rows.filter(r => !r.ok && !r.blank).length;
+            $('#hint').textContent = (bad ? `有 ${bad} 行沒有數量，沒有縮放。` : '') + (rows.some(r => r.note) ? '　計數單位（顆、個、片…）不會拆成小數，請留意標示。' : '');
+        }
+        function renderList() {
+            $('#list').innerHTML = saved.length ? saved.map(r => `<div class="li" data-id="${r.id}"><div class="grow"><b>${Util.esc(r.name)}</b><div class="small">${r.text.split(/\r?\n/).filter(x => x.trim()).length} 項食材</div></div><div class="acts"><button class="sm" data-act="load">載入</button><button class="sm" data-act="del" aria-label="刪除 ${Util.esc(r.name)}">刪除</button></div></div>`).join('') : '<p class="muted">還沒有儲存的食譜。</p>';
+            $('#usage').textContent = `已存 ${saved.length} / ${RS.MAX} 份`;
+        }
+        const msg = (t) => { $('#saveMsg').textContent = t || ''; };
+
+        for (const id of ['#src', '#orig', '#target', '#ratio', '#mode']) { $(id).addEventListener('input', render); $(id).addEventListener('change', render); }
+        const setBy = (r) => { useRatio = r; $('#byServ').setAttribute('aria-pressed', !r); $('#byRatio').setAttribute('aria-pressed', r); $('#servBox').hidden = r; $('#ratioBox').hidden = !r; render(); };
+        $('#byServ').onclick = () => setBy(false); $('#byRatio').onclick = () => setBy(true);
+        $('#copy').onclick = () => { const t = recipeText(rows); if (!t) return; Util.copyWithFeedback($('#copy'), t); };
+        $('#save').onclick = () => {
+            const r = addRecipe(saved, $('#rName').value, $('#src').value);
+            if (r.err) { msg(r.err); return; }
+            saved = r.list; Util.store.set('recipe_saved', saved); $('#rName').value = ''; msg('已儲存（存的是原始食材，不是縮放後的結果）'); renderList();
+        };
+        $('#list').onclick = (e) => {
+            const b = e.target.closest('button[data-act]'); if (!b) return;
+            const id = b.closest('[data-id]').dataset.id, r = saved.find(x => x.id === id); if (!r) return;
+            if (b.dataset.act === 'load') { $('#src').value = r.text; msg(`已載入「${r.name}」`); render(); }
+            else { if (!confirm(`刪除食譜「${r.name}」？無法復原。`)) return; saved = removeRecipe(saved, id); Util.store.set('recipe_saved', saved); msg(''); renderList(); }
+        };
+        $('#clearAll').onclick = () => {
+            if (!saved.length) { msg('沒有儲存的食譜'); return; }
+            if (!confirm(`清除全部 ${saved.length} 份食譜？無法復原。`)) return;
+            saved = []; Util.store.set('recipe_saved', saved); msg(''); renderList();
+        };
+        render(); renderList();
+    </script>
+</body>
+
+</html>
