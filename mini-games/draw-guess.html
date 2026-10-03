@@ -5,14 +5,41 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="連線你畫我猜：2–8 人輪流畫畫或口述，其他人即時猜答案，猜得越快分數越高。房主可選畫畫或口述（你說我猜）模式。">
-    <meta property="og:title" content="連線你畫我猜" />
+    <meta name="description" content="你畫我猜：2–8 人輪流畫畫或口述，其他人即時猜答案，猜得越快分數越高。房主可選畫畫或口述（你說我猜）模式。">
+    <meta property="og:title" content="你畫我猜" />
     <meta property="og:description" content="輪流畫畫或口述、即時猜題的多人連線遊戲。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/draw-guess.html" />
-    <title>連線你畫我猜</title>
+    <title>你畫我猜</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>你畫我猜：一個人畫、其他人猜。可以單人練習畫畫，也能 2–8 人連線，猜得越快分數越高。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>想練習把東西畫得讓人看得懂。</li>
+        <li>聚會時開房間，輪流畫給朋友猜。</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <p><b>單機（單人練習）：</b></p>
+        <ol>
+        <li>選每題秒數，按「單機開始」，會隨機給一個題目。</li>
+        <li>用手指或滑鼠在畫板上畫；可換顏色、細／中／粗、白色橡皮擦（⌫）、「復原」與「清除」。</li>
+        <li>畫完按「畫好了」，或等時間到，會揭曉答案。</li>
+        <li>自評「畫得出來」或「畫不出來」（別人看你的畫猜不猜得出），會自動換下一題並累計紀錄。</li>
+        </ol>
+        <p><b>連線：</b>輸入暱稱按「建立房間」，傳邀請連結給朋友（2–8 人）。房主可選「畫畫」或「口述」模式後按「開始遊戲」，每人輪流畫（說）一次，其他人在右側輸入答案按「猜」，每回合 60 秒。</p>
+        <h3>範例</h3>
+        <div class="eg">題目「蘋果」：畫一個紅色圓形加上葉子，按「畫好了」，看到答案後覺得別人猜得到，就按「畫得出來」。紀錄會顯示「1 題・畫得出來 1」。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>練習紀錄只存在這台裝置的瀏覽器。</li>
+        <li>連線計分：猜對 50–100 分（越快越高），畫的人每有一人猜對得 20 分。</li>
+        <li>手機畫畫時，畫板上不會捲動頁面。</li>
+        </ul>
+    </template>
+
     <script src="../shared/js/util.js"></script>
     <script src="../shared/js/p2p-room.js"></script>
     <style>
@@ -101,6 +128,16 @@
             border-radius: 50%;
             padding: 0;
             border: 3px solid transparent;
+            color: #555;
+        }
+
+        @media (pointer: coarse) {
+            .sw {
+                width: 40px;
+                height: 40px;
+                min-width: 0;
+                min-height: 0;
+            }
         }
 
         .sw[aria-pressed=true] {
@@ -139,10 +176,17 @@
 <body>
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
-        <h1>連線你畫我猜</h1>
-        <p class="sub">房主建立房間，朋友用房號或邀請連結加入（2–8 人）。每個人輪流畫（或口述）一次。</p>
+        <h1>你畫我猜</h1>
+        <p class="sub">可單人練習，也能多人連線。連線：房主建立房間，朋友用房號或邀請連結加入（2–8 人）。每個人輪流畫（或口述）一次。</p>
 
         <div class="card" id="menu">
+            <h2>單人練習</h2>
+            <div class="row">
+                <select id="soloSecs" aria-label="每題秒數"><option value="30">每題 30 秒</option><option value="60" selected>每題 60 秒</option><option value="90">每題 90 秒</option></select>
+                <button class="primary" id="soloBtn">單機開始</button>
+            </div>
+            <p class="note" id="soloStat"></p>
+            <h2 style="margin-top:18px">和朋友連線</h2>
             <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
             <div class="row">
                 <button class="primary" id="hostBtn">建立房間</button>
@@ -179,15 +223,21 @@
                         <button class="sm" data-w="4" aria-pressed="false">細</button>
                         <button class="sm" data-w="10" aria-pressed="true">中</button>
                         <button class="sm" data-w="22" aria-pressed="false">粗</button>
+                        <button class="sm" id="undoBtn" hidden>復原</button>
                         <button class="sm" id="clearBtn">清除</button>
                     </div>
                 </div>
-                <div class="card" style="margin:0">
+                <div class="card" style="margin:0" id="chatCard">
                     <div id="chat" aria-live="polite"></div>
                     <div class="row" style="margin-top:8px"><input id="guess" maxlength="20" placeholder="輸入答案" aria-label="答案"><button class="primary" id="guessBtn">猜</button></div>
                 </div>
             </div>
             <div id="msg" role="status"></div>
+            <div class="row" id="soloBar" style="justify-content:center" hidden>
+                <button class="primary" id="doneBtn">畫好了</button>
+                <button class="primary" id="canBtn" hidden>畫得出來</button>
+                <button id="cantBtn" hidden>畫不出來</button>
+            </div>
             <div class="row" style="justify-content:center;margin-top:12px">
                 <button class="primary" id="again" hidden>再玩一次</button>
                 <button id="leave">離開</button>
@@ -220,6 +270,13 @@
             const list = pool.length ? pool : WORDS;
             return list[rand(list.length)];
         }
+
+        // 螢幕座標 → 畫布座標（畫布以 CSS 縮放，所以要用 getBoundingClientRect 的比例換算；滑鼠與手指共用）
+        const canvasPos = (cx, cy, r, W = 1000, H = 640) => [Math.max(0, Math.min(W, Math.round((cx - r.left) / r.width * W))), Math.max(0, Math.min(H, Math.round((cy - r.top) / r.height * H)))];
+
+        // 單機練習紀錄：{ n 練習題數, can 畫得出來, cant 畫不出來 }
+        const addPractice = (st, ok) => ({ n: (st.n || 0) + 1, can: (st.can || 0) + (ok ? 1 : 0), cant: (st.cant || 0) + (ok ? 0 : 1) });
+        const fmtPractice = (st) => `${st.n || 0} 題・畫得出來 ${st.can || 0}・畫不出來 ${st.cant || 0}` + (st.n ? `（${Math.round(100 * (st.can || 0) / st.n)}%）` : '');
 
         // 筆跡訊息檢查：{ pts: [[x,y],…], color, w, begin }
         function validStroke(m) {
@@ -272,12 +329,13 @@
             });
         }
 
-        const pos = (e) => { const r = cv.getBoundingClientRect(); return [Math.max(0, Math.min(1000, Math.round((e.clientX - r.left) / r.width * 1000))), Math.max(0, Math.min(1000, Math.round((e.clientY - r.top) / r.height * 640)))]; };
-        const iAmDrawer = () => phase === 'draw' && V && V.drawer === my;
+        const pos = (e) => canvasPos(e.clientX, e.clientY, cv.getBoundingClientRect());
+        const iAmDrawer = () => (SD.on ? SD.phase === 'draw' : phase === 'draw' && V && V.drawer === my);
 
         // 把累積的點送出（房主直接廣播；成員送給房主）
         function flush(begin) {
             if (!buf.length) return;
+            if (SD.on) { buf = []; return; }
             const m = { pts: buf, color, w: width, begin: !!begin };
             buf = [];
             if (isHost) { if (acceptStroke(m, my)) room.broadcast({ t: 'STROKE', m }, my); }
@@ -287,6 +345,7 @@
         let strokeBegin = false;
         cv.addEventListener('pointerdown', (e) => {
             if (!iAmDrawer()) return;
+            if (SD.on) { SD.undo.push(ctx.getImageData(0, 0, 1000, 640)); if (SD.undo.length > 20) SD.undo.shift(); }
             cv.setPointerCapture(e.pointerId); drawing = true; strokeBegin = true;
             const p = pos(e); buf = [p]; drawSeg({ pts: [p], color, w: width, begin: true }); flush(true); strokeBegin = false;
         });
@@ -437,6 +496,7 @@
         }
 
         function renderTimer() {
+            if (SD.on) return;
             const ms = !V ? 0 : isHost ? H.endsAt - Date.now() : V.ms - (Date.now() - (V.at || Date.now()));
             $('#timer').textContent = phase === 'draw' && V ? `⏱ ${Math.max(0, Math.ceil(ms / 1000))}` : '';
         }
@@ -466,6 +526,34 @@
             } else $('#msg').textContent = V.phase === 'between' ? '下一回合即將開始…' : '';
             show('#again', isHost && V.phase === 'over');
         }
+
+        // ---------- 單機練習：隨機題目 + 計時，自己畫；時間到或按「畫好了」揭曉答案，自評畫得出來 / 畫不出來 ----------
+        const SD = { on: false, phase: '', word: '', endsAt: 0, used: new Set(), run: { n: 0, can: 0, cant: 0 }, undo: [] };
+        const STAT_KEY = 'drawguess-practice';
+        const soloStat = () => $('#soloStat').textContent = '累計練習：' + fmtPractice(Util.store.get(STAT_KEY, {}));
+        function soloQuestion() {
+            SD.word = pickWord(SD.used, rnd); SD.used.add(SD.word); SD.phase = 'draw'; SD.undo = []; SD.endsAt = Date.now() + $('#soloSecs').value * 1000;
+            clearCanvas(); soloView();
+        }
+        function soloFinish(why) { if (SD.phase !== 'draw') return; SD.phase = 'rate'; drawing = false; soloView(why); }
+        function soloRate(ok) { if (SD.phase !== 'rate') return; SD.run = addPractice(SD.run, ok); Util.store.set(STAT_KEY, addPractice(Util.store.get(STAT_KEY, {}), ok)); soloQuestion(); }
+        function soloView(why = '') {
+            show('#menu', false); show('#lobby', false); show('#game', true);
+            const d = SD.phase === 'draw';
+            $('#chatCard').hidden = true; $('#mainBox').style.gridTemplateColumns = '1fr'; $('#canvasCard').hidden = false;
+            $('#roundInfo').textContent = `練習第 ${SD.run.n + 1} 題`;
+            $('#hint').textContent = d ? `你要畫：${SD.word}` : `答案：${SD.word}`;
+            $('#scoreboard').replaceChildren(Object.assign(document.createElement('div'), { className: 'pl', textContent: '本次：' + fmtPractice(SD.run) }));
+            show('#tools', d); show('#undoBtn', true); show('#soloBar', true); show('#doneBtn', d); show('#canBtn', !d); show('#cantBtn', !d);
+            $('#msg').textContent = d ? '' : `${why ? why + '！' : ''}你覺得這張畫，別人猜得出「${SD.word}」嗎？`;
+            $('#timer').textContent = d ? `⏱ ${Math.max(0, Math.ceil((SD.endsAt - Date.now()) / 1000))}` : '';
+        }
+        setInterval(() => { if (SD.on && SD.phase === 'draw') { if (Date.now() >= SD.endsAt) soloFinish('時間到'); else $('#timer').textContent = `⏱ ${Math.ceil((SD.endsAt - Date.now()) / 1000)}`; } }, 250);
+        $('#soloBtn').onclick = () => { SD.on = true; phase = 'solo'; SD.run = { n: 0, can: 0, cant: 0 }; SD.used = new Set(); soloQuestion(); };
+        $('#doneBtn').onclick = () => soloFinish('');
+        $('#canBtn').onclick = () => soloRate(true); $('#cantBtn').onclick = () => soloRate(false);
+        $('#undoBtn').onclick = () => { if (SD.on && SD.phase === 'draw' && SD.undo.length) { ctx.putImageData(SD.undo.pop(), 0, 0); lastPt = null; } };
+        soloStat();
 
         // ---------- 事件 ----------
         $('#hostBtn').onclick = hostRoom;

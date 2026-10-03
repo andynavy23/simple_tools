@@ -5,14 +5,54 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="連線海戰：雙方各自佈置艦隊、輪流開火。艦隊位置只存在自己的瀏覽器，賽後用雜湊承諾驗證對手沒有作弊。">
-    <meta property="og:title" content="連線海戰" />
+    <meta name="description" content="海戰：可單機對電腦（三種難度）或連線雙人對戰，雙方各自佈置艦隊、輪流開火。艦隊位置只存在自己的瀏覽器，賽後用雜湊承諾驗證對手沒有作弊。">
+    <meta property="og:title" content="海戰" />
     <meta property="og:description" content="雙人連線的戰艦遊戲，賽後可驗證對手沒有作弊。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/battleship.html" />
-    <title>連線海戰</title>
+    <title>海戰</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>海戰（戰艦）：10×10 海域、5 艘艦艇（長度 5、4、3、3、2），輪流開火，先擊沉對方全部艦艇的人獲勝。可以<b>單機對電腦</b>，也可以雙人連線。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>一個人想玩一局，或和朋友線上對戰。</li>
+        <li>手機也能玩：點格子佈船、點格子開火。</li>
+        </ul>
+        <h3>單機怎麼開始</h3>
+        <ol>
+        <li>選<b>難度</b>、按「開始單機」。電腦的艦隊隨機擺放，不會偷看你的艦隊。</li>
+        <li>簡單：隨機亂打。普通：打中之後會掃周圍、沿著一條線追擊。困難：用機率密度圖，算出最可能藏船的格子，打得最準。</li>
+        <li>第一局你先開火，之後每局輪流先手。結束後電腦艦隊會顯示出來（淺色格）。「再來一局」重新佈船，「離開」回選單。</li>
+        </ol>
+        <h3>連線怎麼玩</h3>
+        <ol>
+        <li>輸入暱稱、按「建立房間」，把邀請連結傳給朋友，朋友加入後雙方各自佈船。</li>
+        <li>你的艦隊位置只存在自己的瀏覽器；開局時雙方只交換雜湊承諾，賽後揭曉並自動驗證對方沒有作弊（顯示「驗證通過」或「驗證失敗」）。</li>
+        <li>房主離開遊戲結束；對手離開時房主會回到等待狀態。</li>
+        </ol>
+        <h3>佈船（手機也好按）</h3>
+        <ol>
+        <li>點「我的艦隊」的一格，就把下一艘船放在那格（橫放往右、直放往下）；按「方向」切換橫／直。</li>
+        <li>放錯了：點已放的船可移除，或按「復原」（撤銷最後一艘）、「清除」；也可按「隨機佈船」。</li>
+        <li>5 艘都放好後按「準備好了」。</li>
+        </ol>
+        <h3>開火與勝負</h3>
+        <ul>
+        <li>輪到你時，點敵方海域的格子：✕ 是命中、• 是落空。打光一艘會劃掉上方「敵艦」對應長度。</li>
+        <li>先擊沉對方 5 艘艦艇的人獲勝。</li>
+        </ul>
+        <h3>範例</h3>
+        <div class="eg">長 5 的船橫放，點最左上角那格 → 佔最上面一排左邊 5 格；再按「方向」變直，點左邊第 3 排最左格（下一艘長 4）→ 往下佔 4 格，不會碰到第一艘。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>船不能出界或重疊，放不下會提示。</li>
+        <li>連線時雙方都按「準備好了」才會開戰。</li>
+        </ul>
+    </template>
+
     <script src="../shared/js/util.js"></script>
     <script src="../shared/js/p2p-room.js"></script>
     <style>
@@ -47,6 +87,8 @@
             aspect-ratio: 1;
             border: 0;
             padding: 0;
+            min-height: 0;
+            min-width: 0;
             border-radius: 4px;
             background: var(--card);
             color: var(--muted);
@@ -59,6 +101,14 @@
 
         .grid.off .c {
             cursor: default;
+        }
+
+        .grid.mini {
+            max-width: 220px;
+        }
+
+        .grid.mini .c {
+            font-size: 11px;
         }
 
         .c.ship {
@@ -130,10 +180,16 @@
 <body>
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
-        <h1>連線海戰</h1>
-        <p class="sub">雙人對戰，10×10 海域、5 艘艦艇。艦隊位置只留在你的瀏覽器，對方開火時才回報命中；賽後會驗證雙方都沒說謊。</p>
+        <h1>海戰</h1>
+        <p class="sub">10×10 海域、5 艘艦艇。可單機對電腦，或雙人連線（艦隊位置只留在你的瀏覽器，賽後驗證雙方都沒說謊）。</p>
 
         <div class="card" id="menu">
+            <h2>單機：和電腦玩</h2>
+            <div class="row">
+                <label>難度 <select id="soloLevel"><option value="0">簡單</option><option value="1" selected>普通</option><option value="2">困難</option></select></label>
+                <button class="primary" id="soloBtn">開始單機</button>
+            </div>
+            <h2 style="margin-top:18px">和朋友連線</h2>
             <div class="row"><input type="text" id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
             <div class="row">
                 <button class="primary" id="hostBtn">建立房間</button>
@@ -157,6 +213,7 @@
                 <div class="row" id="placeBar" style="justify-content:center;margin-top:12px">
                     <button id="rot">方向：橫</button>
                     <button id="rand">隨機佈船</button>
+                    <button id="undo">復原</button>
                     <button id="clr">清除</button>
                     <button class="primary" id="ready" disabled>準備好了</button>
                 </div>
@@ -231,18 +288,66 @@
 
         // 承諾字串：艦隊 + 隨機鹽。開局時只送它的雜湊，賽後揭曉艦隊與鹽，對方重算雜湊即可確認沒有中途換船
         const commitText = (fleet, salt) => JSON.stringify({ f: fleet.map(s => [s.r, s.c, s.len, s.h]), salt });
+
+        // 電腦開火（單機）。known：Map，格子 → 0 落空 / 1 命中（還沒歸到已沉的船）/ 2 命中且已歸入擊沉的船；lens：還沒被擊沉的艦長。
+        // 只用「自己打過的結果」，不知道艦隊位置。level 0 簡單：亂打；1 普通：命中後掃周圍（優先延伸成線）、平時打棋盤格；2 困難：機率密度圖
+        const nbrs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        const at = (known, r, c) => (inBoard(r, c) ? known.get(key(r, c)) : undefined);
+        // 擊沉長 len 的船時，把包含 (r,c) 的那條「命中連線」中的 len 格標成已沉（連線不夠長就只標這一格）
+        function markSunk(known, r, c, len) {
+            let best = null;
+            for (const [dr, dc] of [[0, 1], [1, 0]]) {
+                let back = 0, fwd = 0;
+                while (at(known, r - dr * (back + 1), c - dc * (back + 1)) === 1) back++;
+                while (at(known, r + dr * (fwd + 1), c + dc * (fwd + 1)) === 1) fwd++;
+                const run = back + 1 + fwd; if (run < len || (best && best.run <= run)) continue;
+                let st = Math.max(-back, -(len - 1)); if (st + len - 1 > fwd) st = fwd - len + 1;
+                best = { run, dr, dc, st };
+            }
+            if (!best) return known.set(key(r, c), 2);
+            for (let i = 0; i < len; i++) known.set(key(r + best.dr * (best.st + i), c + best.dc * (best.st + i)), 2);
+        }
+        function aiShot(known, lens, level, rand = Math.random) {
+            const free = []; for (let k = 0; k < SIZE * SIZE; k++) if (!known.has(k)) free.push(k);
+            const pick = (a) => a[Math.floor(rand() * a.length)];
+            const hits = [...known].filter(([, v]) => v === 1).map(([k]) => k);
+            if (level === 0) return pick(free);
+            if (level === 1) {
+                if (hits.length) {
+                    const line = [], around = [];
+                    for (const h of hits) {
+                        const r = Math.floor(h / SIZE), c = h % SIZE;
+                        for (const [dr, dc] of nbrs) { const nr = r + dr, nc = c + dc; if (!inBoard(nr, nc) || known.has(key(nr, nc))) continue; around.push(key(nr, nc)); if (at(known, r - dr, c - dc) === 1) line.push(key(nr, nc)); }
+                    }
+                    if (around.length) return pick(line.length ? line : around);
+                }
+                const par = free.filter(k => (Math.floor(k / SIZE) + k % SIZE) % 2 === 0);
+                return pick(par.length ? par : free);
+            }
+            const score = new Array(SIZE * SIZE).fill(0);
+            for (const len of lens) for (const h of [0, 1]) for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
+                const cells = cellsOf({ r, c, len, h }); if (!cells.every(([a, b]) => inBoard(a, b))) continue;
+                const vs = cells.map(([a, b]) => known.get(key(a, b)));
+                if (vs.some(v => v === 0 || v === 2)) continue;
+                const w = 1 + 20 * vs.filter(v => v === 1).length;                 // 蓋到已命中格的擺法權重大增：自然會追擊
+                cells.forEach(([a, b], i) => { if (vs[i] === undefined) score[key(a, b)] += w; });
+            }
+            const top = Math.max(...free.map(k => score[k]));
+            return pick(free.filter(k => score[k] === top));
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
         const { sha256, randomHex: randomSalt } = Util;
 
         let room = null, isHost = false, hostId = '', names = ['', ''], my = 0;
+        let solo = null;                                             // 單機：{ level, fleet, shots, known, lens }
         let G;                                                       // 一局的狀態
         let gameNo = 0;                                              // 第幾局：決定誰先手（輪流）
 
         function newGame() {
             G = {
-                phase: room && (isHost ? room.players.length > 1 : true) ? 'place' : 'wait',                 // wait | place | play | over
+                phase: solo || (room && (isHost ? room.players.length > 1 : true)) ? 'place' : 'wait',                 // wait | place | play | over
                 slots: LENS.map(() => null), orient: 1, myReady: false, oppReady: false, oppCommit: '', salt: '', myCommit: '',
                 turn: 'me', shotsAtMe: new Set(), myShots: new Map(), reports: [], pending: null, sunkLens: [], oppFleet: null, verdict: '', won: null, msg: '',
             };
@@ -251,7 +356,25 @@
 
         const netMsg = (t) => { $('#netMsg').textContent = t; };
         const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
-        function out(d) { if (isHost) room.broadcast(d); else room.send(d); }
+        function out(d) { if (solo) return soloOut(d); if (isHost) room.broadcast(d); else room.send(d); }
+        // ---------- 單機：電腦是「假的對手」，收到的訊息和連線版一樣，走同一套規則 ----------
+        function soloOut(d) {
+            if (d.t === 'READY') {
+                Object.assign(solo, { fleet: randomFleet(rnd), shots: new Set(), known: new Map(), lens: [...LENS] });   // 電腦艦隊隨機擺放，只存在這裡
+                G.oppReady = true; G.oppCommit = 'solo'; startIfReady(); soloKick();
+            } else if (d.t === 'FIRE') {
+                const { r, c } = d;
+                setTimeout(() => { if (!solo || G.phase !== 'play' || !G.pending) return; const res = shotResult(solo.fleet, solo.shots, r, c); solo.shots.add(key(r, c)); onMessage({ t: 'RESULT', r, c, hit: res.hit, sunk: res.sunk }); soloKick(); }, 500 + rnd(300));
+            } else if (d.t === 'RESULT') {                                // 我回報電腦那一槍的結果 → 電腦記下來
+                solo.known.set(key(d.r, d.c), d.hit ? 1 : 0);
+                if (d.sunk) { markSunk(solo.known, d.r, d.c, d.sunk); solo.lens.splice(solo.lens.indexOf(d.sunk), 1); }
+            } else if (d.t === 'REVEAL') { G.oppFleet = solo.fleet; G.verdict = '單機對戰：電腦艦隊位置已揭曉（淺色格）'; }
+        }
+        function soloKick() {
+            if (!solo || G.phase !== 'play' || G.turn !== 'opp') return;
+            setTimeout(() => { if (!solo || G.phase !== 'play' || G.turn !== 'opp') return; const k = aiShot(solo.known, solo.lens, solo.level); onFire({ r: Math.floor(k / SIZE), c: k % SIZE }); }, 700 + rnd(500));
+        }
+        function startSolo() { solo = { level: +$('#soloLevel').value }; isHost = true; my = 0; names = ['玩家', '電腦']; gameNo = 0; newGame(); enter(); }
         function readNick() {
             const n = $('#nick').value.trim();
             if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; }
@@ -378,7 +501,7 @@
                 : phase === 'wait' ? '等待對手加入…（把邀請連結傳給朋友）'
                 : phase === 'place' ? (G.myReady ? (G.oppReady ? '' : `艦隊就位，等待 ${opp} 佈署…`) : fleet.length < LENS.length ? `點自己的海域佈置艦艇（下一艘長度 ${LENS[G.slots.findIndex(s => !s)]}）；點已放的船可移除` : '全部佈置完成，按「準備好了」')
                 : over ? (G.won ? '🏆 你贏了！擊沉所有敵艦' : '💥 你的艦隊全滅了')
-                : G.turn === 'me' ? '輪到你開火！點敵方海域的格子' : `等待 ${opp} 開火…`;
+                : G.turn === 'me' ? '輪到你開火！點敵方海域的格子' : `等待 ${opp} ${solo ? '瞄準中…' : '開火…'}`;
             $('#enemyBox').hidden = phase === 'wait' || phase === 'place';
             $('#mineTitle').textContent = phase === 'place' ? '佈置我的艦隊' : '我的艦隊';
             const mineCells = $('#mine').children, enemyCells = $('#enemy').children;
@@ -393,6 +516,7 @@
             }
             $('#enemy').classList.toggle('off', phase !== 'play' || G.turn !== 'me');
             $('#mine').classList.toggle('off', phase !== 'place' || G.myReady);
+            $('#mine').classList.toggle('mini', phase === 'play' || over);
             // 剩餘艦艇：敵方（已擊沉者劃線）
             const left = [...G.sunkLens];
             $('#fleet').replaceChildren(...(phase === 'play' || over ? [Object.assign(document.createElement('small'), { className: 'muted', textContent: '敵艦：' })].concat(LENS.map(len => { const i = left.indexOf(len), sunk = i >= 0; if (sunk) left.splice(i, 1); return Object.assign(document.createElement('span'), { className: sunk ? 'sunk' : '', textContent: '■'.repeat(len) }); })) : []));
@@ -404,10 +528,12 @@
             $('#copyInvite').hidden = !isHost || phase !== 'wait';
         }
 
+        $('#soloBtn').onclick = startSolo;
         $('#hostBtn').onclick = hostRoom;
         $('#joinBtn').onclick = joinRoom;
         $('#rot').onclick = () => { G.orient ^= 1; render(); };
         $('#rand').onclick = () => { if (G.phase === 'place' && !G.myReady) { G.slots = randomFleet(rnd); G.msg = ''; render(); } };
+        $('#undo').onclick = () => { if (G.phase === 'place' && !G.myReady) { const i = G.slots.map(Boolean).lastIndexOf(true); if (i >= 0) G.slots[i] = null; G.msg = ''; render(); } };
         $('#clr').onclick = () => { if (G.phase === 'place' && !G.myReady) { G.slots = LENS.map(() => null); G.msg = ''; render(); } };
         $('#ready').onclick = setReady;
         $('#again').onclick = () => { out({ t: 'AGAIN' }); gameNo++; newGame(); render(); };

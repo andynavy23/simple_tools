@@ -5,14 +5,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="連線猜拳：雙人剪刀石頭布，三戰兩勝或五戰三勝。雙方先送出加密承諾再同時揭曉，沒有人能後出。">
-    <meta property="og:title" content="連線猜拳" />
+    <meta name="description" content="猜拳：雙人剪刀石頭布，三戰兩勝或五戰三勝。雙方先送出加密承諾再同時揭曉，沒有人能後出。">
+    <meta property="og:title" content="猜拳" />
     <meta property="og:description" content="用雜湊承諾確保公平的雙人猜拳。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/rps.html" />
-    <title>連線猜拳</title>
+    <title>猜拳</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>剪刀石頭布。可以一個人和電腦打，也可以開房間和朋友連線對戰，三戰兩勝、五戰三勝或七戰四勝。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>一個人無聊，想打幾局</li>
+        <li>用來公平地決定誰請喝飲料、誰先選</li>
+        <li>和遠方的朋友快速分勝負</li>
+        </ul>
+        <h3>怎麼玩：單機</h3>
+        <ol>
+        <li>在「單機：和電腦打」選電腦等級：<b>簡單</b>＝完全隨機；<b>普通</b>＝會統計你最常出的拳，大部分時候出剋制它的拳，但偶爾也會亂出</li>
+        <li>按「開始（和電腦）」，選賽制（三 / 五 / 七戰）</li>
+        <li>點 ✊ ✋ ✌️ 其中一個，電腦想一下就會揭曉；先拿到過半勝場的人獲勝</li>
+        <li>結束後按「再來一局」，或「離開」回選單</li>
+        </ol>
+        <h3>怎麼玩：連線</h3>
+        <ol>
+        <li>輸入暱稱，按「建立房間」，再按「複製邀請連結」傳給朋友；朋友開連結、輸入暱稱按「加入」（也可貼房號）</li>
+        <li>只有房主能選賽制與按「再來一局」</li>
+        <li>雙方各自出拳；出拳會先加密送出，兩邊都出完才一起揭曉並驗證，沒有人能偷看或後出。對方揭曉的拳和先前送出的不符會判定作弊</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">單機選「普通」、三戰兩勝。你連出三次石頭，第三局開始電腦大多會出布；這時改出剪刀就能反制它。先贏 2 局的人獲勝。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>平手不算分，該局重來</li>
+        <li>連線需要房主一直開著頁面；房主離開，遊戲就結束</li>
+        <li>單機完全不連網；電腦只看你過去的出拳，不會偷看你這一局的選擇</li>
+        </ul>
+    </template>
+
     <script src="../shared/js/util.js"></script>
     <script src="../shared/js/p2p-room.js"></script>
     <style>
@@ -34,6 +66,10 @@
 
         .row input {
             flex: 1 1 130px;
+        }
+
+        #soloBtn {
+            flex: 1 1 100%;
         }
 
         .score {
@@ -115,10 +151,17 @@
 <body>
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
-        <h1>連線猜拳</h1>
-        <p class="sub">雙人剪刀石頭布。出拳時雙方先交換「加密後的選擇」，兩邊都出完才一起揭曉並驗證，所以沒有人能偷看或後出。</p>
+        <h1>猜拳</h1>
+        <p class="sub">剪刀石頭布：一個人可以和電腦打；連線時雙方先交換「加密後的選擇」，兩邊都出完才一起揭曉並驗證，沒有人能偷看或後出。</p>
 
         <div class="card" id="menu">
+            <h2>單機：和電腦打</h2>
+            <div class="row">
+                <label for="soloLevel" class="muted">電腦</label>
+                <select id="soloLevel"><option value="easy">簡單（隨機）</option><option value="normal" selected>普通（會看你的習慣）</option></select>
+            </div>
+            <div class="row"><button class="primary" id="soloBtn">開始（和電腦）</button></div>
+            <h2 style="margin-top:18px">和朋友連線</h2>
             <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
             <div class="row">
                 <button class="primary" id="hostBtn">建立房間</button>
@@ -165,11 +208,21 @@
         // 承諾字串：包含回合數，同一個選擇 + 鹽在不同回合不能重複使用
         const commitText = (round, choice, salt) => `${round}:${choice}:${salt}`;
         const validHash = (h) => typeof h === 'string' && /^[0-9a-f]{64}$/.test(h);
+        // 電腦出拳：easy 純隨機；normal 有 75% 機率反制「你最常出的拳」（沒有紀錄時隨機），其餘隨機，所以不是每次都贏
+        // ponytail: 只看出拳頻率，不看順序；要更強可加「上一拳之後的轉移」統計
+        const COUNTER = { rock: 'paper', paper: 'scissors', scissors: 'rock' };
+        function cpuPick(level, hist, rand = Math.random) {
+            const any = () => CHOICES[Math.floor(rand() * 3)];
+            if (level !== 'normal' || !hist.length || rand() < 0.25) return any();
+            const cnt = CHOICES.map(c => hist.filter(h => h === c).length), top = Math.max(...cnt);
+            const tops = CHOICES.filter((c, i) => cnt[i] === top);
+            return COUNTER[tops[Math.floor(rand() * tops.length)]];
+        }
         const validReveal = (d) => !!d && Number.isInteger(d.round) && CHOICES.includes(d.choice) && typeof d.salt === 'string' && /^[0-9a-f]{32}$/.test(d.salt);
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
-        let room = null, isHost = false, hostId = '', names = ['', ''], bestOf = 3;
+        let room = null, solo = false, myHist = [], isHost = false, hostId = '', names = ['', ''], bestOf = 3;
         let G = null, inbox = [];                                      // 一局的狀態；inbox：對手已經進入下一回合時提早送來的訊息
 
         function newMatch() {
@@ -183,8 +236,26 @@
         const paired = () => !isHost || (room && room.players.length > 1);
 
         // ---------- 對局流程 ----------
+        // 單機：不需要承諾（電腦在你出拳前已決定、也看不到本局的拳），短暫「思考」後直接揭曉
+        function soloChoose(c) {
+            const round = G.round, cpu = cpuPick($('#soloLevel').value, myHist);
+            G.pick = c; G.oppCommit = 'cpu'; render();
+            setTimeout(() => {
+                if (!G || !solo || G.round !== round || G.over) return;
+                myHist.push(c);
+                const res = beats(c, cpu);
+                G.shown = { me: c, opp: cpu, res };
+                if (res > 0) G.scores[0]++; else if (res < 0) G.scores[1]++;
+                G.hist.push(res);
+                if (Math.max(...G.scores) >= winsNeeded(bestOf)) G.over = true;
+                render();
+                if (!G.over) setTimeout(() => { if (G && solo && G.round === round) { G.round++; Object.assign(G, freshRound()); render(); } }, 1200);
+            }, 700);
+        }
+
         async function choose(c) {
             if (!G || G.over || G.pick || !paired() || !CHOICES.includes(c)) return;
+            if (solo) return soloChoose(c);
             G.pick = c; G.salt = randomHex(16);
             G.myCommit = await sha256(commitText(G.round, c, G.salt));
             out({ t: 'COMMIT', round: G.round, hash: G.myCommit });
@@ -270,31 +341,33 @@
 
         function render() {
             if (!G) return;
-            const meName = isHost ? names[0] : names[1], oppName = isHost ? names[1] : names[0], ready = paired();
-            $('#n0').textContent = meName + '（我）'; $('#n1').textContent = oppName || '等待對手…';
+            const meName = solo ? '你' : isHost ? names[0] : names[1], oppName = solo ? '電腦' : isHost ? names[1] : names[0], ready = paired();
+            $('#n0').textContent = solo ? meName : meName + '（我）'; $('#n1').textContent = oppName || '等待對手…';
             $('#s0').textContent = G.scores[0]; $('#s1').textContent = G.scores[1];
-            $('#setup').hidden = !isHost || G.round > 1 || G.pick !== null || G.over || G.hist.length > 0;
-            $('#bestOf').value = bestOf; $('#bestOf').disabled = !isHost || !ready;
-            $('#a0').textContent = G.shown ? EMOJI[G.shown.me] : G.pick ? '🔒' : '❔';
-            $('#a1').textContent = G.shown ? EMOJI[G.shown.opp] : G.oppCommit ? '🔒' : '❔';
+            $('#setup').hidden = !(isHost || solo) || G.round > 1 || G.pick !== null || G.over || G.hist.length > 0;
+            $('#bestOf').value = bestOf; $('#bestOf').disabled = !(isHost || solo) || !ready;
+            $('#a0').textContent = G.shown ? EMOJI[G.shown.me] : G.pick ? (solo ? EMOJI[G.pick] : '🔒') : '❔';
+            $('#a1').textContent = G.shown ? EMOJI[G.shown.opp] : G.oppCommit ? (solo ? '🤔' : '🔒') : '❔';
             let st;
             if (!ready) st = '等待對手加入…（把邀請連結傳給朋友）';
             else if (G.cheat) st = '⚠ 對手揭曉的選擇與先前送出的承諾不符，判定作弊';
             else if (G.over) st = G.scores[0] > G.scores[1] ? `🏆 你贏了！ ${G.scores[0]} : ${G.scores[1]}` : `💥 ${oppName} 獲勝 ${G.scores[1]} : ${G.scores[0]}`;
             else if (G.shown) st = G.shown.res > 0 ? '這局你贏了！' : G.shown.res < 0 ? '這局你輸了' : '平手，重來';
             else if (!G.pick) st = `第 ${G.round} 局：請出拳（${winsNeeded(bestOf)} 勝制）`;
+            else if (solo && !G.shown) st = '電腦思考中…';
             else if (!G.oppCommit) st = '已出拳（已加密），等待對手…';
             else st = '雙方都出拳了，揭曉中…';
             $('#status').textContent = st;
             document.querySelectorAll('#picks button').forEach(b => { b.disabled = !ready || G.over || !!G.pick; b.setAttribute('aria-pressed', b.dataset.c === G.pick); });
             $('#hist').replaceChildren(...G.hist.map(r => Object.assign(document.createElement('span'), { className: r > 0 ? 'w' : r < 0 ? 'l' : '', textContent: r > 0 ? '勝' : r < 0 ? '負' : '和' })));
-            $('#again').hidden = !(isHost && G.over); $('#copy').hidden = !isHost;
+            $('#again').hidden = !((isHost || solo) && G.over); $('#copy').hidden = !isHost;
         }
 
         $('#hostBtn').onclick = hostRoom;
         $('#joinBtn').onclick = joinRoom;
         $('#bestOf').onchange = () => { bestOf = +$('#bestOf').value; if (isHost && room.players.length > 1) room.sendTo(1, { t: 'SETUP', bestOf }); render(); };
-        $('#again').onclick = () => { newMatch(); out({ t: 'AGAIN' }); render(); };
+        $('#again').onclick = () => { newMatch(); if (!solo) out({ t: 'AGAIN' }); render(); };
+        $('#soloBtn').onclick = () => { solo = true; myHist = []; bestOf = +$('#bestOf').value; newMatch(); show(); render(); };
         $('#leave').onclick = () => location.reload();
         $('#copy').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copy'), url, () => prompt('請手動複製邀請連結：', url)); };
         if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();

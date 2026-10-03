@@ -14,6 +14,40 @@
     <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Noto+Sans+TC:wght@400;700&display=swap"
         rel="stylesheet">
     <!-- 連線與工具函式：共用模組（PeerJS 由 p2p-room.js 載入） -->
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>Artale 團練小工具：記錄狩獵經驗、統計掉落、並用「專注度檢測」確認有沒有掛機。可以自己一個人用（不連線），也可以建立房間讓最多 6 人同步。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>一個人練功，想記經驗進度、掉了什麼寶物。</li>
+        <li>多人組隊練功，由隊長統一看全隊進度與戰功排行。</li>
+        <li>掛機時想要語音提醒自己「還活著嗎」。</li>
+        </ul>
+        <h3>怎麼用：單人使用（不連線）</h3>
+        <ol>
+        <li>STEP 1 輸入暱稱按「確認」（留空會自動取名）。</li>
+        <li>STEP 2 按綠色的「單人使用（不連線）」，你就是隊長，不需房號。</li>
+        <li>「經驗」頁按 +1% / +5% 累積，可設目標並「更新並重置」；達標有慶祝特效。</li>
+        <li>「掉落」頁點六種類別記錄，下面看統計與明細，可「重置我的」。</li>
+        <li>「監測」頁的「發起專注度測試」會語音提醒並出現「還活著!」按鈕，當作自己的掛機鬧鐘；可開自動檢測。</li>
+        </ol>
+        <h3>怎麼用：連線（隊伍）</h3>
+        <ol>
+        <li>隊長按「建立房間 (隊長)」，再「複製邀請連結」給隊員。</li>
+        <li>隊員確認暱稱後貼房號按「加入房間」。</li>
+        <li>隊員操作同步給隊長；重置、改目標、發起檢測只有隊長能下。隊員離開時其經驗會移交隊長。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">單人：目標設 20% → 按 +5%、+5%、+1% 共 11，進度條約 55%；再按 +5% 兩次，進度封頂在目標 20 → 出現慶祝特效。掉落點「武器」兩次、「捲軸(貴)」一次 → 總數 3。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>單人資料只存在這台裝置的瀏覽器，離開再回來還在；清除瀏覽資料會消失。</li>
+        <li>手機畫面下方是切換頁面的導覽列；右下「日誌」可看操作紀錄。</li>
+        <li>語音提醒用瀏覽器內建語音，需要裝置有開聲音。</li>
+        </ul>
+    </template>
+
     <script src="../shared/js/util.js"></script>
     <script src="../shared/js/p2p-room.js"></script>
     <!-- Confetti -->
@@ -321,7 +355,54 @@
             border: 2px solid #000;
         }
 
+        .nav-item {
+            flex: 1;
+            padding: 4px 0;
+            min-height: 48px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-pixel,
+        .form-control {
+            min-height: 44px;
+        }
+
+        .form-switch .form-check-input {
+            min-width: 3em;
+            min-height: 1.5em;
+        }
+
+        .container {
+            padding-right: 12px;
+            padding-left: 12px;
+        }
+
+        .table-responsive-wrap {
+            overflow-x: auto;
+        }
+
         @media (max-width: 576px) {
+            body {
+                font-size: 16px;
+            }
+
+            .container>.d-flex:first-child {
+                padding-right: 56px;
+            }
+
+            .form-control,
+            .form-control-sm {
+                font-size: 16px;
+            }
+
+            .small,
+            small {
+                font-size: 0.85rem;
+            }
+
             .loot-grid {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
@@ -343,6 +424,11 @@
 
         <!-- Room Tab -->
         <div id="room" class="page active">
+            <div class="card p-3 mb-4">
+                <button id="soloBtn" class="btn btn-pixel btn-pixel-green py-2 w-100" onclick="startSolo()">單人使用（不連線）</button>
+                <div class="small text-muted">自己一個人記經驗 / 掉落，資料只存在這台裝置，不需要房間。要組隊再用下面的步驟連線。</div>
+            </div>
+
             <div class="card p-3 mb-4">
                 <h6 class="mb-3"><span class="step-badge">STEP 1</span>設定你的暱稱</h6>
                 <div class="input-group">
@@ -369,7 +455,7 @@
                 <div id="roomInfo" class="mt-2 d-none border-top pt-3">
                     <p class="mb-2 fw-bold">目前房號: <span id="displayRoomId" class="text-primary"></span></p>
                     <div class="d-grid gap-2">
-                        <button class="btn btn-pixel btn-pixel-blue btn-sm" onclick="copyInviteLink()">複製邀請連結</button>
+                        <button id="copyInviteBtn" class="btn btn-pixel btn-pixel-blue btn-sm" onclick="copyInviteLink()">複製邀請連結</button>
                         <button id="leaveDisbandBtn" class="btn btn-pixel btn-pixel-outline btn-sm text-danger"
                             onclick="leaveRoom()">退出</button>
                     </div>
@@ -422,6 +508,7 @@
         <div id="monitor" class="page">
             <div class="card p-3 mb-3">
                 <h5 class="mb-1">專注度檢測</h5>
+                <p id="soloMonitorNote" class="small d-none">單人使用：「發起專注度測試」會提醒你自己（語音 + 點擊「還活著」），當作掛機鬧鐘。</p>
                 <p class="text-muted small">確保隊員依舊待在螢幕前，防止掛機或斷線。</p>
 
                 <div class="card p-3 bg-light mb-3">
@@ -512,7 +599,7 @@
                 </div>
                 <div class="col-12">
                     <h5>隊員貢獻明細</h5>
-                    <div class="card overflow-hidden">
+                    <div class="card overflow-hidden table-responsive-wrap">
                         <table class="table table-sm m-0 small">
                             <thead class="bg-dark text-white">
                                 <tr>
@@ -595,13 +682,13 @@
         const MAX_MEMBERS = 6;
         const { esc } = Util;
         const LOOT_CATS = ['防具', '武器', '捲軸(貴)', '捲軸(廢)', '其他(貴)', '其他(廢)'];
-        let room = null, myId = '', myName = '', isCaptain = false;
+        let room = null, solo = false, myId = '', myName = '', isCaptain = false;
         let autoCheckTimer = null;
         let connectTimeout = null;
 
         // --- 初始化 ---
         window.onload = () => {
-            const rId = P2PRoom.roomFromUrl() || new URLSearchParams(window.location.search).get('room');
+            const rId = (typeof P2PRoom !== 'undefined' && P2PRoom.roomFromUrl()) || new URLSearchParams(window.location.search).get('room');
             if (rId) document.getElementById('joinIdInput').value = rId;
 
             const saved = localStorage.getItem('artale_v4_name');
@@ -611,7 +698,7 @@
         // --- 暱稱邏輯 ---
         function confirmNickname() {
             let input = document.getElementById('nickname').value.trim();
-            if (input && !P2PRoom.validNick(input, MAX_NICK)) {
+            if (input && typeof P2PRoom !== "undefined" && !P2PRoom.validNick(input, MAX_NICK)) {
                 return alert("暱稱格錯誤：僅限繁中、英數，且不可超過30字!");
             }
 
@@ -704,6 +791,23 @@
             });
         }
 
+        // 單人使用：不建立 P2PRoom，自己就是隊長；狀態存在 localStorage
+        const SOLO_KEY = 'artale_party_solo';
+        function startSolo() {
+            if (room || isCaptain) return;
+            if (!myName) confirmNickname();
+            if (!myName) return;
+            solo = true; isCaptain = true; myId = 'solo';
+            try { const sv = JSON.parse(localStorage.getItem(SOLO_KEY)); if (sv && sv.exp && sv.loot) { state.exp = sv.exp; state.loot = sv.loot; state.logs = sv.logs || []; } } catch (e) { }
+            state.room = { id: 'solo', captain: 'solo', members: [] };
+            addMember('solo', myName, 'Captain', '連線中');
+            document.getElementById('displayRoomId').innerText = '單人使用（不連線）';
+            ['roomInfo', 'captainExp', 'captainMonitor', 'expResetBtn', 'lootResetAllBtn', 'soloMonitorNote'].forEach(i => document.getElementById(i).classList.remove('d-none'));
+            ['roomActions', 'copyInviteBtn'].forEach(i => document.getElementById(i).classList.add('d-none'));
+            document.getElementById('leaveDisbandBtn').innerText = '離開（資料保留）';
+            addLog('[系統] 單人使用（資料只存在本機）');
+        }
+
         function joinRoom() {
             if (room) return;
             const id = document.getElementById('joinIdInput').value.trim();
@@ -791,7 +895,7 @@
         }
 
         function broadcastState() {
-            if (!isCaptain) return;
+            if (!isCaptain || !room) return;
             room.broadcast({ type: 'SYNC', payload: state });
         }
 
@@ -803,6 +907,7 @@
         // --- UI ---
         function updateUI() {
             document.getElementById('memberCount').innerText = state.room.members.length;
+            if (solo) try { localStorage.setItem(SOLO_KEY, JSON.stringify({ exp: state.exp, loot: state.loot, logs: state.logs })); } catch (e) { }
             const mList = document.getElementById('memberList');
             mList.innerHTML = state.room.members.map(m => `
                 <div class="col-6 col-sm-4">
@@ -896,7 +1001,7 @@
             state.room.members.forEach(m => m.status = 'Idle');
             state.logs.push({ time: Date.now(), msg: `[檢測] 測試開始 (限時 ${duration} 秒)`, type: "info" });
             broadcastState();
-            room.broadcast({ type: 'TEST_START', payload: duration });
+            if (room) room.broadcast({ type: 'TEST_START', payload: duration });
             showSurvivalUI(duration);
 
             setTimeout(() => {
@@ -965,7 +1070,7 @@
             }
             updateUI();
         }
-        function leaveRoom() { if (confirm("確定要離隊嗎？")) location.reload(); }
+        function leaveRoom() { if (confirm(solo ? "離開單人使用？（資料會保留在這台裝置）" : "確定要離隊嗎？")) location.reload(); }
         function copyInviteLink() {
             const link = P2PRoom.inviteLink(myId);
             Util.copyText(link).then(ok => ok ? alert("邀請連結已複製!") : prompt("請手動複製邀請連結：", link));

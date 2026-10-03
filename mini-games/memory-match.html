@@ -11,6 +11,31 @@
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/memory-match.html" />
     <title>翻牌記憶遊戲</title>
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>翻牌記憶遊戲：每次翻兩張，一樣就得分。一個人挑戰最少步數、和電腦比誰配對多，或連線與朋友（最多 4 人）輪流翻。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>訓練記憶力、打發時間</li>
+        <li>和小孩或朋友比誰記得牢</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+        <li><b>單人</b>（預設）：選難度（6 / 8 / 12 / 18 對），按「開始」。翻完所有牌，用越少步越好，畫面會顯示步數、時間與你的最佳步數</li>
+        <li><b>和電腦比賽</b>：按上方「和電腦比賽」，選難度與電腦記憶力：簡單＝只記最近 4 張、普通＝記最近 10 張、困難＝幾乎全記。按「開始（你先翻）」</li>
+        <li><b>連線</b>：按「連線 2–4 人」，輸入暱稱建立房間並傳邀請連結，朋友加入後房主按「開始遊戲」</li>
+        <li>配對成功可以繼續翻；失敗則蓋回，換下一位（連線與電腦模式）</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">和電腦比賽、8 對：你翻到 🍎 和 🍌 沒配對，換電腦。電腦如果記得之前看過的 🍎，就會優先翻它，所以記憶力設定越高越難贏。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>電腦只記得「已經被翻開過」的牌，包括你翻開的，不會偷看蓋著的牌</li>
+        <li>牌多（專家 18 對）時，困難電腦也會漏記一些</li>
+        <li>每個難度的最佳步數分開記錄在本機</li>
+        </ul>
+    </template>
+
     <script src="../shared/js/util.js"></script>
     <script src="../shared/js/p2p-room.js"></script>
     <link rel="stylesheet" href="../shared/css/theme.css">
@@ -32,6 +57,12 @@
             flex-wrap: wrap;
             align-items: center;
             margin-bottom: 10px;
+        }
+
+        #modeBar .seg {
+            flex: 1 1 auto;
+            padding-left: 10px;
+            padding-right: 10px;
         }
 
         .row:last-child {
@@ -118,7 +149,8 @@
         <div class="card" id="setup">
             <div class="row" id="modeBar">
                 <button class="seg" data-mode="solo" aria-pressed="true">單人</button>
-                <button class="seg" data-mode="online" aria-pressed="false">連線（2–4 人）</button>
+                <button class="seg" data-mode="cpu" aria-pressed="false">和電腦比賽</button>
+                <button class="seg" data-mode="online" aria-pressed="false">連線 2–4 人</button>
             </div>
             <div class="row" id="diffRow">
                 <label for="diff" class="muted">難度</label>
@@ -129,6 +161,15 @@
                     <option value="18">專家：18 對</option>
                 </select>
                 <button class="primary" id="soloStart">開始</button>
+            </div>
+            <div class="row" id="cpuRow" hidden>
+                <label for="cpuLevel" class="muted">電腦記憶力</label>
+                <select id="cpuLevel">
+                    <option value="easy">簡單：只記最近 4 張</option>
+                    <option value="normal" selected>普通：記最近 10 張</option>
+                    <option value="hard">困難：幾乎全記</option>
+                </select>
+                <button class="primary" id="cpuStart">開始（你先翻）</button>
             </div>
             <div id="onlineBox" hidden>
                 <div class="row"><input id="nick" maxlength="10" placeholder="你的暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
@@ -242,6 +283,28 @@
             if (!v.scores.every(Number.isInteger) || !Number.isInteger(v.turn) || v.turn < 0 || v.turn >= m) return false;
             return typeof v.over === 'boolean';
         }
+
+        // ---------- 電腦對手（單機）----------
+        // 電腦只記得「翻開過」的牌（mem = [[位置, 牌面], …]，最近看到的在後面），最多記 cap 張，超過就忘掉最舊的。
+        // 下面兩個選牌函式只收「牌的狀態」和記憶，看不到蓋著的牌面，所以不會偷看。
+        const CPU_CAP = { easy: 4, normal: 10, hard: 30 };   // 困難：30 張，幾乎全記（專家 36 張牌時才會漏掉一點）
+        const remember = (mem, i, v, cap) => [...mem.filter(m => m[0] !== i), [i, v]].slice(-Math.max(2, cap));
+        const rpick = (a, rand) => a[Math.floor(rand() * a.length)];
+        const downIdx = (status) => status.map((s, i) => (s === 'down' ? i : -1)).filter(i => i >= 0);
+        // 第一張：記憶裡有「已知的一對」就翻其中一張；否則翻一張沒看過的（沒有就隨便翻）
+        function cpuFirst(status, mem, rand = Math.random) {
+            const known = mem.filter(([i]) => status[i] === 'down');
+            for (let a = 0; a < known.length; a++) for (let b = a + 1; b < known.length; b++) if (known[a][1] === known[b][1]) return known[a][0];
+            const seen = new Set(known.map(m => m[0])), fresh = downIdx(status).filter(i => !seen.has(i));
+            return rpick(fresh.length ? fresh : downIdx(status), rand);
+        }
+        // 第二張（第一張 first 已翻開並記進 mem）：記憶裡有同樣牌面的另一張就翻它；否則翻一張沒看過的
+        function cpuSecond(status, mem, first, rand = Math.random) {
+            const f = mem.find(m => m[0] === first), hit = f && mem.find(m => m[0] !== first && status[m[0]] === 'down' && m[1] === f[1]);
+            if (hit) return hit[0];
+            const seen = new Set(mem.map(m => m[0])), rest = downIdx(status).filter(i => i !== first), fresh = rest.filter(i => !seen.has(i));
+            return rpick(fresh.length ? fresh : rest, rand);
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -258,8 +321,9 @@
             const menu = screen === 'menu', hostLobby = screen === 'lobby' && isHost;
             show('#setup', menu || hostLobby);             // 房主在大廳仍可調整難度
             show('#modeBar', menu);
-            show('#diffRow', (menu && mode === 'solo') || hostLobby);
+            show('#diffRow', (menu && (mode === 'solo' || mode === 'cpu')) || hostLobby);
             show('#soloStart', menu && mode === 'solo');
+            show('#cpuRow', menu && mode === 'cpu');
             show('#onlineBox', menu && mode === 'online');
             show('#lobby', screen === 'lobby');
             show('#game', screen === 'game');
@@ -323,11 +387,13 @@
                     const alone = V.names.length > 1 && V.active.filter(Boolean).length <= 1;
                     msg = alone ? '其他玩家都離開了' : (win.length > 1 ? `平手：${win.join('、')}` : `🏆 ${win[0]} 獲勝`);
                 }
+            } else if (mode === 'cpu') {
+                msg = V.turn === my ? '輪到你了' : '電腦思考中…';
             } else if (mode === 'online') {
                 msg = V.turn === my ? '輪到你了' : `輪到 ${V.names[V.turn]}`;
             }
             $('#msg').textContent = msg;
-            $('#again').hidden = !(V.over && (mode === 'solo' || isHost));
+            $('#again').hidden = !(V.over && (mode === 'solo' || mode === 'cpu' || isHost));
         }
 
         // ---------- 單人 ----------
@@ -347,15 +413,37 @@
             updateScreens();
         }
 
-        // ---------- 共用：翻牌流程（單人 / 房主） ----------
+        // ---------- 和電腦比賽：你是 0 號、電腦是 1 號 ----------
+        let cpuMem = [], cpuTimer = 0;
+        function startCpu() {
+            mode = 'cpu'; isHost = false; my = 0;
+            clearTimeout(resolveTimer); clearTimeout(cpuTimer); clearInterval(soloTick);
+            G = createGame(makeDeck(+$('#diff').value), 2); cpuMem = [];
+            screen = 'game';
+            $('#board').replaceChildren();
+            publish();
+            updateScreens();
+        }
+        // 輪到電腦時：稍等 → 翻第一張 → 稍等 → 翻第二張（配對 / 蓋回之後由 applyFlip 的結算計時再呼叫一次）
+        function cpuStep() {
+            clearTimeout(cpuTimer);
+            if (mode !== 'cpu' || !G || G.over || G.turn !== 1 || G.up.length) return;
+            cpuTimer = setTimeout(() => {
+                applyFlip(cpuFirst(G.status, cpuMem), 1);
+                cpuTimer = setTimeout(() => { if (G && mode === 'cpu' && G.up.length === 1) applyFlip(cpuSecond(G.status, cpuMem, G.up[0]), 1); }, 800);
+            }, 700);
+        }
+
+        // ---------- 共用：翻牌流程（單人 / 電腦 / 房主） ----------
         function publish() {
-            V = { ...view(G), names: mode === 'solo' ? ['你'] : room.players.map(p => p.nick) };
+            V = { ...view(G), names: mode === 'solo' ? ['你'] : mode === 'cpu' ? ['你', '電腦'] : room.players.map(p => p.nick) };
             renderGame();
             if (mode === 'online' && isHost) room.broadcast({ type: 'VIEW', v: V });
         }
 
         function applyFlip(i, who) {
             if (!flip(G, i, who)) return;
+            if (mode === 'cpu') cpuMem = remember(cpuMem, i, G.deck[i], CPU_CAP[$('#cpuLevel').value]);   // 電腦看得到所有「翻開」的牌（含你翻的）
             if (mode === 'solo' && !soloStart) {
                 soloStart = Date.now();
                 soloTick = setInterval(() => { if (G && !G.over) renderGame(); }, 1000);
@@ -372,12 +460,13 @@
                         if (!best || G.moves < best) store.set(bestKey(), G.moves);
                     }
                     publish();
+                    cpuStep();
                 }, FLIP_BACK_MS);
             }
         }
 
         function onCard(i) {
-            if (mode === 'solo' || isHost) applyFlip(i, mode === 'solo' ? 0 : my);
+            if (mode === 'solo' || mode === 'cpu' || isHost) applyFlip(i, mode === 'solo' ? 0 : my);
             else if (room && V && V.turn === my) room.send({ type: 'FLIP', i });
         }
 
@@ -496,10 +585,11 @@
             updateScreens();
         });
         $('#soloStart').onclick = startSolo;
+        $('#cpuStart').onclick = startCpu;
         $('#hostBtn').onclick = hostRoom;
         $('#joinBtn').onclick = joinRoom;
         $('#startOnline').onclick = startOnline;
-        $('#again').onclick = () => (mode === 'solo' ? startSolo() : startOnline());
+        $('#again').onclick = () => (mode === 'solo' ? startSolo() : mode === 'cpu' ? startCpu() : startOnline());
         $('#leave').onclick = () => location.reload();
         $('#copyInvite').onclick = () => {
             const url = P2PRoom.inviteLink(hostId);

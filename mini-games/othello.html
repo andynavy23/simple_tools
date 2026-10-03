@@ -13,6 +13,33 @@
     <title>黑白棋</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>黑白棋（Othello）：8×8 棋盤，黑棋先手。下的棋子必須夾住對手的棋子（橫、直、斜都可以），被夾住的會翻成你的顏色。雙方都沒地方可下時結束，棋子多的人獲勝，一樣多是平手。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>一個人練習：「單機對電腦」，不用連線。</li>
+        <li>兩人共用一支手機：「本機雙人」。</li>
+        <li>跟朋友用房號連線對戰。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li><b>單機</b>：選難度與執黑或執白，按「單機對電腦」。簡單是隨機下，普通偏愛角落與邊，困難會往後算幾步。</li>
+        <li>棋盤上有白色小點的格子就是你能下的位置，點一下就下。沒地方可下會自動跳過並提示。</li>
+        <li>「提示」會讓一格閃爍，是普通級電腦建議的位置；「悔棋」會回到你上一次下子之前。</li>
+        <li>結束後按「再來一局」，「離開」回到選單。</li>
+        <li><b>連線</b>：輸入暱稱，按「建立房間」，用「複製邀請連結」傳給朋友；朋友開連結、輸入暱稱後按「加入」（或貼上房號）。房主執黑先手，加入者執白，限兩人。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">開局黑棋有 4 個合法位置。你執黑下其中一個，被夾住的 1 顆白棋翻成黑，比數變成 4 : 1。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>角落一旦佔到就不會被翻，最值錢；緊鄰角落的格子通常很危險。</li>
+        <li>悔棋與提示只在單機和本機雙人出現。</li>
+        <li>連線時房主離開遊戲就結束；資料只在雙方瀏覽器之間傳送。</li>
+        </ul>
+    </template>
+
     <script src="../shared/js/util.js"></script>
     <script src="../shared/js/p2p-room.js"></script>
     <style>
@@ -73,7 +100,7 @@
 
         #board {
             display: grid;
-            grid-template-columns: repeat(8, 1fr);
+            grid-template-columns: repeat(8, minmax(0, 1fr));
             gap: 2px;
             background: #0f5c32;
             padding: 4px;
@@ -81,6 +108,8 @@
         }
 
         .sq {
+            min-width: 0;
+            min-height: 0;
             aspect-ratio: 1;
             border: 0;
             padding: 0;
@@ -118,6 +147,27 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, .45);
         }
 
+        .sq.hint {
+            outline: 3px solid #fff;
+            outline-offset: -3px;
+            animation: blink .8s infinite alternate;
+        }
+
+        @keyframes blink {
+            to {
+                opacity: .6;
+            }
+        }
+
+        .sec {
+            font-weight: 700;
+            margin: 14px 0 8px;
+        }
+
+        .sec:first-child {
+            margin-top: 0;
+        }
+
         .sq.last {
             outline: 3px solid #ffd60a;
             outline-offset: -3px;
@@ -132,12 +182,14 @@
         <p class="sub">下的棋子要夾住對手的棋子（橫、直、斜都算），被夾住的會翻成你的顏色。沒有地方可下就跳過，棋子多的人獲勝。黑棋先手。</p>
 
         <div class="card" id="menu">
+            <p class="sec">單機（不用連線）</p>
             <div class="row">
-                <button class="primary" id="local">本機雙人</button>
-                <button class="primary" id="cpu">對電腦</button>
+                <button class="primary" id="cpu">單機對電腦</button>
                 <select id="level" aria-label="電腦難度"><option value="easy">簡單</option><option value="normal" selected>普通</option><option value="hard">困難</option></select>
                 <select id="first" aria-label="執哪一色"><option value="me">我執黑（先手）</option><option value="cpu">我執白（電腦先手）</option></select>
             </div>
+            <div class="row"><button id="local">本機雙人（同一支手機輪流）</button></div>
+            <p class="sec">和朋友連線</p>
             <div class="row"><input id="nick" maxlength="10" placeholder="連線暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
             <div class="row">
                 <button id="host">建立房間</button>
@@ -152,6 +204,8 @@
             <div class="score"><span><span class="dot p1"></span><b id="nBlack">2</b></span><span><span class="dot p2"></span><b id="nWhite">2</b></span></div>
             <div id="board"></div>
             <div class="row" style="justify-content:center;margin-top:14px">
+                <button id="undo" hidden>悔棋</button>
+                <button id="hint" hidden>提示</button>
                 <button class="primary" id="again" hidden>再來一局</button>
                 <button id="copy" hidden>複製邀請連結</button>
                 <button id="leave">離開</button>
@@ -271,6 +325,18 @@
             return tied[rand(tied.length)];
         }
 
+        // ---------- 悔棋與提示（歷史快照放在 state 外面，不會被連線同步） ----------
+        const snap = (s) => JSON.parse(JSON.stringify(s));
+        // 悔棋：who = 0 退一步；who = 1|2 退到「輪到 who 下」的那個時間點（對電腦時回到自己的回合，含對手被跳過的情形）。回傳要還原的 state，沒得退回傳 null
+        function undoTo(hist, who) {
+            const i = who ? hist.map(s => s.turn).lastIndexOf(who) : hist.length - 1;
+            if (i < 0) return null;
+            const s = hist[i]; hist.length = i;
+            return s;
+        }
+        // 提示：目前輪到的人的建議 [r, c]（用普通級電腦）；已結束回傳 null
+        const hintMove = (state) => (state.over ? null : cpuMove(state.board, state.turn, 'normal'));
+
         // 成員端檢查房主傳來的狀態
         function validState(s) {
             const pos = (p) => Array.isArray(p) && p.length === 2 && p.every(v => Number.isInteger(v) && v >= 0 && v < N);
@@ -280,7 +346,7 @@
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
-        let mode = 'menu', S = null, room = null, myPlayer = 0, names = ['', ''], firstGame = true, hostId = '', cpuPlayer = 0, cpuLevel = 'normal', cpuTimer = 0;
+        let mode = 'menu', S = null, room = null, myPlayer = 0, names = ['', ''], firstGame = true, hostId = '', cpuPlayer = 0, cpuLevel = 'normal', cpuTimer = 0, H = [], hint = null;
 
         const netMsg = (t) => { $('#netMsg').textContent = t; };
         const enableNet = (on) => ['#local', '#cpu', '#host', '#join', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
@@ -299,7 +365,7 @@
             const ok = new Set(canPlay ? legalMoves(S.board, S.turn).map(([r, c]) => r * N + c) : []);
             for (let i = 0; i < N * N; i++) {
                 const r = Math.floor(i / N), c = i % N, v = S.board[r][c], b = sq[i];
-                b.className = 'sq' + (ok.has(i) ? ' ok' : '') + (S.last && S.last[0] === r && S.last[1] === c ? ' last' : '');
+                b.className = 'sq' + (ok.has(i) ? ' ok' : '') + (hint && hint[0] === r && hint[1] === c ? ' hint' : '') + (S.last && S.last[0] === r && S.last[1] === c ? ' last' : '');
                 b.disabled = !ok.has(i);
                 b.replaceChildren(...(v ? [Object.assign(document.createElement('i'), { className: 'p' + v })] : []));
             }
@@ -316,17 +382,28 @@
             $('#status').innerHTML = text;
             $('#again').hidden = !(S.over && (mode === 'local' || mode === 'host' || mode === 'cpu'));
             $('#copy').hidden = mode !== 'host';
+            const solo = mode === 'local' || mode === 'cpu';
+            $('#undo').hidden = $('#hint').hidden = !solo;
+            $('#undo').disabled = !H.length || (mode === 'cpu' && !H.some(h => h.turn === myPlayer));
+            $('#hint').disabled = S.over || (mode === 'cpu' && S.turn !== myPlayer);
+        }
+        // 單機走一步（先存快照供悔棋）
+        function move(who, r, c) {
+            const s = snap(S);
+            if (!play(S, who, r, c)) return false;
+            H.push(s); hint = null;
+            return true;
         }
 
         function show(screen) { $('#menu').hidden = screen !== 'menu'; $('#game').hidden = screen !== 'game'; }
 
-        function startLocal() { mode = 'local'; S = newGame(); build(); show('game'); render(); }
+        function startLocal() { mode = 'local'; S = newGame(); H = []; hint = null; build(); show('game'); render(); }
 
         // ---------- 對電腦 ----------
         function startCpu() {
             mode = 'cpu'; cpuLevel = $('#level').value; myPlayer = $('#first').value === 'cpu' ? 2 : 1; cpuPlayer = other(myPlayer);
             names = myPlayer === 1 ? ['你', '電腦'] : ['電腦', '你'];
-            S = newGame(); build(); show('game'); render(); scheduleCpu();
+            S = newGame(); H = []; hint = null; build(); show('game'); render(); scheduleCpu();
         }
         function scheduleCpu() {
             clearTimeout(cpuTimer);
@@ -334,7 +411,7 @@
             cpuTimer = setTimeout(() => {
                 if (mode !== 'cpu' || !S || S.over || S.turn !== cpuPlayer) return;
                 const mv = cpuMove(S.board, cpuPlayer, cpuLevel);
-                if (mv) play(S, cpuPlayer, mv[0], mv[1]);
+                if (mv) move(cpuPlayer, mv[0], mv[1]);
                 render(); scheduleCpu();                              // 對手無子可下被跳過時，輪到電腦連下
             }, 550);
         }
@@ -381,8 +458,8 @@
         }
 
         function onSquare(r, c) {
-            if (mode === 'local') { if (play(S, S.turn, r, c)) render(); }
-            else if (mode === 'cpu') { if (S.turn === myPlayer && play(S, myPlayer, r, c)) { render(); scheduleCpu(); } }
+            if (mode === 'local') { if (move(S.turn, r, c)) render(); }
+            else if (mode === 'cpu') { if (S.turn === myPlayer && move(myPlayer, r, c)) { render(); scheduleCpu(); } }
             else if (mode === 'host') { if (play(S, 1, r, c)) publish(); }
             else if (mode === 'guest' && room && S && S.turn === myPlayer) room.send({ type: 'MOVE', r, c });
         }
@@ -391,7 +468,9 @@
         $('#cpu').onclick = startCpu;
         $('#host').onclick = hostRoom;
         $('#join').onclick = joinRoom;
-        $('#again').onclick = () => { S = newGame(); if (mode === 'host') publish(); else { render(); scheduleCpu(); } };
+        $('#again').onclick = () => { S = newGame(); H = []; hint = null; if (mode === 'host') publish(); else { render(); scheduleCpu(); } };
+        $('#undo').onclick = () => { const s = undoTo(H, mode === 'cpu' ? myPlayer : 0); if (!s) return; clearTimeout(cpuTimer); S = s; hint = null; render(); scheduleCpu(); };
+        $('#hint').onclick = () => { hint = hintMove(S); render(); };
         $('#copy').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copy'), url, () => prompt('請手動複製邀請連結：', url)); };
         $('#leave').onclick = () => location.reload();
         if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();

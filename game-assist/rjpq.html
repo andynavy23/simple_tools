@@ -4,7 +4,7 @@
         <meta charset="UTF-8" />
         <meta
             name="viewport"
-            content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+            content="width=device-width, initial-scale=1.0"
         />
         <meta
             property="og:image"
@@ -21,6 +21,40 @@
         />
         <title>Artale RJPQ - 輔助工具</title>
         <!-- 使用 PeerJS 進行 P2P 連線 -->
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>RJPQ（羅密歐與茱麗葉）門位標記工具：10 層、每層 4 道門，標記哪道門是通路、哪道是死路，最後可產生各人的路線總覽。可以自己一個人用（不連線），也可以建房讓最多 8 人即時同步標記。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>一個人跑副本時，把試過的門記下來，免得重複踩。</li>
+        <li>和隊友分工探路，用同步標記一起拼出路線。</li>
+        <li>通關前用「路線總覽」整理成 10 層的門號字串。</li>
+        </ul>
+        <h3>怎麼用：單人使用（不連線）</h3>
+        <ol>
+        <li>按最上面的「單人使用（不連線）」（會自動幫你取暱稱，也可先輸入暱稱按「確定暱稱」）。</li>
+        <li>電腦：左鍵點門＝標記通路，再點一次取消；右鍵＝標記死路（✕），再按取消。</li>
+        <li>手機：點一下＝標記通路；0.5 秒內連點兩下＝標記 / 取消死路。</li>
+        <li>可用顏色選擇換標記顏色；「路線總覽」整理成 L1 到 L10（由下往上）的門號；「清空所有標記」重來。</li>
+        <li>標記存在這台裝置，重新整理後再按「單人使用」會接續。按「離開單人模式」回到選單。</li>
+        </ol>
+        <h3>怎麼用：連線</h3>
+        <ol>
+        <li>房主輸入暱稱，按「建立房間」，用「邀請連結」傳給隊友（最多 8 人）。</li>
+        <li>隊友開連結、輸入暱稱，按「加入房間」。</li>
+        <li>每道門只能被一人標記為通路；房主可取消別人標記、清空全部、踢人。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">單人：L10 點第 2 道門（通路）、L9 點第 4 道門 → 路線總覽顯示「0-0-0-0-0-0-0-0-4-2」（由 L1 排到 L10，0 表示尚未確定）。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>單人版完全不連線，離線也能用。</li>
+        <li>電腦版有「懸浮視窗」可把地圖放在遊戲上方（需 Chrome / Edge 新版）。</li>
+        <li>路線總覽會用死路標記做推論，只供參考。</li>
+        </ul>
+    </template>
+
         <script src="../shared/js/util.js"></script>
         <script src="../shared/js/p2p-room.js"></script>
         <link rel="stylesheet" href="../shared/css/maple.css">
@@ -111,6 +145,26 @@
                 gap: 6px;
                 margin-top: 8px;
                 margin-bottom: 3px;
+            }
+
+            /* 手機：觸控目標 >= 44px、輸入框 16px（避免 iOS 放大） */
+            @media (pointer: coarse), (max-width: 600px) {
+                .ms-btn { min-height: 44px; }
+                input { min-height: 44px; font-size: 16px; box-sizing: border-box; }
+                .door { height: 44px; }
+                .door-tag { font-size: 11px; transform: none; bottom: 0; }
+                .door-cell-id { font-size: 12px; }
+                .color-picker { gap: 8px; }
+                .color-option { width: 40px; height: 40px; }
+                .kick-btn { font-size: 22px; padding: 6px 10px; margin-left: 6px; }
+                .help-btn { font-size: 15px; padding: 12px; min-height: 44px; box-sizing: border-box; }
+                .participant-tag { font-size: 14px; }
+                #btn-leave, #btn-log-toggle { font-size: 13px !important; }
+                .log-panel { font-size: 12px; }
+                .panel-label { font-size: 15px; }
+                #conn-status { font-size: 13px !important; }
+                .header { padding-right: 56px; flex-wrap: wrap; gap: 4px; }
+                .header .title { font-size: 14px; }
             }
 
             @media (max-width: 768px) {
@@ -502,6 +556,17 @@
                         class="conn-panel"
                         style="margin-top: 6px"
                     >
+                        <button
+                            class="ms-btn primary"
+                            id="btn-solo"
+                            onclick="startSolo()"
+                            style="width: 100%; margin-bottom: 4px"
+                        >
+                            單人使用（不連線）
+                        </button>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 8px">
+                            自己一個人標記門位，不用建房，資料只存在這台裝置。
+                        </div>
                         <div
                             class="panel-label"
                             style="
@@ -510,7 +575,7 @@
                                 justify-content: space-between;
                             "
                         >
-                            <span>📡 房間設定</span>
+                            <span>📡 和隊友連線</span>
                             <span
                                 id="conn-status"
                                 style="font-size: 10px; color: #999"
@@ -905,7 +970,7 @@
                 if (val === "") {
                     val = "冒險者" + Math.floor(1000 + Math.random() * 9000);
                 }
-                if (!P2PRoom.validNick(val)) {
+                if (typeof P2PRoom !== "undefined" && !P2PRoom.validNick(val)) {
                     return alert("暱稱請使用 1-10 位英數或中文字。");
                 }
 
@@ -1023,7 +1088,10 @@
                     room = null;
                 }
                 isHost = false;
+                solo = false;
                 fullMyId = "";
+                getDoc().getElementById("btn-solo").disabled = false;
+                getDoc().getElementById("btn-leave").innerText = "離開房間";
                 gameState.slots = Array(8).fill(null);
                 mySlotIndex = -1;
 
@@ -1281,12 +1349,39 @@
                 refreshUI();
             }
 
+            // 單人使用：不建立 P2PRoom，自己就是房主（槽位 0），標記存在 localStorage
+            let solo = false;
+            const SOLO_KEY = "rjpq_solo";
+            function startSolo() {
+                if (room || solo || isHost) return;
+                if (!myNick) saveNick();
+                if (!myNick) return;
+                solo = true;
+                isHost = true;
+                mySlotIndex = 0;
+                fullMyId = "solo";
+                gameState.slots[0] = { index: 0, nick: myNick, color: myColor, peerId: "solo", isHost: true, connected: true, passMarkers: [], deadEndMarkers: [] };
+                try {
+                    const sv = JSON.parse(localStorage.getItem(SOLO_KEY));
+                    if (sv && Array.isArray(sv.passMarkers) && Array.isArray(sv.deadEndMarkers)) Object.assign(gameState.slots[0], { passMarkers: sv.passMarkers, deadEndMarkers: sv.deadEndMarkers });
+                } catch (e) { }
+                ["btn-host", "btn-join", "join-id", "btn-solo"].forEach((i) => (getDoc().getElementById(i).disabled = true));
+                ["btn-leave", "btn-reset-all", "btn-summary"].forEach((i) => (getDoc().getElementById(i).style.display = "inline-flex"));
+                getDoc().getElementById("btn-leave").innerText = "離開單人模式";
+                setStatus("🟢 單人使用（不連線）", "#4caf50");
+                log("單人使用：資料只存在本機。", "success");
+                refreshUI();
+            }
+
             function broadcastState() {
-                if (!isHost) return;
+                if (!isHost || !room) return;
                 room.broadcast({ type: "STATE_SYNC", state: gameState });
             }
 
             function refreshUI() {
+                if (solo && gameState.slots[0]) {
+                    try { localStorage.setItem(SOLO_KEY, JSON.stringify({ passMarkers: gameState.slots[0].passMarkers, deadEndMarkers: gameState.slots[0].deadEndMarkers })); } catch (e) { }
+                }
                 // 更新成員名單
                 const activeSlots = gameState.slots.filter(
                     (s) => s !== null && s.connected,
@@ -1780,7 +1875,7 @@
                 .getElementById("pip-btn")
                 .addEventListener("click", togglePiP);
             renderGrid();
-            const initialHash = P2PRoom.roomFromUrl();
+            const initialHash = typeof P2PRoom !== "undefined" && P2PRoom.roomFromUrl();
             if (initialHash) {
                 const ji = getDoc().getElementById("join-id");
                 if (ji) ji.value = initialHash;

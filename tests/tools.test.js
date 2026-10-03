@@ -929,11 +929,11 @@ const NL = String.fromCharCode(10);
     // 外框與首頁：每頁載入 chrome.js；首頁每張卡片都有 data-topic
     for (const dir of ['game-assist', 'mini-games', 'fun', 'utils', 'reading'])
         for (const f of fs.readdirSync(path.join(root, dir)).filter(x => x.endsWith('.html'))) assert.ok(read(`${dir}/${f}`).includes('shared/js/chrome.js'), `${dir}/${f} 沒有載入 chrome.js`);
-    // 使用說明：連線遊戲（階段 3 補齊）以外的頁面都要有 <template id="help">，且含必要的段落
+    // 使用說明：每個頁面都要有 <template id="help">，且含必要的段落
     for (const dir of ['game-assist', 'mini-games', 'fun', 'utils', 'reading'])
         for (const f of fs.readdirSync(path.join(root, dir)).filter(x => x.endsWith('.html'))) {
             const h = read(`${dir}/${f}`), t = /<template id="help">([\s\S]*?)<\/template>/.exec(h);
-            if (!t) { assert.ok(h.includes('p2p-room.js'), `${dir}/${f} 缺少使用說明 <template id="help">`); continue; }
+            assert.ok(t, `${dir}/${f} 缺少使用說明 <template id="help">`);
             for (const sec of ['這是什麼', '什麼時候用', '小提醒']) assert.ok(t[1].includes(sec), `${dir}/${f} 的說明缺「${sec}」`);
             assert.ok(/範例|計分/.test(t[1]), `${dir}/${f} 的說明缺「範例」（遊戲可用「計分」「勝負與計分」代替）`);
             assert.ok(/怎麼用|怎麼玩/.test(t[1]), `${dir}/${f} 的說明缺「怎麼用 / 怎麼玩」`); assert.equal(h.split('<template id="help">').length, 2, `${dir}/${f} 有多份說明`);
@@ -2323,5 +2323,9 @@ const NL = String.fromCharCode(10);
     assert.ok(m.validItems([])); assert.ok(m.validItems(merged)); assert.ok(!m.validItems([{ t: '', done: false }])); assert.ok(!m.validItems('x')); assert.ok(!m.validItems([{ t: 'a', done: 1 }]));
     ok('countdown: checklist');
 }
+
+// ===== 單機模式測試（階段 3）：tests/solo-*.test.js 各自獨立，這裡一起執行；非同步測試請 push 到 require('./_load').pending =====
+for (const f of fs.readdirSync(__dirname).filter(x => /^solo-.*\.test\.js$/.test(x)).sort()) require(path.join(__dirname, f));
+pending.push(...require('./_load').pending);
 
 Promise.all(pending).then(() => console.log('ALL OK')).catch((e) => { console.error(e); process.exit(1); });

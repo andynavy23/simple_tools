@@ -39,6 +39,7 @@ node tests/tools.test.js    # 各工具純邏輯，約 1–1.5 分鐘；順便�
 ```
 
 - 純邏輯寫在頁面的 `// --- pure ---` 與 `// --- /pure ---` 之間，測試用 `load(file, 'names')` 取出來執行。
+- 單機模式 / 電腦玩家的測試放 `tests/solo-<批次>.test.js`（用 `tests/_load.js` 的 `load`），`tools.test.js` 會自動載入全部 `solo-*.test.js`。
 - 畫面與 P2P 要在真實瀏覽器測（puppeteer-core + Edge，需 `--disable-extensions`，點擊用 DOM `.click()`）；連線工具開多個分頁。
 
 ## 新增 / 合併工具

@@ -13,6 +13,33 @@
     <title>四子棋</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>四子棋：紅、黃兩色輪流把棋子投進直欄，棋子會落到該欄最底下。誰先連成四顆（橫、直、斜都算）就贏；棋盤 7 欄 6 列，下滿沒人連成就是平手。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>一個人想打發時間：直接「單機對電腦」，不用連線。</li>
+        <li>兩個人同一支手機輪流下：「本機雙人」。</li>
+        <li>和遠方朋友對戰：建立房間，把邀請連結傳給對方。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li><b>單機</b>：選難度（簡單 / 普通 / 困難）與誰先下，按「單機對電腦」。電腦會想一下才下。</li>
+        <li>點棋盤上任一欄就會落子。輪到你時才能點。</li>
+        <li>「提示」會把建議的那一欄亮起（用普通級電腦算）；「悔棋」會收回你上一步，並一起收回電腦的回應，回到你的回合。</li>
+        <li>結束後按「再來一局」，先手會和上一局對調；「離開」回到選單。</li>
+        <li><b>連線</b>：輸入暱稱（1–10 字），按「建立房間」，再按「複製邀請連結」傳給朋友；朋友開連結、輸入暱稱按「加入」，也可以貼上房號。房主執紅先手，加入的人執黃，只能兩人。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">你先手、選「簡單」。連下同一欄三顆紅子，電腦沒擋就再下一顆，直向連四獲勝。想收回一步時按「悔棋」。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>簡單難度偶爾會亂下，但明顯的一步勝或必擋不會漏；困難會算比較多步。</li>
+        <li>悔棋與提示只在單機和本機雙人出現，連線對戰沒有。</li>
+        <li>連線時房主離開，遊戲就結束；資料只在你和朋友的瀏覽器之間傳送。</li>
+        </ul>
+    </template>
+
     <script src="../shared/js/util.js"></script>
     <script src="../shared/js/p2p-room.js"></script>
     <style>
@@ -66,7 +93,7 @@
 
         #board {
             display: grid;
-            grid-template-columns: repeat(7, 1fr);
+            grid-template-columns: repeat(7, minmax(0, 1fr));
             gap: 6px;
             background: var(--board);
             padding: 10px;
@@ -88,6 +115,31 @@
         .col:disabled {
             opacity: 1;
             cursor: default;
+        }
+
+        .col.hint {
+            background: rgba(255, 255, 255, .35);
+            box-shadow: 0 0 0 3px #fff inset;
+        }
+
+        .sec {
+            font-weight: 700;
+            margin: 14px 0 8px;
+        }
+
+        .sec:first-child {
+            margin-top: 0;
+        }
+
+        @media (max-width: 480px) {
+            #board {
+                gap: 4px;
+                padding: 8px;
+            }
+
+            .col {
+                gap: 4px;
+            }
         }
 
         .slot {
@@ -127,12 +179,14 @@
         <p class="sub">先把四顆同色連成一線（橫、直、斜）就贏。</p>
 
         <div class="card" id="menu">
+            <p class="sec">單機（不用連線）</p>
             <div class="row">
-                <button class="primary" id="local">本機雙人</button>
-                <button class="primary" id="cpu">對電腦</button>
+                <button class="primary" id="cpu">單機對電腦</button>
                 <select id="level" aria-label="電腦難度"><option value="easy">簡單</option><option value="normal" selected>普通</option><option value="hard">困難</option></select>
                 <select id="first" aria-label="誰先下"><option value="me">我先手（紅）</option><option value="cpu">電腦先手</option></select>
             </div>
+            <div class="row"><button id="local">本機雙人（同一支手機輪流）</button></div>
+            <p class="sec">和朋友連線</p>
             <div class="row"><input id="nick" maxlength="10" placeholder="連線暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
             <div class="row">
                 <button id="host">建立房間</button>
@@ -146,6 +200,8 @@
             <div class="status" id="status" role="status"></div>
             <div id="board"></div>
             <div class="row" style="justify-content:center;margin-top:14px">
+                <button id="undo" hidden>悔棋</button>
+                <button id="hint" hidden>提示</button>
                 <button class="primary" id="again" hidden>再來一局</button>
                 <button id="copy" hidden>複製邀請連結</button>
                 <button id="leave">離開</button>
@@ -266,6 +322,18 @@
             return tied[rand(tied.length)];
         }
 
+        // ---------- 悔棋與提示（歷史快照放在 state 外面，不會被連線同步） ----------
+        const snap = (s) => JSON.parse(JSON.stringify(s));
+        // 悔棋：who = 0 退一步；who = 1|2 退到「輪到 who 下」的那個時間點（對電腦時回到自己的回合）。回傳要還原的 state，沒得退回傳 null
+        function undoTo(hist, who) {
+            const i = who ? hist.map(s => s.turn).lastIndexOf(who) : hist.length - 1;
+            if (i < 0) return null;
+            const s = hist[i]; hist.length = i;
+            return s;
+        }
+        // 提示：目前輪到的人的建議欄（用普通級電腦）；已結束回傳 -1
+        const hintCol = (state) => (state.winner || state.draw ? -1 : cpuChoose(state.board, state.turn, 'normal'));
+
         // 成員端收到房主狀態時的格式檢查
         function validState(s) {
             return !!s && Array.isArray(s.board) && s.board.length === ROWS && s.board.every(r => Array.isArray(r) && r.length === COLS && r.every(v => v === 0 || v === 1 || v === 2))
@@ -277,7 +345,7 @@
         const $ = (s) => document.querySelector(s);
         let mode = 'menu';           // menu | local | host | guest
         let S = null;                // 狀態（本機 / 房主：權威；成員：房主傳來）
-        let room = null, myPlayer = 0, names = ['', ''], firstNext = 1, hostId = '', cpuPlayer = 0, cpuLevel = 'normal', cpuTimer = 0;
+        let room = null, myPlayer = 0, names = ['', ''], firstNext = 1, hostId = '', cpuPlayer = 0, cpuLevel = 'normal', cpuTimer = 0, H = [], hint = -1;
 
         const netMsg = (t) => { $('#netMsg').textContent = t; };
         const enableNet = (on) => ['#local', '#cpu', '#host', '#join', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
@@ -302,6 +370,7 @@
             const myTurn = mode === 'local' || S.turn === myPlayer;
             for (let c = 0; c < COLS; c++) {
                 const col = cols[c];
+                col.classList.toggle('hint', c === hint);
                 col.disabled = !!S.winner || S.draw || !myTurn || S.board[0][c] !== 0 || (mode === 'host' && (!room || room.players.length < 2));
                 for (let r = 0; r < ROWS; r++) {
                     const v = S.board[r][c], slot = col.children[r];
@@ -318,6 +387,17 @@
             $('#status').innerHTML = text;
             $('#again').hidden = !((S.winner || S.draw) && (mode === 'local' || mode === 'host' || mode === 'cpu'));
             $('#copy').hidden = mode !== 'host';
+            const solo = mode === 'local' || mode === 'cpu';
+            $('#undo').hidden = $('#hint').hidden = !solo;
+            $('#undo').disabled = !H.length || (mode === 'cpu' && !H.some(h => h.turn === myPlayer));
+            $('#hint').disabled = !!S.winner || S.draw || (mode === 'cpu' && S.turn !== myPlayer);
+        }
+        // 單機走一步（先存快照供悔棋）
+        function move(who, col) {
+            const s = snap(S);
+            if (!play(S, who, col)) return false;
+            H.push(s); hint = -1;
+            return true;
         }
 
         function show(screen) {
@@ -328,7 +408,7 @@
         // ---------- 本機 ----------
         function startLocal() {
             mode = 'local';
-            S = newGame(1); firstNext = 2;
+            S = newGame(1); firstNext = 2; H = []; hint = -1;
             build(); show('game'); render();
         }
 
@@ -336,7 +416,7 @@
         function startCpu() {
             mode = 'cpu'; cpuLevel = $('#level').value; myPlayer = $('#first').value === 'cpu' ? 2 : 1; cpuPlayer = myPlayer === 1 ? 2 : 1;
             names = myPlayer === 1 ? ['你', '電腦'] : ['電腦', '你'];
-            firstNext = 1; S = newGame(1); firstNext = 2; build(); show('game'); render(); scheduleCpu();
+            S = newGame(1); firstNext = 2; H = []; hint = -1; build(); show('game'); render(); scheduleCpu();
         }
         function scheduleCpu() {
             clearTimeout(cpuTimer);
@@ -344,7 +424,7 @@
             cpuTimer = setTimeout(() => {
                 if (mode !== 'cpu' || !S || S.winner || S.draw || S.turn !== cpuPlayer) return;
                 const c = cpuChoose(S.board, cpuPlayer, cpuLevel);
-                if (c >= 0) play(S, cpuPlayer, c);
+                if (c >= 0) move(cpuPlayer, c);
                 render();
             }, 450);
         }
@@ -413,8 +493,8 @@
         }
 
         function onColumn(c) {
-            if (mode === 'local') { if (play(S, S.turn, c)) render(); }
-            else if (mode === 'cpu') { if (S.turn === myPlayer && play(S, myPlayer, c)) { render(); scheduleCpu(); } }
+            if (mode === 'local') { if (move(S.turn, c)) render(); }
+            else if (mode === 'cpu') { if (S.turn === myPlayer && move(myPlayer, c)) { render(); scheduleCpu(); } }
             else if (mode === 'host') { if (play(S, 1, c)) publish(); }
             else if (mode === 'guest' && room && S && S.turn === myPlayer) room.send({ type: 'DROP', col: c });
         }
@@ -425,9 +505,11 @@
         $('#host').onclick = hostRoom;
         $('#join').onclick = joinRoom;
         $('#again').onclick = () => {
-            S = newGame(firstNext); firstNext = firstNext === 1 ? 2 : 1;   // 輸家 / 對方先手：每局輪流先手
+            S = newGame(firstNext); firstNext = firstNext === 1 ? 2 : 1; H = []; hint = -1;   // 輸家 / 對方先手：每局輪流先手
             if (mode === 'host') publish(); else { render(); scheduleCpu(); }
         };
+        $('#undo').onclick = () => { const s = undoTo(H, mode === 'cpu' ? myPlayer : 0); if (!s) return; clearTimeout(cpuTimer); S = s; hint = -1; render(); scheduleCpu(); };
+        $('#hint').onclick = () => { hint = hintCol(S); render(); };
         $('#copy').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copy'), url, () => prompt('請手動複製邀請連結：', url)); };
         $('#leave').onclick = () => location.reload();
 

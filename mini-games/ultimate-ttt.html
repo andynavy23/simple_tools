@@ -13,6 +13,36 @@
     <title>終極井字棋</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>終極井字棋：大棋盤由 9 個小井字棋組成。你下在小棋盤的哪一格，對手下一步就必須下在大棋盤的對應位置。可和電腦、同一台裝置的朋友，或連線的朋友對戰。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>普通井字棋太容易平手，想要有策略的版本</li>
+        <li>一個人想練習、或和朋友同機輪流下</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+        <li><b>和電腦下</b>：選難度（簡單＝亂下合法步；普通＝能贏就贏、會擋你的連線、避免送你去好位置；困難＝向前搜尋數步），按「和電腦下」。你是 X，電腦是 O，之後每局輪流先手</li>
+        <li><b>本機雙人</b>：同一台輪流點</li>
+        <li><b>連線</b>：輸入暱稱按「建立房間」，傳邀請連結；朋友輸入暱稱按「加入」。房主是 X、朋友是 O</li>
+        <li>發亮的綠框小棋盤就是這一步可以下的地方；點空格落子</li>
+        </ol>
+        <h3>規則</h3>
+        <ul>
+        <li>在小棋盤連成一線就佔領那一區；小棋盤填滿沒人連線算平手區</li>
+        <li>如果對應的小棋盤已經結束，對手可以任選一個小棋盤</li>
+        <li>先在大棋盤連成一線的人獲勝；全部分出勝負仍沒連線則平手</li>
+        </ul>
+        <h3>範例</h3>
+        <div class="eg">你（X）下在第 1 區的右下格（第 9 格），電腦就必須下在第 9 區（大棋盤的右下）。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>困難模式電腦會想一下，在手機上也只需要不到一秒</li>
+        <li>單機與本機雙人完全不連網</li>
+        </ul>
+    </template>
+
     <script src="../shared/js/util.js"></script>
     <script src="../shared/js/p2p-room.js"></script>
     <style>
@@ -36,6 +66,10 @@
 
         .row input {
             flex: 1 1 130px;
+        }
+
+        #soloBtn {
+            flex: 1 1 160px;
         }
 
         .status {
@@ -88,7 +122,13 @@
             border-radius: 8px;
             background: var(--card, #fff);
             min-width: 0;
+            min-height: 0;
+            border: 1px solid var(--line);
         }
+
+        .c.x:disabled { color: var(--x); }
+
+        .c.o:disabled { color: var(--o); }
 
         .c:disabled {
             opacity: 1;
@@ -120,7 +160,14 @@
         <p class="sub">你下在小棋盤的哪一格，對手就必須下在大棋盤的對應位置。先在大棋盤連成一線的人獲勝。</p>
 
         <div class="card" id="menu">
-            <div class="row"><button class="primary" id="local">本機雙人</button></div>
+            <h2>單機</h2>
+            <div class="row">
+                <button class="primary" id="soloBtn">和電腦下</button>
+                <label for="cpuLevel" class="muted">難度</label>
+                <select id="cpuLevel"><option value="easy">簡單</option><option value="normal" selected>普通</option><option value="hard">困難</option></select>
+            </div>
+            <div class="row"><button id="local">本機雙人（同一台輪流）</button></div>
+            <h2 style="margin-top:18px">和朋友連線</h2>
             <div class="row"><input id="nick" maxlength="10" placeholder="連線暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
             <div class="row">
                 <button id="host">建立房間</button>
@@ -175,13 +222,96 @@
                 && (s.turn === 1 || s.turn === 2) && Number.isInteger(s.next) && s.next >= -1 && s.next <= 8 && (s.winner === 0 || s.winner === 1 || s.winner === 2) && typeof s.draw === 'boolean'
                 && (s.last === null || (Array.isArray(s.last) && s.last.length === 2 && s.last.every(v => Number.isInteger(v) && v >= 0 && v < 9)));
         }
+
+        // ---------- 電腦對手（單機）----------
+        const cloneG = (s) => ({ cells: s.cells.map(r => r.slice()), small: s.small.slice(), turn: s.turn, next: s.next, winner: s.winner, draw: s.draw, last: s.last });
+        // 目前輪到的人所有合法步 [b, c]（和 canPlay 一致）
+        function legalMoves(s) {
+            const out = [];
+            if (s.winner || s.draw) return out;
+            for (let b = 0; b < 9; b++) {
+                if (s.small[b] !== 0 || (s.next !== -1 && s.next !== b)) continue;
+                for (let c = 0; c < 9; c++) if (s.cells[b][c] === 0) out.push([b, c]);
+            }
+            return out;
+        }
+        // who 在這個 9 格上「再下一格就連線」的空格
+        const winCells = (a, who) => { const r = []; for (const l of LINES) { const m = l.filter(i => a[i] === who).length, e = l.filter(i => a[i] === 0); if (m === 2 && e.length === 1) r.push(e[0]); } return r; };
+        const pickOne = (arr, rand) => arr[Math.floor(rand() * arr.length)];
+
+        // 普通：能贏就贏；贏小棋盤 > 擋對手在這個小棋盤的連線 > 其他；並避免把對手送到他能贏小棋盤（或贏整局）的棋盤、或送去「任選」
+        function scoreMove(s, b, c, rand) {
+            const who = s.turn, opp = 3 - who, t = cloneG(s);
+            play(t, who, b, c);
+            if (t.winner === who) return 1e6;
+            let sc = rand() * 4;
+            if (t.small[b] === who) sc += 100 + (b === 4 ? 20 : 0);
+            else if (winCells(s.cells[b], opp).includes(c)) sc += 60;
+            sc += c === 4 ? 3 : [0, 2, 6, 8].includes(c) ? 2 : 0;
+            if (!t.winner && !t.draw) {
+                if (t.next === -1) sc -= 40;
+                else {
+                    const oc = winCells(t.cells[t.next], opp);
+                    if (oc.length) sc -= 80;
+                    for (const k of oc) { const u = cloneG(t); play(u, opp, t.next, k); if (u.winner === opp) sc -= 1000; }
+                }
+            }
+            return sc;
+        }
+
+        // 困難：靜態評分（小棋盤勝負 + 小棋盤內的威脅 + 大棋盤的連線潛力），從 me 的角度
+        function evalPos(s, me) {
+            const BW = [3, 2, 3, 2, 4, 2, 3, 2, 3], opp = 3 - me; let v = 0;
+            for (let b = 0; b < 9; b++) {
+                if (s.small[b] === me) v += BW[b] * 10; else if (s.small[b] === opp) v -= BW[b] * 10;
+                else if (s.small[b] === 0) for (const l of LINES) {
+                    const m = l.filter(i => s.cells[b][i] === me).length, o = l.filter(i => s.cells[b][i] === opp).length;
+                    if (m && !o) v += m === 2 ? 3 : 0.5; else if (o && !m) v -= o === 2 ? 3 : 0.5;
+                }
+            }
+            for (const l of LINES) {
+                const m = l.filter(i => s.small[i] === me).length, o = l.filter(i => s.small[i] === opp).length, d = l.filter(i => s.small[i] === 3).length;
+                if (d) continue;
+                if (m && !o) v += m === 2 ? 25 : 4; else if (o && !m) v -= o === 2 ? 25 : 4;
+            }
+            return v;
+        }
+        function search(s, depth, alpha, beta, me, ctr) {
+            if (s.winner) return s.winner === me ? 1e5 + depth : -1e5 - depth;
+            if (s.draw) return 0;
+            if (depth === 0 || ctr.n++ > ctr.max) return evalPos(s, me);
+            const max = s.turn === me; let best = max ? -Infinity : Infinity;
+            for (const [b, c] of legalMoves(s)) {
+                const t = cloneG(s); play(t, s.turn, b, c);
+                const v = search(t, depth - 1, alpha, beta, me, ctr);
+                if (max) { if (v > best) best = v; if (v > alpha) alpha = v; } else { if (v < best) best = v; if (v < beta) beta = v; }
+                if (alpha >= beta) break;
+            }
+            return best;
+        }
+
+        // 電腦替「目前輪到的人」選一步 [b, c]；level：easy 隨機合法步 / normal 規則評分 / hard 限深 alpha-beta（depth 層、最多約 max 個節點）
+        // ponytail: hard 只搜 5 層 + 節點上限，沒有置換表；要更強可加深度與走法排序
+        function cpuMove(s, level = 'normal', rand = Math.random, depth = 5, max = 120000) {
+            const mv = legalMoves(s);
+            if (!mv.length) return null;
+            if (level === 'easy') return pickOne(mv, rand);
+            if (level === 'normal') { const sc = mv.map(([b, c]) => scoreMove(s, b, c, rand)), top = Math.max(...sc); return mv[sc.indexOf(top)]; }
+            const ctr = { n: 0, max }; let bestV = -Infinity, best = null;
+            for (const i of mv.map((m, i) => [rand(), i]).sort((x, y) => x[0] - y[0]).map(x => x[1])) {
+                const [b, c] = mv[i], t = cloneG(s); play(t, s.turn, b, c);
+                const v = search(t, depth - 1, bestV, Infinity, s.turn, ctr);
+                if (v > bestV || !best) { bestV = v; best = [b, c]; }
+            }
+            return best;
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
         let mode = 'menu', S = null, room = null, myPlayer = 0, names = ['', ''], firstNext = 1, hostId = '';
         const MARK = ['', 'X', 'O'];
         const netMsg = (t) => { $('#netMsg').textContent = t; };
-        const enableNet = (on) => ['#local', '#host', '#join', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const enableNet = (on) => ['#soloBtn', '#local', '#host', '#join', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
 
         function build() {
             $('#board').replaceChildren(...Array.from({ length: 9 }, (_, b) => {
@@ -211,13 +341,22 @@
             if (S.winner) text = `${mk(S.winner)} ${who(S.winner)} 獲勝！`;
             else if (S.draw) text = '平手';
             else if (mode === 'host' && room && room.players.length < 2) text = '等待玩家加入…';
+            else if (mode === 'cpu' && S.turn === 2) text = `${mk(2)} 電腦思考中…`;
             else text = mode === 'local' ? `輪到 ${mk(S.turn)}${S.next === -1 ? '（任選小棋盤）' : `（第 ${S.next + 1} 區）`}` : (S.turn === myPlayer ? `${mk(S.turn)} 輪到你了${S.next === -1 ? '（任選小棋盤）' : `（第 ${S.next + 1} 區）`}` : `${mk(S.turn)} 輪到 ${who(S.turn)}`);
             $('#status').innerHTML = text;
-            $('#again').hidden = !((S.winner || S.draw) && (mode === 'local' || mode === 'host'));
+            $('#again').hidden = !((S.winner || S.draw) && (mode === 'local' || mode === 'host' || mode === 'cpu'));
             $('#copy').hidden = mode !== 'host';
         }
         const show = (screen) => { $('#menu').hidden = screen !== 'menu'; $('#game').hidden = screen !== 'game'; };
 
+        let cpuTimer = 0;
+        // 單機：你是 X（1），電腦是 O（2）；輪到電腦時稍等一下再下
+        function cpuTurn() {
+            clearTimeout(cpuTimer);
+            if (mode !== 'cpu' || !S || S.winner || S.draw || S.turn !== 2) return;
+            cpuTimer = setTimeout(() => { const m = cpuMove(S, $('#cpuLevel').value); if (m && play(S, 2, m[0], m[1])) render(); }, 600 + Util.rnd(300));
+        }
+        function startSolo() { mode = 'cpu'; myPlayer = 1; names = ['你', '電腦']; S = newGame(1); firstNext = 2; build(); show('game'); render(); }
         function startLocal() { mode = 'local'; S = newGame(1); firstNext = 2; build(); show('game'); render(); }
 
         const readNick = () => { const n = $('#nick').value.trim(); if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; } return n; };
@@ -259,12 +398,14 @@
 
         function onCell(b, c) {
             if (mode === 'local') { if (play(S, S.turn, b, c)) render(); }
+            else if (mode === 'cpu') { if (play(S, 1, b, c)) { render(); cpuTurn(); } }
             else if (mode === 'host') { if (play(S, 1, b, c)) publish(); }
             else if (mode === 'guest' && room && S && canPlay(S, myPlayer, b, c)) room.send({ type: 'MOVE', b, c });
         }
 
+        $('#soloBtn').onclick = startSolo;
         $('#local').onclick = startLocal; $('#host').onclick = hostRoom; $('#join').onclick = joinRoom;
-        $('#again').onclick = () => { S = newGame(firstNext); firstNext = firstNext === 1 ? 2 : 1; if (mode === 'host') publish(); else render(); };
+        $('#again').onclick = () => { clearTimeout(cpuTimer); S = newGame(firstNext); firstNext = firstNext === 1 ? 2 : 1; if (mode === 'host') publish(); else { render(); cpuTurn(); } };
         $('#copy').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copy'), url, () => prompt('請手動複製邀請連結：', url)); };
         $('#leave').onclick = () => location.reload();
         if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
