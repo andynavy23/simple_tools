@@ -27,6 +27,7 @@
         <li><b>本機雙人</b>：同一台輪流點</li>
         <li><b>連線</b>：輸入暱稱按「建立房間」，傳邀請連結；朋友輸入暱稱按「加入」。房主是 X、朋友是 O</li>
         <li>發亮的綠框小棋盤就是這一步可以下的地方；點空格落子</li>
+        <li><b>手機</b>：總覽下方有放大的「焦點面板」，就是目前要下的小棋盤，在那裡點格子落子；若可任選小棋盤，先點上方總覽的某個小棋盤，再到面板落子</li>
         </ol>
         <h3>規則</h3>
         <ul>
@@ -139,6 +140,71 @@
             outline: 2px solid var(--ok, #30d158);
         }
 
+        #focus {
+            display: none;
+            margin-top: 14px;
+        }
+
+        .focus-on #focus {
+            display: block;
+        }
+
+        .focus-on .sb {
+            cursor: pointer;
+        }
+
+        .focus-on .sb .c {
+            pointer-events: none;
+        }
+
+        .sb.focused {
+            box-shadow: 0 0 0 3px var(--blue, #0a84ff);
+        }
+
+        .sb.active.focused {
+            box-shadow: 0 0 0 3px var(--ok, #30d158);
+        }
+
+        #focusTitle {
+            text-align: center;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        #focusGrid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(80px, 1fr));
+            gap: 6px;
+            padding: 6px;
+            border-radius: 12px;
+            background: var(--fill);
+        }
+
+        .fc {
+            aspect-ratio: 1;
+            min-width: 0;
+            min-height: 80px;
+            padding: 0;
+            font-size: 40px;
+            font-weight: 800;
+            border-radius: 10px;
+            background: var(--card, #fff);
+            border: 1px solid var(--line);
+        }
+
+        .fc.x:disabled { color: var(--x); }
+
+        .fc.o:disabled { color: var(--o); }
+
+        .fc:disabled {
+            opacity: 1;
+            cursor: default;
+        }
+
+        .fc.last {
+            outline: 3px solid var(--ok, #30d158);
+        }
+
         .big {
             position: absolute;
             inset: 0;
@@ -180,6 +246,7 @@
         <div class="card" id="game" hidden>
             <div class="status" id="status" role="status"></div>
             <div id="board"></div>
+            <div id="focus"><div id="focusTitle"></div><div id="focusGrid"></div></div>
             <div class="row" style="justify-content:center;margin-top:14px">
                 <button class="primary" id="again" hidden>再來一局</button>
                 <button id="copy" hidden>複製邀請連結</button>
@@ -222,6 +289,9 @@
                 && (s.turn === 1 || s.turn === 2) && Number.isInteger(s.next) && s.next >= -1 && s.next <= 8 && (s.winner === 0 || s.winner === 1 || s.winner === 2) && typeof s.draw === 'boolean'
                 && (s.last === null || (Array.isArray(s.last) && s.last.length === 2 && s.last.every(v => Number.isInteger(v) && v >= 0 && v < 9)));
         }
+
+        // 焦點面板要放大的小棋盤：必須下的（next）優先；任選時用玩家點選的 sel（須仍在進行中）；否則 -1
+        const focusBoard = (s, sel) => (s.next >= 0 ? s.next : (sel >= 0 && sel < 9 && s.small[sel] === 0 ? sel : -1));
 
         // ---------- 電腦對手（單機）----------
         const cloneG = (s) => ({ cells: s.cells.map(r => r.slice()), small: s.small.slice(), turn: s.turn, next: s.next, winner: s.winner, draw: s.draw, last: s.last });
@@ -321,12 +391,18 @@
             }));
         }
 
+        const mq = matchMedia('(max-width:600px), (pointer:coarse)');
+        let focusSel = -1, lastKey = '';
         function render() {
             if (!S) return;
+            const key = String(S.last);
+            if (key !== lastKey) { lastKey = key; focusSel = -1; }       // 每下一步就清掉手選的焦點
             const myTurn = mode === 'local' || S.turn === myPlayer, over = S.winner || S.draw;
+            const fb = focusBoard(S, focusSel);
+            $('#game').classList.toggle('focus-on', mq.matches);
             [...$('#board').children].forEach((sb, b) => {
                 const active = !over && myTurn && S.small[b] === 0 && (S.next === -1 || S.next === b);
-                sb.className = 'sb' + (active ? ' active' : '') + (S.small[b] ? ' done' : '');
+                sb.className = 'sb' + (active ? ' active' : '') + (S.small[b] ? ' done' : '') + (b === fb ? ' focused' : '');
                 sb.querySelector('.big')?.remove();
                 [...sb.querySelectorAll('.c')].forEach((k, c) => {
                     const v = S.cells[b][c];
@@ -335,6 +411,7 @@
                 });
                 if (S.small[b]) { const big = document.createElement('div'); big.className = 'big' + (S.small[b] <= 2 ? ' ' + 'xo'[S.small[b] - 1] : ''); big.textContent = S.small[b] === 3 ? '＝' : MARK[S.small[b]]; sb.append(big); }
             });
+            renderFocus(fb, myTurn, over);
             const who = (p) => (mode === 'local' ? MARK[p] : (names[p - 1] || MARK[p]));
             const mk = (p) => `<b class="${'xo'[p - 1]}">${MARK[p]}</b>`;
             let text;
@@ -346,6 +423,18 @@
             $('#status').innerHTML = text;
             $('#again').hidden = !((S.winner || S.draw) && (mode === 'local' || mode === 'host' || mode === 'cpu'));
             $('#copy').hidden = mode !== 'host';
+        }
+        function renderFocus(fb, myTurn, over) {
+            const g = $('#focusGrid');
+            $('#focusTitle').textContent = fb < 0 ? '請先點上方一個小棋盤' : `第 ${fb + 1} 區`;
+            if (g.children.length !== 9) g.replaceChildren(...Array.from({ length: 9 }, (_, c) => { const k = document.createElement('button'); k.className = 'fc'; k.onclick = () => onCell(+g.dataset.b, c); return k; }));
+            g.dataset.b = fb;
+            [...g.children].forEach((k, c) => {
+                const v = fb < 0 ? 0 : S.cells[fb][c];
+                k.textContent = MARK[v]; k.setAttribute('aria-label', `焦點第 ${c + 1} 格`);
+                k.className = 'fc' + (v ? ' ' + 'xo'[v - 1] : '') + (S.last && S.last[0] === fb && S.last[1] === c ? ' last' : '');
+                k.disabled = fb < 0 || over || !myTurn || S.small[fb] !== 0 || v !== 0 || (mode === 'host' && (!room || room.players.length < 2));
+            });
         }
         const show = (screen) => { $('#menu').hidden = screen !== 'menu'; $('#game').hidden = screen !== 'game'; };
 
@@ -395,6 +484,13 @@
                 onError: onNetError,
             });
         }
+
+        $('#board').addEventListener('click', (e) => {          // 手機：點總覽的小棋盤 = 設為焦點（任選時才有意義）
+            const sb = e.target.closest('.sb');
+            if (!$('#game').classList.contains('focus-on') || !sb || !S) return;
+            const b = [...$('#board').children].indexOf(sb);
+            if (S.next === -1 && S.small[b] === 0) { focusSel = b; render(); }
+        });
 
         function onCell(b, c) {
             if (mode === 'local') { if (play(S, S.turn, b, c)) render(); }

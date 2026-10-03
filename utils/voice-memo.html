@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="語音備忘錄：用瀏覽器內建語音辨識把說的話轉成文字，存成可搜尋、編輯、匯出的備忘清單。">
+    <meta name="st-keys" content="voicememo_items,voicememo_lang">
+    <meta property="og:title" content="語音備忘錄" />
+    <meta property="og:description" content="說話轉文字，存成備忘清單；也能手動輸入。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/voice-memo.html" />
+    <title>語音備忘錄</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        .privacy {
+            border-left: 4px solid var(--bad);
+        }
+
+        .privacy b {
+            color: var(--bad);
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>* {
+            flex: 1 1 140px;
+            min-height: 44px;
+        }
+
+        #mic.on {
+            background: var(--bad);
+            color: #fff;
+            animation: pulse 1.2s infinite;
+        }
+
+        @keyframes pulse {
+            50% {
+                opacity: .7;
+            }
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 96px;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+
+        .interim {
+            min-height: 1.4em;
+            color: var(--muted);
+            font-style: italic;
+            margin: 6px 0 0;
+        }
+
+        .err {
+            color: var(--bad);
+            font-weight: 600;
+        }
+
+        .memo {
+            padding: 10px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .memo:last-child {
+            border-bottom: 0;
+        }
+
+        .memo textarea {
+            min-height: 64px;
+        }
+
+        .memo .row {
+            margin-top: 6px;
+        }
+
+        .memo .row>* {
+            flex: 0 0 auto;
+            min-width: 64px;
+        }
+
+        .memo time {
+            font-size: 13px;
+            color: var(--muted);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>語音備忘錄</h1>
+        <p class="sub">說話轉文字，存成可搜尋、可編輯、可匯出的備忘清單。</p>
+
+        <div class="card privacy">
+            <b>隱私提醒</b>：多數瀏覽器（Chrome、Edge、Safari）的語音辨識會把<b>你的聲音傳到瀏覽器廠商的伺服器</b>處理，並不是完全離線。不想外傳的內容請改用手動輸入。備忘文字本身只存在這台裝置的瀏覽器裡。
+        </div>
+
+        <div class="card" id="unsupported" hidden>
+            <h2>這個瀏覽器不支援語音辨識</h2>
+            <p>Firefox 等瀏覽器沒有內建語音辨識。你仍然可以在下方的文字框<b>手動輸入備忘</b>並儲存；若想用語音，請改用手機或電腦上的 Chrome / Edge / Safari。</p>
+        </div>
+
+        <div class="card">
+            <div class="row">
+                <select id="lang" aria-label="辨識語言">
+                    <option value="zh-TW">中文（臺灣）</option>
+                    <option value="en-US">English</option>
+                    <option value="ja-JP">日本語</option>
+                </select>
+                <button class="primary" id="mic">🎤 開始說話</button>
+            </div>
+            <p class="note err" id="msg" role="status" aria-live="polite"></p>
+            <textarea id="draft" placeholder="說話的內容會出現在這裡，也可以直接打字；確認後按「儲存備忘」" aria-label="備忘內容"></textarea>
+            <p class="interim" id="interim" aria-live="polite"></p>
+            <div class="row" style="margin-top:8px">
+                <button class="primary" id="save">儲存備忘</button>
+                <button id="clearDraft">清空</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>備忘清單 <span class="muted" id="count"></span></h2>
+            <div class="row">
+                <input id="q" type="search" placeholder="搜尋備忘" aria-label="搜尋備忘">
+                <button id="export">匯出 .txt</button>
+            </div>
+            <div id="list"></div>
+            <p class="note" id="empty">還沒有備忘。最多保留 200 筆，超過會刪掉最舊的。</p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>按一下就能說話，瀏覽器把你說的話轉成文字，存成備忘清單。也能直接打字，當一般的文字備忘用。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>騎車前、雙手忙著時，先口述一件要記的事。</li>
+        <li>開會或看書時快速記幾句，之後再整理。</li>
+        <li>練習外語發音，看看辨識出來是不是自己想說的字。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>選辨識語言：中文（臺灣）、English 或 日本語。</li>
+        <li>按「開始說話」，第一次要允許麥克風。說的時候灰色斜體字是暫時結果，停頓後會變成正式文字。</li>
+        <li>說完再按一次（按鈕現在寫「停止」）。可以在文字框裡修改，再按「儲存備忘」。</li>
+        <li>清單裡每筆都能直接修改文字、「複製」或「刪除」；上方可以搜尋，「匯出 .txt」會下載全部備忘。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">語言選「中文（臺灣）」，說「明天下午三點開會」
+        → 文字框出現：明天下午三點開會
+        → 按「儲存備忘」，清單最上面多一筆，附上時間</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li><b>隱私：</b>Chrome、Edge、Safari 會把聲音傳到廠商的伺服器辨識，不是完全離線；敏感內容請手動輸入。</li>
+        <li>Firefox 等不支援語音辨識，但手動輸入備忘仍可使用。</li>
+        <li>辨識需要網路與 HTTPS 網頁。麥克風被拒絕時，到瀏覽器的網站設定重新允許。</li>
+        <li>備忘只存在這台裝置，最多 200 筆；換瀏覽器或清除資料就會消失，重要的請「匯出 .txt」。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, copyWithFeedback, download } = Util;
+
+        // --- pure ---
+        const MEMO_MAX = 200;
+        const LANGS = ['zh-TW', 'en-US', 'ja-JP'];
+        const cleanLang = (l) => LANGS.includes(l) ? l : 'zh-TW';
+        let idSeq = 0;
+        const newId = () => Date.now().toString(36) + (idSeq++).toString(36) + Math.random().toString(36).slice(2, 6);
+
+        // 讀取 / 還原備份時一律驗證：壞資料略過，缺 id 補上，最多 200 筆
+        function cleanMemos(raw) {
+            if (!Array.isArray(raw)) return [];
+            return raw.filter(m => m && typeof m.text === 'string' && m.text.trim() && Number.isFinite(m.t))
+                .map(m => ({ id: typeof m.id === 'string' && m.id ? m.id : newId(), t: m.t, text: m.text.trim().slice(0, 5000) })).slice(0, MEMO_MAX);
+        }
+        // 新備忘放最前面；超過上限刪最舊的；空白內容原樣回傳
+        function addMemo(list, text, t) {
+            const s = String(text).trim().slice(0, 5000);
+            if (!s) return list;
+            return [{ id: newId(), t, text: s }, ...list].slice(0, MEMO_MAX);
+        }
+        // 多個關鍵字（空白分隔）都要出現，不分大小寫
+        function searchMemos(list, q) {
+            const ks = String(q).toLowerCase().split(/\s+/).filter(Boolean);
+            return ks.length ? list.filter(m => ks.every(k => m.text.toLowerCase().includes(k))) : list;
+        }
+        const P2 = (n) => String(n).padStart(2, '0');
+        const fmtStamp = (t) => { const d = new Date(t); return `${d.getFullYear()}-${P2(d.getMonth() + 1)}-${P2(d.getDate())} ${P2(d.getHours())}:${P2(d.getMinutes())}`; };
+        function memosToText(list) {
+            return list.length ? list.map(m => `[${fmtStamp(m.t)}] ${m.text}`).join('\n\n') + '\n' : '';
+        }
+        // 把一次辨識工作階段的結果（[{isFinal, transcript}]）合成 { final, interim }；中日文直接相連，英文用空白隔開
+        function mergeResults(results, lang) {
+            const sep = /^en/.test(lang) ? ' ' : '';
+            const join = (a) => a.map(r => r.transcript).join(sep).replace(/\s+/g, ' ').trim();
+            const rs = Array.isArray(results) ? results : [];
+            return { final: join(rs.filter(r => r.isFinal)), interim: join(rs.filter(r => !r.isFinal)) };
+        }
+        function recognitionError(code) {
+            switch (code) {
+                case 'not-allowed': case 'service-not-allowed': return '麥克風權限被拒絕（或這個網頁不是 HTTPS）。請在瀏覽器的網站設定允許麥克風後重試。';
+                case 'audio-capture': return '找不到麥克風，請確認裝置有麥克風且沒有被其他程式占用。';
+                case 'no-speech': return '沒有聽到聲音，請靠近麥克風再說一次。';
+                case 'network': return '語音辨識需要網路，目前連不上辨識服務，請檢查網路後重試。';
+                case 'language-not-supported': return '這個瀏覽器不支援所選的語言，請換一種語言。';
+                case 'aborted': return '';
+                default: return `語音辨識發生錯誤（${code}）。`;
+            }
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let items = cleanMemos(store.get('voicememo_items', []));
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        $('#lang').value = cleanLang(store.get('voicememo_lang', 'zh-TW'));
+        const save = () => store.set('voicememo_items', items);
+        const setMsg = (s) => { $('#msg').textContent = s; };
+
+        function render() {
+            const shown = searchMemos(items, $('#q').value), box = $('#list');
+            box.replaceChildren();
+            for (const m of shown) {
+                const d = document.createElement('div'); d.className = 'memo';
+                const tm = document.createElement('time'); tm.textContent = fmtStamp(m.t);
+                const ta = document.createElement('textarea'); ta.value = m.text; ta.setAttribute('aria-label', '備忘內容');
+                ta.onchange = () => { const v = ta.value.trim(); if (!v) { ta.value = m.text; return; } m.text = v.slice(0, 5000); save(); };
+                const row = document.createElement('div'); row.className = 'row';
+                const cp = document.createElement('button'); cp.className = 'sm'; cp.textContent = '複製'; cp.onclick = () => copyWithFeedback(cp, ta.value);
+                const del = document.createElement('button'); del.className = 'sm'; del.textContent = '刪除';
+                del.onclick = () => { if (!confirm('刪除這筆備忘？')) return; items = items.filter(x => x !== m); save(); render(); };
+                row.append(cp, del); d.append(tm, ta, row); box.append(d);
+            }
+            $('#empty').hidden = items.length > 0;
+            $('#count').textContent = items.length ? `（${$('#q').value.trim() ? shown.length + ' / ' : ''}${items.length} / ${MEMO_MAX}）` : '';
+        }
+
+        // ---- 語音 ----
+        let rec = null, base = '';
+        const setDraft = (final) => { $('#draft').value = base && final ? base + (/^en/.test($('#lang').value) ? ' ' : '') + final : base + final; };
+        function stop() { if (rec) rec.stop(); }
+        function start() {
+            setMsg('');
+            rec = new SR(); rec.lang = $('#lang').value; rec.continuous = true; rec.interimResults = true;
+            base = $('#draft').value.trim();
+            rec.onresult = (e) => {
+                const rs = [...e.results].map(r => ({ isFinal: r.isFinal, transcript: r[0].transcript }));
+                const m = mergeResults(rs, rec.lang);
+                setDraft(m.final); $('#interim').textContent = m.interim;
+            };
+            rec.onerror = (e) => setMsg(recognitionError(e.error));
+            rec.onend = () => { rec = null; $('#interim').textContent = ''; $('#mic').classList.remove('on'); $('#mic').textContent = '🎤 開始說話'; $('#lang').disabled = false; };
+            try { rec.start(); } catch (e) { rec = null; setMsg('無法開始辨識，請稍後再試。'); return; }
+            $('#mic').classList.add('on'); $('#mic').textContent = '⏹ 停止'; $('#lang').disabled = true;
+        }
+        if (SR) $('#mic').onclick = () => rec ? stop() : start();
+        else { $('#unsupported').hidden = false; $('#mic').disabled = true; $('#lang').disabled = true; $('#draft').placeholder = '這個瀏覽器不支援語音辨識，請直接在這裡輸入備忘，再按「儲存備忘」'; }
+
+        $('#lang').onchange = () => store.set('voicememo_lang', $('#lang').value);
+        $('#save').onclick = () => {
+            if (rec) stop();
+            const t = $('#draft').value;
+            if (!t.trim()) { setMsg('沒有內容可以儲存。'); return; }
+            items = addMemo(items, t, Date.now()); save(); $('#draft').value = ''; setMsg(''); render();
+        };
+        $('#clearDraft').onclick = () => { if (rec) stop(); $('#draft').value = ''; $('#interim').textContent = ''; setMsg(''); };
+        $('#q').oninput = render;
+        $('#export').onclick = () => { if (!items.length) { setMsg('沒有備忘可以匯出。'); return; } download(new Blob([memosToText(items)], { type: 'text/plain;charset=utf-8' }), 'voice-memo.txt'); };
+        addEventListener('pagehide', () => { if (rec) rec.abort(); });
+        render();
+    </script>
+</body>
+
+</html>

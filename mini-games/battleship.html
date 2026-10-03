@@ -41,7 +41,7 @@
         </ol>
         <h3>開火與勝負</h3>
         <ul>
-        <li>輪到你時，點敵方海域的格子：✕ 是命中、• 是落空。打光一艘會劃掉上方「敵艦」對應長度。</li>
+        <li>輪到你時，點敵方海域的格子（手機：先點格子瞄準，再按「開火」或再點同一格）：✕ 是命中、• 是落空。打光一艘會劃掉上方「敵艦」對應長度。</li>
         <li>先擊沉對方 5 艘艦艇的人獲勝。</li>
         </ul>
         <h3>範例</h3>
@@ -118,6 +118,17 @@
         .c.ghost {
             outline: 2px dashed var(--blue);
             outline-offset: -2px;
+        }
+
+        .c.aim {
+            outline: 3px solid var(--bad, #d70015);
+            outline-offset: -3px;
+            background: color-mix(in srgb, var(--bad, #d70015) 25%, var(--card));
+        }
+
+        #btnFire {
+            min-height: 44px;
+            min-width: 160px;
         }
 
         .c.hit {
@@ -205,6 +216,7 @@
                 <div id="enemyBox">
                     <h3 id="enemyTitle">敵方海域（點格子開火）</h3>
                     <div class="grid" id="enemy"></div>
+                    <div class="row" style="justify-content:center;margin-top:10px"><button class="primary" id="btnFire" hidden disabled>開火</button></div>
                 </div>
                 <h3 id="mineTitle" style="margin-top:14px">我的艦隊</h3>
                 <div class="grid" id="mine"></div>
@@ -307,6 +319,14 @@
             if (!best) return known.set(key(r, c), 2);
             for (let i = 0; i < len; i++) known.set(key(r + best.dr * (best.st + i), c + best.dc * (best.st + i)), 2);
         }
+        // 單機專用：回報電腦「被擊沉的那艘船的所有格」（連線不送、不用）
+        const sunkCells = (fleet, r, c) => cellsOf(fleet.find(s => cellsOf(s).some(([a, b]) => a === r && b === c)));
+        // 電腦記下我方回報的一槍：單機的 RESULT 帶 cells 時精準標示整艘沉船；沒有（連線格式）就用 markSunk 推測
+        function applyResult(known, d) {
+            known.set(key(d.r, d.c), d.hit ? 1 : 0);
+            if (!d.sunk) return;
+            if (d.cells) d.cells.forEach(([a, b]) => known.set(key(a, b), 2)); else markSunk(known, d.r, d.c, d.sunk);
+        }
         function aiShot(known, lens, level, rand = Math.random) {
             const free = []; for (let k = 0; k < SIZE * SIZE; k++) if (!known.has(k)) free.push(k);
             const pick = (a) => a[Math.floor(rand() * a.length)];
@@ -366,8 +386,8 @@
                 const { r, c } = d;
                 setTimeout(() => { if (!solo || G.phase !== 'play' || !G.pending) return; const res = shotResult(solo.fleet, solo.shots, r, c); solo.shots.add(key(r, c)); onMessage({ t: 'RESULT', r, c, hit: res.hit, sunk: res.sunk }); soloKick(); }, 500 + rnd(300));
             } else if (d.t === 'RESULT') {                                // 我回報電腦那一槍的結果 → 電腦記下來
-                solo.known.set(key(d.r, d.c), d.hit ? 1 : 0);
-                if (d.sunk) { markSunk(solo.known, d.r, d.c, d.sunk); solo.lens.splice(solo.lens.indexOf(d.sunk), 1); }
+                applyResult(solo.known, d);
+                if (d.sunk) solo.lens.splice(solo.lens.indexOf(d.sunk), 1);
             } else if (d.t === 'REVEAL') { G.oppFleet = solo.fleet; G.verdict = '單機對戰：電腦艦隊位置已揭曉（淺色格）'; }
         }
         function soloKick() {
@@ -397,7 +417,17 @@
             startIfReady(); render();
         }
 
+        // 觸控裝置：第一下只瞄準（準星預覽），再按「開火」或再點同一格才發射；桌機一點就開火
+        const coarse = () => matchMedia('(pointer:coarse)').matches;
+        const coord = (a) => `${String.fromCharCode(65 + a.r)}${a.c + 1}`;
+        function aimOrFire(r, c) {
+            if (!coarse()) return fire(r, c);
+            if (G.phase !== 'play' || G.turn !== 'me' || G.pending || G.myShots.has(key(r, c))) return;
+            if (G.aim && G.aim.r === r && G.aim.c === c) return fire(r, c);
+            G.aim = { r, c }; render();
+        }
         function fire(r, c) {
+            G.aim = null;
             if (G.phase !== 'play' || G.turn !== 'me' || G.pending || G.myShots.has(key(r, c))) return;
             G.pending = { r, c }; out({ t: 'FIRE', r, c }); render();
         }
@@ -406,7 +436,7 @@
             if (G.phase !== 'play' || G.turn !== 'opp' || !inBoard(d.r, d.c) || G.shotsAtMe.has(key(d.r, d.c))) return;
             const res = shotResult(myFleet(), G.shotsAtMe, d.r, d.c);
             G.shotsAtMe.add(key(d.r, d.c));
-            out({ t: 'RESULT', r: d.r, c: d.c, hit: res.hit, sunk: res.sunk });
+            out({ t: 'RESULT', r: d.r, c: d.c, hit: res.hit, sunk: res.sunk, ...(solo && res.sunk ? { cells: sunkCells(myFleet(), d.r, d.c) } : {}) });   // 連線不帶 cells（協定不變）
             if (allSunk(myFleet(), G.shotsAtMe)) { G.phase = 'over'; G.won = false; sendReveal(); } else G.turn = 'me';
             render();
         }
@@ -480,7 +510,7 @@
                 b.onclick = () => onClick(Math.floor(i / SIZE), i % SIZE); return b;
             }));
         };
-        function enter() { $('#menu').hidden = true; $('#game').hidden = false; buildGrid($('#enemy'), fire); buildGrid($('#mine'), placeAt); render(); }
+        function enter() { $('#menu').hidden = true; $('#game').hidden = false; buildGrid($('#enemy'), aimOrFire); buildGrid($('#mine'), placeAt); render(); }
 
         function placeAt(r, c) {
             if (G.phase !== 'place' || G.myReady) return;
@@ -511,9 +541,11 @@
                 m.className = 'c' + (sh ? ' ship' : '') + (hitMe ? (sh ? ' hit' : ' miss') : '');
                 m.textContent = hitMe ? (sh ? '✕' : '•') : '';
                 const e = enemyCells[i], rep = G.myShots.get(i), reveal = G.oppFleet && G.oppFleet.some(s => cellsOf(s).some(([r, c]) => key(r, c) === i));
-                e.className = 'c' + (rep ? (rep.hit ? ' hit' : ' miss') : '') + (!rep && reveal ? ' reveal' : '') + (G.pending && key(G.pending.r, G.pending.c) === i ? ' ghost' : '');
+                e.className = 'c' + (rep ? (rep.hit ? ' hit' : ' miss') : '') + (!rep && reveal ? ' reveal' : '') + (G.pending && key(G.pending.r, G.pending.c) === i ? ' ghost' : '') + (G.aim && key(G.aim.r, G.aim.c) === i ? ' aim' : '');
                 e.textContent = rep ? (rep.hit ? '✕' : '•') : '';
             }
+            if (phase !== 'play' || G.turn !== 'me' || G.pending) G.aim = null;
+            const fb = $('#btnFire'); fb.hidden = !coarse() || phase !== 'play'; fb.disabled = !G.aim; fb.textContent = G.aim ? `開火 ${coord(G.aim)}` : '先點格子瞄準';
             $('#enemy').classList.toggle('off', phase !== 'play' || G.turn !== 'me');
             $('#mine').classList.toggle('off', phase !== 'place' || G.myReady);
             $('#mine').classList.toggle('mini', phase === 'play' || over);
@@ -531,6 +563,7 @@
         $('#soloBtn').onclick = startSolo;
         $('#hostBtn').onclick = hostRoom;
         $('#joinBtn').onclick = joinRoom;
+        $('#btnFire').onclick = () => { if (G.aim) fire(G.aim.r, G.aim.c); };
         $('#rot').onclick = () => { G.orient ^= 1; render(); };
         $('#rand').onclick = () => { if (G.phase === 'place' && !G.myReady) { G.slots = randomFleet(rnd); G.msg = ''; render(); } };
         $('#undo').onclick = () => { if (G.phase === 'place' && !G.myReady) { const i = G.slots.map(Boolean).lastIndexOf(true); if (i >= 0) G.slots[i] = null; G.msg = ''; render(); } };

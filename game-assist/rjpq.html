@@ -19,6 +19,7 @@
             property="og:url"
             content="https://andynavy23.github.io/simple_tools/game-assist/rjpq.html"
         />
+        <meta name="st-keys" content="rjpq_solo">
         <title>Artale RJPQ - 輔助工具</title>
         <!-- 使用 PeerJS 進行 P2P 連線 -->
 
@@ -890,6 +891,167 @@
         </div>
 
         <script>
+            // --- pure ---
+            const MARKER_TYPES = ["pass", "dead", "clear_pass", "clear_dead"];
+            // 成員端：檢查房主廣播的全量狀態格式，避免壞資料破壞畫面
+            function validState(st) {
+                return !!st && Array.isArray(st.slots) && st.slots.length === 8 && st.slots.every(
+                    (x) => x === null || (typeof x === "object" && typeof x.nick === "string" && typeof x.color === "string"
+                        && Array.isArray(x.passMarkers) && Array.isArray(x.deadEndMarkers)));
+            }
+
+            // 門位標記：套用一個 CMD_MARKER 到 slot（房主權威）；格式錯誤或門已被他人佔用回傳 false
+            function applyMarker(slots, slot, cmd) {
+                const { f, d, mType } = cmd; // mType: 'pass' | 'dead' | 'clear_pass' | 'clear_dead'
+                if (!Number.isInteger(f) || f < 0 || f > 9 || !Number.isInteger(d) || d < 0 || d > 3) return false;
+                if (!MARKER_TYPES.includes(mType)) return false;
+
+                if (mType === "pass") {
+                    // 每個門只能一人佔用（各端畫面可能有延遲，以房主為準）
+                    const taken = slots.some(
+                        (s) => s && s.connected && s !== slot && s.passMarkers.some((m) => m.f === f && m.d === d),
+                    );
+                    if (taken) return false;
+                    // 清除同層自己的舊 Pass 標記
+                    slot.passMarkers = slot.passMarkers.filter((m) => m.f !== f);
+                    slot.passMarkers.push({ f, d });
+                    // 保留該格子的死路標記，以便誤點時取消通路能恢復
+                } else if (mType === "dead") {
+                    if (!slot.deadEndMarkers.some((m) => m.f === f && m.d === d))
+                        slot.deadEndMarkers.push({ f, d });
+                    slot.passMarkers = slot.passMarkers.filter((m) => !(m.f === f && m.d === d));
+                } else if (mType === "clear_pass") {
+                    // 房主可取消任何人的通路標記，其餘人只能取消自己的
+                    (slot.isHost ? slots.filter(Boolean) : [slot]).forEach((t) => {
+                        t.passMarkers = t.passMarkers.filter((m) => !(m.f === f && m.d === d));
+                    });
+                } else if (mType === "clear_dead") {
+                    slot.deadEndMarkers = slot.deadEndMarkers.filter((m) => !(m.f === f && m.d === d));
+                }
+                return true;
+            }
+
+            // 某一格的顯示狀態：通路（取最後一位標記者）與所有死路標記者
+            function doorInfo(slots, f, d) {
+                const passSlot = [...slots].reverse().find(
+                    (s) => s && s.connected && s.passMarkers.some((m) => m.f === f && m.d === d),
+                );
+                const deadSlots = slots.filter(
+                    (s) => s && s.connected && s.deadEndMarkers.some((m) => m.f === f && m.d === d),
+                );
+                return { passSlot, deadSlots };
+            }
+
+            // 路線總覽：回傳 floorStatus[f] = { [slotIndex]: 門號(1~4) }，依標記自動推論
+            function summarizeFloors(activeSlots) {
+                const floorStatus = [];
+                for (let f = 0; f < 10; f++) {
+                    let doorHasPass = [false, false, false, false];
+                    let slotHasPass = {};
+
+                    for (let d = 0; d < 4; d++) {
+                        let passSlot = activeSlots.find(s => s.passMarkers.some(m => m.f === f && m.d === d));
+                        if (passSlot) {
+                            doorHasPass[d] = true;
+                            slotHasPass[passSlot.index] = d + 1;
+                        }
+                    }
+
+                    // Rule Deduction per slot:
+                    activeSlots.forEach(s => {
+                        let sIdx = s.index;
+                        if (!slotHasPass[sIdx]) {
+                            // Rule C: Did S mark exactly 3 different doors as dead on this floor?
+                            let sDeadDoors = [];
+                            let sLastUnmarked = -1;
+                            for (let d = 0; d < 4; d++) {
+                                if (s.deadEndMarkers.some(m => m.f === f && m.d === d)) {
+                                    sDeadDoors.push(d);
+                                } else {
+                                    sLastUnmarked = d;
+                                }
+                            }
+                            if (sDeadDoors.length === 3 && sLastUnmarked !== -1) {
+                                slotHasPass[sIdx] = sLastUnmarked + 1;
+                                doorHasPass[sLastUnmarked] = true; // Implicitly taken
+                                return; // Done for this slot
+                            }
+
+                            // Rule A: If a door has exactly 3 dead markers from OTHER members, and no pass marker, it's S's pass!
+                            for (let d = 0; d < 4; d++) {
+                                if (!doorHasPass[d]) {
+                                    let deadSlotsOnD = activeSlots.filter(s2 => s2.deadEndMarkers.some(m => m.f === f && m.d === d));
+                                    if (deadSlotsOnD.length >= 3) {
+                                        let sHasDeadHere = deadSlotsOnD.some(s2 => s2.index === sIdx);
+                                        if (!sHasDeadHere) {
+                                            slotHasPass[sIdx] = d + 1;
+                                            doorHasPass[d] = true; // Mark it as taken implicitly
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+
+                    // Rule B pass: If 3 unique doors are taken, the remaining member gets the 4th door!
+                    let membersWithoutPass = [];
+                    let doorsWithPass = new Set();
+                    activeSlots.forEach(s => {
+                        if (slotHasPass[s.index]) {
+                            doorsWithPass.add(slotHasPass[s.index] - 1);
+                        } else {
+                            membersWithoutPass.push(s);
+                        }
+                    });
+                    if (doorsWithPass.size === 3 && membersWithoutPass.length === 1) {
+                        for (let d = 0; d < 4; d++) {
+                            if (!doorsWithPass.has(d)) {
+                                slotHasPass[membersWithoutPass[0].index] = d + 1;
+                                break;
+                            }
+                        }
+                    }
+
+                    floorStatus[f] = slotHasPass;
+                }
+                return floorStatus;
+            }
+
+            // 某成員的路線字串：由頂樓(L10)到 L1，未知為 0，例如 "1-0-3-..."
+            function routeString(floorStatus, slotIndex) {
+                const routeArr = [];
+                for (let f = 9; f >= 0; f--) routeArr.push(floorStatus[f][slotIndex] || 0);
+                return routeArr.join("-");
+            }
+
+            function hslToHex(hslStr) {
+                const match = hslStr.match(/\d+/g);
+                if (!match) return "#4285f4";
+                let h = parseInt(match[0]),
+                    s = parseInt(match[1]),
+                    l = parseInt(match[2]) / 100;
+                const a = (s * Math.min(l, 1 - l)) / 100;
+                const f = (n) => {
+                    const k = (n + h / 30) % 12;
+                    const color =
+                        l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+                    return Math.round(255 * color)
+                        .toString(16)
+                        .padStart(2, "0");
+                };
+                return `#${f(0)}${f(8)}${f(4)}`;
+            }
+            function hexToRgb(hex) {
+                var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(
+                    hex,
+                );
+                return result
+                    ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
+                    : null;
+            }
+            // --- /pure ---
+
             // === 狀態變數 ===
             let room = null; // P2PRoom（房主或成員）
             let myNick = "";
@@ -1256,13 +1418,6 @@
                 });
             }
 
-            // 成員端：檢查房主廣播的全量狀態格式，避免壞資料破壞畫面
-            function validState(st) {
-                return !!st && Array.isArray(st.slots) && st.slots.length === 8 && st.slots.every(
-                    (x) => x === null || (typeof x === "object" && typeof x.nick === "string" && typeof x.color === "string"
-                        && Array.isArray(x.passMarkers) && Array.isArray(x.deadEndMarkers)));
-            }
-
             function onHostMessage(data) {
                 if (!data || data.type !== "STATE_SYNC" || !validState(data.state)) return;
                 gameState = data.state;
@@ -1289,40 +1444,7 @@
                 if ((cmd.type === "CMD_RESET" || cmd.type === "CMD_KICK") && !slot.isHost) return;
 
                 if (cmd.type === "CMD_MARKER") {
-                    const { f, d, mType } = cmd; // mType: 'pass' | 'dead' | 'clear_pass' | 'clear_dead'
-                    if (!Number.isInteger(f) || f < 0 || f > 9 || !Number.isInteger(d) || d < 0 || d > 3) return;
-                    if (!["pass", "dead", "clear_pass", "clear_dead"].includes(mType)) return;
-
-                    if (mType === "pass") {
-                        // 每個門只能一人佔用（各端畫面可能有延遲，以房主為準）
-                        const taken = gameState.slots.some(
-                            (s) => s && s.connected && s !== slot && s.passMarkers.some((m) => m.f === f && m.d === d),
-                        );
-                        if (taken) return;
-                        // 清除同層自己的舊 Pass 標記
-                        slot.passMarkers = slot.passMarkers.filter(
-                            (m) => m.f !== f,
-                        );
-                        slot.passMarkers.push({ f, d });
-                        // 保留該格子的死路標記，以便誤點時取消通路能恢復
-                    } else if (mType === "dead") {
-                        if (!slot.deadEndMarkers.some((m) => m.f === f && m.d === d))
-                            slot.deadEndMarkers.push({ f, d });
-                        slot.passMarkers = slot.passMarkers.filter(
-                            (m) => !(m.f === f && m.d === d),
-                        );
-                    } else if (mType === "clear_pass") {
-                        // 房主可取消任何人的通路標記，其餘人只能取消自己的
-                        (slot.isHost ? gameState.slots.filter(Boolean) : [slot]).forEach((t) => {
-                            t.passMarkers = t.passMarkers.filter(
-                                (m) => !(m.f === f && m.d === d),
-                            );
-                        });
-                    } else if (mType === "clear_dead") {
-                        slot.deadEndMarkers = slot.deadEndMarkers.filter(
-                            (m) => !(m.f === f && m.d === d),
-                        );
-                    }
+                    if (!applyMarker(gameState.slots, slot, cmd)) return;
                 } else if (cmd.type === "CMD_COLOR") {
                     const taken = gameState.slots.some(
                         (s) => s && s.connected && s !== slot && s.color === cmd.color,
@@ -1604,20 +1726,7 @@
                 }
                 dotsContainer.innerHTML = "";
 
-                const passSlot = [...gameState.slots]
-                    .reverse()
-                    .find(
-                        (s) =>
-                            s &&
-                            s.connected &&
-                            s.passMarkers.some((m) => m.f === f && m.d === d),
-                    );
-                const deadSlots = gameState.slots.filter(
-                    (s) =>
-                        s &&
-                        s.connected &&
-                        s.deadEndMarkers.some((m) => m.f === f && m.d === d),
-                );
+                const { passSlot, deadSlots } = doorInfo(gameState.slots, f, d);
 
                 el.classList.remove("state-pass", "state-error", "my-dead");
                 el.style.removeProperty("--marker-color");
@@ -1648,32 +1757,6 @@
                 } else {
                     dotsContainer.style.display = "flex";
                 }
-            }
-
-            function hslToHex(hslStr) {
-                const match = hslStr.match(/\d+/g);
-                if (!match) return "#4285f4";
-                let h = parseInt(match[0]),
-                    s = parseInt(match[1]),
-                    l = parseInt(match[2]) / 100;
-                const a = (s * Math.min(l, 1 - l)) / 100;
-                const f = (n) => {
-                    const k = (n + h / 30) % 12;
-                    const color =
-                        l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-                    return Math.round(255 * color)
-                        .toString(16)
-                        .padStart(2, "0");
-                };
-                return `#${f(0)}${f(8)}${f(4)}`;
-            }
-            function hexToRgb(hex) {
-                var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(
-                    hex,
-                );
-                return result
-                    ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
-                    : null;
             }
 
             function resetAll() {
@@ -1743,86 +1826,11 @@
                     return;
                 }
 
-                let floorStatus = [];
-                for (let f = 0; f < 10; f++) {
-                    let doorHasPass = [false,false,false,false];
-                    let slotHasPass = {};
-
-                    for (let d = 0; d < 4; d++) {
-                        let passSlot = activeSlots.find(s => s.passMarkers.some(m => m.f === f && m.d === d));
-                        if (passSlot) {
-                            doorHasPass[d] = true;
-                            slotHasPass[passSlot.index] = d + 1;
-                        }
-                    }
-
-                    // Rule Deduction per slot:
-                    activeSlots.forEach(s => {
-                        let sIdx = s.index;
-                        if (!slotHasPass[sIdx]) {
-                            // Rule C: Did S mark exactly 3 different doors as dead on this floor?
-                            let sDeadDoors = [];
-                            let sLastUnmarked = -1;
-                            for (let d = 0; d < 4; d++) {
-                                if (s.deadEndMarkers.some(m => m.f === f && m.d === d)) {
-                                    sDeadDoors.push(d);
-                                } else {
-                                    sLastUnmarked = d;
-                                }
-                            }
-                            if (sDeadDoors.length === 3 && sLastUnmarked !== -1) {
-                                slotHasPass[sIdx] = sLastUnmarked + 1;
-                                doorHasPass[sLastUnmarked] = true; // Implicitly taken
-                                return; // Done for this slot
-                            }
-
-                            // Rule A: If a door has exactly 3 dead markers from OTHER members, and no pass marker, it's S's pass!
-                            for (let d = 0; d < 4; d++) {
-                                if (!doorHasPass[d]) {
-                                    let deadSlotsOnD = activeSlots.filter(s2 => s2.deadEndMarkers.some(m => m.f === f && m.d === d));
-                                    if (deadSlotsOnD.length >= 3) {
-                                        let sHasDeadHere = deadSlotsOnD.some(s2 => s2.index === sIdx);
-                                        if (!sHasDeadHere) {
-                                            slotHasPass[sIdx] = d + 1;
-                                            doorHasPass[d] = true; // Mark it as taken implicitly
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    });
-
-                    // Rule B pass: If 3 unique doors are taken, the remaining member gets the 4th door!
-                    let membersWithoutPass = [];
-                    let doorsWithPass = new Set();
-                    activeSlots.forEach(s => {
-                        if (slotHasPass[s.index]) {
-                            doorsWithPass.add(slotHasPass[s.index] - 1);
-                        } else {
-                            membersWithoutPass.push(s);
-                        }
-                    });
-                    if (doorsWithPass.size === 3 && membersWithoutPass.length === 1) {
-                        for (let d = 0; d < 4; d++) {
-                            if (!doorsWithPass.has(d)) {
-                                slotHasPass[membersWithoutPass[0].index] = d + 1;
-                                break;
-                            }
-                        }
-                    }
-
-                    floorStatus[f] = slotHasPass;
-                }
+                const floorStatus = summarizeFloors(activeSlots);
 
                 // Render per slot
                 activeSlots.forEach(s => {
-                    let routeArr = [];
-                    for (let f = 9; f >= 0; f--) {
-                        let door = floorStatus[f][s.index] || 0;
-                        routeArr.push(door);
-                    }
-                    let routeStr = routeArr.join("-");
+                    let routeStr = routeString(floorStatus, s.index);
 
                     let div = getDoc().createElement("div");
                     div.style.marginBottom = "6px";

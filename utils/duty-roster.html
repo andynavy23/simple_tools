@@ -5,7 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="輪值表：貼上名單，依每天、每週或每月輪流排出值日、值班或報告順序，可跳過週末並複製成文字。">
+    <meta name="description" content="輪值表：貼上名單，依每天、每週或每月輪流排出值日、值班或報告順序，可跳過週末並複製成文字；另有家事分配：自動平均分數、打勾與統計。">
+    <meta name="st-keys" content="roster_cfg,chores_data">
     <meta property="og:title" content="輪值表" />
     <meta property="og:description" content="名單輪流排班，一鍵複製。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
@@ -45,6 +46,55 @@
         .li.we .wd {
             color: var(--bad, #ff453a);
         }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .tabs button {
+            flex: 1;
+        }
+
+        .chore {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .chore .nm {
+            flex: 1;
+            word-break: break-all;
+        }
+
+        .chore button {
+            background: none;
+            color: var(--muted);
+            padding: 0 10px;
+            font-size: 18px;
+        }
+
+        .mem h3 {
+            margin: 14px 0 4px;
+            font-size: 15px;
+        }
+
+        .mem label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 400;
+            margin: 0;
+            min-height: 36px;
+        }
+
+        .mem label.done span {
+            text-decoration: line-through;
+            color: var(--muted);
+        }
     </style>
 </head>
 
@@ -54,6 +104,12 @@
         <h1>輪值表</h1>
         <p class="sub">值日、值班、報告順序、倒垃圾……按名單輪流排下去。</p>
 
+        <div class="tabs" role="tablist">
+            <button id="tabRoster" aria-pressed="true">輪值表</button>
+            <button id="tabChores" aria-pressed="false">家事分配</button>
+        </div>
+
+        <div id="paneRoster">
         <div class="card">
             <label for="names">名單（一行一個，或用逗號分隔）</label>
             <textarea id="names" placeholder="小明&#10;小華&#10;小美"></textarea>
@@ -75,6 +131,36 @@
             <div class="row" style="margin-top:12px"><button class="primary" id="copy">複製成文字</button></div>
             <p class="note" id="tally"></p>
         </div>
+        </div>
+
+        <div id="paneChores" hidden>
+            <div class="card">
+                <label for="cMembers">成員（一行一個，或用逗號分隔）</label>
+                <textarea id="cMembers" placeholder="爸爸&#10;媽媽&#10;小明"></textarea>
+                <label for="cName">家事清單</label>
+                <div class="row">
+                    <input id="cName" type="text" maxlength="20" placeholder="家事名稱（例如：洗碗）" style="flex:1 1 150px">
+                    <select id="cFreq" aria-label="頻率"><option value="day">每天</option><option value="week">每週</option><option value="month">每月</option><option value="once">一次性</option></select>
+                    <select id="cScore" aria-label="難度分數"><option value="1">1 分（輕鬆）</option><option value="2">2 分（普通）</option><option value="3">3 分（費力）</option></select>
+                    <button class="primary" id="cAdd">加入</button>
+                </div>
+                <div id="cList"></div>
+            </div>
+            <div class="card">
+                <div class="row">
+                    <label for="cPeriod" style="margin:0">分配週期</label>
+                    <select id="cPeriod"><option value="week">一週</option><option value="month">一個月</option></select>
+                    <button class="primary" id="cAssign">自動分配</button>
+                </div>
+                <p class="note" id="cNote">依難度分數盡量讓每人總分接近，並避免同一人連續做同一件家事。</p>
+                <div id="cOut"></div>
+                <div class="row" style="margin-top:12px"><button class="primary" id="cCopy">複製成文字</button></div>
+            </div>
+            <div class="card">
+                <h2>完成統計</h2>
+                <div id="cStats"></div>
+            </div>
+        </div>
     </div>
 
     <template id="help">
@@ -87,6 +173,7 @@
         <li>家人輪流煮飯、接送小孩</li>
         </ul>
         <h3>怎麼用</h3>
+        <p>上方有兩個分頁：「輪值表」與「家事分配」。以下前五點是輪值表：</p>
         <ol>
         <li>在「名單」一行一個名字（也能用逗號分隔），想換順序可按「隨機打亂名單順序」</li>
         <li>選「起始日期」與「輪換週期」（每天、每週、每兩週、每月）</li>
@@ -94,12 +181,22 @@
         <li>每天輪換時可勾「每天輪換時跳過週六日」</li>
         <li>下方輪值表會標出「下一個」輪到誰；按「複製成文字」貼到群組</li>
         </ol>
+        <p>家事分配分頁：</p>
+        <ol>
+        <li>填「成員」，在「家事清單」輸入名稱、頻率（每天／每週／每月／一次性）與難度分數 1–3，按「加入」。</li>
+        <li>選「分配週期」（一週或一個月），按「自動分配」：依輪流並盡量讓每人總分接近；若已有上一輪的分配表，會避免同一人連續做同一件家事。</li>
+        <li>做完家事就在該項打勾；「完成統計」會列出每人本週／本月完成次數與分數。</li>
+        <li>按「複製成文字」可貼到群組。</li>
+        </ol>
         <h3>範例</h3>
         <div class="eg">名單：小明、小華、小美；起始 2026-10-05（週一）、每週：<br>10/05 小明、10/12 小華、10/19 小美、10/26 小明……<br>表格下方會統計每人次數。</div>
+        <div class="eg">家事分配：成員 爸爸、媽媽；家事 洗碗（每天、1 分）、倒垃圾（每週、2 分）；分配一週 → 洗碗 7 次 + 倒垃圾 1 次，總分 9，兩人各 4 與 5 分。</div>
         <h3>小提醒</h3>
         <ul>
         <li>每月週期以起始日的「日」為準，遇到月底自動取該月最後一天</li>
         <li>名單與設定會記在這個瀏覽器，不會上傳</li>
+        <li>家事分配的次數：一週＝每天 7 次、每週 1 次、一次性 1 次（每月的家事不排入一週）；一個月＝每天 30 次、每週 4 次、每月 1 次、一次性 1 次</li>
+        <li>再次按「自動分配」會把已打勾的紀錄存進統計，並以目前的分配表當作「上一輪」</li>
         <li>人員請假時，把名字從名單拿掉或調整「從第幾位開始」再重排</li>
         </ul>
     </template>
@@ -131,6 +228,99 @@
             return rows;
         }
         const tally = (rows) => rows.reduce((m, r) => (m[r.name] = (m[r.name] || 0) + 1, m), {});
+
+        // ===== 家事分配 =====
+        const FREQ = { day: '每天', week: '每週', month: '每月', once: '一次性' };
+        // 一個週期內每種頻率出現幾次（每月的家事不排入「一週」）
+        const OCC = { week: { day: 7, week: 1, month: 0, once: 1 }, month: { day: 30, week: 4, month: 1, once: 1 } };
+        function occurrences(chores, period) {
+            const out = [];
+            chores.forEach(c => { const n = (OCC[period] || OCC.week)[c.freq] || 0; for (let i = 0; i < n; i++) out.push({ cid: c.id, name: c.name, score: c.score, freq: c.freq, i, n }); });
+            return out;
+        }
+        // 分配：先依分數由大到小貪婪放給目前總分最低的人，再用「移動 / 交換」的區域搜尋，
+        // 依序最小化 (1) 最高與最低總分之差 (2) 同一人連續做同一件的次數（含上一輪最後一位 prev[家事id]）(3) 總分平方和
+        function assignChores({ chores, members, period = 'week', prev = {} }) {
+            const M = members.length, occ = occurrences(chores, period);
+            const totals = Object.fromEntries(members.map(m => [m, 0]));
+            if (!M || !occ.length) return { rows: [], totals, spread: 0 };
+            const less = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] < b[i]; return false; };
+            const tot = Array(M).fill(0), who = Array(occ.length).fill(-1), groups = {};
+            occ.forEach((o, k) => (groups[o.cid] = groups[o.cid] || []).push(k));
+            const gl = Object.entries(groups);
+            const order = occ.map((_, k) => k).sort((a, b) => occ[b].score - occ[a].score || a - b);
+            const last = {};
+            for (const k of order) {
+                const o = occ[k], lm = last[o.cid] ?? members.indexOf(prev[o.cid]);
+                let best = 0, bk = null;
+                for (let m = 0; m < M; m++) {
+                    const key = [tot[m], m === lm ? 1 : 0, (m + M - k % M) % M];
+                    if (!bk || less(key, bk)) { bk = key; best = m; }
+                }
+                who[k] = best; tot[best] += o.score; last[o.cid] = best;
+            }
+            const cost = () => {
+                let rep = 0, sq = 0;
+                for (const [cid, ks] of gl) { if (who[ks[0]] === members.indexOf(prev[cid])) rep++; for (let j = 1; j < ks.length; j++) if (who[ks[j]] === who[ks[j - 1]]) rep++; }
+                for (const t of tot) sq += t * t;
+                return [Math.max(...tot) - Math.min(...tot), rep, sq];
+            };
+            const mv = (k, m) => { tot[who[k]] -= occ[k].score; tot[m] += occ[k].score; who[k] = m; };
+            let cur = cost();
+            for (let pass = 0, again = true; again && pass < 30; pass++) {
+                again = false;
+                for (let k = 0; k < occ.length; k++) for (let m = 0; m < M; m++) {
+                    if (m === who[k]) continue;
+                    const from = who[k]; mv(k, m); const c = cost();
+                    if (less(c, cur)) { cur = c; again = true; } else mv(k, from);
+                }
+                for (let k = 0; k < occ.length; k++) for (let l = k + 1; l < occ.length; l++) {
+                    if (who[k] === who[l]) continue;
+                    const a = who[k], b = who[l]; mv(k, b); mv(l, a); const c = cost();
+                    if (less(c, cur)) { cur = c; again = true; } else { mv(k, a); mv(l, b); }
+                }
+            }
+            const rows = occ.map((o, k) => ({ ...o, member: members[who[k]], done: '' }));
+            members.forEach((m, i) => { totals[m] = tot[i]; });
+            return { rows, totals, spread: cur[0], repeats: cur[1] };
+        }
+        // 每人完成次數與分數：records = [{ member, score, date }]；週從週一算起
+        function choreStats(records, today) {
+            const ws = day.shift(today, -((weekdayOf(today) + 6) % 7)), ym = today.slice(0, 7);
+            const out = { week: {}, month: {} };
+            for (const r of records) {
+                if (!r || !r.date) continue;
+                const add = (o) => { const x = o[r.member] || (o[r.member] = { n: 0, score: 0 }); x.n++; x.score += r.score; };
+                if (r.date >= ws && r.date <= today) add(out.week);
+                if (r.date.slice(0, 7) === ym && r.date <= today) add(out.month);
+            }
+            return out;
+        }
+        // 複製用文字：每人一行，同名家事合併成 ×N
+        function choresText(rows, members, period) {
+            const lines = ['家事分配（' + (period === 'month' ? '本月' : '本週') + '）'];
+            members.forEach(m => {
+                const mine = rows.filter(r => r.member === m), cnt = {};
+                mine.forEach(r => cnt[r.name] = (cnt[r.name] || 0) + 1);
+                lines.push(`${m}（${mine.reduce((a, r) => a + r.score, 0)} 分）：` + (mine.length ? Object.entries(cnt).map(([n, c]) => c > 1 ? `${n} ×${c}` : n).join('、') : '無'));
+            });
+            return lines.join('\n');
+        }
+        // 讀取驗證：壞資料或缺欄位補預設值
+        function normChoreData(raw) {
+            const o = raw && typeof raw === 'object' ? raw : {}, str = (v) => typeof v === 'string';
+            const chores = (Array.isArray(o.chores) ? o.chores : []).filter(c => c && str(c.name) && c.name).map((c, i) => ({
+                id: str(c.id) && c.id ? c.id : 'c' + i, name: c.name, freq: FREQ[c.freq] ? c.freq : 'week', score: Math.min(3, Math.max(1, Math.round(+c.score) || 1))
+            }));
+            const rowOk = (r) => r && str(r.name) && str(r.member) && Number.isFinite(+r.score);
+            const t = o.table && typeof o.table === 'object' && Array.isArray(o.table.rows) ? o.table : null;
+            return {
+                members: str(o.members) ? o.members : '', chores,
+                period: o.period === 'month' ? 'month' : 'week',
+                table: t ? { period: t.period === 'month' ? 'month' : 'week', rows: t.rows.filter(rowOk).map(r => ({ cid: str(r.cid) ? r.cid : '', name: r.name, score: +r.score, i: +r.i || 0, n: +r.n || 1, freq: r.freq, member: r.member, done: str(r.done) && /^\d{4}-\d{2}-\d{2}$/.test(r.done) ? r.done : '' })) } : null,
+                log: (Array.isArray(o.log) ? o.log : []).filter(r => r && str(r.member) && Number.isFinite(+r.score) && str(r.date)).map(r => ({ member: r.member, score: +r.score, date: r.date, name: str(r.name) ? r.name : '' })).slice(-1000)
+            };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -161,6 +351,74 @@
         $('#shuffle').onclick = () => { $('#names').value = shuffle(parseNames($('#names').value)).join('\n'); render(); };
         $('#copy').onclick = () => copyWithFeedback($('#copy'), rows.map(r => `${r.date}（${WD[r.wd]}）${r.name}`).join('\n'));
         render();
+
+        // ===== 家事分配分頁 =====
+        const cd = normChoreData(store.get('chores_data', {}));
+        const cSave = () => store.set('chores_data', cd);
+        const cMembers = () => [...new Set(parseNames($('#cMembers').value))];
+        const showTab = (t) => {
+            $('#paneRoster').hidden = t !== 'roster'; $('#paneChores').hidden = t !== 'chores';
+            $('#tabRoster').setAttribute('aria-pressed', t === 'roster'); $('#tabChores').setAttribute('aria-pressed', t === 'chores');
+        };
+        $('#tabRoster').onclick = () => showTab('roster'); $('#tabChores').onclick = () => showTab('chores');
+        $('#cMembers').value = cd.members; $('#cPeriod').value = cd.period;
+
+        function cRender() {
+            const members = cMembers(), today = day.today(), t = cd.table, rowsT = t ? t.rows : [];
+            $('#cList').replaceChildren(...cd.chores.map(c => {
+                const d = document.createElement('div'); d.className = 'chore';
+                const n = document.createElement('span'); n.className = 'nm'; n.textContent = `${c.name} ・ ${FREQ[c.freq]} ・ ${c.score} 分`;
+                const x = document.createElement('button'); x.textContent = '×'; x.setAttribute('aria-label', '刪除 ' + c.name);
+                x.onclick = () => { cd.chores = cd.chores.filter(y => y !== c); cSave(); cRender(); };
+                d.append(n, x); return d;
+            }));
+            const out = $('#cOut'); out.replaceChildren();
+            if (!rowsT.length) { out.textContent = '尚未分配：填好成員與家事後按「自動分配」。'; out.className = 'muted'; }
+            else {
+                out.className = '';
+                const people = [...new Set([...members, ...rowsT.map(r => r.member)])];
+                people.forEach(m => {
+                    const mine = rowsT.filter(r => r.member === m); if (!mine.length) return;
+                    const box = document.createElement('div'); box.className = 'mem';
+                    const h = document.createElement('h3'); h.textContent = `${m} ・ ${mine.reduce((a, r) => a + r.score, 0)} 分（完成 ${mine.filter(r => r.done).length}/${mine.length}）`;
+                    box.append(h);
+                    mine.forEach(r => {
+                        const lb = document.createElement('label'); lb.className = r.done ? 'done' : '';
+                        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!r.done;
+                        cb.onchange = () => { r.done = cb.checked ? today : ''; cSave(); cRender(); };
+                        const sp = document.createElement('span'); sp.textContent = `${r.name}${r.n > 1 ? `（${r.freq === 'day' ? '第' + (r.i + 1) + '天' : '第' + (r.i + 1) + '次'}）` : ''} ・ ${r.score} 分`;
+                        lb.append(cb, sp); box.append(lb);
+                    });
+                    out.append(box);
+                });
+            }
+            const st = choreStats([...cd.log, ...rowsT.filter(r => r.done).map(r => ({ member: r.member, score: r.score, date: r.done }))], today);
+            const fmt = (o) => Object.entries(o).map(([m, v]) => `${m} ${v.n} 次 / ${v.score} 分`).join('、') || '還沒有完成紀錄';
+            $('#cStats').replaceChildren(...[['本週', st.week], ['本月', st.month]].map(([k, o]) => { const p = document.createElement('p'); p.className = 'stat'; p.textContent = `${k}：${fmt(o)}`; return p; }));
+        }
+        function cAssign() {
+            const members = cMembers(); cd.members = $('#cMembers').value; cd.period = $('#cPeriod').value;
+            if (!members.length) { $('#cNote').textContent = '請先輸入成員。'; return; }
+            if (!cd.chores.length) { $('#cNote').textContent = '請先加入家事。'; return; }
+            const old = cd.table ? cd.table.rows : [], prev = {};
+            old.forEach(r => { prev[r.cid] = r.member; });
+            cd.log = cd.log.concat(old.filter(r => r.done).map(r => ({ member: r.member, score: r.score, date: r.done, name: r.name }))).slice(-1000);
+            const res = assignChores({ chores: cd.chores, members, period: cd.period, prev });
+            cd.table = { period: cd.period, rows: res.rows };
+            $('#cNote').textContent = res.rows.length ? `已分配 ${res.rows.length} 項；各人總分：` + members.map(m => `${m} ${res.totals[m]}`).join('、') + `（最大差距 ${res.spread} 分）` : '這個週期沒有需要排的家事（每月家事不排入一週）。';
+            cSave(); cRender();
+        }
+        $('#cAdd').onclick = () => {
+            const name = $('#cName').value.trim(); if (!name) return;
+            cd.chores.push({ id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, freq: $('#cFreq').value, score: +$('#cScore').value });
+            $('#cName').value = ''; cSave(); cRender();
+        };
+        $('#cName').onkeydown = (e) => { if (e.key === 'Enter') $('#cAdd').click(); };
+        $('#cMembers').oninput = () => { cd.members = $('#cMembers').value; cSave(); };
+        $('#cPeriod').onchange = () => { cd.period = $('#cPeriod').value; cSave(); };
+        $('#cAssign').onclick = cAssign;
+        $('#cCopy').onclick = () => cd.table && cd.table.rows.length && copyWithFeedback($('#cCopy'), choresText(cd.table.rows, [...new Set([...cMembers(), ...cd.table.rows.map(r => r.member)])], cd.table.period));
+        cRender();
     </script>
 </body>
 

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="心情日記：每天記一筆心情、標籤與文字，月曆顏色一眼看出情緒起伏，並統計平均心情、標籤影響與連續記錄天數。">
+    <meta name="st-keys" content="mood_entries,mood_tags">
+    <meta property="og:title" content="心情日記" />
+    <meta property="og:description" content="每天一筆心情，月曆、統計、搜尋與匯出，資料只存在本機。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/mood-journal.html" />
+    <title>心情日記</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row input {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .moods {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+        }
+
+        .moods button {
+            font-size: 28px;
+            padding: 6px 0;
+            min-height: 48px;
+            border-radius: var(--radius-sm);
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .chips button {
+            min-height: 40px;
+        }
+
+        .cal {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .cal .h {
+            text-align: center;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .cal button {
+            aspect-ratio: 1;
+            min-height: 44px;
+            padding: 0;
+            border-radius: var(--radius-sm);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            line-height: 1.1;
+            background: var(--fill);
+        }
+
+        .cal button span {
+            font-size: 16px;
+        }
+
+        .cal button.sel {
+            outline: 2px solid var(--blue);
+        }
+
+        .cal i {
+            visibility: hidden;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav b {
+            font-size: 18px;
+        }
+
+        .ent {
+            padding: 10px 0;
+            border-top: 1px solid var(--line);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .ent small {
+            color: var(--muted);
+        }
+
+        svg.chart {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>心情日記</h1>
+        <p class="sub">每天一筆：心情、標籤、幾句話。資料只存在這支瀏覽器。</p>
+
+        <div class="card">
+            <label for="date">日期（可補寫過去）</label>
+            <input id="date" type="date" aria-label="日期">
+            <p class="note" id="dateNote"></p>
+            <label>心情</label>
+            <div class="moods" id="moods"></div>
+            <label>標籤（可複選）</label>
+            <div class="chips" id="chips"></div>
+            <div class="row" style="margin-top:8px"><input id="newTag" maxlength="12" placeholder="自訂標籤（最多 12 字）" aria-label="自訂標籤"><button id="addTag">新增標籤</button></div>
+            <label for="text">想說的話</label>
+            <textarea id="text" rows="4" maxlength="2000" placeholder="今天發生了什麼？"></textarea>
+            <div class="row" style="margin-top:10px">
+                <button class="primary" id="save">儲存（覆蓋當天）</button>
+                <button id="append">追加到當天</button>
+                <button id="del">刪除當天</button>
+            </div>
+            <p class="note" id="saveNote"></p>
+        </div>
+
+        <div class="card">
+            <div class="nav"><button id="prev" aria-label="上個月">‹</button><b id="monthTitle"></b><button id="next" aria-label="下個月">›</button></div>
+            <div class="cal" id="cal"></div>
+        </div>
+
+        <div class="card">
+            <h2>統計</h2>
+            <div id="stats"></div>
+            <h2 style="margin-top:14px">近 30 天心情</h2>
+            <div id="chart"></div>
+            <h2 style="margin-top:14px">標籤影響</h2>
+            <p class="note">有該標籤的日子，平均心情比沒有標籤的日子高 / 低多少。</p>
+            <div id="tagStats"></div>
+        </div>
+
+        <div class="card">
+            <h2>搜尋與匯出</h2>
+            <div class="row"><input id="q" type="search" placeholder="搜尋文字、標籤或日期" aria-label="搜尋"></div>
+            <div id="results"></div>
+            <div class="row" style="margin-top:10px"><button id="expTxt">匯出 .txt</button><button id="expMd">匯出 .md</button></div>
+            <p class="note" id="count"></p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>一天記一筆的心情日記：選心情、勾標籤、寫幾句話。月曆用顏色顯示每天心情，還能看平均、連續記錄天數與哪些標籤讓你比較開心。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>睡前花一分鐘記錄今天，累積成自己的情緒紀錄。</li>
+        <li>想知道「運動」「睡眠」是不是真的讓心情變好。</li>
+        <li>忘了記，之後補寫過去某一天。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>日期預設是今天，可改成過去的日期；該日已有記錄會自動帶入。</li>
+        <li>點一個心情（😞😕😐🙂😄 對應 1～5 分），再點要勾的標籤，也能用「新增標籤」加自己的。</li>
+        <li>寫下想說的話，按「儲存（覆蓋當天）」；同一天想再補充，按「追加到當天」，文字會接在後面、標籤合併。</li>
+        <li>月曆點某一天可查看或修改；顏色越綠越開心、越紅越低落。</li>
+        <li>「搜尋與匯出」可搜文字 / 標籤 / 日期，並匯出 .txt 或 .md。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">10/1 🙂(4) 標籤：運動　10/2 😐(3) 標籤：工作　10/3 😄(5) 標籤：運動
+        → 本月平均 (4+3+5)/3 = 4.0
+        → 「運動」平均 4.5，沒有運動的日子 3.0，影響 +1.5
+        → 連續記錄 3 天</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>每天最多一筆，最多保存 3650 筆（約十年），超過會捨棄最舊的。</li>
+        <li>連續天數：今天還沒記沒關係，從昨天往回算。</li>
+        <li>資料只在本機，換手機或清除瀏覽資料前請先用右上角備份。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, esc, day, download } = Util;
+
+        // --- pure ---
+        const MOODS = ['😞', '😕', '😐', '🙂', '😄'], MAX_ENTRIES = 3650, DEF_TAGS = ['工作', '家人', '運動', '睡眠', '天氣'];
+        const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && day.shift(s, 0) === s;
+        const mean = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+        // 標籤：字串、去空白、1–12 字、不重複、最多 10 個
+        function cleanTags(a, max = 10) {
+            if (!Array.isArray(a)) return [];
+            const out = [];
+            for (const t of a) { const s = typeof t === 'string' ? t.trim() : ''; if (s && s.length <= 12 && !out.includes(s)) out.push(s); }
+            return out.slice(0, max);
+        }
+        // 驗證並補預設值；不合法回傳 null
+        function normEntry(e) {
+            if (!e || typeof e !== 'object' || !isDate(e.date)) return null;
+            const mood = Math.round(Number(e.mood));
+            if (!(mood >= 1 && mood <= 5)) return null;
+            return { date: e.date, mood, tags: cleanTags(e.tags), text: typeof e.text === 'string' ? e.text.slice(0, 2000) : '' };
+        }
+        // 清單整理：丟掉壞資料、同日後者覆蓋前者、依日期排序、超過上限留最新
+        function cleanEntries(list) {
+            if (!Array.isArray(list)) return [];
+            const m = new Map();
+            for (const e of list) { const n = normEntry(e); if (n) m.set(n.date, n); }
+            return [...m.values()].sort((a, b) => a.date < b.date ? -1 : 1).slice(-MAX_ENTRIES);
+        }
+        // 儲存一筆（append=true 時與同日舊資料合併：文字接後面、標籤聯集、心情用新的）；不合法回傳 null
+        function saveEntry(list, e, append) {
+            const n = normEntry(e); if (!n) return null;
+            const old = append && list.find(x => x.date === n.date);
+            if (old) { n.text = [old.text, n.text].filter(Boolean).join('\n').slice(0, 2000); n.tags = cleanTags([...old.tags, ...n.tags]); }
+            return cleanEntries([...list.filter(x => x.date !== n.date), n]);
+        }
+        const removeEntry = (list, date) => list.filter(x => x.date !== date);
+        // 月曆格（週日起算）：null 為空格，其餘為 YYYY-MM-DD
+        function monthGrid(y, m) {
+            const cells = Array(new Date(Date.UTC(y, m - 1, 1)).getUTCDay()).fill(null);
+            for (let d = 1; d <= day.daysInMonth(y, m); d++) cells.push(day.ymd(y, m, d));
+            while (cells.length % 7) cells.push(null);
+            return cells;
+        }
+        function monthStats(list, y, m) {
+            const p = day.ymd(y, m, 1).slice(0, 7), a = list.filter(e => e.date.startsWith(p)).map(e => e.mood);
+            return { n: a.length, avg: mean(a) };
+        }
+        // 各標籤：有 / 沒有該標籤的平均心情差（沒有任何對照組時 delta 為 null），依 delta 由高到低
+        function tagImpact(list) {
+            const tags = [...new Set(list.flatMap(e => e.tags))];
+            return tags.map(t => {
+                const w = list.filter(e => e.tags.includes(t)).map(e => e.mood), wo = list.filter(e => !e.tags.includes(t)).map(e => e.mood);
+                return { tag: t, n: w.length, avg: mean(w), delta: wo.length ? mean(w) - mean(wo) : null };
+            }).sort((a, b) => (b.delta ?? -99) - (a.delta ?? -99));
+        }
+        // 連續記錄天數：今天有記從今天算，否則從昨天算
+        function streak(list, today) {
+            const s = new Set(list.map(e => e.date));
+            let d = s.has(today) ? today : day.shift(today, -1), n = 0;
+            while (s.has(d)) { n++; d = day.shift(d, -1); }
+            return n;
+        }
+        function lastDays(list, today, n = 30) {
+            const m = new Map(list.map(e => [e.date, e.mood]));
+            return Array.from({ length: n }, (_, i) => { const d = day.shift(today, i - n + 1); return { date: d, mood: m.get(d) ?? null }; });
+        }
+        // 搜尋文字 / 標籤 / 日期（不分大小寫），新的在前
+        function search(list, q) {
+            q = String(q).trim().toLowerCase();
+            if (!q) return [];
+            return list.filter(e => (e.date + ' ' + e.tags.join(' ') + ' ' + e.text).toLowerCase().includes(q)).reverse();
+        }
+        function exportText(list, md) {
+            return list.map(e => {
+                const t = e.tags.join('、');
+                return md ? `## ${e.date}\n\n- 心情：${MOODS[e.mood - 1]} ${e.mood}/5\n` + (t ? `- 標籤：${t}\n` : '') + (e.text ? `\n${e.text}\n` : '')
+                    : `${e.date}  ${MOODS[e.mood - 1]} ${e.mood}/5` + (t ? `  [${t}]` : '') + (e.text ? `\n${e.text}` : '') + '\n';
+            }).join('\n');
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let entries = cleanEntries(store.get('mood_entries', []));
+        let tagList = cleanTags(store.get("mood_tags", DEF_TAGS), 40); if (!tagList.length) tagList = [...DEF_TAGS];
+        const today = day.today();
+        let curMood = 0, curTags = new Set(), vy, vm;
+        { const p = day.parse(today); vy = p.y; vm = p.m; }
+        const persist = () => { store.set('mood_entries', entries); store.set('mood_tags', tagList); };
+        const moodColor = (m) => `color-mix(in srgb, hsl(${(m - 1) * 30}, 70%, 50%) 55%, var(--card))`;
+
+        $('#date').value = today; $('#date').max = today;
+        $('#moods').replaceChildren(...MOODS.map((e, i) => { const b = document.createElement('button'); b.textContent = e; b.setAttribute('aria-label', `心情 ${i + 1}`); b.onclick = () => { curMood = i + 1; drawForm(); }; return b; }));
+
+        function drawForm() {
+            [...$('#moods').children].forEach((b, i) => b.setAttribute('aria-pressed', curMood === i + 1));
+            const all = [...new Set([...tagList, ...curTags])];
+            $('#chips').replaceChildren(...all.map(t => { const b = document.createElement('button'); b.className = 'sm'; b.textContent = t; b.setAttribute('aria-pressed', curTags.has(t)); b.onclick = () => { curTags.has(t) ? curTags.delete(t) : curTags.add(t); drawForm(); }; return b; }));
+        }
+        function loadDate() {
+            const d = $('#date').value, e = entries.find(x => x.date === d);
+            curMood = e ? e.mood : 0; curTags = new Set(e ? e.tags : []); $('#text').value = e ? e.text : '';
+            $('#dateNote').textContent = e ? '此日已有記錄，可修改後覆蓋或追加。' : '';
+            $('#del').disabled = !e; $('#append').disabled = !e;
+            drawForm(); drawCal();
+        }
+        function doSave(append) {
+            const d = $('#date').value;
+            if (!isDate(d)) { $('#saveNote').textContent = '請選日期'; return; }
+            if (d > today) { $('#saveNote').textContent = '不能寫未來的日期'; return; }
+            if (!curMood) { $('#saveNote').textContent = '請先選心情'; return; }
+            const r = saveEntry(entries, { date: d, mood: curMood, tags: [...curTags], text: $('#text').value }, append);
+            if (!r) { $('#saveNote').textContent = '資料不正確'; return; }
+            entries = r; tagList = [...new Set([...tagList, ...curTags])];
+            persist(); $('#saveNote').textContent = '已儲存'; loadDate(); drawAll();
+        }
+        function drawCal() {
+            $('#monthTitle').textContent = `${vy} 年 ${vm} 月`;
+            const m = new Map(entries.map(e => [e.date, e.mood])), sel = $('#date').value;
+            const hdr = ['日', '一', '二', '三', '四', '五', '六'].map(w => { const d = document.createElement('div'); d.className = 'h'; d.textContent = w; return d; });
+            const cells = monthGrid(vy, vm).map(d => {
+                if (!d) return document.createElement('i');
+                const b = document.createElement('button'), mood = m.get(d);
+                b.innerHTML = `${+d.slice(8)}<span>${mood ? MOODS[mood - 1] : '&nbsp;'}</span>`;
+                if (mood) b.style.background = moodColor(mood);
+                if (d === sel) b.className = 'sel';
+                b.disabled = d > today;
+                b.onclick = () => { $('#date').value = d; loadDate(); };
+                return b;
+            });
+            $('#cal').replaceChildren(...hdr, ...cells);
+        }
+        const fix1 = (n) => n === null ? '—' : n.toFixed(1);
+        function drawStats() {
+            const ms = monthStats(entries, vy, vm);
+            $('#stats').replaceChildren(Util.statRow(`${vm} 月平均心情`, ms.n ? `${fix1(ms.avg)}（${ms.n} 天）` : '—'), Util.statRow('連續記錄', `${streak(entries, today)} 天`), Util.statRow('總筆數', `${entries.length} / ${MAX_ENTRIES}`));
+            const days = lastDays(entries, today), pts = days.map((d, i) => d.mood ? [i / 29 * 290 + 5, 95 - (d.mood - 1) / 4 * 90] : null);
+            let path = '', prev = false;
+            for (const p of pts) { path += p ? `${prev ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}` : ''; prev = !!p; }
+            $('#chart').innerHTML = `<svg class="chart" viewBox="0 0 300 100" role="img" aria-label="近 30 天心情折線"><g stroke="var(--line)" stroke-width="1">${[0, 1, 2, 3, 4].map(i => `<line x1="0" x2="300" y1="${5 + i * 22.5}" y2="${5 + i * 22.5}"/>`).join('')}</g><path d="${path}" fill="none" stroke="var(--blue)" stroke-width="2"/>${pts.filter(Boolean).map(p => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="var(--blue)"/>`).join('')}</svg>` + (days.some(d => d.mood) ? '' : '<p class="note">近 30 天還沒有記錄</p>');
+            const ti = tagImpact(entries);
+            $('#tagStats').replaceChildren(...(ti.length ? ti.map(t => Util.statRow(`${t.tag}（${t.n} 天，平均 ${fix1(t.avg)}）`, t.delta === null ? '—' : (t.delta > 0 ? '+' : '') + t.delta.toFixed(1), t.delta > 0 ? 'ok' : t.delta < 0 ? 'bad' : '')) : [Object.assign(document.createElement('p'), { className: 'note', textContent: '還沒有標籤資料' })]));
+        }
+        function drawSearch() {
+            const r = search(entries, $('#q').value);
+            $('#results').innerHTML = r.slice(0, 50).map(e => `<div class="ent"><b>${e.date}</b> ${MOODS[e.mood - 1]} <small>${esc(e.tags.join('、'))}</small><br>${esc(e.text)}</div>`).join('') + (r.length > 50 ? `<p class="note">只顯示前 50 筆，共 ${r.length} 筆</p>` : '');
+            $('#count').textContent = $('#q').value.trim() ? `找到 ${r.length} 筆` : '';
+        }
+        function drawAll() { drawCal(); drawStats(); drawSearch(); }
+
+        $('#date').onchange = () => { const p = $('#date').value; if (isDate(p)) { vy = day.parse(p).y; vm = day.parse(p).m; } loadDate(); drawStats(); };
+        $('#save').onclick = () => doSave(false);
+        $('#append').onclick = () => doSave(true);
+        $('#del').onclick = () => { if (!confirm('刪除這一天的記錄？')) return; entries = removeEntry(entries, $('#date').value); persist(); loadDate(); drawAll(); };
+        $('#addTag').onclick = () => {
+            const t = cleanTags([$('#newTag').value])[0];
+            if (!t) { $('#saveNote').textContent = '標籤需為 1–12 字'; return; }
+            if (!tagList.includes(t)) tagList.push(t);
+            curTags.add(t); $('#newTag').value = ''; $('#saveNote').textContent = ''; persist(); drawForm();
+        };
+        const shiftMonth = (n) => { const t = vy * 12 + vm - 1 + n; vy = Math.floor(t / 12); vm = t % 12 + 1; drawCal(); drawStats(); };
+        $('#prev').onclick = () => shiftMonth(-1); $('#next').onclick = () => shiftMonth(1);
+        $('#q').oninput = drawSearch;
+        const exp = (md) => { if (!entries.length) { $('#count').textContent = '沒有可匯出的資料'; return; } download(new Blob([exportText(entries, md)], { type: 'text/plain;charset=utf-8' }), `mood-journal.${md ? 'md' : 'txt'}`); };
+        $('#expTxt').onclick = () => exp(false); $('#expMd').onclick = () => exp(true);
+        loadDate(); drawStats(); drawSearch();
+    </script>
+</body>
+
+</html>

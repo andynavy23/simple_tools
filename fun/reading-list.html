@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="書單追蹤：記錄想讀、在讀、讀完的書，進度條、評分、心得與年度統計，可匯出 Markdown 或 CSV。">
+    <meta name="st-keys" content="books_list">
+    <meta property="og:title" content="書單追蹤" />
+    <meta property="og:description" content="追蹤閱讀進度、評分與心得，今年讀完幾本一目了然。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/reading-list.html" />
+    <title>書單追蹤</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>* {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .tabs button {
+            flex: 1;
+            padding-left: 10px;
+            padding-right: 10px;
+            min-height: 44px;
+        }
+
+        .book {
+            padding: 12px 0;
+            border-top: 1px solid var(--line);
+        }
+
+        .book h3 {
+            margin: 0;
+            word-break: break-word;
+        }
+
+        .bar {
+            height: 10px;
+            background: var(--fill);
+            border-radius: 99px;
+            overflow: hidden;
+            margin: 8px 0 4px;
+        }
+
+        .bar i {
+            display: block;
+            height: 100%;
+            background: var(--blue);
+        }
+
+        .rev {
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin: 6px 0;
+        }
+
+        .acts {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .acts input {
+            width: 90px;
+            flex: 0 0 auto;
+        }
+
+        .acts button {
+            min-height: 44px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>書單追蹤</h1>
+        <p class="sub">想讀、在讀、讀完，一本一本記。資料只存在這支瀏覽器。</p>
+
+        <div class="card">
+            <h2 id="formTitle">新增書籍</h2>
+            <label for="title">書名</label>
+            <input id="title" maxlength="100" placeholder="必填" style="width:100%">
+            <label for="author">作者</label>
+            <input id="author" maxlength="60" style="width:100%">
+            <div class="row">
+                <div><label for="total">總頁數</label><input id="total" type="number" inputmode="numeric" min="0" max="99999" style="width:100%"></div>
+                <div><label for="page">目前頁數</label><input id="page" type="number" inputmode="numeric" min="0" max="99999" value="0" style="width:100%"></div>
+            </div>
+            <div class="row">
+                <div><label for="status">狀態</label><select id="status" style="width:100%"></select></div>
+                <div><label for="rating">評分</label><select id="rating" style="width:100%"></select></div>
+            </div>
+            <div class="row">
+                <div><label for="start">開始日期</label><input id="start" type="date" style="width:100%"></div>
+                <div><label for="finish">完成日期</label><input id="finish" type="date" style="width:100%"></div>
+            </div>
+            <label for="review">心得</label>
+            <textarea id="review" rows="3" maxlength="2000"></textarea>
+            <div class="row" style="margin-top:10px"><button class="primary" id="save">加入書單</button><button id="cancel" hidden>取消編輯</button></div>
+            <p class="note" id="formNote"></p>
+        </div>
+
+        <div class="card">
+            <h2>統計</h2>
+            <div id="stats"></div>
+        </div>
+
+        <div class="card">
+            <div class="tabs" id="tabs"></div>
+            <div class="row" style="margin-top:10px">
+                <input id="q" type="search" placeholder="搜尋書名 / 作者 / 心得" aria-label="搜尋">
+                <select id="sort" aria-label="排序">
+                    <option value="added">最近加入</option>
+                    <option value="title">書名</option>
+                    <option value="rating">評分高到低</option>
+                    <option value="progress">進度高到低</option>
+                    <option value="finish">完成日期新到舊</option>
+                </select>
+            </div>
+            <div id="list"></div>
+            <div class="row" style="margin-top:10px"><button id="expMd">匯出 .md</button><button id="expCsv">匯出 CSV</button></div>
+            <p class="note" id="listNote"></p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>幫你管理書單：每本書記書名、作者、頁數與進度，標示想讀 / 在讀 / 讀完 / 擱置，讀完可打分數寫心得，還有年度統計。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>手上同時在讀幾本，想隨時看到各自進度。</li>
+        <li>年底想回顧「今年讀了幾本、平均給幾顆星」。</li>
+        <li>把想讀的書先記下來，免得忘記。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>在「新增書籍」填書名（必填）、作者、總頁數，按「加入書單」。</li>
+        <li>列表上每本書有進度條；在欄位輸入目前頁數，按「更新進度」。</li>
+        <li>第一次更新進度會自動把「想讀」變「在讀」並記開始日；頁數到達總頁數會自動變「讀完」並記完成日。</li>
+        <li>用上方分頁（全部 / 想讀 / 在讀 / 讀完 / 擱置）、搜尋框與排序找書。</li>
+        <li>按「編輯」可改評分、心得、日期等；「匯出 .md / CSV」備份成文字檔。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">《小王子》總 120 頁，目前 30 頁 → 進度 25%
+        把目前頁數更新成 120
+        → 狀態自動變「讀完」，完成日記為今天
+        → 統計「今年讀完」+1，累積頁數 +120</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>累積頁數 = 所有書「目前頁數」加總；沒填總頁數的書不會有百分比，也不會自動讀完。</li>
+        <li>把「讀完」的書頁數改小，會退回「在讀」並清掉完成日。</li>
+        <li>最多 2000 本；資料只在本機，換機前請先用右上角備份或匯出。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, esc, day, download, csvStringify } = Util;
+
+        // --- pure ---
+        const STATUS = { want: '想讀', reading: '在讀', done: '讀完', paused: '擱置' }, MAX_BOOKS = 2000;
+        const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && day.shift(s, 0) === s;
+        const int = (v, lo, hi) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : lo; };
+        const str = (v, n) => typeof v === 'string' ? v.trim().slice(0, n) : '';
+        // 驗證並補預設值；沒有書名回傳 null
+        function cleanBook(b) {
+            if (!b || typeof b !== 'object') return null;
+            const title = str(b.title, 100); if (!title) return null;
+            const total = int(b.total, 0, 99999);
+            return {
+                id: typeof b.id === 'string' ? b.id : '', title, author: str(b.author, 60), total,
+                page: int(b.page, 0, total || 99999), status: STATUS[b.status] ? b.status : 'want', rating: int(b.rating, 0, 5),
+                review: typeof b.review === 'string' ? b.review.slice(0, 2000) : '', start: isDate(b.start) ? b.start : '', finish: isDate(b.finish) ? b.finish : '',
+            };
+        }
+        const newId = () => Math.random().toString(36).slice(2, 10);
+        // 清單整理：丟掉壞資料、補 / 修正重複 id、最多 MAX_BOOKS 本（留最後加入的）
+        function cleanBooks(list) {
+            if (!Array.isArray(list)) return [];
+            const seen = new Set(), out = [];
+            for (const x of list) {
+                const b = cleanBook(x); if (!b) continue;
+                while (!b.id || seen.has(b.id)) b.id = newId();
+                seen.add(b.id); out.push(b);
+            }
+            return out.slice(-MAX_BOOKS);
+        }
+        // 狀態連動：頁數到達總頁數 → 讀完；讀完 → 頁數補滿並記完成日；有進度的「想讀」→ 在讀；在讀 / 讀完沒開始日 → 記今天
+        function settle(b, today) {
+            b = { ...b };
+            if (b.total > 0 && b.page >= b.total && b.status !== 'paused') b.status = 'done';
+            if (b.status === 'done') { if (b.total > 0) b.page = b.total; if (!b.finish) b.finish = today; }
+            else if (b.status === 'want' && b.page > 0) b.status = 'reading';
+            if ((b.status === 'reading' || b.status === 'done') && !b.start) b.start = today;
+            return b;
+        }
+        // 更新進度：讀完的書頁數改小會退回在讀並清掉完成日
+        function applyProgress(b, page, today) {
+            const n = { ...b, page: int(page, 0, b.total || 99999) };
+            if (b.status === 'done' && b.total > 0 && n.page < b.total) { n.status = 'reading'; n.finish = ''; }
+            return settle(n, today);
+        }
+        const progressPct = (b) => b.total > 0 ? Math.min(100, Math.round(b.page / b.total * 100)) : b.status === 'done' ? 100 : 0;
+        function filterBooks(books, status, q) {
+            q = String(q || '').trim().toLowerCase();
+            return books.filter(b => (status === 'all' || b.status === status) && (!q || (b.title + ' ' + b.author + ' ' + b.review).toLowerCase().includes(q)));
+        }
+        function sortBooks(books, key) {
+            const a = [...books].reverse(); // 預設：最近加入在前
+            const cmp = { title: (x, y) => x.title.localeCompare(y.title), rating: (x, y) => y.rating - x.rating, progress: (x, y) => progressPct(y) - progressPct(x), finish: (x, y) => (y.finish || '').localeCompare(x.finish || '') }[key];
+            return cmp ? a.sort(cmp) : a; // sort 穩定，同分維持最近加入在前
+        }
+        // 年度統計：今年讀完幾本、已評分書的平均分、累積頁數（所有書目前頁數加總）
+        function bookStats(books, year) {
+            const rated = books.filter(b => b.rating > 0);
+            return {
+                doneYear: books.filter(b => b.status === 'done' && b.finish.startsWith(year + '-')).length, done: books.filter(b => b.status === 'done').length,
+                avgRating: rated.length ? rated.reduce((s, b) => s + b.rating, 0) / rated.length : null, rated: rated.length, pages: books.reduce((s, b) => s + b.page, 0),
+            };
+        }
+        const stars = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
+        function exportMd(books) {
+            const out = ['# 書單', ''];
+            for (const [k, label] of Object.entries(STATUS)) {
+                const g = books.filter(b => b.status === k); if (!g.length) continue;
+                out.push(`## ${label}（${g.length}）`, '');
+                for (const b of g) {
+                    out.push(`- **${b.title}**` + (b.author ? ` — ${b.author}` : '') + (b.total ? `（${b.page}/${b.total} 頁，${progressPct(b)}%）` : '') + (b.rating ? ` ${stars(b.rating)}` : ''));
+                    if (b.start || b.finish) out.push(`  - ${b.start ? '開始 ' + b.start : ''}${b.start && b.finish ? '，' : ''}${b.finish ? '完成 ' + b.finish : ''}`);
+                    if (b.review) out.push(...b.review.split('\n').map(l => `  > ${l}`));
+                }
+                out.push('');
+            }
+            return out.join('\n');
+        }
+        const exportCsv = (books) => csvStringify(['書名', '作者', '總頁數', '目前頁數', '狀態', '評分', '開始日期', '完成日期', '心得'], books.map(b => [b.title, b.author, b.total, b.page, STATUS[b.status], b.rating, b.start, b.finish, b.review]));
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let books = cleanBooks(store.get('books_list', []));
+        let tab = 'all', editId = null;
+        const today = day.today(), year = today.slice(0, 4);
+        const persist = () => store.set('books_list', books);
+
+        $('#status').replaceChildren(...Object.entries(STATUS).map(([k, v]) => new Option(v, k)));
+        $('#rating').replaceChildren(new Option('未評分', 0), ...[1, 2, 3, 4, 5].map(n => new Option(stars(n), n)));
+        const tabDefs = [['all', '全部'], ...Object.entries(STATUS)];
+        $('#tabs').replaceChildren(...tabDefs.map(([k, v]) => { const b = document.createElement('button'); b.className = 'sm'; b.dataset.tab = k; b.onclick = () => { tab = k; drawList(); }; return b; }));
+
+        function resetForm() {
+            editId = null;
+            for (const id of ['title', 'author', 'total', 'review', 'start', 'finish']) $('#' + id).value = '';
+            $('#page').value = 0; $('#status').value = 'want'; $('#rating').value = 0;
+            $('#formTitle').textContent = '新增書籍'; $('#save').textContent = '加入書單'; $('#cancel').hidden = true;
+        }
+        function fillForm(b) {
+            editId = b.id;
+            for (const k of ['title', 'author', 'total', 'page', 'status', 'rating', 'review', 'start', 'finish']) $('#' + k).value = b[k];
+            $('#formTitle').textContent = '編輯書籍'; $('#save').textContent = '儲存修改'; $('#cancel').hidden = false;
+            $('#title').scrollIntoView({ block: 'center' });
+        }
+        function readForm() {
+            const b = cleanBook({ id: editId || '', title: $('#title').value, author: $('#author').value, total: $('#total').value, page: $('#page').value, status: $('#status').value, rating: $('#rating').value, review: $('#review').value, start: $('#start').value, finish: $('#finish').value });
+            return b && settle(b, today);
+        }
+        $('#save').onclick = () => {
+            const b = readForm();
+            if (!b) { $('#formNote').textContent = '請填書名'; return; }
+            if (editId) books = books.map(x => x.id === editId ? b : x);
+            else { if (books.length >= MAX_BOOKS) { $('#formNote').textContent = `最多 ${MAX_BOOKS} 本`; return; } b.id = newId(); books.push(b); }
+            persist(); $('#formNote').textContent = '已儲存'; resetForm(); drawAll();
+        };
+        $('#cancel').onclick = () => { resetForm(); $('#formNote').textContent = ''; };
+
+        function drawStats() {
+            const s = bookStats(books, year);
+            $('#stats').replaceChildren(Util.statRow(`${year} 年讀完`, `${s.doneYear} 本`), Util.statRow('累計讀完', `${s.done} 本`), Util.statRow('平均評分', s.avgRating === null ? '—' : `${s.avgRating.toFixed(1)}（${s.rated} 本）`), Util.statRow('累積頁數', `${s.pages} 頁`));
+        }
+        function drawList() {
+            for (const b of $('#tabs').children) { const k = b.dataset.tab; b.textContent = tabDefs.find(d => d[0] === k)[1] + ` ${filterBooks(books, k, '').length}`; b.setAttribute('aria-pressed', k === tab); }
+            const r = sortBooks(filterBooks(books, tab, $('#q').value), $('#sort').value);
+            $('#list').replaceChildren(...r.map(b => {
+                const d = document.createElement('div'); d.className = 'book';
+                const pct = progressPct(b);
+                d.innerHTML = `<h3>${esc(b.title)} <small class="muted">${STATUS[b.status]}</small></h3><div class="muted">${esc(b.author)}${b.rating ? ' ' + stars(b.rating) : ''}</div>`
+                    + `<div class="bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div><div class="muted">${b.total ? `${b.page} / ${b.total} 頁（${pct}%）` : `已讀 ${b.page} 頁（未填總頁數）`}${b.start ? '　開始 ' + b.start : ''}${b.finish ? '　完成 ' + b.finish : ''}</div>`
+                    + (b.review ? `<div class="rev">${esc(b.review)}</div>` : '');
+                const acts = document.createElement('div'); acts.className = 'acts';
+                const inp = document.createElement('input'); inp.type = 'number'; inp.inputMode = 'numeric'; inp.min = 0; inp.value = b.page; inp.setAttribute('aria-label', '目前頁數');
+                const up = document.createElement('button'); up.textContent = '更新進度'; up.onclick = () => { books = books.map(x => x.id === b.id ? applyProgress(x, inp.value, today) : x); persist(); drawAll(); };
+                const ed = document.createElement('button'); ed.textContent = '編輯'; ed.onclick = () => fillForm(b);
+                const del = document.createElement('button'); del.textContent = '刪除'; del.onclick = () => { if (!confirm(`刪除《${b.title}》？`)) return; books = books.filter(x => x.id !== b.id); if (editId === b.id) resetForm(); persist(); drawAll(); };
+                acts.append(inp, up, ed, del); d.append(acts);
+                return d;
+            }));
+            $('#listNote').textContent = r.length ? '' : (books.length ? '沒有符合的書' : '還沒有書，從上方新增第一本吧');
+        }
+        function drawAll() { drawStats(); drawList(); }
+        $('#q').oninput = drawList; $('#sort').onchange = drawList;
+        const exp = (csv) => { if (!books.length) { $('#listNote').textContent = '沒有可匯出的資料'; return; } download(new Blob([csv ? '﻿' + exportCsv(books) : exportMd(books)], { type: csv ? 'text/csv;charset=utf-8' : 'text/markdown;charset=utf-8' }), `reading-list.${csv ? 'csv' : 'md'}`); };
+        $('#expMd').onclick = () => exp(false); $('#expCsv').onclick = () => exp(true);
+        resetForm(); drawAll();
+    </script>
+</body>
+
+</html>

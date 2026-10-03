@@ -939,6 +939,30 @@ const NL = String.fromCharCode(10);
             assert.ok(/怎麼用|怎麼玩/.test(t[1]), `${dir}/${f} 的說明缺「怎麼用 / 怎麼玩」`); assert.equal(h.split('<template id="help">').length, 2, `${dir}/${f} 有多份說明`);
         }
     assert.ok(read('index.html').includes('shared/js/chrome.js'));
+    // 本機資料備份：頁面讀寫的每個 localStorage 鍵都要列在 <meta name="st-keys">（chrome.js 的「💾 備份與還原」只認這份宣告）
+    const chromeApi = require('../shared/js/chrome.js');
+    const KEY_REGS = [
+        /(?:store|Util\.store)\.(?:get|set)\(\s*(['"`])([^'"`$]+)\1/g,
+        /localStorage\.(?:get|set|remove)Item\(\s*(['"`])([^'"`$+]+)\1/g,
+        /(?:const|let)\s+(?:[A-Z_]*KEY)\s*=\s*(['"`])([^'"`$]+)\1/g,
+        /bestKey\s*=\s*(['"`])([^'"`$]+)\1\s*[;,\n]/g,
+    ];
+    // 動態鍵：'前綴_' + x、`前綴_${x}`（出現在 store.get/set 或 bestKey 定義裡）
+    const DYN_REGS = [/(?:store|Util\.store)\.(?:get|set)\(\s*(?:`([A-Za-z0-9_-]+_)\$\{|(['"])([A-Za-z0-9_-]+_)\2\s*\+)/g, /bestKey\s*=[^\n]*?(?:(['"])([A-Za-z0-9_-]+_)\1\s*\+|`([A-Za-z0-9_-]+_)\$\{)/g];
+    for (const dir of ['game-assist', 'mini-games', 'fun', 'utils', 'reading'])
+        for (const f of fs.readdirSync(path.join(root, dir)).filter(x => x.endsWith('.html'))) {
+            const h = read(`${dir}/${f}`), used = new Set(), dyn = new Set();
+            for (const rg of KEY_REGS) for (const m of h.matchAll(rg)) used.add(m[2]);
+            for (const m of h.matchAll(DYN_REGS[0])) dyn.add(m[1] || m[3]);
+            for (const m of h.matchAll(DYN_REGS[1])) dyn.add(m[2] || m[3]);
+            const metaM = h.match(/<meta name="st-keys" content="([^"]*)">/);
+            if (!used.size && !dyn.size) { assert.ok(!metaM || metaM[1].trim(), `${dir}/${f} st-keys 不能是空的`); continue; }
+            assert.ok(metaM, `${dir}/${f} 有使用 localStorage（${[...used, ...dyn].join(', ')}）但沒有宣告 <meta name="st-keys">`);
+            const match = chromeApi.matcher(metaM[1].split(',').map(x => x.trim()).filter(Boolean));
+            for (const k of used) assert.ok(match(k), `${dir}/${f} 的 st-keys 沒有涵蓋鍵「${k}」`);
+            for (const q of dyn) assert.ok(match(q + 'x'), `${dir}/${f} 的 st-keys 沒有涵蓋動態鍵前綴「${q}*」`);
+        }
+    assert.match(index, /<meta name="st-keys" content="\*">/, 'index.html 要宣告全站備份 st-keys="*"');
     for (const m of index.matchAll(/<a class="card" [^>]*>/g)) assert.match(m[0], /data-topic="[^"]+"/, '首頁卡片缺 data-topic：' + m[0]);
     ok('TOOLS.md / README / index 與頁面一致');
 }
@@ -2324,8 +2348,8 @@ const NL = String.fromCharCode(10);
     ok('countdown: checklist');
 }
 
-// ===== 單機模式測試（階段 3）：tests/solo-*.test.js 各自獨立，這裡一起執行；非同步測試請 push 到 require('./_load').pending =====
-for (const f of fs.readdirSync(__dirname).filter(x => /^solo-.*\.test\.js$/.test(x)).sort()) require(path.join(__dirname, f));
+// ===== 單機模式 / 新工具測試：tests/solo-*.test.js、tests/new-*.test.js 各自獨立，這裡一起執行；非同步測試請 push 到 require('./_load').pending =====
+for (const f of fs.readdirSync(__dirname).filter(x => /^(solo|new)-.*\.test\.js$/.test(x)).sort()) require(path.join(__dirname, f));
 pending.push(...require('./_load').pending);
 
 Promise.all(pending).then(() => console.log('ALL OK')).catch((e) => { console.error(e); process.exit(1); });

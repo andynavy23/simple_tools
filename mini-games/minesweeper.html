@@ -10,6 +10,7 @@
     <meta property="og:description" content="經典踩地雷，三種難度，記錄最佳時間。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/minesweeper.html" />
+    <meta name="st-keys" content="mines_best_*,mines_daily_*">
     <title>踩地雷</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -43,6 +44,20 @@
             padding-bottom: 6px;
         }
 
+        .field.zoom {
+            overflow: auto;
+            max-height: 68vh;
+            overscroll-behavior: contain;
+        }
+
+        .field.zoom #grid {
+            margin: 0;
+        }
+
+        #fitBtn[hidden] {
+            display: none;
+        }
+
         #grid {
             display: grid;
             gap: 2px;
@@ -57,7 +72,6 @@
         }
 
         .c {
-            --s: min(34px, calc((100vw - 44px) / var(--cols) - 2px));
             width: max(var(--s), 18px);
             height: max(var(--s), 18px);
             padding: 0;
@@ -140,6 +154,8 @@
             <span class="stat">💣 <span id="left">0</span></span>
             <span class="stat">⏱ <span id="time">0</span></span>
             <button id="flagMode" aria-pressed="false" title="開啟後，點一下就是插旗（適合手機）">🚩 旗標模式</button>
+            <button id="zoomBtn" aria-pressed="false" title="放大格子，可拖動捲動盤面（適合手機）">🔍 放大</button>
+            <button id="fitBtn" hidden title="縮回整盤全貌">⤢ 回到全貌</button>
             <button id="daily" aria-pressed="false" title="每天同一個雷區，大家比誰快">每日挑戰</button>
             <button class="primary spacer" id="new">新遊戲</button>
         </div>
@@ -168,7 +184,7 @@
         <div class="eg">翻完所有安全格即過關，計時以秒計，越短越好，各難度分開記錄最佳。踩到地雷就失敗，會顯示所有地雷與標錯的旗。</div>
         <h3>小提醒</h3>
         <ul>
-        <li>高級盤面比螢幕寬，可左右滑動盤面區域查看。</li>
+        <li>手機上中、高級盤會自動「放大」（格子 40px），在盤面上拖動即可捲動，不會誤開格；按「回到全貌」可縮成整盤，「放大」可再切回。</li>
         <li>「每日挑戰」每天固定同一個雷區（第一下點擊附近會略有不同）。</li>
         <li>長按插旗時手指不要移動，否則會被當作捲動。</li>
         </ul>
@@ -257,10 +273,19 @@
         }
 
         const flagsLeft = (g) => g.mines - g.st.reduce((a, v) => a + (v === 2 ? 1 : 0), 0);
+
+        // 格子邊長（px）：放大模式固定 40；否則塞進寬度 boardW，上限 34、下限 18
+        function cellSizeFor(boardW, cols, zoomed) {
+            if (zoomed) return 40;
+            return Math.max(18, Math.min(34, boardW / cols - 2));
+        }
+        // 點擊 vs 拖動：位移不超過 10px 且按下不超過 450ms 才算點擊
+        function isTap(dx, dy, dt) { return Math.hypot(dx, dy) <= 10 && dt <= 450; }
         // --- /pure ---
 
         const { rnd, store } = Util;
         const $ = (s) => document.querySelector(s);
+        let zoomOn = matchMedia('(pointer:coarse)').matches, down = null;
         let g, start = 0, timer = null, flagMode = false, daily = null, R = rnd;               // daily：日期字串；R：佈雷用的亂數
 
         const level = () => $('#level').value.split(',').map(Number);
@@ -278,6 +303,7 @@
             const grid = $('#grid');
             grid.style.gridTemplateColumns = `repeat(${w}, auto)`;
             grid.style.setProperty('--cols', w);
+            layout();
             grid.replaceChildren(...Array.from({ length: w * h }, (_, i) => {
                 const b = document.createElement('button');
                 b.className = 'c';
@@ -285,6 +311,15 @@
                 return b;
             }));
             paint();
+        }
+
+        // 放大模式只在寬盤（>= 16 欄）生效
+        function layout() {
+            const z = zoomOn && g.w >= 16;
+            $('.field').classList.toggle('zoom', z);
+            $('#zoomBtn').setAttribute('aria-pressed', zoomOn);
+            $('#fitBtn').hidden = !z;
+            $('#grid').style.setProperty('--s', cellSizeFor(innerWidth - 44, g.w, z) + 'px');
         }
 
         function paint() {
@@ -324,7 +359,8 @@
         }
 
         const grid = $('#grid');
-        grid.addEventListener('click', (e) => { const b = e.target.closest('.c'); if (b && !longFired) act(+b.dataset.i, flagMode); longFired = false; });
+        grid.addEventListener('pointerdown', (e) => { down = e.pointerType === 'touch' ? { x: e.clientX, y: e.clientY, t: Date.now() } : null; });   // 只防觸控拖動誤觸
+        grid.addEventListener('click', (e) => { const b = e.target.closest('.c'); if (b && !longFired && (!down || isTap(e.clientX - down.x, e.clientY - down.y, Date.now() - down.t))) act(+b.dataset.i, flagMode); longFired = false; });
         grid.addEventListener('contextmenu', (e) => { e.preventDefault(); const b = e.target.closest('.c'); if (b) act(+b.dataset.i, true); });
 
         // 長按插旗（手機）
@@ -337,6 +373,9 @@
         ['touchend', 'touchmove', 'touchcancel'].forEach(t => grid.addEventListener(t, () => clearTimeout(pressTimer), { passive: true }));
 
         $('#flagMode').onclick = () => { flagMode = !flagMode; $('#flagMode').setAttribute('aria-pressed', flagMode); };
+        $('#zoomBtn').onclick = () => { zoomOn = !zoomOn; layout(); };
+        $('#fitBtn').onclick = () => { zoomOn = false; layout(); };
+        addEventListener('resize', layout);
         $('#new').onclick = () => newGame(false);
         $('#daily').onclick = () => newGame(true);
         $('#level').onchange = () => newGame(!!daily);

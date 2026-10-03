@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="QR / 條碼掃描：相機即時掃描或選擇圖片，支援 QR Code 與常見一維條碼，全部在本機解碼。">
+    <meta name="st-keys" content="qrscan_history">
+    <meta property="og:title" content="QR / 條碼掃描" />
+    <meta property="og:description" content="用相機或圖片掃 QR Code 與條碼，本機解碼不上傳。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/qr-scan.html" />
+    <title>QR / 條碼掃描</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        .btns {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btns button {
+            flex: 1 1 140px;
+            min-height: 44px;
+        }
+
+        .stage {
+            position: relative;
+            margin-top: 12px;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            background: #000;
+            max-height: 62vh;
+        }
+
+        .stage video {
+            display: block;
+            width: 100%;
+            max-height: 62vh;
+            object-fit: cover;
+        }
+
+        .stage .frame {
+            position: absolute;
+            inset: 18% 18%;
+            border: 3px solid rgba(255, 255, 255, .85);
+            border-radius: 12px;
+            pointer-events: none;
+        }
+
+        .drop {
+            margin-top: 12px;
+            padding: 18px 12px;
+            border: 2px dashed var(--line);
+            border-radius: var(--radius-sm);
+            text-align: center;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .drop.over {
+            border-color: var(--blue);
+            color: var(--text);
+        }
+
+        .res {
+            white-space: pre-wrap;
+            word-break: break-all;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            margin: 8px 0;
+            max-height: 40vh;
+            overflow: auto;
+            font-size: 16px;
+            user-select: all;
+        }
+
+        .tag {
+            display: inline-block;
+            font-size: 13px;
+            padding: 2px 10px;
+            border-radius: 999px;
+            background: var(--fill);
+            margin-right: 6px;
+        }
+
+        .warn {
+            color: var(--bad);
+            font-weight: 600;
+        }
+
+        a.btnlink {
+            display: inline-flex;
+            align-items: center;
+            min-height: 44px;
+            padding: 0 18px;
+            border-radius: var(--btn-radius);
+            background: var(--fill);
+            color: var(--text);
+            text-decoration: none;
+        }
+
+        .hrow {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .hrow:last-child {
+            border-bottom: 0;
+        }
+
+        .hrow .hbtn {
+            flex: 1;
+            min-width: 0;
+            text-align: left;
+            background: none;
+            border: 0;
+            box-shadow: none;
+            padding: 8px 4px;
+            min-height: 44px;
+        }
+
+        .hrow .hbtn span {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .hrow .del {
+            min-width: 44px;
+            min-height: 44px;
+            padding: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>QR / 條碼掃描</h1>
+        <p class="sub">相機即時掃描，或選擇 / 拖入圖片。解碼都在你的裝置上完成，圖片與相機畫面不會上傳。</p>
+
+        <div class="card">
+            <div class="btns">
+                <button class="primary" id="camBtn">📷 開啟相機掃描</button>
+                <button id="pick">🖼 選擇圖片</button>
+            </div>
+            <input type="file" id="file" accept="image/*" hidden>
+            <div class="stage" id="stage" hidden><video id="video" playsinline muted></video><div class="frame"></div></div>
+            <div class="drop" id="drop">也可以把圖片拖到這裡，或直接貼上圖片（Ctrl+V）</div>
+            <p class="note" id="status" role="status" aria-live="polite"></p>
+            <p class="note" id="engine"></p>
+        </div>
+
+        <div class="card" id="resCard" hidden>
+            <h2>掃描結果</h2>
+            <div><span class="tag" id="resType"></span><span class="muted" id="resFmt"></span></div>
+            <div class="res" id="resText"></div>
+            <div id="resFields"></div>
+            <p class="note" id="resNote"></p>
+            <div class="btns" style="margin-top:10px">
+                <button id="copyRes">複製內容</button>
+                <button id="copyPw" hidden>複製 Wi-Fi 密碼</button>
+                <a class="btnlink" id="openLink" target="_blank" rel="noopener noreferrer" hidden>確認後開啟連結</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>歷史紀錄 <span class="muted" id="histCount"></span></h2>
+            <div id="hist"></div>
+            <p class="note" id="histEmpty">還沒有紀錄。最多保留最近 50 筆，只存在這台裝置。</p>
+            <button class="sm" id="clearHist" hidden>清除全部紀錄</button>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>用手機相機或一張圖片，讀出 QR Code 與常見條碼的內容，並判斷是網址、Wi-Fi、電話、Email 還是純文字。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>桌上或海報上的 QR Code，想先看內容再決定要不要點開。</li>
+        <li>朋友傳來 QR Code 的截圖，直接選圖就能讀。</li>
+        <li>掃 Wi-Fi QR Code，拿到網路名稱與密碼。</li>
+        <li>查商品條碼（EAN-13）的數字。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>按「開啟相機掃描」，允許相機後把 QR 放進畫面中央，讀到就會自動停止。手機會優先使用後鏡頭。</li>
+        <li>或按「選擇圖片」、把圖片拖進虛線框，或直接貼上圖片。</li>
+        <li>結果會顯示內容與類型。按「複製內容」帶走；網址要自己按「確認後開啟連結」。</li>
+        <li>歷史紀錄點一下可重新顯示，最多 50 筆。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">掃到 WIFI:T:WPA;S:Home;P:12345678;;
+        → 類型 Wi-Fi，網路名稱 Home、密碼 12345678、加密 WPA</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>隱私：相機畫面與圖片只在瀏覽器內處理，不會上傳；歷史紀錄存在本機。</li>
+        <li>支援：Chrome / Edge（Android、Mac）有原生條碼辨識，可讀 QR 與多種一維條碼；Firefox、Safari 等會改用內建解碼器，只能讀 QR Code，需要清楚、端正、完整的畫面。</li>
+        <li>相機需要 HTTPS（或 localhost）並允許權限。被拒絕時到瀏覽器的網站設定重新開啟。</li>
+        <li>不會自動跳轉網址。釣魚 QR 很常見，請先看清楚網域。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, copyWithFeedback } = Util;
+
+        // --- pure ---
+        // ===== QR 解碼（版本 1–10、容錯 L/M/Q/H、數字 / 英數 / 位元組模式、Reed-Solomon 糾錯）=====
+        // ponytail: 只靠三個定位器做仿射取樣（正立 / 輕微旋轉 / 縮放），沒有透視校正與對齊圖樣修正；歪斜嚴重的相片請交給原生 BarcodeDetector
+        const FMT_BITS = [1, 0, 3, 2]; // L M Q H 在格式資訊裡的代碼
+        const ECC_PER_BLOCK = [[7, 10, 15, 20, 26, 18, 20, 24, 30, 18], [10, 16, 26, 18, 24, 16, 18, 22, 22, 26], [13, 22, 18, 26, 18, 24, 18, 22, 20, 24], [17, 28, 22, 16, 22, 28, 26, 26, 24, 28]];
+        const N_BLOCKS = [[1, 1, 1, 1, 1, 2, 2, 2, 2, 4], [1, 1, 1, 2, 2, 4, 4, 4, 5, 5], [1, 1, 2, 2, 4, 4, 6, 6, 8, 8], [1, 1, 2, 4, 4, 4, 5, 6, 8, 8]];
+        const ALNUM = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
+
+        const GF_EXP = new Uint8Array(512), GF_LOG = new Uint8Array(256);
+        for (let i = 0, x = 1; i < 255; i++) { GF_EXP[i] = x; GF_LOG[x] = i; x <<= 1; if (x & 256) x ^= 0x11D; }
+        for (let i = 255; i < 512; i++) GF_EXP[i] = GF_EXP[i - 255];
+        const gmul = (a, b) => a && b ? GF_EXP[GF_LOG[a] + GF_LOG[b]] : 0;
+        const gdiv = (a, b) => a ? GF_EXP[(GF_LOG[a] + 255 - GF_LOG[b]) % 255] : 0;
+
+        // 糾錯：blk = 資料碼字 + 糾錯碼字（高次項在前），ne = 糾錯碼字數。成功回傳修好的陣列，無法修復回傳 null
+        function rsCorrect(blk, ne) {
+            blk = blk.slice();
+            const n = blk.length;
+            const syn = () => { const S = []; for (let j = 0; j < ne; j++) { let s = 0; for (const c of blk) s = gmul(s, GF_EXP[j]) ^ c; S.push(s); } return S; };
+            const S = syn();
+            if (S.every(v => !v)) return blk;
+            // Berlekamp-Massey
+            let C = [1], B = [1], L = 0, m = 1, b = 1;
+            for (let i = 0; i < ne; i++) {
+                let d = S[i];
+                for (let k = 1; k <= L; k++) d ^= gmul(C[k] || 0, S[i - k]);
+                if (!d) { m++; continue; }
+                const T = C.slice(), f = gdiv(d, b);
+                while (C.length < B.length + m) C.push(0);
+                B.forEach((v, k) => { C[k + m] ^= gmul(f, v); });
+                if (2 * L <= i) { L = i + 1 - L; B = T; b = d; m = 1; } else m++;
+            }
+            if (L * 2 > ne) return null;
+            const ev = (poly, p) => poly.reduce((a, c, k) => c ? a ^ GF_EXP[(GF_LOG[c] + (255 - p % 255) * k) % 255] : a, 0); // poly(α^-p)
+            const roots = [];
+            for (let p = 0; p < n; p++) if (ev(C, p) === 0) roots.push(p);
+            if (roots.length !== L) return null;
+            const omega = []; // Ω = S·Λ mod x^ne
+            for (let k = 0; k < ne; k++) { let a = 0; for (let i = 0; i <= k && i < C.length; i++) a ^= gmul(C[i], S[k - i]); omega.push(a); }
+            const dC = C.map((c, k) => k % 2 ? c : 0).slice(1); // Λ'(x) 的係數（char 2 的形式導數只留奇次項）
+            for (const p of roots) {
+                const den = ev(dC, p);
+                if (!den) return null;
+                blk[n - 1 - p] ^= gmul(GF_EXP[p % 255], gdiv(ev(omega, p), den));
+            }
+            return syn().every(v => !v) ? blk : null;
+        }
+
+        function numRawModules(ver) {
+            let r = (16 * ver + 128) * ver + 64;
+            if (ver >= 2) { const na = Math.floor(ver / 7) + 2; r -= (25 * na - 10) * na - 55; if (ver >= 7) r -= 36; }
+            return r;
+        }
+        function alignPos(ver) {
+            if (ver === 1) return [];
+            const n = Math.floor(ver / 7) + 2, size = ver * 4 + 17, step = Math.ceil((ver * 4 + 4) / (n * 2 - 2)) * 2, res = [6];
+            for (let pos = size - 7; res.length < n; pos -= step) res.splice(1, 0, pos);
+            return res;
+        }
+        // 功能圖樣（不放資料的格子）
+        function funcMask(ver) {
+            const size = ver * 4 + 17, f = Array.from({ length: size }, () => new Array(size).fill(false));
+            const rect = (x0, y0, x1, y1) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) f[y][x] = true; };
+            rect(0, 0, 8, 8); rect(size - 8, 0, size - 1, 8); rect(0, size - 8, 8, size - 1);
+            for (let i = 0; i < size; i++) { f[6][i] = true; f[i][6] = true; }
+            const ap = alignPos(ver), na = ap.length;
+            for (let i = 0; i < na; i++) for (let j = 0; j < na; j++)
+                if (!((i === 0 && j === 0) || (i === 0 && j === na - 1) || (i === na - 1 && j === 0))) rect(ap[i] - 2, ap[j] - 2, ap[i] + 2, ap[j] + 2);
+            if (ver >= 7) { rect(size - 11, 0, size - 9, 5); rect(0, size - 11, 5, size - 9); }
+            return f;
+        }
+        const MASKS = [(x, y) => (x + y) % 2 === 0, (x, y) => y % 2 === 0, (x, y) => x % 3 === 0, (x, y) => (x + y) % 3 === 0, (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0, (x, y) => x * y % 2 + x * y % 3 === 0, (x, y) => (x * y % 2 + x * y % 3) % 2 === 0, (x, y) => ((x + y) % 2 + x * y % 3) % 2 === 0];
+
+        const FMT_TABLE = []; // 32 個合法格式字：{ code, e（0..3 = L M Q H）, mask }
+        for (let e = 0; e < 4; e++) for (let mask = 0; mask < 8; mask++) {
+            const d = FMT_BITS[e] << 3 | mask; let rem = d;
+            for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+            FMT_TABLE.push({ code: (d << 10 | rem) ^ 0x5412, e, mask });
+        }
+        const popcount = (v) => { let c = 0; for (; v; v &= v - 1) c++; return c; };
+        // 讀兩份格式資訊，取距離最近（容許 3 位元錯）的合法格式字
+        function readFormat(mod, size) {
+            const copy = [0, 0];
+            for (let i = 0; i < 15; i++) {
+                const [x1, y1] = i < 6 ? [8, i] : i === 6 ? [8, 7] : i === 7 ? [8, 8] : i === 8 ? [7, 8] : [14 - i, 8];
+                const [x2, y2] = i < 8 ? [size - 1 - i, 8] : [8, size - 15 + i];
+                if (mod[y1][x1]) copy[0] |= 1 << i;
+                if (mod[y2][x2]) copy[1] |= 1 << i;
+            }
+            let best = null, bd = 4;
+            for (const c of copy) for (const t of FMT_TABLE) { const d = popcount(c ^ t.code); if (d < bd) { bd = d; best = t; } }
+            return best;
+        }
+
+        // 資料碼字 → 文字；格式不合或不支援的模式（漢字等）丟出錯誤
+        function qrParseData(bytes, ver) {
+            let pos = 0;
+            const total = bytes.length * 8;
+            const read = (n) => { if (pos + n > total) throw new Error('eof'); let v = 0; for (let i = 0; i < n; i++, pos++) v = v * 2 + ((bytes[pos >> 3] >> (7 - (pos & 7))) & 1); return v; };
+            const big = ver >= 10;
+            let out = '';
+            while (total - pos >= 4) {
+                const mode = read(4);
+                if (mode === 0) break;
+                if (mode === 1) {
+                    let n = read(big ? 12 : 10);
+                    for (; n >= 3; n -= 3) { const v = read(10); if (v > 999) throw new Error('num'); out += String(v).padStart(3, '0'); }
+                    if (n === 2) { const v = read(7); if (v > 99) throw new Error('num'); out += String(v).padStart(2, '0'); }
+                    else if (n === 1) { const v = read(4); if (v > 9) throw new Error('num'); out += v; }
+                } else if (mode === 2) {
+                    let n = read(big ? 11 : 9);
+                    for (; n >= 2; n -= 2) { const v = read(11); if (v >= 2025) throw new Error('al'); out += ALNUM[Math.floor(v / 45)] + ALNUM[v % 45]; }
+                    if (n === 1) { const v = read(6); if (v >= 45) throw new Error('al'); out += ALNUM[v]; }
+                } else if (mode === 4) {
+                    const n = read(big ? 16 : 8), arr = new Uint8Array(n);
+                    for (let i = 0; i < n; i++) arr[i] = read(8);
+                    try { out += new TextDecoder('utf-8', { fatal: true }).decode(arr); } catch (e) { out += String.fromCharCode(...arr); }
+                } else if (mode === 7) {
+                    const v = read(8);
+                    if ((v & 0xC0) === 0x80) read(8); else if ((v & 0xE0) === 0xC0) read(16); else if (v & 0x80) throw new Error('eci');
+                } else throw new Error('mode');
+            }
+            return out;
+        }
+
+        // 格子矩陣（boolean[y][x]，true = 深色）→ 文字或 null
+        function decodeMatrix(mod, size, ver) {
+            if (ver < 1 || ver > 10 || size !== ver * 4 + 17) return null;
+            const fmt = readFormat(mod, size);
+            if (!fmt) return null;
+            try {
+                const fn = funcMask(ver), mk = MASKS[fmt.mask], raw = Math.floor(numRawModules(ver) / 8), bits = [];
+                for (let right = size - 1; right >= 1; right -= 2) {
+                    if (right === 6) right = 5;
+                    for (let vert = 0; vert < size; vert++) for (let j = 0; j < 2; j++) {
+                        const x = right - j, y = ((right + 1) & 2) === 0 ? size - 1 - vert : vert;
+                        if (!fn[y][x]) bits.push(mod[y][x] !== mk(x, y) ? 1 : 0);
+                    }
+                }
+                const cw = []; for (let i = 0; i < raw; i++) { let v = 0; for (let k = 0; k < 8; k++) v = v << 1 | bits[i * 8 + k]; cw.push(v); }
+                const ne = ECC_PER_BLOCK[fmt.e][ver - 1], nb = N_BLOCKS[fmt.e][ver - 1], shortLen = Math.floor(raw / nb), nShort = nb - raw % nb;
+                const dlen = Array.from({ length: nb }, (_, i) => shortLen - ne + (i < nShort ? 0 : 1)), blocks = dlen.map(() => []);
+                let k = 0;
+                for (let i = 0; i < shortLen - ne + 1; i++) for (let j = 0; j < nb; j++) if (i < dlen[j]) blocks[j].push(cw[k++]);
+                for (let i = 0; i < ne; i++) for (let j = 0; j < nb; j++) blocks[j].push(cw[k++]);
+                const data = [];
+                for (let j = 0; j < nb; j++) { const fixed = rsCorrect(blocks[j], ne); if (!fixed) return null; data.push(...fixed.slice(0, dlen[j])); }
+                return qrParseData(data, ver);
+            } catch (e) { return null; }
+        }
+
+        // RGBA → 二值（1 = 深）：全域 Otsu 與區域平均各佔一半，光線不均也能用
+        function binarize(rgba, w, h) {
+            const g = new Uint8Array(w * h), hist = new Array(256).fill(0);
+            for (let i = 0; i < w * h; i++) { g[i] = (rgba[i * 4] * 77 + rgba[i * 4 + 1] * 150 + rgba[i * 4 + 2] * 29) >> 8; hist[g[i]]++; }
+            let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i];
+            let wB = 0, sB = 0, best = -1, T = 128;
+            for (let t = 0; t < 256; t++) {
+                wB += hist[t]; if (!wB) continue; const wF = w * h - wB; if (!wF) break;
+                sB += t * hist[t]; const mB = sB / wB, mF = (sum - sB) / wF, v = wB * wF * (mB - mF) * (mB - mF);
+                if (v > best) { best = v; T = t + 0.5; }
+            }
+            const W = w + 1, ii = new Float64Array(W * (h + 1));
+            for (let y = 0; y < h; y++) { let row = 0; for (let x = 0; x < w; x++) { row += g[y * w + x]; ii[(y + 1) * W + x + 1] = ii[y * W + x + 1] + row; } }
+            const r = Math.max(8, Math.round(Math.min(w, h) / 16)), bin = new Uint8Array(w * h);
+            for (let y = 0; y < h; y++) {
+                const y0 = Math.max(0, y - r), y1 = Math.min(h, y + r + 1);
+                for (let x = 0; x < w; x++) {
+                    const x0 = Math.max(0, x - r), x1 = Math.min(w, x + r + 1);
+                    const mean = (ii[y1 * W + x1] - ii[y0 * W + x1] - ii[y1 * W + x0] + ii[y0 * W + x0]) / ((x1 - x0) * (y1 - y0));
+                    bin[y * w + x] = g[y * w + x] < (mean + T) / 2 ? 1 : 0;
+                }
+            }
+            return bin;
+        }
+
+        const finderRatio = (r) => {
+            const t = r[0] + r[1] + r[2] + r[3] + r[4]; if (t < 7) return false;
+            const m = t / 7, tol = m * 0.6;
+            return Math.abs(r[0] - m) < tol && Math.abs(r[1] - m) < tol && Math.abs(r[2] - 3 * m) < 3 * tol && Math.abs(r[3] - m) < tol && Math.abs(r[4] - m) < tol;
+        };
+        // 找 1:1:3:1:1 的定位器：橫向掃描命中後，用直向與橫向交叉驗證，同一個定位器的多次命中合併
+        function findFinders(bin, w, h) {
+            const at = (x, y) => x >= 0 && y >= 0 && x < w && y < h ? bin[y * w + x] : 0;
+            // 從 (px,py) 沿 (dx,dy) 量 暗-亮-暗-亮-暗 五段；回傳 { runs, center（沿軸的座標）} 或 null
+            const measure = (px, py, dx, dy) => {
+                if (!at(px, py)) return null;
+                const half = (s) => { const r = []; let i = 1, c = 1; for (let k = 0; k < 3; k++) { let n = 0; while (px + s * dx * i >= 0 && py + s * dy * i >= 0 && px + s * dx * i < w && py + s * dy * i < h && at(px + s * dx * i, py + s * dy * i) === c) { i++; n++; } r.push(n); c ^= 1; } return r; };
+                const a = half(-1), b = half(1), runs = [a[2], a[1], a[0] + b[0] + 1, b[1], b[2]];
+                if (!finderRatio(runs)) return null;
+                const o = px * dx + py * dy;
+                return { runs, center: o + (b[0] - a[0]) / 2 };
+            };
+            const cands = [];
+            for (let y = 0; y < h; y++) {
+                let prev = bin[y * w], len = 1; const rs = [0, 0, 0, 0, 0];
+                for (let x = 1; x <= w; x++) {
+                    const c = x < w ? bin[y * w + x] : -1;
+                    if (c === prev) { len++; continue; }
+                    rs.shift(); rs.push(len);
+                    if (prev === 1 && finderRatio(rs)) {
+                        const cx = Math.round(x - rs[4] - rs[3] - (rs[2] + 1) / 2);
+                        const v = measure(cx, y, 0, 1);
+                        if (v) {
+                            const cy = Math.round(v.center), hz = measure(cx, cy, 1, 0);
+                            if (hz) {
+                                const X = hz.center, Y = v.center, ms = (v.runs.reduce((a, b) => a + b) + hz.runs.reduce((a, b) => a + b)) / 14;
+                                const e = cands.find(q => Math.hypot(q.x - X, q.y - Y) < ms * 3.5 && Math.abs(q.ms - ms) < ms * 0.6);
+                                if (e) { e.x = (e.x * e.n + X) / (e.n + 1); e.y = (e.y * e.n + Y) / (e.n + 1); e.ms = (e.ms * e.n + ms) / (e.n + 1); e.n++; } else cands.push({ x: X, y: Y, ms, n: 1 });
+                            }
+                        }
+                    }
+                    prev = c; len = 1;
+                }
+            }
+            return cands.filter(c => c.n >= 2).sort((a, b) => b.n - a.n).slice(0, 12);
+        }
+
+        // 從二值圖解 QR：回傳文字或 null
+        function decodeBin(bin, w, h) {
+            const fs = findFinders(bin, w, h), trip = [];
+            for (let i = 0; i < fs.length; i++) for (let j = i + 1; j < fs.length; j++) for (let k = j + 1; k < fs.length; k++) {
+                const t = [fs[i], fs[j], fs[k]], mss = t.map(q => q.ms);
+                if (Math.max(...mss) / Math.min(...mss) > 1.6) continue;
+                for (let c = 0; c < 3; c++) {
+                    const A = t[c], B = t[(c + 1) % 3], C = t[(c + 2) % 3];
+                    const ab = Math.hypot(B.x - A.x, B.y - A.y), ac = Math.hypot(C.x - A.x, C.y - A.y);
+                    const dot = (B.x - A.x) * (C.x - A.x) + (B.y - A.y) * (C.y - A.y);
+                    const s = Math.abs(ab - ac) / Math.max(ab, ac) + Math.abs(dot) / (ab * ac);
+                    const ms = (A.ms + B.ms + C.ms) / 3;
+                    if (s < 0.35 && (ab + ac) / 2 / ms >= 8) trip.push({ s, A, B, C, ab, ac, ms });
+                }
+            }
+            trip.sort((a, b) => a.s - b.s);
+            for (const { A, B: B0, C: C0, ab, ac, ms } of trip.slice(0, 4)) {
+                const cross = (B0.x - A.x) * (C0.y - A.y) - (B0.y - A.y) * (C0.x - A.x);
+                const B = cross < 0 ? C0 : B0, C = cross < 0 ? B0 : C0;
+                const v0 = Math.round(((ab + ac) / 2 / ms + 7 - 17) / 4);
+                for (const ver of [v0, v0 - 1, v0 + 1]) {
+                    if (ver < 1 || ver > 10) continue;
+                    const size = ver * 4 + 17, d = size - 7;
+                    const ex = [(B.x - A.x) / d, (B.y - A.y) / d], ey = [(C.x - A.x) / d, (C.y - A.y) / d];
+                    const mod = Array.from({ length: size }, () => new Array(size).fill(false));
+                    const at = (x, y) => { x = Math.round(x); y = Math.round(y); return x >= 0 && y >= 0 && x < w && y < h ? bin[y * w + x] : 0; };
+                    for (let j = 0; j < size; j++) for (let i = 0; i < size; i++) {
+                        const u = i + 0.5 - 3.5, v = j + 0.5 - 3.5, px = A.x + u * ex[0] + v * ey[0], py = A.y + u * ex[1] + v * ey[1], q = 0.25;
+                        const votes = at(px, py) + at(px + q * ex[0], py + q * ex[1]) + at(px - q * ex[0], py - q * ex[1]) + at(px + q * ey[0], py + q * ey[1]) + at(px - q * ey[0], py - q * ey[1]);
+                        mod[j][i] = votes >= 3;
+                    }
+                    const t = decodeMatrix(mod, size, ver);
+                    if (t !== null) return t;
+                }
+            }
+            return null;
+        }
+
+        // RGBA（Uint8ClampedArray）+ 寬高 → 文字或 null；先正常解，失敗再試反相（白底黑碼以外的情況）
+        function decodeQR(rgba, w, h) {
+            const bin = binarize(rgba, w, h);
+            let t = decodeBin(bin, w, h);
+            if (t === null) t = decodeBin(bin.map(v => 1 - v), w, h);
+            return t;
+        }
+
+        // ===== 掃描結果處理 =====
+        const FORMAT_PREF = ['qr_code', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'code_93', 'codabar', 'itf', 'data_matrix', 'pdf417', 'aztec'];
+        const pickFormats = (supported) => Array.isArray(supported) ? FORMAT_PREF.filter(f => supported.includes(f)) : [];
+        const PRODUCT_FMT = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
+
+        // Wi-Fi QR：WIFI:T:WPA;S:名稱;P:密碼;H:true;;（\ 跳脫 ; : , \ "）
+        function parseWifi(text) {
+            if (!/^WIFI:/i.test(text)) return null;
+            const f = {};
+            const body = text.slice(5);
+            let key = '', val = '', inVal = false;
+            for (let i = 0; i < body.length; i++) {
+                const c = body[i];
+                if (c === '\\' && i + 1 < body.length) { (inVal ? (val += body[++i]) : (key += body[++i])); continue; }
+                if (!inVal && c === ':') { inVal = true; continue; }
+                if (inVal && c === ';') { f[key] = val; key = ''; val = ''; inVal = false; continue; }
+                if (!inVal && c === ';') { key = ''; continue; }
+                if (inVal) val += c; else key += c;
+            }
+            if (inVal && key) f[key] = val;
+            if (f.S === undefined) return null;
+            return { ssid: f.S, pass: f.P || '', type: f.T || 'nopass', hidden: /^true$/i.test(f.H || '') };
+        }
+        // 判斷內容類型：link 只有 http(s) 才給「開啟」按鈕
+        function classify(text, format = '') {
+            const t = String(text).trim();
+            if (/^https?:\/\/[^\s]+$/i.test(t)) { let host = ''; try { host = new URL(t).hostname; } catch (e) { } return { type: 'url', label: '網址', host }; }
+            if (parseWifi(t)) return { type: 'wifi', label: 'Wi-Fi' };
+            if (/^tel:/i.test(t)) return { type: 'phone', label: '電話' };
+            if (/^mailto:/i.test(t) || /^[^\s@:]+@[^\s@]+\.[^\s@]+$/.test(t)) return { type: 'email', label: 'Email' };
+            if (/^smsto?:/i.test(t)) return { type: 'sms', label: '簡訊' };
+            if (/^geo:/i.test(t)) return { type: 'geo', label: '地理位置' };
+            if (/^BEGIN:VCARD/i.test(t)) return { type: 'vcard', label: '聯絡人' };
+            if (/^[a-z][a-z0-9+.-]*:\/\//i.test(t)) return { type: 'link', label: '其他連結' };
+            if (PRODUCT_FMT.includes(format) && /^\d+$/.test(t)) return { type: 'product', label: '商品條碼' };
+            if (/^\+?\d[\d\s-]{6,}$/.test(t)) return { type: 'phone', label: '電話號碼（猜測）' };
+            return { type: 'text', label: '文字' };
+        }
+
+        // 歷史紀錄（最新在前，最多 50 筆）：讀取一律驗證，壞資料略過
+        const HIST_MAX = 50;
+        function cleanHistory(raw) {
+            if (!Array.isArray(raw)) return [];
+            return raw.filter(r => r && typeof r.text === 'string' && r.text && r.text.length <= 4000 && Number.isFinite(r.t))
+                .map(r => ({ t: r.t, text: r.text, format: typeof r.format === 'string' ? r.format : 'qr_code' })).slice(0, HIST_MAX);
+        }
+        // 相同內容只留一筆（移到最前、更新時間）
+        function addHistory(list, item) {
+            if (!item || typeof item.text !== 'string' || !item.text) return list;
+            return [{ t: item.t, text: item.text, format: item.format || 'qr_code' }, ...list.filter(r => r.text !== item.text)].slice(0, HIST_MAX);
+        }
+
+        // 相機 / 權限錯誤 → 中文訊息
+        function cameraErrorMsg(name, hasApi = true, secure = true) {
+            if (!hasApi) return secure ? '這個瀏覽器不支援相機存取，請改用「選擇圖片」。' : '相機只能在 HTTPS 網頁（或 localhost）使用。目前的網址不是安全連線，請改用 HTTPS，或用「選擇圖片」。';
+            switch (name) {
+                case 'NotAllowedError': case 'PermissionDeniedError': return '相機權限被拒絕。請在瀏覽器網址列旁的網站設定允許相機後重試，或改用「選擇圖片」。';
+                case 'NotFoundError': case 'DevicesNotFoundError': case 'OverconstrainedError': return '找不到相機。請確認裝置有相機，或改用「選擇圖片」。';
+                case 'NotReadableError': case 'TrackStartError': return '相機被其他程式占用，請關閉其他使用相機的程式後重試。';
+                case 'SecurityError': return '基於安全限制無法使用相機，請用 HTTPS 開啟本頁。';
+                default: return '無法開啟相機，請改用「選擇圖片」。';
+            }
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const cv = document.createElement('canvas'), ctx = cv.getContext('2d', { willReadFrequently: true });
+        let detector = null, stream = null, timer = 0, hist = cleanHistory(store.get('qrscan_history', []));
+        const setStatus = (s) => { $('#status').textContent = s; };
+        const fmtTime = (t) => new Date(t).toLocaleString('zh-TW', { hour12: false });
+
+        // 嘗試 src（canvas 圖源）解碼：先原生，再（圖片，或沒有原生時）純 JS QR 解碼器
+        async function decodeSource(src, sw, sh, sides, useJs) {
+            for (const side of sides) {
+                const k = Math.min(1, side / Math.max(sw, sh));
+                cv.width = Math.max(1, Math.round(sw * k)); cv.height = Math.max(1, Math.round(sh * k));
+                ctx.drawImage(src, 0, 0, cv.width, cv.height);
+                if (detector) { try { const r = await detector.detect(cv); if (r.length && r[0].rawValue) return { text: r[0].rawValue, format: r[0].format }; } catch (e) { } }
+                if (useJs) { const d = ctx.getImageData(0, 0, cv.width, cv.height), t = decodeQR(d.data, d.width, d.height); if (t) return { text: t, format: 'qr_code' }; }
+            }
+            return null;
+        }
+
+        function show(r) {
+            const c = classify(r.text, r.format);
+            $('#resCard').hidden = false;
+            $('#resType').textContent = c.label; $('#resFmt').textContent = r.format === 'qr_code' ? 'QR Code' : r.format;
+            $('#resText').textContent = r.text;
+            const fields = $('#resFields'); fields.replaceChildren();
+            const wifi = c.type === 'wifi' ? parseWifi(r.text) : null;
+            if (wifi) for (const [k, v] of [['網路名稱', wifi.ssid], ['密碼', wifi.pass || '（無）'], ['加密', wifi.type]]) {
+                const d = document.createElement('div'); d.className = 'li'; const a = document.createElement('span'); a.className = 'muted'; a.textContent = k; const b = document.createElement('b'); b.textContent = v; d.append(a, b); fields.append(d);
+            }
+            $('#copyPw').hidden = !wifi || !wifi.pass;
+            const a = $('#openLink'); a.hidden = c.type !== 'url'; a.removeAttribute('href');
+            const note = $('#resNote'); note.className = 'note'; note.replaceChildren();
+            if (c.type === 'url') {
+                a.href = r.text.trim();
+                note.classList.add('warn'); note.textContent = `這是網址，網域是「${c.host}」。確認無誤後再按「確認後開啟連結」，不會自動跳轉。`;
+            } else if (c.type === 'link') { note.classList.add('warn'); note.textContent = '這是其他協定的連結，不提供一鍵開啟，請確認來源可信再自行處理。'; }
+            $('#resCard').scrollIntoView({ block: 'nearest' });
+        }
+        function onResult(r) {
+            show(r); setStatus('掃描成功'); try { navigator.vibrate && navigator.vibrate(60); } catch (e) { }
+            hist = addHistory(hist, { t: Date.now(), text: r.text, format: r.format }); store.set('qrscan_history', hist); renderHist();
+        }
+
+        function renderHist() {
+            const box = $('#hist'); box.replaceChildren();
+            hist.forEach((r, i) => {
+                const row = document.createElement('div'); row.className = 'hrow';
+                const b = document.createElement('button'); b.className = 'hbtn';
+                const s1 = document.createElement('span'); s1.textContent = r.text;
+                const s2 = document.createElement('span'); s2.className = 'muted'; s2.style.fontSize = '12px'; s2.textContent = `${classify(r.text, r.format).label} · ${fmtTime(r.t)}`;
+                b.append(s1, s2); b.onclick = () => show(r);
+                const d = document.createElement('button'); d.className = 'del'; d.textContent = '✕'; d.setAttribute('aria-label', '刪除這筆'); d.onclick = () => { hist.splice(i, 1); store.set('qrscan_history', hist); renderHist(); };
+                row.append(b, d); box.append(row);
+            });
+            $('#histEmpty').hidden = hist.length > 0; $('#clearHist').hidden = !hist.length; $('#histCount').textContent = hist.length ? `（${hist.length} / ${HIST_MAX}）` : '';
+        }
+
+        // ---- 圖片 ----
+        async function scanFile(file) {
+            if (!file || !/^image\//.test(file.type)) { setStatus('這不是圖片檔，請選擇 PNG / JPG 等圖片。'); return; }
+            stopCam(); setStatus('解碼中…');
+            const url = URL.createObjectURL(file), img = new Image();
+            try {
+                await new Promise((ok, bad) => { img.onload = ok; img.onerror = bad; img.src = url; });
+                const r = await decodeSource(img, img.naturalWidth, img.naturalHeight, [1024, 512], true);
+                if (r) onResult(r); else setStatus(detector ? '圖片裡沒有找到條碼。請換一張更清楚、完整的圖片。' : '圖片裡沒有找到 QR Code。內建解碼器只能讀 QR，且需要清楚、端正、完整的圖片。');
+            } catch (e) { setStatus('無法讀取這張圖片。'); } finally { URL.revokeObjectURL(url); }
+        }
+        $('#pick').onclick = () => $('#file').click();
+        $('#file').onchange = (e) => { scanFile(e.target.files[0]); e.target.value = ''; };
+        const drop = $('#drop');
+        ['dragenter', 'dragover'].forEach(n => addEventListener(n, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+        ['dragleave', 'drop'].forEach(n => addEventListener(n, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+        addEventListener('drop', (e) => scanFile(e.dataTransfer && e.dataTransfer.files[0]));
+        addEventListener('paste', (e) => { const f = [...(e.clipboardData ? e.clipboardData.files : [])][0]; if (f) scanFile(f); });
+
+        // ---- 相機 ----
+        function stopCam() {
+            clearTimeout(timer); if (stream) stream.getTracks().forEach(t => t.stop()); stream = null;
+            $('#video').srcObject = null; $('#stage').hidden = true; $('#camBtn').textContent = '📷 開啟相機掃描';
+        }
+        async function loop() {
+            if (!stream) return;
+            const v = $('#video');
+            if (v.readyState >= 2 && v.videoWidth) {
+                const r = await decodeSource(v, v.videoWidth, v.videoHeight, [800], !detector);
+                if (r && stream) { stopCam(); onResult(r); return; }
+            }
+            if (stream) timer = setTimeout(loop, 150);
+        }
+        async function startCam() {
+            const api = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+            if (!api) { setStatus(cameraErrorMsg(null, false, window.isSecureContext)); return; }
+            try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false }); }
+            catch (e) { setStatus(cameraErrorMsg(e && e.name, true, window.isSecureContext)); return; }
+            const v = $('#video'); v.srcObject = stream; v.play().catch(() => { });
+            $('#stage').hidden = false; $('#camBtn').textContent = '⏹ 關閉相機'; setStatus('把 QR Code 或條碼放進畫面中央…');
+            loop();
+        }
+        $('#camBtn').onclick = () => { if (stream) { stopCam(); setStatus('相機已關閉'); } else startCam(); };
+        addEventListener('pagehide', stopCam);
+
+        $('#copyRes').onclick = () => copyWithFeedback($('#copyRes'), $('#resText').textContent);
+        $('#copyPw').onclick = () => { const w = parseWifi($('#resText').textContent); if (w) copyWithFeedback($('#copyPw'), w.pass); };
+        $('#clearHist').onclick = () => { if (confirm('清除全部歷史紀錄？')) { hist = []; store.set('qrscan_history', hist); renderHist(); } };
+
+        renderHist();
+        (async () => {
+            if (window.BarcodeDetector) { try { const f = pickFormats(await BarcodeDetector.getSupportedFormats()); if (f.length) detector = new BarcodeDetector({ formats: f }); } catch (e) { } }
+            $('#engine').textContent = detector ? `解碼引擎：瀏覽器原生 BarcodeDetector（可讀 QR 與一維條碼），失敗時再用內建 QR 解碼器。` : '解碼引擎：內建 QR 解碼器（這個瀏覽器沒有原生條碼辨識，只能讀 QR Code）。';
+        })();
+    </script>
+</body>
+
+</html>

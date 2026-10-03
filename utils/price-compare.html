@@ -5,7 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="比價 / 單價計算：輸入幾個商品的價格、容量與數量，算出每 100 g、每 100 ml 或每個的單價，標出最划算的。">
+    <meta name="description" content="比價 / 單價計算：輸入幾個商品的價格、容量與數量，算出每 100 g、每 100 ml 或每個的單價，標出最划算的；另有折扣、含稅未稅與外國旅客退稅估算。">
+    <meta name="st-keys" content="price_rows,price_tax">
     <meta property="og:title" content="比價 / 單價計算" />
     <meta property="og:description" content="算出單價，找出哪個商品最划算。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
@@ -68,6 +69,79 @@
             color: #fff;
         }
 
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .tabs button {
+            flex: 1;
+        }
+
+        .tx label {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            margin: 8px 0 3px;
+        }
+
+        .tx .r {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .tx .r>div {
+            flex: 1 1 110px;
+            min-width: 0;
+        }
+
+        .tx input,
+        .tx select {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .tx .lay {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .tx .lay select {
+            flex: 2 1 150px;
+            width: auto;
+        }
+
+        .tx .lay input {
+            flex: 1 1 70px;
+            width: auto;
+        }
+
+        .tx .out {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            background: var(--fill);
+            font-variant-numeric: tabular-nums;
+            line-height: 1.7;
+            white-space: pre-wrap;
+        }
+
+        .tx .out b {
+            font-size: 18px;
+        }
+
+        .tx .warn {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 8px 0 0;
+        }
+
         @media (max-width: 560px) {
             .item {
                 grid-template-columns: 1fr 1fr 1fr;
@@ -86,11 +160,74 @@
         <h1>比價 / 單價計算</h1>
         <p class="sub">價格 ÷（每份容量 × 份數）。同一種單位（重量、容量、個數）才會互相比較。</p>
 
+        <div class="tabs" role="tablist">
+            <button id="tabCmp" aria-pressed="true">比價</button>
+            <button id="tabTax" aria-pressed="false">折扣 / 稅額</button>
+        </div>
+
+        <div id="paneCmp">
         <div class="card">
             <div id="items"></div>
             <div style="display:flex;gap:8px;margin-top:12px"><button id="add" class="primary">新增商品</button><button id="clear">全部清空</button></div>
         </div>
         <p class="note">重量：g、kg、台斤（600 g）、兩（37.5 g）；容量：ml、L；個數：個、入、片、包、瓶、打（12 個）。</p>
+        </div>
+
+        <div id="paneTax" class="tx" hidden>
+            <div class="card">
+                <label for="round" style="margin-top:0">小數處理（下面所有計算共用）</label>
+                <select id="round">
+                    <option value="round">四捨五入到元</option>
+                    <option value="floor">無條件捨去到元</option>
+                    <option value="ceil">進位到元</option>
+                    <option value="none">不處理（保留兩位小數）</option>
+                </select>
+            </div>
+
+            <div class="card">
+                <h2>打折（可折上折）</h2>
+                <label for="dOrig">原價（元）</label>
+                <input id="dOrig" type="number" min="0" step="any" inputmode="decimal">
+                <div id="layers"></div>
+                <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                    <button id="dAdd">新增一層折扣</button>
+                    <label style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="dEach" style="width:auto"> 每一層都先取整</label>
+                </div>
+                <div class="out" id="dOut"></div>
+                <p class="warn">折數寫法：8 = 8 折（八折）；85 = 85 折（8.5 折）。「滿額折」例如滿 1000 打 9 折；「滿減」例如滿 1000 減 100，勾「每滿」則每滿 1000 就減 100。</p>
+            </div>
+
+            <div class="card">
+                <h2>買 N 送 M 的實際折數</h2>
+                <div class="r">
+                    <div><label for="bP">單價（元）</label><input id="bP" type="number" min="0" step="any" inputmode="decimal"></div>
+                    <div><label for="bN">買 N</label><input id="bN" type="number" min="1" step="1" value="2"></div>
+                    <div><label for="bM">送 M</label><input id="bM" type="number" min="0" step="1" value="1"></div>
+                </div>
+                <div class="out" id="bOut"></div>
+            </div>
+
+            <div class="card">
+                <h2>含稅 / 未稅互算</h2>
+                <div class="r">
+                    <div><label for="tAmt">金額（元）</label><input id="tAmt" type="number" min="0" step="any" inputmode="decimal"></div>
+                    <div><label for="tMode">這個金額是</label><select id="tMode"><option value="incl">含稅價</option><option value="excl">未稅價</option></select></div>
+                    <div><label for="tRate">稅率</label><select id="tRate"><option value="5">5%（臺灣營業稅）</option><option value="custom">自訂</option></select></div>
+                    <div id="tCustomBox" hidden><label for="tCustom">自訂稅率（%）</label><input id="tCustom" type="number" min="0" step="any" value="10" inputmode="decimal"></div>
+                </div>
+                <div class="out" id="tOut"></div>
+            </div>
+
+            <div class="card">
+                <h2>外國旅客退稅（營業稅）估算</h2>
+                <div class="r">
+                    <div><label for="rAmt">同日同店購買金額（含稅，元）</label><input id="rAmt" type="number" min="0" step="any" inputmode="decimal"></div>
+                    <div><label for="rFee">退稅手續費（%，選填）</label><input id="rFee" type="number" min="0" max="100" step="any" value="0" inputmode="decimal"></div>
+                </div>
+                <div class="out" id="rOut"></div>
+                <p class="warn">估算公式：營業稅額 = 含稅金額 × 5 ÷ 105；估計退稅 = 營業稅額 × (1 − 手續費%)。臺灣營業稅率為 5%，外國旅客在同一天、同一家特定營業人購買的一般物品，含稅金額達 2,000 元才可申請退稅。<b>以上僅供估算，實際資格、退稅金額與手續費請以財政部及退稅業者的官方規定為準。</b></p>
+            </div>
+        </div>
     </div>
 
     <template id="help">
@@ -102,20 +239,31 @@
         <li>比較不同賣場、不同份數的促銷價。</li>
         </ul>
         <h3>怎麼用</h3>
+        <p>上方有兩個分頁：「比價」與「折扣 / 稅額」。比價分頁：</p>
         <ol>
         <li>每個商品填「價格」「每份容量」，選「單位」，有多份就填「份數」。名稱可不填。</li>
         <li>填完就即時顯示單價：重量每 100 g、容量每 100 ml、個數每 1 個。</li>
         <li>最便宜的標「最划算」，其他標「貴 x%」。</li>
         <li>按「新增商品」增加比較對象，「✕」刪除一列，「全部清空」重來。</li>
         </ol>
+        <p>折扣 / 稅額分頁：</p>
+        <ol>
+        <li>先選「小數處理」：四捨五入、無條件捨去、進位到元，或保留兩位小數。</li>
+        <li>「打折」填原價，按「新增一層折扣」疊折上折；每層可選「打折（幾折）」「折扣 %」「滿額折」「滿減」；結果會列出每一步與最後等於幾折。</li>
+        <li>「買 N 送 M」填單價與 N、M，看實際折數與每個的平均價。</li>
+        <li>「含稅 / 未稅互算」選稅率（5% 或自訂）與金額屬於含稅或未稅。</li>
+        <li>「外國旅客退稅」填含稅購買金額，看是否達 2,000 元門檻與退稅估算。</li>
+        </ol>
         <h3>範例</h3>
         <div class="eg">A：80 元、500 g、1 份
         B：150 元、1 kg、1 份
         → A 每 100 g 16 元，B 每 100 g 15 元
         → B 最划算，A 貴 6.7%</div>
+        <div class="eg">原價 1000，先 8 折再打 9 折 → 800 → 720，等於 7.2 折。買 2 送 1：實際 6.67 折。含稅 1050、稅率 5% → 未稅 1000、稅額 50。</div>
         <h3>小提醒</h3>
         <ul>
         <li>只有同一類單位（重量、容量、個數）才會互相比較；台斤 = 600 g、兩 = 37.5 g、打 = 12 個。</li>
+        <li>稅額與退稅只是估算，實際以統一發票與官方規定為準。</li>
         <li>資料只在本機，不會上傳。</li>
         </ul>
     </template>
@@ -145,6 +293,69 @@
             const calc = rows.map(unitPrice), best = {};
             calc.forEach(c => { if (c && (best[c.group] === undefined || c.perBase < best[c.group])) best[c.group] = c.perBase; });
             return calc.map(c => (c ? { group: c.group, per: c.perBase * GROUPS[c.group].per, best: c.perBase === best[c.group], over: best[c.group] > 0 ? Math.round((c.perBase / best[c.group] - 1) * 1000) / 10 : 0, alone: calc.filter(x => x && x.group === c.group).length === 1 } : null));
+        }
+
+        // ===== 折扣 / 稅額 =====
+        // 取整：mode = round 四捨五入 / floor 無條件捨去 / ceil 進位 到元；none 保留兩位小數
+        function rd(x, mode) {
+            if (mode === 'floor') return Math.floor(x + 1e-9);
+            if (mode === 'ceil') return Math.ceil(x - 1e-9);
+            if (mode === 'none') return Math.round(x * 100 + 1e-7) / 100;
+            return Math.round(x + 1e-9);
+        }
+        // 折數 → 倍率：8 = 8 折、85 = 85 折（0.85）；不合理回 NaN
+        const zheFactor = (a) => a > 0 && a <= 10 ? a / 10 : a > 10 && a < 100 ? a / 100 : NaN;
+        // 依序套用折扣層（折上折）。layer: { kind: zhe | off | full | minus | minusx, a, b }
+        //   zhe 幾折(a)；off 折扣 a%；full 滿 a 元打 b 折；minus 滿 a 減 b；minusx 每滿 a 減 b
+        function applyDiscounts(orig, layers, mode = 'round', each = false) {
+            if (!(orig >= 0) || !Number.isFinite(orig)) return null;
+            const steps = []; let cur = orig;
+            for (const L of layers) {
+                const a = +L.a, b = +L.b; let next = cur, text = '', skip = false;
+                if (L.kind === 'zhe') { const f = zheFactor(a); if (isNaN(f)) skip = true; else { next = cur * f; text = `${a} 折`; } }
+                else if (L.kind === 'off') { if (!(a >= 0 && a <= 100)) skip = true; else { next = cur * (1 - a / 100); text = `折扣 ${a}%`; } }
+                else if (L.kind === 'full') { const f = zheFactor(b); if (!(a > 0) || isNaN(f)) skip = true; else { text = `滿 ${a} 打 ${b} 折`; if (cur >= a) next = cur * f; else text += '（未達門檻）'; } }
+                else if (L.kind === 'minus') { if (!(a > 0 && b >= 0)) skip = true; else { text = `滿 ${a} 減 ${b}`; if (cur >= a) next = cur - b; else text += '（未達門檻）'; } }
+                else if (L.kind === 'minusx') { if (!(a > 0 && b >= 0)) skip = true; else { text = `每滿 ${a} 減 ${b}`; next = cur - Math.floor(cur / a) * b; } }
+                else skip = true;
+                if (skip) continue;
+                next = Math.max(0, next); if (each) next = rd(next, mode);
+                steps.push({ text, before: cur, after: next }); cur = next;
+            }
+            const final = rd(cur, mode);
+            return { steps, final, zhe: orig > 0 ? Math.round(final / orig * 1000) / 100 : null, saved: rd(orig - final, mode) };
+        }
+        // 買 N 送 M：付 N 個的錢拿 N+M 個
+        function bogo(price, n, m, mode = 'round') {
+            if (!(price >= 0) || !(n >= 1) || !(m >= 0) || !Number.isInteger(n) || !Number.isInteger(m)) return null;
+            return { zhe: Math.round(n / (n + m) * 1000) / 100, per: rd(price * n / (n + m), mode), total: rd(price * n, mode), qty: n + m };
+        }
+        // 含稅 / 未稅：incl = 金額含稅 → 稅額 = 含稅 × r ÷ (1 + r)；excl = 金額未稅 → 稅額 = 未稅 × r。稅額依 mode 取整，另一邊用加減求出
+        function taxCalc(amount, rate, kind, mode = 'round') {
+            if (!(amount >= 0) || !(rate >= 0) || !Number.isFinite(amount + rate)) return null;
+            const r = rate / 100;
+            if (kind === 'excl') { const tax = rd(amount * r, mode); return { net: amount, tax, gross: rd(amount + tax, mode) }; }
+            const tax = rd(amount * r / (1 + r), mode); return { net: rd(amount - tax, mode), tax, gross: amount };
+        }
+        // 外國旅客退稅估算（臺灣 5%，同日同店含稅滿 2000）：僅供估算
+        const REFUND_MIN = 2000;
+        function touristRefund(gross, feePct = 0, mode = 'round') {
+            if (!(gross >= 0) || !(feePct >= 0 && feePct <= 100)) return null;
+            const tax = gross * 5 / 105;
+            return { eligible: gross >= REFUND_MIN, tax: rd(tax, mode), refund: rd(tax * (1 - feePct / 100), mode) };
+        }
+        // 讀取驗證：缺欄位 / 壞資料補預設值
+        function normTax(raw) {
+            const o = raw && typeof raw === 'object' ? raw : {}, str = (v, d) => typeof v === 'string' ? v : d;
+            const kinds = ['zhe', 'off', 'full', 'minus', 'minusx'];
+            const layers = (Array.isArray(o.layers) ? o.layers : []).filter(l => l && kinds.includes(l.kind)).map(l => ({ kind: l.kind, a: str(l.a, ''), b: str(l.b, '') }));
+            return {
+                tab: o.tab === 'tax' ? 'tax' : 'cmp', round: ['round', 'floor', 'ceil', 'none'].includes(o.round) ? o.round : 'round',
+                each: !!o.each, orig: str(o.orig, ''), layers: layers.length ? layers : [{ kind: 'zhe', a: '8', b: '' }],
+                bP: str(o.bP, ''), bN: str(o.bN, '2'), bM: str(o.bM, '1'),
+                tAmt: str(o.tAmt, ''), tMode: o.tMode === 'excl' ? 'excl' : 'incl', tRate: o.tRate === 'custom' ? 'custom' : '5', tCustom: str(o.tCustom, '10'),
+                rAmt: str(o.rAmt, ''), rFee: str(o.rFee, '0')
+            };
         }
         // --- /pure ---
 
@@ -184,6 +395,59 @@
         $('#add').onclick = () => { rows.push(BLANK()); save(); build(); };
         $('#clear').onclick = () => { rows = [BLANK(), BLANK()]; save(); build(); };
         build();
+
+        // ===== 折扣 / 稅額分頁 =====
+        const T = normTax(store.get('price_tax', {}));
+        const tsave = () => store.set('price_tax', T);
+        const fm = (n) => n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+        const KIND = { zhe: '打折（幾折）', off: '折扣 %', full: '滿額折（滿 A 元打 B 折）', minus: '滿減（滿 A 減 B）', minusx: '每滿 A 減 B' };
+        function showTab(t) {
+            T.tab = t; $('#paneCmp').hidden = t !== 'cmp'; $('#paneTax').hidden = t !== 'tax';
+            $('#tabCmp').setAttribute('aria-pressed', t === 'cmp'); $('#tabTax').setAttribute('aria-pressed', t === 'tax');
+        }
+        function buildLayers() {
+            $('#layers').replaceChildren(...T.layers.map((L, i) => {
+                const d = document.createElement('div'); d.className = 'lay';
+                const k = document.createElement('select'); k.setAttribute('aria-label', '折扣種類'); k.append(...Object.entries(KIND).map(([v, t]) => new Option(t, v))); k.value = L.kind;
+                const a = Object.assign(document.createElement('input'), { type: 'number', step: 'any', min: 0, value: L.a, placeholder: L.kind === 'zhe' ? '幾折' : L.kind === 'off' ? '%' : 'A' }); a.setAttribute('aria-label', '數值 A');
+                const b = Object.assign(document.createElement('input'), { type: 'number', step: 'any', min: 0, value: L.b, placeholder: 'B' }); b.setAttribute('aria-label', '數值 B');
+                b.hidden = L.kind === 'zhe' || L.kind === 'off';
+                const x = Object.assign(document.createElement('button'), { className: 'sm', textContent: '✕' }); x.setAttribute('aria-label', '刪除這一層');
+                k.onchange = () => { L.kind = k.value; tsave(); buildLayers(); };
+                a.oninput = () => { L.a = a.value; tcalc(); }; b.oninput = () => { L.b = b.value; tcalc(); };
+                x.onclick = () => { T.layers.splice(i, 1); tsave(); buildLayers(); };
+                d.append(k, a, b, x); return d;
+            }));
+            tcalc();
+        }
+        function tcalc() {
+            T.round = $('#round').value; T.each = $('#dEach').checked; T.orig = $('#dOrig').value;
+            T.bP = $('#bP').value; T.bN = $('#bN').value; T.bM = $('#bM').value;
+            T.tAmt = $('#tAmt').value; T.tMode = $('#tMode').value; T.tRate = $('#tRate').value; T.tCustom = $('#tCustom').value;
+            T.rAmt = $('#rAmt').value; T.rFee = $('#rFee').value;
+            $('#tCustomBox').hidden = T.tRate !== 'custom';
+            const hint = '填入數字就會顯示結果';
+            const d = T.orig === '' ? null : applyDiscounts(parseFloat(T.orig), T.layers, T.round, T.each);
+            $('#dOut').replaceChildren(...(d ? [
+                ...d.steps.map(s => Object.assign(document.createElement('div'), { textContent: `${s.text}：${fm(s.before)} → ${fm(s.after)}` })),
+                Object.assign(document.createElement('div'), { innerHTML: '<b></b>' })
+            ] : [document.createTextNode(hint)]));
+            if (d) { $('#dOut b').textContent = `折後 ${fm(d.final)} 元` + (d.zhe !== null ? `（等於 ${d.zhe} 折，省 ${fm(d.saved)} 元）` : ''); }
+            const b = T.bP === '' ? null : bogo(parseFloat(T.bP), parseFloat(T.bN), parseFloat(T.bM), T.round);
+            $('#bOut').textContent = b ? `實際 ${b.zhe} 折\n付 ${fm(b.total)} 元拿 ${b.qty} 個，平均每個 ${fm(b.per)} 元` : T.bP === '' ? hint : 'N 需為 ≥ 1 的整數、M 為 ≥ 0 的整數';
+            const rate = T.tRate === 'custom' ? parseFloat(T.tCustom) : 5;
+            const t = T.tAmt === '' ? null : taxCalc(parseFloat(T.tAmt), rate, T.tMode, T.round);
+            $('#tOut').textContent = t ? `未稅 ${fm(t.net)} 元\n稅額 ${fm(t.tax)} 元（稅率 ${rate}%）\n含稅 ${fm(t.gross)} 元` : hint;
+            const r = T.rAmt === '' ? null : touristRefund(parseFloat(T.rAmt), parseFloat(T.rFee) || 0, T.round);
+            $('#rOut').textContent = r ? `${r.eligible ? '已達' : '未達'} 2,000 元門檻（${r.eligible ? '可能符合退稅資格' : '依估算不可退'}）\n營業稅額約 ${fm(r.tax)} 元\n估計退稅 ${r.eligible ? fm(r.refund) : 0} 元（僅供估算）` : hint;
+            tsave();
+        }
+        $('#round').value = T.round; $('#dEach').checked = T.each; $('#dOrig').value = T.orig; $('#bP').value = T.bP; $('#bN').value = T.bN; $('#bM').value = T.bM;
+        $('#tAmt').value = T.tAmt; $('#tMode').value = T.tMode; $('#tRate').value = T.tRate; $('#tCustom').value = T.tCustom; $('#rAmt').value = T.rAmt; $('#rFee').value = T.rFee;
+        ['#round', '#dEach', '#dOrig', '#bP', '#bN', '#bM', '#tAmt', '#tMode', '#tRate', '#tCustom', '#rAmt', '#rFee'].forEach(q => { $(q).oninput = $(q).onchange = tcalc; });
+        $('#dAdd').onclick = () => { T.layers.push({ kind: 'zhe', a: '', b: '' }); tsave(); buildLayers(); };
+        $('#tabCmp').onclick = () => { showTab('cmp'); tsave(); }; $('#tabTax').onclick = () => { showTab('tax'); tsave(); };
+        buildLayers(); showTab(T.tab);
     </script>
 </body>
 

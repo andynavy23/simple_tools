@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="圖片浮水印與拼貼：文字浮水印批次套用、多張圖拼成網格，全部在瀏覽器本機處理不上傳，可打包成 ZIP 下載。">
+    <meta name="st-keys" content="imagemark_opts">
+    <meta property="og:title" content="圖片浮水印 / 拼貼" />
+    <meta property="og:description" content="批次加文字浮水印、2–9 張圖拼貼，不上傳、不需安裝。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/image-mark.html" />
+    <title>圖片浮水印 / 拼貼</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>* {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .row.seg>button {
+            min-height: 44px;
+        }
+
+        input[type=file] {
+            width: 100%;
+            max-width: 100%;
+        }
+
+        input[type=range] {
+            width: 100%;
+        }
+
+        input[type=color] {
+            width: 100%;
+            height: 44px;
+            padding: 2px;
+        }
+
+        .chk {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 44px;
+            font-weight: 400;
+        }
+
+        .anchors {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            max-width: 240px;
+        }
+
+        .anchors button {
+            min-height: 44px;
+            padding: 0;
+        }
+
+        .file {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 0;
+            border-top: 1px solid var(--line);
+        }
+
+        .file span {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file button {
+            min-height: 44px;
+            min-width: 44px;
+            padding: 0 10px;
+        }
+
+        .pv {
+            overflow: auto;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            max-height: 70vh;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .pv canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>圖片浮水印 / 拼貼</h1>
+        <p class="sub">圖片只在你的瀏覽器處理，不會上傳。</p>
+
+        <div class="card">
+            <label for="files">選擇圖片（可多選）</label>
+            <input id="files" type="file" accept="image/*" multiple>
+            <div id="fileList"></div>
+            <p class="note" id="fileNote"></p>
+        </div>
+
+        <div class="card">
+            <div class="row seg"><button id="mMark">浮水印</button><button id="mCollage">拼貼</button></div>
+
+            <div id="markOpts">
+                <label for="o_text">浮水印文字</label>
+                <input id="o_text" maxlength="60" style="width:100%">
+                <label for="o_size">字體大小：<span id="v_size"></span>%（占圖寬）</label>
+                <input id="o_size" type="range" min="2" max="30">
+                <div class="row">
+                    <div><label for="o_color">顏色</label><input id="o_color" type="color"></div>
+                    <div><label for="o_opacity">透明度：<span id="v_opacity"></span>%</label><input id="o_opacity" type="range" min="10" max="100"></div>
+                </div>
+                <label for="o_rotate">旋轉：<span id="v_rotate"></span>°</label>
+                <input id="o_rotate" type="range" min="-90" max="90">
+                <label>位置（九宮格）</label>
+                <div class="anchors" id="anchors"></div>
+                <label class="chk"><input id="o_tile" type="checkbox">平鋪整張圖</label>
+                <div class="row">
+                    <label class="chk"><input id="o_stroke" type="checkbox">描邊</label>
+                    <label class="chk"><input id="o_shadow" type="checkbox">陰影</label>
+                </div>
+            </div>
+
+            <div id="collageOpts" hidden>
+                <div class="row">
+                    <div><label for="o_cols">欄數</label><select id="o_cols" style="width:100%"></select></div>
+                    <div><label for="o_rows">列數</label><select id="o_rows" style="width:100%"></select></div>
+                </div>
+                <label for="o_gap">間距：<span id="v_gap"></span>%</label>
+                <input id="o_gap" type="range" min="0" max="10">
+                <div class="row">
+                    <div><label for="o_bg">背景色</label><input id="o_bg" type="color"></div>
+                    <div><label for="o_fit">單格</label><select id="o_fit" style="width:100%"><option value="fill">填滿（裁切）</option><option value="fit">完整顯示</option></select></div>
+                </div>
+            </div>
+
+            <div class="row" style="margin-top:6px">
+                <div><label for="o_format">輸出格式</label><select id="o_format" style="width:100%"><option value="png">PNG</option><option value="jpeg">JPEG</option></select></div>
+                <div><label for="o_max">最長邊上限</label><select id="o_max" style="width:100%"><option value="1024">1024 px</option><option value="2048">2048 px</option><option value="4096">4096 px</option></select></div>
+            </div>
+            <div id="qWrap"><label for="o_quality">JPEG 品質：<span id="v_quality"></span></label><input id="o_quality" type="range" min="50" max="100"></div>
+        </div>
+
+        <div class="card">
+            <h2>預覽</h2>
+            <label for="zoom">縮放：<span id="v_zoom"></span>%（放大後可在預覽框內捲動）</label>
+            <input id="zoom" type="range" min="100" max="400" step="25" value="100">
+            <div class="pv" id="pv"><canvas id="cv" width="300" height="150"></canvas></div>
+            <p class="note" id="msg"></p>
+            <div class="row" id="markActs" style="margin-top:10px">
+                <button class="primary" id="dlOne">下載目前這張</button>
+                <button id="dlEach">逐張下載全部</button>
+                <button id="dlZip">打包 ZIP</button>
+            </div>
+            <div class="row" id="collageActs" style="margin-top:10px" hidden><button class="primary" id="dlCollage">下載拼貼</button></div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>替圖片加上文字浮水印（可一次套用到很多張），或把 2～9 張圖拼成一張網格。全部在你的瀏覽器處理，圖片不會上傳。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>貼作品、證件影本、商品圖前，先加上「僅供某某用途」之類的浮水印。</li>
+        <li>把幾張活動照拼成一張，方便貼到社群或群組。</li>
+        <li>一次處理十幾張，打包成 ZIP 一次帶走。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>按「選擇圖片」選一到多張（浮水印最多 30 張；拼貼最多取前 9 張，可用 ↑ 調整順序）。</li>
+        <li>上方切換「浮水印」或「拼貼」。</li>
+        <li>浮水印：輸入文字，調字體大小（占圖寬的百分比，所以大小圖看起來比例一致）、顏色、透明度、旋轉，點九宮格選位置，或勾「平鋪整張圖」；可加描邊、陰影。</li>
+        <li>拼貼：選欄數 x 列數、間距、背景色，單格要「填滿（裁切）」或「完整顯示」。</li>
+        <li>選輸出格式（PNG 或 JPEG 並調品質）與最長邊上限，確認預覽後下載。</li>
+        <li>浮水印可「下載目前這張」、「逐張下載全部」或「打包 ZIP」。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">選 3 張照片，文字「© 小明」，大小 8%、旋轉 -30°、位置右下
+        → 一張 4000 像素寬的照片，字高約 320 像素
+        → 按「打包 ZIP」得到 imagemark.zip，內含 3 張 xxx-mark.png</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>輸出的最長邊最多 4096 像素，避免手機記憶體不足；超過會自動等比縮小。</li>
+        <li>手機拍的照片若有旋轉資訊（EXIF），現代瀏覽器會自動轉正；輸出檔不含原圖的 EXIF（定位等資訊會一併移除）。</li>
+        <li>「逐張下載全部」可能被瀏覽器詢問是否允許多檔下載，選允許；嫌麻煩就用 ZIP。</li>
+        <li>ZIP 為不壓縮的「存放」格式，圖片本身已壓縮過，檔案大小幾乎一樣。</li>
+        <li>設定（文字、顏色等）會記在本機；圖片本身不會儲存。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, download } = Util;
+
+        // --- pure ---
+        const MAX_SIDE = 4096, MAX_MARK_FILES = 30, MAX_COLLAGE = 9;
+        // CRC32（IEEE，ZIP 用）：crc32('123456789') = 0xCBF43926
+        const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+        function crc32(b) { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC_T[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+        // ZIP「store」（不壓縮）打包：files = [{name, data: Uint8Array}]，檔名用 UTF-8（旗標 bit 11）。不支援 ZIP64（單檔 / 總量需 < 4GB、檔數 < 65535）
+        function zipStore(files, date = new Date()) {
+            const enc = new TextEncoder();
+            const dosTime = (date.getHours() << 11) | (date.getMinutes() << 5) | (date.getSeconds() >> 1);
+            const dosDate = (Math.max(0, date.getFullYear() - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+            if (files.length > 65535) throw new Error('檔案太多');
+            const parts = [], central = [];
+            let off = 0;
+            for (const f of files) {
+                const name = enc.encode(f.name), crc = crc32(f.data), size = f.data.length;
+                if (off + size > 0xFFFFFFFF - 1e6) throw new Error('ZIP 太大');
+                const lh = new DataView(new ArrayBuffer(30));
+                lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+                lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true); lh.setUint32(14, crc, true); lh.setUint32(18, size, true); lh.setUint32(22, size, true);
+                lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+                const ch = new DataView(new ArrayBuffer(46));
+                ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+                ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true); ch.setUint32(16, crc, true); ch.setUint32(20, size, true); ch.setUint32(24, size, true);
+                ch.setUint16(28, name.length, true); ch.setUint32(42, off, true);
+                parts.push(new Uint8Array(lh.buffer), name, f.data);
+                central.push(new Uint8Array(ch.buffer), name);
+                off += 30 + name.length + size;
+            }
+            const cdSize = central.reduce((s, p) => s + p.length, 0);
+            const end = new DataView(new ArrayBuffer(22));
+            end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true); end.setUint32(12, cdSize, true); end.setUint32(16, off, true);
+            const all = [...parts, ...central, new Uint8Array(end.buffer)], out = new Uint8Array(off + cdSize + 22);
+            let p = 0; for (const a of all) { out.set(a, p); p += a.length; }
+            return out;
+        }
+        // 檔名重複時加 -2、-3（ZIP 內不能同名）
+        function uniqNames(names) {
+            const seen = {};
+            return names.map(n => { seen[n] = (seen[n] || 0) + 1; if (seen[n] === 1) return n; const i = n.lastIndexOf('.'); return i > 0 ? `${n.slice(0, i)}-${seen[n]}${n.slice(i)}` : `${n}-${seen[n]}`; });
+        }
+        // 等比縮到最長邊 <= max（不放大），至少 1px
+        function fitSize(w, h, max = MAX_SIDE) { const s = Math.min(1, max / Math.max(w, h)); return { w: Math.max(1, Math.round(w * s)), h: Math.max(1, Math.round(h * s)) }; }
+        // 旋轉後的外框大小
+        function rotBox(w, h, deg) { const r = deg * Math.PI / 180, c = Math.abs(Math.cos(r)), s = Math.abs(Math.sin(r)); return { w: w * c + h * s, h: w * s + h * c }; }
+        // 九宮格（0 左上 … 4 正中 … 8 右下）：外框 bw x bh 的中心座標，離邊 margin
+        function anchorCenter(a, W, H, bw, bh, margin) {
+            const col = a % 3, row = Math.floor(a / 3);
+            return { x: col === 0 ? margin + bw / 2 : col === 1 ? W / 2 : W - margin - bw / 2, y: row === 0 ? margin + bh / 2 : row === 1 ? H / 2 : H - margin - bh / 2 };
+        }
+        // 平鋪：奇數列錯開半格，傳回所有外框中心（最多 5000 個）
+        function tileCenters(W, H, bw, bh, gap) {
+            const sx = Math.max(1, bw + gap), sy = Math.max(1, bh + gap), out = [];
+            for (let cy = bh / 2, r = 0; cy - bh / 2 < H; cy += sy, r++)
+                for (let cx = bw / 2 - (r % 2 ? sx / 2 : 0); cx - bw / 2 < W; cx += sx) { if (out.length >= 5000) return out; out.push({ x: cx, y: cy }); }
+            return out;
+        }
+        const autoGrid = (n) => { const cols = Math.ceil(Math.sqrt(n)); return { cols, rows: Math.ceil(n / cols) }; };
+        // 拼貼版面：正方形格；寬 = width，間距 = 寬 x gapPct%；若總高超過 max 就整體等比縮小
+        function collageLayout({ cols, rows, width, gapPct, max = MAX_SIDE }) {
+            const gap = width * gapPct / 100, cell = (width - gap * (cols + 1)) / cols;
+            let H = rows * cell + gap * (rows + 1), s = H > max ? max / H : 1;
+            const cells = [];
+            for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push({ x: Math.round((gap + c * (cell + gap)) * s), y: Math.round((gap + r * (cell + gap)) * s), w: Math.round(cell * s), h: Math.round(cell * s) });
+            return { W: Math.round(width * s), H: Math.round(H * s), cells };
+        }
+        // 圖放進格子：fill 等比放大裁切置中（cover）、fit 等比縮小置中（contain）；傳回 drawImage 的來源 / 目的矩形
+        function placeImage(iw, ih, cell, mode) {
+            if (mode === 'fit') {
+                const s = Math.min(cell.w / iw, cell.h / ih), dw = iw * s, dh = ih * s;
+                return { sx: 0, sy: 0, sw: iw, sh: ih, dx: cell.x + (cell.w - dw) / 2, dy: cell.y + (cell.h - dh) / 2, dw, dh };
+            }
+            const s = Math.max(cell.w / iw, cell.h / ih), sw = cell.w / s, sh = cell.h / s;
+            return { sx: (iw - sw) / 2, sy: (ih - sh) / 2, sw, sh, dx: cell.x, dy: cell.y, dw: cell.w, dh: cell.h };
+        }
+        // 描邊顏色：淺色字用黑邊、深色字用白邊
+        const contrast = (hex) => { const n = parseInt(hex.slice(1), 16), l = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; return l > 0.5 ? '#000000' : '#ffffff'; };
+        // 設定驗證：缺欄位 / 壞值補預設、數字夾在範圍內
+        const num = (v, lo, hi, d) => { const n = Number(v); return v !== '' && v !== null && Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : d; };
+        const hex = (v, d) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : d;
+        const bool = (v, d) => typeof v === 'boolean' ? v : d;
+        function cleanOpts(o) {
+            o = o && typeof o === 'object' ? o : {};
+            return {
+                mode: o.mode === 'collage' ? 'collage' : 'mark', text: typeof o.text === 'string' ? o.text.slice(0, 60) : '© 我的圖片', size: num(o.size, 2, 30, 8), color: hex(o.color, '#ffffff'),
+                opacity: num(o.opacity, 10, 100, 60), rotate: num(o.rotate, -90, 90, -30), anchor: num(o.anchor, 0, 8, 8), tile: bool(o.tile, false), stroke: bool(o.stroke, true), shadow: bool(o.shadow, false),
+                cols: num(o.cols, 1, 3, 2), rows: num(o.rows, 1, 3, 2), gap: num(o.gap, 0, 10, 1), bg: hex(o.bg, '#ffffff'), fit: o.fit === 'fit' ? 'fit' : 'fill',
+                format: o.format === 'jpeg' ? 'jpeg' : 'png', quality: num(o.quality, 50, 100, 90), max: [1024, 2048, 4096].includes(Number(o.max)) ? Number(o.max) : 2048,
+            };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let opts = cleanOpts(store.get('imagemark_opts', {}));
+        let files = [], cur = 0, seq = 0;
+        const cache = new Map();
+        const ids = ['text', 'size', 'color', 'opacity', 'rotate', 'tile', 'stroke', 'shadow', 'cols', 'rows', 'gap', 'bg', 'fit', 'format', 'quality', 'max'];
+        for (const id of ['cols', 'rows']) $('#o_' + id).replaceChildren(...[1, 2, 3].map(n => new Option(n, n)));
+        $('#anchors').replaceChildren(...['↖', '↑', '↗', '←', '●', '→', '↙', '↓', '↘'].map((t, i) => { const b = document.createElement('button'); b.textContent = t; b.setAttribute('aria-label', '位置 ' + (i + 1)); b.onclick = () => { opts.anchor = i; $('#o_tile').checked = false; change(); }; return b; }));
+
+        function syncUi() {
+            for (const k of ids) { const e = $('#o_' + k); if (e.type === 'checkbox') e.checked = opts[k]; else e.value = opts[k]; const v = $('#v_' + k); if (v) v.textContent = opts[k]; }
+            [...$('#anchors').children].forEach((b, i) => b.setAttribute('aria-pressed', !opts.tile && opts.anchor === i));
+            $('#mMark').setAttribute('aria-pressed', opts.mode === 'mark'); $('#mCollage').setAttribute('aria-pressed', opts.mode === 'collage');
+            $('#markOpts').hidden = $('#markActs').hidden = opts.mode !== 'mark'; $('#collageOpts').hidden = $('#collageActs').hidden = opts.mode !== 'collage';
+            $('#qWrap').hidden = opts.format !== 'jpeg';
+            $('#v_zoom').textContent = $('#zoom').value; $('#cv').style.width = $('#zoom').value + '%';
+        }
+        function change() { opts = cleanOpts(opts); store.set('imagemark_opts', opts); syncUi(); preview(); }
+        for (const k of ids) $('#o_' + k).oninput = $('#o_' + k).onchange = () => { const e = $('#o_' + k); opts[k] = e.type === 'checkbox' ? e.checked : e.value; change(); };
+        $('#mMark').onclick = () => { opts.mode = 'mark'; change(); }; $('#mCollage').onclick = () => { opts.mode = 'collage'; change(); };
+        $('#zoom').oninput = syncUi;
+
+        // 解碼：預設會依 EXIF 轉正；明確指定 from-image，舊瀏覽器不認得該選項時退回預設
+        async function decode(f) { try { return await createImageBitmap(f, { imageOrientation: 'from-image' }); } catch (e) { return createImageBitmap(f); } }
+        async function getBmp(f) {
+            if (!cache.has(f)) {
+                cache.set(f, await decode(f));
+                while (cache.size > MAX_COLLAGE) { const k = [...cache.keys()].find(x => x !== f); cache.get(k).close(); cache.delete(k); }
+            }
+            return cache.get(f);
+        }
+        function renderMark(cv, bmp, o, maxSide) {
+            const { w: W, h: H } = fitSize(bmp.width, bmp.height, Math.min(maxSide, MAX_SIDE));
+            cv.width = W; cv.height = H;
+            const ctx = cv.getContext('2d');
+            if (o.format === 'jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); }
+            ctx.imageSmoothingQuality = 'high'; ctx.drawImage(bmp, 0, 0, W, H);
+            if (!o.text) return;
+            const fs = W * o.size / 100;
+            ctx.font = `bold ${fs}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            const bw = ctx.measureText(o.text).width, bh = fs * 1.2, rb = rotBox(bw, bh, o.rotate);
+            const pts = o.tile ? tileCenters(W, H, rb.w, rb.h, fs * 0.8) : [anchorCenter(o.anchor, W, H, rb.w, rb.h, fs * 0.5)];
+            ctx.globalAlpha = o.opacity / 100; ctx.lineJoin = 'round';
+            if (o.shadow) { ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = fs * 0.12; ctx.shadowOffsetX = ctx.shadowOffsetY = fs * 0.05; }
+            for (const p of pts) {
+                ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(o.rotate * Math.PI / 180);
+                if (o.stroke) { ctx.lineWidth = fs * 0.1; ctx.strokeStyle = contrast(o.color); ctx.strokeText(o.text, 0, 0); }
+                ctx.fillStyle = o.color; ctx.fillText(o.text, 0, 0);
+                ctx.restore();
+            }
+        }
+        function renderCollage(cv, bmps, o, width) {
+            const L = collageLayout({ cols: o.cols, rows: o.rows, width: Math.min(width, MAX_SIDE), gapPct: o.gap, max: Math.min(width, MAX_SIDE) });
+            cv.width = L.W; cv.height = L.H;
+            const ctx = cv.getContext('2d');
+            ctx.fillStyle = o.bg; ctx.fillRect(0, 0, L.W, L.H); ctx.imageSmoothingQuality = 'high';
+            bmps.slice(0, L.cells.length).forEach((b, i) => { const r = placeImage(b.width, b.height, L.cells[i], o.fit); ctx.drawImage(b, r.sx, r.sy, r.sw, r.sh, r.dx, r.dy, r.dw, r.dh); });
+        }
+        const msg = (t) => { $('#msg').textContent = t; };
+        async function preview() {
+            const my = ++seq, cv = $('#cv');
+            if (!files.length) { cv.width = 300; cv.height = 150; cv.getContext('2d').clearRect(0, 0, 300, 150); msg('請先選擇圖片'); return; }
+            try {
+                if (opts.mode === 'mark') { const b = await getBmp(files[cur]); if (my === seq) { renderMark(cv, b, opts, 1200); msg(`預覽第 ${cur + 1} / ${files.length} 張：${files[cur].name}（輸出會是最長邊 ≤ ${opts.max}px）`); } }
+                else {
+                    const bs = await Promise.all(files.slice(0, MAX_COLLAGE).map(getBmp));
+                    if (my === seq) { renderCollage(cv, bs, opts, 1200); msg(opts.cols * opts.rows < files.length ? `格子 ${opts.cols * opts.rows} 個，只會放前 ${opts.cols * opts.rows} 張` : `輸出寬 ${Math.min(opts.max, MAX_SIDE)}px`); }
+                }
+            } catch (e) { if (my === seq) msg('有圖片無法讀取（格式不支援或檔案太大）'); }
+        }
+        function drawFiles() {
+            for (const [f, b] of cache) if (!files.includes(f)) { b.close(); cache.delete(f); }
+            $('#fileList').replaceChildren(...files.map((f, i) => {
+                const d = document.createElement('div'); d.className = 'file';
+                const s = document.createElement('span'); s.textContent = `${i + 1}. ${f.name}`;
+                const mk = (t, label, fn) => { const b = document.createElement('button'); b.textContent = t; b.setAttribute('aria-label', label); b.onclick = fn; return b; };
+                d.append(s, mk('預覽', '預覽', () => { cur = i; preview(); }), mk('↑', '往前移', () => { if (i) { [files[i - 1], files[i]] = [files[i], files[i - 1]]; cur = 0; drawFiles(); preview(); } }), mk('×', '移除', () => { files.splice(i, 1); cur = 0; drawFiles(); preview(); }));
+                return d;
+            }));
+        }
+        $('#files').onchange = (e) => {
+            const add = [...e.target.files].filter(f => f.type.startsWith('image/'));
+            files = [...files, ...add].slice(0, MAX_MARK_FILES); e.target.value = '';
+            $('#fileNote').textContent = files.length >= MAX_MARK_FILES ? `最多 ${MAX_MARK_FILES} 張` : '';
+            cur = Math.min(cur, files.length - 1); if (cur < 0) cur = 0;
+            drawFiles(); preview();
+        };
+
+        const blobOf = (c, fmt, q) => new Promise(r => c.toBlob(r, 'image/' + fmt, q / 100));
+        const ext = () => opts.format === 'jpeg' ? 'jpg' : 'png';
+        const baseName = (f) => f.name.replace(/\.[^.]*$/, '') || 'image';
+        async function markBlob(f) {
+            const b = await decode(f), c = document.createElement('canvas');
+            try { renderMark(c, b, opts, opts.max); return await blobOf(c, opts.format, opts.quality); } finally { b.close(); c.width = c.height = 0; }
+        }
+        // 批次處理：逐張解碼 → 繪製 → 轉檔 → 釋放，避免同時佔用大量記憶體
+        async function batch(fn) {
+            if (!files.length) { msg('請先選擇圖片'); return; }
+            const btns = document.querySelectorAll('#markActs button, #collageActs button'); btns.forEach(b => b.disabled = true);
+            try { await fn(); } catch (e) { msg('處理失敗：' + (e.message || e)); } finally { btns.forEach(b => b.disabled = false); }
+        }
+        $('#dlOne').onclick = () => batch(async () => { const f = files[cur]; download(await markBlob(f), `${baseName(f)}-mark.${ext()}`); msg('已下載'); });
+        $('#dlEach').onclick = () => batch(async () => {
+            for (let i = 0; i < files.length; i++) { msg(`處理 ${i + 1} / ${files.length}…`); download(await markBlob(files[i]), `${baseName(files[i])}-mark.${ext()}`); await new Promise(r => setTimeout(r, 300)); }
+            msg(`已下載 ${files.length} 張`);
+        });
+        $('#dlZip').onclick = () => batch(async () => {
+            const names = uniqNames(files.map(f => `${baseName(f)}-mark.${ext()}`)), list = [];
+            for (let i = 0; i < files.length; i++) { msg(`處理 ${i + 1} / ${files.length}…`); list.push({ name: names[i], data: new Uint8Array(await (await markBlob(files[i])).arrayBuffer()) }); }
+            download(new Blob([zipStore(list)], { type: 'application/zip' }), 'imagemark.zip'); msg(`已打包 ${files.length} 張`);
+        });
+        $('#dlCollage').onclick = () => batch(async () => {
+            const bs = await Promise.all(files.slice(0, MAX_COLLAGE).map(getBmp)), c = document.createElement('canvas');
+            renderCollage(c, bs, opts, opts.max);
+            const blob = await blobOf(c, opts.format, opts.quality); c.width = c.height = 0;
+            download(blob, `collage.${ext()}`); msg('已下載');
+        });
+
+        syncUi(); drawFiles(); preview();
+    </script>
+</body>
+
+</html>
