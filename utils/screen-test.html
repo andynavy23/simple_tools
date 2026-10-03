@@ -12,6 +12,7 @@
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/screen-test.html" />
     <title>螢幕 / 鍵盤 / 滑鼠測試</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
     <style>
         :root {
             --wrap-w: 760px;
@@ -42,13 +43,26 @@
             position: fixed;
             inset: 0;
             z-index: 100;
-            display: grid;
-            place-items: end center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+            padding-bottom: calc(24px + env(safe-area-inset-bottom));
             cursor: none;
         }
 
+        #exitScreen {
+            background: rgba(128, 128, 128, .55);
+            color: #fff;
+            min-width: 120px;
+        }
+
         #cover span {
-            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        #cover span {
             padding: 6px 16px;
             border-radius: 980px;
             background: rgba(128, 128, 128, .55);
@@ -158,7 +172,7 @@
             </div>
 
             <div class="pane" data-t="kb" hidden>
-                <p class="note">按下每個按鍵，按過的會亮綠色、正在按住的是藍色。瀏覽器會攔截部分組合鍵（如 Ctrl+W、Alt+F4），這類無法測試。</p>
+                <p class="note">按下每個按鍵，按過的會亮綠色、正在按住的是藍色。瀏覽器會攔截部分組合鍵（如 Ctrl+W、Alt+F4），這類無法測試。這個分頁需要實體鍵盤，手機的虛擬鍵盤無法逐鍵偵測。</p>
                 <div class="kb" id="kb"></div>
                 <div id="last"></div>
                 <div class="row"><button class="sm" id="kbReset">重新測試</button></div>
@@ -177,13 +191,41 @@
             </div>
 
             <div class="pane" data-t="mouse" hidden>
-                <div id="pad" tabindex="0">在這裡按滑鼠按鍵、雙擊、滾動滾輪<br><small id="pos">座標：—</small></div>
+                <div id="pad" tabindex="0">在這裡按滑鼠按鍵、雙擊、滾動滾輪<br><small>（需要實體滑鼠；觸控只會顯示座標）</small><br><small id="pos">座標：—</small></div>
                 <div class="lights" id="lights"></div>
                 <div class="row" style="margin-top:10px"><button class="sm" id="mouseReset">重新測試</button></div>
             </div>
         </div>
     </div>
-    <div id="cover" hidden><span id="hint"></span></div>
+    <div id="cover" hidden><span id="hint"></span><button id="exitScreen">離開</button></div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>買螢幕、筆電或週邊時的快速檢查工具：全螢幕純色找壞點、鍵盤逐鍵亮燈、滑鼠按鍵偵測，另外能由吋數與解析度算出 PPI 與實際尺寸。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>剛拿到新螢幕，要在退換貨期限內檢查壞點、漏光。</li>
+        <li>二手鍵盤或筆電，確認每個鍵都正常。</li>
+        <li>想知道 27 吋 2K 螢幕的像素密度。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>「螢幕壞點」：按「開始全螢幕測試」，點一下畫面或按空白鍵 / → 換下一色，← 回上一色；按畫面下方的「離開」或 <kbd>Esc</kbd> 結束。</li>
+        <li>「鍵盤」：逐一按鍵，按過的亮綠色，按住的是藍色；「重新測試」清除。</li>
+        <li>「滑鼠」：在灰色區域按左 / 中 / 右 / 側鍵、雙擊、滾動滾輪，對應項目會亮起。</li>
+        <li>「尺寸 / PPI」：填對角線吋數與解析度（或選常見解析度），也可按「填入目前這個螢幕的解析度」。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">尺寸 / PPI：對角線 27、解析度 2560 × 1440
+        → 像素密度 108.8 PPI、點距 0.233 mm
+        → 實際約 59.8 × 33.6 cm、長寬比 16:9</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>鍵盤與滑鼠測試需要實體裝置；手機觸控只能用螢幕壞點與尺寸計算。</li>
+        <li>瀏覽器會攔截 Ctrl+W、Alt+F4 等組合鍵，這些無法測試。</li>
+        <li>有些手機瀏覽器不支援全螢幕，仍會用滿版色塊顯示。</li>
+        </ul>
+    </template>
 
     <script src="../shared/js/util.js"></script>
     <script>
@@ -235,13 +277,14 @@
         let hintTimer = null;
         function showColor() {
             $('#cover').style.background = COLORS[ci][1];
-            $('#hint').textContent = `${COLORS[ci][0]}（${ci + 1} / ${COLORS.length}）← → 換色，Esc 離開`; $('#hint').style.opacity = 1;
+            $('#hint').textContent = `${COLORS[ci][0]}（${ci + 1} / ${COLORS.length}）點一下換色，← → 切換，Esc 離開`; $('#hint').style.opacity = 1;
             clearTimeout(hintTimer); hintTimer = setTimeout(() => { $('#hint').style.opacity = 0; }, 1800);
         }
         const coverOpen = () => !$('#cover').hidden;
         function startScreen() { ci = 0; $('#cover').hidden = false; showColor(); try { $('#cover').requestFullscreen && $('#cover').requestFullscreen(); } catch (e) { } }
         function stopScreen() { $('#cover').hidden = true; try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) { } }
         $('#startScreen').onclick = startScreen;
+        $('#exitScreen').onclick = (e) => { e.stopPropagation(); stopScreen(); };
         $('#cover').onclick = () => { ci = (ci + 1) % COLORS.length; showColor(); };
         document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && coverOpen()) $('#cover').hidden = true; });
 
