@@ -85,7 +85,7 @@
 .st-sw i{display:block;width:26px;height:26px;border-radius:50%;border:2px solid var(--line);background:linear-gradient(135deg,var(--a) 50%,var(--b) 50%)}
 .st-sw[aria-pressed=true]{background:var(--fill);color:var(--text);border-color:var(--blue)}
 .st-md{min-height:0;padding:8px 4px;font-size:13px;border-radius:var(--radius-sm)}
-.st-help{width:min(600px,94vw);max-height:86vh;padding:0;border:var(--card-border);border-radius:var(--radius);background:var(--card);color:var(--text);box-shadow:0 12px 40px rgba(0,0,0,.4),var(--card-shadow);font:15px/1.65 var(--font)}
+.st-help{width:min(600px,94vw);max-height:86vh;max-height:86dvh;padding:0;border:var(--card-border);border-radius:var(--radius);background:var(--card);color:var(--text);box-shadow:0 12px 40px rgba(0,0,0,.4),var(--card-shadow);font:15px/1.65 var(--font)}
 .st-help::backdrop{background:rgba(0,0,0,.5)}
 .st-help header{position:sticky;top:0;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;background:var(--card);border-bottom:1px solid var(--line)}
 .st-help header b{font:var(--head-weight) 17px/1.3 var(--head-font)}
@@ -106,7 +106,7 @@
 .st-data .st-msg.bad{color:var(--bad)}
 .st-data .st-msg.ok{color:var(--ok)}
 .st-help footer label{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
-@media (max-width:600px){.st-help{width:100vw;max-width:100vw;max-height:92vh;margin:auto auto 0;border-bottom-left-radius:0;border-bottom-right-radius:0}}
+@media (max-width:600px){.st-help{width:100vw;max-width:100vw;max-height:92vh;max-height:92dvh;margin:auto auto 0;border-bottom-left-radius:0;border-bottom-right-radius:0}}
 `;
 
     function el(tag, attrs, ...kids) {
