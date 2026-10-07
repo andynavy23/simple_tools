@@ -42,6 +42,61 @@
         .li b {
             font-variant-numeric: tabular-nums;
             word-break: break-all;
+            text-align: right;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .tabs button {
+            flex: 1;
+        }
+
+        .row textarea {
+            min-height: 96px;
+            resize: vertical;
+        }
+
+        .code {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 14px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin: 8px 0;
+            overflow-x: auto;
+            white-space: pre;
+            max-width: 100%;
+        }
+
+        .oid {
+            padding: 10px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .oid:last-child {
+            border-bottom: 0;
+        }
+
+        .oid .id {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 14px;
+            font-weight: 700;
+            word-break: break-all;
+        }
+
+        .oid.bad .id {
+            color: var(--bad);
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
         }
     </style>
 </head>
@@ -52,14 +107,17 @@
         <h1>時間戳轉換</h1>
         <p class="sub">Unix 時間戳（秒 / 毫秒）與日期互轉，全部在本機計算。</p>
 
-        <div class="card">
-            <div class="li"><span class="muted">現在（秒）</span><span class="big" id="nowS"></span><button class="sm" id="copyS">複製</button></div>
-            <div class="li"><span class="muted">現在（毫秒）</span><span class="big" id="nowMs"></span><button class="sm" id="copyMs">複製</button></div>
-        </div>
+        <div class="tabs" id="tabs"><button data-t="ts" aria-pressed="true">時間戳</button><button data-t="oid" aria-pressed="false">ObjectId</button></div>
 
         <div class="card">
             <label for="tz">顯示時區</label>
             <select id="tz"></select>
+        </div>
+
+        <div id="pgTs">
+        <div class="card">
+            <div class="li"><span class="muted">現在（秒）</span><span class="big" id="nowS"></span><button class="sm" id="copyS">複製</button></div>
+            <div class="li"><span class="muted">現在（毫秒）</span><span class="big" id="nowMs"></span><button class="sm" id="copyMs">複製</button></div>
         </div>
 
         <div class="card">
@@ -74,6 +132,26 @@
             <div class="row"><input id="dt" type="datetime-local" step="1" aria-label="日期時間"><span class="muted">以上方「顯示時區」解讀</span></div>
             <p class="note" id="dtNote"></p>
             <div id="dtOut"></div>
+        </div>
+        </div>
+
+        <div id="pgOid" hidden>
+            <div class="card">
+                <h2>ObjectId → 時間</h2>
+                <div class="row"><textarea id="oidIn" rows="4" placeholder="貼上 MongoDB ObjectId，可多個（空白 / 換行 / 逗號分隔，最多 200 個）&#10;例如 507f1f77bcf86cd799439011" aria-label="ObjectId" spellcheck="false"></textarea></div>
+                <p class="note" id="oidNote"></p>
+                <div id="oidOut"></div>
+                <div class="chips"><button class="sm" id="oidCopy" hidden>複製整理後的表格</button></div>
+            </div>
+
+            <div class="card">
+                <h2>時間 → ObjectId</h2>
+                <div class="row"><input id="o2dDt" type="datetime-local" step="1" aria-label="日期時間"><span class="muted">以上方「顯示時區」解讀</span></div>
+                <div class="row" style="margin-top:8px"><input id="o2dTs" inputmode="numeric" placeholder="或輸入時間戳（秒 / 毫秒自動判斷）" aria-label="時間戳"></div>
+                <div class="chips" id="o2dQuick"><button class="sm" data-q="today">今天</button><button class="sm" data-q="yesterday">昨天</button><button class="sm" data-q="week">最近 7 天</button><button class="sm" data-q="month">本月</button></div>
+                <p class="note" id="o2dNote"></p>
+                <div id="o2dOut"></div>
+            </div>
         </div>
     </div>
 
@@ -92,22 +170,28 @@
         <li>時間戳 → 日期：貼上數字。工具會自動判斷是「秒」（10 位數）還是「毫秒」（13 位數）。</li>
         <li>日期 → 時間戳：用「日期時間」欄選時間，結果以上面選的時區解讀。</li>
         <li>最上面的「現在」會每秒更新，按「複製」可直接帶走。</li>
+        <li>要看 MongoDB 的 <kbd>_id</kbd>：切到上方「ObjectId」分頁，貼上一個或多個 ObjectId（空白、換行、逗號分隔，最多 200 個），會列出建立時間、隨機值與計數器；無效的會標示原因。「複製整理後的表格」可貼到試算表。</li>
+        <li>反過來，在「時間 → ObjectId」輸入日期時間或時間戳，或按「今天 / 昨天 / 最近 7 天 / 本月」，會產生最小 / 最大 ObjectId 與可直接複製的 <kbd>$gte / $lt</kbd> 查詢片段（日期範圍是「起日 00:00 到隔日 00:00」，右端不含）。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">輸入 1700000000
         → 臺北 2023-11-15 06:13:20（UTC+08:00）
         → UTC 2023-11-14 22:13:20
-        → ISO 8601 2023-11-14T22:13:20.000Z</div>
+        → ISO 8601 2023-11-14T22:13:20.000Z
+        ObjectId 507f1f77bcf86cd799439011
+        → 建立時間 UTC 2012-10-17 21:13:27、隨機值 bcf86cd799、計數器 4427793</div>
         <h3>小提醒</h3>
         <ul>
         <li>夏令時間（例如紐約）會自動處理；遇到「不存在的一小時」會取較早的解讀。</li>
+        <li>ObjectId 內的時間只有「秒」的精度，同一秒建立的文件無法用它分先後；最大 / 最小 ObjectId 只是該秒的邊界，不是真實存在的文件。可表示範圍為 1970–2106 年。</li>
+        <li>ObjectId 分頁不儲存你輸入的內容；只有「顯示時區」會被記住。</li>
         <li>全部在你的瀏覽器計算，不會上傳。</li>
         </ul>
     </template>
 
     <script src="../shared/js/util.js"></script>
     <script>
-        const { store, copyWithFeedback } = Util;
+        const { store, copyWithFeedback, oid } = Util;
 
         // --- pure ---
         // 絕對值 >= 1e11（約西元 1973 年的毫秒值）視為毫秒，否則視為秒
@@ -148,6 +232,35 @@
             if (!u) return a < 1 ? '現在' : `${Math.floor(a)} 秒${ago ? '前' : '後'}`;
             return `${Math.floor(a / u[0])} ${u[1]}${ago ? '前' : '後'}`;
         }
+
+        // ObjectId 分頁
+        const OID_MAX = 200;
+        function splitOids(text) {
+            const all = String(text ?? '').split(/[\s,，;；]+/).filter(Boolean);
+            return { list: all.slice(0, OID_MAX), over: Math.max(0, all.length - OID_MAX) };
+        }
+        const oidReason = (s) => s.length !== 24 ? `長度為 ${s.length}（需 24 位）` : '含非 16 進位字元（只能是 0-9、a-f）';
+        function oidRows(list, tz, nowMs) {
+            return list.map(id => {
+                const p = oid.parse(id);
+                if (!p.ok) return { id, ok: false, reason: oidReason(id) };
+                return { id: id.toLowerCase(), ok: true, local: `${fmtInZone(p.ms, tz)}（${fmtOffset(zoneOffsetMin(p.ms, tz))}）`, utc: fmtInZone(p.ms, 'UTC'), iso: new Date(p.ms).toISOString(), rel: relative(p.ms - nowMs), random: p.random, counter: p.counter };
+            });
+        }
+        const oidTableText = (rows, tz) => [['ObjectId', tz, 'UTC', 'ISO 8601', '隨機值', '計數器'], ...rows.map(r => r.ok ? [r.id, r.local, r.utc, r.iso, r.random, r.counter] : [r.id, '無效：' + r.reason])].map(r => r.join('\t')).join('\n');
+        // [fromMs, toMs) → 最小 / 最大 ObjectId 與查詢片段（toMs 不含；超出 1970–2106 會丟出錯誤）
+        function oidRangeQuery(fromMs, toMs) {
+            const min = oid.fromDate(fromMs, '00'), max = oid.fromDate(toMs - 1000, 'ff'), hi = oid.fromDate(toMs, '00');
+            return { min, max, query: `{ _id: { $gte: ObjectId("${min}"), $lt: ObjectId("${hi}") } }` };
+        }
+        const oidInstant = (ms) => { const f = Math.floor(ms / 1000) * 1000; return oidRangeQuery(f, f + 1000); };
+        // 快捷範圍（以 tz 的日界線）：today / yesterday / week（含今天共 7 天）/ month → [起, 迄)
+        function rangeFor(kind, nowMs, tz) {
+            const p = zoneParts(nowMs, tz);
+            const at = (y, m, d) => { const t = new Date(Date.UTC(y, m - 1, d)); return parseInZone(`${t.getUTCFullYear()}-${P2(t.getUTCMonth() + 1)}-${P2(t.getUTCDate())} 00:00:00`, tz); };
+            const { year: y, month: m, day: d } = p;
+            return { today: [at(y, m, d), at(y, m, d + 1)], yesterday: [at(y, m, d - 1), at(y, m, d)], week: [at(y, m, d - 6), at(y, m, d + 1)], month: [at(y, m, 1), at(y, m + 1, 1)] }[kind];
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -177,10 +290,59 @@
             if (!Number.isFinite(ms)) { $('#dtNote').textContent = '日期格式不對'; return; }
             out.append(li('秒', String(Math.floor(ms / 1000))), li('毫秒', String(ms)), li('ISO 8601', new Date(ms).toISOString()));
         }
+        const liCopy = (k, v) => { const d = li(k, v); const b = document.createElement('button'); b.className = 'sm'; b.textContent = '複製'; b.onclick = () => copyWithFeedback(b, v); d.append(b); return d; };
+        const codeBox = (t) => { const d = document.createElement('div'); d.className = 'code'; d.textContent = t; return d; };
+
+        let tab = 'ts', lastRows = [], o2dLast = null;
+        function showOid() {
+            const out = $('#oidOut'), tz = $('#tz').value, { list, over } = splitOids($('#oidIn').value);
+            out.replaceChildren(); $('#oidCopy').hidden = !list.length;
+            lastRows = oidRows(list, tz, Date.now());
+            $('#oidNote').textContent = list.length ? `共 ${list.length} 個，有效 ${lastRows.filter(r => r.ok).length} 個${over ? `（超過 ${OID_MAX} 個，其餘 ${over} 個已略過）` : ''}` : '';
+            for (const r of lastRows) {
+                const d = document.createElement('div'); d.className = 'oid' + (r.ok ? '' : ' bad');
+                const id = document.createElement('div'); id.className = 'id'; id.textContent = r.id; d.append(id);
+                if (r.ok) d.append(li(tz, r.local), li('UTC', r.utc), li('ISO 8601', r.iso), li('相對現在', r.rel), li('隨機值（5 位元組）', r.random), li('計數器', String(r.counter)));
+                else { const m = document.createElement('div'); m.className = 'note'; m.textContent = '無效：' + r.reason; d.append(m); }
+                out.append(d);
+            }
+        }
+        // 時間 → ObjectId：range = [fromMs, toMs)，label 說明範圍；note 為錯誤訊息
+        function showO2d(range, label, note = '') {
+            const out = $('#o2dOut'); out.replaceChildren(); $('#o2dNote').textContent = note;
+            if (!range) return;
+            try {
+                const q = oidRangeQuery(range[0], range[1]);
+                $('#o2dNote').textContent = label;
+                out.append(liCopy('最小 ObjectId', q.min), liCopy('最大 ObjectId', q.max));
+                const cb = document.createElement('button'); cb.className = 'sm'; cb.textContent = '複製查詢片段'; cb.onclick = () => copyWithFeedback(cb, q.query);
+                out.append(codeBox(q.query), cb);
+            } catch (e) { $('#o2dNote').textContent = e.message; }
+        }
+        function o2dInput(which) {
+            const tz = $('#tz').value;
+            let ms;
+            if (which === 'dt') { const v = $('#o2dDt').value; if (!v) return showO2d(null); ms = parseInZone(v, tz); if (!Number.isFinite(ms)) return showO2d(null, '', '日期格式不對'); }
+            else { const raw = $('#o2dTs').value.trim(); if (!raw) return showO2d(null); const n = Number(raw); if (!Number.isFinite(n)) return showO2d(null, '', '請輸入數字'); ms = toMs(n); }
+            const f = Math.floor(ms / 1000) * 1000;
+            showO2d([f, f + 1000], `${fmtInZone(f, tz)}（${tz}）這一秒；ObjectId 只有秒的精度`);
+        }
+        function o2dQuick(kind) { const tz = $('#tz').value, r = rangeFor(kind, Date.now(), tz); showO2d(r, `${fmtInZone(r[0], tz)} → ${fmtInZone(r[1], tz)}（${tz}，右端不含）`); }
+        const o2dRefresh = () => { if (o2dLast) o2dLast[0] === 'q' ? o2dQuick(o2dLast[1]) : o2dInput(o2dLast[1]); };
+        $('#o2dQuick').onclick = (e) => { const q = e.target.dataset.q; if (q) { o2dLast = ['q', q]; o2dQuick(q); } };
+        $('#o2dDt').oninput = () => { o2dLast = ['i', 'dt']; $('#o2dTs').value = ''; o2dInput('dt'); };
+        $('#o2dTs').oninput = () => { o2dLast = ['i', 'ts']; $('#o2dDt').value = ''; o2dInput('ts'); };
+        $('#oidIn').oninput = showOid;
+        $('#oidCopy').onclick = () => copyWithFeedback($('#oidCopy'), oidTableText(lastRows, $('#tz').value));
+        $('#tabs').onclick = (e) => {
+            const t = e.target.dataset.t; if (!t) return; tab = t;
+            [...$('#tabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab));
+            $('#pgTs').hidden = tab !== 'ts'; $('#pgOid').hidden = tab !== 'oid';
+        };
         function tick() { const n = Date.now(); $('#nowS').textContent = Math.floor(n / 1000); $('#nowMs').textContent = n; }
 
         $('#ts').oninput = showTs; $('#dt').oninput = showDt;
-        $('#tz').onchange = () => { store.set('ts_tz', $('#tz').value); showTs(); showDt(); };
+        $('#tz').onchange = () => { store.set('ts_tz', $('#tz').value); showTs(); showDt(); showOid(); o2dRefresh(); };
         $('#useNow').onclick = () => { $('#ts').value = Math.floor(Date.now() / 1000); showTs(); };
         $('#copyS').onclick = () => copyWithFeedback($('#copyS'), String(Math.floor(Date.now() / 1000)));
         $('#copyMs').onclick = () => copyWithFeedback($('#copyMs'), String(Date.now()));

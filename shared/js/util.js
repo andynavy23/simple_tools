@@ -138,6 +138,25 @@
         return [header, ...rows].map(r => r.map(cell).join(',')).join('\r\n');
     }
 
+    // MongoDB ObjectId（12 位元組 = 24 位 16 進位）：前 4 位元組是建立時間（Unix 秒，大端序），接著 5 位元組隨機值（每個行程固定），最後 3 位元組計數器。
+    // oid.parse 回傳 { ok, ms, sec, random, counter }（ms 是建立時間的毫秒時間戳，只有秒的精度）；格式不對回傳 { ok:false }
+    // oid.fromDate(ms, fill)：產生「該秒」的 ObjectId，其餘 8 位元組填 fill（'00' 最小、'ff' 最大），用在 _id 的時間範圍查詢
+    const OID_RE = /^[0-9a-fA-F]{24}$/;
+    const oid = {
+        isValid: (s) => typeof s === 'string' && OID_RE.test(s.trim()),
+        parse(s) {
+            if (!oid.isValid(s)) return { ok: false };
+            const h = s.trim().toLowerCase(), sec = parseInt(h.slice(0, 8), 16);
+            return { ok: true, sec, ms: sec * 1000, random: h.slice(8, 18), counter: parseInt(h.slice(18), 16) };
+        },
+        fromDate(ms, fill = '00') {
+            const sec = Math.floor(ms / 1000);
+            if (!Number.isFinite(sec) || sec < 0 || sec > 0xffffffff) throw new Error('時間超出 ObjectId 可表示的範圍（1970–2106）');
+            const f = fill === 'ff' ? 'ff' : '00';
+            return sec.toString(16).padStart(8, '0') + f.repeat(8);
+        },
+    };
+
     // 可播種的亂數（mulberry32，種子字串先雜湊成 32 位元）：同一個種子永遠產生同一串數字，用在「每日挑戰」。
     // 回傳函式 rand01()，傳回 [0,1) 小數；rand01.int(n) 傳回 [0,n) 整數。非密碼學用途
     function seeded(seed) {
@@ -196,7 +215,7 @@
         },
     };
 
-    const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex, seeded, parseCSV, toObjects, isNum, csvStringify };
+    const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex, seeded, parseCSV, toObjects, isNum, csvStringify, oid };
     if (typeof module !== 'undefined' && module.exports) module.exports = Util;
     else root.Util = Util;
 })(typeof window !== 'undefined' ? window : globalThis);

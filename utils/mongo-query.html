@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="MongoDB 指令產生器：用表單建立 find / aggregate / update / delete / createIndex，輸出 mongosh、Node.js、pymongo、Compass JSON。">
+    <meta property="og:title" content="MongoDB 指令產生器" />
+    <meta property="og:description" content="條件建構器產生 MongoDB 查詢與更新指令，四種輸出格式一鍵複製。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/mongo-query.html" />
+    <meta name="st-keys" content="mongoq_opts">
+    <title>MongoDB 指令產生器</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 720px;
+        }
+
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>input,
+        .row>select {
+            flex: 1 1 140px;
+            min-width: 0;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .tabs button {
+            flex: 1 1 auto;
+        }
+
+        .crow {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .crow>* {
+            flex: 1 1 140px;
+            min-width: 0;
+        }
+
+        .crow>.del,
+        .crow>.chk {
+            flex: 0 0 auto;
+        }
+
+        .grp {
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            padding: 8px 10px;
+            margin: 8px 0;
+        }
+
+        .grp.sub {
+            margin-left: 10px;
+            background: var(--fill);
+        }
+
+        .ghead {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .ghead select {
+            flex: 1 1 160px;
+        }
+
+        .chk {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 400;
+            margin: 0;
+            min-height: 44px;
+        }
+
+        .stage {
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            padding: 10px;
+            margin: 10px 0;
+        }
+
+        .stage>.shead {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+        }
+
+        .stage>.shead b {
+            flex: 1 1 auto;
+        }
+
+        .stage>div>input,
+        .stage>div>.grp~input {
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 6px;
+        }
+
+        .part {
+            margin: 10px 0;
+        }
+
+        .part .ph {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        pre.code {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 14px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin: 6px 0;
+            overflow-x: auto;
+            white-space: pre;
+            max-width: 100%;
+        }
+
+        .alert {
+            border: 2px solid var(--bad);
+            color: var(--bad);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin: 10px 0;
+            font-weight: 700;
+        }
+
+        .alert.info {
+            border-color: var(--line);
+            color: var(--text);
+            font-weight: 400;
+        }
+
+        .errs {
+            color: var(--bad);
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        textarea {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            min-height: 120px;
+            resize: vertical;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>MongoDB 指令產生器</h1>
+        <p class="sub">用表單組出查詢 / 更新 / 聚合 / 索引指令，全部在本機產生，不連線資料庫。</p>
+
+        <div class="card">
+            <label for="op">操作</label>
+            <select id="op"></select>
+            <label for="coll">集合名稱</label>
+            <input id="coll" type="text" placeholder="例如 users" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="200">
+            <label for="tpl">快速範本</label>
+            <div class="row">
+                <select id="tpl"></select>
+                <input id="tplN" type="text" inputmode="numeric" value="7" aria-label="N（天數 / 每頁筆數）" style="flex:0 0 72px" title="N（天數 / 每頁筆數）">
+                <input id="tplP" type="text" inputmode="numeric" value="1" aria-label="第幾頁" style="flex:0 0 72px" title="第幾頁（僅分頁查詢）">
+                <button id="tplGo">套用</button>
+            </div>
+            <p class="note">範本會重設下方的條件（集合名稱保留）。N = 天數或每頁筆數，第二格 = 頁碼。</p>
+        </div>
+
+        <div class="card" id="cFilter"></div>
+        <div class="card" id="cDistinct"></div>
+        <div class="card" id="cProj"></div>
+        <div class="card" id="cSort"></div>
+        <div class="card" id="cPage"></div>
+        <div class="card" id="cUpd"></div>
+        <div class="card" id="cDoc"></div>
+        <div class="card" id="cAgg"></div>
+        <div class="card" id="cIdx"></div>
+        <p class="note" id="msg"></p>
+
+        <div class="card">
+            <h2>輸出</h2>
+            <div class="tabs" id="fmtTabs"></div>
+            <div id="warns"></div>
+            <ul class="errs" id="errs"></ul>
+            <div id="out"></div>
+            <button class="primary" id="copyAll" hidden>複製全部</button>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>用表單組出 MongoDB 指令：find、aggregate、updateMany、deleteMany、createIndex 等 13 種操作，一鍵輸出成 mongosh、Node.js 驅動、Python pymongo 或 Compass 篩選 JSON。字串、引號、反斜線、換行都會正確跳脫。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>不熟 MongoDB 語法，想用表單湊出查詢再複製貼上。</li>
+        <li>同一個條件要在 shell、程式碼、Compass 各貼一次。</li>
+        <li>要寫「最近 N 天」「依欄位分組計數」「找重複資料」這類常見查詢。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>選「操作」，輸入「集合名稱」（不可含 <kbd>$</kbd>、不可 <kbd>system.</kbd> 開頭、最多 120 字）。</li>
+        <li>在「條件」每列填：欄位（可用 <kbd>a.b.c</kbd>）、運算子、值與值型別。多列可選「全部符合 ($and)」或「任一符合 ($or)」，並可加一層群組。</li>
+        <li>find 可再設投影、排序、skip / limit；更新設定 $set 等運算子；aggregate 加階段並可上下移；索引設欄位與選項。</li>
+        <li>下方切換輸出格式，按「複製」。也可先套用「快速範本」再修改。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">集合 users、條件 age 大於等於 18（數字）
+        → mongosh：db.users.find({ age: { $gte: 18 } })
+        → Compass：{"age": {"$gte": 18}}</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>updateMany / deleteMany 或條件為空時會出現紅色警告：條件為空會影響整個集合，請先用 find / countDocuments 確認。</li>
+        <li>「在清單中」用逗號或換行分隔；日期沒寫時區時視為 UTC；物件 / 陣列用 JSON，並支援 <kbd>{"$oid":"…"}</kbd>、<kbd>{"$date":"…"}</kbd>。</li>
+        <li>欄位有錯時不會產生指令（避免漏掉條件而誤刪）。</li>
+        <li>只記住「上次的操作與輸出格式」（本機 mongoq_opts，壞資料會回到預設）；集合名稱與條件不會儲存，重新整理就清空。清除瀏覽器網站資料或用右上角備份即可管理這一個鍵。</li>
+        <li>正規表示式以你輸入的內容為準（mongosh / Node 用 JS 字面值，pymongo / Compass 用 $regex），特殊語法請在 MongoDB 實測。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, copyWithFeedback, oid } = Util;
+
+        // --- pure ---
+        const OPS = ['find', 'findOne', 'countDocuments', 'distinct', 'aggregate', 'insertOne', 'insertMany', 'updateOne', 'updateMany', 'replaceOne', 'deleteOne', 'deleteMany', 'createIndex'];
+        const FMTS = ['mongosh', 'node', 'python', 'compass'];
+        const LIM = { rows: 30, groups: 10, stages: 30, sort: 10, list: 500, text: 200000 };
+        const WRITE_OPS = ['updateOne', 'updateMany', 'replaceOne', 'deleteOne', 'deleteMany'];
+        const WITH_FILTER = ['find', 'findOne', 'countDocuments', 'distinct', ...WRITE_OPS];
+        const TYPE_ALIASES = ['double', 'string', 'object', 'array', 'binData', 'undefined', 'objectId', 'bool', 'date', 'null', 'regex', 'dbPointer', 'javascript', 'symbol', 'javascriptWithScope', 'int', 'timestamp', 'long', 'decimal', 'minKey', 'maxKey', 'number'];
+        const ACCS = ['sum', 'avg', 'min', 'max', 'count', 'push', 'addToSet', 'first', 'last'];
+        const UPD_KIND = { $set: 'typed', $unset: 'none', $inc: 'number', $mul: 'number', $min: 'typed', $max: 'typed', $push: 'typed', $pull: 'typed', $addToSet: 'typed', $pop: 'pop', $rename: 'name', $currentDate: 'none' };
+        const DBRESERVED = new Set(['stats', 'help', 'version', 'getName', 'getCollection', 'runCommand', 'adminCommand', 'aggregate', 'watch', 'createCollection', 'dropDatabase', 'getSiblingDB', 'auth', 'logout', 'hostInfo', 'serverStatus', 'getMongo', 'constructor', 'toString', 'valueOf', 'prototype', 'hasOwnProperty']);
+        const SNAKE = { find: 'find', findOne: 'find_one', countDocuments: 'count_documents', distinct: 'distinct', aggregate: 'aggregate', insertOne: 'insert_one', insertMany: 'insert_many', updateOne: 'update_one', updateMany: 'update_many', replaceOne: 'replace_one', deleteOne: 'delete_one', deleteMany: 'delete_many', createIndex: 'create_index' };
+
+        // 資料樹：物件用 Map（保留鍵順序）、特殊型別用 Tag（oid / date / re）；JSON.parse 不會產生它們
+        class Tag { constructor(k, a, b = '') { this.k = k; this.a = a; this.b = b; } }
+        const M = (...pairs) => new Map(pairs);
+        const isOpMap = (v) => v instanceof Map && v.size > 0 && [...v.keys()].every(k => k[0] === '$');
+        const splitList = (s) => String(s ?? '').split(/[,，\n]/).map(x => x.trim()).filter(Boolean);
+        const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        const newRow = (o = {}) => ({ k: 'row', field: '', op: 'eq', value: '', type: 'string', opt: '', ...o });
+        const newGroup = (mode = 'and', items = []) => ({ k: 'grp', mode, items });
+        const newUpd = (o = {}) => ({ op: '$set', field: '', value: '', type: 'string', ...o });
+        const newStage = (type) => ({
+            match: () => ({ type, grp: newGroup('and', [newRow()]) }),
+            group: () => ({ type, id: '', accs: [{ name: 'count', op: 'count', field: '' }] }),
+            sort: () => ({ type, sort: [{ field: '', dir: '1' }] }),
+            project: () => ({ type, proj: { mode: 'include', fields: '', noId: false } }),
+            limit: () => ({ type, n: '' }), skip: () => ({ type, n: '' }),
+            unwind: () => ({ type, field: '', preserve: false }),
+            lookup: () => ({ type, from: '', localField: '', foreignField: '', as: '' }),
+            count: () => ({ type, name: 'count' }),
+            addFields: () => ({ type, rows: [{ name: '', value: '', type: 'string' }] }),
+        }[type]());
+        function defaultState() {
+            return {
+                op: 'find', coll: '', filter: newGroup('and', [newRow()]), proj: { mode: 'include', fields: '', noId: false }, sort: [], limit: '', skip: '', distinctField: '',
+                upd: { rows: [newUpd()], upsert: false, arrayFilters: '' }, doc: '', stages: [],
+                idx: { keys: [{ field: '', dir: '1' }], unique: false, ttl: '', usePartial: false, partial: newGroup('and', [newRow()]) },
+            };
+        }
+        // 上次使用的操作與輸出格式（壞資料回到預設）
+        function loadOpts(raw) {
+            const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+            return { op: OPS.includes(o.op) ? o.op : 'find', fmt: FMTS.includes(o.fmt) ? o.fmt : 'mongosh' };
+        }
+
+        // ---- 驗證 ----
+        function validColl(name) {
+            const n = String(name ?? '').trim();
+            if (!n) return '請輸入集合名稱';
+            if (n.length > 120) return '集合名稱最多 120 字';
+            if (n.includes('$')) return '集合名稱不能含 $';
+            if (n.includes('\0')) return '集合名稱不能含空字元';
+            if (n.startsWith('system.')) return '集合名稱不能以 system. 開頭';
+            return '';
+        }
+        function validField(f) {
+            if (!f) return '欄位不能空白';
+            if (f.length > 200) return '欄位最多 200 字';
+            if (f.includes('\0')) return '欄位不能含空字元';
+            if (f[0] === '$') return '欄位不能以 $ 開頭';
+            if (f.split('.').some(s => s === '')) return '欄位路徑不能有空段（例如 a..b）';
+            return '';
+        }
+        // 輸出欄位名稱（group 累加器、$count 等）：不含 .、不以 $ 開頭
+        function validName(n) {
+            if (!n) return '名稱不能空白';
+            if (n.length > 100 || /^\$|\.|\0/.test(n)) return '名稱不能以 $ 開頭、不能含 . 或空字元';
+            return '';
+        }
+        // 聚合裡的欄位參照：'$ROOT' / '$CURRENT' 或一般欄位 → '$' + 欄位
+        const refOf = (f) => (f === '$ROOT' || f === '$CURRENT') ? { v: '$' + f } : (validField(f) ? { err: validField(f) } : { v: '$' + f });
+
+        // 日期：YYYY-MM-DD[THH:mm[:ss[.SSS]]][Z|±hh:mm]；沒寫時區視為 UTC。回傳 ISO 字串或 null
+        function parseDate(s) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?\s*(Z|[+-]\d{2}:?\d{2})?$/i.exec(String(s ?? '').trim());
+            if (!m) return null;
+            const [y, mo, d, h, mi, se] = m.slice(1, 7).map(x => +x || 0), ms = m[7] ? +m[7].padEnd(3, '0') : 0;
+            if (y < 1000 || mo < 1 || h > 23 || mi > 59 || se > 59) return null;
+            let t = Date.UTC(y, mo - 1, d, h, mi, se, ms);
+            const c = new Date(t);
+            if (c.getUTCMonth() !== mo - 1 || c.getUTCDate() !== d) return null;
+            const z = m[8];
+            if (z && z.toUpperCase() !== 'Z') { const zz = z.slice(1).replace(':', ''); if (+zz.slice(0, 2) > 23 || +zz.slice(2) > 59) return null; t -= (z[0] === '-' ? -1 : 1) * (+zz.slice(0, 2) * 60 + +zz.slice(2)) * 60000; }
+            const out = new Date(t);
+            return Number.isFinite(out.getTime()) && out.getUTCFullYear() <= 9999 && out.getUTCFullYear() >= 1000 ? out.toISOString() : null;
+        }
+        // JSON → 資料樹（{"$oid"} / {"$date"} 轉成 Tag）
+        function revive(v) {
+            if (Array.isArray(v)) return v.map(revive);
+            if (v && typeof v === 'object') {
+                const ks = Object.keys(v);
+                if (ks.length === 1 && ks[0] === '$oid' && oid.isValid(v.$oid)) return new Tag('oid', v.$oid.trim().toLowerCase());
+                if (ks.length === 1 && ks[0] === '$date' && typeof v.$date === 'string' && parseDate(v.$date)) return new Tag('date', parseDate(v.$date));
+                return new Map(ks.map(k => [k, revive(v[k])]));
+            }
+            return v;
+        }
+        // 值：{ v } 或 { err }
+        function coerce(text, type) {
+            const t = String(text ?? '');
+            if (t.length > LIM.text) return { err: '內容太長' };
+            switch (type) {
+                case 'string': return { v: t };
+                case 'number': { const s = t.trim(), n = s === '' ? NaN : Number(s); return Number.isFinite(n) ? { v: n } : { err: '請輸入數字' }; }
+                case 'bool': { const s = t.trim().toLowerCase(); return s === 'true' || s === 'false' ? { v: s === 'true' } : { err: '布林請輸入 true 或 false' }; }
+                case 'null': return { v: null };
+                case 'oid': return oid.isValid(t) ? { v: new Tag('oid', t.trim().toLowerCase()) } : { err: 'ObjectId 需為 24 位 16 進位' };
+                case 'date': { const d = parseDate(t); return d ? { v: new Tag('date', d) } : { err: '日期格式需為 YYYY-MM-DD 或 YYYY-MM-DDTHH:mm:ss[.SSS][Z]' }; }
+                case 'ref': { const r = refOf(t.trim()); return r.err ? r : { v: r.v }; }
+                case 'array': case 'object': {
+                    let j; try { j = JSON.parse(t); } catch { return { err: 'JSON 格式錯誤' }; }
+                    const isA = Array.isArray(j);
+                    return j && typeof j === 'object' && isA === (type === 'array') ? { v: revive(j) } : { err: type === 'array' ? '需為 JSON 陣列' : '需為 JSON 物件' };
+                }
+            }
+            return { err: '未知的值型別' };
+        }
+        const intOpt = (s, label, min = 0) => {
+            const t = String(s ?? '').trim();
+            if (!t) return {};
+            return /^\d+$/.test(t) && Number.isSafeInteger(+t) && +t >= min ? { v: +t } : { err: `${label}需為${min > 0 ? '正' : '非負'}整數` };
+        };
+
+        // ---- 條件 ----
+        function condRow(r) {
+            const val = String(r.value ?? ''), ty = r.type, one = () => coerce(val, ty);
+            const fl = (opt) => { const f = String(opt ?? '').replace(/\s/g, ''); return /^[ims]*$/.test(f) ? { v: [...new Set(f)].join('') } : { err: '正規表示式選項只能用 i m s' }; };
+            switch (r.op) {
+                case 'eq': return one();
+                case 'ne': case 'gt': case 'gte': case 'lt': case 'lte': { const c = one(); return c.err ? c : { v: M(['$' + r.op, c.v]) }; }
+                case 'in': case 'nin': {
+                    let items;
+                    if (ty === 'array') { const c = one(); if (c.err) return c; items = c.v; }
+                    else if (ty === 'null') items = [null];
+                    else {
+                        const parts = splitList(val);
+                        if (!parts.length) return { err: '請輸入至少一個值（以逗號或換行分隔）' };
+                        if (parts.length > LIM.list) return { err: `清單最多 ${LIM.list} 個` };
+                        const cs = parts.map(x => coerce(x, ty)), bad = cs.find(x => x.err);
+                        if (bad) return bad;
+                        items = cs.map(x => x.v);
+                    }
+                    return { v: M(['$' + r.op, items]) };
+                }
+                case 'exists': { const s = val.trim().toLowerCase(); return ['', 'true', 'false'].includes(s) ? { v: M(['$exists', s !== 'false']) } : { err: '存在請選「存在」或「不存在」' }; }
+                case 'type': {
+                    const s = val.trim();
+                    if (/^-?\d+$/.test(s)) return { v: M(['$type', +s]) };
+                    return TYPE_ALIASES.includes(s) ? { v: M(['$type', s]) } : { err: '型別請輸入別名（例如 string、int、date、objectId）或編號' };
+                }
+                case 'regex': case 'contains': {
+                    if (!val) return { err: r.op === 'regex' ? '請輸入正規表示式' : '請輸入要包含的字串' };
+                    const f = fl(r.opt); if (f.err) return f;
+                    return { v: new Tag('re', r.op === 'regex' ? val : escapeRe(val), f.v) };
+                }
+                case 'elemMatch': { const c = one(); return c.err ? c : { v: M(['$elemMatch', ty === 'object' ? c.v : M(['$eq', c.v])]) }; }
+                case 'size': { const s = val.trim(); return /^\d+$/.test(s) && Number.isSafeInteger(+s) ? { v: M(['$size', +s]) } : { err: '陣列大小需為非負整數' }; }
+                case 'mod': {
+                    const p = splitList(val);
+                    return p.length === 2 && p.every(x => /^-?\d+$/.test(x)) && +p[0] !== 0 ? { v: M(['$mod', [+p[0], +p[1]]]) } : { err: '取模請輸入「除數, 餘數」兩個整數（除數不可為 0）' };
+                }
+            }
+            return { err: '未知的運算子' };
+        }
+        function combine(mode, clauses) {
+            if (!clauses.length) return null;
+            if (clauses.length === 1) return clauses[0];
+            if (mode === 'or') return M(['$or', clauses]);
+            const out = new Map();
+            for (const c of clauses) for (const [k, v] of c) {
+                if (!out.has(k)) { out.set(k, v); continue; }
+                const o = out.get(k);
+                if (isOpMap(o) && isOpMap(v) && ![...v.keys()].some(x => o.has(x))) out.set(k, new Map([...o, ...v]));
+                else return M(['$and', clauses]);
+            }
+            return out;
+        }
+        // 條件群組 → { v: Map|null, errs }；null 代表沒有任何有效條件。最多一層巢狀
+        function compileGroup(g, pfx = '', depth = 0) {
+            const errs = [], clauses = [], items = Array.isArray(g?.items) ? g.items : [];
+            if (items.length > LIM.rows) errs.push(`${pfx}條件最多 ${LIM.rows} 列`);
+            if (items.filter(x => x?.k === 'grp').length > LIM.groups) errs.push(`${pfx}群組最多 ${LIM.groups} 個`);
+            items.slice(0, LIM.rows).forEach((it, i) => {
+                if (!it || typeof it !== 'object') return;
+                if (it.k === 'grp') {
+                    if (depth >= 1) { errs.push(`${pfx}群組最多一層巢狀`); return; }
+                    const r = compileGroup(it, `${pfx}群組 ${i + 1} 的`, depth + 1);
+                    errs.push(...r.errs); if (r.v) clauses.push(r.v);
+                    return;
+                }
+                const field = String(it.field ?? '').trim(), lab = `${pfx}條件 ${i + 1}`;
+                if (!field && !String(it.value ?? '').trim()) return;
+                const fe = validField(field); if (fe) { errs.push(`${lab}：${fe}`); return; }
+                const c = condRow(it); if (c.err) { errs.push(`${lab}：${c.err}`); return; }
+                clauses.push(M([field, c.v]));
+            });
+            return { v: combine(g?.mode === 'or' ? 'or' : 'and', clauses), errs };
+        }
+        function compileProj(p) {
+            p = p || {};
+            const errs = [], fields = [...new Set(splitList(p.fields))], inc = p.mode !== 'exclude', out = new Map();
+            for (const f of fields) { const e = validField(f); if (e) errs.push(`投影欄位「${f}」：${e}`); else out.set(f, inc ? 1 : 0); }
+            if (p.noId) { if (inc && out.get('_id') === 1) errs.push('「排除 _id」與投影欄位清單的 _id 衝突'); else out.set('_id', 0); }
+            return { v: out.size ? out : null, errs };
+        }
+        // 排序 / 索引鍵：[[欄位, 方向]]；dirs 為允許的方向
+        function compileKeys(rows, label, dirs = [1, -1]) {
+            const errs = [], out = [], seen = new Set();
+            const list = Array.isArray(rows) ? rows : [];
+            if (list.length > LIM.sort) errs.push(`${label}最多 ${LIM.sort} 個欄位`);
+            list.slice(0, LIM.sort).forEach(r => {
+                const f = String(r?.field ?? '').trim(); if (!f) return;
+                const e = validField(f); if (e) { errs.push(`${label}「${f}」：${e}`); return; }
+                if (seen.has(f)) { errs.push(`${label}欄位「${f}」重複`); return; }
+                seen.add(f);
+                const d = /^-?\d+$/.test(String(r.dir)) ? +r.dir : r.dir;
+                if (!dirs.includes(d)) { errs.push(`${label}「${f}」方向不正確`); return; }
+                out.push([f, d]);
+            });
+            return { v: out.length ? out : null, errs };
+        }
+        // ---- 更新 ----
+        function compileUpdate(rows) {
+            const errs = [], groups = new Map(), seen = [];
+            const list = Array.isArray(rows) ? rows : [];
+            if (list.length > LIM.rows) errs.push(`更新最多 ${LIM.rows} 列`);
+            list.slice(0, LIM.rows).forEach((r, i) => {
+                if (!r) return;
+                const kind = UPD_KIND[r.op], field = String(r.field ?? '').trim(), val = String(r.value ?? ''), lab = `更新 ${i + 1}`;
+                if (!kind) { errs.push(`${lab}：未知的運算子`); return; }
+                if (!field && !val.trim()) return;
+                const fe = validField(field); if (fe) { errs.push(`${lab}：${fe}`); return; }
+                let v;
+                if (kind === 'typed' || kind === 'number') { const c = coerce(val, kind === 'number' ? 'number' : r.type); if (c.err) { errs.push(`${lab}：${c.err}`); return; } v = c.v; }
+                else if (kind === 'none') v = r.op === '$unset' ? '' : true;
+                else if (kind === 'pop') { const s = val.trim(); if (s !== '1' && s !== '-1') { errs.push(`${lab}：$pop 請選 1（最後一個）或 -1（第一個）`); return; } v = +s; }
+                else { const t = val.trim(), e = validField(t); if (e) { errs.push(`${lab}：新欄位名稱 ${e}`); return; } if (t === field) { errs.push(`${lab}：新舊欄位相同`); return; } v = t; }
+                const touched = r.op === '$rename' ? [field, v] : [field];
+                const clash = touched.find(f => seen.some(s => s === f || s.startsWith(f + '.') || f.startsWith(s + '.')));
+                if (clash) { errs.push(`${lab}：欄位「${clash}」與其他更新衝突（同一欄位或父子路徑不能重複更新）`); return; }
+                seen.push(...touched);
+                if (!groups.has(r.op)) groups.set(r.op, new Map());
+                groups.get(r.op).set(field, v);
+            });
+            if (!groups.size && !errs.length) errs.push('請至少設定一個更新欄位');
+            return { v: groups.size ? groups : null, errs };
+        }
+        function compileJsonList(text, type, label) {
+            const t = String(text ?? '').trim();
+            if (!t) return { errs: [`請輸入${label}`] };
+            const c = coerce(t, type);
+            if (c.err) return { errs: [`${label}：${c.err}`] };
+            if (type === 'array' && (!c.v.length || c.v.some(x => !(x instanceof Map)))) return { errs: [`${label}需為非空的物件陣列`] };
+            return { v: c.v, errs: [] };
+        }
+        // ---- 聚合 ----
+        function compileStage(s) {
+            const bad = (...m) => ({ errs: m }), ok = (v, errs = []) => ({ v: M(['$' + s.type, v]), errs });
+            switch (s.type) {
+                case 'match': { const r = compileGroup(s.grp); return ok(r.v || new Map(), r.errs); }
+                case 'group': {
+                    const errs = [], ids = splitList(s.id), idKeys = new Set();
+                    let id = null;
+                    ids.forEach(f => { const e = validField(f); if (e) errs.push(`分組欄位「${f}」：${e}`); });
+                    if (ids.length === 1) id = '$' + ids[0];
+                    else if (ids.length > 1) { id = new Map(); ids.forEach(f => { const k = f.replace(/\./g, '_'); if (idKeys.has(k)) errs.push(`分組欄位「${f}」名稱重複`); idKeys.add(k); id.set(k, '$' + f); }); }
+                    const out = M(['_id', id]);
+                    (Array.isArray(s.accs) ? s.accs : []).slice(0, LIM.rows).forEach((a, i) => {
+                        const name = String(a?.name ?? '').trim(), f = String(a?.field ?? '').trim();
+                        if (!name && !f) return;
+                        const lab = `累加器 ${i + 1}`, ne = validName(name);
+                        if (ne) { errs.push(`${lab}：${ne}`); return; }
+                        if (name === '_id' || out.has(name)) { errs.push(`${lab}：名稱「${name}」重複或保留`); return; }
+                        if (!ACCS.includes(a.op)) { errs.push(`${lab}：未知的累加器`); return; }
+                        if (a.op === 'count' || (a.op === 'sum' && !f)) { out.set(name, M(['$sum', 1])); return; }
+                        const r = refOf(f); if (r.err) { errs.push(`${lab}：${r.err}`); return; }
+                        out.set(name, M(['$' + a.op, r.v]));
+                    });
+                    return ok(out, errs);
+                }
+                case 'sort': { const r = compileKeys(s.sort, '排序'); return r.errs.length || !r.v ? bad(...r.errs, ...(r.v ? [] : ['請至少填一個排序欄位'])) : ok(new Map(r.v)); }
+                case 'project': { const r = compileProj(s.proj); return r.errs.length || !r.v ? bad(...r.errs, ...(r.v ? [] : ['請至少選一個欄位'])) : ok(r.v); }
+                case 'limit': case 'skip': { const r = intOpt(s.n, s.type, s.type === 'limit' ? 1 : 0); return r.err ? bad(r.err) : r.v === undefined ? bad('請輸入數字') : ok(r.v); }
+                case 'unwind': { const f = String(s.field ?? '').trim(), e = validField(f); return e ? bad(e) : ok(s.preserve ? M(['path', '$' + f], ['preserveNullAndEmptyArrays', true]) : '$' + f); }
+                case 'lookup': {
+                    const from = String(s.from ?? '').trim(), errs = [], g = (k, lab) => { const v = String(s[k] ?? '').trim(), e = validField(v); if (e) errs.push(`${lab}：${e}`); return v; };
+                    const fe = validColl(from); if (fe) errs.push('from：' + fe);
+                    const lf = g('localField', 'localField'), ff = g('foreignField', 'foreignField'), as = g('as', 'as');
+                    return errs.length ? bad(...errs) : ok(M(['from', from], ['localField', lf], ['foreignField', ff], ['as', as]));
+                }
+                case 'count': { const n = String(s.name ?? '').trim(), e = validName(n); return e ? bad(e) : ok(n); }
+                case 'addFields': {
+                    const errs = [], out = new Map();
+                    (Array.isArray(s.rows) ? s.rows : []).slice(0, LIM.rows).forEach((r, i) => {
+                        const name = String(r?.name ?? '').trim(); if (!name && !String(r?.value ?? '').trim()) return;
+                        const lab = `欄位 ${i + 1}`, e = validField(name); if (e) { errs.push(`${lab}：${e}`); return; }
+                        const c = coerce(r.value, r.type); if (c.err) { errs.push(`${lab}：${c.err}`); return; }
+                        out.set(name, typeof c.v === 'string' && c.v[0] === '$' && r.type === 'string' ? M(['$literal', c.v]) : c.v);
+                    });
+                    if (!out.size && !errs.length) errs.push('請至少設定一個欄位');
+                    return errs.length ? bad(...errs) : ok(out);
+                }
+            }
+            return bad('未知的階段');
+        }
+        function compileStages(stages) {
+            if (!Array.isArray(stages) || !stages.length) return { v: [], errs: ['請至少加入一個階段'] };
+            const errs = [], out = [];
+            if (stages.length > LIM.stages) errs.push(`階段最多 ${LIM.stages} 個`);
+            stages.slice(0, LIM.stages).forEach((s, i) => {
+                const r = compileStage(s || {});
+                errs.push(...r.errs.map(e => `階段 ${i + 1}（$${s?.type}）：${e}`));
+                if (r.v) out.push(r.v);
+            });
+            return { v: out, errs };
+        }
+
+        // ---- 組成指令 ----
+        function buildCommand(S) {
+            if (!S || typeof S !== 'object') S = {};
+            const errs = [], warns = [], op = OPS.includes(S?.op) ? S.op : 'find';
+            const ce = validColl(S?.coll); if (ce) errs.push(ce);
+            const cmd = { op, coll: String(S?.coll ?? '').trim() };
+            const take = (r) => { errs.push(...r.errs); return r.v; };
+            if (WITH_FILTER.includes(op)) cmd.filter = take(compileGroup(S.filter)) || new Map();
+            switch (op) {
+                case 'find': case 'findOne': {
+                    cmd.proj = take(compileProj(S.proj));
+                    if (op === 'find') {
+                        cmd.sort = take(compileKeys(S.sort, '排序'));
+                        const l = intOpt(S.limit, 'limit'), k = intOpt(S.skip, 'skip');
+                        if (l.err) errs.push(l.err); if (k.err) errs.push(k.err);
+                        cmd.limit = l.v; cmd.skip = k.v;
+                    }
+                    break;
+                }
+                case 'distinct': { const f = String(S.distinctField ?? '').trim(), e = validField(f); if (e) errs.push('欄位：' + e); cmd.field = f; break; }
+                case 'aggregate': cmd.pipeline = take(compileStages(S.stages)); break;
+                case 'insertOne': cmd.doc = take(compileJsonList(S.doc, 'object', '文件')); break;
+                case 'replaceOne': cmd.doc = take(compileJsonList(S.doc, 'object', '取代用的文件')); cmd.upsert = !!S.upd?.upsert; break;
+                case 'insertMany': cmd.docs = take(compileJsonList(S.doc, 'array', '文件陣列')); break;
+                case 'updateOne': case 'updateMany': {
+                    cmd.update = take(compileUpdate(S.upd?.rows)); cmd.upsert = !!S.upd?.upsert;
+                    const af = String(S.upd?.arrayFilters ?? '').trim();
+                    if (af) cmd.arrayFilters = take(compileJsonList(af, 'array', 'arrayFilters'));
+                    break;
+                }
+                case 'createIndex': {
+                    const ix = S.idx || {};
+                    cmd.keys = take(compileKeys(ix.keys, '索引', [1, -1, 'text', 'hashed', '2dsphere']));
+                    if (!cmd.keys && !errs.length) errs.push('請至少填一個索引欄位');
+                    const o = new Map();
+                    if (ix.unique) o.set('unique', true);
+                    const t = intOpt(ix.ttl, 'expireAfterSeconds');
+                    if (t.err) errs.push(t.err);
+                    else if (t.v !== undefined) { if (cmd.keys && (cmd.keys.length !== 1 || ![1, -1].includes(cmd.keys[0][1]))) errs.push('TTL 只能用在單一欄位的升冪 / 降冪索引'); o.set('expireAfterSeconds', t.v); }
+                    if (ix.usePartial) { const p = take(compileGroup(ix.partial, '部分索引')); if (!p && !errs.length) errs.push('部分索引條件不能是空的'); else if (p) o.set('partialFilterExpression', p); }
+                    cmd.idxOpts = o;
+                    break;
+                }
+            }
+            if (WRITE_OPS.includes(op)) {
+                if (!cmd.filter.size) warns.push({ level: 'danger', text: `條件為空會影響整個集合：${op} 沒有任何條件。請先用 find / countDocuments 確認會命中哪些文件。` });
+                else if (op === 'updateMany' || op === 'deleteMany') warns.push({ level: 'info', text: `${op} 會一次修改 / 刪除所有符合的文件，建議先用 countDocuments 或 find 確認筆數。` });
+            }
+            return { ok: !errs.length, errs, warns, cmd };
+        }
+
+        // ---- 輸出 ----
+        const pad = (n) => '  '.repeat(n);
+        const jsKey = (k) => /^[A-Za-z_$][\w$]*$/.test(k) ? k : JSON.stringify(k);
+        function strLit(s, lang) {
+            if (lang !== 'python') return JSON.stringify(s).replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+            let o = '"';
+            for (const ch of s) {
+                const c = ch.codePointAt(0);
+                if (ch === '\\') o += '\\\\'; else if (ch === '"') o += '\\"'; else if (ch === '\n') o += '\\n'; else if (ch === '\r') o += '\\r'; else if (ch === '\t') o += '\\t';
+                else if (c < 0x20 || c === 0x7f) o += '\\x' + c.toString(16).padStart(2, '0');
+                else if (c >= 0xd800 && c <= 0xdfff) o += '\\u' + c.toString(16);
+                else o += ch;
+            }
+            return o + '"';
+        }
+        const LT = { '\n': 'n', '\r': 'r', '\u2028': 'u2028', '\u2029': 'u2029' };
+        function reLit(p, f) {
+            let o = '', esc = false;
+            for (const ch of p) {
+                if (esc) { esc = false; if (LT[ch]) o = o.slice(0, -1) + '\\' + LT[ch]; else o += ch; }
+                else if (ch === '\\') { esc = true; o += ch; }
+                else if (ch === '/') o += '\\/';
+                else if (LT[ch]) o += '\\' + LT[ch];
+                else o += ch;
+            }
+            if (esc) o += '\\';
+            return `/${o || '(?:)'}/${f}`;
+        }
+        function tagStr(t, lang, ind, ctx) {
+            if (t.k === 'oid') { ctx.oid = 1; return lang === 'compass' ? `{"$oid": ${strLit(t.a, lang)}}` : `${lang === 'node' ? 'new ' : ''}ObjectId(${strLit(t.a, lang)})`; }
+            if (t.k === 'date') {
+                if (lang === 'compass') return `{"$date": ${strLit(t.a, lang)}}`;
+                if (lang === 'node') return `new Date(${strLit(t.a, lang)})`;
+                if (lang === 'mongosh') return `ISODate(${strLit(t.a, lang)})`;
+                ctx.date = 1;
+                const m = /^(\d+)-(\d+)-(\d+)T(\d+):(\d+):(\d+)\.(\d+)Z$/.exec(t.a), n = m.slice(1).map(Number);
+                return `datetime(${n.slice(0, 6).join(', ')}${n[6] ? ', ' + n[6] * 1000 : ''}, tzinfo=timezone.utc)`;
+            }
+            if (lang === 'mongosh' || lang === 'node') return reLit(t.a, t.b);
+            return ser(t.b ? M(['$regex', t.a], ['$options', t.b]) : M(['$regex', t.a]), lang, ind, ctx);
+        }
+        function ser(v, lang, ind, ctx) {
+            if (v === null || v === undefined) return lang === 'python' ? 'None' : 'null';
+            if (typeof v === 'boolean') return lang === 'python' ? (v ? 'True' : 'False') : String(v);
+            if (typeof v === 'number') return String(v);
+            if (typeof v === 'string') return strLit(v, lang);
+            if (v instanceof Tag) return tagStr(v, lang, ind, ctx);
+            const js = lang === 'mongosh' || lang === 'node', arr = Array.isArray(v);
+            const items = arr ? v.map(x => ser(x, lang, ind + 1, ctx)) : (v instanceof Map ? [...v] : Object.entries(v)).map(([k, x]) => (js ? jsKey(k) : strLit(k, lang)) + ': ' + ser(x, lang, ind + 1, ctx));
+            const [o, c] = arr ? '[]' : '{}';
+            if (!items.length) return o + c;
+            const sp = js && !arr ? ' ' : '', flat = o + sp + items.join(', ') + sp + c;
+            return !flat.includes('\n') && flat.length + ind * 2 <= 80 ? flat : o + '\n' + items.map(i => pad(ind + 1) + i).join(',\n') + '\n' + pad(ind) + c;
+        }
+        function call(prefix, args) {
+            const flat = `${prefix}(${args.join(', ')})`;
+            return !flat.includes('\n') && flat.length <= 100 ? flat : `${prefix}(\n${args.map(a => '  ' + a).join(',\n')}\n)`;
+        }
+        // 回傳 [{ label, text, json }]；code 格式只有一段，Compass 依欄位分段（每段都是合法 JSON）
+        function render(cmd, lang) {
+            if (lang === 'compass') return renderCompass(cmd);
+            const ctx = {}, py = lang === 'python', node = lang === 'node', S = (v) => ser(v, lang, 1, ctx), q = (s) => strLit(s, lang);
+            const coll = lang === 'mongosh' ? (/^[A-Za-z_]\w*$/.test(cmd.coll) && !DBRESERVED.has(cmd.coll) ? `db.${cmd.coll}` : `db.getCollection(${q(cmd.coll)})`) : node ? `db.collection(${q(cmd.coll)})` : `db[${q(cmd.coll)}]`;
+            const C = (args) => call(`${coll}.${py ? SNAKE[cmd.op] : cmd.op}`, args);
+            const pairs = (l) => py ? '[' + l.map(([f, d]) => `(${q(f)}, ${ser(d, lang, 0, ctx)})`).join(', ') + ']' : ser(new Map(l), lang, 0, ctx);
+            let c;
+            switch (cmd.op) {
+                case 'find': case 'findOne': {
+                    const a = [S(cmd.filter)]; if (cmd.proj) a.push(node ? S(M(['projection', cmd.proj])) : S(cmd.proj));
+                    c = C(a);
+                    if (cmd.op === 'find') {
+                        if (cmd.sort) c += `.sort(${pairs(cmd.sort)})`;
+                        if (cmd.skip !== undefined) c += `.skip(${cmd.skip})`;
+                        if (cmd.limit !== undefined) c += `.limit(${cmd.limit})`;
+                        if (node) c += '.toArray()'; else if (py) c = `list(${c})`;
+                    }
+                    break;
+                }
+                case 'countDocuments': c = C([S(cmd.filter)]); break;
+                case 'distinct': c = C([q(cmd.field), ...(cmd.filter.size ? [S(cmd.filter)] : [])]); break;
+                case 'aggregate': c = C([S(cmd.pipeline)]); if (node) c += '.toArray()'; else if (py) c = `list(${c})`; break;
+                case 'insertOne': c = C([S(cmd.doc)]); break;
+                case 'insertMany': c = C([S(cmd.docs)]); break;
+                case 'deleteOne': case 'deleteMany': c = C([S(cmd.filter)]); break;
+                case 'updateOne': case 'updateMany': case 'replaceOne': {
+                    const a = [S(cmd.filter), S(cmd.op === 'replaceOne' ? cmd.doc : cmd.update)];
+                    if (py) { if (cmd.upsert) a.push('upsert=True'); if (cmd.arrayFilters) a.push('array_filters=' + S(cmd.arrayFilters)); }
+                    else { const o = new Map(); if (cmd.upsert) o.set('upsert', true); if (cmd.arrayFilters) o.set('arrayFilters', cmd.arrayFilters); if (o.size) a.push(S(o)); }
+                    c = C(a);
+                    break;
+                }
+                case 'createIndex': {
+                    const o = cmd.idxOpts, a = [pairs(cmd.keys)];
+                    if (py) for (const [k, v] of o) a.push(`${k}=${S(v)}`); else if (o.size) a.push(S(o));
+                    c = C(a);
+                    break;
+                }
+            }
+            const head = [];
+            if (node) { if (ctx.oid) head.push("// const { ObjectId } = require('mongodb');"); c = `const result = await ${c};`; }
+            else if (py) { if (ctx.oid) head.push('from bson import ObjectId'); if (ctx.date) head.push('from datetime import datetime, timezone'); c = `result = ${c}`; }
+            return [{ label: { mongosh: 'mongosh', node: 'Node.js', python: 'pymongo' }[lang], text: [...head, c].join('\n'), json: false }];
+        }
+        function renderCompass(cmd) {
+            const ctx = {}, parts = [], J = (v) => ser(v, 'compass', 0, ctx);
+            const add = (label, v) => parts.push({ label, text: J(v), json: true });
+            const txt = (label, t) => parts.push({ label, text: String(t), json: false });
+            switch (cmd.op) {
+                case 'find': case 'findOne':
+                    add('Filter', cmd.filter);
+                    if (cmd.proj) add('Project', cmd.proj);
+                    if (cmd.op === 'find') { if (cmd.sort) add('Sort', new Map(cmd.sort)); if (cmd.skip !== undefined) txt('Skip', cmd.skip); if (cmd.limit !== undefined) txt('Limit', cmd.limit); } else txt('Limit', 1);
+                    break;
+                case 'countDocuments': add('Filter', cmd.filter); break;
+                case 'distinct': txt('欄位', cmd.field); add('Filter', cmd.filter); break;
+                case 'aggregate': add('Pipeline', cmd.pipeline); break;
+                case 'insertOne': add('Document', cmd.doc); break;
+                case 'insertMany': add('Documents', cmd.docs); break;
+                case 'deleteOne': case 'deleteMany': add('Filter', cmd.filter); break;
+                case 'replaceOne': add('Filter', cmd.filter); add('Document', cmd.doc); break;
+                case 'updateOne': case 'updateMany': add('Filter', cmd.filter); add('Update', cmd.update); if (cmd.arrayFilters) add('arrayFilters', cmd.arrayFilters); break;
+                case 'createIndex': add('Index keys', new Map(cmd.keys)); if (cmd.idxOpts.size) add('Options', cmd.idxOpts); break;
+            }
+            return parts;
+        }
+
+        // ---- 快速範本：回傳要覆蓋預設狀態的欄位 ----
+        const DAY = 86400000;
+        function template(name, p, nowMs) {
+            const clamp = (v, d, max) => Math.min(max, Math.max(1, Math.floor(Number(v)) || d));
+            const n = clamp(p?.n, name === 'paging' ? 20 : 7, name === 'paging' ? 1000 : 20000), page = clamp(p?.page, 1, 1000000);
+            const grp = (mode, ...rows) => newGroup(mode, rows.map(r => newRow(r)));
+            const st = (type, o) => ({ ...newStage(type), ...o });
+            switch (name) {
+                case 'recentDays': return { op: 'find', filter: grp('and', { field: 'createdAt', op: 'gte', type: 'date', value: new Date(nowMs - n * DAY).toISOString() }), sort: [{ field: 'createdAt', dir: '-1' }] };
+                case 'recentOid': return { op: 'find', filter: grp('and', { field: '_id', op: 'gte', type: 'oid', value: oid.fromDate(nowMs - n * DAY, '00') }), sort: [{ field: '_id', dir: '-1' }] };
+                case 'missing': return { op: 'find', filter: grp('or', { field: 'field', op: 'exists', value: 'false' }, { field: 'field', op: 'eq', type: 'null' }, { field: 'field', op: 'eq', type: 'string', value: '' }) };
+                case 'fuzzy': return { op: 'find', filter: grp('and', { field: 'name', op: 'contains', value: '關鍵字', opt: 'i' }) };
+                case 'groupCount': return { op: 'aggregate', stages: [st('group', { id: 'field' }), st('sort', { sort: [{ field: 'count', dir: '-1' }] })] };
+                case 'latest': return { op: 'aggregate', stages: [st('sort', { sort: [{ field: 'createdAt', dir: '-1' }] }), st('group', { id: 'groupField', accs: [{ name: 'latest', op: 'first', field: '$ROOT' }] })] };
+                case 'dupes': return { op: 'aggregate', stages: [st('group', { id: 'field', accs: [{ name: 'count', op: 'count', field: '' }, { name: 'ids', op: 'push', field: '_id' }] }), st('match', { grp: grp('and', { field: 'count', op: 'gt', type: 'number', value: '1' }) })] };
+                case 'paging': return { op: 'find', sort: [{ field: '_id', dir: '1' }], skip: String((page - 1) * n), limit: String(n) };
+            }
+            return {};
+        }
+        const TEMPLATES = [['recentDays', '最近 N 天（依 createdAt）'], ['recentOid', '最近 N 天（依 ObjectId 時間）'], ['missing', '欄位不存在 / 為空'], ['fuzzy', '模糊搜尋'], ['groupCount', '依欄位分組計數'], ['latest', '取每組最新一筆'], ['dupes', '找出重複資料'], ['paging', '分頁查詢']];
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const h = (t, p = {}, ...c) => {
+            const e = document.createElement(t);
+            for (const [k, v] of Object.entries(p)) { if (k === 'class') e.className = v; else if (k.startsWith('on')) e[k] = v; else if (v === true) e.setAttribute(k, ''); else if (v !== false && v != null) e.setAttribute(k, v); }
+            e.append(...c); return e;
+        };
+        const OP_LABELS = { find: 'find 查詢多筆', findOne: 'findOne 查詢一筆', countDocuments: 'countDocuments 計數', distinct: 'distinct 不重複值', aggregate: 'aggregate 聚合', insertOne: 'insertOne 新增一筆', insertMany: 'insertMany 新增多筆', updateOne: 'updateOne 更新一筆', updateMany: 'updateMany 更新多筆', replaceOne: 'replaceOne 取代一筆', deleteOne: 'deleteOne 刪除一筆', deleteMany: 'deleteMany 刪除多筆', createIndex: 'createIndex 建立索引' };
+        const CMP = [['eq', '等於'], ['ne', '不等於'], ['gt', '大於'], ['gte', '大於等於'], ['lt', '小於'], ['lte', '小於等於'], ['in', '在清單中 ($in)'], ['nin', '不在清單中 ($nin)'], ['exists', '存在或不存在 ($exists)'], ['type', '型別 ($type)'], ['regex', '正規表示式 ($regex)'], ['contains', '包含字串'], ['elemMatch', '陣列包含 ($elemMatch)'], ['size', '陣列大小 ($size)'], ['mod', '取模 ($mod)']];
+        const TYPES = [['string', '字串'], ['number', '數字'], ['bool', '布林'], ['null', 'null'], ['oid', 'ObjectId'], ['date', '日期 (ISODate)'], ['array', '陣列 (JSON)'], ['object', '物件 (JSON)']];
+        const NO_TYPE = new Set(['exists', 'type', 'regex', 'contains', 'size', 'mod']);
+        const PH = { in: '用逗號或換行分隔，例如 a, b, c', nin: '用逗號或換行分隔', type: 'string / int / date / objectId 或編號', regex: '例如 ^abc.*', contains: '要包含的文字（自動跳脫）', elemMatch: '值（物件型別請填 JSON）', size: '例如 3', mod: '除數, 餘數（例如 5, 1）' };
+        let S = defaultState(), fmt = 'mongosh';
+
+        const msg = (t) => { $('#msg').textContent = t || ''; };
+        const txtIn = (o, k, ph, p = {}) => h('input', { type: 'text', value: o[k] ?? '', placeholder: ph, 'aria-label': ph, autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', maxlength: 2000, oninput: (e) => { o[k] = e.target.value; update(); }, ...p });
+        const selIn = (o, k, opts, rebuild, label) => { const s = h('select', { 'aria-label': label || k, onchange: (e) => { o[k] = e.target.value; rebuild ? build() : update(); } }, ...opts.map(([v, l]) => h('option', { value: v }, l))); s.value = o[k]; return s; };
+        const chkIn = (o, k, label) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!o[k], onchange: (e) => { o[k] = e.target.checked; update(); } }), label);
+        const btn = (t, f, cls = 'sm', label) => h('button', { type: 'button', class: cls, 'aria-label': label || t, onclick: f }, t);
+        const add = (list, item, max, what) => { if (list.length >= max) return msg(`${what}最多 ${max} 個`); msg(''); list.push(item); build(); };
+
+        function rowUI(r, del) {
+            if (r.op === 'exists' && !['true', 'false'].includes(r.value)) r.value = 'true';
+            const kids = [txtIn(r, 'field', '欄位（可用 a.b.c）'), selIn(r, 'op', CMP, true, '運算子')];
+            if (!NO_TYPE.has(r.op)) kids.push(selIn(r, 'type', TYPES, true, '值型別'));
+            kids.push(r.op === 'exists' ? selIn(r, 'value', [['true', '存在'], ['false', '不存在']], false, '存在與否') : r.type === 'null' && !['in', 'nin'].includes(r.op) ? h('span', { class: 'muted' }, '值為 null') : txtIn(r, 'value', PH[r.op] || '值'));
+            if (r.op === 'regex' || r.op === 'contains') kids.push(txtIn(r, 'opt', '選項 i m s（可留空）'));
+            kids.push(btn('✕', del, 'sm del', '刪除這個條件'));
+            return h('div', { class: 'crow' }, ...kids);
+        }
+        function groupUI(g, depth, onDel) {
+            const head = h('div', { class: 'ghead' }, selIn(g, 'mode', [['and', '全部符合 ($and)'], ['or', '任一符合 ($or)']], false, '組合方式'), btn('＋條件', () => add(g.items, newRow(), LIM.rows, '條件')));
+            if (!depth) head.append(btn('＋群組', () => add(g.items, newGroup('or', [newRow()]), LIM.rows, '條件')));
+            if (onDel) head.append(btn('刪除群組', onDel));
+            const box = h('div', { class: 'grp' + (depth ? ' sub' : '') }, head);
+            g.items.forEach((it, i) => { const del = () => { g.items.splice(i, 1); build(); }; box.append(it.k === 'grp' ? groupUI(it, depth + 1, del) : rowUI(it, del)); });
+            return box;
+        }
+        function sortUI(list, dirs, label) {
+            const box = h('div');
+            list.forEach((r, i) => box.append(h('div', { class: 'crow' }, txtIn(r, 'field', '欄位'), selIn(r, 'dir', dirs, false, '方向'), btn('✕', () => { list.splice(i, 1); build(); }, 'sm del', '刪除這個欄位'))));
+            box.append(btn('＋欄位', () => add(list, { field: '', dir: '1' }, LIM.sort, label)));
+            return box;
+        }
+        function projUI(p) {
+            return h('div', {}, h('div', { class: 'row' }, selIn(p, 'mode', [['include', '只包含這些欄位'], ['exclude', '排除這些欄位']], false, '投影模式'), chkIn(p, 'noId', '排除 _id')), h('div', { class: 'row', style: 'margin-top:8px' }, txtIn(p, 'fields', '欄位，用逗號分隔（留空 = 全部）')));
+        }
+        const DIR2 = [['1', '升冪 (1)'], ['-1', '降冪 (-1)']];
+        const STAGES = [['match', '$match 篩選'], ['group', '$group 分組'], ['sort', '$sort 排序'], ['project', '$project 投影'], ['limit', '$limit'], ['skip', '$skip'], ['unwind', '$unwind 展開陣列'], ['lookup', '$lookup 關聯'], ['count', '$count 計數'], ['addFields', '$addFields 新增欄位']];
+        function stageUI(s, i) {
+            const body = h('div');
+            const L = (t) => h('label', {}, t);
+            switch (s.type) {
+                case 'match': body.append(groupUI(s.grp, 0)); break;
+                case 'group':
+                    body.append(L('分組欄位（逗號分隔多個；留空 = 全部一組）'), txtIn(s, 'id', '例如 status 或 city, status'), L('累加器'));
+                    s.accs.forEach((a, j) => body.append(h('div', { class: 'crow' }, txtIn(a, 'name', '輸出名稱'), selIn(a, 'op', ACCS.map(x => [x, '$' + x]), false, '累加器'), txtIn(a, 'field', '欄位（count 可留空；$ROOT = 整份文件）'), btn('✕', () => { s.accs.splice(j, 1); build(); }, 'sm del', '刪除累加器'))));
+                    body.append(btn('＋累加器', () => add(s.accs, { name: '', op: 'sum', field: '' }, LIM.rows, '累加器')));
+                    break;
+                case 'sort': body.append(sortUI(s.sort, DIR2, '排序')); break;
+                case 'project': body.append(projUI(s.proj)); break;
+                case 'limit': case 'skip': body.append(txtIn(s, 'n', '數字', { inputmode: 'numeric' })); break;
+                case 'unwind': body.append(txtIn(s, 'field', '陣列欄位'), chkIn(s, 'preserve', '保留空陣列 / 缺少該欄位的文件')); break;
+                case 'lookup': body.append(txtIn(s, 'from', 'from（另一個集合）'), txtIn(s, 'localField', 'localField（本集合欄位）'), txtIn(s, 'foreignField', 'foreignField（對方欄位）'), txtIn(s, 'as', 'as（結果放進的欄位）')); break;
+                case 'count': body.append(txtIn(s, 'name', '輸出欄位名稱')); break;
+                case 'addFields':
+                    s.rows.forEach((r, j) => body.append(h('div', { class: 'crow' }, txtIn(r, 'name', '新欄位'), selIn(r, 'type', [...TYPES, ['ref', '欄位參照 ($欄位)']], false, '值型別'), txtIn(r, 'value', '值'), btn('✕', () => { s.rows.splice(j, 1); build(); }, 'sm del', '刪除欄位'))));
+                    body.append(btn('＋欄位', () => add(s.rows, { name: '', value: '', type: 'string' }, LIM.rows, '欄位')));
+                    break;
+            }
+            const mv = (d) => () => { const j = i + d; if (j < 0 || j >= S.stages.length) return; [S.stages[i], S.stages[j]] = [S.stages[j], S.stages[i]]; build(); };
+            return h('div', { class: 'stage' }, h('div', { class: 'shead' }, h('b', {}, `${i + 1}. $${s.type}`), btn('↑', mv(-1), 'sm', '上移'), btn('↓', mv(1), 'sm', '下移'), btn('✕', () => { S.stages.splice(i, 1); build(); }, 'sm', '刪除階段')), body);
+        }
+
+        function build() {
+            const op = S.op, show = (id, on) => { $(id).hidden = !on; };
+            $('#op').value = op;
+            show('#cFilter', WITH_FILTER.includes(op)); show('#cDistinct', op === 'distinct'); show('#cProj', op === 'find' || op === 'findOne'); show('#cSort', op === 'find'); show('#cPage', op === 'find');
+            show('#cUpd', op === 'updateOne' || op === 'updateMany'); show('#cDoc', ['insertOne', 'insertMany', 'replaceOne'].includes(op)); show('#cAgg', op === 'aggregate'); show('#cIdx', op === 'createIndex');
+            $('#cFilter').replaceChildren(h('h2', {}, op === 'distinct' ? '條件（可留空）' : '條件'), groupUI(S.filter, 0));
+            $('#cDistinct').replaceChildren(h('h2', {}, '欄位'), txtIn(S, 'distinctField', '要取不重複值的欄位'));
+            $('#cProj').replaceChildren(h('h2', {}, '投影'), projUI(S.proj));
+            $('#cSort').replaceChildren(h('h2', {}, '排序'), sortUI(S.sort, DIR2, '排序'));
+            $('#cPage').replaceChildren(h('h2', {}, 'limit / skip'), h('div', { class: 'row' }, txtIn(S, 'limit', 'limit（留空 = 不限）', { inputmode: 'numeric' }), txtIn(S, 'skip', 'skip（留空 = 0）', { inputmode: 'numeric' })));
+            const u = S.upd;
+            $('#cUpd').replaceChildren(h('h2', {}, '更新'), ...u.rows.map((r, i) => {
+                const k = UPD_KIND[r.op], kids = [selIn(r, 'op', Object.keys(UPD_KIND).map(x => [x, x]), true, '更新運算子'), txtIn(r, 'field', '欄位（可用 a.b.c；陣列可用 a.$[x]）')];
+                if (k === 'typed') kids.push(selIn(r, 'type', TYPES, false, '值型別'));
+                if (k === 'pop') { if (!['1', '-1'].includes(r.value)) r.value = '1'; kids.push(selIn(r, 'value', [['1', '移除最後一個 (1)'], ['-1', '移除第一個 (-1)']], false, '$pop 方向')); }
+                else if (k !== 'none') kids.push(txtIn(r, 'value', k === 'name' ? '新欄位名稱' : '值'));
+                kids.push(btn('✕', () => { u.rows.splice(i, 1); build(); }, 'sm del', '刪除這列'));
+                return h('div', { class: 'crow' }, ...kids);
+            }), btn('＋更新', () => add(u.rows, newUpd(), LIM.rows, '更新')), h('div', {}, chkIn(u, 'upsert', 'upsert（找不到就新增）')), h('label', {}, 'arrayFilters（JSON 陣列，可留空）'), txtIn(u, 'arrayFilters', '例如 [{"e.score": {"$gte": 8}}]'));
+            const docLabel = { insertOne: '文件（JSON 物件）', insertMany: '文件陣列（JSON 陣列，每個元素是物件）', replaceOne: '取代用的完整文件（JSON 物件）' }[op] || '';
+            $('#cDoc').replaceChildren(h('h2', {}, docLabel), h('textarea', { 'aria-label': docLabel, spellcheck: 'false', maxlength: LIM.text, placeholder: op === 'insertMany' ? '[{"name": "a"}, {"name": "b"}]' : '{"name": "a", "createdAt": {"$date": "2024-01-01T00:00:00Z"}}', oninput: (e) => { S.doc = e.target.value; update(); } }, S.doc));
+            const ag = h('select', { id: 'addStage', 'aria-label': '階段類型' }, ...STAGES.map(([v, l]) => h('option', { value: v }, l)));
+            $('#cAgg').replaceChildren(h('h2', {}, '聚合階段'), ...S.stages.map(stageUI), h('div', { class: 'row' }, ag, btn('＋階段', () => add(S.stages, newStage(ag.value), LIM.stages, '階段'), 'primary')));
+            const ix = S.idx;
+            $('#cIdx').replaceChildren(h('h2', {}, '索引欄位'), sortUI(ix.keys, [['1', '升冪 (1)'], ['-1', '降冪 (-1)'], ['text', 'text'], ['hashed', 'hashed'], ['2dsphere', '2dsphere']], '索引'), h('div', {}, chkIn(ix, 'unique', 'unique（唯一）')), h('label', {}, 'TTL expireAfterSeconds（留空 = 不用）'), txtIn(ix, 'ttl', '秒數，例如 3600', { inputmode: 'numeric' }), h('div', {}, chkIn(ix, 'usePartial', '部分索引 partialFilterExpression')), ...(ix.usePartial ? [groupUI(ix.partial, 0)] : []));
+            update();
+        }
+
+        let parts = [];
+        function update() {
+            const r = buildCommand(S);
+            $('#errs').replaceChildren(...r.errs.map(e => h('li', {}, e)));
+            $('#warns').replaceChildren(...r.warns.map(w => {
+                const d = h('div', { class: 'alert' + (w.level === 'danger' ? '' : ' info') }, w.text);
+                if (WRITE_OPS.includes(S.op)) d.append(' ', btn('先用 countDocuments 確認', () => { S.op = 'countDocuments'; persist(); build(); }));
+                return d;
+            }));
+            parts = r.ok ? render(r.cmd, fmt) : [];
+            $('#out').replaceChildren(...parts.map(p => { const pre = h('pre', { class: 'code' }, p.text), b = btn('複製', () => copyWithFeedback(b, p.text)); return h('div', { class: 'part' }, h('div', { class: 'ph' }, h('b', {}, p.label), b), pre); }));
+            $('#copyAll').hidden = !parts.length;
+        }
+        const persist = () => store.set('mongoq_opts', { op: S.op, fmt });
+
+        $('#op').replaceChildren(...OPS.map(o => h('option', { value: o }, OP_LABELS[o])));
+        $('#tpl').replaceChildren(...TEMPLATES.map(([v, l]) => h('option', { value: v }, l)));
+        $('#fmtTabs').replaceChildren(...[['mongosh', 'mongosh'], ['node', 'Node.js'], ['python', 'pymongo'], ['compass', 'Compass JSON']].map(([v, l]) => h('button', { 'data-f': v, 'aria-pressed': 'false' }, l)));
+        const markFmt = () => [...$('#fmtTabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.f === fmt));
+        $('#fmtTabs').onclick = (e) => { const f = e.target.dataset.f; if (f) { fmt = f; markFmt(); persist(); update(); } };
+        $('#op').onchange = () => { S.op = $('#op').value; msg(''); persist(); build(); };
+        $('#coll').oninput = () => { S.coll = $('#coll').value; update(); };
+        $('#tplGo').onclick = () => { const keep = S.coll; S = { ...defaultState(), ...template($('#tpl').value, { n: $('#tplN').value, page: $('#tplP').value }, Date.now()), coll: keep }; msg(''); persist(); build(); };
+        $('#copyAll').onclick = () => copyWithFeedback($('#copyAll'), parts.length === 1 ? parts[0].text : parts.map(p => `${p.label}\n${p.text}`).join('\n\n'));
+
+        { const o = loadOpts(store.get('mongoq_opts', null)); S.op = o.op; fmt = o.fmt; }
+        markFmt(); build();
+    </script>
+</body>
+
+</html>

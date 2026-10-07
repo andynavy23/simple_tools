@@ -32,7 +32,7 @@
 | [QR Code 產生器](utils/qr-code.html) | 工具 | 自行實作的 QR 編碼器（版本 1–40、容錯 L/M/Q/H）；Code 128（B / C 自動選）與 EAN-13 條碼（與 JsBarcode 逐位元比對過）；可下載 PNG；範本：Wi-Fi / vCard 3.0 / 電話 / 簡訊 / Email / 地理位置 / 行事曆事件 / 網址，自動跳脫；敏感資料不寫入 localStorage |
 | [JSON 整理器](utils/json-formatter.html) | 工具 | 美化 / 壓縮 / 驗證、錯誤定位、樹狀檢視；JSON ↔ YAML、JSON ↔ CSV 轉換 |
 | [Markdown 即時預覽](utils/markdown-preview.html) | 工具 | 標題 / 清單 / 表格 / 程式碼，輸出前消毒，可複製 HTML |
-| [2048](mini-games/game-2048.html) | 小遊戲 | 方向鍵 / WASD / 觸控滑動，記錄最高分；每日挑戰（每天同一組亂數） |
+| [2048](mini-games/game-2048.html) | 小遊戲 | 方向鍵 / WASD / 觸控滑動，記錄最高分；每日挑戰（每天同一組亂數）；方塊滑動 / 合併 / 新方塊動畫（尊重系統「減少動態效果」） |
 | [踩地雷](mini-games/minesweeper.html) | 小遊戲 | 三種難度、第一步必安全、連鎖展開與快速開格，記錄最佳時間；每日挑戰（每天同一個雷區） |
 | [四子棋](mini-games/connect-four.html) | 小遊戲 | 本機雙人、對電腦（簡單 / 普通 / 困難，alpha-beta 搜尋）或連線（房主判定落子），每局輪流先手；單機：單機對電腦、悔棋與提示 |
 | [經驗效率計算機](game-assist/exp-calculator.html) | 遊戲輔助 | 以百分比計算：還需次數、時間、預計完成時刻 |
@@ -70,7 +70,7 @@
 | [成語接龍](fun/idiom-chain.html) | 趣味 | 2–8 人；內建 1000+ 成語自動驗證，詞庫外的四字詞由房主裁決；每人 3 命、30 秒限時；單機：單機和電腦接龍（三種難度） |
 | [計算機](utils/calculator.html) | 工具 | 自製運算式解析器（不用 eval）、隱含乘法、sin / cos / ln / log / sqrt…、ans、角度 / 弧度，歷史紀錄可點回重算 |
 | [比價 / 單價計算](utils/price-compare.html) | 工具 | 重量 / 容量 / 個數三組單位（含台斤、兩、打），多份數，同組比較並標示貴多少 %；折扣 / 稅額分頁：折上折、滿額折 / 滿減、買 N 送 M 實際折數、含稅 / 未稅互算（5% / 自訂）、外國旅客退稅估算（僅供估算）、取整方式可選 |
-| [文字轉語音](utils/tts.html) | 工具 | speechSynthesis 朗讀；長文自動分段、可暫停繼續；選語音、語速、音調 |
+| [文字轉語音](utils/tts.html) | 工具 | speechSynthesis 朗讀；長文自動分段、可暫停繼續；選語音、語速、音調；自動辨識語言（中日韓、俄、阿拉伯等書寫系統與 en/es/fr/de/pt/it/nl/pl/tr/vi/id）並依語言與口音選聲音，可逐段手改語言、依序朗讀（限制：語言與口音取決於裝置安裝的聲音；辨識為啟發式；iOS 需點擊才能朗讀） |
 | [21 點](mini-games/blackjack.html) | 小遊戲 | 莊家由程式擔任（17 停牌）；牌堆與暗牌只在房主端；Blackjack 賠 1.5 倍、加倍；30 秒自動停牌；單機：單機對莊家，可加 0–3 位電腦玩家 |
 | [貪吃蛇](mini-games/snake.html) | 小遊戲 | 撞牆 / 穿牆兩種模式、方向鍵 / WASD / 觸控滑動、越吃越快，分別記錄最高分 |
 | [俄羅斯方塊](mini-games/tetris.html) | 小遊戲 | 7 袋隨機、旋轉踢牆、暫存、下一個預覽、落點影子、等級加速；鍵盤與觸控按鈕 |
@@ -89,7 +89,7 @@
 | [便條紙](fun/sticky-notes.html) | 趣味 | 最多 200 張、6 種顏色、釘選、搜尋、複製與匯出 .txt；不讀取剪貼簿 |
 | [網頁鬧鐘](fun/alarm.html) | 趣味 | 多組、重複星期、貪睡 5 分鐘、系統通知；明確警告網頁無法在關閉分頁或鎖屏後響鈴 |
 | [文字加密 / 解密](utils/aes-crypt.html) | 工具 | AES-256-GCM + PBKDF2-SHA256 60 萬次；隨機鹽與 IV；密文帶版本前綴；改動或密碼錯誤會被偵測 |
-| [時間戳轉換](utils/timestamp.html) | 工具 | Unix 時間戳（秒 / 毫秒自動判斷）與日期互轉；顯示 UTC、ISO 8601、相對時間；13 個常用時區 + 裝置時區（含夏令時間）；即時顯示現在時間戳 |
+| [時間戳轉換](utils/timestamp.html) | 工具 | Unix 時間戳（秒 / 毫秒自動判斷）與日期互轉；顯示 UTC、ISO 8601、相對時間；13 個常用時區 + 裝置時區（含夏令時間）；即時顯示現在時間戳；ObjectId 分頁：貼上多個 MongoDB ObjectId（≤200）解出建立時間 / 隨機值 / 計數器並可複製 TSV，時間或時間戳轉最小 / 最大 ObjectId 與 $gte / $lt 查詢片段，快捷今天 / 昨天 / 最近 7 天 / 本月 |
 | [CSS 產生器](utils/css-gen.html) | 工具 | 陰影（含內陰影）、線性 / 放射漸層（2–3 色標）、圓角（四角獨立，px / %）；即時預覽；複製 CSS |
 | [輪值表](utils/duty-roster.html) | 工具 | 每天 / 每週 / 每兩週 / 每月輪換；跳過週六日；指定從第幾位開始；每人次數；標出下一個輪到的人；複製成文字；家事分配分頁：家事（頻率、1–3 分）與成員，自動分配（輪流 + 總分差最小 + 避免連續同人）、打勾、本週 / 本月每人完成次數與分數、複製文字 |
 | [數字滑塊](mini-games/sliding-puzzle.html) | 小遊戲 | 3×3 / 4×4 / 5×5；點擊或方向鍵 / WASD 滑動；隨機走法打亂（一定有解）；步數、時間與各尺寸最佳紀錄 |
@@ -108,12 +108,14 @@
 | [號碼驗證與測試資料](utils/id-validator.html) | 工具 | 驗證與產生身分證 / 居留證（含舊式 A–D 與新式 8/9）、統一編號（2023 新規則）、信用卡 Luhn（只產生測試用格式）、臺灣電話簡易格式檢查；全在本機計算、不存資料 |
 | [水平儀 / 指南針](utils/level-compass.html) | 工具 | 水平儀（平放 / 立起、歸零校正）、指南針（絕對方位，磁偏角未修正）、坡度（度 / % / 高:長）；iOS 需授權感測器，無感測器時可用模擬輸入預覽；不存資料 |
 | [照片 EXIF 檢視與清除](utils/exif-viewer.html) | 工具 | JPEG / PNG / WebP 自行解析 EXIF（相機、鏡頭、時間、曝光、方向、GPS 與地圖文字連結、縮圖）與 XMP / IPTC / ICC 區段；無損移除中繼資料（可保留方向）或 canvas 重新編碼；清除後重新解析；最多 20 張、單張 30MB；不存資料 |
-| [錄音機](utils/audio-recorder.html) | 工具 | getUserMedia + MediaRecorder 錄音（webm/opus、mp4、ogg 依瀏覽器）、暫停 / 繼續、即時音量條；清單可播放、改名、刪除、下載原格式或 16-bit WAV；單次 60 分鐘、清單 20 段；只存記憶體，未下載會提醒；不存資料 |
+| [錄音機 / 音檔剪輯](utils/audio-recorder.html) | 工具 | getUserMedia + MediaRecorder 錄音（webm/opus、mp4、ogg 依瀏覽器）、暫停 / 繼續、即時音量條；清單可播放、改名、刪除、下載原格式或 16-bit WAV；單次 60 分鐘、清單 20 段；只存記憶體，未下載會提醒；不存資料；音檔剪輯：載入本機音檔（mp3/wav/m4a/aac/ogg/webm/flac，≤100MB、≤30 分鐘）或清單錄音，波形選取、裁剪 / 刪除 / 複製 / 插入靜音 / 淡入淡出 / 音量 / 正規化 / 反轉 / 裁首尾靜音 / 調速、復原重做 20 步、合併多段、匯出 WAV 或壓縮格式（即時錄製，需等於音檔長度的時間）；不支援 MP3；有未下載或未匯出內容離開會提醒 |
 | [亂碼修復 / 編碼轉換](utils/encoding-fixer.html) | 工具 | 檔案轉碼（自動偵測 BOM / UTF-8 / Big5 / GBK / SJIS 等，手動指定、預覽、另存 UTF-8，可選 BOM 與換行，上限 20MB）；貼上亂碼逆向修復（互錯組合評分排序）；含 � 的無法修復；不存資料 |
 | [chmod 權限計算器](utils/chmod-calc.html) | 工具 | 勾選、八進位、符號三向同步，含 setuid / setgid / sticky；常見組合速查；umask 計算；符號模式模擬（u/g/o/a、+ - =、r w x X s t、g=u）；產生 chmod 與 find 指令；不存資料 |
 | [股票交易成本與損益試算](utils/stock-cost.html) | 工具 | 臺股現股 / 零股 / 當沖 / ETF 手續費（折扣、最低手續費）、證交稅、淨損益、報酬率、損益平衡賣價；進位可選；股利補充保費與殖利率；分批買進（最多 20 批）平均成本；費率稅率皆可改（以當時法規與券商為準）；只存偏好設定 |
 | [重訓記錄](fun/workout-log.html) | 趣味 | 內建 30 個動作加自訂（上限 50）；多組重量 × 次數、RPE、備註；預估 1RM（Epley / Brzycki）、三種 PR 並標 🏆、近 12 次 1RM 折線圖、每週訓練量；kg / lb 顯示切換；訓練紀錄上限 5000 次；刪某動作全部紀錄、刪一年前、清除全部 |
 | [睡眠記錄](fun/sleep-log.html) | 趣味 | 入睡與起床時間（跨午夜自動算日期）、品質 1–5、備註；近 7 / 14 / 30 天平均時數、平均入睡 / 起床、規律度、睡眠債（目標可調）、近 14 天長條圖；上限 3650 筆；刪單筆、刪一年前、清除全部；僅供參考，不是醫療建議 |
+| [MongoDB 指令產生器](utils/mongo-query.html) | 工具 | find / findOne / countDocuments / distinct / aggregate / 新增 / 更新 / 取代 / 刪除 / createIndex；條件建構器（15 種運算子、8 種值型別、一層巢狀 and / or）、投影、排序、limit / skip、12 種更新運算子、聚合階段（可上下移）、索引（unique / TTL / partialFilter）；輸出 mongosh、Node.js、pymongo、Compass JSON 並一鍵複製；8 個快速範本；寫入類操作條件為空時紅色警告；不連線資料庫；只存上次的操作與輸出格式 |
+| [螢幕分享](utils/screen-share.html) | 工具 | 電腦分享螢幕 / 視窗 / 分頁（可含系統聲音），其他裝置開連結或輸入 6 碼房號觀看；PeerJS 點對點 WebRTC，最多 4 位觀看者（可踢除，顯示連線狀態）；畫質可選 15 / 30 fps 與最大寬度；觀看端顯示解析度 / fps / 位元率 / 延遲，支援全螢幕；手機瀏覽器無法分享螢幕（只能觀看）；對稱型 NAT 需 TURN，本工具未提供；內附手機鏡像到電腦的說明（scrcpy、Miracast、AirPlay、Chromecast）；不存資料 |
 | [摸魚閱讀器](reading/stealth-reader.html) | 閱讀 | 本機載入 txt 小說，偽裝 ERP 後台、老闆鍵、進度記憶（開發中） |
 
 ## 使用

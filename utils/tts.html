@@ -5,12 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="文字轉語音：貼上文字，選語音、語速與音調，用瀏覽器內建的語音朗讀，可暫停與繼續，不上傳任何內容。">
+    <meta name="description" content="文字轉語音：貼上文字，自動辨識語言（中日韓、歐洲語言等）並依語言與口音選聲音，也可手選語音、語速與音調，用瀏覽器內建的語音朗讀，可暫停與繼續，不上傳任何內容。">
     <meta property="og:title" content="文字轉語音" />
     <meta property="og:description" content="用瀏覽器內建語音朗讀文字。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/tts.html" />
-    <meta name="st-keys" content="tts_text,tts_voice">
+    <meta name="st-keys" content="tts_text,tts_voice,tts_auto">
     <title>文字轉語音</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -47,6 +47,52 @@
             accent-color: var(--blue);
         }
 
+        .chk {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            min-height: 44px;
+            margin: 8px 0 0;
+            color: var(--text);
+        }
+
+        .seg {
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            padding: 8px 10px;
+            margin-top: 8px;
+            min-width: 0;
+        }
+
+        .seg.cur {
+            border-color: var(--blue);
+            background: var(--fill);
+        }
+
+        .seg .h {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+
+        .seg .t {
+            overflow-wrap: anywhere;
+            margin-top: 4px;
+        }
+
+        .seg .v,
+        .note {
+            color: var(--muted);
+            font-size: 13px;
+            overflow-wrap: anywhere;
+        }
+
+        .bad {
+            color: var(--bad);
+        }
+
         #msg {
             color: var(--muted);
             font-size: 14px;
@@ -64,8 +110,11 @@
 
         <div class="card">
             <textarea id="text" placeholder="在這裡貼上或輸入要朗讀的文字…" aria-label="要朗讀的文字"></textarea>
+            <label class="chk"><input type="checkbox" id="auto" checked> 自動辨識語言（依語言與口音選聲音）</label>
             <div class="fgrid">
-                <div style="grid-column:1/-1"><label for="voice">語音</label><select id="voice" style="width:100%"></select></div>
+                <div id="defRow" style="grid-column:1/-1"><label for="defLang">預設語言（辨識不出時用）</label><select id="defLang" style="width:100%"></select></div>
+                <div id="accents" style="display:contents"></div>
+                <div id="voiceRow" style="grid-column:1/-1" hidden><label for="voice">語音</label><select id="voice" style="width:100%"></select></div>
                 <div><label for="rate">語速 <b id="rateV">1.0</b></label><input type="range" id="rate" min="0.5" max="2" step="0.1" value="1"></div>
                 <div><label for="pitch">音調 <b id="pitchV">1.0</b></label><input type="range" id="pitch" min="0.5" max="2" step="0.1" value="1"></div>
             </div>
@@ -75,35 +124,45 @@
                 <button id="stop">停止</button>
                 <span class="muted" id="count"></span>
             </div>
+            <div id="autoBox"><div id="segs"></div></div>
             <progress id="prog" value="0" max="1" hidden></progress>
             <div id="msg" role="status"></div>
+            <div class="note bad" id="warn"></div>
+            <div class="note" id="vnote"></div>
+            <p class="note">能用的語言與口音完全取決於這台裝置安裝的聲音；語言辨識是猜的，短句或混雜文字可能判錯，可在片段清單手動改。iPhone 需由你點「朗讀」才會開始，切到背景或鎖屏會中斷。</p>
+            <button class="sm" id="resetAuto">清除語言偏好</button>
         </div>
     </div>
 
+
     <template id="help">
         <h3>這是什麼</h3>
-        <p>把文字唸出來。使用瀏覽器 / 系統內建的語音，不需要網路上傳，文字不會離開你的裝置。</p>
+        <p>把文字唸出來。用瀏覽器 / 系統內建的語音，不需要網路上傳，文字不會離開你的裝置。可以自動辨識每一段是什麼語言，並選對應的聲音與口音，中英日韓混著寫也能一口氣唸完。</p>
         <h3>什麼時候用</h3>
         <ul>
         <li>想聽一篇文章，眼睛休息。</li>
         <li>檢查文章唸起來順不順。</li>
-        <li>練習外語發音或聽力。</li>
+        <li>練習外語發音或聽力（例如英式 / 美式口音比較）。</li>
         </ul>
         <h3>怎麼用</h3>
         <ol>
         <li>在文字框貼上或輸入內容。</li>
-        <li>在「語音」選聲音（預設優先列出繁體中文語音）。</li>
-        <li>拖曳「語速」與「音調」調整（0.5 到 2）。</li>
-        <li>按「朗讀」開始，可「暫停」再「繼續」，或「停止」；進度條顯示唸到第幾段。</li>
+        <li>預設開著「自動辨識語言」：下方會列出片段清單，每段顯示語言、使用的聲音，可用右邊選單手動改這一段的語言。關掉的話就回到「選一個語音朗讀全部」。</li>
+        <li>「預設語言」是辨識不出來（太短、字太少）時用的語言。</li>
+        <li>文字含多個語言時，會出現各語言的「口音」選單，只列出這台裝置真的有的地區（例如英文的美國 / 英國 / 澳洲 / 印度），選擇會被記住。</li>
+        <li>拖曳「語速」與「音調」（0.5 到 2），按「朗讀」開始，片段依序唸，目前這段會被框起來；可「暫停」再「繼續」或「停止」。</li>
         </ol>
         <h3>範例</h3>
-        <div class="eg">輸入：大家好。今天天氣很好！
-        按「朗讀」→ 顯示「共 2 段」，依序唸兩句，結束後顯示「朗讀完畢」</div>
+        <div class="eg">輸入：今天天氣很好。The weather is very good today and we are going to the park.
+        清單：第 1 段 中文、第 2 段 英文；英文口音選「英國」，朗讀時第 2 段改用英式聲音
+        夾在中文句裡的 iPhone、OK 這類短英文不會被切開</div>
         <h3>小提醒</h3>
         <ul>
-        <li>可選的聲音取決於你的瀏覽器與作業系統；沒有語音時會用預設。</li>
-        <li>長文會自動依標點切成短段，避免中途斷掉。</li>
+        <li>能用的語言與口音完全取決於這台裝置（iPhone / Mac / Windows / Android）安裝的聲音；沒有的語言會用紅字提醒，並交給系統預設聲音（可能唸不出來）。iPhone 可到「設定 &gt; 輔助使用 &gt; 朗讀內容 &gt; 聲音」下載更多。</li>
+        <li>語言辨識是用字元與常用字去猜，短句或混雜的文字可能判錯，請用片段旁的選單手動改；繁簡與粵語無法自動分，中文預設走臺灣口音，可在口音選單改。</li>
+        <li>iPhone 必須由你點「朗讀」才會開始；切到背景或鎖定螢幕會中斷。聲音清單有時要等幾秒才載入。</li>
         <li>文字會暫存在這個瀏覽器，下次開啟還在；太大存不下時字數旁會提示。清空輸入框就等於清除暫存。</li>
+        <li>語言偏好（開關、預設語言、各語言口音）也存在這個瀏覽器，資料很小；按「清除語言偏好」可恢復預設（不影響文字）。</li>
         </ul>
     </template>
 
@@ -130,16 +189,205 @@
 
         // 語音排序：預設優先選與頁面語言相符、其次是中文的語音
         const voiceRank = (v, lang) => (v.lang === lang ? 0 : v.lang.toLowerCase().startsWith(lang.slice(0, 2).toLowerCase()) ? 1 : /^zh/i.test(v.lang) ? 2 : 3);
+
+        // ---- 語言辨識（啟發式、完全離線）----
+        const LANGS = { zh: '中文', yue: '粵語', ja: '日文', ko: '韓文', th: '泰文', ar: '阿拉伯文', fa: '波斯文', ur: '烏爾都文', he: '希伯來文', hi: '印地文', bn: '孟加拉文', ta: '坦米爾文', te: '泰盧固文', ka: '喬治亞文', hy: '亞美尼亞文', ru: '俄文', uk: '烏克蘭文', el: '希臘文', en: '英文', es: '西班牙文', fr: '法文', de: '德文', pt: '葡萄牙文', it: '義大利文', nl: '荷蘭文', pl: '波蘭文', tr: '土耳其文', vi: '越南文', id: '印尼文' };
+        // 書寫系統：latn / cjk（漢字 + 假名）/ ar / cyrl 之後再細分語言，其餘直接等於語言代碼
+        function scriptOf(c) {
+            if (c < 0x80) return (c >= 65 && c <= 90) || (c >= 97 && c <= 122) ? 'latn' : null;
+            if (c < 0x250) return c >= 0xC0 && c !== 0xD7 && c !== 0xF7 ? 'latn' : null;
+            if (c < 0x370) return null;
+            if (c < 0x400) return 'el';
+            if (c < 0x530) return 'cyrl';
+            if (c >= 0x531 && c <= 0x58F) return 'hy';
+            if (c >= 0x590 && c <= 0x5FF) return 'he';
+            if (c >= 0x621 && c <= 0x6D3) return c >= 0x660 && c <= 0x669 ? null : 'ar';
+            if ((c >= 0x750 && c <= 0x77F) || (c >= 0xFB50 && c <= 0xFDFF) || (c >= 0xFE70 && c <= 0xFEFF)) return 'ar';
+            if (c >= 0x900 && c <= 0x97F) return c === 0x964 || c === 0x965 ? null : 'hi';
+            if (c >= 0x980 && c <= 0x9FF) return 'bn';
+            if (c >= 0xB80 && c <= 0xBFF) return 'ta';
+            if (c >= 0xC00 && c <= 0xC7F) return 'te';
+            if (c >= 0xE00 && c <= 0xE7F) return 'th';
+            if (c >= 0x10A0 && c <= 0x10FF) return 'ka';
+            if ((c >= 0x1100 && c <= 0x11FF) || (c >= 0x3130 && c <= 0x318F) || (c >= 0xAC00 && c <= 0xD7AF)) return 'ko';
+            if (c >= 0x1E00 && c <= 0x1EFF) return 'latn';
+            if (c >= 0x1F00 && c <= 0x1FFF) return 'el';
+            if ((c >= 0x3040 && c <= 0x30FF && c !== 0x30FB) || (c >= 0x31F0 && c <= 0x31FF) || (c >= 0xFF66 && c <= 0xFF9F)) return 'cjk';
+            if ((c >= 0x3400 && c <= 0x4DBF) || (c >= 0x4E00 && c <= 0x9FFF) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0x20000 && c <= 0x2FA1F) || c === 0x3005 || c === 0x3007) return 'cjk';
+            return null;
+        }
+        // 拉丁字母語言：特有字元 + 常用功能詞計分
+        const CH = {
+            'ñ': { es: 4 }, '¿': { es: 4 }, '¡': { es: 4 }, 'á': { es: 1, pt: 1, vi: 1 }, 'é': { es: 1, fr: 1, pt: 1, it: 1, vi: 1 }, 'í': { es: 1, pt: 1, vi: 1 }, 'ó': { es: 1, pt: 1, pl: 1, vi: 1 }, 'ú': { es: 1, pt: 1, vi: 1 },
+            'à': { fr: 1, it: 1, pt: 1, vi: 1 }, 'è': { fr: 1, it: 1 }, 'ù': { fr: 1, it: 1, vi: 1 }, 'ì': { it: 2, vi: 1 }, 'ò': { it: 2, vi: 1 }, 'ê': { fr: 1, pt: 1, vi: 2 }, 'â': { fr: 1, pt: 1, tr: 1, vi: 2 }, 'ô': { fr: 1, pt: 1, vi: 2 }, 'î': { fr: 1, tr: 1 }, 'û': { fr: 1, tr: 1 },
+            'ë': { fr: 1, nl: 1 }, 'ï': { fr: 1, nl: 1 }, 'œ': { fr: 3 }, 'ç': { fr: 2, pt: 2, tr: 1 }, 'ã': { pt: 4, vi: 1 }, 'õ': { pt: 4, vi: 1 },
+            'ß': { de: 5 }, 'ä': { de: 2 }, 'ö': { de: 2, tr: 2 }, 'ü': { de: 2, tr: 2 }, 'ı': { tr: 5 }, 'ğ': { tr: 5 }, 'ş': { tr: 5 },
+            'ł': { pl: 5 }, 'ą': { pl: 5 }, 'ę': { pl: 5 }, 'ś': { pl: 4 }, 'ź': { pl: 4 }, 'ż': { pl: 4 }, 'ć': { pl: 4 }, 'ń': { pl: 4 },
+            'ă': { vi: 4 }, 'ơ': { vi: 5 }, 'ư': { vi: 5 }, 'đ': { vi: 4 },
+        };
+        const SW = Object.fromEntries(Object.entries({
+            en: 'the and is are was were to of in that it for with you this have not on be at hello how what your my i we they but from will can do good thank thanks very about would there their so if or an as he she his her',
+            es: 'el la los las de que y en un una es por con para no se lo como más pero su al muy está estoy hola gracias buenos días yo tú qué cómo dónde mi me te son del soy tengo quiero esto esta',
+            fr: 'le la les des du de et est un une que qui pour dans pas ne je tu il elle nous vous ce cette avec sur au aux bonjour merci très suis sont mais ça comment où êtes',
+            de: 'der die das und ist nicht ich du sie es ein eine zu mit auf für den dem von wir ihr auch sind aber wie hallo danke guten tag noch bin was haben ja nein',
+            pt: 'o a os as de que e um uma em não para com por é se mais mas você eu ele ela nós está muito obrigado obrigada olá bom dia como do da no na são tem isso pela',
+            it: 'il lo la i gli le di che e un una in per con non è sono mi ti ci ma come anche questo ciao grazie buongiorno molto del della al sì io noi cosa sei',
+            nl: 'de het een en van ik je dat niet is op te zijn met voor maar ook wat hij ze we dit aan er nog wel ben hallo dank goedemorgen heel',
+            pl: 'i w na z że nie to się jest do jak co tak ale dla po czy jestem cześć dziękuję dzień dobry ja ty my są od przez',
+            tr: 've bir bu için ile da de ne mi ben sen çok var yok merhaba teşekkürler nasıl değil gibi daha ama evet hayır ki o biz',
+            vi: 'và của là có không tôi bạn một được cho này những trong với xin chào cảm ơn rất đã anh em ở như',
+            id: 'yang dan di ini itu dengan untuk tidak saya anda ke dari adalah pada akan bisa apa kamu aku ada sudah terima kasih selamat pagi',
+        }).map(([k, v]) => [k, new Set(v.split(' '))]));
+        // 一個句子的拉丁語言；分數太低或打平回傳 null
+        function detectLatin(s) {
+            const low = String(s).toLowerCase(), sc = {}, add = (l, w) => { sc[l] = (sc[l] || 0) + w; };
+            for (const ch of low) { const e = CH[ch]; if (e) for (const l in e) add(l, e[l]); else if (ch >= 'Ạ' && ch <= 'ỹ') add('vi', 3); }
+            const words = low.match(/\p{L}+/gu) || [];
+            for (const w of words) for (const l in SW) if (SW[l].has(w)) add(l, 1);
+            const r = Object.entries(sc).sort((a, b) => b[1] - a[1]);
+            if (!r.length || r[0][1] < (words.length <= 2 ? 1 : 2) || (r[1] && r[0][1] - r[1][1] < 1)) return null;
+            return r[0][0];
+        }
+        const SENT = /(?<=[.!?؟۔।]\s+|[。！？．]\s*|\n\s*)(?=\S)/;
+        function langsOfRun(cls, text) {
+            if (cls === 'cjk') return text.split(SENT).map(s => [s, /[぀-ヿㇰ-ㇿｦ-ﾟ]/.test(s) ? 'ja' : 'zh']);   // 含假名 → 日文（整句）；純漢字 → 中文
+            if (cls === 'ar') return [[text, /[ٹڈڑں]/.test(text) ? 'ur' : /[پچژگ]/.test(text) ? 'fa' : 'ar']];
+            if (cls === 'cyrl') return [[text, /[іїєґІЇЄҐ]/.test(text) ? 'uk' : 'ru']];
+            if (cls !== 'latn') return [[text, cls]];
+            const ss = text.split(SENT), ls = ss.map(detectLatin);
+            let last = null; for (let i = 0; i < ls.length; i++) { if (ls[i]) last = ls[i]; else ls[i] = last; }
+            const first = ls.find(Boolean) || 'und';
+            return ss.map((s, i) => [s, ls[i] || first]);       // 辨識不出的句子沿用前一句（前面都不行就用後一句）；全部不行 → 'und'
+        }
+        // 把文字切成語言片段 [{text, lang}]（lang 'und' = 無法判斷）；各片段的 text 串起來等於原文
+        // 太短的外語片段（拉丁字母 < 12 個字母、其他 < 2~3 個字）併入前一段，避免中文句中的 OK / iPhone 被切開
+        function detectSegments(text) {
+            text = String(text == null ? '' : text); if (!text) return [];
+            const runs = []; let cur = null, pend = '';
+            for (let i = 0; i < text.length;) {
+                const c = text.codePointAt(i), w = c > 0xFFFF ? 2 : 1, ch = text.slice(i, i + w), s = scriptOf(c); i += w;
+                if (s === null) { if (cur) cur.text += ch; else pend += ch; }
+                else if (cur && cur.cls === s) { cur.text += ch; cur.n++; }
+                else { cur = { cls: s, text: pend + ch, n: 1 }; pend = ''; runs.push(cur); }
+            }
+            if (!runs.length) return [{ text, lang: 'und' }];
+            const min = (c) => c === 'latn' ? 12 : c === 'cjk' || c === 'ko' ? 2 : 3;
+            const out = [];
+            for (const r of runs) {
+                const last = out[out.length - 1];
+                if (last && last.cls === r.cls) { last.text += r.text; last.n += r.n; }
+                else if (last && r.n < min(r.cls)) last.text += r.text;
+                else out.push(r);
+            }
+            if (out.length > 1 && out[0].n < min(out[0].cls)) { out[1].text = out[0].text + out[1].text; out.shift(); }
+            const segs = [];
+            for (const r of out) for (const [t, lang] of langsOfRun(r.cls, r.text)) {
+                const l = segs[segs.length - 1];
+                if (l && l.lang === lang) l.text += t; else segs.push({ text: t, lang });
+            }
+            return segs;
+        }
+
+        // ---- 選聲音 ----
+        const ALIAS = { cmn: 'zh', iw: 'he', in: 'id' };
+        function voiceInfo(lang) {
+            const p = String(lang || '').replace(/_/g, '-').toLowerCase().split('-');
+            return { pri: p[0], reg: p.slice(1).find(x => /^([a-z]{2}|\d{3})$/.test(x)) || '' };
+        }
+        // 0 = 同語言主要聲音、1 = 次要（zh 找不到時才用粵語；粵語可退回 zh-HK），null = 不同語言
+        function famRank(v, lang) {
+            const { pri: p0, reg } = voiceInfo(v.lang), pri = ALIAS[p0] || p0;
+            if (lang === 'zh') return pri === 'zh' ? 0 : pri === 'yue' ? 1 : null;
+            if (lang === 'yue') return pri === 'yue' ? 0 : pri === 'zh' && (reg === 'hk' || reg === 'mo') ? 1 : null;
+            return pri === (ALIAS[lang] || lang) ? 0 : null;
+        }
+        // 依語言（'zh' 'en' …）與口音偏好（'en-GB' 或 'GB'）選聲音：精準口音 > 同語言其他地區；再依「系統預設」「本機聲音」；沒有同語言聲音回傳 null
+        function pickVoice(voices, lang, accent) {
+            const a = String(accent || '').replace(/_/g, '-').toLowerCase(), reg = a ? a.split('-').pop() : '';
+            let best = null, bs = null;
+            const less = (x, y) => { for (let k = 0; k < x.length; k++) if (x[k] !== y[k]) return x[k] < y[k]; return false; };
+            (voices || []).forEach((v, i) => {
+                if (!v || typeof v.lang !== 'string') return;
+                const f = famRank(v, lang); if (f === null) return;
+                const s = [(reg && voiceInfo(v.lang).reg === reg ? 0 : 2) + f, v.default ? 0 : 1, v.localService ? 0 : 1, i];
+                if (!bs || less(s, bs)) { best = v; bs = s; }
+            });
+            return best;
+        }
+        // 這個語言在裝置上有哪些地區 / 口音可選：[{code:'en-GB', reg:'GB', n:聲音數}]
+        function accentOptions(voices, lang) {
+            const m = {};
+            for (const v of voices || []) { if (!v || typeof v.lang !== 'string' || famRank(v, lang) === null) continue; const r = voiceInfo(v.lang).reg.toUpperCase(); if (r) m[r] = (m[r] || 0) + 1; }
+            return Object.entries(m).map(([reg, n]) => ({ code: lang + '-' + reg, reg, n })).sort((a, b) => b.n - a.n || (a.code < b.code ? -1 : 1));
+        }
+        // tts_auto 讀取驗證：{on, def, accents:{語言: 'en-GB' | ''}}
+        function cleanAuto(o) {
+            const r = { on: true, def: 'zh', accents: {} };
+            if (!o || typeof o !== 'object' || Array.isArray(o)) return r;
+            if (typeof o.on === 'boolean') r.on = o.on;
+            if (typeof o.def === 'string' && LANGS[o.def]) r.def = o.def;
+            if (o.accents && typeof o.accents === 'object' && !Array.isArray(o.accents)) for (const k of Object.keys(LANGS)) { const v = o.accents[k]; if (typeof v === 'string' && (v === '' || /^[a-z]{2,3}-([A-Za-z]{2}|\d{3})$/.test(v))) r.accents[k] = v; }
+            return r;
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
         const synth = window.speechSynthesis;
         let voices = [], queue = [], idx = 0, total = 0, playing = false, token = 0;      // token：每次重新朗讀 / 停止就換一個，舊的事件回呼（有些瀏覽器取消後仍會觸發 end）一律忽略
+        let auto = cleanAuto(store.get('tts_auto', null)), segs = [], ov = {}, gaveUp = false, timer = 0;
         $('#text').value = store.get('tts_text', '');
 
         if (!synth || typeof SpeechSynthesisUtterance === 'undefined') {
             $('#msg').textContent = '這個瀏覽器不支援語音合成（speechSynthesis）。'; ['play', 'pause', 'stop'].forEach(i => { $('#' + i).disabled = true; });
         }
+
+        const nameOf = (l) => LANGS[l] || '無法判斷';
+        const resolve = (i) => ov[i] || (segs[i].lang === 'und' ? auto.def : segs[i].lang);
+        const accOf = (l) => (l in auto.accents ? auto.accents[l] : l === 'zh' ? 'zh-TW' : '');      // 沒設定過：中文預設臺灣，其他交給裝置預設
+        const regionName = (r) => { try { return new Intl.DisplayNames(['zh-TW'], { type: 'region' }).of(r) || r; } catch (e) { return r; } };
+        const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const langSelect = (value, label) => { const s = mk('select'); s.setAttribute('aria-label', label); for (const k in LANGS) s.append(new Option(LANGS[k], k)); s.value = value; return s; };
+
+        function renderSegs() {
+            const box = $('#segs'); box.replaceChildren();
+            segs.slice(0, 60).forEach((s, i) => {
+                const l = resolve(i), v = pickVoice(voices, l, accOf(l)), d = mk('div', 'seg'); d.dataset.i = i;
+                const sel = langSelect(l, `第 ${i + 1} 段的語言`); sel.className = 'segLang'; sel.onchange = () => { ov[i] = sel.value; refresh(); };
+                const h = mk('div', 'h'); h.append(mk('b', '', `第 ${i + 1} 段 · ${nameOf(l)}${s.lang === 'und' && !ov[i] ? '（辨識不出，用預設）' : ''}`), sel);
+                const t = s.text.trim();
+                d.append(h, mk('div', 't', t.length > 40 ? t.slice(0, 40) + '…' : t), mk('div', 'v' + (voices.length && !v ? ' bad' : ''), v ? `聲音：${v.name}（${v.lang}）` : voices.length ? `這個裝置沒有「${nameOf(l)}」語言的聲音` : '用系統預設聲音'));
+                box.append(d);
+            });
+            if (segs.length > 60) box.append(mk('div', 'note', `…還有 ${segs.length - 60} 段（照同樣規則朗讀，不列出）`));
+        }
+        function renderAccents() {
+            const box = $('#accents'); box.replaceChildren();
+            if (!voices.length) return;
+            for (const l of new Set(segs.map((s, i) => resolve(i)))) {
+                const opts = accentOptions(voices, l), d = mk('div');
+                if (!opts.length) {
+                    if (!voices.some(v => famRank(v, l) !== null)) { d.append(mk('label', '', `${nameOf(l)} 口音`), mk('div', 'note bad', `這個裝置沒有「${nameOf(l)}」語言的聲音`)); box.append(d); }
+                    continue;
+                }
+                const sel = mk('select'); sel.id = 'acc_' + l; sel.dataset.lang = l; sel.style.width = '100%'; sel.setAttribute('aria-label', nameOf(l) + ' 口音');
+                sel.append(new Option('自動（裝置預設）', ''), ...opts.map(o => new Option(`${regionName(o.reg)}（${o.n} 個聲音）`, o.code)));
+                sel.value = opts.some(o => o.code === accOf(l)) ? accOf(l) : '';
+                sel.onchange = () => { auto.accents[l] = sel.value; store.set('tts_auto', auto); refresh(); };
+                const lb = mk('label', '', `${nameOf(l)} 口音`); lb.htmlFor = sel.id; d.append(lb, sel); box.append(d);
+            }
+        }
+        function refresh() {
+            clearTimeout(timer);
+            $('#auto').checked = auto.on; $('#defLang').value = auto.def;
+            $('#segs').hidden = !auto.on; $('#defRow').hidden = !auto.on; $('#voiceRow').hidden = auto.on; $('#accents').hidden = !auto.on;
+            $('#vnote').textContent = !synth ? '' : voices.length ? '' : gaveUp ? '這個裝置沒有提供任何語音；仍可按「朗讀」，會交給系統預設聲音。iPhone 可到「設定 > 輔助使用 > 朗讀內容 > 聲音」下載語音。' : '正在載入裝置的語音…';
+            if (!auto.on) { $('#warn').textContent = ''; return; }
+            segs = detectSegments($('#text').value);
+            const miss = voices.length ? [...new Set(segs.map((s, i) => resolve(i)))].filter(l => !pickVoice(voices, l, accOf(l))) : [];
+            $('#warn').textContent = miss.length ? `這個裝置沒有「${miss.map(nameOf).join('、')}」語言的聲音，這部分會交給系統預設聲音（可能唸不出來）。` : '';
+            renderSegs(); renderAccents();
+        }
+        const mark = (i) => document.querySelectorAll('.seg').forEach(e => { const on = +e.dataset.i === i; e.classList.toggle('cur', on); if (on) e.setAttribute('aria-current', 'true'); else e.removeAttribute('aria-current'); });
 
         function loadVoices() {
             if (!synth) return;
@@ -147,35 +395,47 @@
             const saved = store.get('tts_voice', '');
             $('#voice').replaceChildren(...(voices.length ? voices.map(v => Object.assign(new Option(`${v.name}（${v.lang}）`, v.voiceURI))) : [new Option('（系統沒有提供語音，會用預設語音）', '')]));
             if (voices.some(v => v.voiceURI === saved)) $('#voice').value = saved;
+            refresh();
         }
-        if (synth) { loadVoices(); synth.onvoiceschanged = loadVoices; }
+        for (const k in LANGS) $('#defLang').append(new Option(LANGS[k], k));
+        if (synth) { loadVoices(); synth.onvoiceschanged = loadVoices; [300, 1000, 2500].forEach(ms => setTimeout(() => { if (!voices.length) loadVoices(); }, ms)); setTimeout(() => { gaveUp = true; if (!voices.length) loadVoices(); }, 5000); }   // iOS 的語音清單可能延遲才出現
+        else refresh();
 
         function speakNext(run) {
             if (!playing || run !== token) return;
-            if (idx >= queue.length) { playing = false; $('#play').textContent = '朗讀'; $('#prog').value = 1; $('#msg').textContent = '朗讀完畢'; return; }
-            const u = new SpeechSynthesisUtterance(queue[idx]), v = voices.find(x => x.voiceURI === $('#voice').value);
-            if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'zh-TW';
-            u.rate = +$('#rate').value; u.pitch = +$('#pitch').value;
+            if (idx >= queue.length) { playing = false; mark(-1); $('#play').textContent = '朗讀'; $('#prog').value = 1; $('#msg').textContent = '朗讀完畢'; return; }
+            const it = queue[idx], u = new SpeechSynthesisUtterance(it.t);
+            if (it.v) { u.voice = it.v; u.lang = it.v.lang; } else u.lang = it.lang === 'zh' ? 'zh-TW' : it.lang;
+            u.rate = +$('#rate').value; u.pitch = +$('#pitch').value; mark(it.seg);
             u.onend = () => { if (run !== token) return; idx++; $('#prog').value = idx / total; speakNext(run); };
-            u.onerror = (e) => { if (run !== token || e.error === 'canceled' || e.error === 'interrupted') return; playing = false; $('#msg').textContent = '朗讀失敗：' + e.error; $('#play').textContent = '朗讀'; };
+            u.onerror = (e) => { if (run !== token || e.error === 'canceled' || e.error === 'interrupted') return; playing = false; mark(-1); $('#msg').textContent = '朗讀失敗：' + e.error; $('#play').textContent = '朗讀'; };
             synth.speak(u);
         }
 
+        function buildQueue() {
+            if (!auto.on) { const v = voices.find(x => x.voiceURI === $('#voice').value) || null; return chunks($('#text').value).map(t => ({ t, v, lang: 'zh', seg: -1 })); }
+            refresh(); const q = [];
+            segs.forEach((s, i) => { const l = resolve(i), v = pickVoice(voices, l, accOf(l)); chunks(s.text).forEach(t => q.push({ t, v, lang: l, seg: i })); });
+            return q;
+        }
         function start() {
             synth.cancel(); const run = ++token;
-            queue = chunks($('#text').value); idx = 0; total = queue.length;
+            queue = buildQueue(); idx = 0; total = queue.length;
             if (!total) { $('#msg').textContent = '請先輸入文字'; return; }
-            store.set('tts_text', $('#text').value); store.set('tts_voice', $('#voice').value);
+            store.set('tts_text', $('#text').value); store.set('tts_voice', $('#voice').value); store.set('tts_auto', auto);
             playing = true; $('#play').textContent = '重新朗讀'; $('#prog').hidden = false; $('#prog').value = 0; $('#msg').textContent = `共 ${total} 段`;
             speakNext(run);
         }
 
         $('#play').onclick = start;
         $('#pause').onclick = () => { if (!synth.speaking) return; if (synth.paused) { synth.resume(); $('#pause').textContent = '暫停'; } else { synth.pause(); $('#pause').textContent = '繼續'; } };
-        $('#stop').onclick = () => { playing = false; token++; synth.cancel(); $('#play').textContent = '朗讀'; $('#pause').textContent = '暫停'; $('#msg').textContent = '已停止'; };
+        $('#stop').onclick = () => { playing = false; token++; synth.cancel(); mark(-1); $('#play').textContent = '朗讀'; $('#pause').textContent = '暫停'; $('#msg').textContent = '已停止'; };
         $('#rate').oninput = () => { $('#rateV').textContent = (+$('#rate').value).toFixed(1); };
         $('#pitch').oninput = () => { $('#pitchV').textContent = (+$('#pitch').value).toFixed(1); };
-        $('#text').oninput = () => { $('#count').textContent = $('#text').value.length + ' 字' + (store.set('tts_text', $('#text').value) ? '' : '（太大，瀏覽器存不下，沒有自動儲存）'); };
+        $('#text').oninput = () => { $('#count').textContent = $('#text').value.length + ' 字' + (store.set('tts_text', $('#text').value) ? '' : '（太大，瀏覽器存不下，沒有自動儲存）'); ov = {}; clearTimeout(timer); timer = setTimeout(refresh, 250); };
+        $('#auto').onchange = () => { auto.on = $('#auto').checked; store.set('tts_auto', auto); refresh(); };
+        $('#defLang').onchange = () => { auto.def = $('#defLang').value; store.set('tts_auto', auto); refresh(); };
+        $('#resetAuto').onclick = () => { if (!confirm('清除「自動辨識語言」的設定（開關、預設語言、各語言口音偏好）並恢復預設？無法復原；文字內容不受影響。')) return; try { localStorage.removeItem('tts_auto'); } catch (e) { } auto = cleanAuto(null); ov = {}; refresh(); $('#msg').textContent = '已清除語言偏好'; };
         window.addEventListener('pagehide', () => { if (synth) synth.cancel(); });
         $('#count').textContent = $('#text').value.length + ' 字';
     </script>

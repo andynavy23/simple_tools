@@ -243,7 +243,7 @@
         return room;
     }
 
-    const P2PRoom = { host, join, validNick, NICK_RE, roomFromUrl, inviteLink, explain, ICE };
+    const P2PRoom = { host, join, validNick, NICK_RE, roomFromUrl, inviteLink, explain, ICE, loadPeer };      // loadPeer：只需要 PeerJS 本身（例如視訊 / 螢幕分享的 peer.call）時用
     if (typeof module !== 'undefined' && module.exports) module.exports = P2PRoom;
     else root.P2PRoom = P2PRoom;
 })(typeof window !== 'undefined' ? window : globalThis);

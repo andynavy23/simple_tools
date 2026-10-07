@@ -60,22 +60,66 @@
         .cell {
             aspect-ratio: 1;
             border-radius: 10px;
+            background: rgba(255, 255, 255, .25);
+        }
+
+        /* 方塊層：絕對定位，只動畫 transform / opacity；位置用百分比，縮放視窗不會錯位 */
+        #tiles {
+            position: absolute;
+            inset: 10px;
+            pointer-events: none;
+        }
+
+        .tile {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: calc((100% - 30px) / 4);
+            aspect-ratio: 1;
+            transition: transform .12s ease-out;
+            will-change: transform;
+        }
+
+        .tile i {
+            position: absolute;
+            inset: 0;
+            border-radius: 10px;
             display: grid;
             place-items: center;
+            font-style: normal;
             font-weight: 800;
             font-size: clamp(22px, 8vw, 40px);
-            background: rgba(255, 255, 255, .25);
             color: #776e65;
-            transition: background .1s;
         }
 
-        .cell.pop {
-            animation: pop .16s ease;
+        .tile i.spawn {
+            animation: spawn .15s ease-out;
         }
 
-        @keyframes pop {
+        .tile i.merge {
+            animation: mpop .15s ease-out;
+        }
+
+        @keyframes spawn {
+            from {
+                transform: scale(.2);
+                opacity: 0;
+            }
+        }
+
+        @keyframes mpop {
             50% {
-                transform: scale(1.12);
+                transform: scale(1.18);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .tile {
+                transition: none;
+            }
+
+            .tile i {
+                animation: none !important;
             }
         }
 
@@ -174,6 +218,7 @@
         <p class="muted" id="dailyInfo" style="margin:-6px 0 10px;font-size:13px" hidden></p>
 
         <div id="board" aria-label="遊戲盤面">
+            <div id="tiles"></div>
             <div id="msg" hidden role="status"><span id="msgText"></span><span><button class="primary" id="again">再來一局</button> <button id="keep" hidden>繼續玩</button></span></div>
         </div>
         <button class="sm" id="clearBest" style="margin-top:12px">清除最佳紀錄</button>
@@ -202,6 +247,7 @@
         <li>滑動時畫面不會跟著捲動，請在棋盤區域內滑。</li>
         <li>每日挑戰另外記錄「今日最高」，不影響一般最高分。</li>
         <li>不能移動的方向不會產生新方塊。</li>
+        <li>方塊有滑動、合併與新增的小動畫；系統開啟「減少動態效果」時會自動關閉動畫（計分與結果不受影響）。</li>
             <li>最佳紀錄存在這台裝置；想重來可按頁面下方的「清除最佳紀錄」（只清這個遊戲，無法復原；頁面會重新載入，進行中的這一局會結束）。</li>
 </ul>
     </template>
@@ -265,6 +311,25 @@
             return { board: b, pos: [y, x] };
         }
 
+        // 動畫用軌跡：每個原有方塊 { from, to, v, merged }（merged 的兩個方塊 to 相同）；board / gained / moved 與 move() 一致
+        function moveTrace(board, dir) {
+            const pos = (k, i) => dir === 'left' ? [k, i] : dir === 'right' ? [k, N - 1 - i] : dir === 'up' ? [i, k] : [N - 1 - i, k];
+            const moves = [], b = emptyBoard();
+            let gained = 0;
+            for (let k = 0; k < N; k++) {
+                const tiles = [];
+                for (let i = 0; i < N; i++) { const [y, x] = pos(k, i), v = board[y][x]; if (v) tiles.push({ v, from: [y, x] }); }
+                for (let t = 0, j = 0; t < tiles.length; t++, j++) {
+                    const a = tiles[t], c = tiles[t + 1], to = pos(k, j);
+                    if (c && c.v === a.v) {
+                        moves.push({ from: a.from, to, v: a.v, merged: true }, { from: c.from, to, v: c.v, merged: true });
+                        b[to[0]][to[1]] = a.v * 2; gained += a.v * 2; t++;
+                    } else { moves.push({ from: a.from, to, v: a.v, merged: false }); b[to[0]][to[1]] = a.v; }
+                }
+            }
+            return { moves, board: b, gained, moved: moves.some(m => m.from[0] !== m.to[0] || m.from[1] !== m.to[1]) };
+        }
+
         const canMove = (board) => ['left', 'right', 'up', 'down'].some(d => move(board, d).moved);
         const maxTile = (board) => Math.max(...board.flat());
         // --- /pure ---
@@ -272,20 +337,50 @@
         const { rnd, store } = Util;
         const $ = (s) => document.querySelector(s);
         const boardEl = $('#board');
-        let board, score, best = store.get('g2048_best', 0), won = false, over = false, lastPos = null;
+        let board, score, best = store.get('g2048_best', 0), won = false, over = false;
         let daily = null, R = { int: rnd, float: () => rnd(1000) / 1000 };            // daily：{ date, best }；R：目前使用的亂數（每日挑戰用種子亂數）
         const today = () => Util.day.today();
         const dailyBest = () => { const d = store.get('g2048_daily', null); return d && d.date === today() ? d.best : 0; };
-        const cells = [];
-        for (let i = 0; i < N * N; i++) { const c = document.createElement('div'); c.className = 'cell'; boardEl.insertBefore(c, $('#msg')); cells.push(c); }
+        for (let i = 0; i < N * N; i++) { const c = document.createElement('div'); c.className = 'cell'; boardEl.insertBefore(c, $('#msg')); }
+
+        // --- 方塊動畫（純視覺；遊戲邏輯仍由 board / move() 決定）---
+        const tilesEl = $('#tiles'), DUR = 120;
+        let grid = null, pending = null, timer = 0;            // grid：每格目前的方塊 { v, y, x, el }；pending：滑動結束後要做的事
+        const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const place = (t) => { t.el.style.transform = `translate(calc(${t.x} * (100% + 10px)), calc(${t.y} * (100% + 10px)))`; };
+        function mkTile(v, y, x, cls) {
+            const t = { v, y, x, el: document.createElement('div') };
+            t.el.className = 'tile';
+            t.el.innerHTML = `<i class="${v > 2048 ? 'vbig' : 'v' + v}${cls ? ' ' + cls : ''}">${v}</i>`;
+            place(t); tilesEl.appendChild(t.el);
+            return t;
+        }
+        function rebuild() {
+            clearTimeout(timer); pending = null; tilesEl.textContent = '';
+            grid = board.map((r, y) => r.map((v, x) => v ? mkTile(v, y, x) : null));
+        }
+        // 滑動結束：移除被合併的舊方塊、放上合併後與新生的方塊、顯示過關 / 結束訊息；可被新輸入提前呼叫
+        function settle() {
+            clearTimeout(timer);
+            const p = pending; if (!p) return;
+            pending = null;
+            p.drop.forEach(t => t.el.remove());
+            p.add.forEach(([t, cls]) => { t.el = mkTile(t.v, t.y, t.x, cls).el; });
+            if (p.msg) showMsg(...p.msg);
+        }
+        function animate(oldBoard, dir, spawnPos, msg) {
+            const tr = moveTrace(oldBoard, dir), next = board.map(r => r.map(() => null)), drop = [], add = [];
+            tr.moves.forEach(m => {
+                const t = grid[m.from[0]][m.from[1]]; t.y = m.to[0]; t.x = m.to[1]; place(t);
+                if (m.merged) { drop.push(t); if (!next[t.y][t.x]) { next[t.y][t.x] = { v: m.v * 2, y: t.y, x: t.x }; add.push([next[t.y][t.x], 'merge']); } }
+                else next[t.y][t.x] = t;
+            });
+            if (spawnPos) { const [y, x] = spawnPos; next[y][x] = { v: board[y][x], y, x }; add.push([next[y][x], 'spawn']); }
+            grid = next; pending = { drop, add, msg };
+            if (reduced()) settle(); else timer = setTimeout(settle, DUR + 20);
+        }
 
         function render() {
-            board.flat().forEach((v, i) => {
-                const c = cells[i];
-                c.className = 'cell' + (v ? ' ' + (v > 2048 ? 'vbig' : 'v' + v) : '');
-                c.textContent = v || '';
-                if (lastPos && lastPos[0] * N + lastPos[1] === i) { void c.offsetWidth; c.classList.add('pop'); }
-            });
             $('#score').textContent = score;
             $('#best').textContent = best;
         }
@@ -301,24 +396,28 @@
             if (daily) { const r = Util.seeded('2048-' + daily.date); R = { int: r.int, float: r }; } else R = { int: rnd, float: () => rnd(1000) / 1000 };
             $('#daily').setAttribute('aria-pressed', !!daily); $('#dailyInfo').hidden = !daily;
             if (daily) $('#dailyInfo').textContent = `${daily.date} 每日挑戰：今天大家的亂數序列相同。今日最高 ${dailyBest()} 分`;
-            board = emptyBoard(); score = 0; won = false; over = false; lastPos = null;
+            board = emptyBoard(); score = 0; won = false; over = false;
             for (let i = 0; i < 2; i++) board = spawn(board, R.int, R.float).board;
             $('#msg').hidden = true;
-            render();
+            rebuild(); render();
         }
 
         function play(dir) {
+            settle();                                       // 上一個動畫還沒結束就先完成它，不漏輸入
             if (over || !$('#msg').hidden) return;
             const r = move(board, dir);
             if (!r.moved) return;
+            const old = board;
             board = r.board; score += r.gained;
             const s = spawn(board, R.int, R.float);
-            if (s) { board = s.board; lastPos = s.pos; }
+            if (s) board = s.board;
             if (!daily && score > best) { best = score; store.set('g2048_best', best); }
             if (daily && score > dailyBest()) { store.set('g2048_daily', { date: daily.date, best: score }); $('#dailyInfo').textContent = `${daily.date} 每日挑戰：今天大家的亂數序列相同。今日最高 ${score} 分`; }
             render();
-            if (!won && maxTile(board) >= 2048) { won = true; showMsg('🎉 達成 2048！', true); }
-            else if (!canMove(board)) { over = true; showMsg('遊戲結束', false); }
+            let msg = null;
+            if (!won && maxTile(board) >= 2048) { won = true; msg = ['🎉 達成 2048！', true]; }
+            else if (!canMove(board)) { over = true; msg = ['遊戲結束', false]; }
+            animate(old, dir, s && s.pos, msg);
         }
 
         const KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', a: 'left', d: 'right', w: 'up', s: 'down' };

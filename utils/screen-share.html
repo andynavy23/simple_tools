@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="螢幕分享：電腦分享螢幕 / 視窗 / 分頁，手機或另一台電腦打開連結就能觀看，點對點連線、不經過伺服器。">
+    <meta property="og:title" content="螢幕分享" />
+    <meta property="og:description" content="電腦分享螢幕，手機打開連結即可觀看；點對點傳輸。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/screen-share.html" />
+    <title>螢幕分享</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root { --wrap-w: 720px; }
+        [hidden] { display: none !important; }
+        .seg { display: flex; gap: 8px; margin-bottom: 16px; }
+        .seg button { flex: 1; padding-left: 8px; padding-right: 8px; }
+        label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+        select, input { width: 100%; font-size: 16px; }
+        .chk { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 15px; color: var(--text); margin: 8px 0 0; }
+        .chk input { width: 22px; height: 22px; flex: none; }
+        .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+        .btns button { flex: 1 1 140px; }
+        .code { font-size: 28px; font-weight: 700; letter-spacing: .12em; font-variant-numeric: tabular-nums; text-align: center; margin: 4px 0; }
+        .err { color: var(--bad); margin: 10px 0 0; font-size: 14px; }
+        .ok { color: var(--ok); }
+        .bad { color: var(--bad); }
+        .stage { position: relative; background: #000; border-radius: var(--radius-sm); aspect-ratio: 16 / 9; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        .stage video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+        .stage .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 12px; color: #ddd; font-size: 14px; pointer-events: none; }
+        .stage.fs { position: fixed; inset: 0; z-index: 50; border-radius: 0; aspect-ratio: auto; height: 100vh; height: 100dvh; }
+        .stage .xfs { position: absolute; left: 12px; top: 12px; z-index: 2; }
+        .vrow { gap: 8px; flex-wrap: wrap; }
+        details summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+        details h3 { font-size: 15px; margin: 14px 0 4px; }
+        details p, details li { font-size: 14px; margin: 4px 0; }
+        details ul { margin: 4px 0; padding-left: 20px; }
+        code, kbd { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; background: var(--fill); padding: 1px 5px; border-radius: 4px; }
+        pre.cmd { background: var(--fill); padding: 8px 10px; border-radius: var(--radius-sm); overflow-x: auto; font-size: 13px; margin: 6px 0; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>螢幕分享</h1>
+        <p class="sub">電腦分享螢幕，手機或另一台電腦打開連結就能看。點對點連線，畫面不經過我們的伺服器。</p>
+
+        <div class="seg" role="group" aria-label="模式">
+            <button id="modeShare" aria-pressed="true">我要分享（電腦）</button>
+            <button id="modeWatch" aria-pressed="false">我要觀看</button>
+        </div>
+
+        <!-- ===== 分享端 ===== -->
+        <div id="shareBox">
+            <div class="card" id="unsupported" hidden>
+                <h2>這個裝置無法分享螢幕</h2>
+                <p>手機瀏覽器（iPhone Safari、Android Chrome）都沒有開放「擷取螢幕」功能，網頁做不到。請改用電腦的 Chrome / Edge / Firefox / Safari 來分享；這支手機可以當觀看端。</p>
+                <p class="note">想把手機畫面鏡像到電腦，請看下方「手機螢幕鏡像到電腦怎麼做」。</p>
+                <div class="btns"><button class="primary" id="goWatch">改成觀看模式</button></div>
+            </div>
+
+            <div class="card" id="setup">
+                <h2>分享設定</h2>
+                <label for="fps">畫質</label>
+                <select id="fps">
+                    <option value="30">流暢（30 fps）</option>
+                    <option value="15">清晰省頻寬（15 fps）</option>
+                </select>
+                <label for="maxw">最大寬度</label>
+                <select id="maxw">
+                    <option value="1280">1280</option>
+                    <option value="1920" selected>1920</option>
+                    <option value="0">原始大小</option>
+                </select>
+                <label class="chk"><input type="checkbox" id="audio"> 分享系統聲音（瀏覽器選單裡要勾選才有）</label>
+                <div class="btns">
+                    <button class="primary" id="startBtn">開始分享</button>
+                    <button id="stopBtn" hidden>停止分享</button>
+                </div>
+                <p class="err" id="shareErr" role="alert" hidden></p>
+            </div>
+
+            <div id="live" hidden>
+                <div class="card">
+                    <p><b class="ok">● 正在分享</b> <span class="muted" id="audioNote"></span></p>
+                    <div class="stage" style="max-width:420px"><video id="preview" muted playsinline autoplay></video></div>
+                    <p class="note">這是你分享出去的畫面預覽。分享前請確認視窗內容，不要分享含密碼的視窗。</p>
+                </div>
+                <div class="card">
+                    <h2>邀請連結</h2>
+                    <div class="code" id="roomCode"></div>
+                    <input id="link" readonly aria-label="邀請連結">
+                    <div class="btns"><button class="primary" id="copyLink">複製連結</button></div>
+                    <p class="note">另一台裝置打開連結，或到本頁選「我要觀看」輸入房號。最多 4 位觀看者。</p>
+                </div>
+                <div class="card">
+                    <h2>觀看者 <span class="muted" id="vcount"></span></h2>
+                    <div id="vlist"></div>
+                    <p class="note" id="vEmpty">還沒有人加入。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 觀看端 ===== -->
+        <div id="watchBox" hidden>
+            <div class="card" id="joinCard">
+                <h2>輸入房號或貼上邀請連結</h2>
+                <input id="codeIn" placeholder="例如 ABC234" autocomplete="off" autocapitalize="characters" spellcheck="false">
+                <div class="btns"><button class="primary" id="watchBtn">開始觀看</button></div>
+            </div>
+            <div class="card" id="viewCard" hidden>
+                <div class="stage" id="stage">
+                    <video id="vid" playsinline muted autoplay></video>
+                    <div class="ph" id="ph">連線中…</div>
+                    <button class="sm xfs" id="xfs" hidden>✕ 離開全螢幕</button>
+                </div>
+                <p id="vStatus" role="status" style="margin:10px 0 0"></p>
+                <p class="note" id="vStats"></p>
+                <p class="err" id="diag" role="alert" hidden></p>
+                <div class="btns">
+                    <button id="soundBtn" hidden>🔊 開啟聲音</button>
+                    <button id="fsBtn">全螢幕</button>
+                    <button class="primary" id="retryBtn" hidden>重新連線</button>
+                    <button id="leaveBtn">離開</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <details>
+                <summary>手機螢幕鏡像到電腦怎麼做</summary>
+                <p><b>為什麼本頁做不到？</b>瀏覽器沒有開放「擷取手機自己的螢幕」給網頁（手機版瀏覽器不支援 <code>getDisplayMedia</code>）。要鏡像手機畫面，只能靠作業系統或原生 App 的功能：</p>
+
+                <h3>Android → 電腦：scrcpy（開源，Windows / Mac / Linux）</h3>
+                <ul>
+                    <li>手機：設定 → 關於手機，連點「版本號碼」開啟開發人員選項，再開啟「USB 偵錯」（選單名稱依廠牌略有不同）。</li>
+                    <li>用 USB 線接電腦，手機跳出「允許 USB 偵錯」時按允許。</li>
+                    <li>電腦安裝 scrcpy，到官方 GitHub（Genymobile/scrcpy）下載，或用套件管理員：</li>
+                </ul>
+                <pre class="cmd">winget install scrcpy      # Windows
+brew install scrcpy        # macOS
+sudo apt install scrcpy    # Debian / Ubuntu（版本可能較舊）</pre>
+                <ul>
+                    <li>執行 <code>scrcpy</code> 即可看到並操作手機。常用：<code>scrcpy --record out.mp4</code> 錄影、<code>scrcpy --no-audio</code> 不傳聲音。</li>
+                    <li>無線：Android 11 以上可在開發人員選項開「無線偵錯」，依畫面用 <code>adb pair</code>、<code>adb connect</code> 連上後再執行 <code>scrcpy</code>（需同一個 Wi-Fi）。</li>
+                </ul>
+
+                <h3>Windows 內建方式</h3>
+                <ul>
+                    <li>「手機連結」App（Phone Link）：部分 Android 機型支援在電腦上看到手機畫面；iPhone 目前只有通知、訊息、通話等部分功能，不是螢幕鏡像。支援機型以 Microsoft 與手機廠商的官方說明為準。</li>
+                    <li>Miracast：Windows 設定 → 系統 → 投影到這部電腦（可能要先在「選用功能」安裝「無線顯示器」）。手機端的名稱依廠牌而異，常見「智慧鏡像 / Smart View / 投射 / 螢幕鏡像」。支援度與延遲因裝置而異。</li>
+                </ul>
+
+                <h3>iPhone → Mac</h3>
+                <ul>
+                    <li>較新的 macOS / iOS 內建「iPhone 鏡像輸出」，可在 Mac 上看到並操作 iPhone（需符合系統與帳號條件，細節見 Apple 官方說明）。</li>
+                    <li>USB 錄影：用傳輸線接 Mac，開 QuickTime Player → 檔案 → 新增影片錄製，相機選你的 iPhone。</li>
+                    <li>AirPlay：新版 macOS 可以把 Mac 當 AirPlay 接收端（在系統設定的 AirDrop 與 Handoff / 一般 附近尋找「AirPlay 接收器」，路徑依版本略有不同）；iPhone 控制中心 → 螢幕鏡像 → 選那台 Mac。</li>
+                </ul>
+
+                <h3>iPhone → Windows</h3>
+                <p>Windows 沒有內建 AirPlay 接收端，需要第三方「AirPlay 接收器」類桌面軟體（有免費與付費版）。風險：要放行防火牆與區域網路連線、需信任軟體來源；請只從官方網站下載、避免破解版，用完可關閉或移除；兩台要在同一個網路。</p>
+
+                <h3>Chromecast / Google Home</h3>
+                <p>Android 可用 Google Home App 的「投放螢幕」把畫面送到 Chromecast 或支援的電視（不是送到電腦）。iPhone 無法用它鏡像整個畫面；部分 App 內的投放鈕只會投該 App 的影片。</p>
+            </details>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>讓電腦把螢幕（整個螢幕、單一視窗或瀏覽器分頁）即時分享給另一台裝置：手機或另一台電腦打開連結就能看。使用 WebRTC 點對點傳輸，畫面只在兩端之間流動，不經過我們的伺服器。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>在電腦上簡報或示範，讓旁邊的人用自己的手機看。</li>
+        <li>遠端協助家人：請對方在電腦分享，你在手機上看。</li>
+        <li>想把電腦畫面丟到另一台螢幕（例如平板）上看。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>分享端（電腦）選「我要分享」，挑畫質與最大寬度，需要聲音就勾「分享系統聲音」，按「開始分享」，在瀏覽器視窗選要分享的內容。</li>
+        <li>按「複製連結」傳給對方，或告訴對方 6 碼房號。</li>
+        <li>觀看端打開連結（或選「我要觀看」輸入房號），按「開始觀看」。畫面會先靜音播放；有聲音時按「開啟聲音」。</li>
+        <li>點畫面或按「全螢幕」放大；手機橫放會自動滿版。畫面下方會顯示延遲、解析度與位元率。</li>
+        <li>分享端可在「觀看者」清單按「踢除」請人離開；按「停止分享」或用瀏覽器 / 系統的停止分享鈕都會結束，觀看端會收到通知。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">電腦分享 → 房號 K7M2QX，連結 …/utils/screen-share.html#K7M2QX
+        手機打開連結 → 按「開始觀看」→ 顯示「1280×720 · 30 fps · 2.1 Mbps · 延遲約 60 ms」</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>手機瀏覽器無法分享自己的螢幕（網頁做不到），手機只能當觀看端；要鏡像手機畫面請看頁面下方說明。</li>
+        <li>最多 4 位觀看者；觀看者每多一位，電腦上傳頻寬就多用一份。</li>
+        <li>隱私：分享前請確認視窗內容，不要分享含密碼、通知或私人訊息的視窗；知道房號的人都能加入，不認識的人請踢除並停止分享。</li>
+        <li>某些網路（例如對稱型 NAT、公司網路）需要 TURN 中繼才連得上，本工具未提供；可改用同一個 Wi-Fi 或關閉 VPN。</li>
+        <li>本頁不儲存任何資料；關閉頁面即結束分享。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <script>
+        // --- pure ---
+        const MAX_VIEWERS = 4, CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', ID_PREFIX = 'stsh-';
+        const peerIdOf = (code) => ID_PREFIX + code;
+        const makeCode = (rnd) => Array.from({ length: 6 }, () => CODE_CHARS[rnd(CODE_CHARS.length)]).join('');
+        // 房號 / 邀請連結 / 網址 hash → 6 碼房號；不合法回傳空字串
+        const parseRoom = (s) => {
+            s = String(s == null ? '' : s).trim();
+            const m = s.match(/#([^#\s]*)\s*$/); if (m) s = m[1];
+            s = s.toUpperCase().replace(/^STSH-/, '').replace(/[\s-]/g, '');
+            return /^[ABCDEFGHJKLMNPQRSTUVWXYZ2-9]{6}$/.test(s) ? s : '';
+        };
+        // 畫質：fps、最大寬度（0 = 原始）、來源寬度 → getDisplayMedia / applyConstraints 的限制與 maxBitrate（bps）
+        const qualityPlan = (fps, maxW, srcW) => {
+            fps = fps === 15 ? 15 : 30; maxW = [1280, 1920].includes(maxW) ? maxW : 0;
+            const v = { frameRate: { ideal: fps, max: fps } }; if (maxW) v.width = { max: maxW };
+            const w = Math.min(srcW > 0 ? srcW : 1920, maxW || 1e9);
+            const bps = Math.max(300000, Math.min(8000000, Math.round(w * (w * 9 / 16) * fps * 0.08)));
+            return { constraints: v, maxBitrate: bps, maxFramerate: fps };
+        };
+        // 觀看者名單：加入 / 狀態 / 離開 / 踢除 / 上限（ponytail：踢除只擋同一個 peer id，對方重新整理後是新 id，擋不住；需要時改成房主端密碼）
+        const viewerList = (max = MAX_VIEWERS) => {
+            const m = new Map(), banned = new Set(); let seq = 0;
+            return {
+                add(id) {
+                    if (banned.has(id)) return { ok: false, reason: 'kicked' };
+                    if (m.has(id)) return { ok: false, reason: 'dup' };
+                    if (m.size >= max) return { ok: false, reason: 'full' };
+                    m.set(id, { n: ++seq, state: 'connecting' }); return { ok: true, n: seq };
+                },
+                set(id, st) { const v = m.get(id); if (!v || !['connecting', 'live', 'lost'].includes(st)) return false; v.state = st; return true; },
+                remove(id) { return m.delete(id); },
+                kick(id) { if (!m.delete(id)) return false; banned.add(id); return true; },
+                list() { return [...m].map(([id, v]) => ({ id, n: v.n, state: v.state })); },
+                liveCount() { return [...m.values()].filter(v => v.state === 'live').length; },
+            };
+        };
+        // getStats 報表陣列 → 精簡數值
+        const parseStats = (reports) => {
+            const o = { bytes: 0, w: 0, h: 0, fps: 0, rtt: null, jb: null };
+            for (const r of reports || []) {
+                if (!r) continue;
+                if (r.type === 'inbound-rtp' && (r.kind === 'video' || r.mediaType === 'video')) {
+                    o.bytes = r.bytesReceived || 0; o.w = r.frameWidth || 0; o.h = r.frameHeight || 0; o.fps = Math.round(r.framesPerSecond || 0);
+                    if (r.jitterBufferEmittedCount > 0) o.jb = (r.jitterBufferDelay || 0) / r.jitterBufferEmittedCount * 1000;
+                } else if (r.type === 'candidate-pair' && (r.nominated || r.state === 'succeeded') && typeof r.currentRoundTripTime === 'number') {
+                    o.rtt = r.currentRoundTripTime * 1000;
+                }
+            }
+            return o;
+        };
+        const kbpsBetween = (b0, t0, b1, t1) => (t1 > t0 && b1 >= b0) ? Math.round((b1 - b0) * 8 / (t1 - t0)) : 0;   // bytes、毫秒 → kbit/s
+        const fmtStats = (s, kbps) => {
+            const p = [];
+            if (s.w) p.push(`${s.w}×${s.h}`);
+            if (s.fps) p.push(`${s.fps} fps`);
+            p.push(kbps >= 1000 ? `${(kbps / 1000).toFixed(1)} Mbps` : `${kbps} kbps`);
+            p.push(s.rtt == null && s.jb == null ? '延遲 —' : `延遲約 ${Math.round((s.rtt || 0) / 2 + (s.jb || 0))} ms`);
+            return p.join(' · ');
+        };
+        const diagnose = (kind) => ({
+            'peer-unavailable': '找不到這個房號：請確認房號，並確認分享端還在分享中。',
+            timeout: '連線逾時：請確認房號與網路。',
+            'ice-failed': '連不上對方：這種網路環境可能需要 TURN 中繼，本工具未提供。可試試同一個 Wi-Fi、關閉 VPN，或換一個網路。',
+            'no-stream': '已連上但收不到畫面：這種網路環境可能需要 TURN 中繼，本工具未提供。可試試同一個 Wi-Fi、關閉 VPN，或換一個網路。',
+            full: '分享端已達觀看人數上限（4 位）。',
+            kicked: '你已被分享端移除。',
+            ended: '分享已結束。',
+            lost: '與分享端的連線中斷。',
+            'load-failed': '無法載入連線元件（PeerJS），請確認網路後重新整理。',
+        }[kind] || '無法連上連線伺服器或連線失敗，請檢查網路後再試。');
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const setHidden = (sel, h) => { $(sel).hidden = h; };
+        const CAN_SHARE = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+        const ICE_CFG = () => ({ iceServers: P2PRoom.ICE });
+        const closeSafe = (o) => { try { o && o.close(); } catch (e) { } };
+        P2PRoom.loadPeer().catch(() => { });          // 預載 PeerJS
+
+        // ---------- 模式 ----------
+        function setMode(m) {
+            $('#modeShare').setAttribute('aria-pressed', m === 'share'); $('#modeWatch').setAttribute('aria-pressed', m === 'watch');
+            setHidden('#shareBox', m !== 'share'); setHidden('#watchBox', m !== 'watch');
+            setHidden('#unsupported', CAN_SHARE); if (!CAN_SHARE) setHidden('#setup', true);
+        }
+        $('#modeShare').onclick = () => setMode('share');
+        $('#modeWatch').onclick = () => setMode('watch');
+        $('#goWatch').onclick = () => setMode('watch');
+
+        // ---------- 分享端 ----------
+        let hpeer = null, stream = null, sharing = false, hostCode = '';
+        const conns = new Map(), calls = new Map();
+        const VL = viewerList(MAX_VIEWERS);
+        const STATE_TXT = { connecting: '連線中…', live: '觀看中', lost: '連線不穩 / 中斷' };
+
+        function renderViewers() {
+            const l = VL.list();
+            $('#vcount').textContent = `${VL.liveCount()} 位觀看中（${l.length}/${MAX_VIEWERS}）`;
+            setHidden('#vEmpty', l.length > 0);
+            const box = $('#vlist'); box.textContent = '';
+            for (const v of l) {
+                const row = document.createElement('div'); row.className = 'li vrow'; row.dataset.id = v.id;
+                const t = document.createElement('span'); t.textContent = `觀看者 ${v.n}　`;
+                const st = document.createElement('b'); st.className = v.state === 'live' ? 'ok' : v.state === 'lost' ? 'bad' : ''; st.textContent = STATE_TXT[v.state]; t.append(st);
+                const k = document.createElement('button'); k.className = 'sm kick'; k.textContent = '踢除'; k.onclick = () => kick(v.id);
+                row.append(t, k); box.append(row);
+            }
+        }
+        const send = (c, msg) => { try { c && c.open !== false && c.send(msg); } catch (e) { } };
+        function drop(id) {
+            VL.remove(id); closeSafe(conns.get(id)); closeSafe(calls.get(id)); conns.delete(id); calls.delete(id); renderViewers();
+        }
+        function kick(id) {
+            const c = conns.get(id); send(c, { t: 'kicked' });
+            VL.kick(id); conns.delete(id); const call = calls.get(id); calls.delete(id); renderViewers();
+            setTimeout(() => { closeSafe(c); closeSafe(call); }, 250);
+        }
+        function applyBitrate(pc) {
+            try {
+                const tr = stream && stream.getVideoTracks()[0]; if (!tr) return;
+                const plan = qualityPlan(+$('#fps').value, +$('#maxw').value, (tr.getSettings() || {}).width);
+                const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video'); if (!sender) return;
+                const p = sender.getParameters(); if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+                p.encodings[0].maxBitrate = plan.maxBitrate; p.encodings[0].maxFramerate = plan.maxFramerate;
+                sender.setParameters(p).catch(() => { });
+            } catch (e) { }
+        }
+        function onViewer(conn) {
+            conn.on('open', () => {
+                if (!sharing) { send(conn, { t: 'ended' }); setTimeout(() => closeSafe(conn), 250); return; }
+                const id = conn.peer, r = VL.add(id);
+                if (!r.ok) { send(conn, { t: r.reason }); setTimeout(() => closeSafe(conn), 250); return; }
+                conns.set(id, conn);
+                const call = hpeer.call(id, stream); calls.set(id, call);
+                const pc = call.peerConnection;
+                if (pc) pc.addEventListener('iceconnectionstatechange', () => {
+                    const s = pc.iceConnectionState;
+                    if (s === 'connected' || s === 'completed') { VL.set(id, 'live'); applyBitrate(pc); } else if (s === 'failed' || s === 'disconnected') VL.set(id, 'lost');
+                    renderViewers();
+                });
+                call.on('close', () => { if (calls.get(id) === call) drop(id); });
+                call.on('error', () => { if (calls.get(id) === call) drop(id); });
+                renderViewers();
+            });
+            conn.on('close', () => { if (conns.get(conn.peer) === conn) drop(conn.peer); });
+            conn.on('error', () => { });
+        }
+        function showErr(msg) { $('#shareErr').textContent = msg; setHidden('#shareErr', !msg); }
+        function stopShare(reason) {
+            if (!sharing && !stream) return;
+            sharing = false;
+            for (const c of conns.values()) send(c, { t: 'ended' });
+            const p = hpeer, s = stream; hpeer = null; stream = null;
+            setTimeout(() => { try { p && p.destroy(); } catch (e) { } }, 300);
+            if (s) s.getTracks().forEach(t => { t.onended = null; t.stop(); });
+            conns.clear(); calls.clear(); for (const v of VL.list()) VL.remove(v.id);
+            $('#preview').srcObject = null;
+            setHidden('#live', true); setHidden('#setup', false); setHidden('#startBtn', false); setHidden('#stopBtn', true);
+            showErr(reason || '');
+        }
+        function openHostPeer(Peer, tries = 0) {
+            return new Promise((resolve, reject) => {
+                const code = makeCode(Util.rnd), p = new Peer(peerIdOf(code), { debug: 1, config: ICE_CFG() });
+                p.on('open', () => { hpeer = p; hostCode = code; p.on('connection', onViewer); p.on('error', (e) => { if (sharing) showErr(diagnose(e.type)); }); resolve(); });
+                p.on('error', (e) => { if (hpeer === p) return; try { p.destroy(); } catch (x) { } if (e.type === 'unavailable-id' && tries < 5) openHostPeer(Peer, tries + 1).then(resolve, reject); else reject(e); });
+            });
+        }
+        async function startShare() {
+            showErr('');
+            if (!CAN_SHARE) return;
+            const plan = qualityPlan(+$('#fps').value, +$('#maxw').value, 0);
+            try {
+                stream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'always', ...plan.constraints }, audio: $('#audio').checked });
+            } catch (e) { stream = null; showErr(e && e.name === 'NotAllowedError' ? '你取消了分享（或瀏覽器沒有授權）。' : '無法開始分享：' + (e && e.message || e)); return; }
+            $('#startBtn').disabled = true;
+            try {
+                const Peer = await P2PRoom.loadPeer(); await openHostPeer(Peer);
+            } catch (e) {
+                stream.getTracks().forEach(t => t.stop()); stream = null; $('#startBtn').disabled = false;
+                showErr(diagnose(e && e.type)); return;
+            }
+            $('#startBtn').disabled = false; sharing = true;
+            stream.getVideoTracks()[0].addEventListener('ended', () => stopShare('系統或瀏覽器已停止分享，已通知觀看者。'));
+            $('#audioNote').textContent = stream.getAudioTracks().length ? '（含聲音）' : '（沒有聲音）';
+            $('#preview').srcObject = stream; $('#preview').play().catch(() => { });
+            $('#roomCode').textContent = hostCode; $('#link').value = P2PRoom.inviteLink(hostCode);
+            setHidden('#live', false); setHidden('#setup', true); setHidden('#startBtn', true); setHidden('#stopBtn', false);
+            renderViewers();
+        }
+        $('#startBtn').onclick = startShare;
+        $('#stopBtn').onclick = () => stopShare('');
+        $('#copyLink').onclick = () => Util.copyWithFeedback($('#copyLink'), $('#link').value);
+        function onQuality() {
+            if (!sharing) return;
+            const tr = stream.getVideoTracks()[0], plan = qualityPlan(+$('#fps').value, +$('#maxw').value, 0);
+            tr.applyConstraints(plan.constraints).catch(() => { });
+            for (const c of calls.values()) if (c.peerConnection) applyBitrate(c.peerConnection);
+        }
+        $('#fps').onchange = onQuality; $('#maxw').onchange = onQuality;
+
+        // ---------- 觀看端 ----------
+        let vpeer = null, vconn = null, vcall = null, vpc = null, statTimer = 0, noStreamTimer = 0, openTimer = 0, finished = false, lastRoom = '', prevStat = null, autoFs = false;
+        const vid = $('#vid'), stage = $('#stage');
+
+        function vSay(msg, bad) { const e = $('#vStatus'); e.textContent = msg; e.className = bad ? 'bad' : ''; }
+        function vReset() {
+            clearInterval(statTimer); clearTimeout(noStreamTimer); clearTimeout(openTimer); prevStat = null;
+            const p = vpeer; vpeer = vconn = vcall = vpc = null; try { p && p.destroy(); } catch (e) { }
+            vid.srcObject = null; setHidden('#soundBtn', true); $('#vStats').textContent = '';
+        }
+        function vEnd(kind) {            // 結束一次觀看：顯示原因與診斷，提供重新連線
+            if (finished) return; finished = true; vReset();
+            setHidden('#ph', false); $('#ph').textContent = '已中斷';
+            vSay(kind === 'ended' ? '分享端已結束分享。' : kind === 'kicked' ? '你已被分享端移除。' : '無法觀看。', kind !== 'ended');
+            $('#diag').textContent = diagnose(kind); setHidden('#diag', false);
+            setHidden('#retryBtn', kind === 'kicked' || kind === 'full');
+            exitFs();
+        }
+        function onStream(s) {
+            if (vid.srcObject === s) return;
+            clearTimeout(noStreamTimer); vid.srcObject = s; vid.muted = true; vid.play().catch(() => { });
+            setHidden('#ph', true); setHidden('#diag', true); vSay('● 觀看中', false); $('#vStatus').className = 'ok';
+            setHidden('#soundBtn', !s.getAudioTracks().length); $('#soundBtn').textContent = '🔊 開啟聲音';
+            clearInterval(statTimer); statTimer = setInterval(pollStats, 1000);
+        }
+        async function pollStats() {
+            if (!vpc) return;
+            try {
+                const rep = await vpc.getStats(), arr = []; rep.forEach(r => arr.push(r));
+                const s = parseStats(arr), now = performance.now();
+                const k = prevStat ? kbpsBetween(prevStat.b, prevStat.t, s.bytes, now) : 0; prevStat = { b: s.bytes, t: now };
+                $('#vStats').textContent = fmtStats(s, k);
+            } catch (e) { }
+        }
+        async function watch(code) {
+            finished = false; vReset(); lastRoom = code;
+            setHidden('#joinCard', true); setHidden('#viewCard', false); setHidden('#diag', true); setHidden('#retryBtn', true);
+            setHidden('#ph', false); $('#ph').textContent = '連線中…'; vSay('連線中…', false);
+            vid.muted = true; vid.play().catch(() => { });          // 在使用者手勢內先呼叫（iOS 需要）
+            let Peer; try { Peer = await P2PRoom.loadPeer(); } catch (e) { return vEnd('load-failed'); }
+            if (finished) return;
+            const p = vpeer = new Peer({ debug: 1, config: ICE_CFG() });
+            p.on('error', (e) => { if (vpeer === p) vEnd(e.type === 'peer-unavailable' ? 'peer-unavailable' : e.type); });
+            p.on('call', (call) => {
+                vcall = call; call.answer();
+                call.on('stream', onStream);
+                call.on('close', () => { if (vcall === call) vEnd('lost'); });
+                vpc = call.peerConnection;
+                if (vpc) vpc.addEventListener('iceconnectionstatechange', () => { if (vpc && vpc.iceConnectionState === 'failed') vEnd('ice-failed'); });
+            });
+            p.on('open', () => {
+                const c = vconn = p.connect(peerIdOf(code), { reliable: true });
+                openTimer = setTimeout(() => vEnd('timeout'), 15000);
+                c.on('open', () => {
+                    clearTimeout(openTimer); c.send({ t: 'hi' }); vSay('已連上，等待畫面…', false);
+                    noStreamTimer = setTimeout(() => vEnd('no-stream'), 20000);
+                });
+                c.on('data', (m) => { if (m && typeof m.t === 'string' && ['ended', 'kicked', 'full'].includes(m.t)) vEnd(m.t); });
+                c.on('close', () => { if (vconn === c) vEnd('lost'); });
+            });
+        }
+        function startWatch() {
+            const code = parseRoom($('#codeIn').value);
+            if (!code) { $('#codeIn').focus(); alert('房號是 6 碼英數字（或貼上完整邀請連結）'); return; }
+            watch(code);
+        }
+        $('#watchBtn').onclick = startWatch;
+        $('#codeIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') startWatch(); });
+        $('#retryBtn').onclick = () => watch(lastRoom);
+        $('#leaveBtn').onclick = () => { finished = true; vReset(); exitFs(); setHidden('#viewCard', true); setHidden('#joinCard', false); };
+        $('#soundBtn').onclick = () => { vid.muted = !vid.muted; vid.play().catch(() => { }); $('#soundBtn').textContent = vid.muted ? '🔊 開啟聲音' : '🔇 關閉聲音'; };
+
+        // 全螢幕：Fullscreen API → iPhone 的 video.webkitEnterFullscreen → CSS 滿版
+        const isFs = () => stage.classList.contains('fs') || document.fullscreenElement === stage;
+        function enterFs() {
+            if (stage.requestFullscreen) stage.requestFullscreen().catch(() => cssFs(true));
+            else if (vid.webkitEnterFullscreen && vid.readyState > 0) { try { vid.webkitEnterFullscreen(); } catch (e) { cssFs(true); } }
+            else cssFs(true);
+        }
+        function cssFs(on) { stage.classList.toggle('fs', on); setHidden('#xfs', !on); }
+        function exitFs() { autoFs = false; if (document.fullscreenElement) document.exitFullscreen().catch(() => { }); cssFs(false); }
+        $('#fsBtn').onclick = () => isFs() ? exitFs() : enterFs();
+        $('#xfs').onclick = exitFs;
+        vid.addEventListener('click', () => isFs() ? exitFs() : enterFs());
+        // 手機橫放時自動滿版（直放後恢復）
+        const land = matchMedia('(orientation: landscape) and (max-height: 500px)');
+        land.addEventListener('change', () => {
+            if (!vid.srcObject) return;
+            if (land.matches && !isFs()) { autoFs = true; cssFs(true); } else if (!land.matches && autoFs) exitFs();
+        });
+
+        window.addEventListener('pagehide', () => { try { hpeer && hpeer.destroy(); vpeer && vpeer.destroy(); } catch (e) { } });
+
+        // ---------- 初始 ----------
+        {
+            const r = parseRoom(P2PRoom.roomFromUrl());
+            if (r) { $('#codeIn').value = r; setMode('watch'); } else setMode(CAN_SHARE ? 'share' : 'watch');
+        }
+    </script>
+</body>
+
+</html>

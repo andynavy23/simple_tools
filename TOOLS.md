@@ -31,7 +31,7 @@
 | [21 點](mini-games/blackjack.html) | 莊家由程式擔任（17 停牌）；牌堆與暗牌只在房主端；Blackjack 賠 1.5 倍、加倍；30 秒自動停牌；單機：單機對莊家，可加 0–3 位電腦玩家 | — | ✓ |
 | [四子棋](mini-games/connect-four.html) | 本機雙人、對電腦（簡單 / 普通 / 困難，alpha-beta 搜尋）或連線（房主判定落子），每局輪流先手；單機：單機對電腦、悔棋與提示 | — | ✓ |
 | [你畫我猜](mini-games/draw-guess.html) | 畫畫或口述（你說我猜）兩種模式；房主判定猜題與計分；題目只傳給畫 / 說的人；筆跡經房主驗證後轉送；單機：單人練習（隨機題目、計時、自評） | `drawguess-practice` | ✓ |
-| [2048](mini-games/game-2048.html) | 方向鍵 / WASD / 觸控滑動，記錄最高分；每日挑戰（每天同一組亂數） | `g2048_best`、`g2048_daily` |  |
+| [2048](mini-games/game-2048.html) | 方向鍵 / WASD / 觸控滑動，記錄最高分；每日挑戰（每天同一組亂數）；方塊滑動 / 合併 / 新方塊動畫（尊重系統「減少動態效果」） | `g2048_best`、`g2048_daily` |  |
 | [五子棋](mini-games/gobang.html) | 楓之谷像素風五子棋，本地雙人、對電腦（簡單 / 普通 / 困難，棋型評分）或房號連線；單機：單機對電腦、悔棋與提示（手機確認落子） | — | ✓ |
 | [拼圖](mini-games/jigsaw.html) | 3×3–6×6；內建 canvas 圖片或上傳照片（置中裁切、不上傳）；步數、時間、最少步數參考與最佳紀錄 | — |  |
 | [翻牌記憶遊戲](mini-games/memory-match.html) | 單人挑戰最少步數，或連線（最多 4 人，房主驗證）輪流翻牌；單機：單人，或和電腦比賽 | — | ✓ |
@@ -117,9 +117,9 @@
 | [純文字整理](utils/text-tools.html) | 去重複、排序、刪空行、全半形、大小寫，可復原；即時字數 / 閱讀時間；中文 / 英文假文產生；符號表分頁：16 類符號與 emoji、搜尋、點擊複製並累積、最近使用、全形 ↔ 半形對照表 | `symbols_recent` |  |
 | [搶票校時鐘](utils/ticket-clock.html) | 臺灣時間（UTC+8）到毫秒、不受裝置時區影響；網路校時（多來源取往返最短、顯示誤差）；開賣倒數與最後 10 秒提示音；提前毫秒補償；記錄按下時間差；螢幕常亮 | `ticket_hist`、`ticket_target`、`ticket_lead` |  |
 | [時區轉換](utils/timezone.html) | 一個時間對照多個城市，處理夏令時間；即時看板（每秒更新、日夜圖示）；會議時間尋找：選 2–6 城市與上班時段（可午休），24 小時橫條找共同上班時段，無重疊時推薦最少加班 / 半夜時段，可複製建議時間（DST、跨日正確） | `tz_zones`、`tz_meet` |  |
-| [文字轉語音](utils/tts.html) | speechSynthesis 朗讀；長文自動分段、可暫停繼續；選語音、語速、音調 | `tts_text`、`tts_voice` |  |
+| [文字轉語音](utils/tts.html) | speechSynthesis 朗讀；長文自動分段、可暫停繼續；選語音、語速、音調；自動辨識語言（中日韓、俄、阿拉伯等書寫系統與 en/es/fr/de/pt/it/nl/pl/tr/vi/id）並依語言與口音選聲音，可逐段手改語言、依序朗讀（限制：語言與口音取決於裝置安裝的聲音；辨識為啟發式；iOS 需點擊才能朗讀） | `tts_text`、`tts_voice`、`tts_auto` |  |
 | [單位與匯率換算](utils/unit-converter.html) | 長度、重量、坪、溫度等單位、烹飪（杯 / 匙 / 公克，依 15 種食材密度），以及即時匯率（需連網，有離線快取） | `fx_cache` |  |
-| [時間戳轉換](utils/timestamp.html) | Unix 時間戳（秒 / 毫秒自動判斷）與日期互轉；顯示 UTC、ISO 8601、相對時間；13 個常用時區 + 裝置時區（含夏令時間）；即時顯示現在時間戳 | `ts_tz` |  |
+| [時間戳轉換](utils/timestamp.html) | Unix 時間戳（秒 / 毫秒自動判斷）與日期互轉；顯示 UTC、ISO 8601、相對時間；13 個常用時區 + 裝置時區（含夏令時間）；即時顯示現在時間戳；ObjectId 分頁：貼上多個 MongoDB ObjectId（≤200）解出建立時間 / 隨機值 / 計數器並可複製 TSV，時間或時間戳轉最小 / 最大 ObjectId 與 $gte / $lt 查詢片段，快捷今天 / 昨天 / 最近 7 天 / 本月 | `ts_tz` |  |
 | [CSS 產生器](utils/css-gen.html) | 陰影（含內陰影）、線性 / 放射漸層（2–3 色標）、圓角（四角獨立，px / %）；即時預覽；複製 CSS | `cssgen` |  |
 | [輪值表](utils/duty-roster.html) | 每天 / 每週 / 每兩週 / 每月輪換；跳過週六日；指定從第幾位開始；每人次數；標出下一個輪到的人；複製成文字；家事分配分頁：家事（頻率、1–3 分）與成員，自動分配（輪流 + 總分差最小 + 避免連續同人）、打勾、本週 / 本月每人完成次數與分數、複製文字 | `roster_cfg`、`chores_data` |  |
 | [語音備忘錄](utils/voice-memo.html) | 瀏覽器內建語音辨識（中文 / 英文 / 日文）邊說邊顯示暫時結果；備忘清單可編輯 / 刪除 / 複製 / 搜尋 / 匯出 .txt，上限 200 筆；不支援語音的瀏覽器可手動輸入；語音多半會傳到瀏覽器廠商伺服器（頁面有隱私提醒） | `voicememo_items`、`voicememo_lang` |  |
@@ -131,10 +131,12 @@
 | [號碼驗證與測試資料](utils/id-validator.html) | 驗證與產生身分證 / 居留證（含舊式 A–D 與新式 8/9）、統一編號（2023 新規則）、信用卡 Luhn（只產生測試用格式）、臺灣電話簡易格式檢查；全在本機計算、不存資料 | — |  |
 | [水平儀 / 指南針](utils/level-compass.html) | 水平儀（平放 / 立起、歸零校正）、指南針（絕對方位，磁偏角未修正）、坡度（度 / % / 高:長）；iOS 需授權感測器，無感測器時可用模擬輸入預覽；不存資料 | — |  |
 | [照片 EXIF 檢視與清除](utils/exif-viewer.html) | JPEG / PNG / WebP 自行解析 EXIF（相機、鏡頭、時間、曝光、方向、GPS 與地圖文字連結、縮圖）與 XMP / IPTC / ICC 區段；無損移除中繼資料（可保留方向）或 canvas 重新編碼；清除後重新解析；最多 20 張、單張 30MB；不存資料 | — |  |
-| [錄音機](utils/audio-recorder.html) | getUserMedia + MediaRecorder 錄音（webm/opus、mp4、ogg 依瀏覽器）、暫停 / 繼續、即時音量條；清單可播放、改名、刪除、下載原格式或 16-bit WAV；單次 60 分鐘、清單 20 段；只存記憶體，未下載會提醒；不存資料 | — |  |
+| [錄音機 / 音檔剪輯](utils/audio-recorder.html) | getUserMedia + MediaRecorder 錄音（webm/opus、mp4、ogg 依瀏覽器）、暫停 / 繼續、即時音量條；清單可播放、改名、刪除、下載原格式或 16-bit WAV；單次 60 分鐘、清單 20 段；只存記憶體，未下載會提醒；不存資料；音檔剪輯：載入本機音檔（mp3/wav/m4a/aac/ogg/webm/flac，≤100MB、≤30 分鐘）或清單錄音，波形選取、裁剪 / 刪除 / 複製 / 插入靜音 / 淡入淡出 / 音量 / 正規化 / 反轉 / 裁首尾靜音 / 調速、復原重做 20 步、合併多段、匯出 WAV 或壓縮格式（即時錄製，需等於音檔長度的時間）；不支援 MP3；有未下載或未匯出內容離開會提醒 | — |  |
 | [亂碼修復 / 編碼轉換](utils/encoding-fixer.html) | 檔案轉碼（自動偵測 BOM / UTF-8 / Big5 / GBK / SJIS 等，手動指定、預覽、另存 UTF-8，可選 BOM 與換行，上限 20MB）；貼上亂碼逆向修復（互錯組合評分排序）；含 � 的無法修復；不存資料 | — |  |
 | [chmod 權限計算器](utils/chmod-calc.html) | 勾選、八進位、符號三向同步，含 setuid / setgid / sticky；常見組合速查；umask 計算；符號模式模擬（u/g/o/a、+ - =、r w x X s t、g=u）；產生 chmod 與 find 指令；不存資料 | — |  |
 | [股票交易成本與損益試算](utils/stock-cost.html) | 臺股現股 / 零股 / 當沖 / ETF 手續費（折扣、最低手續費）、證交稅、淨損益、報酬率、損益平衡賣價；進位可選；股利補充保費與殖利率；分批買進（最多 20 批）平均成本；費率稅率皆可改（以當時法規與券商為準）；只存偏好設定 | `stockcost_opts` |  |
+| [MongoDB 指令產生器](utils/mongo-query.html) | find / findOne / countDocuments / distinct / aggregate / 新增 / 更新 / 取代 / 刪除 / createIndex；條件建構器（15 種運算子、8 種值型別、一層巢狀 and / or）、投影、排序、limit / skip、12 種更新運算子、聚合階段（可上下移）、索引（unique / TTL / partialFilter）；輸出 mongosh、Node.js、pymongo、Compass JSON 並一鍵複製；8 個快速範本；寫入類操作條件為空時紅色警告；不連線資料庫；只存上次的操作與輸出格式 | `mongoq_opts` |  |
+| [螢幕分享](utils/screen-share.html) | 電腦分享螢幕 / 視窗 / 分頁（可含系統聲音），其他裝置開連結或輸入 6 碼房號觀看；PeerJS 點對點 WebRTC，最多 4 位觀看者（可踢除，顯示連線狀態）；畫質可選 15 / 30 fps 與最大寬度；觀看端顯示解析度 / fps / 位元率 / 延遲，支援全螢幕；手機瀏覽器無法分享螢幕（只能觀看）；對稱型 NAT 需 TURN，本工具未提供；內附手機鏡像到電腦的說明（scrcpy、Miracast、AirPlay、Chromecast）；不存資料 | — |  |
 
 ## 閱讀
 

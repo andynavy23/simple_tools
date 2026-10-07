@@ -292,6 +292,16 @@ const ok = (name) => console.log('ok  ' + name);
         delete global.Chrome; assert.equal(store.set('a', 1), false);
         global.localStorage = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = v; } }; failed = 0; global.Chrome = { storageFailed() { failed++; } };
         assert.equal(store.set('ok', 1), true); assert.equal(failed, 0, '成功時不提示'); delete global.Chrome;
+        // ObjectId
+        const O = Util.oid;
+        assert.ok(O.isValid('507f1f77bcf86cd799439011') && O.isValid(' 507F1F77BCF86CD799439011 ') && !O.isValid('507f1f77bcf86cd79943901') && !O.isValid('zzzf1f77bcf86cd799439011') && !O.isValid(5) && !O.isValid(''));
+        const po = O.parse('507f1f77bcf86cd799439011');
+        assert.deepEqual([po.ok, po.sec, po.ms, po.random, po.counter], [true, 0x507f1f77, 0x507f1f77 * 1000, 'bcf86cd799', 0x439011]);
+        assert.equal(new Date(po.ms).toISOString(), '2012-10-17T21:13:27.000Z');
+        assert.equal(O.parse('nope').ok, false);
+        assert.equal(O.fromDate(Date.UTC(2012, 9, 17, 21, 13, 27)), '507f1f770000000000000000'); assert.equal(O.fromDate(1350508407999, 'ff'), '507f1f77ffffffffffffffff');
+        assert.equal(O.parse(O.fromDate(1700000000123)).ms, 1700000000000);
+        assert.throws(() => O.fromDate(-1)); assert.throws(() => O.fromDate(NaN)); assert.throws(() => O.fromDate(2 ** 33 * 1000));
         // esc / day / statRow
         assert.equal(Util.esc('<a href="x">&\'</a>'), '&lt;a href=&quot;x&quot;&gt;&amp;&#39;&lt;/a&gt;');
         assert.equal(Util.esc(5), '5');

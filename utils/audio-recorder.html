@@ -5,12 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="錄音機：用麥克風錄音，可暫停、即時音量條，錄完直接下載原格式或 WAV；錄音只存在記憶體，不上傳。">
-    <meta property="og:title" content="錄音機" />
-    <meta property="og:description" content="麥克風錄音、暫停、下載 WAV，全部在本機。" />
+    <meta name="description" content="錄音機 / 音檔剪輯：麥克風錄音，或載入本機音檔做波形剪輯（裁剪、刪除、淡入淡出、音量、正規化、合併），匯出 WAV 或壓縮格式；全部在本機記憶體處理，不上傳。">
+    <meta property="og:title" content="錄音機 / 音檔剪輯" />
+    <meta property="og:description" content="麥克風錄音、波形剪輯、合併、匯出 WAV，全部在本機。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/audio-recorder.html" />
-    <title>錄音機</title>
+    <title>錄音機 / 音檔剪輯</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
     <style>
@@ -104,6 +104,8 @@
 
         .item .row button {
             min-width: 0;
+            flex: 1 1 auto;
+            min-height: 44px;
         }
 
         .tag {
@@ -111,16 +113,154 @@
             font-weight: 700;
             color: var(--bad);
         }
+
+        /* ---- 剪輯區 ---- */
+        .drop {
+            border: 2px dashed var(--line);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+        }
+
+        .drop.over {
+            border-color: var(--blue);
+        }
+
+        .drop input[type=file] {
+            width: 100%;
+        }
+
+        .lbl {
+            font-weight: 700;
+            margin: 16px 0 6px;
+        }
+
+        .einfo {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 10px;
+            align-items: baseline;
+            margin-bottom: 8px;
+            overflow-wrap: anywhere;
+        }
+
+        .wavebox {
+            position: relative;
+            height: 140px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            touch-action: pan-y;
+            user-select: none;
+            -webkit-user-select: none;
+            cursor: crosshair;
+        }
+
+        .wavebox canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #selbox {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: var(--blue);
+            opacity: .3;
+            pointer-events: none;
+        }
+
+        .vline {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            margin-left: -1px;
+            pointer-events: none;
+        }
+
+        #curline {
+            background: var(--bad);
+        }
+
+        #phline {
+            background: var(--ok);
+        }
+
+        .ed input[type=range],
+        .ed progress {
+            width: 100%;
+            min-height: 28px;
+            margin: 4px 0;
+        }
+
+        .ops {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+            gap: 8px;
+        }
+
+        .ed button,
+        .mrow button {
+            min-height: 44px;
+            white-space: normal;
+            padding-left: 8px;
+            padding-right: 8px;
+        }
+
+        .prow {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 8px;
+        }
+
+        .prow>input,
+        .prow>select {
+            flex: 1 1 80px;
+            min-width: 0;
+        }
+
+        .prow>button {
+            flex: 1 1 auto;
+        }
+
+        .prow label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 44px;
+        }
+
+        .mrow {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .mrow span {
+            flex: 1;
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .mrow button {
+            flex: 0 0 44px;
+            padding: 0;
+        }
     </style>
 </head>
 
 <body>
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
-        <h1>錄音機</h1>
-        <p class="sub">麥克風錄音，全部在本機，不上傳也不儲存。</p>
+        <h1>錄音機 / 音檔剪輯</h1>
+        <p class="sub">麥克風錄音、載入音檔剪輯合併，全部在本機，不上傳也不儲存。</p>
 
-        <div class="alert"><span>請先下載！</span> 錄音只存在這個分頁的記憶體裡，重新整理或關閉頁面就會消失，無法找回。</div>
+        <div class="alert"><span>請先下載！</span> 錄音與剪輯結果只存在這個分頁的記憶體裡，重新整理或關閉頁面就會消失，無法找回。</div>
 
         <div class="card">
             <div class="timer" id="timer">00:00</div>
@@ -139,37 +279,182 @@
             <p class="note" id="empty" style="margin:0">還沒有錄音。</p>
             <div id="list"></div>
         </div>
+
+        <div class="card ed" id="editCard">
+            <h2>音檔剪輯</h2>
+            <div class="drop" id="drop">
+                <input type="file" id="efile" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm,.flac" aria-label="選擇音檔">
+                <p class="note" style="margin:8px 0 0">選擇或拖入音檔（mp3、wav、m4a、aac、ogg、webm、flac…，單檔 ≤ 100MB、長度 ≤ 30 分鐘）；或按上方錄音清單的「剪輯」。</p>
+            </div>
+            <p class="msg" id="emsg" role="alert"></p>
+
+            <div id="editor" hidden>
+                <div class="einfo"><b id="eName"></b><span class="note" id="eMeta"></span></div>
+                <div class="prow" style="margin-top:0">
+                    <button id="undo" disabled>↶ 復原</button>
+                    <button id="redo" disabled>↷ 重做</button>
+                    <span class="note" id="hinfo" style="flex:1 1 100%"></span>
+                </div>
+
+                <div class="lbl">波形（拖曳選取範圍，點一下定位游標）</div>
+                <div class="wavebox" id="wbox"><canvas id="wave"></canvas><div id="selbox" hidden></div><div class="vline" id="curline"></div><div class="vline" id="phline" hidden></div></div>
+                <input type="range" id="vscroll" min="0" max="1000" value="0" aria-label="水平捲動">
+                <div class="ops">
+                    <button id="zout" aria-label="縮小">－</button>
+                    <button id="zin" aria-label="放大">＋</button>
+                    <button id="zall">全部</button>
+                    <button id="zsel">縮放到選取</button>
+                </div>
+
+                <div class="lbl">播放預覽</div>
+                <div class="prow" style="margin-top:0">
+                    <button class="primary" id="play">▶ 播放</button>
+                    <button id="stopP">■ 停止</button>
+                    <label><input type="checkbox" id="selOnly"> 只播選取區</label>
+                    <label><input type="checkbox" id="loop"> 循環</label>
+                </div>
+                <p class="note" id="tpos" style="margin:6px 0 0"></p>
+
+                <div class="lbl">選取區間（精確到毫秒）</div>
+                <div class="prow" style="margin-top:0">
+                    <input type="text" id="selA" aria-label="起點（分:秒.毫秒）" inputmode="decimal" placeholder="起點 00:00.000">
+                    <input type="text" id="selB" aria-label="終點（分:秒.毫秒）" inputmode="decimal" placeholder="終點 00:00.000">
+                </div>
+                <input type="range" id="sliA" min="0" max="1000" value="0" aria-label="起點滑桿">
+                <input type="range" id="sliB" min="0" max="1000" value="0" aria-label="終點滑桿">
+                <div class="ops">
+                    <button id="selAll">全選</button>
+                    <button id="selNone">清除選取</button>
+                </div>
+                <p class="note" id="selInfo" style="margin:6px 0 0"></p>
+
+                <div class="lbl">編輯（可復原 / 重做，最多 20 步）</div>
+                <div class="ops">
+                    <button id="opCrop">裁剪（保留選取）</button>
+                    <button id="opCut">刪除選取區</button>
+                    <button id="opCopy">複製選取區到游標處</button>
+                    <button id="opRev">反轉</button>
+                    <button id="opNorm">正規化（峰值 -1 dB）</button>
+                </div>
+                <div class="prow">
+                    <input type="number" id="silSec" value="1" min="0.01" max="600" step="0.1" aria-label="靜音秒數">
+                    <button id="opSil">在游標處插入靜音（秒）</button>
+                </div>
+                <div class="prow">
+                    <select id="fadeKind" aria-label="淡入淡出曲線">
+                        <option value="lin">線性</option>
+                        <option value="log">對數</option>
+                    </select>
+                    <button id="opFi">選取區淡入</button>
+                    <button id="opFo">選取區淡出</button>
+                </div>
+                <div class="prow">
+                    <input type="number" id="gainV" value="6" step="1" aria-label="音量調整數值">
+                    <select id="gainU" aria-label="音量單位">
+                        <option value="db">dB</option>
+                        <option value="pct">%</option>
+                    </select>
+                    <button id="opGain">調整音量</button>
+                </div>
+                <div class="prow">
+                    <input type="number" id="trimDb" value="-50" min="-90" max="-6" step="1" aria-label="靜音門檻（dB）">
+                    <button id="opTrim">裁掉首尾靜音（門檻 dB）</button>
+                </div>
+                <div class="prow">
+                    <input type="number" id="spd" value="1.25" min="0.5" max="2" step="0.05" aria-label="速度倍率">
+                    <button id="opSpeed">調速（會變音高）</button>
+                </div>
+                <p class="note">音量、正規化、反轉、調速：有選取就只動選取區，沒選取就動整段。</p>
+
+                <div class="lbl">匯出</div>
+                <div class="prow" style="margin-top:0">
+                    <input type="text" id="xname" maxlength="60" aria-label="匯出檔名" style="flex:1 1 100%">
+                    <select id="xrate" aria-label="取樣率">
+                        <option value="orig">取樣率：原始</option>
+                        <option value="44100">44100 Hz</option>
+                        <option value="22050">22050 Hz</option>
+                        <option value="16000">16000 Hz</option>
+                    </select>
+                    <select id="xch" aria-label="聲道">
+                        <option value="orig">聲道：原始</option>
+                        <option value="1">單聲道</option>
+                    </select>
+                </div>
+                <div class="ops" style="margin-top:8px">
+                    <button class="primary" id="xwav">匯出 WAV（16-bit）</button>
+                    <button id="xcomp">匯出壓縮格式</button>
+                    <button id="xadd">加回錄音清單</button>
+                </div>
+                <progress id="xprog" value="0" max="1" hidden></progress>
+                <div class="prow" id="xrow" hidden style="margin-top:0">
+                    <span class="note" id="xstat" style="flex:1 1 auto"></span>
+                    <button id="xcancel">取消匯出</button>
+                </div>
+                <p class="note" id="xinfo">壓縮格式是用瀏覽器即時錄製，需要等於音檔長度的時間（10 分鐘的音檔要等 10 分鐘）；不支援 MP3。</p>
+            </div>
+        </div>
+
+        <div class="card ed">
+            <h2>合併音檔</h2>
+            <p class="note" style="margin-top:0">把錄音清單的段落、目前剪輯區或本機音檔依順序串接成一段，結果載入上方剪輯區。聲道數與取樣率以第一段為準。</p>
+            <div class="prow" style="margin-top:0">
+                <select id="mSrc" aria-label="要加入的來源"></select>
+                <button id="mAdd">加入</button>
+            </div>
+            <div class="prow">
+                <input type="file" id="mFile" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm,.flac" aria-label="加入本機音檔" style="max-width:100%">
+            </div>
+            <div id="mList"></div>
+            <p class="note" id="mEmpty" style="margin:8px 0 0">合併清單是空的（最多 20 段，至少 2 段才能合併）。</p>
+            <div class="ops" style="margin-top:8px">
+                <button class="primary" id="mGo" disabled>合併並載入剪輯區</button>
+                <button id="mClear">清空合併清單</button>
+            </div>
+            <p class="msg" id="mmsg" role="alert"></p>
+        </div>
     </div>
 
     <template id="help">
         <h3>這是什麼</h3>
-        <p>用手機或電腦的麥克風錄音的小工具。錄好的聲音先留在這一頁，你可以試聽、重新命名，再下載成原格式或 WAV。</p>
+        <p>兩個功能合一：用麥克風錄音，以及把錄音或本機音檔拿來剪輯（裁剪、刪除、淡入淡出、調音量、合併…）。全部在你的瀏覽器裡處理，不上傳。</p>
         <h3>什麼時候用</h3>
         <ul>
-        <li>開會、上課、訪談時臨時錄音。</li>
-        <li>錄一段語音訊息、練習講稿或唱歌。</li>
-        <li>需要 WAV 檔交給剪輯或語音辨識軟體。</li>
+        <li>開會、上課、訪談時臨時錄音，事後剪掉開頭結尾。</li>
+        <li>把一段長錄音裁成要的部分，或把幾段串成一個檔。</li>
+        <li>幫語音訊息、鈴聲加淡入淡出、調整音量。</li>
+        <li>把 m4a、ogg、flac 等檔轉成 WAV 交給其他軟體。</li>
         </ul>
-        <h3>怎麼用</h3>
+        <h3>怎麼用（錄音）</h3>
         <ol>
-        <li>按「● 錄音」，瀏覽器會詢問麥克風權限，請選允許。</li>
-        <li>錄音中可按「暫停」、「繼續」；上方有計時與即時音量條，沒動表示沒收到聲音。</li>
-        <li>按「停止」後，錄音出現在「本次錄音」清單，可播放、改名。</li>
-        <li>按「下載原格式」或「下載 WAV」存檔；「刪除」會從清單移除。</li>
+        <li>按「● 錄音」並允許麥克風；可「暫停」、「繼續」，上方有計時與音量條。</li>
+        <li>按「停止」後，錄音出現在「本次錄音」清單，可播放、改名、「下載原格式」、「下載 WAV」，或按「剪輯」送進剪輯區。</li>
+        </ol>
+        <h3>怎麼用（剪輯）</h3>
+        <ol>
+        <li>在「音檔剪輯」選擇或拖入音檔，或按錄音清單的「剪輯」。</li>
+        <li>選取範圍：在波形上水平拖曳；或在「起點 / 終點」輸入框打時間（例 <kbd>1:23.456</kbd>）；或拉滑桿。點一下波形是放游標。</li>
+        <li>用 ＋ / － / 「全部」/「縮放到選取」縮放，下方滑桿左右捲動（手機不必雙指縮放）。</li>
+        <li>按「裁剪」「刪除選取區」「淡入 / 淡出」「調整音量」「正規化」「反轉」「裁掉首尾靜音」「調速」等；做錯按「復原」。</li>
+        <li>「▶ 播放」預覽，可只播選取區、循環。滿意後輸入檔名，按「匯出 WAV」；或「加回錄音清單」。</li>
+        <li>「合併音檔」：把清單段落、目前剪輯區、本機檔加進合併清單，用 ↑ ↓ 調順序，按「合併並載入剪輯區」。</li>
         </ol>
         <h3>範例</h3>
-        <div class="eg">按「● 錄音」 → 說話 10 秒 → 停止
-        → 清單出現「錄音 14:05:09」，10 秒、約 100KB
-        → 下載 WAV：16-bit、單聲道或雙聲道 PCM</div>
+        <div class="eg">載入 10 秒的 wav → 起點填 2、終點填 5 → 「裁剪（保留選取）」
+        → 長度變 00:03.000 → 「匯出 WAV」
+        → 檔名「原檔名-剪輯.wav」，3 秒、16-bit</div>
         <h3>小提醒</h3>
         <ul>
-        <li>錄音只存在記憶體，重新整理或關閉就會消失。有尚未下載的錄音時，離開頁面前會提醒。</li>
-        <li>上限：單次錄音 60 分鐘（到時自動停止）、清單 20 段（滿了要先刪除或下載後刪除才能再錄）。WAV 轉換限 15 分鐘內的錄音，更長請下載原格式。</li>
-        <li>格式依瀏覽器而定：Chrome / Edge / Firefox 多為 webm（opus），Safari（含 iPhone）為 mp4（存成 .m4a），部分瀏覽器是 ogg；頁面會顯示格式，原格式檔小很多，WAV 無壓縮、檔案大。</li>
-        <li>mp4 / ogg 錄音轉 WAV 時，若瀏覽器無法解碼會顯示說明，請改下載原格式。瀏覽器完全不支援錄音（沒有 MediaRecorder）時，錄音鈕會停用並說明原因。</li>
-        <li>mp4 / ogg 路徑只用模擬的 MediaRecorder 測過，尚未在 iPhone 等真機上實測。</li>
-        <li>權限被拒時，請到網址列旁的網站設定允許麥克風，再按一次錄音。需要 https 網址（或本機）才能使用麥克風。</li>
-        <li>隱私與儲存：聲音不會上傳，也不寫入任何本機儲存，只存在記憶體。</li>
+        <li>手機操作：波形上水平拖曳選取、垂直滑動則捲動頁面；拖不準就用起訖輸入框與滑桿，按鈕都夠大。</li>
+        <li><b>不支援 MP3 匯出</b>：MP3 需要額外的編碼程式，本頁刻意不引入任何第三方程式，所以沒有。請用 WAV（無壓縮，最通用，檔案大）或「壓縮格式」（webm / mp4 / ogg 依瀏覽器）。</li>
+        <li><b>壓縮格式要等於音檔長度的時間</b>：它是播放同時即時錄製，畫面有進度與「取消匯出」；不想等就用 WAV。</li>
+        <li>WAV 匯出可選取樣率（原始 / 44100 / 22050 / 16000 Hz）與單聲道；降取樣會損失高頻。檔案超過 400MB 會拒絕，請降取樣率或改單聲道。</li>
+        <li>匯入的音檔取樣率以瀏覽器解碼結果為準（常為 44.1k 或 48k）；超過兩個聲道只取前兩個。</li>
+        <li>限制：單檔 ≤ 100MB、長度 ≤ 30 分鐘（超過會拒絕並說明）；合併後也不能超過 30 分鐘；復原最多 20 步，記憶體吃緊時會較早丟掉最舊的步驟。</li>
+        <li>調速是重新取樣，速度與音高一起變（0.5 倍變低沉、2 倍變尖）；調音量超過 0 dBFS 的尖峰會被限幅削平，避免爆音。</li>
+        <li>錄音與剪輯結果只存在記憶體，不寫入任何本機儲存。有尚未下載的錄音或未匯出的編輯時，離開頁面前會提醒。錄音清單上限 20 段，滿了要先刪除才能再錄或加回；單次錄音 60 分鐘，下載 WAV 限 15 分鐘內的錄音（更長可「剪輯」成 30 分鐘內，或下載原格式）。</li>
+        <li>格式依瀏覽器而定：Chrome / Edge / Firefox 多為 webm（opus），Safari（含 iPhone）為 mp4（存成 .m4a）；瀏覽器無法解碼的檔案會顯示訊息，請改用其他格式。</li>
+        <li>權限被拒時，請到網址列旁的網站設定允許麥克風；需要 https 網址（或本機）才能錄音。剪輯不需要麥克風。</li>
+        <li>mp4 / ogg 錄音路徑只用模擬的 MediaRecorder 測過，尚未在 iPhone 等真機上實測。</li>
         </ul>
     </template>
 
@@ -225,6 +510,121 @@
                 v.setInt16(o, x < 0 ? Math.round(x * 0x8000) : Math.round(x * 0x7FFF), true); o += 2;
             }
             return new Uint8Array(buf);
+        }
+
+        // ---- 剪輯：chs 一律是 Float32Array 陣列（每聲道一個）、視為不可變——每個操作回傳新陣列，所以復原只要留舊參照 ----
+        const MAX_EDIT_MS = 30 * 60 * 1000, MAX_FILE = 100 * 1048576, MAX_HIST = 20, HIST_BYTES = 512 * 1048576, MAX_WAV_BYTES = 400 * 1048576;
+        const nOf = (chs) => chs.length ? chs[0].length : 0;
+        const clampInt = (x, lo, hi) => Math.min(hi, Math.max(lo, Math.round(+x) || 0));
+        // 區間：夾在 [0, n]、反向自動對調
+        function clampRange(a, b, n) { const x = clampInt(a, 0, n), y = clampInt(b, 0, n); return x <= y ? [x, y] : [y, x]; }
+        // 實際作用範圍：選取為空（起訖相同）就是整段
+        function effRange(a, b, n) { const r = clampRange(a, b, n); return r[0] === r[1] ? [0, n] : r; }
+        const silence = (nc, n) => Array.from({ length: nc }, () => new Float32Array(n));
+        function sliceCh(chs, a, b) { const [x, y] = clampRange(a, b, nOf(chs)); return chs.map(c => c.slice(x, y)); }
+        // 把 [a,b) 換成 piece（長度可不同）：裁剪 / 刪除 / 插入 / 調速都是它
+        function spliceCh(chs, a, b, piece) {
+            const n = nOf(chs), [x, y] = clampRange(a, b, n), pl = nOf(piece);
+            return chs.map((c, k) => { const p = piece[k] || piece[0], o = new Float32Array(x + pl + (n - y)); o.set(c.subarray(0, x)); o.set(p, x); o.set(c.subarray(y), x + pl); return o; });
+        }
+        // 淡入淡出曲線：t 0–1 → 增益 0–1（lin 線性、log 對數：前段上升快）
+        function fadeGain(t, kind) { t = Math.min(1, Math.max(0, +t || 0)); return kind === 'log' ? Math.log10(1 + 9 * t) : t; }
+        // dir 'in'：起點 0 → 終點 1；'out'：起點 1 → 終點 0
+        function applyFade(chs, a, b, dir, kind) {
+            const [x, y] = clampRange(a, b, nOf(chs)), L = y - x;
+            return chs.map(c => { const o = c.slice(); for (let i = 0; i < L; i++) { const t = L > 1 ? i / (L - 1) : 0; o[x + i] *= fadeGain(dir === 'out' ? 1 - t : t, kind); } return o; });
+        }
+        const dbToGain = (db) => Math.pow(10, db / 20);
+        const gainToDb = (g) => g > 0 ? 20 * Math.log10(g) : -Infinity;
+        const clampDb = (db) => Math.min(24, Math.max(-60, +db || 0));
+        // 乘上增益；limit 為 true 時限幅在 ±1（防爆音）
+        function applyGain(chs, a, b, g, limit = true) {
+            const [x, y] = clampRange(a, b, nOf(chs));
+            return chs.map(c => { const o = c.slice(); for (let i = x; i < y; i++) { const v = o[i] * g; o[i] = limit ? (v > 1 ? 1 : v < -1 ? -1 : v) : v; } return o; });
+        }
+        function peakOf(chs, a, b) {
+            const [x, y] = clampRange(a, b, nOf(chs)); let p = 0;
+            for (const c of chs) for (let i = x; i < y; i++) { const v = Math.abs(c[i]); if (v > p) p = v; }
+            return p;
+        }
+        // 正規化：範圍內峰值調到 targetDb（預設 -1 dBFS）；全靜音原樣回傳
+        function normalizeChs(chs, a, b, targetDb = -1) { const p = peakOf(chs, a, b); return p > 0 ? applyGain(chs, a, b, dbToGain(targetDb) / p) : chs; }
+        function reverseChs(chs, a, b) { const [x, y] = clampRange(a, b, nOf(chs)); return chs.map(c => { const o = c.slice(); o.subarray(x, y).reverse(); return o; }); }
+        // 靜音偵測：回傳 [第一個超過門檻的取樣, 最後一個超過門檻的取樣 + 1]；全部低於門檻回傳 null
+        function findSilence(chs, thrDb) {
+            const thr = dbToGain(thrDb), n = nOf(chs); let s = -1, e = -1;
+            for (let i = 0; i < n && s < 0; i++) for (const c of chs) if (Math.abs(c[i]) > thr) { s = i; break; }
+            if (s < 0) return null;
+            for (let i = n - 1; i >= s && e < 0; i--) for (const c of chs) if (Math.abs(c[i]) > thr) { e = i + 1; break; }
+            return [s, e];
+        }
+        // 聲道數轉換：多 → 單取平均；單 → 多複製
+        function remix(chs, nc) {
+            if (chs.length === nc) return chs;
+            if (nc === 1) { const n = nOf(chs), o = new Float32Array(n), k = chs.length; for (const c of chs) for (let i = 0; i < n; i++) o[i] += c[i]; for (let i = 0; i < n; i++) o[i] /= k; return [o]; }
+            return Array.from({ length: nc }, (_, i) => chs[Math.min(i, chs.length - 1)]);
+        }
+        // 重新取樣成指定長度 m：縮小（倍率 > 1）用區間平均，放大用線性內插
+        function resampleLen(c, m) {
+            const n = c.length, o = new Float32Array(m); if (!n || !m) return o;
+            const r = n / m;
+            for (let i = 0; i < m; i++) {
+                const p = i * r;
+                if (r > 1) { const j0 = Math.floor(p), j1 = Math.max(j0 + 1, Math.min(n, Math.ceil(p + r))); let s = 0; for (let j = j0; j < j1; j++) s += c[j]; o[i] = s / (j1 - j0); }
+                else { const j = Math.min(n - 1, Math.floor(p)), f = p - j; o[i] = c[j] * (1 - f) + c[Math.min(n - 1, j + 1)] * f; }
+            }
+            return o;
+        }
+        const resampleCh = (c, from, to) => from === to ? c : resampleLen(c, Math.round(c.length * to / from));
+        const resampleChs = (chs, from, to) => from === to ? chs : chs.map(c => resampleCh(c, from, to));
+        // 調速：範圍 [a,b) 以 f 倍速重取樣（f 夾在 0.5–2，長度變 1/f，音高跟著變）
+        function speedChs(chs, a, b, f) {
+            f = Math.min(2, Math.max(0.5, +f || 1)); const [x, y] = effRange(a, b, nOf(chs));
+            return spliceCh(chs, x, y, sliceCh(chs, x, y).map(c => resampleLen(c, Math.max(1, Math.round(c.length / f)))));
+        }
+        // 依序串接：聲道數與取樣率以第一段為準
+        function concatAudio(list) {
+            if (!list.length) return { chs: [new Float32Array(0)], sr: 44100 };
+            const sr = list[0].sr, nc = list[0].chs.length, parts = list.map(it => resampleChs(remix(it.chs, nc), it.sr, sr));
+            const total = parts.reduce((s, p) => s + nOf(p), 0);
+            return { sr, chs: Array.from({ length: nc }, (_, k) => { const o = new Float32Array(total); let at = 0; for (const p of parts) { o.set(p[k], at); at += p[k].length; } return o; }) };
+        }
+        // 波形峰值降採樣：[s0,s1) 分成 buckets 格，每格取最小 / 最大（每格最多抽樣 256 點，大檔也快）
+        function peaksFor(chs, s0, s1, buckets) {
+            const n = nOf(chs), mn = new Float32Array(buckets), mx = new Float32Array(buckets), span = (s1 - s0) / buckets;
+            for (let k = 0; k < buckets; k++) {
+                const a = Math.max(0, Math.floor(s0 + span * k)); let b = Math.max(a + 1, Math.floor(s0 + span * (k + 1))); b = Math.min(b, n);
+                if (a >= b) continue;
+                const step = Math.ceil((b - a) / 256); let lo = Infinity, hi = -Infinity;
+                for (const c of chs) for (let i = a; i < b; i += step) { const v = c[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
+                mn[k] = lo; mx[k] = hi;
+            }
+            return { mn, mx };
+        }
+        // 時間：毫秒 ↔ mm:ss.mmm（滿 1 小時為 h:mm:ss.mmm）；parseTime 接受 "83.456"、"1:23.456"、"1:02:03.5"，錯誤回傳 NaN
+        function fmtTime(ms) {
+            ms = Math.max(0, Math.round(+ms || 0));
+            const h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, s = Math.floor(ms / 1000) % 60;
+            return (h ? h + ':' : '') + P2(m) + ':' + P2(s) + '.' + String(ms % 1000).padStart(3, '0');
+        }
+        function parseTime(str) {
+            const p = String(str).trim().split(':'); if (!p[0] || p.length > 3) return NaN;
+            if (!p.every((x, i) => i < p.length - 1 ? /^\d+$/.test(x) : /^\d+(\.\d+)?$/.test(x))) return NaN;
+            return Math.round(p.map(Number).reduce((a, x) => a * 60 + x, 0) * 1000);
+        }
+        // 復原歷史：只留最近 maxStates 個狀態，且不重複計算的記憶體 ≤ maxBytes（至少留一個）
+        function trimHistory(hist, maxStates, maxBytes) {
+            const h = hist.slice(-maxStates);
+            const bytes = (arr) => { const s = new Set(); let t = 0; for (const st of arr) for (const c of st) if (!s.has(c)) { s.add(c); t += c.byteLength; } return t; };
+            while (h.length > 1 && bytes(h) > maxBytes) h.shift();
+            return h;
+        }
+        const wavBytes = (n, nc) => 44 + n * nc * 2;
+        // 載入限制：回傳空字串表示可以
+        function limitMsg(size, ms) {
+            if (size > MAX_FILE) return `檔案 ${fmtSize(size)} 超過 100MB 上限，請先用其他工具壓縮或裁短。`;
+            if (ms > MAX_EDIT_MS) return `音檔長度 ${fmtDur(ms)} 超過 30 分鐘上限，請先分段。`;
+            return '';
         }
         // --- /pure ---
 
@@ -308,13 +708,16 @@
                 b1.onclick = () => { download(it.blob, cleanName(nm.value) + '.' + extFor(it.type)); it.dl = true; tag.textContent = ''; };
                 const b2 = document.createElement('button'); b2.className = 'sm wav'; b2.textContent = '下載 WAV';
                 b2.onclick = () => toWav(it, b2, tag);
+                const b4 = document.createElement('button'); b4.className = 'sm edit'; b4.textContent = '剪輯';
+                b4.onclick = () => { if (it.ms > MAX_EDIT_MS) { esay(limitMsg(0, it.ms)); return; } loadBlob(it.blob, it.name, it.ms); };
                 const b3 = document.createElement('button'); b3.className = 'sm del'; b3.textContent = '刪除';
                 b3.onclick = () => {
                     if (!it.dl && !confirm('這段錄音還沒下載，刪除後無法復原。確定刪除？')) return;
                     URL.revokeObjectURL(it.url); items = items.filter(x => x !== it); renderList();
                 };
-                row.append(b1, b2, b3); d.append(nm, au, meta, row); return d;
+                row.append(b1, b2, b4, b3); d.append(nm, au, meta, row); return d;
             }));
+            refreshMergeOpts();
         }
         async function toWav(it, btn, tag) {
             if (it.ms > MAX_WAV_MS) { say(`這段錄音超過 ${MAX_WAV_MS / 60000} 分鐘，不轉 WAV（記憶體會不足），請下載原格式。`); return; }
@@ -330,8 +733,319 @@
             finally { if (c) c.close().catch(() => { }); btn.textContent = label; btn.disabled = false; }
         }
 
+
+        // ================= 剪輯區 =================
+        // ed：{ name, sr, chs, hist（狀態陣列）, hi（目前位置）, a, b（選取）, cur（游標）, clean（上次匯出 / 載入時的 chs，用來判斷有沒有未匯出的編輯）}
+        let ed = null, view = { s: 0, spp: 1 }, P = null, pctx = null, pbCache = null, XP = null, mq = [], mseq = 0, busy = false, lastDraw = 0;
+        const MIN_SPP = 0.25;
+        const len = () => ed ? nOf(ed.chs) : 0;
+        const esay = (t) => { $('#emsg').textContent = t || ''; };
+        const unsaved = () => !!(ed && ed.chs !== ed.clean);
+        const W = () => Math.max(50, $('#wbox').clientWidth);
+        const fitSpp = () => Math.max(MIN_SPP, len() / W());
+        const ms2s = (ms) => Math.round(ms * ed.sr / 1000), s2ms = (s) => s / ed.sr * 1000;
+
+        async function decodeBlob(blob) {
+            if (!AC) throw new Error('這個瀏覽器不支援音訊解碼（沒有 AudioContext）');
+            const c = new AC();
+            try {
+                const ab = await c.decodeAudioData(await blob.arrayBuffer());
+                if (!ab.length) throw new Error('音檔沒有內容');
+                const m = limitMsg(0, ab.length / ab.sampleRate * 1000); if (m) throw new Error(m);
+                const chs = []; for (let i = 0; i < Math.min(2, ab.numberOfChannels); i++) chs.push(ab.getChannelData(i));
+                return { chs, sr: ab.sampleRate };
+            } finally { c.close().catch(() => { }); }
+        }
+        const decodeFail = (e) => '無法解碼這個檔案（瀏覽器可能不支援此格式，或檔案已損壞）：' + ((e && (e.message || e.name)) || '解碼錯誤');
+
+        function loadSource(chs, sr, name) {
+            if (unsaved() && !confirm('目前的編輯結果還沒匯出，載入新音檔會讓它消失且無法復原。確定載入？')) return false;
+            stopPlay(); pbCache = null;
+            ed = { name: cleanName(name, '音檔'), sr, chs, hist: [chs], hi: 0, a: 0, b: 0, cur: 0, clean: chs };
+            $('#editor').hidden = false; $('#xname').value = cleanName(ed.name + '-剪輯');
+            view = { s: 0, spp: fitSpp() }; clampView(); draw(); updateInfo(); esay('');
+            return true;
+        }
+        async function loadBlob(blob, name, ms) {
+            if (busy) return; busy = true; esay('解碼中…');
+            try {
+                const m = limitMsg(blob.size, ms || 0); if (m) { esay(m); return; }
+                const d = await decodeBlob(blob);
+                if (loadSource(d.chs, d.sr, name)) { esay(''); $('#editor').scrollIntoView({ block: 'start' }); } else esay('');
+            } catch (e) { esay(decodeFail(e)); } finally { busy = false; }
+        }
+        const baseName = (n) => String(n).replace(/\.[^.]*$/, '');
+
+        // ---- 波形 ----
+        function clampView() {
+            const n = len(), w = W(); view.spp = Math.min(fitSpp(), Math.max(MIN_SPP, view.spp));
+            view.s = Math.max(0, Math.min(view.s, Math.max(0, n - w * view.spp)));
+        }
+        function zoom(f, c) {
+            const w = W(), o = view.spp, fr = (c - view.s) / (w * o);
+            view.spp = o * f; clampView0(); view.s = c - fr * w * view.spp; clampView(); draw();
+        }
+        const clampView0 = () => { view.spp = Math.min(fitSpp(), Math.max(MIN_SPP, view.spp)); };
+        function draw() {
+            if (!ed) return;
+            const t0 = performance.now(), w = W(), h = 140, dpr = window.devicePixelRatio || 1, cv = $('#wave');
+            cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+            const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+            const cs = getComputedStyle(document.documentElement);
+            g.fillStyle = cs.getPropertyValue('--muted').trim() || '#888'; g.globalAlpha = .5; g.fillRect(0, h / 2, w, 1); g.globalAlpha = 1;
+            g.fillStyle = cs.getPropertyValue('--text').trim() || '#000';
+            const { mn, mx } = peaksFor(ed.chs, view.s, view.s + w * view.spp, w), k = h / 2 * 0.95;
+            for (let x = 0; x < w; x++) { if (mx[x] === 0 && mn[x] === 0) continue; const y0 = h / 2 - mx[x] * k, y1 = h / 2 - mn[x] * k; g.fillRect(x, y0, 1, Math.max(1, y1 - y0)); }
+            const n = len(), room = n - w * view.spp, sc = $('#vscroll');
+            sc.disabled = room <= 0; sc.value = room > 0 ? Math.round(view.s / room * 1000) : 0;
+            lastDraw = performance.now() - t0; overlays();
+        }
+        const xOf = (s) => (s - view.s) / view.spp;
+        function overlays() {
+            if (!ed) return;
+            const sb = $('#selbox'); sb.hidden = ed.a >= ed.b;
+            sb.style.left = xOf(ed.a) + 'px'; sb.style.width = Math.max(1, xOf(ed.b) - xOf(ed.a)) + 'px';
+            $('#curline').style.left = xOf(ed.cur) + 'px';
+        }
+        addEventListener('resize', () => { if (ed) { clampView(); draw(); } });
+        new MutationObserver(() => draw()).observe(document.documentElement, { attributes: true });
+        $('#vscroll').oninput = (e) => { const room = len() - W() * view.spp; if (room > 0) { view.s = e.target.value / 1000 * room; draw(); } };
+        $('#zin').onclick = () => ed && zoom(0.5, ed.a < ed.b ? (ed.a + ed.b) / 2 : ed.cur);
+        $('#zout').onclick = () => ed && zoom(2, ed.a < ed.b ? (ed.a + ed.b) / 2 : ed.cur);
+        $('#zall').onclick = () => { if (ed) { view = { s: 0, spp: fitSpp() }; clampView(); draw(); } };
+        $('#zsel').onclick = () => { if (ed && ed.a < ed.b) { const w = W(); view.spp = Math.max(MIN_SPP, (ed.b - ed.a) * 1.1 / w); clampView0(); view.s = ed.a - (ed.b - ed.a) * 0.05; clampView(); draw(); } };
+
+        // ---- 選取 / 游標 ----
+        function setSel(a, b) { const r = clampRange(a, b, len()); ed.a = r[0]; ed.b = r[1]; updateSel(); overlays(); }
+        function setCur(s) { ed.cur = clampInt(s, 0, len()); overlays(); updateSel(); }
+        function updateSel() {
+            const n = len() || 1;
+            $('#selA').value = fmtTime(s2ms(ed.a)); $('#selB').value = fmtTime(s2ms(ed.b));
+            $('#sliA').value = Math.round(ed.a / n * 1000); $('#sliB').value = Math.round(ed.b / n * 1000);
+            $('#selInfo').textContent = (ed.a < ed.b ? `選取長度 ${fmtTime(s2ms(ed.b - ed.a))}` : '沒有選取（音量 / 正規化 / 反轉 / 調速會作用在整段）') + `　游標 ${fmtTime(s2ms(ed.cur))}`;
+            if (!P) $('#tpos').textContent = `${fmtTime(s2ms(ed.cur))} / ${fmtTime(s2ms(len()))}`;
+        }
+        function updateInfo() {
+            if (!ed) return;
+            $('#eName').textContent = ed.name; $('#eMeta').textContent = `${fmtTime(s2ms(len()))}　${ed.sr} Hz　${ed.chs.length === 1 ? '單聲道' : '雙聲道'}`;
+            $('#undo').disabled = ed.hi <= 0; $('#redo').disabled = ed.hi >= ed.hist.length - 1;
+            $('#hinfo').textContent = `可復原 ${ed.hi} 步、可重做 ${ed.hist.length - 1 - ed.hi} 步` + (unsaved() ? '　（有未匯出的編輯）' : '');
+            updateSel(); refreshMergeOpts();
+        }
+        const sampAt = (e) => { const r = $('#wbox').getBoundingClientRect(); return clampInt(view.s + (e.clientX - r.left) * view.spp, 0, len()); };
+        let drag = null;
+        const wb = $('#wbox');
+        wb.addEventListener('pointerdown', (e) => { if (!ed || (e.pointerType === 'mouse' && e.button !== 0)) return; try { wb.setPointerCapture(e.pointerId); } catch (x) { } drag = { s0: sampAt(e), x0: e.clientX, moved: false }; });
+        wb.addEventListener('pointermove', (e) => { if (!drag) return; if (Math.abs(e.clientX - drag.x0) > 4) drag.moved = true; if (drag.moved) setSel(drag.s0, sampAt(e)); });
+        wb.addEventListener('pointerup', (e) => { if (drag && !drag.moved) setCur(drag.s0); drag = null; });
+        wb.addEventListener('pointercancel', () => { drag = null; });
+        const timeInput = (id, which) => {
+            $(id).onchange = () => {
+                if (!ed) return; const ms = parseTime($(id).value);
+                if (isNaN(ms)) { esay('時間格式不對，請輸入像 1:23.456 或 83.456（秒）。'); updateSel(); return; }
+                esay(''); const s = ms2s(ms); which ? setSel(ed.a, s) : setSel(s, ed.b);
+            };
+        };
+        timeInput('#selA', 0); timeInput('#selB', 1);
+        $('#sliA').oninput = (e) => { const s = Math.round(e.target.value / 1000 * len()); setSel(Math.min(s, ed.b), ed.b); };
+        $('#sliB').oninput = (e) => { const s = Math.round(e.target.value / 1000 * len()); setSel(ed.a, Math.max(s, ed.a)); };
+        $('#selAll').onclick = () => ed && setSel(0, len());
+        $('#selNone').onclick = () => ed && setSel(0, 0);
+
+        // ---- 歷史 / 編輯 ----
+        function commit(chs, msg, sel) {
+            const n = nOf(chs);
+            if (!n) { esay('結果不能是空的，至少要保留一點聲音。'); return false; }
+            if (s2ms(n) > MAX_EDIT_MS) { esay('結果會超過 30 分鐘上限，沒有執行。'); return false; }
+            stopPlay(); pbCache = null;
+            ed.hist.length = ed.hi + 1; ed.hist.push(chs); ed.hist = trimHistory(ed.hist, MAX_HIST + 1, HIST_BYTES); ed.hi = ed.hist.length - 1; ed.chs = chs;
+            const s = sel || [ed.a, ed.b, ed.cur]; ed.a = s[0]; ed.b = s[1]; ed.cur = s[2];
+            ed.a = clampInt(ed.a, 0, n); ed.b = clampInt(ed.b, ed.a, n); ed.cur = clampInt(ed.cur, 0, n);
+            clampView(); draw(); updateInfo(); esay(msg || ''); return true;
+        }
+        function jump(d) {
+            if (!ed) return; const j = ed.hi + d; if (j < 0 || j >= ed.hist.length) return;
+            stopPlay(); pbCache = null; ed.hi = j; ed.chs = ed.hist[j]; const n = len();
+            ed.a = clampInt(ed.a, 0, n); ed.b = clampInt(ed.b, ed.a, n); ed.cur = clampInt(ed.cur, 0, n);
+            clampView(); draw(); updateInfo(); esay(d < 0 ? '已復原' : '已重做');
+        }
+        $('#undo').onclick = () => ed && jump(-1); $('#redo').onclick = () => ed && jump(1);
+        const needSel = () => { if (ed.a >= ed.b) { esay('請先選取一段範圍（在波形上水平拖曳，或輸入起訖時間）。'); return false; } return true; };
+        const op = (id, fn) => { $(id).onclick = () => { if (!ed) return; try { fn(); } catch (e) { esay('執行失敗（可能是記憶體不足）：' + ((e && e.message) || e)); } }; };
+        const rng = () => effRange(ed.a, ed.b, len());
+        op('#opCrop', () => { if (needSel()) commit(sliceCh(ed.chs, ed.a, ed.b), '已保留選取區', [0, 0, 0]); });
+        op('#opCut', () => { if (needSel()) commit(spliceCh(ed.chs, ed.a, ed.b, silence(ed.chs.length, 0)), '已刪除選取區', [0, 0, ed.a]); });
+        op('#opCopy', () => { if (needSel()) { const p = sliceCh(ed.chs, ed.a, ed.b); commit(spliceCh(ed.chs, ed.cur, ed.cur, p), '已複製選取區到游標處', [ed.a, ed.b, ed.cur + nOf(p)]); } });
+        op('#opSil', () => {
+            const sec = parseFloat($('#silSec').value);
+            if (!(sec > 0 && sec <= 600)) { esay('靜音秒數請輸入 0.01 到 600 之間。'); return; }
+            const k = Math.max(1, Math.round(sec * ed.sr)); commit(spliceCh(ed.chs, ed.cur, ed.cur, silence(ed.chs.length, k)), `已在游標處插入 ${sec} 秒靜音`);
+        });
+        op('#opFi', () => { if (needSel()) commit(applyFade(ed.chs, ed.a, ed.b, 'in', $('#fadeKind').value), '已淡入選取區'); });
+        op('#opFo', () => { if (needSel()) commit(applyFade(ed.chs, ed.a, ed.b, 'out', $('#fadeKind').value), '已淡出選取區'); });
+        op('#opGain', () => {
+            const v = parseFloat($('#gainV').value), pct = $('#gainU').value === 'pct';
+            if (!isFinite(v) || (pct && v <= 0)) { esay(pct ? '百分比請輸入大於 0 的數字（100 為不變）。' : '請輸入 dB 數值（正數變大聲、負數變小聲）。'); return; }
+            const db = clampDb(pct ? gainToDb(v / 100) : v), g = dbToGain(db), [a, b] = rng(), clip = peakOf(ed.chs, a, b) * g > 1;
+            commit(applyGain(ed.chs, a, b, g), `音量已調整 ${db > 0 ? '+' : ''}${db.toFixed(1)} dB` + (clip ? '；有尖峰超過 0 dBFS，已限幅削平以免爆音' : '') + (Math.abs(db - (pct ? gainToDb(v / 100) : v)) > 0.05 ? '（已限制在 -60 到 +24 dB）' : ''));
+        });
+        op('#opNorm', () => { const [a, b] = rng(); if (!peakOf(ed.chs, a, b)) { esay('這段是全靜音，無法正規化。'); return; } commit(normalizeChs(ed.chs, a, b, -1), '已正規化（峰值 -1 dBFS）'); });
+        op('#opRev', () => { const [a, b] = rng(); commit(reverseChs(ed.chs, a, b), '已反轉'); });
+        op('#opTrim', () => {
+            const thr = Math.min(-6, Math.max(-90, parseFloat($('#trimDb').value))); if (!isFinite(thr)) { esay('門檻請輸入 -90 到 -6 之間的 dB 數值。'); return; }
+            const r = findSilence(ed.chs, thr);
+            if (!r) { esay(`整段都低於 ${thr} dB，找不到聲音；請調高門檻（例如 -60）。`); return; }
+            if (r[0] === 0 && r[1] === len()) { esay('首尾沒有低於門檻的靜音，沒有變動。'); return; }
+            commit(sliceCh(ed.chs, r[0], r[1]), `已裁掉首尾靜音（門檻 ${thr} dB）`, [0, 0, 0]);
+        });
+        op('#opSpeed', () => {
+            const f = parseFloat($('#spd').value); if (!(f >= 0.5 && f <= 2)) { esay('速度倍率請輸入 0.5 到 2。'); return; }
+            const [a, b] = rng(), hadSel = ed.a < ed.b, nl = Math.max(1, Math.round((b - a) / f));
+            commit(speedChs(ed.chs, a, b, f), `已調速 ${f} 倍（音高同時改變）`, hadSel ? [a, a + nl, ed.cur] : [0, 0, ed.cur]);
+        });
+
+        // ---- 播放預覽 ----
+        function stopPlay() {
+            if (P) { try { P.src.onended = null; P.src.stop(); } catch (e) { } cancelAnimationFrame(P.raf); P = null; }
+            $('#phline').hidden = true; $('#play').textContent = '▶ 播放'; if (ed) updateSel();
+        }
+        function getAb() {
+            if (pbCache && pbCache.chs === ed.chs) return pbCache.ab;
+            const ab = pctx.createBuffer(ed.chs.length, len(), ed.sr); ed.chs.forEach((c, i) => ab.copyToChannel(c, i)); pbCache = { chs: ed.chs, ab }; return ab;
+        }
+        async function play() {
+            if (!ed) return;
+            if (P) { stopPlay(); return; }
+            if (!AC) { esay('這個瀏覽器不支援播放預覽。'); return; }
+            try {
+                if (!pctx) pctx = new AC(); await pctx.resume();
+                const n = len(), sr = ed.sr, so = $('#selOnly').checked && ed.a < ed.b, loop = $('#loop').checked;
+                const ls = so ? ed.a : 0, le = so ? ed.b : n; let from = so ? ed.a : ed.cur; if (from >= le - 1 || from < ls) from = ls;
+                const src = pctx.createBufferSource(); src.buffer = getAb(); src.connect(pctx.destination);
+                if (loop) { src.loop = true; src.loopStart = ls / sr; src.loopEnd = le / sr; src.start(0, from / sr); } else src.start(0, from / sr, (le - from) / sr);
+                P = { src, t0: pctx.currentTime, from, ls, le, loop, raf: 0 }; src.onended = stopPlay;
+                $('#play').textContent = '❚❚ 暫停'; $('#phline').hidden = false;
+                const tick = () => {
+                    if (!P) return; let pos = P.from + (pctx.currentTime - P.t0) * sr;
+                    if (P.loop && pos >= P.le) pos = P.ls + ((pos - P.ls) % (P.le - P.ls));
+                    pos = Math.min(pos, n); $('#phline').style.left = xOf(pos) + 'px'; $('#tpos').textContent = `${fmtTime(s2ms(pos))} / ${fmtTime(s2ms(n))}`;
+                    P.raf = requestAnimationFrame(tick);
+                }; tick();
+            } catch (e) { P = null; esay('無法播放：' + ((e && e.message) || e)); }
+        }
+        $('#play').onclick = play; $('#stopP').onclick = () => { if (ed) { stopPlay(); } };
+
+        // ---- 匯出 ----
+        function prepOut() {
+            const sr = $('#xrate').value === 'orig' ? ed.sr : +$('#xrate').value, nc = $('#xch').value === '1' ? 1 : ed.chs.length;
+            return { sr, nc, n: Math.round(len() * sr / ed.sr) };
+        }
+        function buildOut(o) { return resampleChs(remix(ed.chs, o.nc), ed.sr, o.sr); }
+        function makeWav() {
+            const o = prepOut();
+            if (wavBytes(o.n, o.nc) > MAX_WAV_BYTES) { esay(`WAV 會達 ${fmtSize(wavBytes(o.n, o.nc))}，超過 400MB 上限；請降低取樣率、改單聲道，或先裁短。`); return null; }
+            return { blob: new Blob([encodeWav(buildOut(o), o.sr)], { type: 'audio/wav' }), sr: o.sr, n: o.n };
+        }
+        const xname = () => cleanName($('#xname').value, '剪輯');
+        $('#xwav').onclick = () => {
+            if (!ed) return; esay('');
+            try { const w = makeWav(); if (!w) return; download(w.blob, xname() + '.wav'); ed.clean = ed.chs; updateInfo(); esay(`已匯出 ${xname()}.wav（${fmtSize(w.blob.size)}）`); } catch (e) { esay('匯出失敗（可能是記憶體不足）：' + ((e && e.message) || e)); }
+        };
+        $('#xadd').onclick = () => {
+            if (!ed) return; esay('');
+            if (items.length >= MAX_ITEMS) { esay(`錄音清單已滿 ${MAX_ITEMS} 段，請先下載並刪除一些錄音。`); return; }
+            try {
+                const w = makeWav(); if (!w) return; const d = new Date();
+                items.unshift({ id: ++seq, name: xname(), blob: w.blob, url: URL.createObjectURL(w.blob), ms: s2ms(len()), at: d.toLocaleString('sv'), dl: false, type: 'audio/wav' });
+                ed.clean = ed.chs; renderList(); updateInfo(); esay('已加回錄音清單（WAV）');
+            } catch (e) { esay('加入失敗（可能是記憶體不足）：' + ((e && e.message) || e)); }
+        };
+        function endExport() { if (XP) { clearInterval(XP.timer); XP = null; } $('#xprog').hidden = true; $('#xrow').hidden = true; $('#xcomp').disabled = false; }
+        $('#xcomp').onclick = async () => {
+            if (!ed || XP) return; esay('');
+            if (!AC || !window.MediaRecorder) { esay('這個瀏覽器不支援壓縮格式匯出（沒有 MediaRecorder），請改用 WAV。'); return; }
+            const mime = pickMime((t) => MediaRecorder.isTypeSupported(t)), o = prepOut(), nm = xname(), dur = o.n / o.sr;
+            let c = null;
+            try {
+                const out = buildOut(o); c = new AC(); const ab = c.createBuffer(o.nc, o.n, o.sr); out.forEach((ch, i) => ab.copyToChannel(ch, i));
+                const dest = c.createMediaStreamDestination(), src = c.createBufferSource(); src.buffer = ab; src.connect(dest);
+                let mr = null; try { if (mime) mr = new MediaRecorder(dest.stream, { mimeType: mime }); } catch (e) { mr = null; } if (!mr) mr = new MediaRecorder(dest.stream);
+                const chunks = []; mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+                const done = new Promise(r => { mr.onstop = r; });
+                XP = { cancel: false, mr, src, timer: 0 };
+                $('#xcomp').disabled = true; $('#xprog').hidden = false; $('#xrow').hidden = false; $('#xprog').value = 0;
+                $('#xstat').textContent = `即時錄製中，需要 ${fmtDur(dur * 1000)}…`;
+                await c.resume();
+                src.onended = () => setTimeout(() => { if (mr.state !== 'inactive') mr.stop(); }, 150);
+                mr.start(500); src.start();
+                XP.timer = setInterval(() => { const t = Math.min(dur, c.currentTime); $('#xprog').value = dur ? t / dur : 1; $('#xstat').textContent = `即時錄製中 ${fmtDur(t * 1000)} / ${fmtDur(dur * 1000)}`; }, 200);
+                await done;
+                const cancelled = XP && XP.cancel; endExport();
+                if (cancelled) { esay('已取消匯出'); return; }
+                const type = mr.mimeType || mime || 'audio/webm', blob = new Blob(chunks, { type });
+                if (!blob.size) { esay('沒有錄到資料，請改用 WAV。'); return; }
+                download(blob, nm + '.' + extFor(type)); ed.clean = ed.chs; updateInfo(); esay(`已匯出 ${nm}.${extFor(type)}（${type.split(';')[0]}，${fmtSize(blob.size)}）`);
+            } catch (e) { endExport(); esay('壓縮匯出失敗：' + ((e && e.message) || e) + '。請改用 WAV。'); } finally { if (c) c.close().catch(() => { }); }
+        };
+        $('#xcancel').onclick = () => { if (XP) { XP.cancel = true; try { XP.src.onended = null; XP.src.stop(); } catch (e) { } try { if (XP.mr.state !== 'inactive') XP.mr.stop(); } catch (e) { } } };
+
+        // ---- 載入檔案 / 拖曳 ----
+        const pickFile = (f) => { if (f) loadBlob(f, baseName(f.name), 0); };
+        $('#efile').onchange = (e) => { pickFile(e.target.files[0]); e.target.value = ''; };
+        const drop = $('#drop');
+        ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+        ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+        drop.addEventListener('drop', (e) => pickFile(e.dataTransfer && e.dataTransfer.files[0]));
+
+        // ---- 合併 ----
+        const mmsg = (t) => { $('#mmsg').textContent = t || ''; };
+        function refreshMergeOpts() {
+            const sel = $('#mSrc'), old = sel.value, opts = items.map(it => [String(it.id), `錄音：${it.name}（${fmtDur(it.ms)}）`]);
+            if (ed) opts.unshift(['cur', `目前剪輯區：${ed.name}（${fmtDur(s2ms(len()))}）`]);
+            sel.replaceChildren(...opts.map(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; return o; }));
+            if (opts.some(o => o[0] === old)) sel.value = old; $('#mAdd').disabled = !opts.length;
+            if (!opts.length) { const o = document.createElement('option'); o.textContent = '（沒有可加入的錄音或剪輯）'; sel.append(o); }
+        }
+        function renderMerge() {
+            $('#mEmpty').hidden = mq.length > 0; $('#mGo').disabled = mq.length < 2;
+            $('#mList').replaceChildren(...mq.map((m, i) => {
+                const d = document.createElement('div'); d.className = 'mrow';
+                const t = document.createElement('span'); t.textContent = `${i + 1}. ${m.name}${m.ms ? '（' + fmtDur(m.ms) + '）' : ''}`;
+                const mk = (cls, txt, label, fn, dis) => { const b = document.createElement('button'); b.className = cls; b.textContent = txt; b.setAttribute('aria-label', label); b.disabled = !!dis; b.onclick = fn; return b; };
+                const mv = (k) => () => { const j = i + k; [mq[i], mq[j]] = [mq[j], mq[i]]; renderMerge(); };
+                d.append(t, mk('mup', '↑', '上移', mv(-1), i === 0), mk('mdn', '↓', '下移', mv(1), i === mq.length - 1), mk('mrm', '✕', '移除', () => { mq.splice(i, 1); renderMerge(); }));
+                return d;
+            }));
+        }
+        function mpush(m) { if (mq.length >= MAX_ITEMS) { mmsg(`合併清單最多 ${MAX_ITEMS} 段。`); return; } mmsg(''); mq.push({ id: ++mseq, ...m }); renderMerge(); }
+        $('#mAdd').onclick = () => {
+            const v = $('#mSrc').value;
+            if (v === 'cur') { if (ed) mpush({ name: ed.name, chs: ed.chs, sr: ed.sr, ms: s2ms(len()) }); return; }
+            const it = items.find(x => String(x.id) === v); if (it) mpush({ name: it.name, blob: it.blob, ms: it.ms });
+        };
+        $('#mFile').onchange = (e) => {
+            const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+            const m = limitMsg(f.size, 0); if (m) { mmsg(m); return; } mpush({ name: baseName(f.name), blob: f, ms: 0 });
+        };
+        $('#mClear').onclick = () => { mq = []; mmsg(''); renderMerge(); };
+        $('#mGo').onclick = async () => {
+            if (busy || mq.length < 2) return; busy = true; mmsg('解碼並串接中…'); $('#mGo').disabled = true;
+            try {
+                const list = []; let total = 0;
+                for (const m of mq) {
+                    const d = m.chs ? { chs: m.chs, sr: m.sr } : await decodeBlob(m.blob).catch(e => { throw new Error(`「${m.name}」：${decodeFail(e)}`); });
+                    total += nOf(d.chs) / d.sr * 1000; if (total > MAX_EDIT_MS) throw new Error('合併後會超過 30 分鐘上限。');
+                    list.push(d);
+                }
+                const r = concatAudio(list);
+                if (loadSource(r.chs, r.sr, mq[0].name + '-合併')) mmsg(`已合併 ${mq.length} 段，結果在上方剪輯區。`); else mmsg('');
+                if (ed) $('#editor').scrollIntoView({ block: 'start' });
+            } catch (e) { mmsg('合併失敗：' + ((e && e.message) || e)); } finally { busy = false; renderMerge(); }
+        };
+        refreshMergeOpts(); renderMerge();
+
         $('#rec').onclick = start; $('#pause').onclick = togglePause; $('#stop').onclick = stop;
-        addEventListener('beforeunload', (e) => { if (rec || items.some(i => !i.dl)) { e.preventDefault(); e.returnValue = ''; } });
+        addEventListener('beforeunload', (e) => { if (rec || items.some(i => !i.dl) || unsaved()) { e.preventDefault(); e.returnValue = ''; } });
         setUi('idle'); renderList();
     </script>
 </body>

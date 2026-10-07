@@ -7,7 +7,7 @@ global.Util = require(path.join(root, 'shared/js/util.js'));
 const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
 
 // 頁面外層用 const { ... } = Util 取得共用函式，這裡提供同樣的名稱
-const PRELUDE = 'const { rnd, shuffle, store, copyText, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex, seeded, parseCSV, toObjects, isNum, csvStringify } = Util;\n';
+const PRELUDE = 'const { rnd, shuffle, store, copyText, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex, seeded, parseCSV, toObjects, isNum, csvStringify, oid } = Util;\n';
 const load = (file, names, from = '// --- pure ---', to = '// --- /pure ---') => {
     const h = read(file);
     return new Function(PRELUDE + h.slice(h.indexOf(from), h.indexOf(to)) + `; return { ${names} };`)();
