@@ -27,6 +27,7 @@
 - 風格 / 明暗由 `<html data-ui-style data-ui-mode>` 決定（chrome.js 設定）。**不要在頁面用 `data-style` / `data-mode` 屬性**（已經出過撞名 bug）。
 - 每頁 `<head>` 在 theme.css 之後放 `<script src="../shared/js/chrome.js"></script>`（`index.html` 與根目錄頁面路徑不用 `../`）。
 - **手機優先**：以 390px 寬為基準設計。按鈕與可點區域 ≥ 44px（theme.css 已對觸控裝置處理）；不可橫向捲動；棋盤 / 畫布用 `aspect-ratio` 與 `%` / `vw`，不要寫死像素；輸入框字級 ≥ 16px（避免 iOS 放大）；常用操作放在拇指好按的位置。改完用 390×844（`isMobile`）截圖檢查。
+- **iPhone / Safari 專屬陷阱**：文字輸入（input / select / textarea）在觸控裝置上字級必須 ≥ 16px，否則 iOS 聚焦時會自動放大整個頁面（之後版面變寬、要手動縮回；chrome.js 已用 `!important` 全站強制，不要再用更小的字級）；高度用 `dvh`（寫在 `vh` 後面當後援），不要只用 `vh`；不要對 html / body 設 `overflow:hidden`；不要依賴外部 CDN（樣式、字型、圖示都要本地化，網路慢或 App 內建瀏覽器載入失敗時頁面會壞）；大面積 `touch-action:none`（遊戲盤面、畫布）會讓手指在上面無法捲動頁面，要確保盤面外有可滑動的區域，或提供「捲動頁面」模式切換。手機排版用真正的 WebKit（iPhone 17 模擬）稽核：`ios_audit.mjs`（6 種視窗狀態，約 20 秒，有快取）。
 - **每個工具頁都要有說明**：頁面內放 `<template id="help">`，用 `<h3>` 分段：這是什麼 / 什麼時候用 / 怎麼用（或怎麼玩）/ 範例（`<div class="eg">`）/ 小提醒。第一次進入會自動彈出一次，之後從右上角「？」開啟。連線遊戲要寫清楚怎麼開房、怎麼邀請、規則與限制，以及單機模式怎麼玩。
 - **本機資料一定要能備份**：頁面只要讀寫 localStorage，就必須在 `<head>` 宣告 `<meta name="st-keys" content="鍵1,鍵2,前綴_*">`（動態鍵用 `*` 結尾的前綴）；chrome.js 會因此在右上角出現「💾」，提供匯出 / 載入 JSON 備份（首頁是 `content="*"` 全站備份）。新增或改名鍵時同步更新這行（`tools.test.js` 會靜態檢查、`e2e_keys.mjs` 會執行期檢查）。讀取資料時一律驗證並容錯，因為還原會把舊版資料寫回來。
 - **連線遊戲必須有單機模式**（電腦玩家 / 練習模式），不連線也能玩。

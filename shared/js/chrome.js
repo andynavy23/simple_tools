@@ -98,6 +98,7 @@
 .st-help .eg{margin:8px 0;padding:10px 12px;border-radius:var(--radius-sm);background:var(--fill);font-size:14px;white-space:pre-wrap}
 .st-help kbd{padding:1px 6px;border-radius:5px;border:1px solid var(--line);background:var(--fill);font:12px ui-monospace,Menlo,Consolas,monospace}
 .st-help footer{position:sticky;bottom:0;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 16px;background:var(--card);border-top:1px solid var(--line)}
+@media (pointer:coarse){input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=button]):not([type=submit]):not([type=reset]):not([type=image]),select,textarea{font-size:16px!important}}
 .st-toast{position:fixed;left:50%;bottom:max(18px,calc(env(safe-area-inset-bottom) + 10px));transform:translateX(-50%);z-index:70;max-width:min(92vw,460px);padding:12px 16px;border-radius:var(--radius-sm);background:var(--text);color:var(--bg);font:14px/1.5 var(--font);box-shadow:0 6px 24px rgba(0,0,0,.35);text-align:center}
 .st-toast.bad{background:var(--bad);color:#fff}
 .st-data p{margin:8px 0}
