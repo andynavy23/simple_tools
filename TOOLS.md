@@ -28,8 +28,8 @@
 | 工具 | 已有功能 | 本機資料（localStorage） | 連線 |
 |---|---|---|---|
 | [海戰](mini-games/battleship.html) | 艦隊只存在自己端；開局送雜湊承諾、賽後揭曉並重算每一槍的回報；單機：單機對電腦（簡單 / 普通 / 困難） | — | ✓ |
-| [21 點](mini-games/blackjack.html) | 莊家由程式擔任（17 停牌）；牌堆與暗牌只在房主端；Blackjack 賠 1.5 倍、加倍；30 秒自動停牌；單機：單機對莊家，可加 0–3 位電腦玩家 | — | ✓ |
-| [四子棋](mini-games/connect-four.html) | 本機雙人、對電腦（簡單 / 普通 / 困難，alpha-beta 搜尋）或連線（房主判定落子），每局輪流先手；單機：單機對電腦、悔棋與提示 | — | ✓ |
+| [21 點](mini-games/blackjack.html) | 莊家由程式擔任（17 停牌）；牌堆與暗牌只在房主端；Blackjack 賠 1.5 倍、加倍；30 秒自動停牌；單機：單機對莊家，可加 0–3 位電腦玩家；發牌 / 翻牌 / 結算動畫（尊重系統「減少動態效果」） | — | ✓ |
+| [四子棋](mini-games/connect-four.html) | 本機雙人、對電腦（簡單 / 普通 / 困難，alpha-beta 搜尋）或連線（房主判定落子），每局輪流先手；單機：單機對電腦、悔棋與提示；落子掉落與勝利連線動畫（尊重系統「減少動態效果」） | — | ✓ |
 | [你畫我猜](mini-games/draw-guess.html) | 畫畫或口述（你說我猜）兩種模式；房主判定猜題與計分；題目只傳給畫 / 說的人；筆跡經房主驗證後轉送；單機：單人練習（隨機題目、計時、自評） | `drawguess-practice` | ✓ |
 | [2048](mini-games/game-2048.html) | 方向鍵 / WASD / 觸控滑動，記錄最高分；每日挑戰（每天同一組亂數）；方塊滑動 / 合併 / 新方塊動畫（尊重系統「減少動態效果」） | `g2048_best`、`g2048_daily` |  |
 | [五子棋](mini-games/gobang.html) | 楓之谷像素風五子棋，本地雙人、對電腦（簡單 / 普通 / 困難，棋型評分）或房號連線；單機：單機對電腦、悔棋與提示（手機確認落子） | — | ✓ |
@@ -37,17 +37,17 @@
 | [翻牌記憶遊戲](mini-games/memory-match.html) | 單人挑戰最少步數，或連線（最多 4 人，房主驗證）輪流翻牌；單機：單人，或和電腦比賽 | — | ✓ |
 | [踩地雷](mini-games/minesweeper.html) | 三種難度、第一步必安全、連鎖展開與快速開格，記錄最佳時間；每日挑戰（每天同一個雷區） | — |  |
 | [數織 Nonogram](mini-games/nonogram.html) | 5 / 10 / 15 格；出題器用逐行推理驗證可解且唯一；拖曳塗色、標 ✕，記錄最佳時間 | — |  |
-| [黑白棋](mini-games/othello.html) | 本機雙人、對電腦（簡單 / 普通 / 困難）或連線（房主判定）；合法步提示、無子可下自動跳過、雙方無步結算；單機：單機對電腦、悔棋與提示 | — | ✓ |
+| [黑白棋](mini-games/othello.html) | 本機雙人、對電腦（簡單 / 普通 / 困難）或連線（房主判定）；合法步提示、無子可下自動跳過、雙方無步結算；單機：單機對電腦、悔棋與提示；落子與翻面動畫（尊重系統「減少動態效果」） | — | ✓ |
 | [反應速度測試](mini-games/reaction-time.html) | 隨機等待、搶跑偵測、5 次平均，記錄歷史最佳與中位數 | `reaction_best`、`reaction_all` |  |
 | [記憶序列 Simon](mini-games/simon.html) | 四色按鈕與音效，越後面越快，記錄最高關卡 | `simon_best` |  |
-| [貪吃蛇](mini-games/snake.html) | 撞牆 / 穿牆兩種模式、方向鍵 / WASD / 觸控滑動、越吃越快，分別記錄最高分 | — |  |
+| [貪吃蛇](mini-games/snake.html) | 撞牆 / 穿牆兩種模式、方向鍵 / WASD / 觸控滑動、越吃越快，分別記錄最高分；蛇平滑移動、吃食物與死亡動畫（尊重系統「減少動態效果」） | — |  |
 | [數獨](mini-games/sudoku.html) | 保證唯一解的出題、筆記、提示、衝突標示，記錄最佳時間 | `sudoku_best_<線索數>` |  |
-| [俄羅斯方塊](mini-games/tetris.html) | 7 袋隨機、旋轉踢牆、暫存、下一個預覽、落點影子、等級加速；鍵盤與觸控按鈕 | — |  |
+| [俄羅斯方塊](mini-games/tetris.html) | 7 袋隨機、旋轉踢牆、暫存、下一個預覽、落點影子、等級加速；鍵盤與觸控按鈕；消行閃光動畫（尊重系統「減少動態效果」） | — |  |
 | [打字速度測試](mini-games/typing-test.html) | 中文 / 英文 / 程式碼 / 自訂文章打字測速，每分鐘字數與正確率（自訂文章不記最佳）；歷史成績走勢與最常打錯的字 | `typing_custom`、`typing_hist`、`typing_miss` |  |
 | [終極密碼](mini-games/ultimate-code.html) | 2–8 人；密碼只存在房主端，結束才公布；累計輸的次數；單機：單機和電腦輪流猜，或電腦出你來猜 | — | ✓ |
 | [數字滑塊](mini-games/sliding-puzzle.html) | 3×3 / 4×4 / 5×5；點擊或方向鍵 / WASD 滑動；隨機走法打亂（一定有解）；步數、時間與各尺寸最佳紀錄 | `slide_best_<n>` |  |
 | [終極井字棋](mini-games/ultimate-ttt.html) | 9 個小棋盤，下在哪格對手就得去對應棋盤；對應棋盤已結束則任選；本機雙人或連線（房主驗證每一步）；單機：單機對電腦（三種難度） | — | ✓ |
-| [UNO](mini-games/uno.html) | 2–6 人；跳過 / 迴轉 / 抽二 / 萬用 / 萬用抽四；抽到能出的牌可出或過；牌堆空了自動洗回棄牌；手牌只傳給本人；離線玩家自動跳過；單機：單機和 1–5 位電腦（三種難度） | — | ✓ |
+| [UNO](mini-games/uno.html) | 2–6 人；跳過 / 迴轉 / 抽二 / 萬用 / 萬用抽四；抽到能出的牌可出或過；牌堆空了自動洗回棄牌；手牌只傳給本人；離線玩家自動跳過；單機：單機和 1–5 位電腦（三種難度）；出牌飛行、抽牌與特殊牌動畫（尊重系統「減少動態效果」） | — | ✓ |
 | [心算練習](mini-games/mental-math.html) | 加減乘除可複選，位數 1–3，10 / 20 / 50 題或限時 60 秒；除法一定整除、減法可選不出負數；自訂螢幕數字鍵盤 + 實體鍵盤；結束顯示正確率、平均秒數、錯題回顧；依組合分開記最佳成績並可清除 | `mentalmath_best_*` |  |
 
 ## 趣味
@@ -100,7 +100,7 @@
 | [油耗 / 行車成本](utils/fuel-log.html) | 加滿到加滿法計算每段油耗（沒加滿的併入下一次）、整體平均、最近 12 段走勢、匯出 CSV | `fuel_entries` |  |
 | [BMI / 熱量 / 心率計算](utils/health-calc.html) | BMI（台灣標準）、BMR、TDEE、心率區間（含儲備心率法）；體重紀錄（折線圖、目標線、近 30 天趨勢、預估達標日）；飲食記錄：約 170 種臺灣常見食物估計熱量、搜尋別名、自訂食物最多 50 個、與 TDEE 對照、各餐別小計、近 7 天圖；紀錄上限 5000 筆（估計值，不是醫療建議） | `weight_log`、`weight_goal`、`food_log`、`food_custom` |  |
 | [圖片壓縮 / 縮圖 / 轉檔](utils/image-resize.html) | 等比縮放、品質調整、JPEG / PNG / WebP 轉檔、SVG 轉 PNG（向量可放大到任意尺寸）；圖片不上傳，重新編碼會移除 EXIF | — |  |
-| [JSON 整理器](utils/json-formatter.html) | 美化 / 壓縮 / 驗證、錯誤定位、樹狀檢視；JSON ↔ YAML、JSON ↔ CSV 轉換 | — |  |
+| [JSON 整理器](utils/json-formatter.html) | 美化 / 壓縮 / 驗證、錯誤定位、樹狀檢視；JSON ↔ YAML、JSON ↔ CSV 轉換；另可把 JSON 當範例產生型別：TypeScript（interface / type）、JSON Schema（draft 2020-12）、Mongoose Schema、Python dataclass、Go struct，多筆陣列合併欄位推論 | — |  |
 | [貸款 / 複利試算](utils/loan-calculator.html) | 本息 / 本金平均攤還與逐期表；起始本金 + 每月投入的複利成長；存款目標（多久達標 / 每月要存多少，可扣通膨） | — |  |
 | [發票 / 樂透對獎](utils/lottery-check.html) | 統一發票特別獎到六獎與增開六獎（含獎金）；大樂透、威力彩獎項判定；開獎號碼自行輸入、不連網 | `lc_tab` |  |
 | [Markdown 即時預覽](utils/markdown-preview.html) | 標題 / 清單 / 表格 / 程式碼，輸出前消毒，可複製 HTML | `md_src` |  |
@@ -108,10 +108,10 @@
 | [週期表](utils/periodic-table.html) | 118 元素、10 種類別著色與篩選、原子量 / 族 / 週期 / 常溫狀態 / 電子組態（含例外），中英文與符號搜尋 | `pt_sel` |  |
 | [比價 / 單價計算](utils/price-compare.html) | 重量 / 容量 / 個數三組單位（含台斤、兩、打），多份數，同組比較並標示貴多少 %；折扣 / 稅額分頁：折上折、滿額折 / 滿減、買 N 送 M 實際折數、含稅 / 未稅互算（5% / 自訂）、外國旅客退稅估算（僅供估算）、取整方式可選 | `price_rows`、`price_tax` |  |
 | [QR Code 產生器](utils/qr-code.html) | 自行實作的 QR 編碼器（版本 1–40、容錯 L/M/Q/H）；Code 128（B / C 自動選）與 EAN-13 條碼（與 JsBarcode 逐位元比對過）；可下載 PNG；範本：Wi-Fi / vCard 3.0 / 電話 / 簡訊 / Email / 地理位置 / 行事曆事件 / 網址，自動跳脫；敏感資料不寫入 localStorage | — |  |
-| [UUID / 隨機資料產生](utils/random-data.html) | UUID v4、整數、日期、假姓名 / 手機 / Email；最多 1000 筆 | `rd_kind` |  |
+| [UUID / 隨機資料產生](utils/random-data.html) | UUID v4、整數、日期、假姓名 / 手機 / Email；最多 1000 筆；新增 UUID v7 / ULID（可排序，同毫秒單調遞增；可選現在 / 指定時間），最多 1000 筆 | `rd_kind` |  |
 | [正規表示式測試器](utils/regex-tester.html) | 即時標示符合內容、群組與位置 | — |  |
 | [薪資 / 加班費試算](utils/salary-calc.html) | 時薪 = 月薪 ÷ 240；平日 / 休息日 / 假日加班費分段倍率；實領概算；113 年度綜合所得稅概算與年終獎金多繳的稅 | `salary_calc` |  |
-| [螢幕 / 鍵盤 / 滑鼠測試](utils/screen-test.html) | 全螢幕純色輪播、鍵盤配置逐鍵亮燈、滑鼠按鍵 / 雙擊 / 滾輪偵測；螢幕 PPI、實際尺寸與長寬比計算 | `screentest_tab` |  |
+| [螢幕 / 鍵盤 / 滑鼠測試](utils/screen-test.html) | 全螢幕純色輪播、鍵盤配置逐鍵亮燈、滑鼠按鍵 / 雙擊 / 滾輪偵測；螢幕 PPI、實際尺寸與長寬比計算；新增「相機」分頁（裝置、QVGA 到 4K、實際解析度 / fps、鏡像、拍照、前後鏡頭）與「麥克風」分頁（音量表 dBFS + 峰值、回音 / 噪音 / 增益開關、錄 5 秒回放，只存記憶體） | `screentest_tab` |  |
 | [分帳計算](utils/split-bill.html) | 多人多筆支出分帳，轉帳次數最少；小費快算（百分比、人數、每人湊整數） | `bill_state` |  |
 | [文字差異比對](utils/text-diff.html) | 逐行或逐字詞（行內標示）差異比對 | — |  |
 | [純文字整理](utils/text-tools.html) | 去重複、排序、刪空行、全半形、大小寫，可復原；即時字數 / 閱讀時間；中文 / 英文假文產生；符號表分頁：16 類符號與 emoji、搜尋、點擊複製並累積、最近使用、全形 ↔ 半形對照表 | `symbols_recent` |  |
@@ -119,7 +119,7 @@
 | [時區轉換](utils/timezone.html) | 一個時間對照多個城市，處理夏令時間；即時看板（每秒更新、日夜圖示）；會議時間尋找：選 2–6 城市與上班時段（可午休），24 小時橫條找共同上班時段，無重疊時推薦最少加班 / 半夜時段，可複製建議時間（DST、跨日正確） | `tz_zones`、`tz_meet` |  |
 | [文字轉語音](utils/tts.html) | speechSynthesis 朗讀；長文自動分段、可暫停繼續；選語音、語速、音調；自動辨識語言（中日韓、俄、阿拉伯等書寫系統與 en/es/fr/de/pt/it/nl/pl/tr/vi/id）並依語言與口音選聲音，可逐段手改語言、依序朗讀（限制：語言與口音取決於裝置安裝的聲音；辨識為啟發式；iOS 需點擊才能朗讀） | `tts_text`、`tts_voice`、`tts_auto` |  |
 | [單位與匯率換算](utils/unit-converter.html) | 長度、重量、坪、溫度等單位、烹飪（杯 / 匙 / 公克，依 15 種食材密度），以及即時匯率（需連網，有離線快取） | `fx_cache` |  |
-| [時間戳轉換](utils/timestamp.html) | Unix 時間戳（秒 / 毫秒自動判斷）與日期互轉；顯示 UTC、ISO 8601、相對時間；13 個常用時區 + 裝置時區（含夏令時間）；即時顯示現在時間戳；ObjectId 分頁：貼上多個 MongoDB ObjectId（≤200）解出建立時間 / 隨機值 / 計數器並可複製 TSV，時間或時間戳轉最小 / 最大 ObjectId 與 $gte / $lt 查詢片段，快捷今天 / 昨天 / 最近 7 天 / 本月 | `ts_tz` |  |
+| [時間戳轉換](utils/timestamp.html) | Unix 時間戳（秒 / 毫秒自動判斷）與日期互轉；顯示 UTC、ISO 8601、相對時間；13 個常用時區 + 裝置時區（含夏令時間）；即時顯示現在時間戳；ObjectId 分頁：貼上多個 MongoDB ObjectId（≤200）解出建立時間 / 隨機值 / 計數器並可複製 TSV，時間或時間戳轉最小 / 最大 ObjectId 與 $gte / $lt 查詢片段，快捷今天 / 昨天 / 最近 7 天 / 本月；ID 分頁擴充：自動判斷 ObjectId / UUID（v1/v6/v7 解時間）/ ULID / KSUID / Snowflake（Discord / Twitter / 自訂 epoch），可複製 TSV；時間可轉該時間的 UUID v7 / ULID 及其最小 / 最大值 | `ts_tz` |  |
 | [CSS 產生器](utils/css-gen.html) | 陰影（含內陰影）、線性 / 放射漸層（2–3 色標）、圓角（四角獨立，px / %）；即時預覽；複製 CSS | `cssgen` |  |
 | [輪值表](utils/duty-roster.html) | 每天 / 每週 / 每兩週 / 每月輪換；跳過週六日；指定從第幾位開始；每人次數；標出下一個輪到的人；複製成文字；家事分配分頁：家事（頻率、1–3 分）與成員，自動分配（輪流 + 總分差最小 + 避免連續同人）、打勾、本週 / 本月每人完成次數與分數、複製文字 | `roster_cfg`、`chores_data` |  |
 | [語音備忘錄](utils/voice-memo.html) | 瀏覽器內建語音辨識（中文 / 英文 / 日文）邊說邊顯示暫時結果；備忘清單可編輯 / 刪除 / 複製 / 搜尋 / 匯出 .txt，上限 200 筆；不支援語音的瀏覽器可手動輸入；語音多半會傳到瀏覽器廠商伺服器（頁面有隱私提醒） | `voicememo_items`、`voicememo_lang` |  |
@@ -136,7 +136,11 @@
 | [chmod 權限計算器](utils/chmod-calc.html) | 勾選、八進位、符號三向同步，含 setuid / setgid / sticky；常見組合速查；umask 計算；符號模式模擬（u/g/o/a、+ - =、r w x X s t、g=u）；產生 chmod 與 find 指令；不存資料 | — |  |
 | [股票交易成本與損益試算](utils/stock-cost.html) | 臺股現股 / 零股 / 當沖 / ETF 手續費（折扣、最低手續費）、證交稅、淨損益、報酬率、損益平衡賣價；進位可選；股利補充保費與殖利率；分批買進（最多 20 批）平均成本；費率稅率皆可改（以當時法規與券商為準）；只存偏好設定 | `stockcost_opts` |  |
 | [MongoDB 指令產生器](utils/mongo-query.html) | find / findOne / countDocuments / distinct / aggregate / 新增 / 更新 / 取代 / 刪除 / createIndex；條件建構器（15 種運算子、8 種值型別、一層巢狀 and / or）、投影、排序、limit / skip、12 種更新運算子、聚合階段（可上下移）、索引（unique / TTL / partialFilter）；輸出 mongosh、Node.js、pymongo、Compass JSON 並一鍵複製；8 個快速範本；寫入類操作條件為空時紅色警告；不連線資料庫；只存上次的操作與輸出格式 | `mongoq_opts` |  |
-| [螢幕分享](utils/screen-share.html) | 電腦分享螢幕 / 視窗 / 分頁（可含系統聲音），其他裝置開連結或輸入 6 碼房號觀看；PeerJS 點對點 WebRTC，最多 4 位觀看者（可踢除，顯示連線狀態）；畫質可選 15 / 30 fps 與最大寬度；觀看端顯示解析度 / fps / 位元率 / 延遲，支援全螢幕；手機瀏覽器無法分享螢幕（只能觀看）；對稱型 NAT 需 TURN，本工具未提供；內附手機鏡像到電腦的說明（scrcpy、Miracast、AirPlay、Chromecast）；不存資料 | — |  |
+| [螢幕分享](utils/screen-share.html) | 電腦分享螢幕 / 視窗 / 分頁（可含系統聲音），其他裝置開連結或輸入 6 碼房號觀看；PeerJS 點對點 WebRTC，最多 4 位觀看者（可踢除，顯示連線狀態）；畫質可選 15 / 30 fps 與最大寬度；觀看端顯示解析度 / fps / 位元率 / 延遲，支援全螢幕；手機瀏覽器無法分享螢幕（只能觀看）；對稱型 NAT 需 TURN，本工具未提供；內附手機鏡像到電腦的說明（scrcpy、Miracast、AirPlay、Chromecast）；不存資料；新增螢幕錄影：「只錄影（不分享）」模式（可錄系統聲音、可混入麥克風，暫停 / 繼續，預覽後下載 webm，不支援時 mp4；單次 60 分鐘 / 1GB 上限）與分享時「同時錄製這次分享」；僅桌面瀏覽器，錄影只存記憶體 | — |  |
+| [SQL 指令產生器](utils/sql-query.html) | MySQL / PostgreSQL / SQLite / SQL Server；SELECT（別名與聚合、DISTINCT、最多 4 個 JOIN、AND/OR 一層巢狀條件、GROUP BY / HAVING、多欄排序、分頁）、每組最新一筆（視窗函式）、INSERT（單筆 / 多筆 / upsert）、UPDATE、DELETE、CREATE TABLE、CREATE INDEX、ALTER TABLE；輸出純 SQL（字面值已跳脫）、參數化、Node.js、Python；識別字一律加引號；無條件的 UPDATE / DELETE 紅色警告；七個快速範本；不連線、不提供 DROP / TRUNCATE；只存上次的方言 / 操作 / 輸出格式 | `sqlq_opts` |  |
+| [音頻產生器 / 聽力頻率測試](utils/tone-generator.html) | Web Audio 六種波形（正弦 / 方波 / 三角 / 鋸齒 / 白噪音 / 粉紅噪音），20–20000 Hz，音量 -60 至 -6 dBFS（預設 -30）；左右聲道測試（含左→右輪流）、定時停止；頻率掃描（線性 / 對數、可循環）；聽力頻率測試（8–20 kHz 共 10 階，非醫療）；雙耳拍；即時頻譜 / 波形；需點擊才發聲、離開頁面即停止；不存資料 | — |  |
+| [字幕時間軸工具](utils/subtitle-tool.html) | 解析 SRT / VTT / ASS（基本）/ SBV，自動偵測編碼（失敗時可改用 Big5 / GBK）；就地編輯 / 新增 / 刪除 / 排序；整體平移（可指定範圍）、兩點線性校正、幀率轉換；合併重疊或過短、依字數拆分（不拆英文單字與 emoji）、搜尋取代（含 regex）；檢查七類問題並一鍵修正，復原 10 步；輸出 SRT / VTT / SBV / 純文字 / CSV（CRLF / LF、BOM）；單檔 5 MB、5 萬行；不做簡繁轉換、ASS 只讀；不存資料 | — |  |
+| [跨裝置傳檔 / 傳文字](utils/file-drop.html) | 兩台裝置開同一連結或輸入 6 碼房號，PeerJS 點對點 WebRTC 互傳檔案與文字（1 對 1，第三位被拒）；多檔依序傳送（選擇 / 拖放），每塊 16KB 並依 bufferedAmount 背壓，顯示進度 / 速度 / 剩餘時間，可取消；逐塊 + 總 CRC32 校驗（非加密雜湊）；單檔 ≤ 500MB（接收端記憶體暫存最多 30 個 / 1GB）；文字單則 ≤ 50,000 字、記憶體內最多 100 則；檔名過濾；壞訊息忽略並計數；任何知道房號者可連入、信令用公共 PeerJS、對稱型 NAT 需 TURN（未提供）；不存資料 | — |  |
 
 ## 閱讀
 
