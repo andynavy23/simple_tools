@@ -46,6 +46,7 @@
         <ul>
         <li>籌碼用完就出局；單機時你出局牌局就結束。</li>
         <li>沒有分牌與保險，這是簡化版。</li>
+        <li>發牌、要牌、莊家翻牌、爆牌與勝負都有短短的動畫，純視覺、不會延後你的操作或牌局節奏；系統設定「減少動態效果」時會自動關閉。</li>
         </ul>
     </template>
 
@@ -78,6 +79,7 @@
             color: #fff;
             border-radius: 18px;
             padding: 14px;
+            overflow: hidden;           /* 發牌動畫從角落滑入，不讓窄螢幕橫向溢出 */
         }
 
         .seat {
@@ -336,6 +338,19 @@
             const ok = BETS.filter(b => b <= chips);
             return ok.length ? ok[Math.floor(rand() * Math.min(3, ok.length))] : 0;
         }
+
+        // 動畫用純計算：牌從 from（牌堆）滑到 to 的位移；發牌順序 = 每位玩家一張、莊家一張，輪第 1 輪、第 2 輪…，每張間隔 step 毫秒
+        // prev / cur 是各座位（與莊家）前後的牌數；回傳 [{ seat（-1 = 莊家）, idx, delay }]
+        const slideDelta = (from, to) => ({ dx: from.left - to.left, dy: from.top - to.top });
+        function dealSchedule(prevLens, prevDealer, curLens, curDealer, step) {
+            const out = []; let k = 0;
+            const rounds = Math.max(curDealer, ...curLens);
+            for (let r = 0; r < rounds; r++) {
+                curLens.forEach((n, i) => { if (r >= (prevLens[i] || 0) && r < n) out.push({ seat: i, idx: r, delay: k++ * step }); });
+                if (r >= prevDealer && r < curDealer) out.push({ seat: -1, idx: r, delay: k++ * step });
+            }
+            return out;
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -521,6 +536,34 @@
         }
         const OUTCOME = { blackjack: ['Blackjack！', 'win'], win: ['贏', 'win'], push: ['平手', ''], lose: ['輸', 'lose'], bust: ['爆牌', 'lose'] };
 
+        // ---- 動畫（只動 transform / opacity；畫面一律先畫成最終狀態，動畫只是視覺，不擋輸入也不影響房主節奏）----
+        let A = null, lastSig = '';
+        const motionOK = () => !document.hidden && !matchMedia('(prefers-reduced-motion: reduce)').matches && !!Element.prototype.animate;
+        const fx = (el, kf, o) => el && el.animate(kf, { duration: 300, easing: 'ease-out', fill: 'backwards', ...o });
+        function animateTable(prev) {
+            if (!prev || !motionOK()) return;
+            const tb = $('.table').getBoundingClientRect(), deck = { left: tb.right - 50, top: tb.top };
+            const seatEls = [...$('#seats').children], dc = $('#dealerCards').children;
+            const cardsOf = (seat) => seat < 0 ? dc : seatEls[seat] && seatEls[seat].querySelector('.cards').children;
+            const sched = dealSchedule(prev.hands.map(h => h.length), prev.dealer.length, V.hands.map(h => (h || []).length), V.dealer.length, 70);
+            sched.forEach(({ seat, idx, delay }) => {
+                const el = cardsOf(seat) && cardsOf(seat)[idx]; if (!el) return;
+                const r = el.getBoundingClientRect(), { dx, dy } = slideDelta(deck, r), back = el.classList.contains('back');
+                fx(el, [{ transform: `translate(${dx}px,${dy}px) scale(.6)${back ? '' : ' perspective(400px) rotateY(90deg)'}`, opacity: 0 }, { transform: 'none', opacity: 1 }], { delay });
+            });
+            if (prev.dealer[1] === '??' && V.dealer[1] && V.dealer[1] !== '??') fx(dc[1], [{ transform: 'perspective(400px) rotateY(90deg)' }, { transform: 'perspective(400px) rotateY(0)' }], { duration: 400 });
+            seatEls.forEach((se, i) => {
+                const h = V.hands[i] || [], v = handValue(h.filter(c => c !== '??')), ph = prev.hands[i] || [], pv = handValue(ph), r = V.result[i];
+                const head = se.querySelector('.tot');
+                if (prev.chips[i] !== undefined && (prev.chips[i] !== V.chips[i] || prev.bets[i] !== V.bets[i] || ph.length !== h.length)) fx(head, [{ transform: 'scale(1)' }, { transform: 'scale(1.25)' }, { transform: 'scale(1)' }], { duration: 350 });
+                if (h.length > ph.length && v.bust && !pv.bust) fx(se, [{ transform: 'translateX(0)' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(6px)' }, { transform: 'translateX(-4px)' }, { transform: 'translateX(0)' }], { duration: 400, delay: 250 });
+                else if (h.length > ph.length && v.total === 21 && !v.blackjack) fx(se, [{ transform: 'scale(1)' }, { transform: 'scale(1.04)' }, { transform: 'scale(1)' }], { duration: 450, delay: 250 });
+                const res = se.querySelector('.res');
+                if (res && r && !prev.res[i]) fx(res, [{ transform: 'scale(.4)', opacity: 0 }, { transform: r.o === 'win' || r.o === 'blackjack' ? 'scale(1.5)' : 'scale(1.2)', opacity: 1, offset: .6 }, { transform: 'scale(1)', opacity: 1 }], { duration: r.o === 'blackjack' ? 700 : 450 });
+            });
+            if (prev.dealerTotal !== V.dealerTotal && V.dealerTotal >= 0) fx($('#dealerTot'), [{ transform: 'scale(1)' }, { transform: 'scale(1.25)' }, { transform: 'scale(1)' }], { duration: 350, delay: 200 });
+        }
+
         function render() {
             if (!V) return;
             if (V.phase === 'lobby') {
@@ -531,7 +574,17 @@
                 return;
             }
             show('#menu', false); show('#lobby', false); show('#game', true);
-            const over = V.phase === 'over', n = V.names.length;
+            const over = V.phase === 'over';
+            const sig = JSON.stringify([V.phase, V.round, V.names, V.chips, V.bets, V.hands, V.dealer, V.result, V.turn, V.out, V.active, V.inRound, V.dealerTotal, my]);
+            if (sig !== lastSig) {                                  // 每秒的倒數重畫不重建牌桌，動畫才不會被打斷
+                lastSig = sig; const prev = A;
+                A = { phase: V.phase, round: V.round, hands: V.hands.map(h => (h || []).slice()), dealer: V.dealer.slice(), chips: V.chips.slice(), bets: V.bets.slice(), res: V.result.map(r => r && r.o), dealerTotal: V.dealerTotal };
+                drawTable(over);
+                animateTable(prev);
+            }
+            drawCtrl(over);
+        }
+        function drawTable(over) {
             $('#dealerCards').replaceChildren(...V.dealer.map(cardEl)); $('#dealerTot').textContent = V.dealerTotal >= 0 ? `${V.dealerTotal} 點` : '';
             $('#seats').replaceChildren(...V.names.map((nm, i) => {
                 const d = document.createElement('div'), h = V.hands[i] || [], v = handValue(h.filter(c => c !== '??')), r = V.result[i], oc = r && OUTCOME[r.o];
@@ -545,6 +598,8 @@
                 else if (V.out[i] && V.chips[i] <= 0 && V.round > 0) d.append(Object.assign(document.createElement('div'), { className: 'res lose', textContent: '籌碼用完了' }));
                 return d;
             }));
+        }
+        function drawCtrl(over) {
             const mine = V.turn === my && V.phase === 'play', placed = V.bets[my] > 0, left = Math.max(0, Math.ceil((V.ms - (Date.now() - V.at)) / 1000));
             $('#status').textContent = over ? `牌局結束：${V.note}` : V.phase === 'bet' ? (V.out[my] ? '你的籌碼用完了，觀戰中' : placed ? `已下注 ${V.bets[my]}，等待其他人… ⏱ ${left}` : `第 ${V.round} 局：請下注 ⏱ ${left}`) : V.phase === 'play' ? (mine ? `輪到你了 ⏱ ${left}` : `等待 ${V.names[V.turn]} ${solo ? '思考中' : '決定'}…`) : V.phase === 'dealer' ? '莊家開牌…' : '本局結算';
             $('#note').textContent = V.note && !over ? V.note : '';

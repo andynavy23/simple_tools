@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="字幕時間軸工具：解析 SRT / VTT / ASS / SBV，編輯、平移、校正、幀率轉換、合併拆分、檢查並轉出各種格式。">
+    <meta property="og:title" content="字幕時間軸工具" />
+    <meta property="og:description" content="字幕格式互轉、時間平移與校正、檢查修正，全部在本機處理。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/subtitle-tool.html" />
+    <title>字幕時間軸工具</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 860px;
+        }
+
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        label.inl {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 400;
+            margin: 8px 0;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin: 6px 0;
+        }
+
+        .row>input,
+        .row>select {
+            flex: 1;
+            min-width: 110px;
+        }
+
+        textarea.src {
+            width: 100%;
+            min-height: 110px;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
+        }
+
+        .tw {
+            overflow-x: auto;
+            max-width: 100%;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+        }
+
+        table {
+            border-collapse: collapse;
+            min-width: 640px;
+            width: 100%;
+        }
+
+        th,
+        td {
+            padding: 4px 6px;
+            border-bottom: 1px solid var(--line);
+            vertical-align: top;
+            text-align: left;
+        }
+
+        thead th {
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        th.n {
+            position: sticky;
+            left: 0;
+            z-index: 1;
+            min-width: 52px;
+            width: 52px;
+            background: var(--card);
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            border-right: 1px solid var(--line);
+        }
+
+        input.tin {
+            width: 136px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        input.tin.bad {
+            border-color: var(--bad);
+        }
+
+        td textarea {
+            width: 100%;
+            min-width: 220px;
+            min-height: 60px;
+        }
+
+        tr.hl th.n,
+        tr.hl td {
+            background: var(--fill);
+        }
+
+        details.card>summary {
+            cursor: pointer;
+            font-weight: 700;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+        }
+
+        .issues {
+            margin: 8px 0;
+            padding-left: 0;
+            list-style: none;
+        }
+
+        .issues li {
+            padding: 6px 0;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        #msg {
+            min-height: 1.5em;
+        }
+
+        #msg.bad {
+            color: var(--bad);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>字幕時間軸工具</h1>
+        <p class="sub">解析 SRT / VTT / ASS / SBV，編輯、平移、校正、檢查，再轉出任何格式。全部在本機處理。</p>
+
+        <div class="card">
+            <h2>載入字幕</h2>
+            <div class="row"><input type="file" id="file" accept=".srt,.vtt,.ass,.ssa,.sbv,.txt" aria-label="選擇字幕檔"></div>
+            <div class="row"><select id="enc" aria-label="文字編碼"><option value="auto">編碼：自動偵測</option><option value="utf-8">UTF-8</option><option value="utf-16le">UTF-16 LE</option><option value="utf-16be">UTF-16 BE</option><option value="big5">Big5（繁中）</option><option value="gbk">GBK（簡中）</option><option value="shift_jis">Shift_JIS</option></select><select id="fmt" aria-label="輸入格式"><option value="auto">格式：自動偵測</option><option value="srt">SRT</option><option value="vtt">VTT</option><option value="ass">ASS / SSA</option><option value="sbv">SBV</option></select></div>
+            <textarea id="src" class="src" placeholder="或直接貼上字幕內容" aria-label="字幕內容" spellcheck="false"></textarea>
+            <label class="inl"><input type="checkbox" id="strip"> 解析時移除 HTML 標籤與 ASS 樣式碼（如 &lt;i&gt;、{\an8}）</label>
+            <div class="chips"><button class="primary" id="parse">解析</button><button class="sm" id="sample">帶入範例</button></div>
+            <div class="chips" id="encBtns" hidden><button class="sm" data-enc="big5">改用 Big5 重新解讀</button><button class="sm" data-enc="gbk">改用 GBK 重新解讀</button></div>
+            <p id="msg" role="status"></p>
+        </div>
+
+        <div class="card">
+            <h2>字幕清單（<span id="cnt">0</span> 行）</h2>
+            <div class="chips"><button class="sm" id="add">新增一行</button><button class="sm" id="sort">依時間排序並重新編號</button><button class="sm" id="stripNow">移除標籤</button><button class="sm" id="undo" disabled>復原上一步</button><button class="sm" id="clear">清空</button></div>
+            <div class="tw"><table><thead><tr><th class="n">#</th><th>開始</th><th>結束</th><th>文字</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>
+            <div class="chips"><button class="sm" id="prev">‹ 上一頁</button><span class="muted" id="pg"></span><button class="sm" id="next">下一頁 ›</button></div>
+        </div>
+
+        <details class="card" id="dShift">
+            <summary>整體時間平移</summary>
+            <p class="note">正數延後、負數提前（毫秒）。行號留空代表從頭 / 到尾；時間不會小於 0。</p>
+            <div class="row"><input id="shMs" type="number" inputmode="numeric" value="1000" aria-label="平移毫秒"><input id="shFrom" type="number" inputmode="numeric" placeholder="從第幾行" aria-label="從第幾行"><input id="shTo" type="number" inputmode="numeric" placeholder="到第幾行" aria-label="到第幾行"></div>
+            <div class="chips"><button class="primary" id="shGo">套用平移</button></div>
+        </details>
+
+        <details class="card" id="dLin">
+            <summary>兩點線性校正</summary>
+            <p class="note">指定兩句字幕「應該出現的開始時間」，自動算出縮放與偏移，套用到全部字幕。</p>
+            <div class="row"><span>第</span><input id="lnA" type="number" inputmode="numeric" value="1" aria-label="第一基準行"><span>句應在</span><input id="lnAt" placeholder="00:01:02.500" aria-label="第一基準新時間"></div>
+            <div class="row"><span>第</span><input id="lnB" type="number" inputmode="numeric" value="1" aria-label="第二基準行"><span>句應在</span><input id="lnBt" placeholder="01:35:10.000" aria-label="第二基準新時間"></div>
+            <div class="chips"><button class="primary" id="lnGo">套用校正</button></div>
+        </details>
+
+        <details class="card" id="dFps">
+            <summary>幀率轉換</summary>
+            <p class="note">字幕是照「來源幀率」做的、但影片實際是「目標幀率」時使用（時間 × 來源 ÷ 目標）。</p>
+            <div class="row"><select id="fpsFrom" aria-label="來源幀率"></select><span>→</span><select id="fpsTo" aria-label="目標幀率"></select></div>
+            <div class="chips"><button class="primary" id="fpsGo">套用</button></div>
+        </details>
+
+        <details class="card" id="dMerge">
+            <summary>合併與拆分</summary>
+            <div class="row"><label class="inl"><input type="checkbox" id="mgOv" checked> 合併時間重疊的字幕</label></div>
+            <div class="row"><input id="mgMin" type="number" inputmode="numeric" value="500" aria-label="過短毫秒"><input id="mgGap" type="number" inputmode="numeric" value="500" aria-label="最大間隔毫秒"></div>
+            <p class="note">左：短於幾毫秒視為過短（0 = 不合併過短）；右：與相鄰字幕間隔在幾毫秒內才合併。</p>
+            <div class="chips"><button class="primary" id="mgGo">合併</button></div>
+            <hr>
+            <div class="row"><input id="spMax" type="number" inputmode="numeric" value="20" aria-label="每行最多字數"><select id="spMode" aria-label="拆分方式"><option value="split">拆成多句（依字數分配時間）</option><option value="wrap">同一句內換行</option></select></div>
+            <p class="note">中文每字算 1、英文單字不會被拆斷、emoji 視為 1 個字。</p>
+            <div class="chips"><button class="primary" id="spGo">拆分長句</button></div>
+        </details>
+
+        <details class="card" id="dRep">
+            <summary>搜尋取代</summary>
+            <div class="row"><input id="rpFind" placeholder="搜尋" aria-label="搜尋"><input id="rpTo" placeholder="取代為" aria-label="取代為"></div>
+            <label class="inl"><input type="checkbox" id="rpRe"> 正規表示式（取代可用 $1）</label>
+            <label class="inl"><input type="checkbox" id="rpCi"> 不分大小寫</label>
+            <div class="chips"><button class="primary" id="rpGo">全部取代</button></div>
+        </details>
+
+        <details class="card" id="dChk">
+            <summary>檢查工具</summary>
+            <div class="row"><input id="ckMax" type="number" inputmode="decimal" value="7" step="0.5" aria-label="過長秒數"><input id="ckMin" type="number" inputmode="decimal" value="0.5" step="0.1" aria-label="過短秒數"><input id="ckChars" type="number" inputmode="numeric" value="42" aria-label="每行字數上限"></div>
+            <p class="note">依序：過長秒數、過短秒數、每行字數上限。另外會檢查重疊、起訖顛倒、長度為 0、空字幕。</p>
+            <div class="chips"><button class="primary" id="ckGo">檢查</button><button id="ckFix" disabled>一鍵修正</button></div>
+            <ul class="issues" id="issues"></ul>
+        </details>
+
+        <div class="card">
+            <h2>輸出</h2>
+            <div class="row"><select id="ofmt" aria-label="輸出格式"><option value="srt">SRT</option><option value="vtt">VTT</option><option value="sbv">SBV</option><option value="txt">純文字（僅文字）</option><option value="csv">CSV</option></select><select id="onl" aria-label="換行"><option value="crlf">換行 CRLF</option><option value="lf">換行 LF</option></select></div>
+            <div class="row"><input id="osuf" value="_edited" aria-label="檔名後綴"><label class="inl" style="margin:0"><input type="checkbox" id="obom"> 加上 BOM</label></div>
+            <div class="chips"><button class="primary" id="oGen">產生預覽</button><button id="oCopy">複製</button><button id="oDl">下載</button></div>
+            <textarea id="oOut" class="src" readonly aria-label="輸出內容"></textarea>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>字幕檔的瑞士刀：貼上或選擇 .srt / .vtt / .ass / .sbv，解析成表格後可就地編輯、整體平移、校正、換幀率、合併拆分、搜尋取代與檢查，最後轉出 SRT、VTT、SBV、純文字或 CSV。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>字幕比影片快或慢：平移，或用兩點校正一次拉齊。</li>
+        <li>SRT 與 VTT 互轉（毫秒分隔符、標頭會自動處理）。</li>
+        <li>字幕太長、重疊或閃一下就消失，想一鍵整理。</li>
+        <li>亂碼的舊字幕檔（Big5 / GBK）要轉成 UTF-8。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>選擇檔案或貼上內容，按「解析」。檔案若亂碼，按「改用 Big5 / GBK 重新解讀」或在「編碼」下拉改選。</li>
+        <li>在清單表格直接改時間（支援 <kbd>00:00:01,000</kbd>、<kbd>0:0:1.5</kbd>、<kbd>00:01.000</kbd>）與文字；可新增、刪除、排序。表格可左右捲動，第一欄（行號）固定。</li>
+        <li>展開需要的功能：平移（可指定行號範圍）、兩點校正、幀率轉換、合併 / 拆分、搜尋取代、檢查。</li>
+        <li>操作做錯可按「復原上一步」。</li>
+        <li>在「輸出」選格式、換行（CRLF / LF）與是否加 BOM，按「產生預覽」，再「複製」或「下載」。檔名為原檔名加後綴。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">字幕第 1 句在 00:00:01,000，整體平移 +1500 毫秒
+        → 00:00:02,500
+        輸出成 VTT：00:00:02.500 --> 00:00:04.500（開頭多一行 WEBVTT）
+        兩點校正：第 1 句應在 00:01:02.500，最後一句應在 01:35:10.000，工具會自動算出縮放與偏移</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>不支援簡繁轉換；ASS 只讀取對白與時間，樣式、特效不會保留，輸出也沒有 ASS。</li>
+        <li>解析很寬鬆：多餘空行、缺漏序號都可以；單檔上限 5 MB、最多 5 萬行字幕。</li>
+        <li>VTT 的 cue 設定（如 align:start）會保留，轉 SRT / SBV 時會捨棄。HTML 標籤與 {\an8} 預設保留，可勾選移除。</li>
+        <li>平移到小於 0 的時間會被截成 0。輸出前建議先跑「檢查」。</li>
+        <li>本工具不儲存任何資料；重新整理頁面會清空，請先下載。檔案不會上傳。</li>
+        </ul>
+    </template>
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { esc, csvStringify } = Util;
+        // --- pure ---
+        const P2 = (n) => String(n).padStart(2, '0'), P3 = (n) => String(n).padStart(3, '0');
+        const MAXCUES = 50000;
+        // 時間字串 → 毫秒；支援 H:M:S[,.]ms、M:S.ms、小數位任意長（第 4 位起四捨五入進位）；失敗回傳 NaN
+        function tcParse(s) {
+            const m = /^\s*(?:(\d+):)?(\d+):(\d+)(?:[.,:](\d+))?\s*$/.exec(String(s));
+            if (!m) return NaN;
+            let ms = 0;
+            if (m[4]) { ms = parseInt(m[4].slice(0, 3).padEnd(3, '0'), 10); if (m[4].length > 3 && m[4][3] >= '5') ms++; }
+            return ((+(m[1] || 0) * 60 + +m[2]) * 60 + +m[3]) * 1000 + ms;
+        }
+        function tcFormat(ms, sep = ',', hp = 2) {
+            ms = Number.isFinite(ms) ? Math.max(0, Math.round(ms)) : 0;
+            return `${String(Math.floor(ms / 3600000)).padStart(hp, '0')}:${P2(Math.floor(ms / 60000) % 60)}:${P2(Math.floor(ms / 1000) % 60)}${sep}${P3(ms % 1000)}`;
+        }
+        const normNL = (s) => String(s).replace(/^﻿/, '').replace(/\r\n?/g, '\n');
+        // 移除 HTML 標籤與 ASS 樣式碼 {\an8}
+        const stripTags = (t, o = {}) => { const { html = true, ass = true } = o; let s = String(t); if (ass) s = s.replace(/\{\\[^}]*\}/g, ''); if (html) s = s.replace(/<\/?[a-zA-Z][^<>\n]*>/g, ''); return s; };
+        const TT = '\\d+(?::\\d+){1,2}(?:[.,:]\\d+)?', ST = '\\d+:\\d+:\\d+(?:\\.\\d+)?';
+        const RE_ARROW = new RegExp(`^\\s*(${TT})\\s*-+>\\s*(${TT})(.*)$`), RE_SBV = new RegExp(`^\\s*(${ST})\\s*,\\s*(${ST})\\s*()$`);
+        // SRT / VTT / SBV：找時間行，之後到空行為止都是文字；文字區塊末尾緊貼下一個時間行的純數字視為序號
+        function parseTimed(lines, re) {
+            const cues = []; let cur = null, inText = false;
+            for (const raw of lines) {
+                const line = raw.replace(/\s+$/, ''), m = re.exec(line);
+                if (m) {
+                    if (inText && cur.l.length && /^\d+$/.test(cur.l[cur.l.length - 1].trim())) cur.l.pop();
+                    cur = { s: tcParse(m[1]), e: tcParse(m[2]), t: '', set: (m[3] || '').trim(), l: [] };
+                    cues.push(cur); inText = true;
+                } else if (!line.trim()) inText = false;
+                else if (inText) cur.l.push(line);
+            }
+            return cues.map(({ l, ...c }) => ({ ...c, t: l.join('\n') }));
+        }
+        function parseASS(lines) {
+            let fmt = ['Layer', 'Start', 'End', 'Style', 'Name', 'MarginL', 'MarginR', 'MarginV', 'Effect', 'Text'], sec = '';
+            const cues = [];
+            for (const raw of lines) {
+                const t = raw.trim();
+                if (/^\[.*\]$/.test(t)) { sec = t.toLowerCase(); continue; }
+                if (sec === '[events]' && /^format:/i.test(t)) { fmt = t.slice(7).split(',').map(x => x.trim()); continue; }
+                if (!/^dialogue:/i.test(t)) continue;
+                const n = fmt.length, parts = []; let rest = t.slice(9).replace(/^\s/, '');
+                while (parts.length < n - 1) { const i = rest.indexOf(','); if (i < 0) break; parts.push(rest.slice(0, i)); rest = rest.slice(i + 1); }
+                parts.push(rest);
+                const s = tcParse(parts[Math.max(0, fmt.indexOf('Start'))]), e = tcParse(parts[Math.max(0, fmt.indexOf('End'))]);
+                if (Number.isNaN(s) || Number.isNaN(e)) continue;
+                cues.push({ s, e, t: parts[n - 1].replace(/\\[Nn]/g, '\n').replace(/\\h/g, ' '), set: '' });
+            }
+            return cues;
+        }
+        function detectFmt(s) {
+            if (/^\s*WEBVTT/i.test(s)) return 'vtt';
+            if (/\[Script Info\]|^Dialogue:/mi.test(s)) return 'ass';
+            if (!/-->/.test(s) && RE_SBV.test(s.split('\n').find(l => RE_SBV.test(l)) || '')) return 'sbv';
+            return 'srt';
+        }
+        // 解析：回傳 { fmt, cues, warns }
+        function parseSubs(text, o = {}) {
+            const s = normNL(text), fmt = !o.fmt || o.fmt === 'auto' ? detectFmt(s) : o.fmt, lines = s.split('\n'), warns = [];
+            let cues = fmt === 'ass' ? parseASS(lines) : parseTimed(lines, fmt === 'sbv' ? RE_SBV : RE_ARROW);
+            if (o.strip) cues = cues.map(c => ({ ...c, t: stripTags(c.t) }));
+            if (!cues.length && s.trim()) warns.push('找不到任何字幕，請確認格式');
+            if (cues.length > MAXCUES) { warns.push(`字幕超過 ${MAXCUES} 行，只讀取前 ${MAXCUES} 行`); cues = cues.slice(0, MAXCUES); }
+            return { fmt, cues, warns };
+        }
+        // 序列化
+        const cleanT = (t) => String(t == null ? '' : t).replace(/\n{2,}/g, '\n').replace(/^\n+|\n+$/g, '');
+        const toSRT = (c) => c.map((x, i) => `${i + 1}\n${tcFormat(x.s)} --> ${tcFormat(x.e)}\n${cleanT(x.t)}\n`).join('\n');
+        const toVTT = (c) => 'WEBVTT\n\n' + c.map(x => `${tcFormat(x.s, '.')} --> ${tcFormat(x.e, '.')}${x.set ? ' ' + x.set : ''}\n${cleanT(x.t)}\n`).join('\n');
+        const toSBV = (c) => c.map(x => `${tcFormat(x.s, '.', 1)},${tcFormat(x.e, '.', 1)}\n${cleanT(x.t)}\n`).join('\n');
+        const toTXT = (c) => c.map(x => cleanT(x.t)).filter(Boolean).join('\n') + '\n';
+        const toCSV = (c) => csvStringify(['序號', '開始', '結束', '文字'], c.map((x, i) => [i + 1, tcFormat(x.s), tcFormat(x.e), cleanT(x.t)])).replace(/\r\n/g, '\n') + '\n';
+        function serialize(cues, fmt, o = {}) {
+            let s = ({ srt: toSRT, vtt: toVTT, sbv: toSBV, txt: toTXT, csv: toCSV }[fmt] || toSRT)(cues);
+            if (o.nl !== 'lf') s = s.replace(/\n/g, '\r\n');
+            return (o.bom ? '﻿' : '') + s;
+        }
+        const outName = (orig, ext, suffix = '_edited') => (String(orig || '').replace(/^.*[\\/]/, '').replace(/\.[^.]*$/, '') || 'subtitle') + suffix + '.' + ext;
+        // 位元組 → 文字：偵測 BOM / UTF-16 / 嚴格 UTF-8；都不是時 bad = true（建議改用 Big5 / GBK）
+        function decodeBytes(u8, enc = 'auto') {
+            const dec = (l, fatal) => new TextDecoder(l, { fatal }).decode(u8);
+            if (enc !== 'auto') { try { return { text: dec(enc, false), enc, bad: false }; } catch (e) { return { text: dec('utf-8', false), enc: 'utf-8', bad: true }; } }
+            if (u8[0] === 0xEF && u8[1] === 0xBB && u8[2] === 0xBF) return { text: dec('utf-8', false), enc: 'utf-8', bad: false };
+            if (u8[0] === 0xFF && u8[1] === 0xFE) return { text: dec('utf-16le', false), enc: 'utf-16le', bad: false };
+            if (u8[0] === 0xFE && u8[1] === 0xFF) return { text: dec('utf-16be', false), enc: 'utf-16be', bad: false };
+            let ze = 0, zo = 0; const n = Math.min(u8.length, 2000);
+            for (let i = 0; i < n; i++) if (u8[i] === 0) (i % 2 ? zo++ : ze++);
+            if (n >= 4 && zo > n / 4 && ze === 0) return { text: dec('utf-16le', false), enc: 'utf-16le', bad: false };
+            if (n >= 4 && ze > n / 4 && zo === 0) return { text: dec('utf-16be', false), enc: 'utf-16be', bad: false };
+            try { return { text: dec('utf-8', true), enc: 'utf-8', bad: false }; } catch (e) { return { text: dec('utf-8', false), enc: 'utf-8', bad: true }; }
+        }
+        // 時間運算（回傳新陣列，不改動輸入）
+        const sortCues = (c) => [...c].sort((a, b) => a.s - b.s || a.e - b.e);
+        function shiftCues(cues, ms, from = 0, to = cues.length - 1) {
+            return cues.map((c, i) => i >= from && i <= to ? { ...c, s: Math.max(0, c.s + ms), e: Math.max(0, c.e + ms) } : { ...c });
+        }
+        // 兩點線性校正：第 i 句開始時間改為 ti、第 j 句改為 tj，其餘依比例；基準點相同回傳 null
+        function retime(cues, i, ti, j, tj) {
+            const a = cues[i], b = cues[j];
+            if (!a || !b || a.s === b.s || !Number.isFinite(ti) || !Number.isFinite(tj)) return null;
+            const k = (tj - ti) / (b.s - a.s), f = (t) => Math.max(0, Math.round(ti + (t - a.s) * k));
+            return cues.map(c => ({ ...c, s: f(c.s), e: f(c.e) }));
+        }
+        const FPS = [['23.976', 24000 / 1001], ['24', 24], ['25', 25], ['29.97', 30000 / 1001], ['30', 30]];
+        const fpsScale = (from, to) => from / to;
+        const scaleCues = (cues, k) => cues.map(c => ({ ...c, s: Math.round(c.s * k), e: Math.round(c.e * k) }));
+        const joinText = (a, b) => !b || a === b ? a : !a ? b : a + '\n' + b;
+        // 合併重疊 / 過短（與相鄰字幕間隔 ≤ maxGap）的字幕
+        function mergeCues(cues, o = {}) {
+            const { overlap = true, minLen = 500, maxGap = 500 } = o, out = [];
+            for (const c of sortCues(cues)) {
+                const p = out[out.length - 1];
+                if (p && ((overlap && c.s < p.e) || (minLen > 0 && (c.e - c.s < minLen || p.e - p.s < minLen) && c.s - p.e <= maxGap))) { p.e = Math.max(p.e, c.e); p.t = joinText(p.t, c.t); }
+                else out.push({ ...c });
+            }
+            return { cues: out, n: cues.length - out.length };
+        }
+        // 文字斷行：不拆英文單字與 emoji（以字素為單位）；標點不放行首
+        const graphemes = (s) => typeof Intl !== 'undefined' && Intl.Segmenter ? [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(s)].map(x => x.segment) : Array.from(s);
+        const cnt = (s) => graphemes(String(s)).length;
+        const CJK = /[⺀-鿿豈-﫿가-힯＀-￯]/, CLOSE = /^[，。、！？；：）」』】》〉…～）]$/;
+        const isWordCh = (g) => !CJK.test(g) && /^[\p{L}\p{M}\p{N}'’\-_@#$%&\/+=()"“”.,:;!?…*<>]+$/u.test(g);
+        function chunkText(text, max) {
+            const s = String(text).replace(/\s*\n\s*/g, ' ');
+            if (!(max > 0)) return [s.trim()];
+            const toks = [];
+            for (const g of graphemes(s)) {
+                const last = toks[toks.length - 1];
+                if (/^\s+$/.test(g)) { if (last && !last.sp) toks.push({ t: ' ', n: 1, sp: 1 }); }
+                else if (isWordCh(g)) { if (last && last.w) { last.t += g; last.n++; } else toks.push({ t: g, n: 1, w: 1 }); }
+                else if (CLOSE.test(g) && last && !last.sp) { last.t += g; last.n++; }
+                else toks.push({ t: g, n: 1 });
+            }
+            const lines = []; let line = '', len = 0, sp = false;
+            for (const k of toks) {
+                if (k.sp) { sp = len > 0; continue; }
+                const add = sp ? 1 : 0;
+                if (len > 0 && len + add + k.n > max) { lines.push(line); line = k.t; len = k.n; }
+                else { line += (sp ? ' ' : '') + k.t; len += add + k.n; }
+                sp = false;
+            }
+            if (len) lines.push(line);
+            return lines;
+        }
+        // 拆分長句：mode 'split' 拆成多句（依字數分配時間）、'wrap' 同句內換行
+        function splitCues(cues, max, mode = 'split') {
+            const out = []; let n = 0;
+            for (const c of cues) {
+                const ls = String(c.t).split('\n');
+                if (ls.every(l => cnt(l) <= max)) { out.push({ ...c }); continue; }
+                if (mode === 'wrap') { out.push({ ...c, t: ls.flatMap(l => chunkText(l, max)).join('\n') }); n++; continue; }
+                const parts = chunkText(c.t, max), w = parts.map(p => cnt(p)), total = w.reduce((a, b) => a + b, 0), d = c.e - c.s;
+                let acc = 0;
+                parts.forEach((p, i) => {
+                    const s = c.s + Math.round(d * acc / total); acc += w[i];
+                    const e = i === parts.length - 1 ? c.e : c.s + Math.round(d * acc / total);
+                    out.push({ ...c, id: i ? undefined : c.id, s, e, t: p });
+                });
+                n += parts.length - 1;
+            }
+            return { cues: out, n };
+        }
+        // 檢查：回傳 [{ i, type, msg }]
+        function checkCues(cues, o = {}) {
+            const { maxDur = 7000, minDur = 500, maxChars = 42 } = o, out = [];
+            cues.forEach((c, i) => {
+                const d = c.e - c.s, add = (type, msg) => out.push({ i, type, msg });
+                if (!String(c.t).trim()) add('empty', '空字幕');
+                if (d < 0) add('reversed', '負長度（起訖顛倒，結束早於開始）');
+                else if (d === 0) add('zero', '長度為 0');
+                else if (d < minDur) add('short', `過短（${(d / 1000).toFixed(2)} 秒）`);
+                if (d > maxDur) add('long', `過長（${(d / 1000).toFixed(1)} 秒）`);
+                if (String(c.t).split('\n').some(l => cnt(l) > maxChars)) add('lines', `每行超過 ${maxChars} 字`);
+                const nx = cues[i + 1];
+                if (nx && c.e > nx.s) add('overlap', `與第 ${i + 2} 行時間重疊`);
+            });
+            return out;
+        }
+        // 一鍵修正：顛倒對調、刪空字幕、依時間排序、過長截斷、過短延長（不超過下一句）、重疊截到下一句開始、過長行換行
+        function fixCues(cues, o = {}) {
+            const { maxDur = 7000, minDur = 500, maxChars = 42 } = o;
+            let a = cues.map(c => ({ ...c }));
+            a.forEach(c => { if (c.e < c.s) [c.s, c.e] = [c.e, c.s]; });
+            a = sortCues(a.filter(c => String(c.t).trim()));
+            a.forEach((c, i) => {
+                const nx = a[i + 1];
+                if (c.e - c.s > maxDur) c.e = c.s + maxDur;
+                if (c.e - c.s < minDur) { let e = c.s + minDur; if (nx && nx.s > c.s) e = Math.min(e, nx.s); if (e > c.e) c.e = e; }
+                if (nx && nx.s > c.s && c.e > nx.s) c.e = nx.s;
+                if (String(c.t).split('\n').some(l => cnt(l) > maxChars)) c.t = String(c.t).split('\n').flatMap(l => chunkText(l, maxChars)).join('\n');
+            });
+            return a;
+        }
+        // 搜尋取代；regex 錯誤回傳 { error }
+        function replaceCues(cues, find, repl, o = {}) {
+            if (!find) return { cues: cues.map(c => ({ ...c })), n: 0 };
+            let re;
+            try { re = new RegExp(o.regex ? find : find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g' + (o.ci ? 'i' : '')); } catch (e) { return { error: '正規表示式有誤：' + e.message }; }
+            let n = 0;
+            const out = cues.map(c => { const m = String(c.t).match(re); if (!m) return { ...c }; n += m.length; return { ...c, t: String(c.t).replace(re, o.regex ? repl : () => repl) }; });
+            return { cues: out, n };
+        }
+        // --- /pure ---
+
+        const $ = (id) => document.getElementById(id);
+        const PAGE = 100;
+        let cues = [], nid = 1, page = 0, raw = null, baseName = '', hist = [], lastFix = null;
+        const withId = (a) => a.map(c => ({ ...c, id: c.id || nid++ }));
+        const say = (t, bad) => { $('msg').textContent = t; $('msg').className = bad ? 'bad' : ''; };
+        const opts = () => ({ maxDur: (parseFloat($('ckMax').value) || 7) * 1000, minDur: (parseFloat($('ckMin').value) || 0) * 1000, maxChars: parseInt($('ckChars').value, 10) || 42 });
+        function snap() { hist.push(cues.map(c => ({ ...c }))); if (hist.length > 10) hist.shift(); $('undo').disabled = false; }
+        function apply(next, text) { snap(); cues = withId(next); render(); say(text); $('issues').innerHTML = ''; $('ckFix').disabled = true; }
+
+        function render(keepPage) {
+            const pages = Math.max(1, Math.ceil(cues.length / PAGE));
+            if (!keepPage) page = Math.min(page, pages - 1);
+            const a = page * PAGE, rows = cues.slice(a, a + PAGE);
+            $('tb').innerHTML = rows.map((c, k) => `<tr data-id="${c.id}"><th class="n">${a + k + 1}</th><td><input class="tin" data-k="s" value="${tcFormat(c.s)}" aria-label="開始"></td><td><input class="tin" data-k="e" value="${tcFormat(c.e)}" aria-label="結束"></td><td><textarea data-k="t" rows="2" aria-label="文字">${esc(c.t)}</textarea></td><td><button class="sm" data-del>刪除</button></td></tr>`).join('');
+            $('cnt').textContent = cues.length;
+            $('pg').textContent = cues.length ? `第 ${a + 1}–${a + rows.length} 行（${page + 1} / ${pages} 頁）` : '尚無字幕';
+            $('prev').disabled = page <= 0; $('next').disabled = page >= pages - 1;
+            $('undo').disabled = !hist.length;
+        }
+        $('tb').addEventListener('change', (e) => {
+            const t = e.target, tr = t.closest('tr'); if (!tr || !t.classList.contains('tin')) return;
+            const c = cues.find(x => x.id === +tr.dataset.id), v = tcParse(t.value);
+            if (!c) return;
+            if (Number.isNaN(v)) { t.value = tcFormat(c[t.dataset.k]); say('時間格式不對，已還原（例如 00:01:02,500）', true); return; }
+            c[t.dataset.k] = v; t.value = tcFormat(v); say('');
+        });
+        $('tb').addEventListener('input', (e) => { const t = e.target, tr = t.closest('tr'); if (!tr || t.dataset.k !== 't') return; const c = cues.find(x => x.id === +tr.dataset.id); if (c) c.t = t.value.replace(/\r\n?/g, '\n'); });
+        $('tb').addEventListener('click', (e) => {
+            if (!e.target.closest('[data-del]')) return;
+            const id = +e.target.closest('tr').dataset.id; snap(); cues = cues.filter(c => c.id !== id); render(); say('已刪除 1 行');
+        });
+        $('prev').onclick = () => { page--; render(true); };
+        $('next').onclick = () => { page++; render(true); };
+        $('add').onclick = () => { snap(); const l = cues[cues.length - 1], s = l ? l.e : 0; cues.push({ id: nid++, s, e: s + 2000, t: '', set: '' }); page = Math.ceil(cues.length / PAGE) - 1; render(true); say('已新增一行（在最後）'); };
+        $('sort').onclick = () => apply(sortCues(cues), '已依時間排序，序號依新順序重新編號');
+        $('stripNow').onclick = () => apply(cues.map(c => ({ ...c, t: stripTags(c.t) })), '已移除 HTML 標籤與樣式碼');
+        $('undo').onclick = () => { if (!hist.length) return; cues = hist.pop(); render(); say('已復原上一步'); };
+        $('clear').onclick = () => { if (cues.length && confirm('清空全部字幕？（可用「復原上一步」救回）')) apply([], '已清空'); };
+
+        // ---- 載入 ----
+        function load(text, fmtSel) {
+            const r = parseSubs(text, { fmt: fmtSel, strip: $('strip').checked });
+            snap(); cues = withId(r.cues); page = 0; render();
+            const names = { srt: 'SRT', vtt: 'VTT', ass: 'ASS', sbv: 'SBV' };
+            say(`格式 ${names[r.fmt]}，共 ${cues.length} 行` + (r.warns.length ? '。' + r.warns.join('；') : ''), !cues.length);
+            if (names[r.fmt] && $('ofmt').value === r.fmt) $('ofmt').value = r.fmt === 'srt' ? 'vtt' : 'srt';
+        }
+        function decodeAndLoad() {
+            const d = decodeBytes(raw, $('enc').value);
+            $('src').value = d.text; $('encBtns').hidden = !d.bad;
+            load(d.text, $('fmt').value);
+            if (d.bad) say('這個檔案不是有效的 UTF-8，可能是 Big5 / GBK 編碼：請按下方按鈕重新解讀（目前顯示的可能是亂碼）', true);
+        }
+        $('file').onchange = async () => {
+            const f = $('file').files[0]; if (!f) return;
+            if (f.size > 5 * 1024 * 1024) { say('檔案超過 5 MB，請改用較小的檔案', true); return; }
+            baseName = f.name; raw = new Uint8Array(await f.arrayBuffer()); decodeAndLoad();
+        };
+        $('enc').onchange = () => { if (raw) decodeAndLoad(); };
+        $('encBtns').onclick = (e) => { const b = e.target.closest('[data-enc]'); if (b && raw) { $('enc').value = b.dataset.enc; decodeAndLoad(); } };
+        $('parse').onclick = () => { raw = null; $('encBtns').hidden = true; load($('src').value, $('fmt').value); };
+        $('sample').onclick = () => { $('src').value = '1\n00:00:01,000 --> 00:00:03,500\n<i>你好，世界</i>\n\n2\n00:00:03,000 --> 00:00:05,000\nHello, this is a sample.\n\n3\n00:00:08,000 --> 00:00:08,200\n太短\n'; $('parse').click(); };
+
+        // ---- 功能 ----
+        const rowNo = (id, def) => { const v = parseInt($(id).value, 10); return Number.isFinite(v) ? v - 1 : def; };
+        const need = () => cues.length ? true : (say('請先載入字幕', true), false);
+        $('shGo').onclick = () => {
+            if (!need()) return;
+            const ms = parseInt($('shMs').value, 10); if (!Number.isFinite(ms)) return say('請輸入平移毫秒數', true);
+            const from = Math.max(0, rowNo('shFrom', 0)), to = Math.min(cues.length - 1, rowNo('shTo', cues.length - 1));
+            if (from > to) return say('行號範圍不正確', true);
+            apply(shiftCues(cues, ms, from, to), `已平移第 ${from + 1}–${to + 1} 行 ${ms > 0 ? '+' : ''}${ms} 毫秒`);
+        };
+        $('lnGo').onclick = () => {
+            if (!need()) return;
+            const i = rowNo('lnA', -1), j = rowNo('lnB', -1), ta = tcParse($('lnAt').value), tb = tcParse($('lnBt').value);
+            if (!cues[i] || !cues[j]) return say('基準行號超出範圍', true);
+            if (Number.isNaN(ta) || Number.isNaN(tb)) return say('基準時間格式不對（例如 00:01:02.500）', true);
+            const r = retime(cues, i, ta, j, tb); if (!r) return say('兩個基準點不能是同一句或同一時間', true);
+            const k = (tb - ta) / (cues[j].s - cues[i].s);
+            apply(r, `已校正：縮放 ×${k.toFixed(6)}，第 ${i + 1} 句 → ${tcFormat(ta)}`);
+        };
+        for (const id of ['fpsFrom', 'fpsTo']) $(id).innerHTML = FPS.map(([n, v], k) => `<option value="${v}"${(id === 'fpsFrom' ? 2 : 1) === k ? ' selected' : ''}>${n} fps</option>`).join('');
+        $('fpsGo').onclick = () => { if (!need()) return; const a = +$('fpsFrom').value, b = +$('fpsTo').value; apply(scaleCues(cues, fpsScale(a, b)), `已轉換：時間 × ${(a / b).toFixed(6)}`); };
+        $('mgGo').onclick = () => { if (!need()) return; const r = mergeCues(cues, { overlap: $('mgOv').checked, minLen: parseInt($('mgMin').value, 10) || 0, maxGap: parseInt($('mgGap').value, 10) || 0 }); apply(r.cues, `已合併，減少 ${r.n} 行`); };
+        $('spGo').onclick = () => { if (!need()) return; const m = parseInt($('spMax').value, 10); if (!(m >= 1)) return say('每行字數請填 1 以上', true); const r = splitCues(cues, m, $('spMode').value); apply(r.cues, r.n ? `已處理 ${r.n} 處` : '沒有超過字數的字幕'); };
+        $('rpGo').onclick = () => {
+            if (!need()) return;
+            const r = replaceCues(cues, $('rpFind').value, $('rpTo').value, { regex: $('rpRe').checked, ci: $('rpCi').checked });
+            if (r.error) return say(r.error, true);
+            if (!r.n) return say('沒有符合的內容');
+            apply(r.cues, `已取代 ${r.n} 處`);
+        };
+        function showIssues() {
+            const list = checkCues(cues, opts());
+            $('issues').innerHTML = list.slice(0, 200).map(x => `<li><span>第 ${x.i + 1} 行：${esc(x.msg)}</span><button class="sm" data-go="${x.i}">前往</button></li>`).join('') + (list.length > 200 ? `<li>…還有 ${list.length - 200} 項</li>` : '');
+            $('ckFix').disabled = !list.length;
+            return list;
+        }
+        $('ckGo').onclick = () => { if (!need()) return; const l = showIssues(); say(l.length ? `發現 ${l.length} 個問題` : '沒有發現問題'); };
+        $('ckFix').onclick = () => { if (!need()) return; const before = checkCues(cues, opts()).length; apply(fixCues(cues, opts()), ''); const l = showIssues(); say(`已修正，問題 ${before} → ${l.length}（剩下的需要手動處理，例如同時開始的重疊）`); };
+        $('issues').onclick = (e) => {
+            const b = e.target.closest('[data-go]'); if (!b) return;
+            const i = +b.dataset.go; page = Math.floor(i / PAGE); render(true);
+            const tr = $('tb').children[i - page * PAGE]; if (tr) { tr.classList.add('hl'); tr.scrollIntoView({ block: 'center' }); setTimeout(() => tr.classList.remove('hl'), 1500); }
+        };
+
+        // ---- 輸出 ----
+        const outText = () => serialize(cues, $('ofmt').value, { nl: $('onl').value, bom: $('obom').checked });
+        $('oGen').onclick = () => { if (need()) { $('oOut').value = outText(); say(`已產生 ${$('ofmt').value.toUpperCase()}，共 ${cues.length} 行`); } };
+        $('oCopy').onclick = () => { if (need()) { $('oOut').value = outText(); Util.copyWithFeedback($('oCopy'), $('oOut').value); } };
+        $('oDl').onclick = () => {
+            if (!need()) return;
+            const fmt = $('ofmt').value, text = outText();
+            $('oOut').value = text;
+            Util.download(new Blob([text], { type: 'text/plain;charset=utf-8' }), outName(baseName, fmt, $('osuf').value));
+        };
+        render();
+    </script>
+</body>
+
+</html>

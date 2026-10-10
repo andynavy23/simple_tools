@@ -26,6 +26,66 @@
             align-items: start;
         }
 
+        #cvwrap {
+            position: relative;
+        }
+
+        /* 消行「幽靈層」：疊在盤面上的視覺效果，不擋操作，只動畫 transform / opacity */
+        #fx {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: hidden;
+            border-radius: 12px;
+        }
+
+        .fxrow {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 5%;
+            background: #fff;
+            opacity: 0;
+            animation: fxrow .2s ease-out both;
+        }
+
+        @keyframes fxrow {
+            35% {
+                opacity: 1;
+            }
+
+            to {
+                opacity: 0;
+                transform: scaleY(.1);
+            }
+        }
+
+        .fxall {
+            position: absolute;
+            inset: 0;
+            background: #fff;
+            opacity: 0;
+            animation: fxall .45s ease-out both;
+        }
+
+        @keyframes fxall {
+            15% {
+                opacity: .8;
+            }
+
+            to {
+                opacity: 0;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+
+            .fxrow,
+            .fxall {
+                display: none;
+            }
+        }
+
         #cv {
             width: 100%;
             aspect-ratio: 1 / 2;
@@ -96,7 +156,7 @@
         <h1>俄羅斯方塊</h1>
         <p class="sub">← → 移動、↑ 或 X 順時針旋轉、Z 逆時針、↓ 加速、空白鍵直接落下、C 暫存、P 暫停。</p>
         <div class="play">
-            <canvas id="cv" width="300" height="600" aria-label="遊戲畫面"></canvas>
+            <div id="cvwrap"><canvas id="cv" width="300" height="600" aria-label="遊戲畫面"></canvas><div id="fx"></div></div>
             <div class="side">
                 <div>下一個<canvas id="next" width="90" height="90"></canvas></div>
                 <div>暫存<canvas id="hold" width="90" height="90"></canvas></div>
@@ -135,6 +195,7 @@
         <li>方塊疊到出生位置就結束，會顯示得分並記錄最高分。</li>
         <li>暫停時方塊停止下落，按「繼續」鈕或再按 <kbd>P</kbd> 繼續。</li>
         <li>旋轉靠牆時會自動往旁邊挪一點。</li>
+        <li>消行時被消掉的列會閃白淡出、上方的列再落下補位（4 行有全盤閃光）；這只是視覺效果，計分與下一塊的生成、操作都即時進行，不會被動畫卡住。系統開啟「減少動態效果」時會自動關閉，切到別的分頁也不會累積。</li>
             <li>最佳紀錄存在這台裝置；想重來可按頁面下方的「清除最佳紀錄」（只清這個遊戲，無法復原；頁面會重新載入，進行中的這一局會結束）。</li>
 </ul>
     </template>
@@ -193,13 +254,25 @@
         const levelOf = (lines) => 1 + Math.floor(lines / 10);
         const dropMs = (level) => Math.max(80, 800 - (level - 1) * 70);
 
+        // 消行動畫計畫（視覺層）：piece 鎖定後哪幾列滿了（舊座標）、消行後每個新列要從上方落下幾列
+        // before 是鎖定後、消行前的盤面；shift[y] = 新盤面第 y 列比舊位置多落了幾列（= y - 舊列）
+        const FX_FLASH = 200, FX_FALL = 150;
+        function clearPlan(board, p) {
+            const before = board.map(r => r.slice());
+            for (const [x, y] of cellsOf(p)) if (y >= 0) before[y][x] = p.type;
+            const rows = []; before.forEach((r, y) => { if (r.every(Boolean)) rows.push(y); });
+            const shift = new Array(H).fill(0); let ny = rows.length;
+            for (let o = 0; o < H; o++) if (!rows.includes(o)) { shift[ny] = ny - o; ny++; }
+            return { rows, shift, before, tetris: rows.length >= 4, total: FX_FLASH + FX_FALL };
+        }
+
         // 7 袋隨機：每一袋七種各一個、打亂順序；保證不會太久不出現某種方塊
         const bag = (shuf = shuffle) => shuf(NAMES);
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
         const cv = $('#cv'), g = cv.getContext('2d'), CELL = cv.width / W;
-        let board, cur, queue, held, canHold, score, lines, level, over, paused, timer, running = false;
+        let board, cur, queue, held, canHold, score, lines, level, over, paused, timer, running = false, fx = null;
 
         const bestKey = 'tetris_best';
         const nextType = () => { if (queue.length < 7) queue.push(...bag()); return queue.shift(); };
@@ -215,7 +288,11 @@
             const cs = getComputedStyle(document.documentElement);
             g.fillStyle = cs.getPropertyValue('--card').trim() || '#fff'; g.fillRect(0, 0, cv.width, cv.height);
             g.strokeStyle = 'rgba(128,128,128,.08)'; for (let i = 1; i < W; i++) { g.beginPath(); g.moveTo(i * CELL, 0); g.lineTo(i * CELL, cv.height); g.stroke(); }
-            for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (board[y][x]) block(g, x, y, CELL, SHAPES[board[y][x]].color);
+            const t = fx ? performance.now() - fx.t0 : 0;
+            if (fx && t >= fx.plan.total) fx = null;
+            if (fx) for (const y of fx.plan.rows) if (t < FX_FLASH * .35) for (let x = 0; x < W; x++) block(g, x, y, CELL, SHAPES[fx.plan.before[y][x]].color);       // 被消的列：閃白前還看得到原本的方塊
+            const q = fx ? Math.min(1, Math.max(0, (t - FX_FLASH) / FX_FALL)) : 1;
+            for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (board[y][x]) block(g, x, y - (fx ? fx.plan.shift[y] * (1 - q * q) : 0), CELL, SHAPES[board[y][x]].color);
             if (cur && !over) {
                 g.globalAlpha = .25; for (const [x, y] of cellsOf(ghost(board, cur))) if (y >= 0) block(g, x, y, CELL, SHAPES[cur.type].color); g.globalAlpha = 1;
                 for (const [x, y] of cellsOf(cur)) if (y >= 0) block(g, x, y, CELL, SHAPES[cur.type].color);
@@ -233,9 +310,19 @@
             const best = store.get(bestKey, 0); if (score > best) store.set(bestKey, score);
             $('#best').textContent = Math.max(best, score); $('#msg').textContent = score > best ? `💥 遊戲結束　🎉 新紀錄 ${score}` : `💥 遊戲結束　得分 ${score}`; $('#start').textContent = '再玩一次'; draw();
         }
+        function startFx(plan) {
+            fx = { t0: performance.now(), plan };
+            const box = $('#fx'); box.replaceChildren(...plan.rows.map(y => Object.assign(document.createElement('div'), { className: 'fxrow' })), ...(plan.tetris ? [Object.assign(document.createElement('div'), { className: 'fxall' })] : []));
+            [...box.children].forEach((d, i) => { if (plan.rows[i] !== undefined) d.style.top = plan.rows[i] * 100 / H + '%'; });
+            setTimeout(() => { if (!fx) box.replaceChildren(); }, 600);
+            (function f() { if (!fx) return; draw(); requestAnimationFrame(f); })();
+        }
         function settle() {
-            const r = lock(board, cur); board = r.board;
-            if (r.cleared) { lines += r.cleared; score += lineScore(r.cleared, level); level = levelOf(lines); }
+            const old = board, r = lock(board, cur); board = r.board;
+            if (r.cleared) {
+                if (!matchMedia('(prefers-reduced-motion: reduce)').matches && !document.hidden) startFx(clearPlan(old, cur));
+                lines += r.cleared; score += lineScore(r.cleared, level); level = levelOf(lines);
+            }
             nextPiece(); draw();
         }
         function tick() {
@@ -256,7 +343,7 @@
         }
 
         function start() {
-            board = newBoard(); queue = [...bag()]; held = null; score = 0; lines = 0; level = 1; over = false; paused = false; running = true; $('#pauseBtn').textContent = '⏸';
+            fx = null; $('#fx').replaceChildren(); board = newBoard(); queue = [...bag()]; held = null; score = 0; lines = 0; level = 1; over = false; paused = false; running = true; $('#pauseBtn').textContent = '⏸';
             mini($('#hold'), null); $('#msg').textContent = ''; $('#start').textContent = '重新開始'; $('#best').textContent = store.get(bestKey, 0);
             clearTimeout(timer); nextPiece(); draw(); timer = setTimeout(tick, dropMs(1));
         }

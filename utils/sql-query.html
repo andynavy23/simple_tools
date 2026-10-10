@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="SQL 指令產生器：用表單建立 SELECT / INSERT / UPDATE / DELETE / CREATE TABLE / 索引，支援 MySQL、PostgreSQL、SQLite、SQL Server，輸出純 SQL、參數化、Node.js、Python。">
+    <meta property="og:title" content="SQL 指令產生器" />
+    <meta property="og:description" content="條件建構器產生四種方言的 SQL，字面值正確跳脫，另有參數化與程式碼範例。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/sql-query.html" />
+    <meta name="st-keys" content="sqlq_opts">
+    <title>SQL 指令產生器</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 720px;
+        }
+
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>input,
+        .row>select {
+            flex: 1 1 140px;
+            min-width: 0;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .tabs button {
+            flex: 1 1 auto;
+        }
+
+        .crow {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .crow>* {
+            flex: 1 1 130px;
+            min-width: 0;
+        }
+
+        .crow>.del,
+        .crow>.chk {
+            flex: 0 0 auto;
+        }
+
+        .grp {
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            padding: 8px 10px;
+            margin: 8px 0;
+        }
+
+        .grp.sub {
+            margin-left: 10px;
+            background: var(--fill);
+        }
+
+        .ghead {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .ghead select {
+            flex: 1 1 160px;
+        }
+
+        .chk {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 400;
+            margin: 0;
+            min-height: 44px;
+        }
+
+        .box {
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            padding: 8px 10px;
+            margin: 10px 0;
+        }
+
+        .part {
+            margin: 10px 0;
+        }
+
+        .part .ph {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        pre.code {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 14px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin: 6px 0;
+            overflow-x: auto;
+            white-space: pre;
+            max-width: 100%;
+        }
+
+        .alert {
+            border: 2px solid var(--bad);
+            color: var(--bad);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin: 10px 0;
+            font-weight: 700;
+        }
+
+        .alert.info {
+            border-color: var(--line);
+            color: var(--text);
+            font-weight: 400;
+        }
+
+        .errs {
+            color: var(--bad);
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .cell {
+            overflow-x: auto;
+        }
+
+        .cell table {
+            border-collapse: collapse;
+        }
+
+        .cell td,
+        .cell th {
+            padding: 2px 4px;
+        }
+
+        .cell input,
+        .cell select {
+            min-width: 110px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>SQL 指令產生器</h1>
+        <p class="sub">用表單組出 SQL（MySQL / PostgreSQL / SQLite / SQL Server），全部在本機產生，不連線資料庫。</p>
+
+        <div class="card">
+            <div class="row">
+                <div style="flex:1 1 160px"><label for="dialect">資料庫方言</label>
+                    <select id="dialect" style="width:100%"></select>
+                </div>
+                <div style="flex:1 1 160px"><label for="op">操作</label>
+                    <select id="op" style="width:100%"></select>
+                </div>
+            </div>
+            <label for="tbl">表名</label>
+            <input id="tbl" type="text" placeholder="例如 users 或 public.users" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="300">
+            <label for="tpl">快速範本</label>
+            <div class="row">
+                <select id="tpl"></select>
+                <input id="tplN" type="text" inputmode="numeric" value="7" aria-label="N（天數 / 每頁筆數）" style="flex:0 0 72px" title="N（天數 / 每頁筆數）">
+                <input id="tplP" type="text" inputmode="numeric" value="1" aria-label="第幾頁" style="flex:0 0 72px" title="第幾頁（僅分頁查詢）">
+                <button id="tplGo">套用</button>
+            </div>
+            <p class="note">範本會重設下方設定（表名與方言保留）。N = 天數或每頁筆數，第二格 = 頁碼。</p>
+        </div>
+
+        <div class="card" id="cIns"></div>
+        <div class="card" id="cUpd"></div>
+        <div class="card" id="cCt"></div>
+        <div class="card" id="cIx"></div>
+        <div class="card" id="cAlt"></div>
+        <div class="card" id="cLat"></div>
+        <div class="card" id="cCols"></div>
+        <div class="card" id="cJoin"></div>
+        <div class="card" id="cWhere"></div>
+        <div class="card" id="cGroup"></div>
+        <div class="card" id="cOrder"></div>
+        <p class="note" id="msg"></p>
+
+        <div class="card">
+            <h2>輸出</h2>
+            <div class="tabs" id="fmtTabs"></div>
+            <div id="warns"></div>
+            <ul class="errs" id="errs"></ul>
+            <div id="out"></div>
+            <button class="primary" id="copyAll" hidden>複製全部</button>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>用表單組出 SQL 指令：SELECT（含 JOIN、聚合、分組、排序、分頁）、INSERT（單筆 / 多筆 / upsert）、UPDATE、DELETE、CREATE TABLE、CREATE INDEX、ALTER TABLE，還有「每組最新一筆」。可選 MySQL、PostgreSQL、SQLite、SQL Server，會自動換成各自的引號、分頁、布林、自增、upsert 與日期函式寫法。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>不確定某個資料庫的語法（LIMIT 還是 TOP？AUTO_INCREMENT 還是 IDENTITY？）。</li>
+        <li>要找重複資料、每組最新一筆、最近 N 天這類常見查詢。</li>
+        <li>要把同一個查詢改成另一種資料庫的寫法，或轉成 Node.js / Python 程式碼。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>選「資料庫方言」與「操作」，輸入「表名」（可寫 <kbd>schema.table</kbd>）。</li>
+        <li>在「條件」每列填：欄位、運算子、值型別與值。可選「全部符合 (AND)」或「任一符合 (OR)」，並加一層群組。「包含 / 開頭 / 結尾」會自動跳脫 <kbd>%</kbd> 與 <kbd>_</kbd>。</li>
+        <li>SELECT 可設欄位（含別名與 COUNT / SUM / AVG / MIN / MAX）、最多 4 個 JOIN、GROUP BY / HAVING、排序、limit / offset。</li>
+        <li>下方切換「純 SQL」「參數化」「Node.js」「Python」，按「複製」。也可先套用「快速範本」再修改。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">方言 PostgreSQL、表 users、條件 age 大於等於 18（數字）、排序 id、limit 10
+        → SELECT *
+        → FROM "users"
+        → WHERE "age" >= 18
+        → ORDER BY "id" ASC
+        → LIMIT 10;
+        同樣設定換成 SQL Server：SELECT TOP 10 * FROM [users] …</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>「純 SQL」的字面值只適合手動貼到 SQL 工具執行；<b>寫在程式裡請用「參數化」</b>，避免 SQL 注入。字面值已把單引號加倍（MySQL 另處理反斜線）、拒絕空字元，但仍不及參數化安全。</li>
+        <li>UPDATE / DELETE 條件為空時會出現紅色警告（會影響整張表），可按「先用 SELECT COUNT(*) 確認」。不提供 DROP / TRUNCATE。</li>
+        <li>名稱一律加引號並跳脫；名稱不能含控制字元。欄位有錯時不會產生指令。</li>
+        <li>INSERT 的空白儲存格：字串欄位視為空字串，其他型別視為 NULL。「在清單中」用逗號或換行分隔。</li>
+        <li>版本：視窗函式（每組最新一筆）需 MySQL 8+ / SQLite 3.25+；SQLite RIGHT / FULL JOIN 需 3.39+；MySQL 不支援 FULL JOIN；SQL Server 的 OFFSET 分頁必須有 ORDER BY。</li>
+        <li>只記住「上次的方言、操作與輸出格式」（本機 sqlq_opts，壞資料會回到預設）；表名、條件與值不會儲存，重新整理就清空。用右上角備份即可管理這一個鍵。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, copyWithFeedback } = Util;
+
+        // --- pure ---
+        const OPS = ['select', 'latest', 'insert', 'update', 'delete', 'createTable', 'createIndex', 'alterTable'];
+        const DIALECTS = ['mysql', 'pg', 'sqlite', 'mssql'];
+        const FMTS = ['sql', 'param', 'node', 'python'];
+        const LIM = { rows: 30, groups: 10, cols: 60, joins: 4, order: 10, insRows: 200, list: 500, text: 100000 };
+        const JOINS = { inner: 'INNER JOIN', left: 'LEFT JOIN', right: 'RIGHT JOIN', full: 'FULL JOIN' };
+        const VTYPES = ['string', 'number', 'bool', 'null', 'date', 'ref', 'param', 'now', 'daysago'];
+        const AGG_FN = { COUNT: 'COUNT', COUNTD: 'COUNT', SUM: 'SUM', AVG: 'AVG', MIN: 'MIN', MAX: 'MAX' };
+        const MK = '\0';   // 佔位符標記（使用者文字一律拒絕 NUL，所以不會撞）
+        const CMPS = { eq: '=', ne: '<>', gt: '>', gte: '>=', lt: '<', lte: '<=', like: 'LIKE', notlike: 'NOT LIKE' };
+
+        const newRow = (o = {}) => ({ k: 'row', field: '', agg: '', op: 'eq', type: 'string', value: '', value2: '', ...o });
+        const newGroup = (mode = 'and', items = []) => ({ k: 'grp', mode, items });
+        const newCol = (o = {}) => ({ agg: '', field: '', alias: '', ...o });
+        const newCt = (o = {}) => ({ name: '', type: 'int', len: '', pk: false, nn: false, uq: false, ai: false, defType: 'none', def: '', fk: '', ...o });
+        function defaultState() {
+            return {
+                op: 'select', d: 'mysql', table: '',
+                sel: { distinct: false, cols: [newCol()], alias: '', joins: [], groupBy: '', having: newGroup('and', []), orderBy: [], limit: '', offset: '' },
+                where: newGroup('and', [newRow()]),
+                ins: { cols: [{ name: '', type: 'string' }], rows: [['']], upsert: false, keys: '' },
+                upd: [{ field: '', type: 'string', value: '' }],
+                ct: { ifNot: false, cols: [newCt({ name: 'id', pk: true, ai: true })] },
+                ix: { name: '', cols: '', unique: false, ifNot: false },
+                alt: { action: 'add', col: newCt(), from: '', to: '', name: '' },
+                lat: { group: '', order: '', dir: 'desc' },
+            };
+        }
+        // 上次使用的方言、操作與輸出格式（壞資料回到預設）
+        function loadOpts(raw) {
+            const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+            return { op: OPS.includes(o.op) ? o.op : 'select', d: DIALECTS.includes(o.d) ? o.d : 'mysql', fmt: FMTS.includes(o.fmt) ? o.fmt : 'sql' };
+        }
+
+        // ---- 識別字 / 字面值 ----
+        const Q = { mysql: (s) => '`' + s.replace(/`/g, '``') + '`', pg: (s) => '"' + s.replace(/"/g, '""') + '"', sqlite: (s) => '"' + s.replace(/"/g, '""') + '"', mssql: (s) => '[' + s.replace(/]/g, ']]') + ']' };
+        const hasCtl = (s) => /[\u0000-\u001f\u007f]/.test(s);
+        // 單一識別字：一律加引號，引號字元本身加倍
+        function identOne(name, d, label = '名稱') {
+            const n = String(name ?? '').trim();
+            if (!n) return { err: `${label}不能空白` };
+            if (n.length > 128) return { err: `${label}最多 128 字` };
+            if (hasCtl(n)) return { err: `${label}不能含控制字元（換行、Tab、空字元等）` };
+            return { v: Q[d](n) };
+        }
+        // 允許一層 schema.table（兩段都是 [A-Za-z_][A-Za-z0-9_$]*）；其他含點的名稱整段當一個識別字
+        function ident(name, d, label = '名稱') {
+            const n = String(name ?? '').trim(), m = /^([A-Za-z_][A-Za-z0-9_$]*)\.([A-Za-z_][A-Za-z0-9_$]*)$/.exec(n);
+            if (m && n.length <= 257) return { v: Q[d](m[1]) + '.' + Q[d](m[2]) };
+            return identOne(n, d, label);
+        }
+        function strLit(s, d) {
+            if (s.includes('\0')) return { err: '字串不能含空字元（NUL）' };
+            let t = s;
+            if (d === 'mysql') t = t.replace(/\\/g, '\\\\');
+            t = t.replace(/'/g, "''");
+            return { v: (d === 'mssql' ? "N'" : "'") + t + "'" };
+        }
+        function parseDate(s) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(String(s ?? '').trim());
+            if (!m) return null;
+            const y = +m[1], mo = +m[2], dd = +m[3], h = +(m[4] || 0), mi = +(m[5] || 0), se = +(m[6] || 0);
+            if (y < 1 || mo < 1 || mo > 12 || h > 23 || mi > 59 || se > 59) return null;
+            const c = new Date(Date.UTC(2000, mo - 1, dd)); c.setUTCFullYear(y);
+            if (c.getUTCMonth() !== mo - 1 || c.getUTCDate() !== dd) return null;
+            return { date: `${m[1]}-${m[2]}-${m[3]}`, time: m[4] === undefined ? null : `${m[4]}:${m[5]}:${m[6] || '00'}` };
+        }
+        const nowFn = (d) => ({ mysql: 'NOW()', pg: 'NOW()', sqlite: "datetime('now')", mssql: 'GETDATE()' }[d]);
+        const daysAgoFn = (n, d) => ({ mysql: `NOW() - INTERVAL ${n} DAY`, pg: `NOW() - INTERVAL '${n} days'`, sqlite: `datetime('now', '-${n} days')`, mssql: `DATEADD(day, -${n}, GETDATE())` }[d]);
+        const splitList = (s) => String(s ?? '').split(/[,，\n]/).map(x => x.trim()).filter(Boolean);
+        // 值 → { sql } 或 { err }。ctx = { d, mode: 'lit' | 'param', params: [] }；param 模式下字串 / 數字 / 布林 / 日期變成佔位符
+        function val(type, text, ctx) {
+            const t = String(text ?? ''), d = ctx.d, par = ctx.mode === 'param';
+            if (t.length > LIM.text) return { err: '內容太長' };
+            const push = (p) => { ctx.params.push(p); return MK + (ctx.params.length - 1) + MK; };
+            switch (type) {
+                case 'string': { const l = strLit(t, d); return l.err ? l : { sql: par ? push({ t: 's', v: t }) : l.v }; }
+                case 'number': { const s = t.trim(); return /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(s) && s.length <= 40 ? { sql: par ? push({ t: 'n', v: s }) : s } : { err: '請輸入數字' }; }
+                case 'bool': { const s = t.trim().toLowerCase(); if (s !== 'true' && s !== 'false') return { err: '布林請輸入 true 或 false' }; return { sql: par ? push({ t: 'b', v: s === 'true' }) : (d === 'mysql' || d === 'pg' ? s.toUpperCase() : s === 'true' ? '1' : '0') }; }
+                case 'null': return { sql: 'NULL' };
+                case 'date': {
+                    const p = parseDate(t); if (!p) return { err: '日期格式需為 YYYY-MM-DD 或 YYYY-MM-DD HH:mm[:ss]' };
+                    if (par) return { sql: push({ t: 's', v: p.date + (p.time ? ' ' + p.time : '') }) };
+                    return { sql: "'" + (d === 'mssql' ? (p.time ? `${p.date}T${p.time}` : p.date.replace(/-/g, '')) : p.date + (p.time ? ' ' + p.time : '')) + "'" };
+                }
+                case 'ref': { const e = ident(t, d, '欄位參考'); return e.err ? e : { sql: e.v }; }
+                case 'param': {
+                    const label = t.trim();
+                    if (label && !/^[A-Za-z_]\w{0,39}$/.test(label)) return { err: '佔位符名稱只能用英數與底線' };
+                    return { sql: push({ t: 'var', v: label || 'param' + (ctx.params.length + 1) }) };
+                }
+                case 'now': return { sql: nowFn(d) };
+                case 'daysago': return /^\d{1,5}$/.test(t.trim()) ? { sql: daysAgoFn(+t.trim(), d) } : { err: '天數需為 0–99999 的整數' };
+            }
+            return { err: '未知的值型別' };
+        }
+        // 把標記換成方言佔位符，並依「出現順序」重排參數。ph：'?' | '$' | '@p' | '%s'
+        function finalize(sql, params, ph) {
+            const out = [];
+            const text = sql.replace(/\0(\d+)\0|(%)/g, (m, i, pc) => {
+                if (pc) return ph === '%s' ? '%%' : '%';
+                out.push(params[+i]);
+                return ph === '$' || ph === '@p' ? ph + out.length : ph;
+            });
+            return { sql: text, params: out };
+        }
+        const intOpt = (s, label, min = 0) => {
+            const t = String(s ?? '').trim();
+            if (!t) return {};
+            return /^\d+$/.test(t) && Number.isSafeInteger(+t) && +t >= min ? { v: +t } : { err: `${label}需為${min > 0 ? '正' : '非負'}整數` };
+        };
+
+        // ---- 條件 ----
+        function aggExpr(agg, f, d) {
+            if (!AGG_FN[agg]) return { err: '未知的聚合函式' };
+            if (agg === 'COUNT' && (f === '' || f === '*')) return { v: 'COUNT(*)' };
+            if (f === '' || f === '*') return { err: `${agg === 'COUNTD' ? 'COUNT DISTINCT' : agg} 需要指定欄位` };
+            const e = ident(f, d, '欄位'); if (e.err) return e;
+            return { v: agg === 'COUNTD' ? `COUNT(DISTINCT ${e.v})` : `${AGG_FN[agg]}(${e.v})` };
+        }
+        const likeEsc = (s, d) => { let t = s.replace(/[!%_]/g, '!$&'); if (d === 'mssql') t = t.replace(/\[/g, '!['); return t; };
+        function condRow(r, ctx, allowAgg) {
+            const d = ctx.d, op = r.op, f = String(r.field ?? '').trim(), ty = r.type || 'string', agg = r.agg || '';
+            let L;
+            if (agg) { if (!allowAgg) return { err: 'WHERE / ON 不能用聚合函式（請改放 HAVING）' }; const a = aggExpr(agg, f, d); if (a.err) return a; L = a.v; }
+            else { const e = ident(f, d, '欄位'); if (e.err) return e; L = e.v; }
+            if (!VTYPES.includes(ty)) return { err: '未知的值型別' };
+            const one = (sym) => { if (ty === 'null') return { err: 'null 只能搭配「等於 / 不等於」' }; const v = val(ty, r.value, ctx); return v.err ? v : { sql: `${L} ${sym} ${v.sql}` }; };
+            switch (op) {
+                case 'eq': case 'ne': { if (ty === 'null') return { sql: `${L} IS ${op === 'ne' ? 'NOT ' : ''}NULL` }; return one(CMPS[op]); }
+                case 'gt': case 'gte': case 'lt': case 'lte': case 'like': case 'notlike': return one(CMPS[op]);
+                case 'contains': case 'notContains': case 'startsWith': case 'endsWith': {
+                    const t = String(r.value ?? '');
+                    if (!t) return { err: '請輸入要比對的文字' };
+                    const e = likeEsc(t, d), p = op === 'startsWith' ? e + '%' : op === 'endsWith' ? '%' + e : '%' + e + '%';
+                    const v = val('string', p, ctx); if (v.err) return v;
+                    return { sql: `${L} ${op === 'notContains' ? 'NOT LIKE' : 'LIKE'} ${v.sql}${e !== t ? " ESCAPE '!'" : ''}` };
+                }
+                case 'in': case 'nin': {
+                    if (ty === 'null') return { err: '清單不能用 null 型別（請用 IS NULL）' };
+                    const parts = splitList(r.value);
+                    if (!parts.length) return { err: '請輸入至少一個值（以逗號或換行分隔）' };
+                    if (parts.length > LIM.list) return { err: `清單最多 ${LIM.list} 個` };
+                    const vs = []; for (const x of parts) { const v = val(ty, x, ctx); if (v.err) return v; vs.push(v.sql); }
+                    return { sql: `${L} ${op === 'nin' ? 'NOT IN' : 'IN'} (${vs.join(', ')})` };
+                }
+                case 'between': {
+                    if (ty === 'null' || ty === 'bool') return { err: 'BETWEEN 不支援 null / 布林' };
+                    const a = val(ty, r.value, ctx); if (a.err) return a;
+                    const b = val(ty, r.value2, ctx); if (b.err) return { err: '第二個值：' + b.err };
+                    return { sql: `${L} BETWEEN ${a.sql} AND ${b.sql}` };
+                }
+                case 'null': return { sql: `${L} IS NULL` };
+                case 'notnull': return { sql: `${L} IS NOT NULL` };
+            }
+            return { err: '未知的運算子' };
+        }
+        // 群組 → { sql, n, errs }；最多一層巢狀，巢狀群組有 2 個以上條件時加括號
+        function compileGroup(g, ctx, pfx = '', depth = 0, allowAgg = false) {
+            const errs = [], clauses = [], items = Array.isArray(g?.items) ? g.items : [];
+            if (items.length > LIM.rows) errs.push(`${pfx}條件最多 ${LIM.rows} 列`);
+            if (items.filter(x => x?.k === 'grp').length > LIM.groups) errs.push(`${pfx}群組最多 ${LIM.groups} 個`);
+            items.slice(0, LIM.rows).forEach((it, i) => {
+                if (!it || typeof it !== 'object') return;
+                if (it.k === 'grp') {
+                    if (depth >= 1) { errs.push(`${pfx}群組最多一層巢狀`); return; }
+                    const r = compileGroup(it, ctx, `${pfx}群組 ${i + 1} 的`, depth + 1, allowAgg);
+                    errs.push(...r.errs); if (r.sql) clauses.push(r.n > 1 ? `(${r.sql})` : r.sql);
+                    return;
+                }
+                const field = String(it.field ?? '').trim(), lab = `${pfx}條件 ${i + 1}`;
+                if (!field && !it.agg && !String(it.value ?? '').trim()) return;
+                const c = condRow(it, ctx, allowAgg);
+                if (c.err) errs.push(`${lab}：${c.err}`); else clauses.push(c.sql);
+            });
+            return { sql: clauses.join(g?.mode === 'or' ? ' OR ' : ' AND '), n: clauses.length, errs };
+        }
+
+        // ---- SELECT ----
+        function concatExpr(text, d) {
+            const parts = String(text ?? '').split(',').map(x => x.trim()).filter(Boolean), out = [];
+            if (parts.length < 2) return { err: '串接至少需要兩個項目（用逗號分隔；文字用單引號包住，例如 first, \' \', last）' };
+            for (const p of parts) {
+                if (p.length >= 2 && p[0] === "'" && p.at(-1) === "'") { const l = strLit(p.slice(1, -1), d); if (l.err) return l; out.push(l.v); }
+                else { const e = ident(p, d, '欄位'); if (e.err) return e; out.push(e.v); }
+            }
+            return { v: d === 'sqlite' ? out.join(' || ') : `CONCAT(${out.join(', ')})` };
+        }
+        function selectSql(S, ctx, errs, warns) {
+            const d = ctx.d, s = S.sel && typeof S.sel === 'object' ? S.sel : {}, T = ident(S.table, d, '表名');
+            const cols = [], aliases = new Set(), nonAgg = []; let hasAgg = false, hasStar = false;
+            const colList = Array.isArray(s.cols) ? s.cols : [];
+            if (colList.length > LIM.cols) errs.push(`欄位最多 ${LIM.cols} 個`);
+            colList.slice(0, LIM.cols).forEach((c, i) => {
+                if (!c || typeof c !== 'object') return;
+                const f = String(c.field ?? '').trim(), agg = c.agg || '', al = String(c.alias ?? '').trim(), lab = `欄位 ${i + 1}`;
+                if (!f && !agg) return;
+                let e, star = /^(?:([A-Za-z_][A-Za-z0-9_$]*)\.)?\*$/.exec(f);
+                if (agg === 'CONCAT') e = concatExpr(f, d);
+                else if (agg) { e = aggExpr(agg, f, d); hasAgg = true; }
+                else if (star) { e = { v: (star[1] ? Q[d](star[1]) + '.' : '') + '*' }; hasStar = true; if (al) { errs.push(`${lab}：* 不能取別名`); return; } }
+                else e = ident(f, d, '欄位');
+                if (e.err) { errs.push(`${lab}：${e.err}`); return; }
+                let sql = e.v;
+                if (al) {
+                    const a = identOne(al, d, '別名'); if (a.err) { errs.push(`${lab}：${a.err}`); return; }
+                    if (aliases.has(al.toLowerCase())) { errs.push(`${lab}：別名「${al}」重複`); return; }
+                    aliases.add(al.toLowerCase()); sql += ' AS ' + a.v;
+                }
+                cols.push(sql);
+                if (!agg || agg === 'CONCAT') nonAgg.push(e.v);
+            });
+            const lines = [];
+            const lim = intOpt(s.limit, 'limit', 1), off = intOpt(s.offset, 'offset', 0);
+            if (lim.err) errs.push(lim.err); if (off.err) errs.push(off.err);
+            const offN = off.v || 0, order = [];
+            const ol = Array.isArray(s.orderBy) ? s.orderBy : [];
+            if (ol.length > LIM.order) errs.push(`排序最多 ${LIM.order} 個欄位`);
+            ol.slice(0, LIM.order).forEach((r, i) => {
+                const f = String(r?.field ?? '').trim(); if (!f) return;
+                const e = ident(f, d, '欄位'); if (e.err) { errs.push(`排序 ${i + 1}：${e.err}`); return; }
+                if (r.dir !== 'asc' && r.dir !== 'desc') { errs.push(`排序 ${i + 1}：方向不正確`); return; }
+                order.push(`${e.v} ${r.dir.toUpperCase()}`);
+            });
+            const top = d === 'mssql' && lim.v !== undefined && !offN ? `TOP ${lim.v} ` : '';
+            lines.push(`SELECT ${s.distinct ? 'DISTINCT ' : ''}${top}${cols.length ? cols.join(', ') : '*'}`);
+            let fa = '';
+            if (s.alias && String(s.alias).trim()) { const a = identOne(s.alias, d, 'FROM 別名'); if (a.err) errs.push(a.err); else fa = ' AS ' + a.v; }
+            lines.push(`FROM ${T.err ? '' : T.v}${fa}`);
+            const jl = Array.isArray(s.joins) ? s.joins : [];
+            if (jl.length > LIM.joins) errs.push(`JOIN 最多 ${LIM.joins} 個`);
+            jl.slice(0, LIM.joins).forEach((j, i) => {
+                const lab = `JOIN ${i + 1}`;
+                if (!j || !JOINS[j.type]) { errs.push(`${lab}：類型不正確`); return; }
+                if (d === 'mysql' && j.type === 'full') errs.push(`${lab}：MySQL 不支援 FULL JOIN（可用 LEFT JOIN UNION RIGHT JOIN 改寫）`);
+                if (d === 'sqlite' && (j.type === 'full' || j.type === 'right')) warns.push({ level: 'info', text: `${lab}：SQLite 的 RIGHT / FULL JOIN 需要 3.39 以上版本。` });
+                const t = ident(j.table, d, '表名'); if (t.err) { errs.push(`${lab}：${t.err}`); return; }
+                let a = ''; if (j.alias && String(j.alias).trim()) { const x = identOne(j.alias, d, '別名'); if (x.err) { errs.push(`${lab}：${x.err}`); return; } a = ' AS ' + x.v; }
+                const on = compileGroup(j.on, ctx, `${lab} 的 ON `); errs.push(...on.errs);
+                if (!on.sql && !on.errs.length) errs.push(`${lab}：ON 條件不能是空的`);
+                lines.push(`${JOINS[j.type]} ${t.v}${a} ON ${on.sql}`);
+            });
+            const w = compileGroup(S.where, ctx, 'WHERE '); errs.push(...w.errs);
+            if (w.sql) lines.push('WHERE ' + w.sql);
+            const gb = splitList(s.groupBy).map((f, i) => { const e = ident(f, d, '欄位'); if (e.err) errs.push(`GROUP BY「${f}」：${e.err}`); return e.v; }).filter(Boolean);
+            if (gb.length) lines.push('GROUP BY ' + gb.join(', '));
+            const hv = compileGroup(s.having, ctx, 'HAVING ', 0, true); errs.push(...hv.errs);
+            if (hv.sql) lines.push('HAVING ' + hv.sql);
+            if (hasAgg && nonAgg.some(x => !gb.includes(x)) || hasAgg && hasStar) warns.push({ level: 'info', text: '有聚合函式時，沒有聚合的欄位必須放進 GROUP BY（PostgreSQL / SQL Server / 新版 MySQL 會報錯）。' });
+            if (order.length) lines.push('ORDER BY ' + order.join(', '));
+            if (d === 'mssql') {
+                if (offN) {
+                    if (!order.length) errs.push('SQL Server 的 OFFSET 分頁必須有 ORDER BY（請在排序加一個欄位）');
+                    lines.push(`OFFSET ${offN} ROWS` + (lim.v !== undefined ? ` FETCH NEXT ${lim.v} ROWS ONLY` : ''));
+                }
+            } else if (d === 'pg') {
+                if (lim.v !== undefined) lines.push(`LIMIT ${lim.v}`); if (offN) lines.push(`OFFSET ${offN}`);
+            } else if (lim.v !== undefined || offN) {
+                lines.push(`LIMIT ${lim.v !== undefined ? lim.v : d === 'mysql' ? '18446744073709551615' : '-1'}` + (offN ? ` OFFSET ${offN}` : ''));
+            }
+            if ((lim.v !== undefined || offN) && !order.length && d !== 'mssql') warns.push({ level: 'info', text: '分頁沒有 ORDER BY 時，每次查詢的順序不保證一致，建議加排序。' });
+            return lines.join('\n') + ';';
+        }
+        // 每組最新一筆（視窗函式）
+        function latestSql(S, ctx, errs, warns) {
+            const d = ctx.d, l = S.lat && typeof S.lat === 'object' ? S.lat : {}, T = ident(S.table, d, '表名');
+            const gs = splitList(l.group).map(f => { const e = ident(f, d, '欄位'); if (e.err) errs.push(`分組欄位「${f}」：${e.err}`); return e.v; }).filter(Boolean);
+            if (!gs.length && !errs.length) errs.push('請輸入分組欄位');
+            const o = ident(l.order, d, '排序欄位'); if (o.err) errs.push(o.err);
+            if (l.dir !== 'asc' && l.dir !== 'desc') errs.push('排序方向不正確');
+            const w = compileGroup(S.where, ctx, 'WHERE '); errs.push(...w.errs);
+            if (d === 'mysql') warns.push({ level: 'info', text: '視窗函式 ROW_NUMBER() 需要 MySQL 8.0 以上；MySQL 5.7 不支援。' });
+            if (d === 'sqlite') warns.push({ level: 'info', text: '視窗函式需要 SQLite 3.25 以上。' });
+            const rn = Q[d]('_rn');
+            return [`SELECT *`, `FROM (`, `  SELECT *, ROW_NUMBER() OVER (PARTITION BY ${gs.join(', ')} ORDER BY ${o.v} ${String(l.dir).toUpperCase()}) AS ${rn}`, `  FROM ${T.v}`, ...(w.sql ? [`  WHERE ${w.sql}`] : []), `) AS ${Q[d]('ranked')}`, `WHERE ${rn} = 1;`].join('\n');
+        }
+
+        // ---- INSERT / UPDATE / DELETE ----
+        function insertSql(S, ctx, errs) {
+            const d = ctx.d, n = S.ins && typeof S.ins === 'object' ? S.ins : {}, T = ident(S.table, d, '表名');
+            const cols = [], seen = new Set(), types = [];
+            (Array.isArray(n.cols) ? n.cols : []).slice(0, LIM.cols).forEach((c, i) => {
+                const name = String(c?.name ?? '').trim(); if (!name) return;
+                const e = identOne(name, d, '欄位'); if (e.err) { errs.push(`欄位 ${i + 1}：${e.err}`); return; }
+                if (seen.has(name.toLowerCase())) { errs.push(`欄位「${name}」重複`); return; }
+                if (!VTYPES.includes(c.type) || c.type === 'ref') { errs.push(`欄位「${name}」的值型別不正確`); return; }
+                seen.add(name.toLowerCase()); cols.push({ name, q: e.v, type: c.type, idx: i });
+            });
+            if (!cols.length && !errs.length) errs.push('請至少填一個欄位');
+            const rows = Array.isArray(n.rows) ? n.rows : [];
+            if (rows.length > LIM.insRows) errs.push(`資料最多 ${LIM.insRows} 列`);
+            const out = [];
+            rows.slice(0, LIM.insRows).forEach((r, ri) => {
+                if (!Array.isArray(r)) return;
+                const cells = cols.map(c => {
+                    const t = String(r[c.idx] ?? '');
+                    const ty = c.type !== 'string' && c.type !== 'param' && c.type !== 'now' && c.type !== 'null' && !t.trim() ? 'null' : c.type;
+                    const v = val(ty, t, ctx); if (v.err) { errs.push(`第 ${ri + 1} 列「${c.name}」：${v.err}`); return ''; }
+                    return v.sql;
+                });
+                out.push(`(${cells.join(', ')})`);
+            });
+            if (!out.length && !errs.length) errs.push('請至少填一列資料');
+            const cl = cols.map(c => c.q).join(', ');
+            let keys = [];
+            if (n.upsert) {
+                keys = splitList(n.keys);
+                if (!keys.length) errs.push('Upsert 請填「重複判斷欄位」（主鍵或唯一欄位）');
+                for (const k of keys) if (!seen.has(k.toLowerCase())) errs.push(`重複判斷欄位「${k}」必須是上面的欄位之一`);
+            }
+            if (errs.length) return '';
+            const valSql = out.length > 1 ? 'VALUES\n  ' + out.join(',\n  ') : 'VALUES ' + out[0];
+            const lk = new Set(keys.map(k => k.toLowerCase())), upd = cols.filter(c => !lk.has(c.name.toLowerCase()));
+            if (!n.upsert) return `INSERT INTO ${T.v} (${cl})\n${valSql};`;
+            if (d === 'mysql') return `INSERT INTO ${T.v} (${cl})\n${valSql}\nON DUPLICATE KEY UPDATE ${(upd.length ? upd : cols.slice(0, 1)).map(c => `${c.q} = ${upd.length ? `VALUES(${c.q})` : c.q}`).join(', ')};`;
+            if (d === 'mssql') {
+                const src = Q.mssql('source'), tg = Q.mssql('target');
+                return [`MERGE INTO ${T.v} AS ${tg}`, `USING (VALUES ${out.join(', ')}) AS ${src} (${cl})`, `ON ${keys.map(k => { const q = Q.mssql(cols.find(c => c.name.toLowerCase() === k.toLowerCase()).name); return `${tg}.${q} = ${src}.${q}`; }).join(' AND ')}`,
+                ...(upd.length ? [`WHEN MATCHED THEN UPDATE SET ${upd.map(c => `${tg}.${c.q} = ${src}.${c.q}`).join(', ')}`] : []),
+                `WHEN NOT MATCHED THEN INSERT (${cl}) VALUES (${cols.map(c => `${src}.${c.q}`).join(', ')});`].join('\n');
+            }
+            const kq = keys.map(k => Q[d](cols.find(c => c.name.toLowerCase() === k.toLowerCase()).name)).join(', ');
+            return `INSERT INTO ${T.v} (${cl})\n${valSql}\nON CONFLICT (${kq}) ${upd.length ? 'DO UPDATE SET ' + upd.map(c => `${c.q} = EXCLUDED.${c.q}`).join(', ') : 'DO NOTHING'};`;
+        }
+        function updateSql(S, ctx, errs) {
+            const d = ctx.d, T = ident(S.table, d, '表名'), sets = [], seen = new Set();
+            const list = Array.isArray(S.upd) ? S.upd : [];
+            if (list.length > LIM.rows) errs.push(`SET 最多 ${LIM.rows} 列`);
+            list.slice(0, LIM.rows).forEach((r, i) => {
+                const f = String(r?.field ?? '').trim(); if (!f && !String(r?.value ?? '').trim()) return;
+                const lab = `SET ${i + 1}`, e = ident(f, d, '欄位'); if (e.err) { errs.push(`${lab}：${e.err}`); return; }
+                if (!VTYPES.includes(r.type)) { errs.push(`${lab}：未知的值型別`); return; }
+                if (seen.has(f.toLowerCase())) { errs.push(`${lab}：欄位「${f}」重複`); return; }
+                seen.add(f.toLowerCase());
+                const v = val(r.type, r.value, ctx); if (v.err) { errs.push(`${lab}：${v.err}`); return; }
+                sets.push(`${e.v} = ${v.sql}`);
+            });
+            if (!sets.length && !errs.length) errs.push('請至少設定一個欄位');
+            const w = compileGroup(S.where, ctx, 'WHERE '); errs.push(...w.errs);
+            return `UPDATE ${T.v}\nSET ${sets.join(', ')}${w.sql ? '\nWHERE ' + w.sql : ''};`;
+        }
+        function deleteSql(S, ctx, errs) {
+            const T = ident(S.table, ctx.d, '表名'), w = compileGroup(S.where, ctx, 'WHERE '); errs.push(...w.errs);
+            return `DELETE FROM ${T.v}${w.sql ? '\nWHERE ' + w.sql : ''};`;
+        }
+
+        // ---- DDL ----
+        const TYPEMAP = {
+            int: ['INT', 'INTEGER', 'INTEGER', 'INT'], bigint: ['BIGINT', 'BIGINT', 'INTEGER', 'BIGINT'], smallint: ['SMALLINT', 'SMALLINT', 'INTEGER', 'SMALLINT'],
+            text: ['TEXT', 'TEXT', 'TEXT', 'NVARCHAR(MAX)'], boolean: ['BOOLEAN', 'BOOLEAN', 'INTEGER', 'BIT'], date: ['DATE', 'DATE', 'TEXT', 'DATE'],
+            datetime: ['DATETIME', 'TIMESTAMP', 'TEXT', 'DATETIME2'], double: ['DOUBLE', 'DOUBLE PRECISION', 'REAL', 'FLOAT'], json: ['JSON', 'JSONB', 'TEXT', 'NVARCHAR(MAX)'],
+            uuid: ['CHAR(36)', 'UUID', 'TEXT', 'UNIQUEIDENTIFIER'], blob: ['BLOB', 'BYTEA', 'BLOB', 'VARBINARY(MAX)'],
+        };
+        const CT_TYPES = ['int', 'bigint', 'smallint', 'varchar', 'text', 'boolean', 'date', 'datetime', 'decimal', 'double', 'json', 'uuid', 'blob'];
+        const INTS = ['int', 'bigint', 'smallint'];
+        const di = (d) => DIALECTS.indexOf(d);
+        function colType(c, d) {
+            const ty = c.type, len = String(c.len ?? '').trim();
+            if (ty === 'varchar') {
+                const n = len === '' ? 255 : +len;
+                if (!/^\d*$/.test(len) || n < 1 || n > 65535) return { err: 'VARCHAR 長度需為 1–65535' };
+                return { v: d === 'sqlite' ? 'TEXT' : d === 'mssql' ? (n > 4000 ? 'NVARCHAR(MAX)' : `NVARCHAR(${n})`) : `VARCHAR(${n})` };
+            }
+            if (ty === 'decimal') {
+                const m = /^(\d+)(?:\s*,\s*(\d+))?$/.exec(len || '10,2'), p = m && +m[1], s = m ? +(m[2] || 0) : 0;
+                if (!m || p < 1 || p > 38 || s > p) return { err: 'DECIMAL 請填「總位數,小數位數」，例如 10,2（總位數 1–38）' };
+                return { v: d === 'sqlite' ? 'NUMERIC' : `${d === 'pg' ? 'NUMERIC' : 'DECIMAL'}(${p},${s})` };
+            }
+            return TYPEMAP[ty] ? { v: TYPEMAP[ty][di(d)] } : { err: '未知的欄位型別' };
+        }
+        // 單一欄位定義 → { v } / { err }；pk：是否單一主鍵（寫在欄位後面）
+        function colLine(c, d, inlinePk) {
+            const name = identOne(c.name, d, '欄位名稱'); if (name.err) return name;
+            const ty = colType(c, d); if (ty.err) return ty;
+            const parts = [name.v, ty.v];
+            if (c.ai) {
+                if (!INTS.includes(c.type)) return { err: `自增欄位「${c.name}」必須是整數型別` };
+                if (c.defType !== 'none') return { err: `自增欄位「${c.name}」不能設預設值` };
+                if (d === 'sqlite') { parts[1] = 'INTEGER'; parts.push('PRIMARY KEY AUTOINCREMENT'); }
+                else parts.push({ mysql: 'AUTO_INCREMENT', pg: 'GENERATED ALWAYS AS IDENTITY', mssql: 'IDENTITY(1,1)' }[d]);
+            }
+            if (c.nn && !c.pk) parts.push('NOT NULL');
+            if (c.uq && !c.pk) parts.push('UNIQUE');
+            const dt = c.defType || 'none';
+            if (dt !== 'none') {
+                const t = String(c.def ?? '');
+                let v;
+                if (dt === 'null') v = { sql: 'NULL' };
+                else if (dt === 'now') v = { sql: d === 'mssql' ? 'GETDATE()' : 'CURRENT_TIMESTAMP' };
+                else if (['string', 'number', 'bool'].includes(dt)) v = val(dt, t, { d, mode: 'lit', params: [] });
+                else v = { err: '預設值型別不正確' };
+                if (v.err) return { err: `「${c.name}」的預設值：${v.err}` };
+                parts.push('DEFAULT ' + v.sql);
+            }
+            if (c.pk && inlinePk && !(c.ai && d === 'sqlite')) parts.push('PRIMARY KEY');
+            return { v: parts.join(' ') };
+        }
+        function createTableSql(S, ctx, errs) {
+            const d = ctx.d, ct = S.ct && typeof S.ct === 'object' ? S.ct : {}, T = ident(S.table, d, '表名');
+            const cols = (Array.isArray(ct.cols) ? ct.cols : []).filter(c => c && typeof c === 'object' && String(c.name ?? '').trim());
+            if (cols.length > LIM.cols) errs.push(`欄位最多 ${LIM.cols} 個`);
+            if (!cols.length) errs.push('請至少定義一個欄位');
+            const pks = cols.filter(c => c.pk), ais = cols.filter(c => c.ai), seen = new Set(), lines = [];
+            if (ais.length > 1) errs.push('只能有一個自增欄位');
+            if (ais.length && !ais[0].pk) errs.push('自增欄位必須是主鍵');
+            if (ais.length && pks.length > 1) errs.push('自增欄位不能搭配複合主鍵');
+            cols.slice(0, LIM.cols).forEach((c, i) => {
+                const n = String(c.name).trim().toLowerCase();
+                if (seen.has(n)) { errs.push(`欄位「${c.name}」重複`); return; }
+                seen.add(n);
+                const l = colLine(c, d, pks.length === 1); if (l.err) errs.push(l.err); else lines.push(l.v);
+            });
+            if (pks.length > 1) lines.push(`PRIMARY KEY (${pks.map(c => identOne(c.name, d).v).join(', ')})`);
+            cols.forEach(c => {
+                const fk = String(c.fk ?? '').trim(); if (!fk) return;
+                const dot = fk.lastIndexOf('.'), t = dot > 0 ? ident(fk.slice(0, dot), d, '外鍵表名') : { err: `「${c.name}」的外鍵請填「表名.欄位」` }, rc = dot > 0 ? identOne(fk.slice(dot + 1), d, '外鍵欄位') : {};
+                if (t.err || rc.err) { errs.push(`「${c.name}」：${t.err || rc.err}`); return; }
+                lines.push(`FOREIGN KEY (${identOne(c.name, d).v}) REFERENCES ${t.v} (${rc.v})`);
+            });
+            const head = ct.ifNot && d !== 'mssql' ? 'CREATE TABLE IF NOT EXISTS ' : 'CREATE TABLE ';
+            const pre = ct.ifNot && d === 'mssql' && !T.err ? `IF OBJECT_ID(N'${T.v.replace(/'/g, "''")}', N'U') IS NULL\n` : '';
+            return `${pre}${head}${T.v} (\n${lines.map(l => '  ' + l).join(',\n')}\n);`;
+        }
+        function indexSql(S, ctx, errs, warns) {
+            const d = ctx.d, x = S.ix && typeof S.ix === 'object' ? S.ix : {}, T = ident(S.table, d, '表名');
+            const raw = splitList(x.cols);
+            if (!raw.length) errs.push('請輸入索引欄位（逗號分隔，可加 ASC / DESC）');
+            if (raw.length > LIM.order) errs.push(`索引欄位最多 ${LIM.order} 個`);
+            const cols = [], names = [];
+            raw.slice(0, LIM.order).forEach(r => {
+                const m = /^(.*?)(?:\s+(ASC|DESC))?$/i.exec(r), e = ident(m[1], d, '欄位');
+                if (e.err) { errs.push(`索引欄位「${r}」：${e.err}`); return; }
+                cols.push(e.v + (m[2] ? ' ' + m[2].toUpperCase() : '')); names.push(m[1].trim());
+            });
+            let name = String(x.name ?? '').trim();
+            if (!name) name = ('idx_' + String(S.table ?? '').trim().split('.').pop() + '_' + names.join('_')).replace(/[^A-Za-z0-9_]/g, '_').slice(0, 63);
+            const nq = identOne(name, d, '索引名稱'); if (nq.err) errs.push(nq.err);
+            if (x.ifNot && (d === 'mysql' || d === 'mssql')) warns.push({ level: 'info', text: `${d === 'mysql' ? 'MySQL' : 'SQL Server'} 的 CREATE INDEX 不支援 IF NOT EXISTS，已省略。` });
+            return `CREATE ${x.unique ? 'UNIQUE ' : ''}INDEX ${x.ifNot && (d === 'pg' || d === 'sqlite') ? 'IF NOT EXISTS ' : ''}${nq.v} ON ${T.v} (${cols.join(', ')});`;
+        }
+        function alterSql(S, ctx, errs, warns) {
+            const d = ctx.d, a = S.alt && typeof S.alt === 'object' ? S.alt : {}, T = ident(S.table, d, '表名'), pre = `ALTER TABLE ${T.v ?? ''}`;
+            if (a.action === 'add') {
+                const c = { ...newCt(), ...(a.col || {}), pk: false, ai: false, fk: '' };
+                const l = colLine(c, d, false); if (l.err) { errs.push(l.err); return ''; }
+                if (d === 'sqlite' && c.uq) errs.push('SQLite 的 ADD COLUMN 不能加 UNIQUE（請改用 CREATE UNIQUE INDEX）');
+                if (d === 'sqlite' && c.nn && (c.defType === 'none' || c.defType === 'null')) errs.push('SQLite 的 ADD COLUMN 設 NOT NULL 時必須有非 NULL 的預設值');
+                if (c.nn && c.defType === 'none') warns.push({ level: 'info', text: '新增 NOT NULL 欄位但沒有預設值：資料表已有資料時 MySQL / PostgreSQL / SQL Server 會失敗。' });
+                return `${pre} ADD ${d === 'mssql' ? '' : 'COLUMN '}${l.v};`;
+            }
+            if (a.action === 'rename') {
+                const f = identOne(a.from, d, '舊欄位名稱'), t = identOne(a.to, d, '新欄位名稱');
+                if (f.err) errs.push(f.err); if (t.err) errs.push(t.err);
+                if (!f.err && !t.err && String(a.from).trim() === String(a.to).trim()) errs.push('新舊欄位名稱相同');
+                if (d === 'mysql') warns.push({ level: 'info', text: 'RENAME COLUMN 需要 MySQL 8.0 以上（5.7 要用 CHANGE 並重寫整個欄位定義）。' });
+                if (d === 'sqlite') warns.push({ level: 'info', text: 'RENAME COLUMN 需要 SQLite 3.25 以上。' });
+                if (d === 'mssql') return `EXEC sp_rename N'${(T.v ?? '').replace(/'/g, "''")}.${(f.v ?? '').replace(/'/g, "''")}', N'${String(a.to ?? '').trim().replace(/'/g, "''")}', N'COLUMN';`;
+                return `${pre} RENAME COLUMN ${f.v} TO ${t.v};`;
+            }
+            if (a.action === 'drop') {
+                const n = identOne(a.name, d, '欄位名稱'); if (n.err) errs.push(n.err);
+                warns.push({ level: 'danger', text: '刪除欄位會永久刪掉該欄所有資料，無法復原。執行前請先備份。' });
+                if (d === 'sqlite') warns.push({ level: 'info', text: 'DROP COLUMN 需要 SQLite 3.35 以上。' });
+                return `${pre} DROP COLUMN ${n.v};`;
+            }
+            errs.push('未知的 ALTER 動作'); return '';
+        }
+
+        // ---- 組成 ----
+        // mode：'lit'（值寫進 SQL）或 'param'（值變佔位符）。回傳 sql 含標記，之後用 finalize 換成方言佔位符
+        function compile(S, mode = 'lit') {
+            S = S && typeof S === 'object' ? S : {};
+            const d = DIALECTS.includes(S.d) ? S.d : 'mysql', op = OPS.includes(S.op) ? S.op : 'select';
+            const ddl = ['createTable', 'createIndex', 'alterTable'].includes(op);
+            const ctx = { d, mode: ddl ? 'lit' : mode, params: [] }, errs = [], warns = [];
+            const t = ident(S.table, d, '表名'); if (t.err) errs.push(t.err);
+            let sql = '';
+            switch (op) {
+                case 'select': sql = selectSql(S, ctx, errs, warns); break;
+                case 'latest': sql = latestSql(S, ctx, errs, warns); break;
+                case 'insert': sql = insertSql(S, ctx, errs); break;
+                case 'update': sql = updateSql(S, ctx, errs); break;
+                case 'delete': sql = deleteSql(S, ctx, errs); break;
+                case 'createTable': sql = createTableSql(S, ctx, errs); break;
+                case 'createIndex': sql = indexSql(S, ctx, errs, warns); break;
+                case 'alterTable': sql = alterSql(S, ctx, errs, warns); break;
+            }
+            if (op === 'update' || op === 'delete') {
+                const g = compileGroup(S.where, { d, mode: 'lit', params: [] }, '');
+                const label = op.toUpperCase();
+                if (!g.sql && !g.errs.length) warns.push({ level: 'danger', text: `條件為空會影響整張表：${label} 沒有任何條件。請先用 SELECT COUNT(*) 確認會命中多少筆。` });
+                else if (g.sql) warns.push({ level: 'info', text: `${label} 會一次修改 / 刪除所有符合的資料列，建議先用 SELECT COUNT(*) 確認筆數。` });
+            }
+            const uniq = [...new Set(errs)];
+            return { ok: !uniq.length, errs: uniq, warns, sql: uniq.length ? '' : sql, params: ctx.params, op, d, ddl };
+        }
+        // 「先用 SELECT COUNT(*) 確認」：保留表名與條件，改成 SELECT COUNT(*)
+        function toCountCheck(S) {
+            const base = defaultState();
+            return { ...base, d: S.d, table: S.table, op: 'select', where: S.where, sel: { ...base.sel, cols: [newCol({ agg: 'COUNT' })] } };
+        }
+
+        // ---- 輸出 ----
+        const pyStr = (s) => {
+            let o = '"';
+            for (const ch of s) {
+                const c = ch.codePointAt(0);
+                if (ch === '\\') o += '\\\\'; else if (ch === '"') o += '\\"'; else if (ch === '\n') o += '\\n'; else if (ch === '\r') o += '\\r'; else if (ch === '\t') o += '\\t';
+                else if (c < 0x20 || c === 0x7f) o += '\\x' + c.toString(16).padStart(2, '0');
+                else if (c >= 0xd800 && c <= 0xdfff) o += '\\u' + c.toString(16);
+                else o += ch;
+            }
+            return o + '"';
+        };
+        const jsStr = (s) => JSON.stringify(s).replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+        const pText = (p, py) => p.t === 's' ? (py ? pyStr(p.v) : jsStr(p.v)) : p.t === 'b' ? (py ? (p.v ? 'True' : 'False') : String(p.v)) : String(p.v);
+        const plist = (ps, py) => '[' + ps.map(p => pText(p, py)).join(', ') + ']';
+        const READ = ['select', 'latest'];
+        function nodeCode(r, sql, ps) {
+            const d = r.d, read = READ.includes(r.op), vars = ps.filter(p => p.t === 'var').map(p => p.v);
+            const q = sql.includes('\n') ? '[\n' + sql.split('\n').map(l => '  ' + jsStr(l)).join(',\n') + '\n].join("\\n")' : jsStr(sql);
+            const head = {
+                mysql: ["const mysql = require('mysql2/promise');", "const conn = await mysql.createConnection({ host: 'localhost', user: 'root', password: '', database: 'mydb' });"],
+                pg: ["const { Client } = require('pg');", 'const client = new Client({ connectionString: process.env.DATABASE_URL });', 'await client.connect();'],
+                sqlite: ["const Database = require('better-sqlite3');", "const db = new Database('app.db');"],
+                mssql: ["const mssql = require('mssql');", "const pool = await mssql.connect({ server: 'localhost', database: 'mydb', user: 'sa', password: '...', options: { trustServerCertificate: true } });"],
+            }[d];
+            const L = [...head, '', (vars.length ? `// 請先定義變數：${vars.join('、')}\n` : '') + `const query = ${q};`];
+            if (d === 'mssql') {
+                L.push('const request = pool.request();', ...ps.map((p, i) => `request.input('p${i + 1}', ${pText(p, false)});`), 'const result = await request.query(query);', read ? 'console.log(result.recordset);' : 'console.log(result.rowsAffected);', 'await pool.close();');
+            } else {
+                if (ps.length) L.push(`const params = ${plist(ps, false)};`);
+                const a = ps.length ? ', params' : '';
+                if (d === 'mysql') L.push(`const [rows] = await conn.${ps.length ? 'execute' : 'query'}(query${a});`, 'console.log(rows);', 'await conn.end();');
+                else if (d === 'pg') L.push(`const result = await client.query(query${a});`, read ? 'console.log(result.rows);' : 'console.log(result.rowCount);', 'await client.end();');
+                else L.push('const stmt = db.prepare(query);', read ? `const rows = stmt.all(${ps.length ? 'params' : ''});` : `const info = stmt.run(${ps.length ? 'params' : ''});`, read ? 'console.log(rows);' : 'console.log(info.changes);');
+            }
+            return L.join('\n');
+        }
+        function pythonCode(r, sql, ps) {
+            const d = r.d, read = READ.includes(r.op), vars = ps.filter(p => p.t === 'var').map(p => p.v);
+            const q = sql.includes('\n') ? '"\\n".join([\n' + sql.split('\n').map(l => '    ' + pyStr(l)).join(',\n') + '\n])' : pyStr(sql);
+            const head = {
+                mysql: ['import pymysql', '', 'conn = pymysql.connect(host="localhost", user="root", password="", database="mydb")'],
+                pg: ['import psycopg2', '', 'conn = psycopg2.connect(dbname="mydb", user="postgres", password="...", host="localhost")'],
+                sqlite: ['import sqlite3', '', 'conn = sqlite3.connect("app.db")'],
+                mssql: ['import pyodbc', '', 'conn = pyodbc.connect("DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost;DATABASE=mydb;UID=sa;PWD=...;TrustServerCertificate=yes")'],
+            }[d];
+            const L = [...head, 'cur = conn.cursor()', '', (vars.length ? `# 請先定義變數：${vars.join('、')}\n` : '') + `sql = ${q}`];
+            if (ps.length) L.push(`params = ${plist(ps, true)}`);
+            L.push(`cur.execute(sql${ps.length ? ', params' : ''})`);
+            if (read) L.push('rows = cur.fetchall()', 'print(rows)'); else L.push('conn.commit()', 'print(cur.rowcount)');
+            L.push('conn.close()');
+            return L.join('\n');
+        }
+        const FMT_LABEL = { sql: '純 SQL', param: '參數化', node: 'Node.js', python: 'Python' };
+        const NOTE_LIT = '字面值版本只適合手動貼到 SQL 工具執行；寫在程式裡請用「參數化」版本，避免 SQL 注入。';
+        // 回傳 { ok, errs, warns, parts: [{ label, text, note? }] }
+        function generate(S, fmt) {
+            fmt = FMTS.includes(fmt) ? fmt : 'sql';
+            const r = compile(S, fmt === 'sql' ? 'lit' : 'param');
+            if (!r.ok) return { ok: false, errs: r.errs, warns: r.warns, parts: [] };
+            const ph = fmt === 'python' ? (r.d === 'mysql' || r.d === 'pg' ? '%s' : '?') : { mysql: '?', sqlite: '?', pg: '$', mssql: '@p' }[r.d];
+            const f = finalize(r.sql, r.params, ph), parts = [], warns = [...r.warns];
+            if (fmt === 'sql') parts.push({ label: '純 SQL', text: f.sql, note: NOTE_LIT });
+            else if (fmt === 'param') {
+                parts.push({ label: 'SQL（參數化）', text: f.sql });
+                if (f.params.length) parts.push({ label: '參數（依序）', text: plist(f.params, false) });
+                else warns.push({ level: 'info', text: r.ddl ? '建立 / 修改結構的語句（DDL）不能使用參數，這個操作沒有可參數化的值。' : '這個語句沒有需要參數化的值。' });
+            } else parts.push({ label: FMT_LABEL[fmt], text: (fmt === 'node' ? nodeCode : pythonCode)(r, f.sql, f.params) });
+            return { ok: true, errs: [], warns, parts };
+        }
+
+        // ---- 快速範本：回傳要覆蓋預設狀態的欄位 ----
+        function template(name, p) {
+            const clamp = (v, def, max) => Math.min(max, Math.max(1, Math.floor(Number(v)) || def));
+            const n = clamp(p?.n, name === 'paging' ? 20 : 7, name === 'paging' ? 1000 : 36500), page = clamp(p?.page, 1, 1000000);
+            const grp = (mode, ...rows) => newGroup(mode, rows.map(r => newRow(r)));
+            const sel = (o) => ({ ...defaultState().sel, ...o });
+            switch (name) {
+                case 'paging': return { op: 'select', sel: sel({ orderBy: [{ field: 'id', dir: 'asc' }], limit: String(n), offset: String((page - 1) * n) }) };
+                case 'dupes': return { op: 'select', where: newGroup('and', []), sel: sel({ cols: [newCol({ field: 'email' }), newCol({ agg: 'COUNT', alias: 'cnt' })], groupBy: 'email', having: grp('and', { agg: 'COUNT', field: '*', op: 'gt', type: 'number', value: '1' }), orderBy: [{ field: 'cnt', dir: 'desc' }] }) };
+                case 'latest': return { op: 'latest', lat: { group: 'user_id', order: 'created_at', dir: 'desc' }, where: newGroup('and', []) };
+                case 'recent': return { op: 'select', where: grp('and', { field: 'created_at', op: 'gte', type: 'daysago', value: String(n) }), sel: sel({ orderBy: [{ field: 'created_at', dir: 'desc' }] }) };
+                case 'missing': return { op: 'select', where: grp('or', { field: 'phone', op: 'null' }, { field: 'phone', op: 'eq', type: 'string', value: '' }) };
+                case 'fuzzy': return { op: 'select', where: grp('and', { field: 'name', op: 'contains', value: '關鍵字' }) };
+                case 'upsert': return { op: 'insert', ins: { cols: [{ name: 'id', type: 'number' }, { name: 'name', type: 'string' }, { name: 'updated_at', type: 'now' }], rows: [['1', 'Alice', '']], upsert: true, keys: 'id' } };
+            }
+            return {};
+        }
+        const TEMPLATES = [['paging', '分頁查詢'], ['dupes', '找出重複資料'], ['latest', '每組最新一筆（視窗函式）'], ['recent', '最近 N 天'], ['missing', '欄位為空（NULL 或空字串）'], ['fuzzy', '模糊搜尋（包含）'], ['upsert', 'Upsert（有就更新、沒有就新增）']];
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const h = (t, p = {}, ...c) => {
+            const e = document.createElement(t);
+            for (const [k, v] of Object.entries(p)) { if (k === 'class') e.className = v; else if (k.startsWith('on')) e[k] = v; else if (v === true) e.setAttribute(k, ''); else if (v !== false && v != null) e.setAttribute(k, v); }
+            e.append(...c); return e;
+        };
+        const OP_LABELS = { select: 'SELECT 查詢', latest: '每組最新一筆', insert: 'INSERT 新增', update: 'UPDATE 更新', delete: 'DELETE 刪除', createTable: 'CREATE TABLE 建表', createIndex: 'CREATE INDEX 建索引', alterTable: 'ALTER TABLE 改表' };
+        const D_LABELS = { mysql: 'MySQL', pg: 'PostgreSQL', sqlite: 'SQLite', mssql: 'SQL Server' };
+        const CMP = [['eq', '等於 ='], ['ne', '不等於 <>'], ['gt', '大於 >'], ['gte', '大於等於 >='], ['lt', '小於 <'], ['lte', '小於等於 <='], ['contains', '包含'], ['notContains', '不包含'], ['startsWith', '開頭是'], ['endsWith', '結尾是'], ['like', 'LIKE（自己寫 % _）'], ['notlike', 'NOT LIKE'], ['in', 'IN（清單）'], ['nin', 'NOT IN'], ['between', 'BETWEEN'], ['null', 'IS NULL'], ['notnull', 'IS NOT NULL']];
+        const TYPES = [['string', '字串'], ['number', '數字'], ['bool', '布林'], ['null', 'NULL'], ['date', '日期'], ['ref', '欄位參考'], ['param', '參數佔位符'], ['now', '現在時間'], ['daysago', 'N 天前']];
+        const NO_TYPE = new Set(['null', 'notnull', 'contains', 'notContains', 'startsWith', 'endsWith']);
+        const AGG_OPTS = [['', '（無）'], ['COUNT', 'COUNT'], ['COUNTD', 'COUNT DISTINCT'], ['SUM', 'SUM'], ['AVG', 'AVG'], ['MIN', 'MIN'], ['MAX', 'MAX']];
+        const PH = { in: '用逗號或換行分隔，例如 a, b, c', nin: '用逗號或換行分隔', contains: '要包含的文字（自動跳脫 % _）', notContains: '不能包含的文字', startsWith: '開頭的文字', endsWith: '結尾的文字', like: '例如 A%_B', param: '變數名稱（可留空）', daysago: '天數，例如 7', date: 'YYYY-MM-DD 或 YYYY-MM-DD HH:mm', ref: '欄位，例如 o.user_id' };
+        let S = defaultState(), fmt = 'sql';
+
+        const msg = (t) => { $('#msg').textContent = t || ''; };
+        const txtIn = (o, k, ph, p = {}) => h('input', { type: 'text', value: o[k] ?? '', placeholder: ph, 'aria-label': ph, autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', maxlength: 2000, oninput: (e) => { o[k] = e.target.value; update(); }, ...p });
+        const selIn = (o, k, opts, rebuild, label) => { const s = h('select', { 'aria-label': label || k, onchange: (e) => { o[k] = e.target.value; rebuild ? build() : update(); } }, ...opts.map(([v, l]) => h('option', { value: v }, l))); s.value = o[k]; return s; };
+        const chkIn = (o, k, label, rebuild) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!o[k], onchange: (e) => { o[k] = e.target.checked; rebuild ? build() : update(); } }), label);
+        const btn = (t, f, cls = 'sm', label) => h('button', { type: 'button', class: cls, 'aria-label': label || t, onclick: f }, t);
+        const add = (list, item, max, what) => { if (list.length >= max) return msg(`${what}最多 ${max} 個`); msg(''); list.push(item); build(); };
+
+        function rowUI(r, del, withAgg) {
+            const kids = [];
+            if (withAgg) kids.push(selIn(r, 'agg', AGG_OPTS, false, '聚合函式'));
+            kids.push(txtIn(r, 'field', withAgg ? '欄位（COUNT 可填 *）' : '欄位（可用 t.col）'), selIn(r, 'op', CMP, true, '運算子'));
+            if (!NO_TYPE.has(r.op)) {
+                kids.push(selIn(r, 'type', TYPES, true, '值型別'));
+                if (r.type !== 'null') kids.push(txtIn(r, 'value', PH[r.type === 'string' ? r.op : r.type] || PH[r.op] || '值'));
+                if (r.op === 'between') kids.push(txtIn(r, 'value2', '第二個值'));
+            } else if (!['null', 'notnull'].includes(r.op)) kids.push(txtIn(r, 'value', PH[r.op]));
+            kids.push(btn('✕', del, 'sm del', '刪除這個條件'));
+            return h('div', { class: 'crow' }, ...kids);
+        }
+        function groupUI(g, depth, opts = {}, onDel) {
+            const head = h('div', { class: 'ghead' }, selIn(g, 'mode', [['and', '全部符合 (AND)'], ['or', '任一符合 (OR)']], false, '組合方式'), btn('＋條件', () => add(g.items, newRow({ type: opts.ref ? 'ref' : 'string' }), LIM.rows, '條件')));
+            if (!depth) head.append(btn('＋群組', () => add(g.items, newGroup('or', [newRow({ type: opts.ref ? 'ref' : 'string' })]), LIM.rows, '條件')));
+            if (onDel) head.append(btn('刪除群組', onDel));
+            const box = h('div', { class: 'grp' + (depth ? ' sub' : '') }, head);
+            g.items.forEach((it, i) => { const del = () => { g.items.splice(i, 1); build(); }; box.append(it.k === 'grp' ? groupUI(it, depth + 1, opts, del) : rowUI(it, del, opts.agg)); });
+            return box;
+        }
+        function ctRowUI(c, del, full) {
+            const lenPh = c.type === 'varchar' ? '長度（預設 255）' : '總位數,小數位數（預設 10,2）';
+            const row = h('div', { class: 'crow' }, txtIn(c, 'name', '欄位名稱'), selIn(c, 'type', CT_TYPES.map(x => [x, x.toUpperCase()]), true, '型別'));
+            if (c.type === 'varchar' || c.type === 'decimal') row.append(txtIn(c, 'len', lenPh));
+            row.append(selIn(c, 'defType', [['none', '無預設值'], ['string', '預設：字串'], ['number', '預設：數字'], ['bool', '預設：布林'], ['null', '預設：NULL'], ['now', '預設：現在時間']], true, '預設值'));
+            if (['string', 'number', 'bool'].includes(c.defType)) row.append(txtIn(c, 'def', '預設值'));
+            if (full) row.append(chkIn(c, 'pk', '主鍵'), chkIn(c, 'ai', '自增'));
+            row.append(chkIn(c, 'nn', 'NOT NULL'), chkIn(c, 'uq', 'UNIQUE'));
+            if (full) row.append(txtIn(c, 'fk', '外鍵：表名.欄位（可留空）'));
+            if (del) row.append(btn('✕', del, 'sm del', '刪除這個欄位'));
+            return row;
+        }
+
+        function build() {
+            const op = S.op, show = (id, on) => { $(id).hidden = !on; };
+            $('#op').value = op; $('#dialect').value = S.d; $('#tbl').value = S.table;
+            show('#cIns', op === 'insert'); show('#cUpd', op === 'update'); show('#cCt', op === 'createTable'); show('#cIx', op === 'createIndex'); show('#cAlt', op === 'alterTable'); show('#cLat', op === 'latest');
+            show('#cCols', op === 'select'); show('#cJoin', op === 'select'); show('#cWhere', ['select', 'latest', 'update', 'delete'].includes(op)); show('#cGroup', op === 'select'); show('#cOrder', op === 'select');
+            const s = S.sel;
+            $('#cCols').replaceChildren(h('h2', {}, '欄位'), ...s.cols.map((c, i) => h('div', { class: 'crow' }, selIn(c, 'agg', [...AGG_OPTS, ['CONCAT', '串接 CONCAT']], true, '聚合函式'), txtIn(c, 'field', c.agg === 'CONCAT' ? "項目，逗號分隔（文字用 ' '）" : c.agg === 'COUNT' ? '欄位（留空 = *）' : '欄位（留空 = 全部 *）'), txtIn(c, 'alias', '別名（可留空）'), btn('✕', () => { s.cols.splice(i, 1); build(); }, 'sm del', '刪除這個欄位'))),
+                btn('＋欄位', () => add(s.cols, newCol(), LIM.cols, '欄位')), h('div', {}, chkIn(s, 'distinct', 'DISTINCT（去除重複列）')), h('label', {}, 'FROM 別名（可留空）'), txtIn(s, 'alias', '例如 u'));
+            $('#cJoin').replaceChildren(h('h2', {}, 'JOIN（最多 4 個）'), ...s.joins.map((j, i) => h('div', { class: 'box' }, h('div', { class: 'crow' }, selIn(j, 'type', [['inner', 'INNER JOIN'], ['left', 'LEFT JOIN'], ['right', 'RIGHT JOIN'], ['full', 'FULL JOIN']], false, 'JOIN 類型'), txtIn(j, 'table', '表名'), txtIn(j, 'alias', '別名（可留空）'), btn('✕', () => { s.joins.splice(i, 1); build(); }, 'sm del', '刪除這個 JOIN')), h('label', {}, 'ON 條件'), groupUI(j.on, 0, { ref: true }))),
+                btn('＋JOIN', () => add(s.joins, { type: 'inner', table: '', alias: '', on: newGroup('and', [newRow({ type: 'ref' })]) }, LIM.joins, 'JOIN')));
+            $('#cWhere').replaceChildren(h('h2', {}, op === 'update' || op === 'delete' ? '條件（WHERE，空白會影響整張表）' : '條件（WHERE，可留空）'), groupUI(S.where, 0));
+            $('#cGroup').replaceChildren(h('h2', {}, 'GROUP BY / HAVING'), txtIn(s, 'groupBy', '分組欄位，逗號分隔（可留空）'), h('label', {}, 'HAVING 條件'), groupUI(s.having, 0, { agg: true }));
+            $('#cOrder').replaceChildren(h('h2', {}, '排序與分頁'), ...s.orderBy.map((r, i) => h('div', { class: 'crow' }, txtIn(r, 'field', '欄位或別名'), selIn(r, 'dir', [['asc', '升冪 ASC'], ['desc', '降冪 DESC']], false, '方向'), btn('✕', () => { s.orderBy.splice(i, 1); build(); }, 'sm del', '刪除排序'))),
+                btn('＋排序', () => add(s.orderBy, { field: '', dir: 'asc' }, LIM.order, '排序')), h('div', { class: 'row', style: 'margin-top:8px' }, txtIn(s, 'limit', 'limit（留空 = 不限）', { inputmode: 'numeric' }), txtIn(s, 'offset', 'offset（留空 = 0）', { inputmode: 'numeric' })));
+            const l = S.lat;
+            $('#cLat').replaceChildren(h('h2', {}, '每組最新一筆'), h('p', { class: 'note' }, '依分組欄位分組，每組只取排序第一筆（ROW_NUMBER 視窗函式）。條件可在下方 WHERE 設定。'), txtIn(l, 'group', '分組欄位，逗號分隔，例如 user_id'), h('div', { class: 'row', style: 'margin-top:8px' }, txtIn(l, 'order', '排序欄位，例如 created_at'), selIn(l, 'dir', [['desc', '最新（DESC）'], ['asc', '最舊（ASC）']], false, '方向')));
+            const ins = S.ins;
+            const tb = h('table', {}, h('thead', {}, h('tr', {}, ...ins.cols.map((c, ci) => h('th', {}, h('div', { class: 'row' }, txtIn(c, 'name', '欄位名稱'), selIn(c, 'type', TYPES.filter(t => t[0] !== 'ref'), true, '值型別'), btn('✕', () => { ins.cols.splice(ci, 1); ins.rows.forEach(r => r.splice(ci, 1)); build(); }, 'sm del', '刪除這個欄位')))), h('th', {}))),
+                h('tbody', {}, ...ins.rows.map((r, ri) => h('tr', {}, ...ins.cols.map((c, ci) => h('td', {}, h('input', { type: 'text', value: r[ci] ?? '', 'aria-label': `第 ${ri + 1} 列 ${c.name || '欄位 ' + (ci + 1)}`, autocomplete: 'off', spellcheck: 'false', maxlength: 2000, oninput: (e) => { r[ci] = e.target.value; update(); } }))), h('td', {}, btn('✕', () => { ins.rows.splice(ri, 1); build(); }, 'sm del', '刪除這一列'))))));
+            $('#cIns').replaceChildren(h('h2', {}, '新增的資料'), h('p', { class: 'note' }, '每欄選值型別；空白儲存格：字串 = 空字串，其他型別 = NULL。'), h('div', { class: 'cell' }, tb),
+                h('div', { class: 'row' }, btn('＋欄位', () => { if (ins.cols.length >= LIM.cols) return msg(`欄位最多 ${LIM.cols} 個`); msg(''); ins.cols.push({ name: '', type: 'string' }); ins.rows.forEach(r => r.push('')); build(); }), btn('＋資料列', () => { if (ins.rows.length >= LIM.insRows) return msg(`資料最多 ${LIM.insRows} 列`); msg(''); ins.rows.push(ins.cols.map(() => '')); build(); })),
+                h('div', {}, chkIn(ins, 'upsert', 'Upsert（重複就更新）', true)), ...(ins.upsert ? [h('label', {}, '重複判斷欄位（主鍵或唯一欄位，逗號分隔）'), txtIn(ins, 'keys', '例如 id')] : []));
+            $('#cUpd').replaceChildren(h('h2', {}, '設定值（SET）'), ...S.upd.map((r, i) => h('div', { class: 'crow' }, txtIn(r, 'field', '欄位'), selIn(r, 'type', TYPES, true, '值型別'), ...(r.type === 'null' || r.type === 'now' ? [] : [txtIn(r, 'value', PH[r.type] || '值')]), btn('✕', () => { S.upd.splice(i, 1); build(); }, 'sm del', '刪除這列'))), btn('＋欄位', () => add(S.upd, { field: '', type: 'string', value: '' }, LIM.rows, '欄位')));
+            const ct = S.ct;
+            $('#cCt').replaceChildren(h('h2', {}, '欄位定義'), ...ct.cols.map((c, i) => h('div', { class: 'box' }, ctRowUI(c, () => { ct.cols.splice(i, 1); build(); }, true))), btn('＋欄位', () => add(ct.cols, newCt(), LIM.cols, '欄位')), h('div', {}, chkIn(ct, 'ifNot', '只在不存在時建立（IF NOT EXISTS）')));
+            const ix = S.ix;
+            $('#cIx').replaceChildren(h('h2', {}, '索引'), txtIn(ix, 'cols', '欄位，逗號分隔，可加 ASC / DESC，例如 email, created_at DESC'), txtIn(ix, 'name', '索引名稱（留空 = 自動產生）'), h('div', {}, chkIn(ix, 'unique', 'UNIQUE（唯一索引）')), h('div', {}, chkIn(ix, 'ifNot', 'IF NOT EXISTS')));
+            const al = S.alt;
+            $('#cAlt').replaceChildren(h('h2', {}, '修改資料表'), selIn(al, 'action', [['add', '加欄位'], ['rename', '欄位改名'], ['drop', '刪除欄位']], true, '動作'),
+                ...(al.action === 'add' ? [ctRowUI(al.col, null, false)] : al.action === 'rename' ? [h('div', { class: 'row', style: 'margin-top:8px' }, txtIn(al, 'from', '舊欄位名稱'), txtIn(al, 'to', '新欄位名稱'))] : [h('div', { style: 'margin-top:8px' }, txtIn(al, 'name', '要刪除的欄位名稱'))]));
+            update();
+        }
+
+        let parts = [];
+        function update() {
+            const r = generate(S, fmt);
+            $('#errs').replaceChildren(...r.errs.map(e => h('li', {}, e)));
+            $('#warns').replaceChildren(...r.warns.map(w => {
+                const d = h('div', { class: 'alert' + (w.level === 'danger' ? '' : ' info') }, w.text);
+                if (w.level === 'danger' && (S.op === 'update' || S.op === 'delete')) d.append(' ', btn('先用 SELECT COUNT(*) 確認', () => { S = toCountCheck(S); persist(); build(); }));
+                return d;
+            }));
+            parts = r.parts;
+            $('#out').replaceChildren(...parts.map(p => { const pre = h('pre', { class: 'code' }, p.text), b = btn('複製', () => copyWithFeedback(b, p.text)); return h('div', { class: 'part' }, h('div', { class: 'ph' }, h('b', {}, p.label), b), ...(p.note ? [h('div', { class: 'alert info' }, '⚠ ' + p.note)] : []), pre); }));
+            $('#copyAll').hidden = !parts.length;
+        }
+        const persist = () => store.set('sqlq_opts', { op: S.op, d: S.d, fmt });
+
+        $('#dialect').replaceChildren(...DIALECTS.map(o => h('option', { value: o }, D_LABELS[o])));
+        $('#op').replaceChildren(...OPS.map(o => h('option', { value: o }, OP_LABELS[o])));
+        $('#tpl').replaceChildren(...TEMPLATES.map(([v, l]) => h('option', { value: v }, l)));
+        $('#fmtTabs').replaceChildren(...FMTS.map(v => h('button', { 'data-f': v, 'aria-pressed': 'false' }, FMT_LABEL[v])));
+        const markFmt = () => [...$('#fmtTabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.f === fmt));
+        $('#fmtTabs').onclick = (e) => { const f = e.target.dataset.f; if (f) { fmt = f; markFmt(); persist(); update(); } };
+        $('#op').onchange = () => { S.op = $('#op').value; msg(''); persist(); build(); };
+        $('#dialect').onchange = () => { S.d = $('#dialect').value; persist(); update(); };
+        $('#tbl').oninput = () => { S.table = $('#tbl').value; update(); };
+        $('#tplGo').onclick = () => { const keep = { table: S.table, d: S.d }; S = { ...defaultState(), ...template($('#tpl').value, { n: $('#tplN').value, page: $('#tplP').value }), ...keep }; msg(''); persist(); build(); };
+        $('#copyAll').onclick = () => copyWithFeedback($('#copyAll'), parts.length === 1 ? parts[0].text : parts.map(p => `${p.label}\n${p.text}`).join('\n\n'));
+
+        { const o = loadOpts(store.get('sqlq_opts', null)); S.op = o.op; S.d = o.d; fmt = o.fmt; }
+        markFmt(); build();
+    </script>
+</body>
+
+</html>

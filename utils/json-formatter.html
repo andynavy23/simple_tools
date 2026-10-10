@@ -156,17 +156,52 @@
             <div class="out" id="outText"></div>
             <div class="out tree" id="outTree" hidden></div>
         </div>
+
+        <div class="card" id="tyCard">
+            <h2>產生型別</h2>
+            <p class="muted" style="font-size:13px;margin:0 0 10px">把上方輸入的 JSON 當範例，推論欄位型別並產生程式碼。陣列有多筆時會合併所有元素的欄位（沒出現在每一筆的欄位視為可選）。</p>
+            <div class="bar" style="margin:0 0 10px">
+                <label>輸出
+                    <select id="tyLang">
+                        <option value="ts">TypeScript</option>
+                        <option value="schema">JSON Schema</option>
+                        <option value="mongoose">Mongoose Schema</option>
+                        <option value="python">Python dataclass</option>
+                        <option value="go">Go struct</option>
+                    </select>
+                </label>
+                <label>根型別名稱 <input type="text" id="tyName" value="Root" maxlength="60" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:8em"></label>
+            </div>
+            <div class="bar" id="tyOpts" style="margin-top:0">
+                <label data-for="ts">宣告
+                    <select id="tyKind">
+                        <option value="interface">interface</option>
+                        <option value="type">type</option>
+                    </select>
+                </label>
+                <label data-for="ts"><input type="checkbox" id="tyExport"> export</label>
+                <label data-for="schema"><input type="checkbox" id="tyFmt" checked> 偵測 format（日期時間、email、uri、uuid）</label>
+                <label data-for="mongoose" hidden><input type="checkbox" id="tyTs"> timestamps</label>
+            </div>
+            <div class="bar">
+                <button class="primary" id="tyGo">產生</button>
+                <button class="sm" id="tyCopy" hidden style="margin-left:auto">複製結果</button>
+            </div>
+            <div id="tyStatus" role="status" style="margin-top:12px;font-size:14px;word-break:break-all"></div>
+            <div class="out" id="tyOut" hidden style="margin-top:10px"></div>
+        </div>
     </div>
 
     <template id="help">
         <h3>這是什麼</h3>
-        <p>貼上 JSON 就能美化、壓縮、驗證，也可以和 YAML、CSV 互相轉換，並用樹狀方式瀏覽。</p>
+        <p>貼上 JSON 就能美化、壓縮、驗證，也可以和 YAML、CSV 互相轉換，並用樹狀方式瀏覽。另外可以把 JSON 當範例，產生 TypeScript、JSON Schema、Mongoose Schema、Python dataclass、Go struct 的型別定義。</p>
         <h3>什麼時候用</h3>
         <ul>
         <li>API 回傳一整行 JSON，看不懂，想排版成易讀的樣子。</li>
         <li>設定檔要在 JSON 與 YAML 之間轉換。</li>
         <li>把 JSON 陣列轉成 CSV 丟進 Excel，或把 CSV 轉回 JSON。</li>
         <li>JSON 有錯，想知道錯在第幾行。</li>
+        <li>拿到 API 回傳範例，想快速產生前端型別、資料庫 Schema 或驗證用的 JSON Schema。</li>
         </ul>
         <h3>怎麼用</h3>
         <ol>
@@ -174,18 +209,26 @@
         <li>按「美化」（可選縮排 2 / 4 空白或 Tab、勾「鍵名排序」）、「壓縮」或「只驗證」；有錯會顯示錯誤位置。</li>
         <li>「格式轉換」按 JSON → YAML、JSON → CSV、YAML → JSON、CSV → JSON，結果顯示在下方。</li>
         <li>結果可切換「文字」與「樹狀」（點節點可展開收合），按「複製結果」帶走，或「放回輸入」接著再轉。</li>
+        <li>往下到「產生型別」：選輸出語言、填「根型別名稱」，按「產生」。TypeScript 可選 interface / type 與 export；JSON Schema 可勾「偵測 format」；Mongoose 可勾 timestamps。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">輸入 [{"name":"A","n":1},{"name":"B","n":2}]
         按「JSON → CSV」
         → name,n
         → A,1
-        → B,2</div>
+        → B,2
+        輸入 [{"id":1,"name":"A"},{"id":2,"name":"B","note":null}]
+        「產生型別」選 TypeScript
+        → type Root = RootItem[];
+        → interface RootItem { id: number; name: string; note?: null; }</div>
         <h3>小提醒</h3>
         <ul>
         <li>CSV 轉換需要第一列是標題；JSON → CSV 需為物件陣列。</li>
         <li>YAML 只支援常用語法，複雜功能（錨點等）可能無法轉換。</li>
-        <li>全部在本機處理，不會上傳。</li>
+        <li>全部在本機處理，不會上傳；也不會儲存任何資料。</li>
+        <li>型別只是「從範例推論」：陣列有多筆時會合併所有元素，沒有出現在每一筆的欄位視為可選，型別不同的欄位用 union（Go 用 interface{}、Mongoose 用 Mixed）。範例沒涵蓋的情況請自己補上。</li>
+        <li>整數與小數同欄位時視為小數（number / float64 / float）；空陣列沒有元素可推論，會是 unknown / Any。物件依鍵名取名（帕斯卡命名，陣列元素會單數化，例如 items → Item）。</li>
+        <li>鍵名不是合法識別字時：TypeScript 加引號；Go 轉成大駝峰並保留 json tag；Python 改名並用 <kbd>field(metadata)</kbd> 記下原鍵名。巢狀超過 100 層或範例超過 200 萬字元不處理。</li>
         </ul>
     </template>
 
@@ -431,6 +474,246 @@
             if (rows.length < 1) throw new Error('沒有資料');
             return toObjects(rows[0], rows.slice(1));
         }
+
+        // ---------- 產生型別（TypeScript / JSON Schema / Mongoose / Python / Go） ----------
+        // 型別推論樹 T：{ null, bool, int, num, str: {fmt, oid}|null, obj: {n, fields: Map<key,{t,c}>}|null, arr: {el: T|null}|null }
+        // 多個旗標同時成立 = union；陣列所有元素、同一欄位在所有物件出現的值都會合併；欄位出現次數 c < 物件數 n → 可選
+        const TY_MAX_DEPTH = 100;
+        const emptyT = () => ({ null: false, bool: false, int: false, num: false, str: null, obj: null, arr: null });
+        const validYmd = (y, m, d) => { const c = new Date(Date.UTC(2000, m - 1, d)); c.setUTCFullYear(y); return c.getUTCMonth() === m - 1 && c.getUTCDate() === d; };
+        function strFmt(s) {
+            let m = /^(\d{4})-(0[1-9]|1[0-2])-(\d{2})(?:[Tt]([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?([Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d))?$/.exec(s);
+            if (m && validYmd(+m[1], +m[2], +m[3])) return m[4] === undefined && !/[Tt]/.test(s) ? 'date' : 'date-time';
+            if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) return 'uuid';
+            if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return 'email';
+            if (/^[a-z][a-z0-9+.-]*:\/\/[^\s]+$/i.test(s)) return 'uri';
+            return '';
+        }
+        function mergeT(a, b) {
+            for (const k of ['null', 'bool', 'int', 'num']) a[k] = a[k] || b[k];
+            if (!a.str) a.str = b.str; else if (b.str) a.str = { fmt: a.str.fmt === b.str.fmt ? a.str.fmt : '', oid: a.str.oid && b.str.oid };
+            if (!a.obj) a.obj = b.obj;
+            else if (b.obj) {
+                a.obj.n += b.obj.n;
+                for (const [k, f] of b.obj.fields) { const ex = a.obj.fields.get(k); if (ex) { ex.t = mergeT(ex.t, f.t); ex.c += f.c; } else a.obj.fields.set(k, f); }
+            }
+            if (!a.arr) a.arr = b.arr; else if (b.arr) a.arr.el = a.arr.el && b.arr.el ? mergeT(a.arr.el, b.arr.el) : a.arr.el || b.arr.el;
+            return a;
+        }
+        function inferT(v, depth = 0) {
+            if (depth > TY_MAX_DEPTH) throw new Error(`JSON 巢狀超過 ${TY_MAX_DEPTH} 層，無法產生型別`);
+            const t = emptyT();
+            if (v === null) t.null = true;
+            else if (typeof v === 'boolean') t.bool = true;
+            else if (typeof v === 'number') { if (Number.isSafeInteger(v)) t.int = true; else t.num = true; }
+            else if (typeof v === 'string') t.str = { fmt: strFmt(v), oid: /^[0-9a-fA-F]{24}$/.test(v) };
+            else if (Array.isArray(v)) { let el = null; for (const x of v) { const e = inferT(x, depth + 1); el = el ? mergeT(el, e) : e; } t.arr = { el };   // ponytail: 無法分辨「空陣列」與「元素型別未知」，兩者都當 unknown
+            } else { const f = new Map(); for (const k of Object.keys(v)) f.set(k, { t: inferT(v[k], depth + 1), c: 1 }); t.obj = { n: 1, fields: f }; }
+            return t;
+        }
+        const isPureObj = (t) => !!t.obj && !t.arr && !t.str && !t.int && !t.num && !t.bool && !t.null;
+        const kindsOf = (t) => ['str', 'int', 'num', 'bool', 'obj', 'arr'].filter(k => t[k]);
+
+        // ---- 命名 ----
+        const words = (s) => String(s).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+        function pascal(key) {
+            let s = words(key).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+            if (!s) s = 'Item';
+            if (!/^\p{L}/u.test(s)) s = 'T' + s;
+            return s;
+        }
+        const UNCOUNTABLE = /(News|Series|Species|Data|Info|Information|Metadata|Media|Sheep|Fish|Equipment|Status|Analysis|Address|Class|Process|Access|Business)$/i;
+        // 單數化（陣列元素的型別名稱）；無法單數化就加 Item
+        function singular(n) {
+            let s = n;
+            if (UNCOUNTABLE.test(n)) s = n;
+            else if (/People$/.test(n)) s = n.replace(/People$/, 'Person');
+            else if (/Children$/.test(n)) s = n.replace(/Children$/, 'Child');
+            else if (/(Men|Women)$/.test(n)) s = n.replace(/en$/, 'an');
+            else if (/(Movie|Cookie|Zombie|Genie|Rookie|Selfie|Smoothie|Calorie|Tie|Pie)s$/i.test(n)) s = n.slice(0, -1);
+            else if (/[^aeiouAEIOU]ies$/.test(n)) s = n.slice(0, -3) + 'y';
+            else if (/(ss|x|z|ch|sh)es$/.test(n)) s = n.slice(0, -2);
+            else if (/(us|is|ss)$/.test(n)) s = n;
+            else if (/[^s]s$/.test(n)) s = n.slice(0, -1);
+            return s === n ? n + 'Item' : s;
+        }
+        // 幫每個物件型別取名（前序；同名加數字；保留字加 Type）。回傳 { rootName, decls: [obj] }，obj.name 已寫入
+        function nameAll(T, rootName, reserved) {
+            const used = new Set(), decls = [];
+            const uniq = (base) => { let n = reserved.has(base) ? base + 'Type' : base, i = 2; const b = n; while (used.has(n)) n = b + i++; used.add(n); return n; };
+            const walk = (t, base, fromArr) => {
+                if (t.obj) { t.obj.name = uniq(fromArr ? singular(base) : base); decls.push(t.obj); for (const [k, f] of t.obj.fields) walk(f.t, pascal(k), false); }
+                if (t.arr && t.arr.el) walk(t.arr.el, base, true);
+            };
+            let R = pascal(rootName || 'Root');
+            if (reserved.has(R)) R += 'Type';
+            if (!isPureObj(T)) used.add(R);   // 根是別名時先佔位，避免子型別撞名
+            walk(T, R, false);
+            return { rootName: R, decls };
+        }
+        const TS_RESERVED = new Set(['Array', 'Date', 'Record', 'Object', 'String', 'Number', 'Boolean', 'Map', 'Set', 'Promise', 'Partial', 'Error', 'Function', 'Symbol']);
+        const PY_RESERVED = new Set(['Any', 'Optional', 'Union', 'List', 'Dict', 'dataclass', 'field', 'None', 'True', 'False']);
+        const NO_RESERVED = new Set();
+        const jsKey = (k) => /^[A-Za-z_$][\w$]*$/.test(k) ? k : JSON.stringify(k);
+
+        // ---- TypeScript ----
+        function toTS(T, o = {}) {
+            const { rootName, decls } = nameAll(T, o.name, TS_RESERVED), ex = o.exp ? 'export ' : '';
+            const tp = (t) => {
+                const p = [];
+                if (t.str) p.push('string'); if (t.int || t.num) p.push('number'); if (t.bool) p.push('boolean');
+                if (t.obj) p.push(t.obj.name);
+                if (t.arr) { if (!t.arr.el) p.push('unknown[]'); else { const e = tp(t.arr.el); p.push(e.length > 1 ? `(${e.join(' | ')})[]` : (e[0] || 'unknown') + '[]'); } }
+                if (t.null) p.push('null');
+                return p;
+            };
+            const te = (t) => tp(t).join(' | ') || 'unknown';
+            const out = [];
+            if (!isPureObj(T)) out.push(`${ex}type ${rootName} = ${te(T)};`);
+            for (const d of decls) {
+                const body = [...d.fields].map(([k, f]) => `  ${jsKey(k)}${f.c < d.n ? '?' : ''}: ${te(f.t)};`).join('\n');
+                out.push(o.kind === 'type' ? `${ex}type ${d.name} = {${body ? '\n' + body + '\n' : ''}};` : `${ex}interface ${d.name} {${body ? '\n' + body + '\n' : ''}}`);
+            }
+            return out.join('\n\n') + '\n';
+        }
+
+        // ---- JSON Schema（draft 2020-12） ----
+        function schemaOf(t, fmt) {
+            const ty = [];
+            if (t.str) ty.push('string'); if (t.num) ty.push('number'); else if (t.int) ty.push('integer');
+            if (t.bool) ty.push('boolean'); if (t.obj) ty.push('object'); if (t.arr) ty.push('array'); if (t.null) ty.push('null');
+            const s = {};
+            if (ty.length) s.type = ty.length === 1 ? ty[0] : ty;
+            if (t.str && fmt && ['date-time', 'date', 'email', 'uri', 'uuid'].includes(t.str.fmt)) s.format = t.str.fmt;
+            if (t.obj) {
+                s.properties = Object.fromEntries([...t.obj.fields].map(([k, f]) => [k, schemaOf(f.t, fmt)]));   // ponytail: fromEntries 遇 __proto__ 鍵會建成自有屬性，沒有原型污染
+                const req = [...t.obj.fields].filter(([, f]) => f.c >= t.obj.n).map(([k]) => k);
+                if (req.length) s.required = req;
+            }
+            if (t.arr) s.items = t.arr.el ? schemaOf(t.arr.el, fmt) : {};
+            return s;
+        }
+        function toJSONSchema(T, o = {}) {
+            const s = schemaOf(T, !!o.fmt);
+            return JSON.stringify({ $schema: 'https://json-schema.org/draft/2020-12/schema', title: pascal(o.name || 'Root'), ...s }, null, 2) + '\n';
+        }
+
+        // ---- Mongoose ----
+        function toMongoose(T, o = {}) {
+            const { rootName, decls } = nameAll(T, o.name, NO_RESERVED);
+            const rootObj = isPureObj(T) ? T.obj : T.arr && !T.str && !T.obj && !T.int && !T.num && !T.bool && !T.null && T.arr.el && isPureObj(T.arr.el) ? T.arr.el.obj : null;
+            if (!rootObj) return '// 根節點不是物件（或物件陣列），無法產生 Mongoose Schema\n';
+            const mt = (t) => {
+                const k = kindsOf(t);
+                if (k.length !== 1) return 'Schema.Types.Mixed';
+                if (t.str) return t.str.oid ? 'Schema.Types.ObjectId' : ['date-time', 'date'].includes(t.str.fmt) ? 'Date' : 'String';
+                if (t.int || t.num) return 'Number'; if (t.bool) return 'Boolean';
+                if (t.obj) return t.obj.name + 'Schema';
+                return `[${t.arr.el ? mt(t.arr.el) : 'Schema.Types.Mixed'}]`;
+            };
+            const blocks = [];
+            for (const d of decls.slice().reverse()) {   // 子文件在前
+                const lines = [];
+                for (const [k, f] of d.fields) {
+                    if (o.timestamps && d === rootObj && (k === 'createdAt' || k === 'updatedAt')) continue;
+                    const ty = mt(f.t), req = f.c >= d.n && !f.t.null && !f.t.arr;
+                    lines.push(`  ${jsKey(k)}: ${req ? `{ type: ${ty}, required: true }` : ty},`);
+                }
+                blocks.push(`const ${d.name}Schema = new Schema({${lines.length ? '\n' + lines.join('\n') + '\n' : ''}}${d === rootObj && o.timestamps ? ', { timestamps: true }' : ''});`);
+            }
+            return `const mongoose = require('mongoose');\nconst { Schema } = mongoose;\n\n${blocks.join('\n\n')}\n\nmodule.exports = mongoose.model(${JSON.stringify(rootObj.name)}, ${rootObj.name}Schema);\n`;
+        }
+
+        // ---- Python dataclass ----
+        const PY_KW = new Set(['False', 'None', 'True', 'and', 'as', 'assert', 'async', 'await', 'break', 'class', 'continue', 'def', 'del', 'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if', 'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass', 'raise', 'return', 'try', 'while', 'with', 'yield', 'match', 'case', 'type']);
+        const PY_SHADOW = new Set(['field', 'dataclass', 'str', 'int', 'float', 'bool', 'list', 'Any', 'Optional', 'Union']);
+        function toPython(T, o = {}) {
+            const { rootName, decls } = nameAll(T, o.name, PY_RESERVED), imp = new Set(['dataclass']);
+            const clsNames = new Set(decls.map(d => d.name));
+            const pt = (t) => {
+                const p = [];
+                if (t.str) p.push('str'); if (t.num) p.push('float'); else if (t.int) p.push('int'); if (t.bool) p.push('bool');
+                if (t.obj) p.push(t.obj.name);
+                if (t.arr) p.push(`list[${t.arr.el ? pt(t.arr.el) : (imp.add('Any'), 'Any')}]`);
+                if (!p.length) return t.null ? 'None' : (imp.add('Any'), 'Any');
+                if (p.length === 1) return t.null ? (imp.add('Optional'), `Optional[${p[0]}]`) : p[0];
+                imp.add('Union'); return `Union[${p.join(', ')}${t.null ? ', None' : ''}]`;
+            };
+            const blocks = [];
+            for (const d of decls.slice().reverse()) {
+                const used = new Set(), req = [], opt = [];
+                for (const [k, f] of d.fields) {
+                    let n = k.replace(/[^\p{L}\p{N}_]/gu, '_') || 'field';
+                    if (!/^[\p{L}_]/u.test(n)) n = '_' + n;
+                    if (PY_KW.has(n) || PY_SHADOW.has(n) || clsNames.has(n)) n += '_';   // 欄位名稱不能蓋掉 field / int / 類別名稱，否則後面的欄位定義會壞掉
+                    const base = n; let i = 2; while (used.has(n)) n = base + '_' + i++;
+                    used.add(n);
+                    const isOpt = f.c < d.n; let ty = pt(f.t);
+                    if (isOpt && !f.t.null) { imp.add('Optional'); ty = `Optional[${ty}]`; }
+                    const meta = n !== k ? `metadata={"json": ${JSON.stringify(k)}}` : '';
+                    if (meta) imp.add('field');
+                    (isOpt ? opt : req).push(`    ${n}: ${ty}${isOpt ? ` = ${meta ? `field(default=None, ${meta})` : 'None'}` : meta ? ` = field(${meta})` : ''}`);
+                }
+                const body = [...req, ...opt];
+                blocks.push(`@dataclass\nclass ${d.name}:\n${body.length ? body.join('\n') : '    pass'}`);
+            }
+            if (!isPureObj(T)) blocks.push(`${rootName} = ${pt(T)}`);
+            const std = ['dataclass', 'field'].filter(x => imp.has(x)), typ = ['Any', 'Optional', 'Union'].filter(x => imp.has(x));
+            return `from dataclasses import ${std.join(', ')}\n${typ.length ? `from typing import ${typ.join(', ')}\n` : ''}\n\n${blocks.join('\n\n\n')}\n`;
+        }
+
+        // ---- Go struct ----
+        const GO_INIT = new Set(['ACL', 'API', 'ASCII', 'CPU', 'CSS', 'DNS', 'EOF', 'GUID', 'HTML', 'HTTP', 'HTTPS', 'ID', 'IP', 'JSON', 'LHS', 'QPS', 'RAM', 'RHS', 'RPC', 'SLA', 'SMTP', 'SQL', 'SSH', 'TCP', 'TLS', 'TTL', 'UDP', 'UI', 'UID', 'UUID', 'URI', 'URL', 'UTF8', 'VM', 'XML', 'XMPP', 'XSRF', 'XSS']);
+        // 欄位名稱 → 大駝峰，常見縮寫保持大寫（user_id → UserID、imageUrl → ImageURL）
+        function goName(key) {
+            const ws = String(key).match(/\p{Lu}+(?!\p{Ll})|\p{Lu}?\p{Ll}+|\p{N}+|\p{L}+/gu) || [];
+            let s = ws.map(w => { const u = w.toUpperCase(); return GO_INIT.has(u) ? u : /^\p{Lu}{2,}$/u.test(w) ? w.charAt(0) + w.slice(1).toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1); }).join('');
+            if (!s) s = 'Field';
+            if (!/^[A-Z]/.test(s)) s = 'X' + s;
+            return s;
+        }
+        const goTag = (key, omit) => {
+            if (!key || /[,\u0000-\u001f]/.test(key)) return null;   // 空鍵名或含逗號 / 控制字元：tag 無法表示
+            const tag = `json:${JSON.stringify(key + (omit ? ',omitempty' : ''))}`;
+            return tag.includes('`') ? JSON.stringify(tag) : '`' + tag + '`';
+        };
+        function toGo(T, o = {}) {
+            const { rootName, decls } = nameAll(T, o.name, NO_RESERVED);
+            const gt = (t, ptr) => {
+                const k = kindsOf(t);
+                if (k.length !== 1) return 'interface{}';
+                const b = t.str ? 'string' : t.num ? 'float64' : t.int ? 'int' : t.bool ? 'bool' : t.obj ? t.obj.name : `[]${t.arr.el ? gt(t.arr.el, false) : 'interface{}'}`;
+                return (ptr || t.null) && !t.arr ? '*' + b : b;
+            };
+            const blocks = [];
+            if (!isPureObj(T)) blocks.push(`type ${rootName} ${gt(T, false)}`);
+            for (const d of decls) {
+                const used = new Set(), rows = [];
+                for (const [k, f] of d.fields) {
+                    let n = goName(k); const base = n; let i = 2; while (used.has(n)) n = base + i++;
+                    used.add(n);
+                    const omit = f.c < d.n, tag = goTag(k, omit), ty = gt(f.t, omit);
+                    rows.push([n, ty, tag ? tag : '', tag ? '' : (k === '' || /,/.test(k) ? '// 鍵名無法寫進 json tag（空字串或含逗號）' : '// 鍵名含控制字元，無法寫進 json tag')]);
+                }
+                const w0 = Math.max(0, ...rows.map(r => r[0].length)), w1 = Math.max(0, ...rows.map(r => r[1].length));
+                const lines = rows.map(r => '\t' + [r[0].padEnd(w0), (r[2] || r[3]) ? r[1].padEnd(w1) : r[1], r[2] || r[3]].join(' ').trimEnd());
+                blocks.push(`type ${d.name} struct {${lines.length ? '\n' + lines.join('\n') + '\n' : ''}}`);
+            }
+            return blocks.join('\n\n') + '\n';
+        }
+
+        // 主入口：value 是已解析的 JSON；lang：ts / schema / mongoose / python / go
+        function generateTypes(value, lang, opts = {}) {
+            const T = inferT(value);
+            switch (lang) {
+                case 'ts': return toTS(T, opts);
+                case 'schema': return toJSONSchema(T, opts);
+                case 'mongoose': return toMongoose(T, opts);
+                case 'python': return toPython(T, opts);
+                case 'go': return toGo(T, opts);
+            }
+            throw new Error('未知的輸出語言');
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -523,6 +806,27 @@
         $('#viewTree').onclick = () => view(true);
         $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), result, () => { });
         $('#toIn').onclick = () => { $('#in').value = result; };
+
+        // ---------- 產生型別 ----------
+        let tyText = '';
+        const tyStatus = (msg, cls) => { const e = $('#tyStatus'); e.className = cls || ''; e.textContent = msg; };
+        const tyOpts = () => { const l = $('#tyLang').value; [...document.querySelectorAll('#tyOpts [data-for]')].forEach(e => { e.hidden = e.dataset.for !== l; }); };
+        $('#tyLang').onchange = () => { tyOpts(); if (tyText) $('#tyGo').click(); };
+        $('#tyGo').onclick = () => {
+            const text = $('#in').value, out = $('#tyOut');
+            tyText = ''; out.hidden = true; $('#tyCopy').hidden = true;
+            if (!text.trim()) return tyStatus('請先在上方貼上 JSON 範例', 'err');
+            if (text.length > 2000000) return tyStatus('✗ 範例太大（超過 200 萬字元），請縮小後再產生', 'err');
+            const r = formatJSON(text, { mode: 'check' });
+            if (!r.ok) return tyStatus(`✗ 輸入不是有效的 JSON：${r.hint || r.message}${r.line ? `（第 ${r.line} 行、第 ${r.col} 欄）` : ''}`, 'err');
+            try {
+                tyText = generateTypes(r.value, $('#tyLang').value, { name: $('#tyName').value, kind: $('#tyKind').value, exp: $('#tyExport').checked, fmt: $('#tyFmt').checked, timestamps: $('#tyTs').checked });
+            } catch (e) { return tyStatus(`✗ ${e.message}`, 'err'); }
+            out.textContent = tyText; out.hidden = false; $('#tyCopy').hidden = false;
+            tyStatus('✓ 已產生，推論自你貼上的範例；範例沒出現的情況（例如欄位其實會是別的型別）請自行補上', 'ok');
+        };
+        $('#tyCopy').onclick = () => Util.copyWithFeedback($('#tyCopy'), tyText, () => { });
+        tyOpts();
     </script>
 </body>
 

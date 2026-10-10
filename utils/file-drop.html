@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="跨裝置傳檔 / 傳文字：兩台裝置打開同一個連結，點對點互傳檔案與文字，不經過伺服器、不留存。">
+    <meta property="og:title" content="跨裝置傳檔 / 傳文字" />
+    <meta property="og:description" content="手機與電腦互傳檔案、文字與連結；點對點傳輸，不經伺服器。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/file-drop.html" />
+    <title>跨裝置傳檔 / 傳文字</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root { --wrap-w: 720px; }
+        [hidden] { display: none !important; }
+        label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+        input, textarea { width: 100%; font-size: 16px; }
+        textarea { min-height: 96px; resize: vertical; }
+        .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+        .btns button { flex: 1 1 140px; }
+        .code { font-size: 28px; font-weight: 700; letter-spacing: .12em; font-variant-numeric: tabular-nums; text-align: center; margin: 4px 0; }
+        .err { color: var(--bad); margin: 10px 0 0; font-size: 14px; }
+        .ok { color: var(--ok); }
+        .bad { color: var(--bad); }
+        .dz { border: 2px dashed var(--line); border-radius: var(--radius-sm); padding: 18px 12px; text-align: center; color: var(--muted); margin-top: 8px; }
+        .dz.over { border-color: var(--blue); color: var(--text); }
+        .dz button { width: 100%; min-height: 56px; font-size: 17px; margin-top: 8px; }
+        @media (pointer: coarse) { .dz { border: 0; padding: 0; } .dz .dtxt { display: none; } }
+        .xf { padding: 10px 0; border-top: 1px solid var(--line); }
+        .xf:first-child { border-top: 0; }
+        .xtop { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+        .xn { word-break: break-all; font-size: 15px; min-width: 0; flex: 1; }
+        .bar { height: 10px; background: var(--fill); border-radius: 5px; overflow: hidden; margin: 8px 0 4px; }
+        .bar i { display: block; height: 100%; width: 0; background: var(--blue); }
+        .xs { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; word-break: break-all; }
+        .xb { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+        .msg { padding: 8px 10px; border-radius: var(--radius-sm); margin: 8px 0; background: var(--fill); }
+        .msg.out { border-left: 4px solid var(--blue); }
+        .msg.in { border-left: 4px solid var(--ok); }
+        .msg pre { margin: 0 0 6px; white-space: pre-wrap; word-break: break-word; font: inherit; font-size: 15px; max-height: 40vh; overflow: auto; }
+        .msg small { color: var(--muted); }
+        #msgs { max-height: 60vh; overflow: auto; }
+        details summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>跨裝置傳檔 / 傳文字</h1>
+        <p class="sub">兩台裝置打開同一個連結，就能互傳檔案與文字。點對點連線，內容不經過我們的伺服器、也不會留存。</p>
+
+        <!-- ===== 起始 ===== -->
+        <div id="home">
+            <div class="card">
+                <h2>建立房間</h2>
+                <p class="note">在這台裝置建立房間，把連結或 6 碼房號傳給另一台裝置。</p>
+                <div class="btns"><button class="primary" id="createBtn">建立房間</button></div>
+            </div>
+            <div class="card">
+                <h2>加入房間</h2>
+                <input id="codeIn" placeholder="輸入 6 碼房號或貼上邀請連結" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="房號">
+                <div class="btns"><button class="primary" id="joinBtn">加入</button></div>
+            </div>
+            <p class="err" id="homeErr" role="alert" hidden></p>
+        </div>
+
+        <!-- ===== 房間 ===== -->
+        <div id="room" hidden>
+            <div class="card">
+                <p id="stat" role="status"></p>
+                <div class="code" id="roomCode"></div>
+                <input id="link" readonly aria-label="邀請連結">
+                <div class="btns">
+                    <button class="primary" id="copyLink">複製連結</button>
+                    <button class="primary" id="retryBtn" hidden>重新連線</button>
+                    <button id="leaveBtn">離開房間</button>
+                </div>
+                <p class="note">只有 1 對 1：第三位嘗試加入會被拒絕。知道房號的人都能連入，請只把連結傳給信任的人。想把連結做成 QR Code，可用工具箱的 QR Code 產生器。</p>
+            </div>
+
+            <div id="work" hidden>
+                <div class="card">
+                    <h2>傳送檔案</h2>
+                    <div class="dz" id="drop">
+                        <div class="dtxt">把檔案拖放到這裡，或</div>
+                        <button class="primary" id="pickBtn">選擇檔案</button>
+                    </div>
+                    <input type="file" id="pick" multiple hidden>
+                    <p class="note">可一次選多個，依序傳送。單檔上限 500 MB；傳輸中請勿關閉頁面。大檔在手機可能記憶體不足。</p>
+                    <p class="err" id="fileErr" role="alert" hidden></p>
+                </div>
+                <div class="card">
+                    <h2>傳送文字</h2>
+                    <textarea id="txt" aria-label="要傳送的文字" placeholder="貼上文字或連結（單則最多 50,000 字）"></textarea>
+                    <div class="btns">
+                        <button class="primary" id="sendTxt">傳送文字</button>
+                        <button id="pasteBtn">貼上剪貼簿</button>
+                    </div>
+                    <p class="err" id="txtErr" role="alert" hidden></p>
+                    <div id="msgs"></div>
+                    <p class="note">訊息只存在記憶體，最多保留最近 100 則（超過會刪掉最舊的）；離開或重新整理就消失。</p>
+                </div>
+            </div>
+
+            <div class="card" id="xcard" hidden>
+                <h2>傳輸</h2>
+                <div id="xfers"></div>
+            </div>
+            <p class="note" id="ignNote" hidden></p>
+        </div>
+
+        <div class="card">
+            <details>
+                <summary>隱私與安全</summary>
+                <ul class="note">
+                    <li>檔案與文字走 WebRTC 點對點，不經過伺服器；但建立連線時要靠公共 PeerJS 信令服務交換位址。</li>
+                    <li>任何知道房號的人都能連入房間（只允許 1 位）。請只在信任的情況下傳送連結，傳完就離開房間。</li>
+                    <li>收到的檔案只存在記憶體，按「下載」才存到裝置；來路不明的檔案請勿開啟。</li>
+                    <li>傳輸中請勿關閉頁面；某些網路（對稱型 NAT、公司網路）需要 TURN 中繼才連得上，本工具未提供。</li>
+                </ul>
+            </details>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>手機和電腦（或兩台電腦）之間互傳檔案、文字與連結。兩台裝置打開同一個連結後點對點連線（WebRTC），內容不經過我們的伺服器，也不會留存。連線後雙方對等，誰都可以傳。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>手機剛拍的照片要傳到電腦，不想登入雲端或接線。</li>
+        <li>電腦上的一段網址、驗證碼、長文字，要貼到手機。</li>
+        <li>朋友來家裡，臨時互傳檔案。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>其中一台按「建立房間」，會出現 6 碼房號與邀請連結，按「複製連結」傳給另一台（也可以直接念房號；想要 QR Code 可用工具箱的 QR Code 產生器把連結做成圖）。</li>
+        <li>另一台打開連結（房號會自動填好）按「加入」；或在首頁輸入 6 碼房號再按「加入」。</li>
+        <li>連線後看到「對方已加入 / 已連上房主」。按「選擇檔案」（手機可從相簿或檔案選取，可多選）或把檔案拖放到虛線框，就會依序傳送；每個檔案顯示進度、速度與剩餘時間，可按「取消」。</li>
+        <li>對方會看到收到的檔案，按「下載」存到裝置，不要了按「移除」釋放記憶體。</li>
+        <li>傳文字：在「傳送文字」貼上內容（或按「貼上剪貼簿」）再按「傳送文字」；對方可按每則訊息的「複製」。</li>
+        <li>按「離開房間」結束。對方離開時房間仍會開著，可等對方重新加入；房主離開後，另一方按「重新連線」會找不到房間，需要房主重新建立。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">電腦：建立房間 → 房號 K7M2QX → 複製連結傳到手機
+        手機：打開連結 → 按「加入」→ 選 3 張照片 → 逐張顯示「100% · 2.4 MB/s」→ 電腦按「下載」</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>隱私與安全：任何知道房號的人都能連入，只允許 1 位（第三位會被拒絕）；請只把連結傳給信任的人，傳完就離開房間。檔案不經過伺服器，但建立連線時要靠公共 PeerJS 信令服務交換位址。</li>
+        <li>收到的檔案會自動接收進記憶體，按「下載」才存檔；來路不明的檔案請勿開啟。收到的檔名會過濾路徑符號與特殊字元。</li>
+        <li>單檔上限 500 MB，超過會拒絕；暫存的收到檔案最多 30 個、合計 1 GB（請下載後按「移除」）。大檔在手機可能記憶體不足，建議手機端單檔不要太大。</li>
+        <li>傳輸中請勿關閉或重新整理頁面，否則該次傳輸會中斷；每塊資料與整個檔案都做 CRC32 校驗，只能抓出傳輸錯誤，不是加密或防竄改的雜湊。</li>
+        <li>某些網路（對稱型 NAT、公司網路、部分行動網路）需要 TURN 中繼才連得上，本工具未提供；可改用同一個 Wi-Fi 或關閉 VPN。</li>
+        <li>文字訊息只存記憶體，單則最多 50,000 字，最多保留最近 100 則（超過會刪掉最舊的）。本頁不使用 localStorage，沒有任何本機資料；離開頁面即全部消失。</li>
+        <li>收到格式不合的訊息會被忽略，並在頁面下方顯示累計次數。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <script>
+        // --- pure ---
+        const CHUNK = 16 * 1024, HIGH_WATER = 1024 * 1024, LOW_WATER = 256 * 1024;
+        const MAX_FILE = 500 * 1024 * 1024, MAX_TEXT = 50000, MAX_MSGS = 100, MAX_NAME = 120;
+        const MAX_RECV_FILES = 30, MAX_RECV_TOTAL = 1024 ** 3, MAX_ACTIVE_RX = 4, MAX_QUEUE = 50, MAX_ROWS = 100;
+        const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', ID_PREFIX = 'stfd-';
+        const peerIdOf = (code) => ID_PREFIX + code;
+        const makeCode = (rnd) => Array.from({ length: 6 }, () => CODE_CHARS[rnd(CODE_CHARS.length)]).join('');
+        const parseRoom = (s) => {
+            s = String(s == null ? '' : s).trim();
+            const m = s.match(/#([^#\s]*)\s*$/); if (m) s = m[1];
+            s = s.toUpperCase().replace(/^STFD-/, '').replace(/[\s-]/g, '');
+            return /^[ABCDEFGHJKLMNPQRSTUVWXYZ2-9]{6}$/.test(s) ? s : '';
+        };
+
+        // CRC32（逐塊累積：crc32(下一塊, 上一次的結果)；起始 prev = 0）
+        const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+        const crc32 = (bytes, prev = 0) => { let c = (prev ^ 0xFFFFFFFF) >>> 0; for (let i = 0; i < bytes.length; i++) c = CRC_T[(c ^ bytes[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+
+        // 分塊：總塊數、第 i 塊長度（超出範圍 = 0）、把一段資料切成多塊（不複製的 view）
+        const chunkCount = (size, cs = CHUNK) => Number.isSafeInteger(size) && size > 0 ? Math.ceil(size / cs) : 0;
+        const chunkLen = (i, size, cs = CHUNK) => { if (!Number.isInteger(i) || i < 0 || !Number.isSafeInteger(size) || size < 0) return 0; const st = i * cs; return st >= size ? 0 : Math.min(cs, size - st); };
+        const splitChunks = (u8, cs = CHUNK) => { const out = []; for (let p = 0; p < u8.length; p += cs) out.push(u8.subarray(p, Math.min(u8.length, p + cs))); return out; };
+
+        // 訊息驗證：回傳只含已知欄位的乾淨物件，不合法回傳 null（呼叫端忽略並計數）
+        const ID_RE = /^[A-Za-z0-9]{6,24}$/;
+        const isId = (x) => typeof x === 'string' && ID_RE.test(x);
+        const isInt = (n, lo, hi) => Number.isInteger(n) && n >= lo && n <= hi;
+        const isBuf = (d) => Object.prototype.toString.call(d) === '[object ArrayBuffer]' || ArrayBuffer.isView(d);
+        const toU8 = (d) => ArrayBuffer.isView(d) ? new Uint8Array(d.buffer, d.byteOffset, d.byteLength) : new Uint8Array(d);
+        const REJECT_WHY = ['too-big', 'busy', 'full'];
+        const validateMsg = (m) => {
+            if (!m || typeof m !== 'object' || Array.isArray(m) || isBuf(m) || typeof m.t !== 'string') return null;
+            const t = m.t;
+            switch (t) {
+                case 'hi': return isInt(m.v, 1, 99) ? { t, v: m.v } : null;
+                case 'full': return { t };
+                case 'text': return isId(m.id) && typeof m.s === 'string' && m.s.length >= 1 && m.s.length <= MAX_TEXT ? { t, id: m.id, s: m.s } : null;
+                case 'offer': return isId(m.id) && typeof m.name === 'string' && m.name.length >= 1 && m.name.length <= 1000 && isInt(m.size, 0, Number.MAX_SAFE_INTEGER) ? { t, id: m.id, name: m.name, size: m.size } : null;
+                case 'accept': case 'cancel': return isId(m.id) ? { t, id: m.id } : null;
+                case 'reject': return isId(m.id) ? { t, id: m.id, why: REJECT_WHY.includes(m.why) ? m.why : 'other' } : null;
+                case 'chunk': return isId(m.id) && isInt(m.seq, 0, 2 ** 31) && isInt(m.c, 0, 0xFFFFFFFF) && isBuf(m.d) && m.d.byteLength >= 1 && m.d.byteLength <= CHUNK ? { t, id: m.id, seq: m.seq, c: m.c, d: toU8(m.d) } : null;
+                case 'done': return isId(m.id) && isInt(m.n, 0, 2 ** 31) && isInt(m.crc, 0, 0xFFFFFFFF) ? { t, id: m.id, n: m.n, crc: m.crc } : null;
+                case 'result': return isId(m.id) && typeof m.ok === 'boolean' ? { t, id: m.id, ok: m.ok } : null;
+                default: return null;
+            }
+        };
+
+        // 接收端：依宣告大小重組。塊序號必須連續、長度與宣告一致、每塊 CRC 正確；done 時再比對塊數與總 CRC
+        const rxNew = (size) => ({ size, n: chunkCount(size), next: 0, got: 0, crc: 0, parts: [], state: 'recv' });
+        const rxChunk = (st, m) => {           // 回傳 '' = 收下；否則是原因（dup 只是重複，可忽略；其他代表這次傳輸壞了）
+            if (st.state !== 'recv') return 'state';
+            if (m.seq < st.next) return 'dup';
+            if (m.seq > st.next) return 'gap';
+            if (m.seq >= st.n || m.d.length !== chunkLen(m.seq, st.size)) return 'size';
+            if (crc32(m.d) !== m.c) return 'crc';
+            st.parts.push(m.d); st.got += m.d.length; st.crc = crc32(m.d, st.crc); st.next++; return '';
+        };
+        const rxDone = (st, m) => {
+            if (st.state !== 'recv') return 'state';
+            if (st.next !== st.n || st.got !== st.size || m.n !== st.n) return 'incomplete';
+            if (m.crc !== st.crc) return 'crc';
+            st.state = 'done'; return '';
+        };
+        const RX_WHY = { gap: '收到的資料缺塊或亂序', size: '資料大小與宣告不符', crc: '資料校驗（CRC32）不符', incomplete: '資料不完整', state: '傳輸狀態錯誤' };
+
+        // 檔名安全：去控制字元 / 雙向文字控制字元、路徑分隔與 Windows 非法字元，去前後空白與點，保留副檔名縮短到 MAX_NAME，處理 Windows 保留字
+        const WIN_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+        const safeName = (name, fallback = 'file') => {
+            let s = typeof name === 'string' ? name : '';
+            s = s.normalize('NFC').replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/g, '').replace(/[\\/:*?"<>|]/g, '_').replace(/^[\s.]+|[\s.]+$/g, '');
+            if (!s) return fallback;
+            const dot = s.lastIndexOf('.'); let base = dot > 0 ? s.slice(0, dot) : s, ext = dot > 0 ? s.slice(dot) : '';
+            if (Array.from(ext).length > 20) { base = s; ext = ''; }
+            if (WIN_RESERVED.test(base.split('.')[0].trim())) base = '_' + base;
+            const cps = Array.from(base), room = MAX_NAME - Array.from(ext).length;
+            if (cps.length > room) base = cps.slice(0, Math.max(1, room)).join('').replace(/[\s.]+$/, '');
+            return base ? base + ext : fallback;
+        };
+
+        // 速度 / 剩餘時間
+        const rateTick = (st, bytes, now) => { if (!st) return { t: now, b: bytes, rate: 0 }; const dt = now - st.t; if (dt < 500) return st; const inst = Math.max(0, bytes - st.b) / dt * 1000; return { t: now, b: bytes, rate: st.rate ? st.rate * 0.7 + inst * 0.3 : inst }; };
+        const etaSec = (remain, rate) => rate > 0 && remain >= 0 ? Math.ceil(remain / rate) : Infinity;
+        const fmtBytes = (b) => { b = Math.max(0, +b || 0); return b < 1024 ? `${Math.round(b)} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : b < 1073741824 ? `${(b / 1048576).toFixed(1)} MB` : `${(b / 1073741824).toFixed(2)} GB`; };
+        const fmtSpeed = (bps) => bps > 0 ? fmtBytes(bps) + '/s' : '—';
+        const fmtEta = (s) => !isFinite(s) || s < 0 ? '—' : s < 60 ? `${s} 秒` : s < 3600 ? `${Math.floor(s / 60)} 分 ${s % 60} 秒` : `${Math.floor(s / 3600)} 小時 ${Math.floor(s % 3600 / 60)} 分`;
+        const needDrain = (buffered, high = HIGH_WATER) => buffered >= high;          // 背壓：送出緩衝達高水位就等 bufferedamountlow
+
+        // 傳輸狀態機：offered（等對方接受）→ active → verifying（送端等對方驗證）→ done；終點狀態不再變動
+        const TX = {
+            offered: { accept: 'active', reject: 'rejected', cancel: 'cancelled', error: 'failed' },
+            active: { finish: 'verifying', ok: 'done', bad: 'failed', cancel: 'cancelled', error: 'failed' },
+            verifying: { ok: 'done', bad: 'failed', cancel: 'cancelled', error: 'failed' },
+        };
+        const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);          // 擋 'constructor' / '__proto__' 這類繼承來的鍵
+        const txNext = (state, ev) => has(TX, state) && has(TX[state], ev) ? TX[state][ev] : state;
+        const txLive = (state) => has(TX, state);
+        // 接收端要不要收這個檔案：回傳 '' 或拒絕原因
+        const canAcceptOffer = (st, size) => size > MAX_FILE ? 'too-big' : st.active >= MAX_ACTIVE_RX ? 'busy' : (st.files >= MAX_RECV_FILES || st.total + size > MAX_RECV_TOTAL) ? 'full' : '';
+        const REJECT_TXT = { 'too-big': '檔案超過 500 MB 上限', busy: '對方同時接收太多檔案，請稍後再傳', full: '對方暫存的檔案太多（請先下載並移除）', other: '對方拒絕接收' };
+        const diagnose = (kind) => ({
+            'peer-unavailable': '找不到這個房號：請確認房號，並確認對方的房間還開著。',
+            timeout: '連線逾時：請確認房號與網路。',
+            'ice-failed': '連不上對方：這種網路環境可能需要 TURN 中繼，本工具未提供。可試試同一個 Wi-Fi、關閉 VPN，或換一個網路。',
+            full: '房間已滿：這個房間只能 1 對 1，已經有人在裡面了。',
+            host: '房主已離開，房間已關閉。',
+            lost: '與對方的連線中斷。',
+            'load-failed': '無法載入連線元件（PeerJS），請確認網路後重新整理。',
+        }[kind] || '無法連上連線伺服器或連線失敗，請檢查網路後再試。');
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const setHidden = (sel, h) => { $(sel).hidden = h; };
+        const closeSafe = (o) => { try { o && o.close(); } catch (e) { } };
+        const ICE_CFG = () => ({ iceServers: P2PRoom.ICE });
+        const newId = () => Util.randomHex(8);
+        P2PRoom.loadPeer().catch(() => { });
+
+        // ---------- 連線 ----------
+        let peer = null, conn = null, isHost = false, myCode = '', lastCode = '', ready = false, ignored = 0, openTimer = 0, gen = 0;
+        const T = new Map(), queue = [];
+        let uploading = false;
+        const send = (c, m) => { try { c && c.open !== false && c.send(m); } catch (e) { } };
+        const bad = () => { ignored = Math.min(ignored + 1, 99999); $('#ignNote').textContent = `已忽略 ${ignored} 則異常訊息（格式不符或不合規則）。`; setHidden('#ignNote', false); };
+        const say = (msg, isBad) => { const e = $('#stat'); e.textContent = msg; e.className = isBad ? 'bad' : ''; };
+        const homeErr = (m) => { $('#homeErr').textContent = m; setHidden('#homeErr', !m); };
+        function showRoom(code) {
+            setHidden('#home', true); setHidden('#room', false); $('#roomCode').textContent = code; $('#link').value = P2PRoom.inviteLink(code);
+            setHidden('#retryBtn', true); setHidden('#work', true);
+        }
+        function view() { setHidden('#work', !ready); setHidden('#xcard', !T.size); }
+        function teardown() {
+            gen++; clearTimeout(openTimer); ready = false;
+            for (const t of T.values()) if (txLive(t.state)) setState(t, 'error', '連線中斷');
+            const c = conn, p = peer; conn = null; peer = null; closeSafe(c); try { p && p.destroy(); } catch (e) { }
+        }
+        function toHome(err) { teardown(); isHost = false; setHidden('#room', true); setHidden('#home', false); homeErr(err || ''); }
+        function attach(c) {
+            conn = c; ready = false; clearTimeout(openTimer);
+            c.on('data', (m) => onData(c, m));
+            c.on('close', () => onClose(c));
+            c.on('error', () => { });
+            send(c, { t: 'hi', v: 1 }); say('已連上，正在確認對方…');
+        }
+        function onClose(c) {
+            if (conn !== c) return;
+            const wasReady = ready; conn = null; ready = false;
+            for (const t of T.values()) if (txLive(t.state)) setState(t, 'error', '連線中斷，傳輸未完成');
+            if (isHost) say(wasReady ? '對方已離開。房間還開著，對方重新打開連結即可再加入。' : '等待對方加入…', wasReady);
+            else { say(diagnose(wasReady ? 'host' : 'lost'), true); setHidden('#retryBtn', false); }
+            view();
+        }
+        function openHost(Peer, tries = 0) {
+            return new Promise((resolve, reject) => {
+                const code = makeCode(Util.rnd), p = new Peer(peerIdOf(code), { debug: 1, config: ICE_CFG() });
+                p.on('open', () => {
+                    peer = p; myCode = code;
+                    p.on('connection', onIncoming);
+                    p.on('disconnected', () => { try { if (peer === p && !p.destroyed) p.reconnect(); } catch (e) { } });
+                    p.on('error', (e) => { if (peer === p && e.type !== 'peer-unavailable') say(diagnose(e.type), true); });
+                    resolve();
+                });
+                p.on('error', (e) => { if (peer === p) return; try { p.destroy(); } catch (x) { } if (e.type === 'unavailable-id' && tries < 5) openHost(Peer, tries + 1).then(resolve, reject); else reject(e); });
+            });
+        }
+        function onIncoming(c) {
+            const go = () => {
+                if (conn && conn.open) { send(c, { t: 'full' }); setTimeout(() => closeSafe(c), 300); return; }          // 1 對 1：第三人被拒
+                attach(c);
+            };
+            if (c.open) go(); else c.on('open', go);
+            c.on('error', () => { });
+        }
+        async function createRoom() {
+            homeErr(''); teardown(); isHost = true; const my = gen;
+            let Peer; try { Peer = await P2PRoom.loadPeer(); } catch (e) { return toHome(diagnose('load-failed')); }
+            try { await openHost(Peer); } catch (e) { return toHome(diagnose(e && e.type)); }
+            if (my !== gen) return;
+            showRoom(myCode); say('房間已建立，等待對方加入…（把連結或房號傳給對方）');
+        }
+        async function joinRoom(code) {
+            homeErr(''); teardown(); isHost = false; lastCode = code; const my = gen;
+            showRoom(code); say('連線中…');
+            let Peer; try { Peer = await P2PRoom.loadPeer(); } catch (e) { return toHome(diagnose('load-failed')); }
+            if (my !== gen) return;
+            const p = peer = new Peer({ debug: 1, config: ICE_CFG() });
+            const fail = (kind) => { if (peer !== p || my !== gen) return; clearTimeout(openTimer); const keep = kind !== 'full'; closeSafe(conn); conn = null; try { p.destroy(); } catch (e) { } peer = null; say(diagnose(kind), true); setHidden('#retryBtn', !keep); };
+            p.on('error', (e) => fail(e.type));
+            p.on('open', () => {
+                const c = p.connect(peerIdOf(code), { reliable: true });
+                openTimer = setTimeout(() => fail('timeout'), 15000);
+                c.on('open', () => attach(c));
+                c.on('error', () => { });
+            });
+        }
+        $('#createBtn').onclick = createRoom;
+        function startJoin() {
+            const code = parseRoom($('#codeIn').value);
+            if (!code) { $('#codeIn').focus(); homeErr('房號是 6 碼英數字（或貼上完整邀請連結）。'); return; }
+            joinRoom(code);
+        }
+        $('#joinBtn').onclick = startJoin;
+        $('#codeIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') startJoin(); });
+        $('#retryBtn').onclick = () => joinRoom(lastCode);
+        $('#leaveBtn').onclick = () => { if ([...T.values()].some(t => txLive(t.state)) && !confirm('還有傳輸進行中，離開會中斷它們。要離開嗎？')) return; for (const t of [...T.values()]) removeT(t); toHome(''); };
+        $('#copyLink').onclick = () => Util.copyWithFeedback($('#copyLink'), $('#link').value);
+
+        // ---------- 訊息處理（所有收到的資料都先驗證）----------
+        function onData(c, raw) {
+            if (c !== conn) return;
+            const m = validateMsg(raw); if (!m) return bad();
+            if (!ready) {
+                if (m.t === 'hi') { ready = true; say(isHost ? '● 對方已加入，可以開始傳送' : '● 已連上房主，可以開始傳送'); $('#stat').className = 'ok'; setHidden('#retryBtn', true); view(); }
+                else if (m.t === 'full') { conn = null; closeSafe(c); try { peer && peer.destroy(); } catch (e) { } peer = null; say(diagnose('full'), true); setHidden('#retryBtn', true); }
+                else bad();
+                return;
+            }
+            switch (m.t) {
+                case 'hi': case 'full': return;
+                case 'text': return addMsg('in', m.s);
+                case 'offer': return onOffer(m);
+                case 'accept': { const t = T.get(m.id); if (!t || t.dir !== 'up' || t.state !== 'offered') return bad(); return setState(t, 'accept'); }
+                case 'reject': { const t = T.get(m.id); if (!t || t.dir !== 'up' || t.state !== 'offered') return bad(); return setState(t, 'reject', REJECT_TXT[m.why]); }
+                case 'cancel': { const t = T.get(m.id); if (!t || !txLive(t.state)) return bad(); return setState(t, 'cancel', '對方已取消'); }
+                case 'chunk': {
+                    const t = T.get(m.id); if (!t || t.dir !== 'down' || t.state !== 'active') return bad();
+                    const r = rxChunk(t.rx, m);
+                    if (r === 'dup') return bad();
+                    if (r) { bad(); send(conn, { t: 'cancel', id: t.id }); return setState(t, 'error', RX_WHY[r] || '傳輸錯誤'); }
+                    t.done = t.rx.got; return touch(t);
+                }
+                case 'done': {
+                    const t = T.get(m.id); if (!t || t.dir !== 'down' || t.state !== 'active') return bad();
+                    const r = rxDone(t.rx, m);
+                    if (r) { send(conn, { t: 'result', id: t.id, ok: false }); return setState(t, 'bad', RX_WHY[r] || '驗證失敗'); }
+                    t.blob = new Blob(t.rx.parts); t.rx = null; send(conn, { t: 'result', id: t.id, ok: true }); return setState(t, 'ok');
+                }
+                case 'result': {
+                    const t = T.get(m.id); if (!t || t.dir !== 'up' || t.state !== 'verifying') return bad();
+                    return setState(t, m.ok ? 'ok' : 'bad', '對方驗證失敗（資料不一致）');
+                }
+            }
+        }
+        function rxStats() {
+            let active = 0, files = 0, total = 0;
+            for (const t of T.values()) if (t.dir === 'down') { if (t.state === 'active') { active++; total += t.size; } else if (t.blob) { files++; total += t.size; } }
+            return { active, files, total };
+        }
+        function onOffer(m) {
+            if (T.has(m.id)) return bad();
+            const why = canAcceptOffer(rxStats(), m.size), name = safeName(m.name);
+            if (why) { send(conn, { t: 'reject', id: m.id, why }); const t = addT({ id: m.id, dir: 'down', name, size: m.size }); return setState(t, 'error', '已拒絕：' + REJECT_TXT[why]); }
+            const t = addT({ id: m.id, dir: 'down', name, size: m.size, state: 'active' }); t.rx = rxNew(m.size);
+            send(conn, { t: 'accept', id: m.id });
+        }
+
+        // ---------- 傳輸列 ----------
+        function addT(o) {
+            const t = Object.assign({ state: 'offered', done: 0, rate: null, why: '', blob: null, el: null, pend: 0 }, o);
+            T.set(t.id, t); buildRow(t); pruneRows(); view(); renderT(t); return t;
+        }
+        function buildRow(t) {
+            const el = document.createElement('div'); el.className = 'xf'; el.dataset.id = t.id;
+            el.innerHTML = '<div class="xtop"><span class="xn"></span><button class="sm xc">取消</button></div><div class="bar"><i></i></div><div class="xs"></div><div class="xb"><button class="primary sm xd" hidden>下載</button><button class="sm xr" hidden>移除</button></div>';
+            el.querySelector('.xc').onclick = () => cancelT(t);
+            el.querySelector('.xd').onclick = () => { if (t.blob) Util.download(t.blob, t.name); };
+            el.querySelector('.xr').onclick = () => removeT(t);
+            t.el = el; $('#xfers').prepend(el);
+        }
+        function renderT(t) {
+            const el = t.el; if (!el) return;
+            const pct = t.size ? Math.min(100, Math.round(t.done / t.size * 100)) : (t.state === 'done' ? 100 : 0);
+            el.querySelector('.xn').textContent = `${t.dir === 'up' ? '⬆ 傳出' : '⬇ 收到'}　${t.name}（${fmtBytes(t.size)}）`;
+            el.querySelector('.bar i').style.width = (t.state === 'done' ? 100 : pct) + '%';
+            const rate = t.rate ? t.rate.rate : 0;
+            el.querySelector('.xs').textContent = ({
+                offered: '等待對方接受…',
+                active: `${pct}% · ${fmtBytes(t.done)} · ${fmtSpeed(rate)} · 剩餘 ${fmtEta(etaSec(t.size - t.done, rate))}`,
+                verifying: '已全部送出，等待對方驗證（CRC32）…',
+                done: t.dir === 'up' ? '✓ 對方已收到，CRC32 驗證通過' : '✓ 已完成，CRC32 驗證通過，可下載',
+                failed: '✗ ' + (t.why || '傳輸失敗'),
+                cancelled: '已取消' + (t.why ? '：' + t.why : ''),
+                rejected: '✗ ' + (t.why || '對方拒絕接收'),
+            })[t.state] || '';
+            el.querySelector('.xc').hidden = !txLive(t.state);
+            el.querySelector('.xd').hidden = !(t.dir === 'down' && t.state === 'done' && t.blob);
+            el.querySelector('.xr').hidden = txLive(t.state);
+        }
+        function touch(t) {
+            t.rate = rateTick(t.rate, t.done, performance.now());
+            if (!t.pend) t.pend = setTimeout(() => { t.pend = 0; renderT(t); }, 100);
+        }
+        function setState(t, ev, why) {
+            const was = t.state, next = txNext(was, ev); if (next === was) return;
+            t.state = next; if (why) t.why = why;
+            if (!txLive(next)) { t.rx = null; if (next !== 'done') t.blob = null; }
+            if (was === 'offered' && t.openGate) { t.openGate(); t.openGate = null; }
+            if (next === 'done') t.done = t.size;
+            renderT(t);
+        }
+        function cancelT(t) {
+            if (!txLive(t.state)) return;
+            send(conn, { t: 'cancel', id: t.id }); setState(t, 'cancel');
+        }
+        function removeT(t) { if (txLive(t.state)) { send(conn, { t: 'cancel', id: t.id }); setState(t, 'cancel'); } T.delete(t.id); t.blob = null; t.el && t.el.remove(); view(); }
+        function pruneRows() {            // 列數超過上限時，淘汰最舊的「失敗 / 取消 / 已送出」列（保留可下載的檔案）
+            if (T.size <= MAX_ROWS) return;
+            for (const t of T.values()) { if (T.size <= MAX_ROWS) break; if (!txLive(t.state) && !(t.dir === 'down' && t.state === 'done')) removeT(t); }
+        }
+
+        // ---------- 傳檔 ----------
+        const fileErr = (m) => { $('#fileErr').textContent = m; setHidden('#fileErr', !m); };
+        function enqueue(files) {
+            fileErr('');
+            if (!ready) return fileErr('還沒連線，無法傳送。');
+            const msgs = [];
+            for (const f of files) {
+                if (f.size > MAX_FILE) { msgs.push(`「${f.name}」超過 500 MB 上限，未傳送`); continue; }
+                if (queue.length >= MAX_QUEUE) { msgs.push(`等待傳送的檔案已達 ${MAX_QUEUE} 個上限，其餘未加入`); break; }
+                queue.push(f);
+            }
+            if (msgs.length) fileErr(msgs.join('；') + '。');
+            runQueue();
+        }
+        async function runQueue() {
+            if (uploading) return; uploading = true;
+            try { while (queue.length && ready) await upload(queue.shift()); } finally { uploading = false; queue.length = 0; }
+        }
+        const drain = async (dc) => {
+            while (dc && needDrain(dc.bufferedAmount)) {
+                await new Promise((res) => { const h = () => { dc.removeEventListener('bufferedamountlow', h); res(); }; dc.addEventListener('bufferedamountlow', h); setTimeout(h, 1000); });
+                if (!conn || conn.open === false) return;
+            }
+        };
+        async function upload(file) {
+            const c = conn, t = addT({ id: newId(), dir: 'up', name: safeName(file.name), size: file.size });
+            t.gate = new Promise((res) => { t.openGate = res; });
+            send(c, { t: 'offer', id: t.id, name: file.name, size: file.size });
+            const to = setTimeout(() => setState(t, 'error', '對方沒有回應'), 30000);
+            await t.gate; clearTimeout(to);
+            if (t.state !== 'active') return;
+            const dc = c.dataChannel; if (dc) dc.bufferedAmountLowThreshold = LOW_WATER;
+            let crc = 0, seq = 0, sent = 0;
+            try {
+                for (let off = 0; off < file.size; off += 1048576) {
+                    const block = new Uint8Array(await file.slice(off, off + 1048576).arrayBuffer());
+                    for (const piece of splitChunks(block)) {
+                        if (t.state !== 'active' || conn !== c) return;
+                        await drain(dc);
+                        if (t.state !== 'active' || conn !== c) return;
+                        const cc = crc32(piece); crc = crc32(piece, crc);
+                        c.send({ t: 'chunk', id: t.id, seq: seq++, c: cc, d: piece.slice().buffer });
+                        sent += piece.length; t.done = Math.max(0, sent - (dc ? dc.bufferedAmount : 0)); touch(t);
+                    }
+                }
+                if (t.state !== 'active') return;
+                c.send({ t: 'done', id: t.id, n: seq, crc }); setState(t, 'finish'); t.done = t.size; renderT(t);
+            } catch (e) { send(c, { t: 'cancel', id: t.id }); setState(t, 'error', '讀取或傳送失敗：' + (e && e.message || e)); }
+        }
+        $('#pickBtn').onclick = () => $('#pick').click();
+        $('#pick').onchange = () => { enqueue([...$('#pick').files]); $('#pick').value = ''; };
+        const dz = $('#drop');
+        ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('over'); }));
+        ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove('over'); }));
+        dz.addEventListener('drop', (e) => enqueue([...(e.dataTransfer && e.dataTransfer.files || [])]));
+        // 避免拖到頁面其他地方時瀏覽器直接開啟檔案
+        ['dragover', 'drop'].forEach(ev => window.addEventListener(ev, (e) => e.preventDefault()));
+
+        // ---------- 文字 ----------
+        const msgs = [];
+        const txtErr = (m) => { $('#txtErr').textContent = m; setHidden('#txtErr', !m); };
+        function addMsg(dir, s) {
+            msgs.push({ dir, s, at: new Date() }); while (msgs.length > MAX_MSGS) msgs.shift();
+            const box = $('#msgs'); box.textContent = '';
+            for (const m of msgs) {
+                const d = document.createElement('div'); d.className = 'msg ' + m.dir;
+                const pre = document.createElement('pre'); pre.textContent = m.s;
+                const b = document.createElement('button'); b.className = 'sm'; b.textContent = '複製'; b.onclick = () => Util.copyWithFeedback(b, m.s);
+                const sm = document.createElement('small'); sm.textContent = `${m.dir === 'out' ? '我傳出' : '對方傳來'} ${m.at.toLocaleTimeString()}　`;
+                d.append(pre, sm, b); box.append(d);
+            }
+            box.scrollTop = box.scrollHeight;
+        }
+        $('#sendTxt').onclick = () => {
+            txtErr(''); const s = $('#txt').value;
+            if (!ready) return txtErr('還沒連線，無法傳送。');
+            if (!s.trim()) return txtErr('請先輸入文字。');
+            if (s.length > MAX_TEXT) return txtErr(`文字太長（${s.length.toLocaleString()} 字），單則最多 ${MAX_TEXT.toLocaleString()} 字。`);
+            send(conn, { t: 'text', id: newId(), s }); addMsg('out', s); $('#txt').value = '';
+        };
+        $('#pasteBtn').onclick = async () => {
+            txtErr('');
+            try { const s = await navigator.clipboard.readText(); if (s) $('#txt').value = s; else txtErr('剪貼簿是空的。'); }
+            catch (e) { txtErr('瀏覽器不允許讀取剪貼簿，請長按文字框手動貼上。'); }
+        };
+
+        window.addEventListener('beforeunload', (e) => { if ([...T.values()].some(t => txLive(t.state))) { e.preventDefault(); e.returnValue = ''; } });
+        window.addEventListener('pagehide', () => { try { closeSafe(conn); peer && peer.destroy(); } catch (e) { } });
+
+        // ---------- 初始 ----------
+        { const r = parseRoom(P2PRoom.roomFromUrl()); if (r) { $('#codeIn').value = r; } }
+    </script>
+</body>
+
+</html>

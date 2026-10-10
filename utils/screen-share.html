@@ -34,6 +34,8 @@
         .stage.fs { position: fixed; inset: 0; z-index: 50; border-radius: 0; aspect-ratio: auto; height: 100vh; height: 100dvh; }
         .stage .xfs { position: absolute; left: 12px; top: 12px; z-index: 2; }
         .vrow { gap: 8px; flex-wrap: wrap; }
+        .rec video { width: 100%; max-height: 50vh; background: #000; border-radius: var(--radius-sm); margin-top: 10px; display: block; }
+        .rec .big { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
         details summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
         details h3 { font-size: 15px; margin: 14px 0 4px; }
         details p, details li { font-size: 14px; margin: 4px 0; }
@@ -52,6 +54,7 @@
         <div class="seg" role="group" aria-label="模式">
             <button id="modeShare" aria-pressed="true">我要分享（電腦）</button>
             <button id="modeWatch" aria-pressed="false">我要觀看</button>
+            <button id="modeRec" aria-pressed="false">只錄影（不分享）</button>
         </div>
 
         <!-- ===== 分享端 ===== -->
@@ -77,6 +80,7 @@
                     <option value="0">原始大小</option>
                 </select>
                 <label class="chk"><input type="checkbox" id="audio"> 分享系統聲音（瀏覽器選單裡要勾選才有）</label>
+                <label class="chk"><input type="checkbox" id="recAlso"> 同時錄製這次分享（錄的就是分享出去的畫面，只存在這個分頁的記憶體）</label>
                 <div class="btns">
                     <button class="primary" id="startBtn">開始分享</button>
                     <button id="stopBtn" hidden>停止分享</button>
@@ -130,6 +134,36 @@
             </div>
         </div>
 
+        <!-- ===== 只錄影 ===== -->
+        <div id="recBox" hidden>
+            <div class="card" id="recSetup">
+                <h2>螢幕錄影</h2>
+                <p class="note">錄下螢幕 / 視窗 / 分頁並存成影片檔；不會傳給任何人，錄影只存在這個分頁的記憶體，下載前請勿關閉頁面。單次上限 60 分鐘或 1 GB。</p>
+                <label class="chk"><input type="checkbox" id="recSys"> 錄系統聲音（瀏覽器選單裡要勾選才有）</label>
+                <label class="chk"><input type="checkbox" id="recMic"> 混入麥克風（需要允許使用麥克風）</label>
+                <div class="btns"><button class="primary" id="recStart">開始錄影</button></div>
+                <p class="err" id="recErr" role="alert" hidden></p>
+            </div>
+        </div>
+
+        <div class="card rec" id="recPanel" hidden>
+            <h2>錄影</h2>
+            <p class="big" id="recTime">00:00</p>
+            <p id="recInfo" class="muted"></p>
+            <p id="recNote" role="status"></p>
+            <div class="btns">
+                <button id="recPause" hidden>暫停</button>
+                <button class="primary" id="recStop" hidden>停止錄影</button>
+            </div>
+            <div id="recDone" hidden>
+                <video id="recPrev" controls playsinline></video>
+                <div class="btns">
+                    <button class="primary" id="recDl">下載影片</button>
+                    <button id="recAgain">重新錄</button>
+                </div>
+            </div>
+        </div>
+
         <div class="card">
             <details>
                 <summary>手機螢幕鏡像到電腦怎麼做</summary>
@@ -171,14 +205,16 @@ sudo apt install scrcpy    # Debian / Ubuntu（版本可能較舊）</pre>
         </div>
     </div>
 
+
     <template id="help">
         <h3>這是什麼</h3>
-        <p>讓電腦把螢幕（整個螢幕、單一視窗或瀏覽器分頁）即時分享給另一台裝置：手機或另一台電腦打開連結就能看。使用 WebRTC 點對點傳輸，畫面只在兩端之間流動，不經過我們的伺服器。</p>
+        <p>讓電腦把螢幕（整個螢幕、單一視窗或瀏覽器分頁）即時分享給另一台裝置：手機或另一台電腦打開連結就能看。使用 WebRTC 點對點傳輸，畫面只在兩端之間流動，不經過我們的伺服器。也可以「只錄影」：把螢幕錄成影片檔存到自己的電腦，不分享給任何人。</p>
         <h3>什麼時候用</h3>
         <ul>
         <li>在電腦上簡報或示範，讓旁邊的人用自己的手機看。</li>
         <li>遠端協助家人：請對方在電腦分享，你在手機上看。</li>
         <li>想把電腦畫面丟到另一台螢幕（例如平板）上看。</li>
+        <li>錄下操作步驟、線上課程或程式 bug 重現過程。</li>
         </ul>
         <h3>怎麼用</h3>
         <ol>
@@ -187,17 +223,23 @@ sudo apt install scrcpy    # Debian / Ubuntu（版本可能較舊）</pre>
         <li>觀看端打開連結（或選「我要觀看」輸入房號），按「開始觀看」。畫面會先靜音播放；有聲音時按「開啟聲音」。</li>
         <li>點畫面或按「全螢幕」放大；手機橫放會自動滿版。畫面下方會顯示延遲、解析度與位元率。</li>
         <li>分享端可在「觀看者」清單按「踢除」請人離開；按「停止分享」或用瀏覽器 / 系統的停止分享鈕都會結束，觀看端會收到通知。</li>
+        <li>錄影：選「只錄影（不分享）」，可勾「錄系統聲音」與「混入麥克風」，按「開始錄影」並選要錄的內容；可「暫停 / 繼續」，按「停止錄影」後可預覽，再按「下載影片」（檔名含時間），不滿意按「重新錄」。</li>
+        <li>分享的同時要錄影：在「分享設定」勾「同時錄製這次分享」，錄的就是分享出去的同一個畫面；停止分享時錄影一起結束。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">電腦分享 → 房號 K7M2QX，連結 …/utils/screen-share.html#K7M2QX
-        手機打開連結 → 按「開始觀看」→ 顯示「1280×720 · 30 fps · 2.1 Mbps · 延遲約 60 ms」</div>
+        手機打開連結 → 按「開始觀看」→ 顯示「1280×720 · 30 fps · 2.1 Mbps · 延遲約 60 ms」
+        只錄影 → 錄 2 分 30 秒 → 停止 → 下載 screen-rec-20261010-143015.webm</div>
         <h3>小提醒</h3>
         <ul>
-        <li>手機瀏覽器無法分享自己的螢幕（網頁做不到），手機只能當觀看端；要鏡像手機畫面請看頁面下方說明。</li>
+        <li>手機瀏覽器無法分享或錄製自己的螢幕（網頁做不到），手機只能當觀看端；錄影入口也只在電腦瀏覽器出現。要鏡像手機畫面請看頁面下方說明。</li>
+        <li>錄影格式：優先 WebM（VP9 / VP8 + Opus），不支援時用 MP4；實際格式顯示在錄影面板。單次上限 60 分鐘或 1 GB，達到會自動停止並保留已錄內容。</li>
+        <li>錄影只存在這個分頁的記憶體，沒有存到任何地方；下載前關閉或重新整理頁面，錄影就會消失（離開時瀏覽器會提醒）。</li>
+        <li>系統或瀏覽器按「停止分享」時，錄影會自動結束並保留已錄的部分。</li>
         <li>最多 4 位觀看者；觀看者每多一位，電腦上傳頻寬就多用一份。</li>
-        <li>隱私：分享前請確認視窗內容，不要分享含密碼、通知或私人訊息的視窗；知道房號的人都能加入，不認識的人請踢除並停止分享。</li>
+        <li>隱私：分享或錄影前請確認內容，不要包含密碼、通知或私人訊息；知道房號的人都能加入，不認識的人請踢除並停止分享。錄影不會傳給任何人，混入麥克風時你的聲音也會被錄進去。</li>
         <li>某些網路（例如對稱型 NAT、公司網路）需要 TURN 中繼才連得上，本工具未提供；可改用同一個 Wi-Fi 或關閉 VPN。</li>
-        <li>本頁不儲存任何資料；關閉頁面即結束分享。</li>
+        <li>本頁不使用 localStorage，不儲存任何資料；關閉頁面即結束分享與錄影。</li>
         </ul>
     </template>
 
@@ -274,6 +316,15 @@ sudo apt install scrcpy    # Debian / Ubuntu（版本可能較舊）</pre>
             lost: '與分享端的連線中斷。',
             'load-failed': '無法載入連線元件（PeerJS），請確認網路後重新整理。',
         }[kind] || '無法連上連線伺服器或連線失敗，請檢查網路後再試。');
+        // 錄影：格式候選（依序挑第一個瀏覽器支援的；都不支援回傳 ''，讓瀏覽器用預設）、檔名、格式化、上限
+        const REC_MIMES = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+        const MAX_REC_BYTES = 1024 ** 3, MAX_REC_MS = 60 * 60 * 1000;
+        const pickRecMime = (isSupported) => { for (const m of REC_MIMES) { try { if (isSupported(m)) return m; } catch (e) { } } return ''; };
+        const pad2 = (n) => String(n).padStart(2, '0');
+        const recFileName = (d, mime) => `screen-rec-${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}.${/mp4/.test(mime || '') ? 'mp4' : 'webm'}`;
+        const fmtDur = (ms) => { const s = Math.max(0, Math.floor((+ms || 0) / 1000)), h = Math.floor(s / 3600); return (h ? h + ':' : '') + pad2(Math.floor(s % 3600 / 60)) + ':' + pad2(s % 60); };
+        const fmtBytes = (b) => { b = Math.max(0, +b || 0); return b < 1024 ? `${Math.round(b)} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : b < 1073741824 ? `${(b / 1048576).toFixed(1)} MB` : `${(b / 1073741824).toFixed(2)} GB`; };
+        const recLimit = (bytes, ms) => bytes >= MAX_REC_BYTES ? 'size' : ms >= MAX_REC_MS ? 'time' : '';     // 回傳超限原因；'' = 還可以錄
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -285,13 +336,16 @@ sudo apt install scrcpy    # Debian / Ubuntu（版本可能較舊）</pre>
 
         // ---------- 模式 ----------
         function setMode(m) {
-            $('#modeShare').setAttribute('aria-pressed', m === 'share'); $('#modeWatch').setAttribute('aria-pressed', m === 'watch');
-            setHidden('#shareBox', m !== 'share'); setHidden('#watchBox', m !== 'watch');
+            if (m === 'rec' && !CAN_SHARE) m = 'watch';
+            $('#modeShare').setAttribute('aria-pressed', m === 'share'); $('#modeWatch').setAttribute('aria-pressed', m === 'watch'); $('#modeRec').setAttribute('aria-pressed', m === 'rec');
+            setHidden('#shareBox', m !== 'share'); setHidden('#watchBox', m !== 'watch'); setHidden('#recBox', m !== 'rec');
+            setHidden('#modeRec', !CAN_SHARE);
             setHidden('#unsupported', CAN_SHARE); if (!CAN_SHARE) setHidden('#setup', true);
         }
         $('#modeShare').onclick = () => setMode('share');
         $('#modeWatch').onclick = () => setMode('watch');
         $('#goWatch').onclick = () => setMode('watch');
+        $('#modeRec').onclick = () => setMode('rec');
 
         // ---------- 分享端 ----------
         let hpeer = null, stream = null, sharing = false, hostCode = '';
@@ -355,6 +409,7 @@ sudo apt install scrcpy    # Debian / Ubuntu（版本可能較舊）</pre>
         function stopShare(reason) {
             if (!sharing && !stream) return;
             sharing = false;
+            if (R.fromShare) recStop('分享已結束，已保留錄影內容。');
             for (const c of conns.values()) send(c, { t: 'ended' });
             const p = hpeer, s = stream; hpeer = null; stream = null;
             setTimeout(() => { try { p && p.destroy(); } catch (e) { } }, 300);
@@ -374,6 +429,7 @@ sudo apt install scrcpy    # Debian / Ubuntu（版本可能較舊）</pre>
         async function startShare() {
             showErr('');
             if (!CAN_SHARE) return;
+            if ($('#recAlso').checked && !recCanStart()) return;
             const plan = qualityPlan(+$('#fps').value, +$('#maxw').value, 0);
             try {
                 stream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'always', ...plan.constraints }, audio: $('#audio').checked });
@@ -392,6 +448,7 @@ sudo apt install scrcpy    # Debian / Ubuntu（版本可能較舊）</pre>
             $('#roomCode').textContent = hostCode; $('#link').value = P2PRoom.inviteLink(hostCode);
             setHidden('#live', false); setHidden('#setup', true); setHidden('#startBtn', true); setHidden('#stopBtn', false);
             renderViewers();
+            if ($('#recAlso').checked) { const m = recBegin(stream, [], null, true); if (m) $('#recNote').textContent = m; }
         }
         $('#startBtn').onclick = startShare;
         $('#stopBtn').onclick = () => stopShare('');
@@ -494,6 +551,91 @@ sudo apt install scrcpy    # Debian / Ubuntu（版本可能較舊）</pre>
             if (!vid.srcObject) return;
             if (land.matches && !isFs()) { autoFs = true; cssFs(true); } else if (!land.matches && autoFs) exitFs();
         });
+
+        // ---------- 錄影 ----------
+        const REC_MSG = { size: '錄影已達 1 GB 記憶體上限，已自動停止並保留已錄內容。', time: '錄影已達單次 60 分鐘上限，已自動停止並保留已錄內容。' };
+        const R = { rec: null, chunks: [], bytes: 0, t0: 0, acc: 0, timer: 0, mime: '', own: [], ctx: null, url: '', blob: null, name: '', saved: true, fromShare: false, note: '' };
+        const recElapsed = () => R.acc + (R.rec && R.rec.state === 'recording' ? performance.now() - R.t0 : 0);
+        function recRender() {
+            const live = !!R.rec, done = !!R.blob;
+            setHidden('#recPanel', !live && !done); setHidden('#recPause', !live); setHidden('#recStop', !live); setHidden('#recDone', !done);
+            $('#recTime').textContent = fmtDur(recElapsed());
+            $('#recInfo').textContent = (live ? (R.rec.state === 'paused' ? '⏸ 已暫停　' : '● 錄影中　') : '') + `約 ${fmtBytes(live ? R.bytes : R.blob ? R.blob.size : 0)}　格式：${R.mime || '瀏覽器預設'}`;
+            $('#recPause').textContent = live && R.rec.state === 'paused' ? '繼續' : '暫停';
+            $('#recNote').textContent = R.note;
+        }
+        function recClear() {
+            if (R.url) URL.revokeObjectURL(R.url);
+            R.url = ''; R.blob = null; R.saved = true; R.note = ''; const v = $('#recPrev'); v.removeAttribute('src'); v.load();
+        }
+        function recCanStart() {
+            if (R.rec) return false;
+            if (R.blob && !R.saved && !confirm('目前的錄影還沒下載，開始新的錄影會捨棄它。要繼續嗎？')) return false;
+            return true;
+        }
+        function recBegin(s, own, ctx, fromShare) {          // 成功回傳 ''，失敗回傳訊息
+            if (typeof MediaRecorder === 'undefined') return '這個瀏覽器不支援錄影（MediaRecorder）。';
+            const mime = pickRecMime((t) => MediaRecorder.isTypeSupported(t));
+            let rec; try { rec = new MediaRecorder(s, mime ? { mimeType: mime } : undefined); } catch (e) { return '無法開始錄影：' + (e && e.message || e); }
+            recClear();
+            Object.assign(R, { rec, chunks: [], bytes: 0, acc: 0, t0: performance.now(), mime: rec.mimeType || mime, own, ctx, fromShare: !!fromShare });
+            rec.ondataavailable = (e) => {
+                if (!e.data || !e.data.size) return;
+                R.chunks.push(e.data); R.bytes += e.data.size;
+                const l = recLimit(R.bytes, recElapsed()); if (l) recStop(REC_MSG[l]);
+            };
+            rec.onstop = recFinish;
+            rec.start(1000);
+            R.timer = setInterval(() => { const l = recLimit(R.bytes, recElapsed()); if (l) recStop(REC_MSG[l]); else recRender(); }, 500);
+            recRender(); return '';
+        }
+        function recStop(note) {
+            const r = R.rec; if (!r || r.state === 'inactive') return;
+            R.acc = recElapsed(); R.note = note || ''; r.stop();
+        }
+        function recFinish() {
+            clearInterval(R.timer);
+            for (const st of R.own) st.getTracks().forEach(t => t.stop());
+            try { R.ctx && R.ctx.close(); } catch (e) { }
+            const type = R.mime || 'video/webm', blob = new Blob(R.chunks, { type });
+            R.chunks = []; R.rec = null; R.own = []; R.ctx = null; R.fromShare = false;
+            if (!blob.size) { R.note = '沒有錄到內容。'; recRender(); return; }
+            R.blob = blob; R.url = URL.createObjectURL(blob); R.saved = false; R.name = recFileName(new Date(), type);
+            const v = $('#recPrev'); v.src = R.url;
+            // MediaRecorder 產生的 webm 沒有時長資訊（duration = Infinity）：跳到最後一次讓瀏覽器算出來，再回到開頭
+            v.onloadedmetadata = () => { if (v.duration === Infinity) { v.currentTime = 1e101; v.ontimeupdate = () => { v.ontimeupdate = null; v.currentTime = 0; }; } };
+            R.note = (R.note ? R.note + ' ' : '') + '錄影完成，請預覽後下載；離開頁面前不下載就會消失。'; recRender();
+        }
+        $('#recPause').onclick = () => {
+            const r = R.rec; if (!r) return;
+            if (r.state === 'recording') { R.acc = recElapsed(); r.pause(); } else if (r.state === 'paused') { R.t0 = performance.now(); r.resume(); }
+            recRender();
+        };
+        $('#recStop').onclick = () => recStop('');
+        $('#recDl').onclick = () => { if (!R.blob) return; Util.download(R.blob, R.name); R.saved = true; R.note = '已下載：' + R.name; recRender(); };
+        $('#recAgain').onclick = () => { if (R.blob && !R.saved && !confirm('這段錄影還沒下載，捨棄後無法復原。要重新錄嗎？')) return; recClear(); recRender(); setMode('rec'); };
+        const recErr = (m) => { $('#recErr').textContent = m; setHidden('#recErr', !m); };
+        async function startRec() {
+            recErr(''); if (!CAN_SHARE || !recCanStart()) return;
+            const wantMic = $('#recMic').checked; let ctx = null, disp = null, mic = null;
+            try { if (wantMic) ctx = new AudioContext(); } catch (e) { return recErr('無法混音：這個瀏覽器不支援 AudioContext。'); }
+            const fail = (m) => { [disp, mic].forEach(st => st && st.getTracks().forEach(t => t.stop())); try { ctx && ctx.close(); } catch (e) { } recErr(m); };
+            try { disp = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'always' }, audio: $('#recSys').checked }); }
+            catch (e) { return fail(e && e.name === 'NotAllowedError' ? '你取消了錄影（或瀏覽器沒有授權）。' : '無法開始錄影：' + (e && e.message || e)); }
+            let s = disp;
+            if (wantMic) {
+                try { mic = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+                catch (e) { return fail(e && e.name === 'NotAllowedError' ? '無法使用麥克風：沒有授權。取消勾選「混入麥克風」可只錄畫面。' : '無法使用麥克風：' + (e && e.message || e)); }
+                const dest = ctx.createMediaStreamDestination();
+                for (const st of [disp, mic]) if (st.getAudioTracks().length) ctx.createMediaStreamSource(new MediaStream(st.getAudioTracks())).connect(dest);
+                s = new MediaStream([...disp.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+                ctx.resume().catch(() => { });
+            }
+            const m = recBegin(s, [disp, mic].filter(Boolean), ctx, false); if (m) return fail(m);
+            disp.getVideoTracks()[0].addEventListener('ended', () => recStop('系統或瀏覽器已停止分享，已保留錄影內容。'));
+        }
+        $('#recStart').onclick = startRec;
+        window.addEventListener('beforeunload', (e) => { if (R.rec || (R.blob && !R.saved)) { e.preventDefault(); e.returnValue = ''; } });
 
         window.addEventListener('pagehide', () => { try { hpeer && hpeer.destroy(); vpeer && vpeer.destroy(); } catch (e) { } });
 

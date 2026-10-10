@@ -302,6 +302,24 @@ const ok = (name) => console.log('ok  ' + name);
         assert.equal(O.fromDate(Date.UTC(2012, 9, 17, 21, 13, 27)), '507f1f770000000000000000'); assert.equal(O.fromDate(1350508407999, 'ff'), '507f1f77ffffffffffffffff');
         assert.equal(O.parse(O.fromDate(1700000000123)).ms, 1700000000000);
         assert.throws(() => O.fromDate(-1)); assert.throws(() => O.fromDate(NaN)); assert.throws(() => O.fromDate(2 ** 33 * 1000));
+        // 含時間的 ID
+        const I = Util.ids;
+        let r = I.parseUuid('017F22E2-79B0-7CC3-98C4-DC0C0C07398F'); assert.deepEqual([r.ok, r.version, r.ms], [true, 7, 1645557742000]);
+        r = I.parseUuid('f81d4fae-7dec-11d0-a765-00a0c91e6bf6'); assert.equal(r.version, 1); assert.equal(new Date(r.ms).toISOString().slice(0, 10), '1997-02-03'); assert.equal(r.node, '00a0c91e6bf6');
+        r = I.parseUuid('1EC9414C-232A-6B00-B3C8-9F6BDECED846'); assert.equal(r.version, 6); assert.equal(new Date(r.ms).toISOString(), '2022-02-22T19:22:22.000Z');        // RFC 9562 附錄的 v6 範例
+        r = I.parseUuid('c232ab00-9414-11ec-b3c8-9f6bdeced846'); assert.equal(new Date(r.ms).toISOString(), '2022-02-22T19:22:22.000Z');                              // 同一時刻的 v1 版本
+        r = I.parseUuid('{3F2504E0-4F89-41D3-9A0C-0305E82C3301}'); assert.deepEqual([r.ok, r.version, r.ms], [true, 4, null]);
+        assert.ok(!I.parseUuid('xyz').ok && !I.parseUuid('').ok); assert.ok(I.parseUuid('urn:uuid:017f22e2-79b0-7cc3-98c4-dc0c0c07398f').ok);
+        r = I.parseUlid('01ARYZ6S41TSV4RRFFQ69G5FAV'); assert.deepEqual([r.ok, r.ms, r.random], [true, 1469918176385, 'TSV4RRFFQ69G5FAV']); assert.equal(I.parseUlid('01arz3ndektsv4rrffq69g5fav').ms, 1469922850259);
+        assert.ok(!I.parseUlid('81ARZ3NDEKTSV4RRFFQ69G5FAV').ok && !I.parseUlid('01ARZ3NDEKTSV4RRFFQ69G5FAI').ok && !I.parseUlid('short').ok);
+        r = I.parseKsuid('0ujtsYcgvSTl8PAuAdqWYSMnLOv'); assert.deepEqual([r.ok, r.ms], [true, 1507608047000]); assert.ok(!I.parseKsuid('0ujtsYcgvSTl8PAuAdqWYSMnLO').ok && !I.parseKsuid('!ujtsYcgvSTl8PAuAdqWYSMnLOv').ok);
+        r = I.parseSnowflake('175928847299117063'); assert.deepEqual([r.ok, r.ms, r.worker, r.process, r.sequence], [true, 1462015105796, 1, 0, 7]);
+        r = I.parseSnowflake('1541815603606036480', I.EPOCHS.twitter); assert.equal(new Date(r.ms).getUTCFullYear(), 2022); assert.ok(!I.parseSnowflake('abc').ok && !I.parseSnowflake('99999999999999999999').ok);
+        const fixed = (n) => Uint8Array.from({ length: n }, (_, i) => (i * 37 + 11) % 256);
+        const u7 = I.uuidv7(1645557742000, fixed); assert.match(u7, /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/); assert.equal(I.parseUuid(u7).ms, 1645557742000); assert.ok(u7.startsWith('017f22e2-79b0-7'));
+        const ul = I.ulid(1469918176385, fixed); assert.match(ul, /^[0-9A-HJKMNP-TV-Z]{26}$/); assert.equal(I.parseUlid(ul).ms, 1469918176385); assert.ok(ul.startsWith('01ARYZ6S41'));
+        for (let i = 0; i < 200; i++) { const t = 1e12 + i * 1234567; assert.equal(I.parseUuid(I.uuidv7(t)).ms, t); assert.equal(I.parseUlid(I.ulid(t)).ms, t); }
+        assert.notEqual(I.uuidv7(5), I.uuidv7(5)); assert.throws(() => I.uuidv7(-1)); assert.throws(() => I.ulid(2 ** 48));
         // esc / day / statRow
         assert.equal(Util.esc('<a href="x">&\'</a>'), '&lt;a href=&quot;x&quot;&gt;&amp;&#39;&lt;/a&gt;');
         assert.equal(Util.esc(5), '5');

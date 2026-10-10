@@ -157,6 +157,67 @@
         },
     };
 
+    // 含時間的 ID：解析 UUID v1 / v6 / v7、ULID、KSUID、Snowflake（Twitter / Discord 等）並產生 UUID v7 與 ULID。
+    // 解析函式回傳 { ok, type, ms, ... }（ms 是建立時間的毫秒時間戳，格式或版本不對 ok 為 false 並附 reason）；產生函式的 ms 預設為現在
+    const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ', B62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    const randBytes = (n) => { const a = new Uint8Array(n); (root.crypto || require('crypto').webcrypto).getRandomValues(a); return a; };
+    const hexOf = (bytes) => [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
+    const ids = {
+        EPOCHS: { twitter: 1288834974657, discord: 1420070400000, unix: 0 },
+        // UUID：v1（Gregorian 100ns）、v6（重排的 v1）、v7（Unix 毫秒）才有時間；v4 等回傳 ok:true 但 ms 為 null
+        parseUuid(str) {
+            const t = String(str).trim().replace(/^urn:uuid:/i, '').replace(/^\{|\}$/g, '');
+            if (!/^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i.test(t)) return { ok: false, reason: '不是 UUID 格式（32 位 16 進位，可含連字號）' };
+            const h = t.replace(/-/g, '').toLowerCase(), ver = parseInt(h[12], 16), variant = parseInt(h[16], 16);
+            const r = { ok: true, type: 'uuid', version: ver, variant: (variant & 0x8) === 0 ? 'NCS' : (variant & 0xc) === 0x8 ? 'RFC 4122 / 9562' : (variant & 0xe) === 0xc ? 'Microsoft' : '保留', ms: null };
+            if (ver === 1) { const t100 = (BigInt('0x' + h.slice(13, 16)) << 48n) + (BigInt('0x' + h.slice(8, 12)) << 32n) + BigInt('0x' + h.slice(0, 8)); r.ms = Number((t100 - 122192928000000000n) / 10000n); r.node = h.slice(20); r.clockSeq = parseInt(h.slice(16, 20), 16) & 0x3fff; }
+            else if (ver === 6) { const t100 = (BigInt('0x' + h.slice(0, 8)) << 28n) + (BigInt('0x' + h.slice(8, 12)) << 12n) + BigInt('0x' + h.slice(13, 16)); r.ms = Number((t100 - 122192928000000000n) / 10000n); r.node = h.slice(20); }
+            else if (ver === 7) r.ms = parseInt(h.slice(0, 12), 16);
+            if (r.ms !== null && !(r.ms >= -8.64e15 && r.ms <= 8.64e15)) { r.ms = null; r.reason = '時間超出可表示範圍'; }
+            return r;
+        },
+        // ULID：26 個 Crockford Base32 字元，前 10 個 = 48 位元毫秒時間；第一個字元不可大於 7
+        parseUlid(str) {
+            const t = String(str).trim().toUpperCase();
+            if (!/^[0-9A-HJKMNP-TV-Z]{26}$/.test(t)) return { ok: false, reason: '不是 ULID 格式（26 個字元，不含 I L O U）' };
+            if (t[0] > '7') return { ok: false, reason: 'ULID 第一個字元不可大於 7（會超出 48 位元時間範圍）' };
+            let ms = 0; for (const c of t.slice(0, 10)) ms = ms * 32 + B32.indexOf(c);
+            return { ok: true, type: 'ulid', ms, random: t.slice(10) };
+        },
+        // KSUID：27 個 base62 字元 = 20 位元組；前 4 位元組是自 2014-03-05T00:53:20Z（1400000000 秒）起算的秒數，其餘 16 位元組隨機
+        parseKsuid(str) {
+            const t = String(str).trim();
+            if (!/^[0-9A-Za-z]{27}$/.test(t)) return { ok: false, reason: '不是 KSUID 格式（27 個英數字元）' };
+            let n = 0n; for (const c of t) n = n * 62n + BigInt(B62.indexOf(c));
+            if (n >= (1n << 160n)) return { ok: false, reason: '數值超出 20 位元組' };
+            const hex = n.toString(16).padStart(40, '0');
+            return { ok: true, type: 'ksuid', ms: (parseInt(hex.slice(0, 8), 16) + 1400000000) * 1000, payload: hex.slice(8) };
+        },
+        // Snowflake（Twitter / Discord 等）：高位是自 epoch 起算的毫秒（右移 22 位元），其後 5 位 worker、5 位 process（或 datacenter / machine）、12 位序號
+        parseSnowflake(str, epochMs = 1420070400000) {
+            const t = String(str).trim();
+            if (!/^\d{1,20}$/.test(t)) return { ok: false, reason: '不是數字 ID（最多 20 位數字）' };
+            const n = BigInt(t); if (n >= (1n << 64n)) return { ok: false, reason: '數值超出 64 位元' };
+            return { ok: true, type: 'snowflake', ms: Number(n >> 22n) + epochMs, worker: Number((n >> 17n) & 31n), process: Number((n >> 12n) & 31n), sequence: Number(n & 4095n) };
+        },
+        // 產生 UUID v7（RFC 9562）：48 位元毫秒 + 版本 7 + 12 位隨機 + 變體 + 62 位隨機
+        uuidv7(ms = Date.now(), rand = randBytes) {
+            if (!(ms >= 0 && ms < 2 ** 48)) throw new Error('時間超出 UUID v7 可表示的範圍（1970–10889）');
+            const b = new Uint8Array(16), r = rand(10); let t = Math.floor(ms);
+            for (let i = 5; i >= 0; i--) { b[i] = t % 256; t = Math.floor(t / 256); }
+            b.set(r, 6); b[6] = (b[6] & 0x0f) | 0x70; b[8] = (b[8] & 0x3f) | 0x80;
+            const h = hexOf(b); return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+        },
+        // 產生 ULID：10 個字元的時間 + 16 個字元的隨機（80 位元）
+        ulid(ms = Date.now(), rand = randBytes) {
+            if (!(ms >= 0 && ms < 2 ** 48)) throw new Error('時間超出 ULID 可表示的範圍（1970–10889）');
+            let t = Math.floor(ms), time = ''; for (let i = 0; i < 10; i++) { time = B32[t % 32] + time; t = Math.floor(t / 32); }
+            const r = rand(10); let n = 0n; for (const x of r) n = (n << 8n) | BigInt(x);
+            let rnd = ''; for (let i = 0; i < 16; i++) { rnd = B32[Number(n & 31n)] + rnd; n >>= 5n; }
+            return time + rnd;
+        },
+    };
+
     // 可播種的亂數（mulberry32，種子字串先雜湊成 32 位元）：同一個種子永遠產生同一串數字，用在「每日挑戰」。
     // 回傳函式 rand01()，傳回 [0,1) 小數；rand01.int(n) 傳回 [0,n) 整數。非密碼學用途
     function seeded(seed) {
@@ -215,7 +276,7 @@
         },
     };
 
-    const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex, seeded, parseCSV, toObjects, isNum, csvStringify, oid };
+    const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex, seeded, parseCSV, toObjects, isNum, csvStringify, oid, ids };
     if (typeof module !== 'undefined' && module.exports) module.exports = Util;
     else root.Util = Util;
 })(typeof window !== 'undefined' ? window : globalThis);

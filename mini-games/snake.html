@@ -103,6 +103,7 @@
         <ul>
         <li>滑動時畫面不會跟著捲動；要捲動頁面請從棋盤外滑。</li>
         <li>追著自己的尾巴走是安全的，因為尾巴會同時移開。</li>
+        <li>蛇的移動是平滑的（速度與規則不變）；吃到食物時食物會縮小消失、蛇身脈動一下，死亡時蛇身會由頭到尾依序變紅。系統開啟「減少動態效果」時會自動關閉這些動畫，切到別的分頁也不會累積。</li>
         <li>手機（觸控裝置）在「開始」旁有「⏸ 暫停」鈕，暫停後變成「▶ 繼續」；電腦用空白鍵。</li>
             <li>最佳紀錄存在這台裝置；想重來可按頁面下方的「清除最佳紀錄」（只清這個遊戲，無法復原；頁面會重新載入，進行中的這一局會結束）。</li>
 </ul>
@@ -144,11 +145,28 @@
 
         // 速度：每吃一個加快一點，最快 60ms 一步
         const tickMs = (score) => Math.max(60, 150 - score * 4);
+
+        // 動畫內插（視覺層）：每一節從 prev[i] 滑到 next[i]（p = 0..1）；吃到食物時多出的尾節原地不動。
+        // 穿牆時實際位移只有 ±1 格：位置會超出盤面一點，並多回傳一份從另一側進來的 [x, y, i]（canvas 會裁掉畫面外的），不會有橫跨盤面的線段
+        function lerpSnake(prev, next, p, size = SIZE) {
+            const out = [], real = (d) => (d > 1 ? d - size : d < -1 ? d + size : d);
+            next.forEach(([bx, by], i) => {
+                const [ax, ay] = prev && prev[i] ? prev[i] : [bx, by];
+                const x = ax + real(bx - ax) * p, y = ay + real(by - ay) * p;
+                const xs = [x], ys = [y];
+                if (x < 0) xs.push(x + size); else if (x > size - 1) xs.push(x - size);
+                if (y < 0) ys.push(y + size); else if (y > size - 1) ys.push(y - size);
+                for (const px of xs) for (const py of ys) out.push([px, py, i]);
+            });
+            return out;
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
         const cv = $('#cv'), g = cv.getContext('2d'), CELL = cv.width / SIZE;
-        let st = null, queue = [], timer = null, paused = false;
+        let st = null, queue = [], timer = null, paused = false, mov = null, eatFx = null, deathT0 = 0, rafOn = false;
+        const FOOD_MS = 160, PULSE_MS = 160, PULSE_STEP = 30, DEATH_STEP = 45;
+        const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
         const bestKey = () => 'snake_best_' + $('#wall').value;
         const showBest = () => { $('#best').textContent = store.get(bestKey(), 0); };
 
@@ -156,17 +174,40 @@
             const cs = getComputedStyle(document.documentElement);
             g.fillStyle = cs.getPropertyValue('--card').trim() || '#fff'; g.fillRect(0, 0, cv.width, cv.height);
             if (!st) return;
-            g.fillStyle = '#ff453a'; g.beginPath(); g.arc((st.food[0] + .5) * CELL, (st.food[1] + .5) * CELL, CELL * .38, 0, 7); g.fill();
-            st.snake.forEach(([x, y], i) => { g.fillStyle = i === 0 ? '#248a3d' : '#30d158'; g.beginPath(); g.roundRect(x * CELL + 2, y * CELL + 2, CELL - 4, CELL - 4, 6); g.fill(); });
+            const now = performance.now(), rm = reduced();
+            const disc = (cx, cy, sc) => { g.fillStyle = '#ff453a'; g.beginPath(); g.arc((cx + .5) * CELL, (cy + .5) * CELL, CELL * .38 * sc, 0, 7); g.fill(); };
+            if (eatFx && (rm || now - eatFx.t0 >= PULSE_MS + st.snake.length * PULSE_STEP)) eatFx = null;
+            if (eatFx && now - eatFx.t0 < FOOD_MS) disc(eatFx.food[0], eatFx.food[1], 1 - (now - eatFx.t0) / FOOD_MS);          // 被吃掉的食物縮小消失
+            if (st.food) disc(st.food[0], st.food[1], eatFx ? Math.min(1, (now - eatFx.t0) / FOOD_MS) : 1);                      // 新食物放大出現
+            const p = mov && !rm ? Math.min(1, (now - mov.t0) / mov.dur) : 1;
+            for (const [x, y, i] of lerpSnake(mov && !rm ? mov.prev : null, st.snake, p).reverse()) {
+                let c = i === 0 ? '#248a3d' : '#30d158', sc = 1;
+                if (eatFx) { const u = (now - eatFx.t0 - i * PULSE_STEP) / PULSE_MS; if (u > 0 && u < 1) sc = 1 + .14 * Math.sin(Math.PI * u); }                  // 脈動由頭傳到尾
+                if (st.dead && (rm || now - deathT0 >= i * DEATH_STEP)) c = '#ff453a';                                            // 死亡：由頭到尾依序變紅
+                const m = 2 + CELL * (1 - sc) / 2;
+                g.fillStyle = c; g.beginPath(); g.roundRect(x * CELL + m, y * CELL + m, CELL - 2 * m, CELL - 2 * m, 6); g.fill();
+            }
         }
+        // 只在「動畫進行中」跑 requestAnimationFrame；頁面隱藏時瀏覽器自動停，回來時依時間戳算進度，不會累積
+        function animating() {
+            if (!st || reduced()) return false;
+            const now = performance.now();
+            if (st.dead) return now - deathT0 < st.snake.length * DEATH_STEP + 100;
+            return !paused && !st.won || !!eatFx;
+        }
+        function raf() { if (rafOn) return; rafOn = true; (function f() { draw(); if (animating()) requestAnimationFrame(f); else rafOn = false; })(); }
 
         function loop() {
             clearTimeout(timer);
             if (paused || !st || st.dead || st.won) return;
             const want = queue.shift();
             if (want && !isReverse(want, st.dir)) st = { ...st, dir: want };
-            st = step(st, $('#wall').value, rnd);
-            $('#score').textContent = st.score; draw();
+            const prev = st; st = step(st, $('#wall').value, rnd);
+            const now = performance.now();
+            mov = st.snake !== prev.snake ? { prev: prev.snake, t0: now, dur: tickMs(st.score) } : null;
+            if (st.score > prev.score) eatFx = { food: prev.food, t0: now };
+            if (st.dead) deathT0 = now;
+            $('#score').textContent = st.score; draw(); raf();
             if (st.dead || st.won) {
                 const best = store.get(bestKey(), 0);
                 if (st.score > best) { store.set(bestKey(), st.score); $('#msg').textContent = `${st.won ? '🏆 填滿整個畫面！' : '💥 遊戲結束'}　🎉 新紀錄 ${st.score}`; } else $('#msg').textContent = `${st.won ? '🏆 填滿整個畫面！' : '💥 遊戲結束'}　得分 ${st.score}`;
@@ -178,7 +219,7 @@
         function start() {
             const mid = SIZE >> 1, snake = [[mid, mid], [mid - 1, mid], [mid - 2, mid]];
             st = { snake, dir: DIRS.right, food: placeFood(snake, rnd), score: 0, dead: false, won: false };
-            queue = []; paused = false; $('#pauseBtn').textContent = '⏸ 暫停'; $('#msg').textContent = ''; $('#score').textContent = 0; $('#start').textContent = '重新開始';
+            queue = []; paused = false; mov = null; eatFx = null; $('#pauseBtn').textContent = '⏸ 暫停'; $('#msg').textContent = ''; $('#score').textContent = 0; $('#start').textContent = '重新開始';
             draw(); showBest(); timer = setTimeout(loop, tickMs(0));
         }
 

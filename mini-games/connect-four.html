@@ -36,6 +36,7 @@
         <ul>
         <li>簡單難度偶爾會亂下，但明顯的一步勝或必擋不會漏；困難會算比較多步。</li>
         <li>悔棋與提示只在單機和本機雙人出現，連線對戰沒有。</li>
+        <li>落子會依重力掉落並輕彈一下，獲勝時四顆子依序亮起（只動畫位移 / 透明度）；電腦會等你的動畫結束才開始思考。系統開啟「減少動態效果」時會自動關閉動畫，切到別的分頁也不會累積。悔棋直接跳回、沒有動畫。</li>
         <li>連線時房主離開，遊戲就結束；資料只在你和朋友的瀏覽器之間傳送。</li>
         </ul>
     </template>
@@ -94,15 +95,17 @@
         #board {
             display: grid;
             grid-template-columns: repeat(7, minmax(0, 1fr));
-            gap: 6px;
+            --gap: 6px;
+            gap: var(--gap);
             background: var(--board);
             padding: 10px;
             border-radius: 16px;
+            overflow: hidden;
         }
 
         .col {
             display: grid;
-            gap: 6px;
+            gap: var(--gap);
             padding: 0;
             background: none;
             border-radius: 10px;
@@ -133,16 +136,13 @@
 
         @media (max-width: 480px) {
             #board {
-                gap: 4px;
+                --gap: 4px;
                 padding: 8px;
-            }
-
-            .col {
-                gap: 4px;
             }
         }
 
         .slot {
+            position: relative;
             aspect-ratio: 1;
             border-radius: 50%;
             background: var(--bg);
@@ -158,10 +158,79 @@
             background: var(--yellow);
         }
 
-        .slot.win {
-            outline: 4px solid #fff;
-            outline-offset: -3px;
-            animation: blink .8s infinite alternate;
+        .slot.win::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            box-shadow: inset 0 0 0 4px #fff;
+            opacity: 0;
+            animation: winon .3s ease-out var(--wd, 0s) forwards, blink .8s calc(var(--wd, 0ms) + .3s) infinite alternate;
+        }
+
+        @keyframes winon {
+            from {
+                transform: scale(1.25);
+            }
+
+            to {
+                transform: none;
+                opacity: 1;
+            }
+        }
+
+        /* 落子：圓盤（::after）從欄頂依重力掉落，slot 本身先維持空洞色 */
+        .slot.drop.p1,
+        .slot.drop.p2 {
+            background: var(--bg);
+        }
+
+        .slot.drop::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            animation: drop var(--dt, .3s) both;
+        }
+
+        .slot.drop.p1::after {
+            background: var(--red);
+        }
+
+        .slot.drop.p2::after {
+            background: var(--yellow);
+        }
+
+        @keyframes drop {
+            0% {
+                transform: translateY(calc(var(--n) * -1 * (100% + var(--gap))));
+                animation-timing-function: ease-in;
+            }
+
+            70% {
+                transform: none;
+                animation-timing-function: ease-out;
+            }
+
+            85% {
+                transform: translateY(-9%);
+                animation-timing-function: ease-in;
+            }
+
+            100% {
+                transform: none;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .slot.win::before {
+                animation: none;
+                opacity: 1;
+            }
+
+            .slot.drop::after {
+                animation: none;
+            }
         }
 
         @keyframes blink {
@@ -334,6 +403,22 @@
         // 提示：目前輪到的人的建議欄（用普通級電腦）；已結束回傳 -1
         const hintCol = (state) => (state.winner || state.draw ? -1 : cpuChoose(state.board, state.turn, 'normal'));
 
+        // ---------- 動畫計畫（視覺層）----------
+        // 掉落時間：距離（格數）越長越久，上限 450ms；WIN_STEP 是四子依序亮起的間隔
+        const DROP_BASE = 150, DROP_PER = 40, DROP_MAX = 450, WIN_STEP = 140;
+        const dropMs = (dist) => Math.min(DROP_MAX, DROP_BASE + DROP_PER * dist);
+        // prev → next 剛好多一顆子才播；回傳 { r, c, dist, ms }（dist = 從欄頂掉落的格數），否則 null（悔棋 / 重開 / 同步重置）
+        function dropPlan(prev, next) {
+            if (!prev || !next) return null;
+            let diff = null, n = 0;
+            for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+                if (prev[r][c] === next[r][c]) continue;
+                if (prev[r][c] !== 0 || next[r][c] === 0) return null;
+                diff = [r, c]; n++;
+            }
+            return n === 1 ? { r: diff[0], c: diff[1], dist: diff[0] + 1, ms: dropMs(diff[0] + 1) } : null;
+        }
+
         // 成員端收到房主狀態時的格式檢查
         function validState(s) {
             return !!s && Array.isArray(s.board) && s.board.length === ROWS && s.board.every(r => Array.isArray(r) && r.length === COLS && r.every(v => v === 0 || v === 1 || v === 2))
@@ -345,7 +430,7 @@
         const $ = (s) => document.querySelector(s);
         let mode = 'menu';           // menu | local | host | guest
         let S = null;                // 狀態（本機 / 房主：權威；成員：房主傳來）
-        let room = null, myPlayer = 0, names = ['', ''], firstNext = 1, hostId = '', cpuPlayer = 0, cpuLevel = 'normal', cpuTimer = 0, H = [], hint = -1;
+        let room = null, myPlayer = 0, names = ['', ''], firstNext = 1, hostId = '', cpuPlayer = 0, cpuLevel = 'normal', cpuTimer = 0, H = [], hint = -1, shown = null, animUntil = 0;
 
         const netMsg = (t) => { $('#netMsg').textContent = t; };
         const enableNet = (on) => ['#local', '#cpu', '#host', '#join', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
@@ -357,7 +442,7 @@
                 const col = document.createElement('button');
                 col.className = 'col';
                 col.setAttribute('aria-label', `第 ${c + 1} 欄`);
-                for (let r = 0; r < ROWS; r++) { const s = document.createElement('div'); s.className = 'slot'; col.append(s); }
+                for (let r = 0; r < ROWS; r++) { const s = document.createElement('div'); s.className = 'slot'; s.onanimationend = (e) => { if (e.animationName === 'drop') s.classList.remove('drop'); }; col.append(s); }
                 col.onclick = () => onColumn(c);
                 return col;
             }));
@@ -368,13 +453,21 @@
             const cols = $('#board').children;
             const win = new Set(S.cells.map(([r, c]) => r * COLS + c));
             const myTurn = mode === 'local' || S.turn === myPlayer;
+            const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches || document.hidden;
+            const plan = reduce ? null : dropPlan(shown, S.board);
+            if (plan) animUntil = performance.now() + plan.ms;
+            shown = S.board.map(row => row.slice());
+            const order = new Map(S.cells.map(([r, c], k) => [r * COLS + c, k]));
             for (let c = 0; c < COLS; c++) {
                 const col = cols[c];
                 col.classList.toggle('hint', c === hint);
                 col.disabled = !!S.winner || S.draw || !myTurn || S.board[0][c] !== 0 || (mode === 'host' && (!room || room.players.length < 2));
                 for (let r = 0; r < ROWS; r++) {
                     const v = S.board[r][c], slot = col.children[r];
-                    slot.className = 'slot' + (v ? ' p' + v : '') + (win.has(r * COLS + c) ? ' win' : '');
+                    const wasWin = slot.classList.contains('win'), isDrop = plan ? plan.r === r && plan.c === c : v && slot.classList.contains('drop');
+                    slot.className = 'slot' + (v ? ' p' + v : '') + (isDrop ? ' drop' : '') + (win.has(r * COLS + c) ? ' win' : '');
+                    if (plan && isDrop) { slot.style.setProperty('--n', plan.dist); slot.style.setProperty('--dt', plan.ms + 'ms'); }
+                    if (win.has(r * COLS + c) && !wasWin) slot.style.setProperty('--wd', ((plan ? plan.ms : 0) + WIN_STEP * order.get(r * COLS + c)) + 'ms');
                 }
             }
             const dot = (p) => `<span class="dot p${p}"></span>`;
@@ -407,14 +500,14 @@
 
         // ---------- 本機 ----------
         function startLocal() {
-            mode = 'local';
+            mode = 'local'; shown = null;
             S = newGame(1); firstNext = 2; H = []; hint = -1;
             build(); show('game'); render();
         }
 
         // ---------- 對電腦 ----------
         function startCpu() {
-            mode = 'cpu'; cpuLevel = $('#level').value; myPlayer = $('#first').value === 'cpu' ? 2 : 1; cpuPlayer = myPlayer === 1 ? 2 : 1;
+            shown = null; mode = 'cpu'; cpuLevel = $('#level').value; myPlayer = $('#first').value === 'cpu' ? 2 : 1; cpuPlayer = myPlayer === 1 ? 2 : 1;
             names = myPlayer === 1 ? ['你', '電腦'] : ['電腦', '你'];
             S = newGame(1); firstNext = 2; H = []; hint = -1; build(); show('game'); render(); scheduleCpu();
         }
@@ -426,7 +519,7 @@
                 const c = cpuChoose(S.board, cpuPlayer, cpuLevel);
                 if (c >= 0) move(cpuPlayer, c);
                 render();
-            }, 450);
+            }, 450 + Math.max(0, animUntil - performance.now()));       // 玩家落子動畫結束後才開始計時
         }
 
         // ---------- 房主 / 連線 ----------
@@ -505,10 +598,10 @@
         $('#host').onclick = hostRoom;
         $('#join').onclick = joinRoom;
         $('#again').onclick = () => {
-            S = newGame(firstNext); firstNext = firstNext === 1 ? 2 : 1; H = []; hint = -1;   // 輸家 / 對方先手：每局輪流先手
+            shown = null; S = newGame(firstNext); firstNext = firstNext === 1 ? 2 : 1; H = []; hint = -1;   // 輸家 / 對方先手：每局輪流先手
             if (mode === 'host') publish(); else { render(); scheduleCpu(); }
         };
-        $('#undo').onclick = () => { const s = undoTo(H, mode === 'cpu' ? myPlayer : 0); if (!s) return; clearTimeout(cpuTimer); S = s; hint = -1; render(); scheduleCpu(); };
+        $('#undo').onclick = () => { const s = undoTo(H, mode === 'cpu' ? myPlayer : 0); if (!s) return; clearTimeout(cpuTimer); shown = null; animUntil = 0; S = s; hint = -1; render(); scheduleCpu(); };
         $('#hint').onclick = () => { hint = hintCol(S); render(); };
         $('#copy').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copy'), url, () => prompt('請手動複製邀請連結：', url)); };
         $('#leave').onclick = () => location.reload();

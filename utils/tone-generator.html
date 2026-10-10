@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="音頻產生器與聽力頻率測試：波形、頻率、音量、左右聲道測試、頻率掃描、聽力上限與雙耳拍，含即時頻譜。">
+    <meta property="og:title" content="音頻產生器 / 聽力頻率測試" />
+    <meta property="og:description" content="產生測試音、檢查耳機左右聲道、掃頻、測聽力上限，離線可用。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/tone-generator.html" />
+    <title>音頻產生器 / 聽力頻率測試</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>input,
+        .row>select {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .row>input[type=range] {
+            min-width: 100%;
+            padding: 0;
+        }
+
+        .tabs {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-bottom: 14px;
+        }
+
+        .tabs button {
+            padding-left: 4px;
+            padding-right: 4px;
+        }
+
+        .warn {
+            border: 2px solid var(--bad);
+            border-radius: var(--radius);
+            padding: 12px 14px;
+            margin-bottom: 14px;
+            background: var(--card);
+            line-height: 1.6;
+        }
+
+        .warn b {
+            color: var(--bad);
+        }
+
+        .big {
+            font-size: 26px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            aspect-ratio: 16 / 7;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+        }
+
+        .bar {
+            height: 8px;
+            background: var(--fill);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+
+        .bar i {
+            display: block;
+            height: 100%;
+            width: 0;
+            background: var(--blue);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>音頻產生器 / 聽力頻率測試</h1>
+        <p class="sub">用瀏覽器產生測試音：檢查耳機左右聲道、掃頻、測聽力上限。全部在本機播放。</p>
+        <div class="warn" id="safety" role="alert"><b>安全提醒：</b>請先把<b>裝置音量調到最小</b>，再慢慢加大。高頻與突然的聲音可能傷耳；兒童與聽力敏感者請特別小心。本工具<b>不是醫療檢測</b>，不能取代聽力檢查。</div>
+        <div class="tabs" id="tabs"><button data-t="gen" aria-pressed="true">音頻</button><button data-t="sweep" aria-pressed="false">掃頻</button><button data-t="hear" aria-pressed="false">聽力</button><button data-t="bin" aria-pressed="false">雙耳拍</button></div>
+
+        <div id="pg-gen">
+            <div class="card">
+                <h2>音頻產生器</h2>
+                <label for="wave">波形</label>
+                <select id="wave">
+                    <option value="sine">正弦波</option>
+                    <option value="square">方波</option>
+                    <option value="triangle">三角波</option>
+                    <option value="sawtooth">鋸齒波</option>
+                    <option value="white">白噪音</option>
+                    <option value="pink">粉紅噪音</option>
+                </select>
+                <label for="fnum">頻率（Hz，20–20000）</label>
+                <div class="row"><input id="fnum" type="number" inputmode="decimal" min="20" max="20000" step="any" value="440" aria-label="頻率"><select id="preset" aria-label="常用音高"></select></div>
+                <div class="row"><input id="fslide" type="range" min="0" max="1000" step="1" aria-label="頻率滑桿（對數）"></div>
+                <div class="chips"><button class="sm" data-d="-10">-10</button><button class="sm" data-d="-1">-1</button><button class="sm" data-d="1">+1</button><button class="sm" data-d="10">+10</button><span class="muted" id="fnote"></span></div>
+                <label for="vol">音量：<span id="volv"></span></label>
+                <div class="row"><input id="vol" type="range" min="-60" max="-6" step="1" value="-30" aria-label="音量（dBFS）"></div>
+                <p class="note">最大 -6 dBFS；改變音量會平滑過渡。播放前請先確認裝置音量很小。</p>
+                <label for="chan">聲道（可用來測試耳機 / 喇叭左右是否接反）</label>
+                <select id="chan">
+                    <option value="both">雙聲道</option>
+                    <option value="left">只有左</option>
+                    <option value="right">只有右</option>
+                    <option value="auto">左 → 右 自動輪流</option>
+                </select>
+                <p class="note" id="chanNote"></p>
+                <div class="chips"><button class="primary" id="genGo">▶ 開始</button></div>
+            </div>
+        </div>
+
+        <div id="pg-sweep" hidden>
+            <div class="card">
+                <h2>頻率掃描</h2>
+                <div class="row"><input id="sf0" type="number" inputmode="decimal" value="20" min="20" max="20000" aria-label="起始頻率 Hz"><span>→</span><input id="sf1" type="number" inputmode="decimal" value="20000" min="20" max="20000" aria-label="結束頻率 Hz"></div>
+                <div class="row" style="margin-top:8px"><input id="sdur" type="number" inputmode="decimal" value="10" min="1" max="120" aria-label="時間長度（秒）"><select id="smode" aria-label="掃描方式"><option value="log">對數（每個八度等時）</option><option value="linear">線性</option></select></div>
+                <label><input type="checkbox" id="sloop"> 循環播放</label>
+                <div class="big" id="swNow">—</div>
+                <div class="bar"><i id="swBar"></i></div>
+                <p class="note">起訖頻率 20–20000 Hz，時間 1–120 秒；起點大於終點即為由高到低。音量使用「音頻」分頁的設定。</p>
+                <div class="chips"><button class="primary" id="swGo">▶ 開始掃描</button></div>
+            </div>
+        </div>
+
+        <div id="pg-hear" hidden>
+            <div class="card">
+                <h2>聽力頻率測試</h2>
+                <p>從 8 kHz 開始，每階播放 2 秒、逐階升高到 20 kHz。聽得到就按「聽得到」，直到某階聽不到為止。請戴耳機、環境安靜，音量調到剛好聽得到 8 kHz 的最小音量。</p>
+                <div class="big" id="hStep">尚未開始</div>
+                <div class="bar"><i id="hBar"></i></div>
+                <div class="chips"><button class="primary" id="hStart">開始測試</button><button id="hYes" disabled>聽得到</button><button id="hNo" disabled>聽不到</button><button id="hAgain" disabled>再播一次</button></div>
+                <p id="hResult"></p>
+                <p class="note">結果受年齡（成年後高頻上限會自然下降，常見約 15–18 kHz）、耳機 / 喇叭的頻率響應與音量影響；許多手機喇叭根本播不出 16 kHz 以上。這不是醫療檢測。</p>
+            </div>
+        </div>
+
+        <div id="pg-bin" hidden>
+            <div class="card">
+                <h2>雙耳拍 / 節拍</h2>
+                <p>左耳播基礎頻率、右耳播「基礎 + 差值」，大腦會感受到差值頻率的節拍。<b>必須戴耳機</b>。僅供放鬆參考，非醫療用途，效果因人而異。</p>
+                <div class="row"><input id="bbase" type="number" inputmode="decimal" value="200" min="100" max="500" aria-label="基礎頻率 Hz"><input id="bbeat" type="number" inputmode="decimal" value="10" min="1" max="40" aria-label="差值 Hz"></div>
+                <div class="chips"><button class="sm" data-beat="2">Delta 2</button><button class="sm" data-beat="6">Theta 6</button><button class="sm" data-beat="10">Alpha 10</button><button class="sm" data-beat="20">Beta 20</button></div>
+                <div class="big" id="bNow">左 200 Hz / 右 210 Hz</div>
+                <p class="note">基礎頻率 100–500 Hz、差值 1–40 Hz。音量使用「音頻」分頁的設定。</p>
+                <div class="chips"><button class="primary" id="bGo">▶ 開始</button></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>即時顯示</h2>
+            <div class="row"><select id="timer" aria-label="定時自動停止"><option value="0">不自動停止</option><option value="30">30 秒後停止</option><option value="300">5 分鐘後停止</option><option value="900">15 分鐘後停止</option><option value="1800">30 分鐘後停止</option></select><button class="sm" id="vizBtn">切換為波形</button></div>
+            <canvas id="cv" aria-label="頻譜與波形"></canvas>
+            <p class="note" id="state">未播放。</p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>用瀏覽器的 Web Audio 產生測試音：可調波形、頻率、音量與左右聲道，還有掃頻、聽力頻率測試與雙耳拍，並即時顯示頻譜 / 波形。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>檢查耳機或喇叭的左右聲道是否接反、有沒有一邊沒聲音。</li>
+        <li>找出某個頻率的共振、雜音，或測喇叭的低頻 / 高頻下限。</li>
+        <li>好奇自己能聽到多高的頻率。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li><b>先把裝置音量調到最小</b>，再按「開始」並慢慢加大。</li>
+        <li>音頻：選波形、用滑桿（對數刻度）、數字或 ±1 / ±10 調頻率，或從下拉選音名（A4 = 440 Hz）與 1 kHz 測試音。音量最大 -6 dBFS，預設 -30。</li>
+        <li>聲道：選「左 → 右 自動輪流」，會每 1.5 秒換邊並顯示現在是哪一邊；若你聽到的和顯示相反，代表耳機戴反或左右接反。</li>
+        <li>掃頻：設起訖頻率與秒數，選線性或對數，可循環；上方即時顯示目前頻率。</li>
+        <li>聽力：按「開始測試」，每階播 2 秒，按「聽得到 / 聽不到」（沒聽清楚可「再播一次」），第一次聽不到就結束並給出結果。</li>
+        <li>雙耳拍：戴耳機，設基礎頻率與差值，按「開始」。</li>
+        <li>可選「定時自動停止」；頁面切到背景或離開時會自動停止聲音。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">頻率 440 Hz、正弦波、-30 dBFS、聲道選「左 → 右 自動輪流」
+        → 先左耳、再右耳輪流響；畫面顯示「現在：左聲道」時，聲音應在左邊
+        聽力測試：8、10、12、14、15 kHz 都聽得到，16 kHz 聽不到
+        → 你的聽力上限約 15 kHz</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li><b>安全：</b>高頻與突然的聲音可能傷耳。音量永遠從最小開始、不要在聽到時再用力加大；有耳鳴、耳疾或兒童使用請避免。</li>
+        <li>聽力測試<b>不是醫療檢測</b>，結果受年齡、耳機 / 喇叭、音量與環境噪音影響；有疑慮請就醫。</li>
+        <li>iPhone 需要按按鈕才會發聲；若靜音開關開著可能聽不到。頻譜只在播放時繪製。</li>
+        <li>雙耳拍僅供放鬆參考，效果因人而異，非醫療用途。</li>
+        <li>本工具不儲存任何資料，沒有備份或清除項目。</li>
+        </ul>
+    </template>
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        const FMIN = 20, FMAX = 20000;
+        const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+        // 頻率 <-> 對數滑桿位置（0–1）
+        const freqToPos = (f) => Math.log(clamp(f, FMIN, FMAX) / FMIN) / Math.log(FMAX / FMIN);
+        const posToFreq = (p) => FMIN * Math.pow(FMAX / FMIN, clamp(p, 0, 1));
+        // dB <-> 增益
+        const dbToGain = (db) => Math.pow(10, db / 20);
+        const gainToDb = (g) => 20 * Math.log10(g);
+        // 音名 <-> 頻率（A4 = 440，平均律）
+        const NOTE_IDX = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+        const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        function noteFreq(name) {
+            const m = /^([A-Ga-g])([#b]?)(-?\d)$/.exec(String(name).trim());
+            if (!m) return NaN;
+            const midi = (+m[3] + 1) * 12 + NOTE_IDX[m[1].toUpperCase()] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
+            return 440 * Math.pow(2, (midi - 69) / 12);
+        }
+        // 最接近的音名與音分偏差
+        function freqToNote(f) {
+            if (!(f > 0)) return null;
+            const x = 69 + 12 * Math.log2(f / 440), midi = Math.round(x);
+            return { name: NOTE_NAMES[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1), cents: Math.round((x - midi) * 100) };
+        }
+        const PRESETS = [['A4 440 Hz（標準音）', 440], ['1 kHz 測試音', 1000], ['C4 中央 C', noteFreq('C4')], ['D4', noteFreq('D4')], ['E4', noteFreq('E4')], ['F4', noteFreq('F4')], ['G4', noteFreq('G4')], ['B4', noteFreq('B4')], ['C5', noteFreq('C5')], ['A3', noteFreq('A3')], ['A5', noteFreq('A5')], ['100 Hz', 100], ['10 kHz', 10000]];
+        // 掃描頻率軌跡：t 秒時的頻率（mode: 'log' | 'linear'）
+        function sweepFreq(t, dur, f0, f1, mode) {
+            const k = clamp(t / dur, 0, 1);
+            return mode === 'linear' ? f0 + (f1 - f0) * k : f0 * Math.pow(f1 / f0, k);
+        }
+        // 開始 / 停止淡入淡出的時間點（秒）
+        function fadePlan(now, ms = 20) { return { t0: now, t1: now + ms / 1000, stopAt: now + ms / 1000 + 0.01 }; }
+        // 聽力測試判定：heard 是依序各階的答案（true 聽得到）
+        const HEAR_LEVELS = [8000, 10000, 12000, 14000, 15000, 16000, 17000, 18000, 19000, 20000];
+        function hearingResult(heard, levels = HEAR_LEVELS) {
+            const i = heard.indexOf(false);
+            if (i < 0 && heard.length < levels.length) return { done: false };
+            if (i < 0) return { done: true, khz: levels[levels.length - 1] / 1000, text: `你的聽力上限至少到 ${levels[levels.length - 1] / 1000} kHz（本測試最高階）` };
+            if (i === 0) return { done: true, khz: null, text: `你的聽力上限低於 ${levels[0] / 1000} kHz（本測試最低階）` };
+            return { done: true, khz: levels[i - 1] / 1000, text: `你的聽力上限約 ${levels[i - 1] / 1000} kHz` };
+        }
+        // 雙耳拍：左 / 右聲道頻率
+        function binauralFreqs(base, beat) {
+            const b = clamp(+base || 200, 100, 500), d = clamp(+beat || 10, 1, 40);
+            return [b, b + d];
+        }
+        // 粉紅噪音（Paul Kellet 近似），輸出約 -1…1
+        function pinkNoise(n, rnd = Math.random) {
+            const out = new Float32Array(n);
+            let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+            for (let i = 0; i < n; i++) {
+                const w = rnd() * 2 - 1;
+                b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.969 * b2 + w * 0.153852;
+                b3 = 0.8665 * b3 + w * 0.3104856; b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898;
+                out[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11; b6 = w * 0.115926;
+            }
+            return out;
+        }
+        // 解析使用者輸入的頻率（壞值回預設）
+        const parseFreq = (v, def = 440) => { const n = parseFloat(v); return Number.isFinite(n) ? clamp(n, FMIN, FMAX) : def; };
+        // --- /pure ---
+
+        const $ = (id) => document.getElementById(id);
+        const S = { ctx: null, vol: null, an: null, cur: null, mode: '', t0: 0, sw: null, timers: [], raf: 0, viz: 'spec', freq: 440, hear: [], hearIdx: 0 };
+        const AC = window.AudioContext || window.webkitAudioContext;
+        const volDb = () => +$('vol').value;
+
+        async function ensure() {
+            if (!S.ctx) {
+                S.ctx = new AC();
+                S.vol = S.ctx.createGain(); S.vol.gain.value = dbToGain(volDb());
+                S.an = S.ctx.createAnalyser(); S.an.fftSize = 2048; S.an.smoothingTimeConstant = 0.7;
+                S.vol.connect(S.an); S.an.connect(S.ctx.destination);
+            }
+            if (S.ctx.state !== 'running') { try { await S.ctx.resume(); } catch (e) { } }
+            return S.ctx;
+        }
+        const noiseCache = {};
+        function noiseBuf(type) {
+            const key = type + S.ctx.sampleRate;
+            if (noiseCache[key]) return noiseCache[key];
+            const n = S.ctx.sampleRate * 2, buf = S.ctx.createBuffer(1, n, S.ctx.sampleRate), d = buf.getChannelData(0);
+            if (type === 'white') for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * 0.5; else d.set(pinkNoise(n));
+            return noiseCache[key] = buf;
+        }
+        // voices: [{type, freq, pan}]；淡入 fadeMs 毫秒
+        async function start(mode, voices, fadeMs = 20) {
+            stopAll();
+            await ensure();
+            const ctx = S.ctx, now = ctx.currentTime, mix = ctx.createGain();
+            mix.gain.setValueAtTime(0, now); mix.gain.linearRampToValueAtTime(1, fadePlan(now, fadeMs).t1);
+            mix.connect(S.vol);
+            const vs = voices.map(v => {
+                const P = ctx.createStereoPanner(); P.pan.value = v.pan || 0;
+                let src;
+                if (v.type === 'white' || v.type === 'pink') { src = ctx.createBufferSource(); src.buffer = noiseBuf(v.type); src.loop = true; }
+                else { src = ctx.createOscillator(); src.type = v.type; src.frequency.value = v.freq; }
+                src.connect(P); P.connect(mix); src.start(now);
+                return { src, P };
+            });
+            S.cur = { mix, voices: vs }; S.mode = mode;
+            const secs = +$('timer').value;
+            if (secs && mode !== 'hear') S.timers.push(setTimeout(stopAll, secs * 1000));
+            S.raf = requestAnimationFrame(frame);
+            ui();
+            return S.cur;
+        }
+        function stopAll() {
+            S.timers.forEach(t => { clearTimeout(t); clearInterval(t); }); S.timers = [];
+            cancelAnimationFrame(S.raf); S.raf = 0;
+            const c = S.cur; S.cur = null; S.mode = '';
+            if (c) {
+                const now = S.ctx.currentTime, f = fadePlan(now);
+                c.mix.gain.cancelScheduledValues(now); c.mix.gain.setValueAtTime(c.mix.gain.value, now); c.mix.gain.linearRampToValueAtTime(0, f.t1);
+                c.voices.forEach(v => { try { v.src.stop(f.stopAt); } catch (e) { } });
+                setTimeout(() => { try { c.mix.disconnect(); } catch (e) { } }, 100);
+            }
+            ui(); draw(true);
+        }
+        function setVol() {
+            const db = volDb(); $('volv').textContent = db + ' dBFS';
+            if (!S.vol) return;
+            const g = S.vol.gain, now = S.ctx.currentTime;
+            g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(dbToGain(db), now + 0.05);
+        }
+        const label = { gen: '音頻', sweep: '掃頻', hear: '聽力測試', bin: '雙耳拍' };
+        function ui() {
+            const on = (m) => S.mode === m;
+            $('genGo').textContent = on('gen') ? '■ 停止' : '▶ 開始';
+            $('swGo').textContent = on('sweep') ? '■ 停止' : '▶ 開始掃描';
+            $('bGo').textContent = on('bin') ? '■ 停止' : '▶ 開始';
+            $('state').textContent = S.mode ? '播放中：' + label[S.mode] : '未播放。';
+        }
+
+        // ---- 頻譜 / 波形 ----
+        const cv = $('cv'), g2 = cv.getContext('2d');
+        function sizeCanvas() {
+            const dpr = Math.min(window.devicePixelRatio || 1, 2), w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
+            if (w && (cv.width !== w || cv.height !== h)) { cv.width = w; cv.height = h; }
+        }
+        function draw(clear) {
+            sizeCanvas();
+            const w = cv.width, h = cv.height; g2.clearRect(0, 0, w, h);
+            if (clear || !S.an) return;
+            const cs = getComputedStyle(document.documentElement);
+            g2.strokeStyle = cs.getPropertyValue('--blue').trim() || '#38f'; g2.lineWidth = Math.max(1, w / 400); g2.beginPath();
+            if (S.viz === 'wave') {
+                const d = new Float32Array(S.an.fftSize); S.an.getFloatTimeDomainData(d);
+                const n = Math.min(d.length, 1024);
+                for (let i = 0; i < n; i++) { const x = i / (n - 1) * w, y = h / 2 - d[i] * h * 0.9 / 2 * 2; i ? g2.lineTo(x, y) : g2.moveTo(x, y); }
+            } else {
+                const d = new Uint8Array(S.an.frequencyBinCount), ny = S.ctx.sampleRate / 2;
+                S.an.getByteFrequencyData(d);
+                for (let x = 0; x < w; x += 2) {
+                    const f = posToFreq(x / w), bin = Math.min(d.length - 1, Math.round(f / ny * d.length)), y = h - d[bin] / 255 * h;
+                    x ? g2.lineTo(x, y) : g2.moveTo(x, y);
+                }
+            }
+            g2.stroke();
+        }
+        function frame() {
+            if (!S.cur) return;
+            if (!document.hidden) draw();
+            if (S.mode === 'sweep' && S.sw) {
+                const el = S.ctx.currentTime - S.t0, c = S.sw, f = sweepFreq(el, c.dur, c.f0, c.f1, c.mode);
+                $('swNow').textContent = Math.round(f) + ' Hz'; $('swBar').style.width = Math.min(100, el / c.dur * 100) + '%';
+                if (el >= c.dur) { if (c.loop) schedSweep(); else { stopAll(); return; } }
+            }
+            S.raf = requestAnimationFrame(frame);
+        }
+        $('vizBtn').onclick = () => { S.viz = S.viz === 'spec' ? 'wave' : 'spec'; $('vizBtn').textContent = S.viz === 'spec' ? '切換為波形' : '切換為頻譜'; draw(!S.cur); };
+        // 頁面隱藏 / 離開：停止聲音
+        document.addEventListener('visibilitychange', () => { if (document.hidden) stopAll(); });
+        addEventListener('pagehide', stopAll);
+
+        // ---- 分頁 ----
+        $('tabs').onclick = (e) => {
+            const b = e.target.closest('button'); if (!b) return;
+            stopAll();
+            document.querySelectorAll('#tabs button').forEach(x => x.setAttribute('aria-pressed', x === b));
+            for (const t of ['gen', 'sweep', 'hear', 'bin']) $('pg-' + t).hidden = t !== b.dataset.t;
+        };
+
+        // ---- 音頻產生器 ----
+        $('preset').innerHTML = '<option value="">常用音高…</option>' + PRESETS.map(([n, f], i) => `<option value="${f}">${n}</option>`).join('');
+        function setFreq(f, fromSlide) {
+            S.freq = parseFreq(f, S.freq);
+            if (!fromSlide) $('fslide').value = Math.round(freqToPos(S.freq) * 1000);
+            if (document.activeElement !== $('fnum') || fromSlide) $('fnum').value = +S.freq.toFixed(2);
+            const n = freqToNote(S.freq); $('fnote').textContent = n ? `≈ ${n.name} ${n.cents >= 0 ? '+' : ''}${n.cents} 音分` : '';
+            if (S.cur && S.mode === 'gen') S.cur.voices.forEach(v => { if (v.src.frequency) { const p = v.src.frequency, now = S.ctx.currentTime; p.cancelScheduledValues(now); p.setTargetAtTime(S.freq, now, 0.01); } });
+        }
+        $('fnum').oninput = () => setFreq($('fnum').value);
+        $('fnum').onchange = () => setFreq($('fnum').value, true);
+        $('fslide').oninput = () => setFreq(posToFreq($('fslide').value / 1000), true);
+        $('preset').onchange = () => { if ($('preset').value) setFreq($('preset').value, false); $('fnum').value = +S.freq.toFixed(2); $('preset').value = ''; };
+        document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { setFreq(S.freq + +b.dataset.d); $('fnum').value = +S.freq.toFixed(2); });
+        $('vol').oninput = setVol;
+        const panOf = { left: -1, right: 1, both: 0, auto: -1 };
+        function setPan(p) { if (!S.cur) return; const now = S.ctx.currentTime; S.cur.voices.forEach(v => { v.P.pan.cancelScheduledValues(now); v.P.pan.setValueAtTime(v.P.pan.value, now); v.P.pan.linearRampToValueAtTime(p, now + 0.02); }); }
+        function chanNote(side) { $('chanNote').textContent = $('chan').value === 'auto' && S.mode === 'gen' ? '現在：' + (side < 0 ? '左聲道' : '右聲道') + '（聽到的方向應與此一致）' : ''; }
+        async function genStart() {
+            const type = $('wave').value, ch = $('chan').value;
+            await start('gen', [{ type, freq: S.freq, pan: panOf[ch] }]);
+            if (ch === 'auto') {
+                let side = -1; chanNote(side);
+                S.timers.push(setInterval(() => { side = -side; setPan(side); chanNote(side); }, 1500));
+            } else chanNote(0);
+        }
+        $('genGo').onclick = () => S.mode === 'gen' ? (stopAll(), chanNote(0)) : genStart();
+        $('wave').onchange = () => { if (S.mode === 'gen') genStart(); };
+        $('chan').onchange = () => { if (S.mode === 'gen') genStart(); else chanNote(0); };
+
+        // ---- 掃頻 ----
+        function readSweep() {
+            return { f0: parseFreq($('sf0').value, 20), f1: parseFreq($('sf1').value, 20000), dur: clamp(parseFloat($('sdur').value) || 10, 1, 120), mode: $('smode').value, loop: $('sloop').checked };
+        }
+        function schedSweep() {
+            const c = S.sw, p = S.cur.voices[0].src.frequency, now = S.ctx.currentTime;
+            p.cancelScheduledValues(now); p.setValueAtTime(c.f0, now);
+            if (c.mode === 'log') p.exponentialRampToValueAtTime(c.f1, now + c.dur); else p.linearRampToValueAtTime(c.f1, now + c.dur);
+            S.t0 = now;
+        }
+        $('swGo').onclick = async () => {
+            if (S.mode === 'sweep') return stopAll();
+            const c = readSweep(); $('sf0').value = c.f0; $('sf1').value = c.f1; $('sdur').value = c.dur;
+            await start('sweep', [{ type: 'sine', freq: c.f0, pan: 0 }]);
+            S.sw = c; schedSweep();
+        };
+
+        // ---- 聽力測試 ----
+        function hearShow(msg) { $('hStep').textContent = msg; $('hBar').style.width = Math.min(100, S.hearIdx / HEAR_LEVELS.length * 100) + '%'; }
+        async function hearPlay() {
+            const f = HEAR_LEVELS[S.hearIdx];
+            hearShow(`第 ${S.hearIdx + 1} / ${HEAR_LEVELS.length} 階：${f / 1000} kHz`);
+            ['hYes', 'hNo', 'hAgain'].forEach(i => $(i).disabled = false);
+            await start('hear', [{ type: 'sine', freq: f, pan: 0 }], 150);
+            S.timers.push(setTimeout(stopAll, 2000));
+        }
+        function hearAnswer(yes) {
+            stopAll(); S.hear.push(yes); S.hearIdx = S.hear.length;
+            const r = hearingResult(S.hear);
+            if (r.done) {
+                ['hYes', 'hNo', 'hAgain'].forEach(i => $(i).disabled = true);
+                hearShow('測試完成'); $('hBar').style.width = '100%'; $('hStart').textContent = '重新測試';
+                $('hResult').innerHTML = `<b>${r.text}</b><br>這不是醫療檢測；結果受年齡、耳機 / 喇叭與音量影響。`;
+            } else hearPlay();
+        }
+        $('hStart').onclick = () => { S.hear = []; S.hearIdx = 0; $('hResult').textContent = ''; hearPlay(); };
+        $('hYes').onclick = () => hearAnswer(true);
+        $('hNo').onclick = () => hearAnswer(false);
+        $('hAgain').onclick = hearPlay;
+
+        // ---- 雙耳拍 ----
+        function binShow() { const [l, r] = binauralFreqs($('bbase').value, $('bbeat').value); $('bNow').textContent = `左 ${l} Hz / 右 ${r} Hz`; return [l, r]; }
+        $('bbase').oninput = $('bbeat').oninput = binShow;
+        document.querySelectorAll('[data-beat]').forEach(b => b.onclick = () => { $('bbeat').value = b.dataset.beat; binShow(); });
+        $('bGo').onclick = () => {
+            if (S.mode === 'bin') return stopAll();
+            const [l, r] = binShow();
+            start('bin', [{ type: 'sine', freq: l, pan: -1 }, { type: 'sine', freq: r, pan: 1 }]);
+        };
+
+        setFreq(440); setVol(); sizeCanvas(); draw(true);
+        addEventListener('resize', () => draw(!S.cur));
+    </script>
+</body>
+
+</html>

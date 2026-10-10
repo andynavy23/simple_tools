@@ -55,6 +55,8 @@
                 <label for="kind">種類</label>
                 <select id="kind">
                     <option value="uuid">UUID v4</option>
+                    <option value="uuid7">UUID v7（可排序）</option>
+                    <option value="ulid">ULID（可排序）</option>
                     <option value="int">隨機整數</option>
                     <option value="date">隨機日期</option>
                     <option value="name">假姓名（中文）</option>
@@ -74,7 +76,7 @@
         <p>一次產生一批 UUID 或測試用的隨機資料：隨機整數、隨機日期、假姓名、假手機號碼、假 Email。</p>
         <h3>什麼時候用</h3>
         <ul>
-        <li>開發時需要一堆唯一 ID（UUID v4）當資料庫主鍵或測試資料。</li>
+        <li>開發時需要一堆唯一 ID（UUID v4）當資料庫主鍵或測試資料；想要能依時間排序的 ID 就用 UUID v7 或 ULID。</li>
         <li>做表單、報表的假資料，不想用真人姓名電話。</li>
         <li>臨時抽一個範圍內的數字或日期。</li>
         </ul>
@@ -88,18 +90,23 @@
         <h3>範例</h3>
         <div class="eg">種類選「UUID v4」、數量 3、按「產生」
         → 出現 3 行，格式像 3f2b8c1e-9a4d-4e7b-8c21-5d0a6b7e1f90
-        （第三段開頭固定是 4，代表版本 4）</div>
+        （第三段開頭固定是 4，代表版本 4）
+種類選「UUID v7」、時間基準「指定時間」2022-02-23 03:22:22（裝置為臺北時區）、數量 3
+→ 3 行都以 017f22e2-79b0-7 開頭（同一毫秒），第三段開頭固定是 7，整批由小到大排列</div>
         <h3>小提醒</h3>
         <ul>
         <li>使用瀏覽器的安全亂數，全部在本機產生，不會上傳。</li>
         <li>假姓名、手機、Email 只是隨機組合（Email 一律 example.com），不是真實的人。</li>
         <li>隨機日期的起日不能晚於迄日。</li>
+        <li>UUID v7 / ULID 是「可排序」的新式 ID：前段是毫秒時間，所以照文字排序 = 照時間排序，適合當資料庫主鍵。同一毫秒內產生的多筆，隨機部分會逐筆 +1，確保一批結果一定由小到大（產生後會顯示「字典序 = 時間序（已驗證）」）。</li>
+        <li>「時間基準」選「現在」是用產生當下的時間；選「指定時間」則整批共用那個時間（以裝置時區解讀），靠遞增的隨機部分維持順序。UUID v7 可用大寫 / 不含連字號；ULID 固定是 26 個大寫字元，沒有這兩個選項。</li>
+        <li>UUID v7 / ULID 的時間可以被讀出來，不適合當作需要保密建立時間的 ID；要反查時間請到「時間戳轉換」的 ID 分頁。</li>
         </ul>
     </template>
 
     <script src="../shared/js/util.js"></script>
     <script>
-        const { rnd, day, store } = Util;
+        const { rnd, day, store, ids } = Util;
 
         // --- pure ---
         // RFC 4122 v4：第 13 個 16 進位字元固定 4，第 17 個是 8 / 9 / a / b
@@ -125,6 +132,26 @@
         // 台灣手機格式 09 + 8 位數字；用 0900-0999 測試段以外的隨機值，僅供測試
         const fakePhone = (r = rnd) => '09' + Array.from({ length: 8 }, () => r(10)).join('');
         const fakeEmail = (r = rnd) => 'abcdefghijklmnopqrstuvwxyz'[r(26)] + randStr(3 + r(6), 'lower', r) + '@example.com';
+
+        // 可排序 ID（UUID v7 / ULID）批次產生，單調遞增：getMs() 回傳每筆的時間（毫秒）；同一毫秒內隨機部分 +1（v7 74 位元、ULID 80 位元），
+        // 時間倒退時沿用上一筆的時間，隨機部分溢位則時間 +1ms 並重新抽隨機。結果的字典序 = 產生順序
+        const toBytes = (n, len) => Uint8Array.from({ length: len }, (_, i) => Number((n >> BigInt(8 * (len - 1 - i))) & 255n));
+        function monotonic(kind, n, getMs, r = rnd) {
+            const bits = kind === 'ulid' ? 80n : 74n, max = (1n << bits) - 1n, fresh = () => { let x = 0n; for (let i = 0n; i < bits; i += 8n) x = (x << 8n) | BigInt(r(256)); return x & max; };
+            const out = []; let last = -1, ctr = 0n;
+            for (let i = 0; i < n; i++) {
+                let ms = Math.max(Math.floor(getMs()), last);
+                if (ms === last) { ctr += 1n; if (ctr > max) { ms++; ctr = fresh(); } } else ctr = fresh();
+                last = ms;
+                // uuidv7 的 10 個隨機位元組：[rand_a 高 4 位, rand_a 低 8 位, rand_b 62 位（8 位元組）]；ulid 則是 80 位元大端序
+                const bytes = kind === 'ulid' ? toBytes(ctr, 10) : Uint8Array.from([Number(ctr >> 70n), Number((ctr >> 62n) & 255n), ...toBytes(ctr & ((1n << 62n) - 1n), 8)]);
+                out.push(kind === 'ulid' ? ids.ulid(ms, () => bytes) : ids.uuidv7(ms, () => bytes));
+            }
+            return out;
+        }
+        const isAscending = (a) => a.every((v, i) => i === 0 || a[i - 1] < v);
+        // 「指定時間」欄的值（YYYY-MM-DDTHH:mm[:ss]，裝置時區）→ 毫秒；格式不對丟錯誤
+        function baseMs(v) { const t = new Date(v).getTime(); if (!v || !Number.isFinite(t)) throw new Error('指定時間格式不對'); return t; }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -133,8 +160,11 @@
             date: '<label for="from">從</label><input type="date" id="from"><label for="to">到</label><input type="date" id="to">',
             uuid: '<label><input type="checkbox" id="upper"> 大寫</label><label><input type="checkbox" id="nodash"> 不含連字號</label>',
         };
+        const BASE = '<label for="tbase">時間基準</label><select id="tbase"><option value="now">現在</option><option value="at">指定時間</option></select><input type="datetime-local" id="tat" step="1" aria-label="指定時間（裝置時區）" disabled>';
+        OPTS.uuid7 = OPTS.uuid + BASE; OPTS.ulid = BASE;
         function renderOpts() {
             $('#opts').innerHTML = OPTS[$('#kind').value] || ''; $('#opts').hidden = !OPTS[$('#kind').value];
+            if ($('#tat')) $('#tat').value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 19);
             if ($('#from')) { $('#from').value = day.shift(day.today(), -365); $('#to').value = day.today(); }
         }
         const num = (id, d) => { const v = parseInt($(id).value, 10); return Number.isFinite(v) ? v : d; };
@@ -142,6 +172,13 @@
         function generate() {
             const n = Math.max(1, Math.min(1000, num('#count', 10))), k = $('#kind').value, out = [];
             try {
+                if (k === 'uuid7' || k === 'ulid') {
+                    const at = $('#tbase').value === 'at' ? baseMs($('#tat').value) : null;
+                    const raw = monotonic(k, n, at === null ? Date.now : () => at);
+                    const fmt = (s) => { if (k === 'ulid') return s; if ($('#upper').checked) s = s.toUpperCase(); return $('#nodash').checked ? s.replace(/-/g, '') : s; };   // ULID 本來就是大寫無連字號，不適用這兩個選項
+                    $('#out').value = raw.map(fmt).join('\n');
+                    $('#info').textContent = `${n} 筆${isAscending(raw) ? '，字典序 = 時間序（已驗證）' : ''}`; return;
+                }
                 for (let i = 0; i < n; i++) {
                     if (k === 'uuid') { let s = uuid4(); if ($('#upper').checked) s = s.toUpperCase(); if ($('#nodash').checked) s = s.replace(/-/g, ''); out.push(s); }
                     else if (k === 'int') out.push(randInt(num('#lo', 1), num('#hi', 100)));
@@ -154,6 +191,7 @@
             } catch (e) { $('#out').value = ''; $('#info').textContent = e.message; }
         }
         $('#kind').onchange = () => { renderOpts(); generate(); store.set('rd_kind', $('#kind').value); };
+        $('#opts').onchange = (e) => { if (e.target.id === 'tbase') $('#tat').disabled = e.target.value !== 'at'; if (e.target.id === 'tbase' || e.target.id === 'tat') generate(); };
         $('#gen').onclick = generate; $('#count').onchange = generate;
         $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), $('#out').value, () => $('#out').select());
         const k0 = store.get('rd_kind', 'uuid'); if ([...$('#kind').options].some(o => o.value === k0)) $('#kind').value = k0;

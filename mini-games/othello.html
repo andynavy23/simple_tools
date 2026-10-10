@@ -36,6 +36,7 @@
         <ul>
         <li>角落一旦佔到就不會被翻，最值錢；緊鄰角落的格子通常很危險。</li>
         <li>悔棋與提示只在單機和本機雙人出現。</li>
+        <li>落子、翻面、可下位置都有動畫（只動畫 transform / 透明度）；電腦會等你的動畫播完才開始思考。系統開啟「減少動態效果」時會自動關閉動畫，切到別的分頁也不會累積。悔棋直接跳回、沒有動畫。</li>
         <li>連線時房主離開遊戲就結束；資料只在雙方瀏覽器之間傳送。</li>
         </ul>
     </template>
@@ -156,6 +157,72 @@
         @keyframes blink {
             to {
                 opacity: .6;
+            }
+        }
+
+        .sq.ok::after {
+            animation: fadein .2s ease-out;
+        }
+
+        @keyframes fadein {
+            from {
+                opacity: 0;
+            }
+        }
+
+        .sq i.drop {
+            animation: drop .15s ease-in both;
+        }
+
+        @keyframes drop {
+            from {
+                transform: scale(1.7);
+                opacity: 0;
+            }
+        }
+
+        .sq i.flip {
+            position: relative;
+            transform-style: preserve-3d;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            animation: flip .3s ease-in-out var(--d) both;
+        }
+
+        .sq i.flip::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            transform: rotateY(180deg);
+        }
+
+        .sq i.flip.p1::before {
+            background: #fff;
+        }
+
+        .sq i.flip.p2::before {
+            background: #111;
+        }
+
+        @keyframes flip {
+            from {
+                transform: perspective(240px) rotateY(180deg);
+            }
+
+            to {
+                transform: perspective(240px) rotateY(360deg);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+
+            .sq i.drop,
+            .sq i.flip,
+            .sq.ok::after {
+                animation: none;
             }
         }
 
@@ -337,6 +404,19 @@
         // 提示：目前輪到的人的建議 [r, c]（用普通級電腦）；已結束回傳 null
         const hintMove = (state) => (state.over ? null : cpuMove(state.board, state.turn, 'normal'));
 
+        // ---------- 動畫計畫（視覺層）：prev → next 剛好多一顆子才播；悔棋 / 重開 / 同步重置都回傳 null ----------
+        const DROP_MS = 150, FLIP_MS = 300, FLIP_STEP = 40;
+        function animPlan(prev, next, last) {
+            if (!prev || !next || !last) return null;
+            const [lr, lc] = last, tot = (b) => b.reduce((a, row) => a + row.filter(Boolean).length, 0);
+            if (prev[lr][lc] !== 0 || next[lr][lc] === 0 || tot(next) !== tot(prev) + 1) return null;
+            const flipsList = [];
+            for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (prev[r][c] && next[r][c] && prev[r][c] !== next[r][c])
+                flipsList.push({ r, c, delay: DROP_MS - 30 + FLIP_STEP * (Math.max(Math.abs(r - lr), Math.abs(c - lc)) - 1) });
+            const total = Math.max(DROP_MS, ...flipsList.map(f => f.delay + FLIP_MS));
+            return { drop: [lr, lc], flips: flipsList, total };
+        }
+
         // 成員端檢查房主傳來的狀態
         function validState(s) {
             const pos = (p) => Array.isArray(p) && p.length === 2 && p.every(v => Number.isInteger(v) && v >= 0 && v < N);
@@ -346,7 +426,7 @@
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
-        let mode = 'menu', S = null, room = null, myPlayer = 0, names = ['', ''], firstGame = true, hostId = '', cpuPlayer = 0, cpuLevel = 'normal', cpuTimer = 0, H = [], hint = null;
+        let mode = 'menu', S = null, room = null, myPlayer = 0, names = ['', ''], firstGame = true, hostId = '', cpuPlayer = 0, cpuLevel = 'normal', cpuTimer = 0, H = [], hint = null, shown = null, animUntil = 0;
 
         const netMsg = (t) => { $('#netMsg').textContent = t; };
         const enableNet = (on) => ['#local', '#cpu', '#host', '#join', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
@@ -362,12 +442,19 @@
         function render() {
             if (!S) return;
             const sq = $('#board').children, myTurn = mode === 'local' || S.turn === myPlayer, canPlay = !S.over && myTurn && !(mode === 'host' && (!room || room.players.length < 2));
+            const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches || document.hidden;
+            const plan = reduce ? null : animPlan(shown, S.board, S.last), fl = new Map(plan ? plan.flips.map(f => [f.r * N + f.c, f.delay]) : []);
+            if (plan) animUntil = performance.now() + plan.total;
+            shown = S.board.map(row => row.slice());
             const ok = new Set(canPlay ? legalMoves(S.board, S.turn).map(([r, c]) => r * N + c) : []);
             for (let i = 0; i < N * N; i++) {
                 const r = Math.floor(i / N), c = i % N, v = S.board[r][c], b = sq[i];
                 b.className = 'sq' + (ok.has(i) ? ' ok' : '') + (hint && hint[0] === r && hint[1] === c ? ' hint' : '') + (S.last && S.last[0] === r && S.last[1] === c ? ' last' : '');
                 b.disabled = !ok.has(i);
-                b.replaceChildren(...(v ? [Object.assign(document.createElement('i'), { className: 'p' + v })] : []));
+                const pc = Object.assign(document.createElement('i'), { className: 'p' + v });
+                if (plan && plan.drop[0] === r && plan.drop[1] === c) pc.classList.add('drop');
+                else if (fl.has(i)) { pc.classList.add('flip'); pc.style.setProperty('--d', fl.get(i) + 'ms'); }
+                b.replaceChildren(...(v ? [pc] : []));
             }
             $('#nBlack').textContent = count(S.board, 1); $('#nWhite').textContent = count(S.board, 2);
             const dot = (p) => `<span class="dot p${p}"></span>`;
@@ -397,10 +484,11 @@
 
         function show(screen) { $('#menu').hidden = screen !== 'menu'; $('#game').hidden = screen !== 'game'; }
 
-        function startLocal() { mode = 'local'; S = newGame(); H = []; hint = null; build(); show('game'); render(); }
+        function startLocal() { shown = null; mode = 'local'; S = newGame(); H = []; hint = null; build(); show('game'); render(); }
 
         // ---------- 對電腦 ----------
         function startCpu() {
+            shown = null;
             mode = 'cpu'; cpuLevel = $('#level').value; myPlayer = $('#first').value === 'cpu' ? 2 : 1; cpuPlayer = other(myPlayer);
             names = myPlayer === 1 ? ['你', '電腦'] : ['電腦', '你'];
             S = newGame(); H = []; hint = null; build(); show('game'); render(); scheduleCpu();
@@ -413,7 +501,7 @@
                 const mv = cpuMove(S.board, cpuPlayer, cpuLevel);
                 if (mv) move(cpuPlayer, mv[0], mv[1]);
                 render(); scheduleCpu();                              // 對手無子可下被跳過時，輪到電腦連下
-            }, 550);
+            }, 550 + Math.max(0, animUntil - performance.now()));       // 玩家落子動畫結束後才開始計時
         }
 
         const readNick = () => {
@@ -468,8 +556,8 @@
         $('#cpu').onclick = startCpu;
         $('#host').onclick = hostRoom;
         $('#join').onclick = joinRoom;
-        $('#again').onclick = () => { S = newGame(); H = []; hint = null; if (mode === 'host') publish(); else { render(); scheduleCpu(); } };
-        $('#undo').onclick = () => { const s = undoTo(H, mode === 'cpu' ? myPlayer : 0); if (!s) return; clearTimeout(cpuTimer); S = s; hint = null; render(); scheduleCpu(); };
+        $('#again').onclick = () => { shown = null; S = newGame(); H = []; hint = null; if (mode === 'host') publish(); else { render(); scheduleCpu(); } };
+        $('#undo').onclick = () => { const s = undoTo(H, mode === 'cpu' ? myPlayer : 0); if (!s) return; clearTimeout(cpuTimer); shown = null; animUntil = 0; S = s; hint = null; render(); scheduleCpu(); };
         $('#hint').onclick = () => { hint = hintMove(S); render(); };
         $('#copy').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copy'), url, () => prompt('請手動複製邀請連結：', url)); };
         $('#leave').onclick = () => location.reload();
