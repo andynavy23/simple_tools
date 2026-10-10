@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="JWT 解碼與檢查：解 header / payload、轉換 exp / iat / nbf 時間、標出 alg none 等風險，可用 HS256/384/512 密鑰驗證簽章或產生測試用 JWT。">
+    <meta property="og:title" content="JWT 解碼與檢查" />
+    <meta property="og:description" content="解 JWT、看到期時間、檢查常見風險，密鑰不離開瀏覽器。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/jwt-decoder.html" />
+    <title>JWT 解碼與檢查</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+        }
+
+        #gh,
+        #gp {
+            min-height: 90px;
+        }
+
+        .mono {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+        }
+
+        .li b {
+            text-align: right;
+            overflow-wrap: anywhere;
+        }
+
+        .code {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 14px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin: 8px 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        .ok {
+            color: var(--ok);
+        }
+
+        .bad {
+            color: var(--bad);
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row input,
+        .row select {
+            flex: 1;
+            min-width: 140px;
+        }
+
+        .risk {
+            padding: 10px 12px;
+            margin: 8px 0;
+            border-radius: var(--radius-sm);
+            background: var(--fill);
+            border-left: 4px solid var(--muted);
+            overflow-wrap: anywhere;
+        }
+
+        .risk.bad {
+            border-left-color: var(--bad);
+        }
+
+        .risk.warn {
+            border-left-color: var(--blue);
+        }
+
+        .risk b {
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .warnbox {
+            border-left: 4px solid var(--bad);
+            padding-left: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>JWT 解碼與檢查</h1>
+        <p class="sub">貼上 JWT，看內容、到期時間與風險；全部在本機計算。</p>
+        <p class="note warnbox">請勿貼上正式環境、仍有效的敏感 token。本頁不會上傳，但剪貼簿、瀏覽器擴充或螢幕分享仍可能外洩。</p>
+
+        <div class="card">
+            <label for="tok">JWT</label>
+            <textarea id="tok" aria-label="JWT" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="eyJhbGciOiJIUzI1NiIs...（可含 Bearer 前綴）"></textarea>
+            <div class="row" style="margin-top:8px"><button class="sm" id="sample">帶入範例</button><button class="sm" id="clear">清空</button></div>
+            <p class="note bad" id="err"></p>
+        </div>
+
+        <div id="result" hidden>
+            <div class="card"><h2>風險與提醒</h2>
+                <div id="risks"></div>
+            </div>
+            <div class="card"><h2>Header</h2>
+                <div class="code" id="hdr"></div>
+                <h2>Payload</h2>
+                <div class="code" id="pl"></div>
+                <button class="sm" id="copyPl">複製 Payload</button>
+            </div>
+            <div class="card" id="timeCard"><h2>時間</h2>
+                <div id="times"></div>
+            </div>
+            <div class="card" id="claimCard"><h2>常見欄位說明</h2>
+                <div id="claims"></div>
+            </div>
+            <div class="card"><h2>驗證簽章（HS256 / HS384 / HS512）</h2>
+                <div class="row"><select id="valg" aria-label="演算法">
+                        <option value="">依 header 的 alg</option>
+                        <option>HS256</option>
+                        <option>HS384</option>
+                        <option>HS512</option>
+                    </select><input id="secret" class="mono" placeholder="密鑰（當成 UTF-8 文字）" aria-label="密鑰" spellcheck="false" autocapitalize="off" autocomplete="off"></div>
+                <p class="note" id="vOut">輸入密鑰後才會驗證。密鑰只在瀏覽器內用 Web Crypto 計算，不會送出。</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>產生測試用 JWT（HS256 / 384 / 512）</h2>
+            <label for="gh">Header（JSON，alg 會依下方選擇覆蓋）</label>
+            <textarea id="gh" aria-label="Header JSON" spellcheck="false" autocapitalize="off">{"typ":"JWT"}</textarea>
+            <label for="gp">Payload（JSON）</label>
+            <textarea id="gp" aria-label="Payload JSON" spellcheck="false" autocapitalize="off"></textarea>
+            <div class="row" style="margin-top:8px"><select id="galg" aria-label="產生用演算法">
+                    <option>HS256</option>
+                    <option>HS384</option>
+                    <option>HS512</option>
+                </select><input id="gs" class="mono" placeholder="密鑰" aria-label="產生用密鑰" spellcheck="false" autocapitalize="off" autocomplete="off" value="test-secret"></div>
+            <div class="row" style="margin-top:8px"><button class="primary" id="gen">產生</button><button class="sm" id="copyGen" hidden>複製</button></div>
+            <p class="note bad" id="gErr"></p>
+            <div class="code" id="gOut" hidden></div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>把 JWT（JSON Web Token）拆成 header、payload、簽章，轉成看得懂的內容與時間，並指出常見的安全風險。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>登入 API 回傳一長串 token，想知道裡面放了什麼、什麼時候過期。</li>
+        <li>排查「401 / token expired」：確認是不是 exp 已過或 nbf 還沒到。</li>
+        <li>開發時需要一個自訂內容的測試 token（HS256）。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>把 JWT 貼進「JWT」欄（可含 <kbd>Bearer </kbd> 前綴、有換行也行），或按「帶入範例」。</li>
+        <li>看「風險與提醒」、Header、Payload，以及 exp / iat / nbf 的本地時間與「已過期 / 還有多久」。</li>
+        <li>想驗證簽章：在「驗證簽章」輸入密鑰（HS 系列），會顯示相符或不符。</li>
+        <li>想做測試 token：在「產生測試用 JWT」填 Header、Payload、密鑰，按「產生」後複製。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">「帶入範例」是 jwt.io 的經典 token
+→ alg HS256、sub 1234567890、name John Doe、iat 1516239022
+→ 密鑰填 your-256-bit-secret：簽章相符</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>解碼只是 base64url 還原，任何人都能做到，<b>不代表 token 可信</b>；要信任必須驗證簽章。</li>
+        <li>密鑰只在你的瀏覽器用 Web Crypto 計算，不會上傳；仍請勿貼正式環境仍有效的 token 或密鑰。</li>
+        <li>RS / ES / PS 等非對稱簽章需要公鑰，此頁不驗證，只能解碼。HS 系列要用密鑰驗證，此頁無法判斷簽發者是誰。</li>
+        <li><kbd>alg: none</kbd> 或沒有簽章代表未簽章，任何人都能偽造；伺服器不應接受。</li>
+        <li>密鑰會被當成 UTF-8 文字；若你的密鑰是 base64 / hex 編碼的二進位，需先自行還原。</li>
+        <li>產生器會重新序列化 JSON（去空白），結果僅供測試。不儲存任何輸入。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { copyWithFeedback } = Util;
+
+        // --- pure ---
+        const HASH = { HS256: 'SHA-256', HS384: 'SHA-384', HS512: 'SHA-512' };
+        // base64url（也容忍標準 base64、空白與 padding）→ bytes；無效丟出 Error
+        function b64uDecode(s) {
+            const t = String(s ?? '').replace(/\s+/g, '').replace(/=+$/, '');
+            if (!/^[A-Za-z0-9_\-+/]*$/.test(t)) throw new Error('含無效字元（只能是 A-Z a-z 0-9 - _）');
+            if (t.length % 4 === 1) throw new Error('長度無效');
+            const bin = atob(t.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((t.length + 3) % 4));
+            return Uint8Array.from(bin, c => c.charCodeAt(0));
+        }
+        const b64uEncode = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        const isObj = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
+        function decodeJson(part, label) {
+            let text;
+            try { text = new TextDecoder('utf-8', { fatal: true }).decode(b64uDecode(part)); } catch (e) { throw new Error(`${label}不是有效的 base64url：${e.message}`); }
+            try { return JSON.parse(text); } catch (e) { throw new Error(`${label}解碼後不是有效的 JSON`); }
+        }
+        function parseJwt(raw) {
+            const t = String(raw ?? '').replace(/^\s*bearer\s+/i, '').replace(/["'\s]/g, '');
+            if (!t) return { ok: false, error: '請貼上 JWT' };
+            const parts = t.split('.');
+            if (parts.length < 2 || parts.length > 3) return { ok: false, error: `需要 2～3 段、以 . 分隔（header.payload.signature），目前有 ${parts.length} 段` };
+            try {
+                const header = decodeJson(parts[0], 'Header');
+                if (!isObj(header)) return { ok: false, error: 'Header 必須是 JSON 物件' };
+                const payload = decodeJson(parts[1], 'Payload');
+                return { ok: true, header, payload, signingInput: parts[0] + '.' + parts[1], sig: parts[2] ?? '' };
+            } catch (e) { return { ok: false, error: e.message }; }
+        }
+        // 時間長度（毫秒）→ 最多兩個單位的中文
+        function fmtDur(ms) {
+            let s = Math.floor(ms / 1000);
+            if (s < 1) return '不到 1 秒';
+            const out = [];
+            for (const [sec, u] of [[31536000, '年'], [86400, '天'], [3600, '小時'], [60, '分鐘'], [1, '秒']]) {
+                const n = Math.floor(s / sec); s -= n * sec;
+                if (n && out.length < 2) out.push(`${n} ${u}`); else if (out.length) break;
+            }
+            return out.join(' ');
+        }
+        // exp / nbf / iat（NumericDate，秒）；status：valid expired notyet future ok invalid
+        function timeClaims(payload, nowMs) {
+            if (!isObj(payload)) return [];
+            const out = [];
+            for (const name of ['exp', 'nbf', 'iat']) {
+                if (!Object.prototype.hasOwnProperty.call(payload, name)) continue;
+                const v = payload[name], ms = typeof v === 'number' ? v * 1000 : NaN;
+                if (!Number.isFinite(new Date(ms).getTime())) { out.push({ name, status: 'invalid', text: '不是有效的時間（NumericDate 需為秒數）' }); continue; }
+                const d = ms - nowMs;
+                const r = name === 'exp' ? (d <= 0 ? ['expired', `已過期 ${fmtDur(-d)}`] : ['valid', `還有 ${fmtDur(d)} 到期`])
+                    : name === 'nbf' ? (d > 0 ? ['notyet', `尚未生效，還有 ${fmtDur(d)}`] : ['ok', '已生效'])
+                        : (d > 0 ? ['future', '發行時間在未來（時鐘不同步？）'] : ['ok', `${fmtDur(-d)}前發行`]);
+                out.push({ name, ms, status: r[0], text: r[1] });
+            }
+            return out;
+        }
+        function riskList(header, payload, sig, nowMs) {
+            const r = [], add = (level, title, text) => r.push({ level, title, text });
+            const alg = header && header.alg;
+            if (typeof alg !== 'string' || !alg) add('warn', '缺少 alg', 'Header 沒有 alg 欄位，無法得知簽章演算法。');
+            else if (alg.toLowerCase() === 'none') add('bad', 'alg 為 none', '未簽章的 token，任何人都能偽造；伺服器若接受就是嚴重漏洞。');
+            else if (/^HS/i.test(alg)) add('info', 'HS 系列（共享密鑰）', '只有知道密鑰才能驗證或簽發。此頁只能在你輸入密鑰時驗證，無法判斷簽發者是否可信。');
+            else if (/^(RS|PS|ES)|^EdDSA$/i.test(alg)) add('info', '非對稱簽章', `${alg} 需要簽發者的公鑰才能驗證，此頁不驗證；解碼內容不代表可信。`);
+            if (!sig && !(typeof alg === 'string' && alg.toLowerCase() === 'none')) add('bad', '沒有簽章', '第三段是空的，這個 token 沒有簽章可驗證。');
+            for (const k of ['jku', 'x5u', 'jwk']) if (header && Object.prototype.hasOwnProperty.call(header, k)) add('warn', `Header 含 ${k}`, '這會指示驗證端去哪裡取得金鑰；攻擊者可能指向自己的金鑰，驗證端應只信任白名單來源。');
+            if (header && typeof header.kid === 'string' && (/[^A-Za-z0-9_.:-]/.test(header.kid) || header.kid.includes('..'))) add('warn', 'kid 含特殊字元', 'kid 若被直接用來查檔案或資料庫，要防路徑穿越與注入。');
+            const tc = timeClaims(payload, nowMs), has = (n) => tc.find(x => x.name === n);
+            if (has('exp') && has('exp').status === 'expired') add('warn', '已過期', `exp：${has('exp').text}。`);
+            if (has('exp') && has('exp').status === 'invalid') add('warn', 'exp 格式不對', 'exp 必須是以秒為單位的數字。');
+            if (has('nbf') && has('nbf').status === 'notyet') add('warn', '尚未生效', `nbf：${has('nbf').text}。`);
+            if (isObj(payload) && !has('exp')) add('info', '沒有 exp', 'Token 沒有到期時間，外流後永遠有效；建議設定 exp。');
+            return r;
+        }
+        // 用 Web Crypto 驗證 HMAC 簽章（crypto.subtle.verify 為定時比較）
+        async function verifyHS(alg, secret, signingInput, sigB64) {
+            const hash = HASH[alg];
+            if (!hash) return { ok: false, error: '只支援 HS256 / HS384 / HS512' };
+            if (!secret) return { ok: false, error: '請輸入密鑰' };
+            if (!sigB64) return { ok: false, error: '沒有簽章可驗證' };
+            let sig; try { sig = b64uDecode(sigB64); } catch (e) { return { ok: false, error: '簽章不是有效的 base64url' }; }
+            const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash }, false, ['verify']);
+            return { ok: await crypto.subtle.verify('HMAC', key, sig, new TextEncoder().encode(signingInput)) };
+        }
+        async function signHS(alg, secret, signingInput) {
+            const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: HASH[alg] }, false, ['sign']);
+            return b64uEncode(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signingInput))));
+        }
+        // 由 header / payload JSON 文字與密鑰產生 token；header.alg 會被覆蓋成 alg
+        async function buildJwt(alg, headerText, payloadText, secret) {
+            if (!HASH[alg]) return { ok: false, error: '只支援 HS256 / HS384 / HS512' };
+            if (!secret) return { ok: false, error: '請輸入密鑰' };
+            let h, p;
+            try { h = JSON.parse(headerText); } catch (e) { return { ok: false, error: 'Header 不是有效的 JSON' }; }
+            try { p = JSON.parse(payloadText); } catch (e) { return { ok: false, error: 'Payload 不是有效的 JSON' }; }
+            if (!isObj(h)) return { ok: false, error: 'Header 必須是 JSON 物件' };
+            if (!isObj(p)) return { ok: false, error: 'Payload 必須是 JSON 物件' };
+            const enc = new TextEncoder(), input = b64uEncode(enc.encode(JSON.stringify({ ...h, alg }))) + '.' + b64uEncode(enc.encode(JSON.stringify(p)));
+            return { ok: true, token: input + '.' + await signHS(alg, secret, input) };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const SAMPLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+        const CLAIMS = { iss: ['發行者 (issuer)', '誰簽發了這個 token'], sub: ['主體 (subject)', 'token 代表的對象，通常是使用者 ID'], aud: ['受眾 (audience)', 'token 要給哪個服務使用；接收端應檢查自己在其中'], jti: ['編號 (JWT ID)', '每個 token 的唯一識別，可用來撤銷或防重放'] };
+        const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+        const li = (k, v, cls) => { const d = el('div', 'li'), b = el('b', cls, v); d.append(el('span', 'muted', k), b); return d; };
+        const STAT = { valid: 'ok', ok: 'ok', expired: 'bad', notyet: 'bad', future: 'bad', invalid: 'bad' };
+        let cur = null, seq = 0;
+
+        function show() {
+            const r = parseJwt($('#tok').value); cur = r.ok ? r : null;
+            $('#result').hidden = !r.ok; $('#err').textContent = $('#tok').value.trim() && !r.ok ? r.error : '';
+            if (!r.ok) return;
+            const now = Date.now();
+            $('#hdr').textContent = JSON.stringify(r.header, null, 2); $('#pl').textContent = JSON.stringify(r.payload, null, 2);
+            $('#risks').replaceChildren(...riskList(r.header, r.payload, r.sig, now).map(x => { const d = el('div', 'risk ' + x.level); d.append(el('b', '', { bad: '嚴重：', warn: '注意：', info: '提醒：' }[x.level] + x.title), el('span', '', x.text)); return d; }));
+            const tc = timeClaims(r.payload, now);
+            $('#timeCard').hidden = !tc.length;
+            $('#times').replaceChildren(...tc.map(x => { const d = el('div', 'li'); const b = el('b', STAT[x.status], (x.ms !== undefined ? new Date(x.ms).toLocaleString() + '（' : '') + x.text + (x.ms !== undefined ? '）' : '')); d.append(el('span', 'muted', x.name), b); return d; }));
+            const cl = isObj(r.payload) ? Object.keys(CLAIMS).filter(k => k in r.payload) : [];
+            $('#claimCard').hidden = !cl.length;
+            $('#claims').replaceChildren(...cl.map(k => { const v = r.payload[k], d = el('div', 'li'); const b = el('b', '', `${typeof v === 'string' ? v : JSON.stringify(v)}`); const s = el('span'); s.append(el('span', '', k + '　' + CLAIMS[k][0]), el('div', 'note', CLAIMS[k][1])); d.append(s, b); return d; }));
+            verify();
+        }
+        async function verify() {
+            const my = ++seq, o = $('#vOut'); o.className = 'note';
+            if (!cur) return;
+            if (!$('#secret').value) { o.textContent = '輸入密鑰後才會驗證。密鑰只在瀏覽器內用 Web Crypto 計算，不會送出。'; return; }
+            const alg = $('#valg').value || cur.header.alg;
+            let res; try { res = await verifyHS(alg, $('#secret').value, cur.signingInput, cur.sig); } catch (e) { res = { ok: false, error: '此瀏覽器無法使用 Web Crypto（需要 https 或 localhost）' }; }
+            if (my !== seq) return;
+            o.className = 'note ' + (res.ok ? 'ok' : 'bad');
+            o.textContent = res.ok ? `簽章相符（${alg}）：token 內容未被竄改，且簽發者持有此密鑰。` : res.error ? `無法驗證：${res.error}` : `簽章不符（${alg}）：密鑰錯誤、演算法不同，或內容被改過。`;
+        }
+        $('#tok').oninput = show; $('#secret').oninput = $('#valg').onchange = verify;
+        $('#sample').onclick = () => { $('#tok').value = SAMPLE; show(); };
+        $('#clear').onclick = () => { $('#tok').value = ''; $('#secret').value = ''; show(); };
+        $('#copyPl').onclick = () => copyWithFeedback($('#copyPl'), $('#pl').textContent);
+        $('#gp').value = JSON.stringify({ sub: 'user-1', name: 'Test User', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 3600 }, null, 2);
+        $('#gen').onclick = async () => {
+            const o = $('#gOut'); o.hidden = true; $('#copyGen').hidden = true; $('#gErr').textContent = '';
+            let r; try { r = await buildJwt($('#galg').value, $('#gh').value, $('#gp').value, $('#gs').value); } catch (e) { r = { ok: false, error: '此瀏覽器無法使用 Web Crypto（需要 https 或 localhost）' }; }
+            if (!r.ok) { $('#gErr').textContent = r.error; return; }
+            o.textContent = r.token; o.hidden = false; $('#copyGen').hidden = false;
+        };
+        $('#copyGen').onclick = () => copyWithFeedback($('#copyGen'), $('#gOut').textContent);
+    </script>
+</body>
+
+</html>

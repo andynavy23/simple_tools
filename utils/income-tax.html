@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="臺灣年度綜合所得稅概算：免稅額、標準 / 列舉扣除、薪資特別扣除、基本生活費差額與累進稅率，算出應納稅額、邊際與有效稅率。">
+    <meta property="og:title" content="年度綜合所得稅概算" />
+    <meta property="og:description" content="臺灣綜所稅試算：免稅額、扣除額、累進稅率，離線計算。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/income-tax.html" />
+    <meta name="st-keys" content="itax_opts">
+    <title>年度綜合所得稅概算</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        label.f {
+            display: block;
+            font-weight: 600;
+            margin: 12px 0 6px;
+        }
+
+        label.f small {
+            font-weight: 400;
+            color: var(--muted);
+        }
+
+        .grid2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        @media (max-width: 420px) {
+            .grid2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .chk {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 44px;
+        }
+
+        .banner {
+            border-left: 4px solid var(--bad);
+            padding: 10px 12px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .li b {
+            font-variant-numeric: tabular-nums;
+            text-align: right;
+            word-break: break-all;
+        }
+
+        .big {
+            font-size: 26px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+        }
+
+        details {
+            margin-top: 10px;
+        }
+
+        details summary {
+            cursor: pointer;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>年度綜合所得稅概算</h1>
+        <p class="sub">臺灣綜合所得稅粗估，全部在本機計算。</p>
+
+        <div class="banner" id="banner"></div>
+
+        <div class="card">
+            <h2>所得（元）</h2>
+            <label class="f" for="salary">本人薪資收入（全年）</label>
+            <input id="salary" inputmode="numeric" autocomplete="off" placeholder="例如 900000">
+            <label class="f" for="interest">利息所得 <small>（可適用儲蓄投資特別扣除）</small></label>
+            <input id="interest" inputmode="numeric" autocomplete="off" placeholder="0">
+            <label class="f" for="other">其他所得合計 <small>（已扣除成本費用的淨額）</small></label>
+            <input id="other" inputmode="numeric" autocomplete="off" placeholder="0">
+            <label class="chk"><input type="checkbox" id="married">有配偶（合併申報）</label>
+            <div id="spouseBox" hidden>
+                <label class="f" for="spouseSalary">配偶薪資收入（全年）</label>
+                <input id="spouseSalary" inputmode="numeric" autocomplete="off" placeholder="0">
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>免稅額人數</h2>
+            <label class="chk"><input type="checkbox" id="self70">本人年滿 70 歲</label>
+            <label class="chk" id="sp70Row" hidden><input type="checkbox" id="spouse70">配偶年滿 70 歲</label>
+            <div class="grid2">
+                <div><label class="f" for="dep">受扶養親屬（未滿 70 歲）人數</label><input id="dep" inputmode="numeric" placeholder="0"></div>
+                <div><label class="f" for="dep70">受扶養直系尊親屬（70 歲以上）人數</label><input id="dep70" inputmode="numeric" placeholder="0"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>扣除額</h2>
+            <label class="f" for="dedMode">一般扣除額</label>
+            <select id="dedMode"><option value="std">標準扣除額</option><option value="item">列舉扣除額</option></select>
+            <div id="itemBox" hidden>
+                <label class="f" for="item">列舉扣除合計 <small>（捐贈、保險費、醫藥、房貸利息、房租等，自行加總）</small></label>
+                <input id="item" inputmode="numeric" autocomplete="off" placeholder="0">
+            </div>
+            <div class="grid2">
+                <div><label class="f" for="disabled">身心障礙人數 <small>（持有證明）</small></label><input id="disabled" inputmode="numeric" placeholder="0"></div>
+                <div><label class="f" for="tuitionN">就讀大專以上人數</label><input id="tuitionN" inputmode="numeric" placeholder="0"></div>
+            </div>
+            <label class="f" for="tuitionFee">每位的全年學費 <small>（每人以上限計）</small></label>
+            <input id="tuitionFee" inputmode="numeric" autocomplete="off" placeholder="0">
+        </div>
+
+        <div class="card">
+            <h2>試算結果</h2>
+            <div id="out"></div>
+            <details><summary>本頁使用的稅制數字</summary><div id="tbl"></div></details>
+            <div class="row" style="margin-top:12px"><button id="reset">清除已記住的輸入</button></div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>臺灣綜合所得稅的粗估工具：輸入所得與家庭狀況，套用免稅額、扣除額與累進稅率，估算應納稅額、適用的邊際稅率與有效稅率。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>報稅前先抓大概要補繳或退多少的方向。</li>
+        <li>比較「標準扣除額」與「列舉扣除額」哪個比較划算。</li>
+        <li>想知道加薪、多一筆收入後，多出來的部分適用哪一級稅率。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>填「本人薪資收入」「利息所得」「其他所得合計」；有配偶就勾「有配偶」並填配偶薪資。</li>
+        <li>填免稅額人數：本人 / 配偶是否滿 70 歲、受扶養親屬人數、受扶養 70 歲以上直系尊親屬人數。</li>
+        <li>「一般扣除額」選標準或列舉；列舉要自己加總金額，結果區會顯示兩者各是多少。</li>
+        <li>有身心障礙者、就讀大專以上子女時，填人數（與學費）。</li>
+        <li>最下方的「試算結果」即時更新，可展開看本頁用的稅制數字。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">114 年度數字，單身、薪資 900,000、無其他所得、標準扣除額
+免稅額 97,000 + 標準扣除額 131,000 + 薪資特別扣除額 218,000
+→ 綜合所得淨額 454,000，適用 5%
+→ 應納稅額 22,700（有效稅率約 2.52%）</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li><b>稅制數字每年會調整</b>。本頁為 114 年度（2025 年所得、2026 年 5 月申報），整理自財政部公告，請務必自行到財政部網站或報稅軟體核對。</li>
+        <li>這是概算：基本生活費差額、儲蓄投資特別扣除等採簡化算法；海外所得、股利合併 / 分開計稅、幼兒學前與長期照顧等特別扣除、扣繳與已繳稅額都未納入，不能取代正式申報。</li>
+        <li>只記住你上次填的內容（存在這台裝置，可用右上角 💾 備份）；按「清除已記住的輸入」會刪除並重設，無法復原。輸入有上限，超過會被截斷。</li>
+        <li>壞掉或被改過的記憶資料會被忽略並用預設值。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store } = Util;
+
+        // --- pure ---
+        // ===== 稅制數字（單一來源）：請以財政部公告為準，每年需自行核對 =====
+        const TAX = {
+            year: 114,
+            label: '114 年度（2025 年所得，2026 年 5 月申報）',
+            source: '財政部（mof.gov.tw）公告的 114 年度綜合所得稅各項金額；整理自公開資訊，未逐項對照原始公告',
+            exemption: 97000,        // 免稅額（每人）；70 歲以上 ×1.5
+            exemption70: 145500,
+            std: 131000,             // 標準扣除額：單身
+            stdMarried: 262000,      // 標準扣除額：有配偶
+            salaryDed: 218000,       // 薪資所得特別扣除額（每人上限）
+            disabilityDed: 218000,   // 身心障礙特別扣除額（每人）
+            savings: 270000,         // 儲蓄投資特別扣除額（全戶上限）
+            tuition: 25000,          // 教育學費特別扣除額（每人上限）
+            basic: 213000,           // 基本生活費（每人）
+            brackets: [[590000, 0.05], [1330000, 0.12], [2660000, 0.2], [4980000, 0.3], [Infinity, 0.4]], // [淨所得上限, 稅率]
+        };
+        const MAX_MONEY = 1e10, MAX_COUNT = 30;
+        const DEFAULTS = { salary: 0, interest: 0, other: 0, married: false, spouseSalary: 0, self70: false, spouse70: false, dep: 0, dep70: 0, dedMode: 'std', item: 0, disabled: 0, tuitionN: 0, tuitionFee: 0 };
+        const MONEY_KEYS = ['salary', 'interest', 'other', 'spouseSalary', 'item', 'tuitionFee'], COUNT_KEYS = ['dep', 'dep70', 'disabled', 'tuitionN'], BOOL_KEYS = ['married', 'self70', 'spouse70'];
+        // 驗證 / 補預設值 / 截斷到上限；任何壞資料都回傳完整物件
+        function sanitize(o) {
+            const r = { ...DEFAULTS };
+            if (!o || typeof o !== 'object' || Array.isArray(o)) return r;
+            for (const k of MONEY_KEYS) { const n = Number(o[k]); r[k] = Number.isFinite(n) && n > 0 ? Math.min(Math.round(n), MAX_MONEY) : 0; }
+            for (const k of COUNT_KEYS) { const n = Number(o[k]); r[k] = Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), MAX_COUNT) : 0; }
+            for (const k of BOOL_KEYS) r[k] = o[k] === true;
+            r.dedMode = o.dedMode === 'item' ? 'item' : 'std';
+            if (!r.married) { r.spouseSalary = 0; r.spouse70 = false; }
+            return r;
+        }
+        // 輸入框文字 → 非負數（逗號可含）；不合法回傳 0
+        const toNum = (s) => { const n = Number(String(s ?? '').replace(/[,，\s]/g, '')); return Number.isFinite(n) && n > 0 ? n : 0; };
+        // 累進稅額（逐級計算）與適用邊際稅率
+        function bracketTax(net, T = TAX) {
+            let tax = 0, prev = 0, rate = 0;
+            for (const [lim, r] of T.brackets) {
+                if (net <= prev) break;
+                tax += (Math.min(net, lim) - prev) * r; rate = r; prev = lim;
+            }
+            return { tax: Math.round(tax), rate };
+        }
+        function computeTax(inp, T = TAX) {
+            const i = sanitize(inp);
+            const income = i.salary + i.spouseSalary + i.interest + i.other;
+            const exSelf = i.self70 ? T.exemption70 : T.exemption;
+            const exSpouse = i.married ? (i.spouse70 ? T.exemption70 : T.exemption) : 0;
+            const exemptions = exSelf + exSpouse + i.dep * T.exemption + i.dep70 * T.exemption70;
+            const persons = 1 + (i.married ? 1 : 0) + i.dep + i.dep70;
+            const stdAmount = i.married ? T.stdMarried : T.std;
+            const general = i.dedMode === 'item' ? i.item : stdAmount;
+            const salaryDed = Math.min(i.salary, T.salaryDed) + (i.married ? Math.min(i.spouseSalary, T.salaryDed) : 0);
+            const savingsDed = Math.min(i.interest, T.savings);
+            const disabilityDed = i.disabled * T.disabilityDed;
+            const tuitionDed = i.tuitionN * Math.min(i.tuitionFee, T.tuition);
+            const special = salaryDed + savingsDed + disabilityDed + tuitionDed;
+            const basicTotal = T.basic * persons;
+            const basicGap = Math.max(0, basicTotal - (exemptions + general + special));
+            const net = Math.max(0, income - exemptions - general - special - basicGap);
+            const { tax, rate } = bracketTax(net, T);
+            return { income, exemptions, persons, stdAmount, itemAmount: i.item, general, salaryDed, savingsDed, disabilityDed, tuitionDed, special, basicTotal, basicGap, net, tax, marginal: rate, effective: income > 0 ? tax / income : 0 };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'itax_opts';
+        const fmt = (n) => Math.round(n).toLocaleString('en-US');
+        const pct = (x) => (x * 100).toFixed(2) + '%';
+        const IDS = [...MONEY_KEYS, ...COUNT_KEYS, ...BOOL_KEYS, 'dedMode'];
+
+        $('#banner').textContent = `試算年度：${TAX.label}。稅制每年會調整，數字請自行向財政部公告核對；本頁僅供概算，非正式申報結果。`;
+        $('#tbl').innerHTML = '';
+        {
+            const rows = [['免稅額（每人 / 70 歲以上）', `${fmt(TAX.exemption)} / ${fmt(TAX.exemption70)}`], ['標準扣除額（單身 / 有配偶）', `${fmt(TAX.std)} / ${fmt(TAX.stdMarried)}`], ['薪資特別扣除額（每人上限）', fmt(TAX.salaryDed)], ['身心障礙特別扣除額（每人）', fmt(TAX.disabilityDed)], ['儲蓄投資特別扣除額（全戶上限）', fmt(TAX.savings)], ['教育學費特別扣除額（每人上限）', fmt(TAX.tuition)], ['基本生活費（每人）', fmt(TAX.basic)]];
+            let prev = 0;
+            for (const [lim, r] of TAX.brackets) { rows.push([`稅率 ${r * 100}%`, lim === Infinity ? `${fmt(prev + 1)} 以上` : `${fmt(prev + 1)} – ${fmt(lim)}`]); prev = lim; }
+            for (const [k, v] of rows) $('#tbl').append(li(k, v));
+            const p = document.createElement('p'); p.className = 'note'; p.textContent = '來源：' + TAX.source; $('#tbl').append(p);
+        }
+        function li(k, v, strong) {
+            const d = document.createElement('div'); d.className = 'li';
+            const a = document.createElement('span'); a.className = 'muted'; a.textContent = k;
+            const b = document.createElement(strong ? 'b' : 'span'); b.textContent = v; if (!strong) b.style.textAlign = 'right';
+            d.append(a, b); return d;
+        }
+
+        function read() {
+            const o = {};
+            for (const k of MONEY_KEYS) o[k] = toNum($('#' + k).value);
+            for (const k of COUNT_KEYS) o[k] = toNum($('#' + k).value);
+            for (const k of BOOL_KEYS) o[k] = $('#' + k).checked;
+            o.dedMode = $('#dedMode').value;
+            return sanitize(o);
+        }
+        function write(o) {
+            for (const k of [...MONEY_KEYS, ...COUNT_KEYS]) $('#' + k).value = o[k] || '';
+            for (const k of BOOL_KEYS) $('#' + k).checked = o[k];
+            $('#dedMode').value = o.dedMode;
+        }
+        function render(save) {
+            const o = read();
+            $('#spouseBox').hidden = $('#sp70Row').hidden = !o.married;
+            $('#itemBox').hidden = o.dedMode !== 'item';
+            const r = computeTax(o), out = $('#out'); out.replaceChildren();
+            const big = document.createElement('div'); big.className = 'li';
+            const a = document.createElement('span'); a.textContent = '應納稅額（概算）'; const b = document.createElement('span'); b.className = 'big'; b.id = 'tax'; b.textContent = fmt(r.tax) + ' 元';
+            big.append(a, b); out.append(big);
+            out.append(li('綜合所得總額', fmt(r.income)), li(`免稅額（${r.persons} 人）`, '− ' + fmt(r.exemptions)), li(o.dedMode === 'item' ? '列舉扣除額' : '標準扣除額', '− ' + fmt(r.general)));
+            if (r.salaryDed) out.append(li('薪資特別扣除額', '− ' + fmt(r.salaryDed)));
+            if (r.savingsDed) out.append(li('儲蓄投資特別扣除額', '− ' + fmt(r.savingsDed)));
+            if (r.disabilityDed) out.append(li('身心障礙特別扣除額', '− ' + fmt(r.disabilityDed)));
+            if (r.tuitionDed) out.append(li('教育學費特別扣除額', '− ' + fmt(r.tuitionDed)));
+            if (r.basicGap) out.append(li(`基本生活費差額（${fmt(r.basicTotal)} − 免稅額與各項扣除）`, '− ' + fmt(r.basicGap)));
+            out.append(li('綜合所得淨額', fmt(r.net), true), li('適用邊際稅率', r.net > 0 ? (r.marginal * 100) + '%' : '—', true), li('有效稅率（應納稅額 ÷ 所得總額）', pct(r.effective), true));
+            if (o.dedMode === 'item' || o.item) { const n = document.createElement('p'); n.className = 'note'; n.textContent = `標準扣除額 ${fmt(r.stdAmount)}、列舉扣除額 ${fmt(o.item)}：${o.item > r.stdAmount ? '列舉較高' : '標準較高或相同'}`; out.append(n); }
+            if (save) store.set(KEY, o);
+        }
+        for (const id of IDS) { const e = $('#' + id); e.oninput = e.onchange = () => render(true); }
+        $('#reset').onclick = () => {
+            if (!confirm('要清除已記住的輸入並重設所有欄位嗎？\n只會刪除本頁記住的內容，無法復原。')) return;
+            try { localStorage.removeItem(KEY); } catch (e) { }
+            write(DEFAULTS); render(false);
+        };
+        write(sanitize(store.get(KEY, null))); render(false);
+    </script>
+</body>
+
+</html>

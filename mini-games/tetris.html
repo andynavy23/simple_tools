@@ -196,6 +196,7 @@
         <li>暫停時方塊停止下落，按「繼續」鈕或再按 <kbd>P</kbd> 繼續。</li>
         <li>旋轉靠牆時會自動往旁邊挪一點。</li>
         <li>消行時被消掉的列會閃白淡出、上方的列再落下補位（4 行有全盤閃光）；這只是視覺效果，計分與下一塊的生成、操作都即時進行，不會被動畫卡住。系統開啟「減少動態效果」時會自動關閉，切到別的分頁也不會累積。</li>
+            <li>最佳紀錄若被改壞（不是正整數）會當作 0。</li>
             <li>最佳紀錄存在這台裝置；想重來可按頁面下方的「清除最佳紀錄」（只清這個遊戲，無法復原；頁面會重新載入，進行中的這一局會結束）。</li>
 </ul>
     </template>
@@ -252,6 +253,7 @@
         const LINE_POINTS = [0, 100, 300, 500, 800];
         const lineScore = (n, level) => LINE_POINTS[n] * level;
         const levelOf = (lines) => 1 + Math.floor(lines / 10);
+        const cleanBest = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0) ? Math.floor(v) : 0;   // 備份還原 / 手動改壞的紀錄一律當 0
         const dropMs = (level) => Math.max(80, 800 - (level - 1) * 70);
 
         // 消行動畫計畫（視覺層）：piece 鎖定後哪幾列滿了（舊座標）、消行後每個新列要從上方落下幾列
@@ -307,7 +309,7 @@
         }
         function endGame() {
             over = true; clearTimeout(timer); running = false;
-            const best = store.get(bestKey, 0); if (score > best) store.set(bestKey, score);
+            const best = cleanBest(store.get(bestKey, 0)); if (score > best) store.set(bestKey, score);
             $('#best').textContent = Math.max(best, score); $('#msg').textContent = score > best ? `💥 遊戲結束　🎉 新紀錄 ${score}` : `💥 遊戲結束　得分 ${score}`; $('#start').textContent = '再玩一次'; draw();
         }
         function startFx(plan) {
@@ -344,7 +346,7 @@
 
         function start() {
             fx = null; $('#fx').replaceChildren(); board = newBoard(); queue = [...bag()]; held = null; score = 0; lines = 0; level = 1; over = false; paused = false; running = true; $('#pauseBtn').textContent = '⏸';
-            mini($('#hold'), null); $('#msg').textContent = ''; $('#start').textContent = '重新開始'; $('#best').textContent = store.get(bestKey, 0);
+            mini($('#hold'), null); $('#msg').textContent = ''; $('#start').textContent = '重新開始'; $('#best').textContent = cleanBest(store.get(bestKey, 0));
             clearTimeout(timer); nextPiece(); draw(); timer = setTimeout(tick, dropMs(1));
         }
         function pause() { if (!running || over) return; paused = !paused; $('#msg').textContent = paused ? '⏸ 暫停' : ''; $('#pauseBtn').textContent = paused ? '繼續' : '⏸'; if (!paused) { clearTimeout(timer); timer = setTimeout(tick, dropMs(level)); } }
@@ -358,7 +360,7 @@
         $('#touch').replaceChildren(...[['◀', 'left', '左移'], ['⟲', 'ccw', '逆時針旋轉'], ['⟳', 'cw', '順時針旋轉'], ['▶', 'right', '右移'], ['▼', 'down', '加速下降'], ['⤓', 'drop', '直接落下'], ['⏸', 'pause', '暫停或繼續']].map(([t, a, l]) => Object.assign(document.createElement('button'), { textContent: t, id: a === 'pause' ? 'pauseBtn' : '', title: l, ariaLabel: l, onpointerdown: (e) => { e.preventDefault(); a === 'pause' ? pause() : act(a); } })));
         $('#hold').parentElement.onpointerdown = () => act('hold');                // 手機：點「暫存」格子 = 暫存
         $('#start').onclick = start;
-        board = newBoard(); queue = []; score = lines = 0; level = 1; $('#best').textContent = store.get(bestKey, 0); draw();
+        board = newBoard(); queue = []; score = lines = 0; level = 1; $('#best').textContent = cleanBest(store.get(bestKey, 0)); draw();
     </script>
 <script>document.getElementById('clearBest').onclick=()=>{if(!confirm('清除這個遊戲的所有最佳紀錄？無法復原。頁面會重新載入，正在進行的這一局會結束。'))return;try{const p=['tetris_best'];Object.keys(localStorage).filter(k=>p.some(x=>k.startsWith(x))).forEach(k=>localStorage.removeItem(k));}catch(e){}location.reload();};</script>
 </body>

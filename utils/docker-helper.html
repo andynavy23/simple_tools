@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="Docker / .env 小幫手：表單產生 docker run 與 docker-compose.yml、由 docker run 指令解析回表單；檢查 .env 的重複鍵、空值、格式與疑似密鑰。">
+    <meta property="og:title" content="Docker / .env 小幫手" />
+    <meta property="og:description" content="docker run ⇄ compose 轉換，.env 檢查與整理，離線計算。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/docker-helper.html" />
+    <meta name="st-keys" content="dockerh_opts">
+    <title>Docker / .env 小幫手</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 720px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .tabs button {
+            flex: 1;
+        }
+
+        label.f {
+            display: block;
+            font-weight: 600;
+            margin: 12px 0 6px;
+        }
+
+        label.f small {
+            font-weight: 400;
+            color: var(--muted);
+        }
+
+        textarea {
+            min-height: 84px;
+            resize: vertical;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+        }
+
+        .grid2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        @media (max-width: 480px) {
+            .grid2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .chk {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 44px;
+            margin-right: 14px;
+        }
+
+        .code {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 14px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin: 8px 0;
+            overflow-x: auto;
+            white-space: pre;
+            max-width: 100%;
+            min-height: 44px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .issue {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--fill);
+            font-size: 15px;
+        }
+
+        .issue:last-child {
+            border-bottom: 0;
+        }
+
+        .issue .lv {
+            display: inline-block;
+            min-width: 3em;
+            font-weight: 700;
+        }
+
+        .lv.error {
+            color: var(--bad);
+        }
+
+        .lv.warn {
+            color: var(--text);
+        }
+
+        .lv.info {
+            color: var(--muted);
+        }
+
+        .ok {
+            color: var(--ok);
+        }
+
+        .warnbox {
+            margin-top: 10px;
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        .warnbox div::before {
+            content: "• ";
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>Docker / .env 小幫手</h1>
+        <p class="sub">表單 ⇄ docker run ⇄ compose，並檢查 .env 檔。全部在本機處理。</p>
+
+        <div class="tabs" id="tabs"><button data-t="run" aria-pressed="true">docker run / compose</button><button data-t="env" aria-pressed="false">.env 檢查</button></div>
+
+        <div id="pgRun">
+            <div class="card">
+                <h2>由 docker run 指令解析</h2>
+                <label class="f" for="cmdIn">貼上指令 <small>（支援引號與 \ 續行）</small></label>
+                <textarea id="cmdIn" maxlength="20000" rows="4" spellcheck="false" placeholder="docker run -d --name web -p 8080:80 nginx:latest"></textarea>
+                <div class="row" style="margin-top:8px"><button class="primary" id="parse">解析到下方表單</button></div>
+                <div class="warnbox" id="parseNote"></div>
+            </div>
+
+            <div class="card">
+                <h2>表單</h2>
+                <label class="f" for="image">映像 <small>（例如 nginx:1.27）</small></label>
+                <input id="image" autocomplete="off" spellcheck="false" maxlength="300" placeholder="nginx:latest">
+                <div class="grid2">
+                    <div><label class="f" for="name">容器名稱 <small>--name</small></label><input id="name" autocomplete="off" spellcheck="false" maxlength="100"></div>
+                    <div><label class="f" for="restart">重啟策略 <small>--restart</small></label>
+                        <select id="restart"><option value="">（不設定）</option><option value="no">no</option><option value="always">always</option><option value="unless-stopped">unless-stopped</option><option value="on-failure">on-failure</option></select></div>
+                </div>
+                <label class="f" for="ports">埠對映 <small>-p，一行一個，例如 8080:80</small></label>
+                <textarea id="ports" maxlength="20000" rows="2" spellcheck="false"></textarea>
+                <label class="f" for="env">環境變數 <small>-e，一行一個，例如 TZ=Asia/Taipei</small></label>
+                <textarea id="env" maxlength="20000" rows="3" spellcheck="false"></textarea>
+                <label class="f" for="volumes">Volume <small>-v，一行一個，例如 ./data:/data</small></label>
+                <textarea id="volumes" maxlength="20000" rows="2" spellcheck="false"></textarea>
+                <div class="grid2">
+                    <div><label class="f" for="network">網路 <small>--network</small></label><input id="network" autocomplete="off" spellcheck="false" maxlength="100" placeholder="例如 host 或 mynet"></div>
+                    <div><label class="f" for="workdir">工作目錄 <small>-w</small></label><input id="workdir" autocomplete="off" spellcheck="false" maxlength="200"></div>
+                    <div><label class="f" for="memory">記憶體上限 <small>--memory，例如 512m</small></label><input id="memory" autocomplete="off" spellcheck="false" maxlength="20"></div>
+                    <div><label class="f" for="cpus">CPU 上限 <small>--cpus，例如 1.5</small></label><input id="cpus" autocomplete="off" spellcheck="false" maxlength="20"></div>
+                    <div><label class="f" for="user">使用者 <small>-u</small></label><input id="user" autocomplete="off" spellcheck="false" maxlength="100"></div>
+                    <div><label class="f" for="cmd">啟動指令 <small>（映像之後的參數）</small></label><input id="cmd" autocomplete="off" spellcheck="false" maxlength="1000"></div>
+                </div>
+                <label class="f" for="extra">其他旗標 <small>（無法對應到表單的，原樣保留）</small></label>
+                <input id="extra" autocomplete="off" spellcheck="false" maxlength="2000" placeholder="例如 --cap-add NET_ADMIN">
+                <div style="margin-top:8px">
+                    <label class="chk"><input type="checkbox" id="detach" checked>背景執行 -d</label>
+                    <label class="chk"><input type="checkbox" id="rm">結束後刪除 --rm</label>
+                    <label class="chk"><input type="checkbox" id="it">互動式 -it</label>
+                    <label class="chk"><input type="checkbox" id="oneLine">指令輸出成單行</label>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>docker run 指令</h2>
+                <div class="code" id="outRun"></div>
+                <button class="sm" id="copyRun">複製</button>
+                <h2 style="margin-top:18px">docker-compose.yml</h2>
+                <div class="code" id="outYml"></div>
+                <button class="sm" id="copyYml">複製</button>
+                <div class="warnbox" id="warns"></div>
+            </div>
+        </div>
+
+        <div id="pgEnv" hidden>
+            <div class="card">
+                <h2>貼上 .env 內容</h2>
+                <textarea id="envIn" maxlength="100000" rows="9" spellcheck="false" placeholder="# 範例&#10;DB_HOST=localhost&#10;DB_PASSWORD=s3cret&#10;GREETING=hello world"></textarea>
+                <p class="note" id="envNote"></p>
+            </div>
+            <div class="card">
+                <h2>檢查結果</h2>
+                <div id="issues"></div>
+            </div>
+            <div class="card">
+                <h2>整理與輸出</h2>
+                <label class="chk"><input type="checkbox" id="sort">依鍵名排序</label>
+                <p class="note">整理版會合併重複鍵（保留最後一個）、補上必要的引號，並移除註解與空行。</p>
+                <h3>整理後的 .env</h3>
+                <div class="code" id="outTidy"></div>
+                <button class="sm" id="copyTidy">複製</button>
+                <h3 style="margin-top:16px">compose 的 environment 區塊</h3>
+                <div class="code" id="outEnvYml"></div>
+                <button class="sm" id="copyEnvYml">複製</button>
+            </div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>兩個小工具：(1) 用表單產生 <kbd>docker run</kbd> 指令與 <kbd>docker-compose.yml</kbd>，也能把現成的 docker run 指令解析回表單；(2) 檢查 .env 檔案有沒有重複鍵、空值、格式錯誤與疑似密鑰，並輸出整理版。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>網路上教學給 docker run 指令，你想改寫成 compose 長期維護。</li>
+        <li>不想記 -p / -v / -e 的寫法，用表單填完直接複製。</li>
+        <li>.env 越寫越亂，想找出重複或漏填的鍵，再整理成固定順序。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>「docker run / compose」分頁：貼上指令按「解析到下方表單」，或直接填表單；下方即時產生指令與 compose。</li>
+        <li>埠對映、環境變數、Volume 都是一行一個。「其他旗標」放表單沒有的旗標，會原樣保留在 docker run 輸出。</li>
+        <li>解析時無法辨識的旗標會被列出並放進「其他旗標」；轉成 compose 時這些旗標會變成註解並出現在提醒中，需要手動處理。</li>
+        <li>「.env 檢查」分頁：貼上 .env，下方列出問題（錯誤、警告、提醒），可勾「依鍵名排序」，再複製整理版或 compose 的 environment 區塊（貼到服務底下、縮排對齊即可）。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">docker run -d --name web -p 8080:80 -e TZ=Asia/Taipei nginx:latest
+→ compose：services → web → image: nginx:latest、ports: "8080:80"、environment: TZ: "Asia/Taipei"
+.env 內容：A=1、A=2、PASSWORD=abc、NOTE=hello world
+→ 重複鍵 A、疑似密鑰 PASSWORD、NOTE 含空白未加引號</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>--rm、-d 在 compose 沒有對應設定（用 <kbd>docker compose run --rm</kbd> / <kbd>up -d</kbd>）；compose 內的 <kbd>$</kbd> 會自動寫成 <kbd>$$</kbd> 避免被當成變數。</li>
+        <li>YAML 由本頁自行輸出，字串會加引號避免 no、1.10、22:22 被誤判型別；複雜的設定（健康檢查、多服務）請自行補充。</li>
+        <li>Docker 的 <kbd>--env-file</kbd> 不處理引號；整理版的引號是給 compose 與常見 dotenv 函式庫用的。</li>
+        <li>疑似密鑰只是依鍵名與常見格式判斷，不代表一定是密鑰；真正的密鑰請不要提交到版本庫。</li>
+        <li>內容不會被儲存（只記住你上次停在哪個分頁，可用右上角 💾 備份）；貼上內容有長度上限，超過會被截斷。壞掉的記憶資料會被忽略。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, copyWithFeedback } = Util;
+
+        // --- pure ---
+        const SAFE_SH = /^[A-Za-z0-9_@%+=:,./-]+$/;
+        const shq = (s) => s === '' ? "''" : SAFE_SH.test(s) ? s : "'" + s.replace(/'/g, "'\\''") + "'";
+
+        // 依 shell 規則切字：單 / 雙引號、反斜線跳脫、\ + 換行續行
+        function tokenize(text) {
+            const s = String(text ?? '').replace(/\r\n?/g, '\n'), toks = [], cont = /[\\^`][ \t]*\n/y;
+            let cur = '', has = false, q = null;
+            for (let i = 0; i < s.length; i++) {
+                const c = s[i];
+                if (q === "'") { if (c === "'") q = null; else cur += c; continue; }
+                if (c === '\\' || c === '^' || c === '`') {
+                    cont.lastIndex = i;
+                    const m = cont.exec(s);
+                    if (m) { i += m[0].length - 1; continue; }
+                    if (c !== '\\') { cur += c; has = true; continue; }
+                    const nx = s[i + 1];
+                    if (nx === undefined) { cur += c; has = true; continue; }
+                    if (q === '"') { if ('"\\$`'.includes(nx)) { cur += nx; i++; } else cur += c; }
+                    else { cur += nx; i++; }
+                    has = true; continue;
+                }
+                if (q === '"') { if (c === '"') q = null; else cur += c; continue; }
+                if (c === "'" || c === '"') { q = c; has = true; continue; }
+                if (/\s/.test(c)) { if (has) { toks.push(cur); cur = ''; has = false; } continue; }
+                cur += c; has = true;
+            }
+            if (q) return { ok: false, reason: '引號未閉合' };
+            if (has) toks.push(cur);
+            return { ok: true, tokens: toks };
+        }
+
+        const VAL_FLAGS = { '--name': 'name', '-p': 'p', '--publish': 'p', '-e': 'e', '--env': 'e', '-v': 'v', '--volume': 'v', '--restart': 'restart', '--network': 'network', '--net': 'network', '-m': 'memory', '--memory': 'memory', '--cpus': 'cpus', '-w': 'workdir', '--workdir': 'workdir', '-u': 'user', '--user': 'user' };
+        const BOOL_FLAGS = { '-d': 'detach', '--detach': 'detach', '--rm': 'rm', '-i': 'i', '--interactive': 'i', '-t': 't', '--tty': 't' };
+        const OTHER_VAL = new Set('--add-host --annotation --attach -a --blkio-weight --cap-add --cap-drop --cgroup-parent --cgroupns --cidfile --cpu-period --cpu-quota --cpu-rt-period --cpu-rt-runtime --cpu-shares -c --cpuset-cpus --cpuset-mems --detach-keys --device --device-cgroup-rule --device-read-bps --device-write-bps --dns --dns-option --dns-search --domainname --entrypoint --env-file --expose --gpus --group-add --health-cmd --health-interval --health-retries --health-start-period --health-timeout --hostname -h --ip --ip6 --ipc --isolation --kernel-memory --label -l --label-file --link --link-local-ip --log-driver --log-opt --mac-address --memory-reservation --memory-swap --memory-swappiness --mount --network-alias --oom-score-adj --pid --pids-limit --platform --pull --restart-delay --runtime --security-opt --shm-size --stop-signal --stop-timeout --storage-opt --sysctl --tmpfs --ulimit --userns --uts --volume-driver --volumes-from'.split(' '));
+        // 其餘未知旗標視為不帶值（--init、--privileged、--read-only、-P 等）
+
+        // 解析 docker run 指令 → { ok, opts, unknown[], notes[] }
+        function parseRun(text) {
+            const t = tokenize(text);
+            if (!t.ok) return { ok: false, reason: t.reason };
+            const k = t.tokens; let i = 0;
+            if (k[i] === 'sudo') i++;
+            if (k[i] === 'docker') i++;
+            if (k[i] === 'container') i++;
+            if (k[i] === 'run') i++;
+            const o = { image: '', name: '', ports: [], env: [], volumes: [], restart: '', network: '', rm: false, detach: false, it: false, memory: '', cpus: '', workdir: '', user: '', extra: [], cmd: [] };
+            const notes = []; let fi = false, ft = false;
+            const put = (kind, v) => {
+                if (v === undefined) { notes.push('旗標缺少值：' + kind); return; }
+                if (kind === 'p') o.ports.push(v); else if (kind === 'e') o.env.push(v); else if (kind === 'v') o.volumes.push(v);
+                else { if (o[kind]) notes.push(`${kind} 重複指定，以最後一個為準`); o[kind] = v; }
+            };
+            for (; i < k.length; i++) {
+                const tok = k[i];
+                if (tok === '--') { i++; break; }
+                if (!tok.startsWith('-') || tok === '-') break;
+                if (tok.startsWith('--')) {
+                    const eq = tok.indexOf('='), name = eq < 0 ? tok : tok.slice(0, eq), inline = eq < 0 ? undefined : tok.slice(eq + 1);
+                    if (VAL_FLAGS[name]) { put(VAL_FLAGS[name], inline !== undefined ? inline : k[++i]); continue; }
+                    if (BOOL_FLAGS[name] && inline === undefined) {
+                        const b = BOOL_FLAGS[name]; if (b === 'i') fi = true; else if (b === 't') ft = true; else o[b] = true; continue;
+                    }
+                    if (inline === undefined && OTHER_VAL.has(name)) { o.extra.push(name); if (i + 1 < k.length) o.extra.push(k[++i]); } else o.extra.push(tok);
+                    continue;
+                }
+                // 短旗標
+                if (VAL_FLAGS[tok]) { put(VAL_FLAGS[tok], k[++i]); continue; }
+                const two = tok.slice(0, 2);
+                if (tok.length > 2 && VAL_FLAGS[two]) { put(VAL_FLAGS[two], tok.slice(2)); continue; }
+                if (/^-[dit]+$/.test(tok)) { for (const ch of tok.slice(1)) { if (ch === 'd') o.detach = true; else if (ch === 'i') fi = true; else ft = true; } continue; }
+                if (OTHER_VAL.has(tok)) { o.extra.push(tok); if (i + 1 < k.length) o.extra.push(k[++i]); continue; }
+                o.extra.push(tok);
+            }
+            if (fi && ft) o.it = true; else { if (fi) o.extra.push('-i'); if (ft) o.extra.push('-t'); }
+            if (i < k.length) { o.image = k[i]; o.cmd = k.slice(i + 1); } else notes.push('找不到映像名稱');
+            const unknown = [];
+            for (let j = 0; j < o.extra.length; j++) if (o.extra[j].startsWith('-')) unknown.push(o.extra[j]);
+            return { ok: true, opts: o, unknown, notes };
+        }
+
+        // opts → docker run 指令
+        function buildRun(o, oneLine = false) {
+            const p = [];
+            if (o.detach) p.push('-d');
+            if (o.rm) p.push('--rm');
+            if (o.it) p.push('-it');
+            if (o.name) p.push('--name ' + shq(o.name));
+            if (o.restart) p.push('--restart ' + shq(o.restart));
+            if (o.network) p.push('--network ' + shq(o.network));
+            for (const x of o.ports) p.push('-p ' + shq(x));
+            for (const x of o.env) p.push('-e ' + shq(x));
+            for (const x of o.volumes) p.push('-v ' + shq(x));
+            if (o.memory) p.push('--memory ' + shq(o.memory));
+            if (o.cpus) p.push('--cpus ' + shq(o.cpus));
+            if (o.workdir) p.push('-w ' + shq(o.workdir));
+            if (o.user) p.push('-u ' + shq(o.user));
+            if (o.extra.length) p.push(o.extra.map(shq).join(' '));
+            p.push([o.image ? shq(o.image) : '<映像>', ...o.cmd.map(shq)].join(' '));
+            return oneLine ? 'docker run ' + p.join(' ') : 'docker run \\\n  ' + p.join(' \\\n  ');
+        }
+
+        // --- YAML（自行輸出，不依賴函式庫）---
+        const YAML_RESERVED = /^(true|false|yes|no|on|off|null|y|n|~)$/i;
+        const ydq = (s) => JSON.stringify(String(s));          // JSON 字串即合法的 YAML 雙引號字串
+        const yval = (s) => { s = String(s); return /^[A-Za-z_][A-Za-z0-9_.\/-]*$/.test(s) && !YAML_RESERVED.test(s) ? s : ydq(s); };
+        const ykey = (s) => { s = String(s); return /^[A-Za-z_][A-Za-z0-9_.-]*$/.test(s) && !YAML_RESERVED.test(s) ? s : ydq(s); };
+        const dollar = (s) => String(s).replace(/\$/g, () => '$$');  // compose 會做變數替換，字面的 $ 要寫成 $$
+        const svcName = (o) => {
+            const base = (o.name || (o.image || '').replace(/@.*$/, '').replace(/:[^/]*$/, '').split('/').pop() || 'app').toLowerCase().replace(/[^a-z0-9_.-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '');
+            return base || 'app';
+        };
+        // opts → { yaml, warnings[] }
+        function buildCompose(o) {
+            const w = [], L = ['services:', '  ' + ykey(svcName(o)) + ':'];
+            const add = (s) => L.push('    ' + s);
+            if (!o.image) w.push('尚未填寫映像');
+            add('image: ' + ydq(dollar(o.image)));
+            if (o.name) add('container_name: ' + ydq(dollar(o.name)));
+            if (o.cmd.length) add('command: [' + o.cmd.map(x => ydq(dollar(x))).join(', ') + ']');
+            if (o.workdir) add('working_dir: ' + ydq(dollar(o.workdir)));
+            if (o.user) add('user: ' + ydq(dollar(o.user)));
+            if (o.ports.length) { add('ports:'); for (const x of o.ports) add('  - ' + ydq(dollar(x))); }
+            if (o.env.length) {
+                const m = new Map();
+                for (const e of o.env) { const eq = e.indexOf('='); const key = eq < 0 ? e : e.slice(0, eq); if (m.has(key)) { w.push(`環境變數 ${key} 重複，以最後一個為準`); m.delete(key); } m.set(key, eq < 0 ? null : e.slice(eq + 1)); }
+                add('environment:');
+                for (const [key, v] of m) add('  ' + ykey(key) + ':' + (v === null ? '' : ' ' + (v === '' ? '""' : yval(dollar(v)))));
+            }
+            if (o.volumes.length) { add('volumes:'); for (const x of o.volumes) add('  - ' + ydq(dollar(x))); }
+            if (o.restart) add('restart: ' + ydq(o.restart));
+            let ext = '';
+            if (o.network) {
+                if (/^(host|none|bridge|container:.+|service:.+)$/.test(o.network)) add('network_mode: ' + ydq(o.network));
+                else { add('networks:'); add('  - ' + ykey(o.network)); ext = o.network; }
+            }
+            if (o.memory) add('mem_limit: ' + ydq(o.memory));
+            if (o.cpus) add('cpus: ' + (/^\d+(\.\d+)?$/.test(o.cpus) ? o.cpus : ydq(o.cpus)));
+            if (o.it) { add('stdin_open: true'); add('tty: true'); }
+            if (o.rm) w.push('--rm 沒有對應的 compose 設定（可用 docker compose run --rm）');
+            const un = [];
+            for (let i = 0; i < o.extra.length; i++) un.push(o.extra[i]);
+            if (un.length) { add('# 未轉換的旗標：' + un.map(shq).join(' ').replace(/\n/g, ' ')); w.push('有旗標無法自動轉成 compose，已寫成註解：' + un.map(shq).join(' ')); }
+            if (ext) L.push('', 'networks:', '  ' + ykey(ext) + ':', '    external: true');
+            return { yaml: L.join('\n'), warnings: w };
+        }
+
+        // 表單欄位的格式提醒（不阻擋輸出）
+        function validateOpts(o) {
+            const w = [];
+            if (!o.image) w.push('尚未填寫映像');
+            for (const p of o.ports) if (!/^((\[[0-9a-fA-F:]+\]|[\d.]+):)?(\d+(-\d+)?:)?\d+(-\d+)?(\/(tcp|udp|sctp))?$/.test(p)) w.push(`埠對映格式可能不對：${p}（例：8080:80、127.0.0.1:8080:80/tcp）`);
+            for (const e of o.env) if (!/^[A-Za-z_][A-Za-z0-9_.]*(=.*)?$/s.test(e)) w.push(`環境變數格式可能不對：${e}（例：KEY=value）`);
+            if (o.memory && !/^\d+(\.\d+)?[bkmgBKMG]?$/.test(o.memory)) w.push(`記憶體格式可能不對：${o.memory}（例：512m、2g）`);
+            if (o.cpus && !/^\d+(\.\d+)?$/.test(o.cpus)) w.push(`CPU 格式可能不對：${o.cpus}（例：1.5）`);
+            if (o.restart && !/^(no|always|unless-stopped|on-failure(:\d+)?)$/.test(o.restart)) w.push(`重啟策略不是常見值：${o.restart}`);
+            return w;
+        }
+
+        // 表單文字 → opts（多行欄位一行一個、其他旗標 / 啟動指令用 shell 規則切字）
+        const lines = (s) => String(s ?? '').split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+        function optsFromForm(f) {
+            const ex = tokenize(f.extra), cm = tokenize(f.cmd), w = [];
+            if (!ex.ok) w.push('「其他旗標」' + ex.reason + '，已忽略');
+            if (!cm.ok) w.push('「啟動指令」' + cm.reason + '，已忽略');
+            return {
+                opts: { image: String(f.image ?? '').trim(), name: String(f.name ?? '').trim(), ports: lines(f.ports), env: lines(f.env), volumes: lines(f.volumes), restart: f.restart || '', network: String(f.network ?? '').trim(), rm: !!f.rm, detach: !!f.detach, it: !!f.it, memory: String(f.memory ?? '').trim(), cpus: String(f.cpus ?? '').trim(), workdir: String(f.workdir ?? '').trim(), user: String(f.user ?? '').trim(), extra: ex.ok ? ex.tokens : [], cmd: cm.ok ? cm.tokens : [] },
+                warnings: w,
+            };
+        }
+
+        // ===== .env =====
+        const ENV_MAX_CHARS = 100000, ENV_MAX_LINES = 2000;
+        const SECRET_KEY = /(PASS(WORD|WD)?|SECRET|TOKEN|API[_-]?KEY|PRIVATE[_-]?KEY|ACCESS[_-]?KEY|CREDENTIAL|AUTH)/i;
+        const SECRET_VAL = /AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|\bsk-[A-Za-z0-9_-]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|xox[baprs]-[A-Za-z0-9-]{10,}/;
+        const PLACEHOLDER = /^(change_?me|x{3,}|\*+|your[-_ ].*|<.*>|\$\{.*\}|todo|example|secret|password|test|dummy|\.\.\.)$/i;
+        function limitEnv(text) {
+            let s = String(text ?? '').replace(/^﻿/, ''), cut = false;
+            if (s.length > ENV_MAX_CHARS) { s = s.slice(0, ENV_MAX_CHARS); cut = true; }
+            const ls = s.split(/\r?\n/);
+            if (ls.length > ENV_MAX_LINES) { s = ls.slice(0, ENV_MAX_LINES).join('\n'); cut = true; }
+            return { text: s, cut };
+        }
+        // 解析 .env → { entries[{line,key,value,quote,comment}], issues[{line,level,code,key,msg}] }
+        function parseEnv(text) {
+            const entries = [], issues = [];
+            const add = (line, level, code, key, msg) => issues.push({ line, level, code, key, msg });
+            limitEnv(text).text.split(/\r?\n/).forEach((raw, idx) => {
+                const line = idx + 1, t = raw.trim();
+                if (!t || t.startsWith('#')) return;
+                const m = /^(?:export\s+)?([^=\s#]+)(\s*)=(\s*)(.*)$/.exec(t);
+                if (!m) { add(line, 'error', 'format', '', t.includes('=') ? '鍵名缺少或不合法' : '格式錯誤：缺少「=」'); return; }
+                const key = m[1], rest = m[4];
+                if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+                    if (/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(key)) add(line, 'warn', 'key-style', key, `鍵名 ${key} 含「.」或「-」，部分工具（shell）不支援`);
+                    else { add(line, 'error', 'key-invalid', key, `鍵名 ${key} 不合法（只能用英數字與底線，且不能以數字開頭）`); return; }
+                }
+                if (m[2] || m[3]) add(line, 'warn', 'eq-space', key, `${key} 的「=」兩側有空白，部分工具會把空白算進去或不支援`);
+                let value = '', quote = '', comment = '';
+                if (rest[0] === '"') {
+                    let j = 1, out = '', closed = false;
+                    for (; j < rest.length; j++) {
+                        const c = rest[j];
+                        if (c === '\\' && j + 1 < rest.length) { const n = rest[++j]; out += n === 'n' ? '\n' : n; continue; }
+                        if (c === '"') { closed = true; break; }
+                        out += c;
+                    }
+                    quote = '"'; value = out;
+                    if (!closed) add(line, 'error', 'quote', key, `${key} 的雙引號沒有閉合`);
+                    else { comment = rest.slice(j + 1).trim(); if (comment && !comment.startsWith('#')) add(line, 'warn', 'trailing', key, `${key} 的引號後面還有多餘文字`); }
+                } else if (rest[0] === "'") {
+                    const j = rest.indexOf("'", 1);
+                    quote = "'";
+                    if (j < 0) { value = rest.slice(1); add(line, 'error', 'quote', key, `${key} 的單引號沒有閉合`); }
+                    else { value = rest.slice(1, j); comment = rest.slice(j + 1).trim(); if (comment && !comment.startsWith('#')) add(line, 'warn', 'trailing', key, `${key} 的引號後面還有多餘文字`); }
+                } else {
+                    const ci = rest.search(/(^|\s)#/);
+                    if (ci >= 0) { comment = rest.slice(ci).trim(); value = rest.slice(0, ci).trim(); } else value = rest.trim();
+                    if (/\s/.test(value)) add(line, 'warn', 'space', key, `${key} 的值含空白但沒加引號，建議寫成 ${key}="${value}"`);
+                }
+                entries.push({ line, key, value, quote, comment });
+                if (value === '') add(line, 'warn', 'empty', key, `${key} 的值是空的`);
+                if (value !== '' && !PLACEHOLDER.test(value) && (SECRET_KEY.test(key) || SECRET_VAL.test(value))) add(line, 'info', 'secret', key, `${key} 疑似密鑰：含真實值的 .env 不要提交到版本庫（加入 .gitignore，改提交 .env.example）`);
+            });
+            const by = new Map();
+            for (const e of entries) (by.get(e.key) || by.set(e.key, []).get(e.key)).push(e.line);
+            for (const [key, ls] of by) if (ls.length > 1) add(ls[ls.length - 1], 'warn', 'dup', key, `重複的鍵 ${key}（第 ${ls.join('、')} 行），以最後一個為準`);
+            const rank = { error: 0, warn: 1, info: 2 };
+            issues.sort((a, b) => a.line - b.line || rank[a.level] - rank[b.level]);
+            return { entries, issues };
+        }
+        // 值需要引號時的輸出
+        function envVal(v) {
+            if (v === '' || SAFE_SH.test(v)) return v;
+            if (!/['\n\r]/.test(v)) return "'" + v + "'";
+            return '"' + v.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r/g, '\\r').replace(/\n/g, '\\n') + '"';
+        }
+        // 合併重複鍵（保留最後一個）、可排序
+        function uniqueEntries(entries, sort = false) {
+            const m = new Map();
+            for (const e of entries) { m.delete(e.key); m.set(e.key, e); }
+            const a = [...m.values()];
+            if (sort) a.sort((x, y) => x.key < y.key ? -1 : x.key > y.key ? 1 : 0);
+            return a;
+        }
+        const tidyEnv = (entries, sort = false) => uniqueEntries(entries, sort).map(e => `${e.key}=${envVal(e.value)}`).join('\n');
+        const envToCompose = (entries, sort = false) => {
+            const u = uniqueEntries(entries, sort);
+            if (!u.length) return '';
+            return '    environment:\n' + u.map(e => `      ${ykey(e.key)}: ${e.value === '' ? '""' : yval(dollar(e.value))}`).join('\n');
+        };
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'dockerh_opts', TABS = ['run', 'env'];
+        const addMsgs = (box, arr) => { box.replaceChildren(...arr.map(t => { const d = document.createElement('div'); d.textContent = t; return d; })); };
+
+        // ---- 分頁（只記住上次分頁）----
+        function showTab(t, save) {
+            if (!TABS.includes(t)) t = 'run';
+            [...$('#tabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.t === t));
+            $('#pgRun').hidden = t !== 'run'; $('#pgEnv').hidden = t !== 'env';
+            if (save) store.set(KEY, { tab: t });
+        }
+        $('#tabs').onclick = (e) => { const t = e.target.dataset.t; if (t) showTab(t, true); };
+        { const s = store.get(KEY, null); showTab(s && typeof s === 'object' && TABS.includes(s.tab) ? s.tab : 'run', false); }
+
+        // ---- docker run ----
+        const FIELDS = ['image', 'name', 'ports', 'env', 'volumes', 'restart', 'network', 'workdir', 'memory', 'cpus', 'user', 'cmd', 'extra'];
+        const formVals = () => { const f = {}; for (const k of FIELDS) f[k] = $('#' + k).value; for (const k of ['rm', 'detach', 'it']) f[k] = $('#' + k).checked; return f; };
+        function renderRun() {
+            const { opts, warnings } = optsFromForm(formVals());
+            $('#outRun').textContent = buildRun(opts, $('#oneLine').checked);
+            const c = buildCompose(opts);
+            $('#outYml').textContent = c.yaml;
+            addMsgs($('#warns'), [...warnings, ...validateOpts(opts).filter(x => !c.warnings.includes(x)), ...c.warnings]);
+        }
+        const shJoin = (a) => a.map(shq).join(' ');
+        $('#parse').onclick = () => {
+            const r = parseRun($('#cmdIn').value), note = $('#parseNote');
+            if (!$('#cmdIn').value.trim()) { addMsgs(note, ['請先貼上 docker run 指令']); return; }
+            if (!r.ok) { addMsgs(note, ['解析失敗：' + r.reason]); return; }
+            const o = r.opts;
+            for (const k of ['image', 'name', 'restart', 'network', 'workdir', 'memory', 'cpus', 'user']) $('#' + k).value = o[k];
+            if (o.restart && ![...$('#restart').options].some(x => x.value === o.restart)) { const op = new Option(o.restart, o.restart); $('#restart').add(op); $('#restart').value = o.restart; }
+            $('#ports').value = o.ports.join('\n'); $('#env').value = o.env.join('\n'); $('#volumes').value = o.volumes.join('\n');
+            $('#cmd').value = shJoin(o.cmd); $('#extra').value = shJoin(o.extra);
+            $('#rm').checked = o.rm; $('#detach').checked = o.detach; $('#it').checked = o.it;
+            addMsgs(note, [...(r.unknown.length ? [`無法對應到表單的旗標，已放進「其他旗標」：${r.unknown.join(' ')}`] : ['已解析完成']), ...r.notes]);
+            renderRun();
+        };
+        for (const k of FIELDS) $('#' + k).oninput = $('#' + k).onchange = renderRun;
+        for (const k of ['rm', 'detach', 'it', 'oneLine']) $('#' + k).onchange = renderRun;
+        $('#copyRun').onclick = () => copyWithFeedback($('#copyRun'), $('#outRun').textContent);
+        $('#copyYml').onclick = () => copyWithFeedback($('#copyYml'), $('#outYml').textContent);
+
+        // ---- .env ----
+        const LV = { error: '錯誤', warn: '警告', info: '提醒' };
+        function renderEnv() {
+            const lim = limitEnv($('#envIn').value), r = parseEnv(lim.text), box = $('#issues');
+            $('#envNote').textContent = lim.cut ? `內容超過上限（${ENV_MAX_CHARS} 字元或 ${ENV_MAX_LINES} 行），其餘已略過` : '';
+            box.replaceChildren();
+            if (!$('#envIn').value.trim()) { box.textContent = '貼上 .env 內容後會在這裡顯示結果'; }
+            else {
+                const sum = document.createElement('p'); sum.className = 'note'; sum.textContent = `共 ${r.entries.length} 個鍵；${r.issues.filter(x => x.level === 'error').length} 個錯誤、${r.issues.filter(x => x.level === 'warn').length} 個警告、${r.issues.filter(x => x.level === 'info').length} 個提醒`; box.append(sum);
+                if (!r.issues.length) { const ok = document.createElement('div'); ok.className = 'issue ok'; ok.textContent = '沒有發現問題'; box.append(ok); }
+                for (const it of r.issues) {
+                    const d = document.createElement('div'); d.className = 'issue';
+                    const lv = document.createElement('span'); lv.className = 'lv ' + it.level; lv.textContent = LV[it.level];
+                    d.append(lv, document.createTextNode(`第 ${it.line} 行：${it.msg}`)); box.append(d);
+                }
+            }
+            const sort = $('#sort').checked;
+            $('#outTidy').textContent = tidyEnv(r.entries, sort);
+            $('#outEnvYml').textContent = envToCompose(r.entries, sort);
+        }
+        $('#envIn').oninput = $('#sort').onchange = renderEnv;
+        $('#copyTidy').onclick = () => copyWithFeedback($('#copyTidy'), $('#outTidy').textContent);
+        $('#copyEnvYml').onclick = () => copyWithFeedback($('#copyEnvYml'), $('#outEnvYml').textContent);
+
+        renderRun(); renderEnv();
+    </script>
+</body>
+
+</html>

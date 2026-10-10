@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="HTTP 狀態碼與 Header 速查：全部標準狀態碼、常用請求 / 回應 Header 與 MIME 類型，附白話說明、何時會看到與排查方向，可搜尋與複製。">
+    <meta property="og:title" content="HTTP 狀態碼與 Header 速查" />
+    <meta property="og:description" content="狀態碼、Header、MIME 類型的離線速查表。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/http-ref.html" />
+    <title>HTTP 狀態碼與 Header 速查</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row input {
+            flex: 1;
+            min-width: 140px;
+        }
+
+        .row select {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .seg {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 10px 0;
+        }
+
+        .seg button {
+            flex: 1;
+        }
+
+        details {
+            border-bottom: 1px solid var(--fill);
+        }
+
+        details:last-child {
+            border-bottom: 0;
+        }
+
+        summary {
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            gap: 10px;
+            align-items: baseline;
+            padding: 12px 0;
+            min-height: 44px;
+        }
+
+        summary::-webkit-details-marker {
+            display: none;
+        }
+
+        summary .k {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-weight: 700;
+            min-width: 3.2em;
+            overflow-wrap: anywhere;
+        }
+
+        summary .t {
+            flex: 1;
+            overflow-wrap: anywhere;
+        }
+
+        summary .c {
+            color: var(--muted);
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .det {
+            padding: 0 0 14px;
+        }
+
+        .det p {
+            margin: 6px 0;
+            overflow-wrap: anywhere;
+        }
+
+        .det b {
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .code {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 14px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin: 8px 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>HTTP 狀態碼與 Header 速查</h1>
+        <p class="sub">狀態碼、Header、MIME 類型的白話速查，離線可用。</p>
+
+        <div class="card">
+            <input id="q" type="search" placeholder="搜尋：404、not found、cache、cors、json…" aria-label="搜尋" autocomplete="off" spellcheck="false" autocapitalize="off">
+            <div class="seg" id="kinds"><button class="sm" data-k="" aria-pressed="true">全部</button><button class="sm" data-k="status" aria-pressed="false">狀態碼</button><button class="sm" data-k="header" aria-pressed="false">Header</button><button class="sm" data-k="mime" aria-pressed="false">MIME</button></div>
+            <div class="row"><select id="cat" aria-label="分類" hidden></select></div>
+            <p class="note" id="count"></p>
+        </div>
+        <div class="card" id="list"></div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>內建 HTTP 狀態碼（1xx–5xx）、常用請求 / 回應 Header 與 MIME 類型的速查表，每筆有白話說明、何時會看到與排查方向。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>API 回了 <kbd>502</kbd> 或 <kbd>429</kbd>，想知道是誰的問題、怎麼查。</li>
+        <li>寫後端要設 <kbd>Cache-Control</kbd>、CORS Header，需要範例值。</li>
+        <li>不確定檔案該用什麼 <kbd>Content-Type</kbd>。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>在搜尋欄輸入狀態碼、英文名稱、中文關鍵字或 Header 名稱。</li>
+        <li>用「全部 / 狀態碼 / Header / MIME」縮小範圍，再用分類下拉選單細分（例如 4xx、CORS）。</li>
+        <li>點一列展開詳情，按「複製」帶走狀態碼名稱、Header 範例或 MIME 值。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">搜尋 429 → Too Many Requests：請求太頻繁，看 Retry-After 等多久再試
+搜尋 cors → 列出 Access-Control-* 與 Origin 等 Header 與範例值</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>「排查方向」是常見情況，不是保證；實際原因仍要看伺服器 log 與回應內容。</li>
+        <li>狀態碼只收錄標準（IANA 登記）的；各家服務自訂的碼（如 Cloudflare 52x）不在內。</li>
+        <li>不儲存任何資料，也不會連線。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { copyWithFeedback } = Util;
+
+        // --- pure ---
+        // 狀態碼：[碼, 英文名, 白話說明, 何時會看到, 排查方向]
+        const STATUS = [
+            ['100', 'Continue', '伺服器已收到請求標頭，客戶端可以繼續送請求本體。', '上傳大檔時，客戶端先送 Expect: 100-continue 探路。', '一般不用處理；若卡住，檢查是否有代理伺服器不支援 Expect。'],
+            ['101', 'Switching Protocols', '伺服器同意切換協定。', '建立 WebSocket 連線時（Upgrade: websocket）。', 'WebSocket 連不上時，確認反向代理有轉送 Upgrade 與 Connection 標頭。'],
+            ['102', 'Processing', '伺服器還在處理，請稍候（WebDAV）。', '處理耗時的 WebDAV 請求時。', '少見；確認請求是否真的需要這麼久。'],
+            ['103', 'Early Hints', '在正式回應前先給提示，讓瀏覽器提早載入資源。', '伺服器想預先告知要載入的 CSS / JS（Link 標頭）。', '當成效能優化；不支援的客戶端會直接忽略。'],
+            ['200', 'OK', '成功，回應本體就是你要的結果。', '一般的 GET、POST 成功。', '拿到 200 但內容不對，檢查查詢參數、快取，以及是否把錯誤包在 body 裡。'],
+            ['201', 'Created', '成功建立了新資源。', 'POST 新增資料後，通常搭配 Location 指向新資源。', '檢查 Location 標頭與回應本體裡的新資源 ID。'],
+            ['202', 'Accepted', '已收到請求，但還沒處理完（非同步）。', '送出背景工作、匯出報表等。', '用回傳的狀態網址輪詢結果，不要當成已完成。'],
+            ['203', 'Non-Authoritative Information', '成功，但內容經過代理伺服器修改過。', '經過會改寫內容的代理。', '若內容與來源不一致，檢查中間代理。'],
+            ['204', 'No Content', '成功，但沒有回應本體。', 'DELETE、PUT 成功不需回傳內容；預檢請求（OPTIONS）。', '前端不要對 204 呼叫 response.json()，會報錯。'],
+            ['205', 'Reset Content', '成功，請客戶端重設表單 / 畫面。', '送出表單後要清空輸入。', '少見；確認客戶端有處理。'],
+            ['206', 'Partial Content', '只回傳了你要求的一部分內容。', '影片串流、斷點續傳（Range 請求）。', '播放卡頓或下載不完整時，檢查 Range / Content-Range 與伺服器是否支援。'],
+            ['207', 'Multi-Status', '一次回報多個子請求各自的結果（WebDAV）。', '批次操作 WebDAV 資源。', '逐一檢查回應內每個子狀態。'],
+            ['208', 'Already Reported', '這些成員已在前面回報過（WebDAV）。', 'WebDAV 綁定集合避免重複列舉。', '少見；通常不需處理。'],
+            ['226', 'IM Used', '回應是對現有資源套用了某種差異運算的結果。', 'Delta encoding（極少用）。', '少見；通常不需處理。'],
+            ['300', 'Multiple Choices', '有多個可選的版本，請客戶端挑一個。', '同一資源有多種格式 / 語言。', '改用明確的網址，或檢查 Accept 標頭。'],
+            ['301', 'Moved Permanently', '資源永久搬家，之後請用新網址。', '網站改網域、http 轉 https、網址結構重整。', '檢查 Location 的新網址；SEO 權重會轉移；瀏覽器會長期快取這個轉址。'],
+            ['302', 'Found', '暫時換網址，下次仍用原網址。', '登入後轉址、暫時維護頁。', '轉址無限迴圈時，檢查 Location 是否指回自己（常見於 http / https 互轉）。'],
+            ['303', 'See Other', '請改用 GET 去另一個網址取得結果。', 'POST 表單送出後轉到結果頁（避免重複送出）。', '確認 Location 網址正確。'],
+            ['304', 'Not Modified', '內容沒變，直接用你快取的版本。', '瀏覽器帶 If-None-Match / If-Modified-Since 重新驗證。', '這是正常的快取行為；若想看到新內容，強制重新整理或檢查 ETag 設定。'],
+            ['305', 'Use Proxy', '必須透過指定代理存取（已棄用）。', '幾乎不會看到。', '現代客戶端已不處理，請改用設定代理。'],
+            ['307', 'Temporary Redirect', '暫時轉址，且必須沿用相同方法與本體。', 'API 暫時導向另一台伺服器、HSTS 內部轉址。', '與 302 差在不會把 POST 改成 GET；檢查 Location。'],
+            ['308', 'Permanent Redirect', '永久轉址，且必須沿用相同方法與本體。', 'API 網址永久改版，POST 也要保留。', '與 301 差在不會把 POST 改成 GET；更新呼叫端網址。'],
+            ['400', 'Bad Request', '請求格式有問題，伺服器看不懂。', 'JSON 格式錯、缺必要欄位、參數型別不對、標頭太大。', '看回應本體的錯誤訊息；驗證 JSON、Content-Type、必填欄位與參數型別。'],
+            ['401', 'Unauthorized', '沒有通過身分驗證（其實是「未登入」）。', '沒帶 token、token 過期或無效。', '檢查 Authorization 標頭、token 是否過期；看 WWW-Authenticate 要求什麼驗證方式。'],
+            ['402', 'Payment Required', '需要付款（保留碼）。', '部分 API 用來表示額度用完或未付費。', '查該服務文件，通常是帳單或方案問題。'],
+            ['403', 'Forbidden', '知道你是誰，但你沒有權限。', '權限不足、IP 被擋、CORS / WAF 規則攔截。', '確認帳號角色與權限；檢查 IP 白名單、WAF / 防火牆規則；與 401 區分是「驗證」還是「授權」。'],
+            ['404', 'Not Found', '找不到這個資源。', '網址打錯、資源被刪、路由沒註冊。', '檢查網址與大小寫、路由設定、靜態檔部署路徑；有些服務會用 404 隱藏無權限的資源。'],
+            ['405', 'Method Not Allowed', '這個網址不允許這個 HTTP 方法。', '對只收 POST 的網址用了 GET。', '看回應的 Allow 標頭列出允許的方法；檢查路由的方法設定。'],
+            ['406', 'Not Acceptable', '伺服器無法提供客戶端 Accept 指定的格式。', 'Accept 要求 JSON 但只能給 XML。', '檢查 Accept / Accept-Language 標頭。'],
+            ['407', 'Proxy Authentication Required', '需要先通過代理伺服器的驗證。', '公司網路代理要求登入。', '設定代理帳密（Proxy-Authorization）。'],
+            ['408', 'Request Timeout', '伺服器等不到完整的請求，逾時了。', '網路很慢、客戶端送一半就停住。', '檢查網路品質、上傳大小與伺服器逾時設定。'],
+            ['409', 'Conflict', '請求與資源目前狀態衝突。', '新增重複的唯一值、版本衝突、同時編輯。', '重新取得最新資料再試；檢查唯一鍵或版本號（ETag / If-Match）。'],
+            ['410', 'Gone', '資源曾經存在，但已永久移除。', '刻意下架的內容、已淘汰的 API 版本。', '更新呼叫端；搜尋引擎會比 404 更快移除索引。'],
+            ['411', 'Length Required', '請求必須帶 Content-Length。', '傳送本體卻沒有長度資訊。', '補上 Content-Length，或確認客戶端程式庫有自動帶。'],
+            ['412', 'Precondition Failed', '請求中的前提條件不成立。', '帶 If-Match 但資源已被別人改過。', '重新取得資源與最新 ETag 再送。'],
+            ['413', 'Content Too Large', '請求本體太大，超過伺服器上限。', '上傳檔案過大。', '縮小檔案，或調高伺服器 / 代理上限（例如 nginx 的 client_max_body_size）。'],
+            ['414', 'URI Too Long', '網址太長。', '用 GET 塞了大量查詢參數。', '改用 POST 把資料放本體。'],
+            ['415', 'Unsupported Media Type', '伺服器不支援你送的內容格式。', 'Content-Type 錯誤，例如該送 application/json 卻送了表單。', '檢查 Content-Type 與實際本體是否一致。'],
+            ['416', 'Range Not Satisfiable', '要求的範圍超出資源大小。', '斷點續傳的 Range 超過檔案長度。', '重新取得檔案大小再計算 Range；看 Content-Range: bytes */總長。'],
+            ['417', 'Expectation Failed', '伺服器無法滿足 Expect 標頭的要求。', '送了 Expect: 100-continue 但不被支援。', '移除 Expect 標頭。'],
+            ['418', "I'm a teapot", '我是茶壺，拒絕泡咖啡（1998 年愚人節 RFC 的彩蛋）。', '玩笑碼；有些服務拿來當反爬蟲或封鎖回應。', '多半是被刻意擋下，檢查 User-Agent 與存取頻率。'],
+            ['421', 'Misdirected Request', '請求被送到無法回應它的伺服器。', 'HTTP/2 連線重用到錯誤網域、憑證不涵蓋。', '檢查 TLS 憑證涵蓋的網域與反向代理設定。'],
+            ['422', 'Unprocessable Content', '格式正確，但內容語意有誤無法處理。', '表單驗證失敗（信箱格式不對、欄位超出範圍）。', '看回應本體裡每個欄位的錯誤訊息。'],
+            ['423', 'Locked', '資源被鎖定（WebDAV）。', '他人正在編輯被鎖的檔案。', '等待解鎖或取得鎖。'],
+            ['424', 'Failed Dependency', '因為前一個請求失敗，這個也失敗（WebDAV）。', '批次操作中前面的步驟出錯。', '先解決前一個失敗的請求。'],
+            ['425', 'Too Early', '伺服器不願處理可能被重放的早期資料（TLS 1.3 0-RTT）。', '使用 TLS early data 時。', '客戶端等握手完成後重送。'],
+            ['426', 'Upgrade Required', '必須升級協定才能存取。', '伺服器要求改用 TLS 或較新的 HTTP 版本。', '看 Upgrade 標頭要求的協定。'],
+            ['428', 'Precondition Required', '伺服器要求請求必須帶條件標頭。', '要求更新時一定要帶 If-Match，避免覆蓋他人修改。', '先 GET 取得 ETag，再用 If-Match 更新。'],
+            ['429', 'Too Many Requests', '請求太頻繁，被限流了。', '超過 API 速率限制。', '看 Retry-After 等多久再試；降低頻率、加上退避重試與快取。'],
+            ['431', 'Request Header Fields Too Large', '請求標頭太大。', 'Cookie 太多或太大。', '清除 Cookie、縮小標頭；調高伺服器標頭上限。'],
+            ['451', 'Unavailable For Legal Reasons', '因法律原因不可提供。', '被政府或法院要求封鎖的內容（名稱源自小說《華氏 451 度》）。', '這是法律限制，換不了；看回應是否說明來源。'],
+            ['500', 'Internal Server Error', '伺服器內部出錯，一個籠統的失敗。', '後端程式例外、設定錯誤、資料庫連不上。', '看伺服器錯誤日誌與堆疊；用同樣的輸入重現；通常不是客戶端的錯。'],
+            ['501', 'Not Implemented', '伺服器還不支援這個功能或方法。', '用了伺服器沒實作的 HTTP 方法。', '改用支援的方法，或確認 API 版本。'],
+            ['502', 'Bad Gateway', '閘道 / 代理收到上游伺服器的無效回應。', '反向代理（nginx、CDN）後面的應用程式掛了或回傳亂碼。', '檢查上游服務是否在跑、埠號與位址設定、上游 log。'],
+            ['503', 'Service Unavailable', '服務暫時無法使用。', '維護中、過載、重新部署、容器還沒啟動。', '看 Retry-After；檢查服務健康、資源用量與部署狀態，稍後重試。'],
+            ['504', 'Gateway Timeout', '閘道等不到上游伺服器及時回應。', '後端處理太慢、資料庫卡住、上游網路不通。', '檢查後端效能與慢查詢；調整代理逾時；長任務改成非同步。'],
+            ['505', 'HTTP Version Not Supported', '伺服器不支援請求使用的 HTTP 版本。', '用了伺服器不認得的協定版本。', '改用較通用的 HTTP/1.1。'],
+            ['506', 'Variant Also Negotiates', '伺服器內容協商設定有循環。', '伺服器設定錯誤。', '檢查伺服器的內容協商設定。'],
+            ['507', 'Insufficient Storage', '伺服器儲存空間不足（WebDAV）。', '硬碟或配額滿了。', '清理空間或調整配額。'],
+            ['508', 'Loop Detected', '伺服器偵測到無窮迴圈（WebDAV）。', '資源結構循環引用。', '檢查資源的連結是否形成迴圈。'],
+            ['510', 'Not Extended', '請求需要伺服器支援的更多擴充。', '極少見。', '看伺服器文件說明需要的擴充。'],
+            ['511', 'Network Authentication Required', '需要先通過網路驗證才能上網。', '咖啡廳 / 飯店 Wi-Fi 的登入頁（Captive Portal）。', '開瀏覽器完成 Wi-Fi 登入後再試。'],
+        ];
+        // Header：[名稱, 方向, 分類, 說明, 何時用, 範例值]
+        const HEADERS = [
+            ['Cache-Control', '兩者', '快取', '控制回應能被誰快取、快取多久。', '想讓靜態檔被長期快取，或讓敏感資料不被快取。', 'Cache-Control: public, max-age=31536000, immutable'],
+            ['ETag', '回應', '快取', '資源版本的指紋，用來判斷內容有沒有變。', '搭配 If-None-Match 做條件請求，節省頻寬。', 'ETag: "33a64df551425fcc55e4d42a148795d9f25f89d4"'],
+            ['If-None-Match', '請求', '快取', '帶上次的 ETag；沒變就回 304。', '瀏覽器重新驗證快取時自動帶。', 'If-None-Match: "33a64df551425fcc"'],
+            ['Last-Modified', '回應', '快取', '資源最後修改時間。', '給 If-Modified-Since 做條件請求。', 'Last-Modified: Wed, 21 Oct 2026 07:28:00 GMT'],
+            ['If-Modified-Since', '請求', '快取', '指定時間之後有改過才回完整內容，否則 304。', '重新驗證快取。', 'If-Modified-Since: Wed, 21 Oct 2026 07:28:00 GMT'],
+            ['Expires', '回應', '快取', '舊式的到期時間；有 Cache-Control: max-age 時會被忽略。', '相容老舊客戶端。', 'Expires: Thu, 01 Jan 2027 00:00:00 GMT'],
+            ['Vary', '回應', '快取', '告訴快取：回應會依哪些請求標頭而不同。', '同網址依語言或壓縮格式回不同內容時。', 'Vary: Accept-Encoding, Accept-Language'],
+            ['Age', '回應', '快取', '這份回應在快取中已存放的秒數。', '除錯 CDN 快取是否命中。', 'Age: 120'],
+            ['Pragma', '請求', '快取', 'HTTP/1.0 的舊式快取控制。', '只為了相容舊系統。', 'Pragma: no-cache'],
+            ['Access-Control-Allow-Origin', '回應', 'CORS', '允許哪個來源的網頁讀取這個回應。', '前端跨網域呼叫 API 被擋時，由後端設定。', 'Access-Control-Allow-Origin: https://app.example.com'],
+            ['Access-Control-Allow-Methods', '回應', 'CORS', '預檢回應：允許跨域使用的方法。', '處理 OPTIONS 預檢請求。', 'Access-Control-Allow-Methods: GET, POST, PUT, DELETE'],
+            ['Access-Control-Allow-Headers', '回應', 'CORS', '預檢回應：允許跨域帶的請求標頭。', '前端帶了 Authorization 或自訂標頭時。', 'Access-Control-Allow-Headers: Content-Type, Authorization'],
+            ['Access-Control-Allow-Credentials', '回應', 'CORS', '允許跨域請求帶 Cookie / 憑證。', '跨域登入狀態；此時 Allow-Origin 不能是 *。', 'Access-Control-Allow-Credentials: true'],
+            ['Access-Control-Max-Age', '回應', 'CORS', '預檢結果可快取多少秒。', '減少 OPTIONS 預檢次數。', 'Access-Control-Max-Age: 86400'],
+            ['Access-Control-Expose-Headers', '回應', 'CORS', '讓前端 JS 能讀到哪些回應標頭。', '前端要讀自訂標頭（如分頁總數）。', 'Access-Control-Expose-Headers: X-Total-Count'],
+            ['Origin', '請求', 'CORS', '發出請求的網頁來源（協定 + 網域 + 埠）。', '跨域請求時瀏覽器自動帶；後端用來決定是否允許。', 'Origin: https://app.example.com'],
+            ['Content-Security-Policy', '回應', '安全', '限制頁面能載入哪些來源的資源，防 XSS。', '強化網站安全。', "Content-Security-Policy: default-src 'self'; img-src 'self' data:"],
+            ['Strict-Transport-Security', '回應', '安全', '要求瀏覽器日後一律用 HTTPS 連這個網站（HSTS）。', '網站全面 HTTPS 後。', 'Strict-Transport-Security: max-age=31536000; includeSubDomains'],
+            ['X-Content-Type-Options', '回應', '安全', '禁止瀏覽器猜測內容類型（MIME sniffing）。', '防止被當成腳本執行。', 'X-Content-Type-Options: nosniff'],
+            ['X-Frame-Options', '回應', '安全', '控制網頁能不能被放進 iframe，防點擊劫持。', '不想被嵌入別人網站。', 'X-Frame-Options: DENY'],
+            ['Referrer-Policy', '回應', '安全', '控制請求時帶多少來源網址（Referer）。', '避免外洩內部網址。', 'Referrer-Policy: strict-origin-when-cross-origin'],
+            ['Permissions-Policy', '回應', '安全', '控制網頁能用哪些瀏覽器功能（相機、定位…）。', '禁用不需要的功能。', 'Permissions-Policy: camera=(), geolocation=()'],
+            ['Set-Cookie', '回應', '安全', '要求瀏覽器儲存 Cookie。', '設定登入 session，建議加 HttpOnly、Secure、SameSite。', 'Set-Cookie: sid=abc123; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=3600'],
+            ['Cookie', '請求', '安全', '瀏覽器帶回先前儲存的 Cookie。', '維持登入狀態。', 'Cookie: sid=abc123; theme=dark'],
+            ['Authorization', '請求', '認證', '帶上身分憑證。', '呼叫需要登入的 API。', 'Authorization: Bearer eyJhbGciOi...'],
+            ['WWW-Authenticate', '回應', '認證', '401 時告訴客戶端要用哪種驗證方式。', '伺服器要求 Basic / Bearer 驗證。', 'WWW-Authenticate: Bearer realm="api"'],
+            ['Proxy-Authorization', '請求', '認證', '向代理伺服器出示憑證。', '代理回 407 時。', 'Proxy-Authorization: Basic dXNlcjpwYXNz'],
+            ['Content-Type', '兩者', '內容', '本體的格式（MIME 類型）與編碼。', '送 / 收 JSON、表單、檔案時一定要設。', 'Content-Type: application/json; charset=utf-8'],
+            ['Content-Length', '兩者', '內容', '本體的位元組長度。', '讓對方知道何時讀完。', 'Content-Length: 348'],
+            ['Content-Encoding', '回應', '內容', '本體使用的壓縮方式。', '伺服器回傳 gzip / br 壓縮內容。', 'Content-Encoding: gzip'],
+            ['Accept', '請求', '內容', '客戶端想收到哪些格式。', '要求 JSON 或特定媒體類型。', 'Accept: application/json, text/plain;q=0.9, */*;q=0.8'],
+            ['Accept-Encoding', '請求', '內容', '客戶端支援的壓縮方式。', '瀏覽器自動帶。', 'Accept-Encoding: gzip, deflate, br'],
+            ['Accept-Language', '請求', '內容', '客戶端偏好的語言。', '伺服器依語言回不同內容。', 'Accept-Language: zh-TW,zh;q=0.9,en;q=0.8'],
+            ['Content-Disposition', '回應', '內容', '提示瀏覽器直接顯示還是下載，並指定檔名。', '下載檔案。', 'Content-Disposition: attachment; filename="report.pdf"'],
+            ['Range', '請求', '內容', '只要資源的某一段位元組。', '影片拖曳、斷點續傳。', 'Range: bytes=0-1023'],
+            ['Content-Range', '回應', '內容', '回傳的是整體的哪一段（搭配 206）。', '回應 Range 請求。', 'Content-Range: bytes 0-1023/146515'],
+            ['Accept-Ranges', '回應', '內容', '告知伺服器是否支援範圍請求。', '讓客戶端知道能否斷點續傳。', 'Accept-Ranges: bytes'],
+            ['Host', '請求', '連線', '要連的網域與埠，一台伺服器可託管多個網站。', 'HTTP/1.1 必備，通常自動帶。', 'Host: api.example.com'],
+            ['Connection', '兩者', '連線', '控制連線是否保持（HTTP/1.1）。', '保持連線或要求關閉。', 'Connection: keep-alive'],
+            ['Keep-Alive', '兩者', '連線', '保持連線的參數。', '搭配 Connection: keep-alive。', 'Keep-Alive: timeout=5, max=1000'],
+            ['Upgrade', '兩者', '連線', '要求切換協定。', '建立 WebSocket。', 'Upgrade: websocket'],
+            ['Transfer-Encoding', '回應', '連線', '本體的傳輸方式，常見分塊傳輸。', '不知道總長度的串流回應。', 'Transfer-Encoding: chunked'],
+            ['Location', '回應', '其他', '指向新網址（轉址或新建資源）。', '搭配 3xx 或 201。', 'Location: https://example.com/new-path'],
+            ['Retry-After', '回應', '其他', '多久之後再試。', '搭配 429、503。', 'Retry-After: 120'],
+            ['User-Agent', '請求', '其他', '客戶端的名稱與版本。', '伺服器辨識瀏覽器或爬蟲；呼叫某些 API 要求填寫。', 'User-Agent: MyApp/1.0 (contact@example.com)'],
+            ['Referer', '請求', '其他', '從哪個網址連過來的（拼字沿用歷史錯誤）。', '分析流量來源、防盜連。', 'Referer: https://example.com/page'],
+            ['Allow', '回應', '其他', '資源允許的 HTTP 方法。', '搭配 405 或 OPTIONS 回應。', 'Allow: GET, HEAD, OPTIONS'],
+            ['Server', '回應', '其他', '伺服器軟體資訊。', '除錯；正式環境建議隱藏版本。', 'Server: nginx'],
+            ['Date', '回應', '其他', '回應產生的時間（GMT）。', '判斷時間與快取計算。', 'Date: Tue, 10 Oct 2026 08:00:00 GMT'],
+            ['X-Forwarded-For', '請求', '其他', '經過代理時記錄原始客戶端 IP。', '反向代理後取得真實 IP（可被偽造，需信任代理）。', 'X-Forwarded-For: 203.0.113.7, 198.51.100.2'],
+            ['Idempotency-Key', '請求', '其他', '讓重送的請求不會重複執行。', '付款、建立訂單時防止重複送出。', 'Idempotency-Key: 8e03978e-40d5-43e8-bc93-6894a57f9324'],
+        ];
+        // MIME：[類型, 分類, 說明, 何時用, 範例]
+        const MIMES = [
+            ['text/plain', '文字', '純文字。', '回傳沒有格式的文字、log。', 'Content-Type: text/plain; charset=utf-8'],
+            ['text/html', '文字', 'HTML 網頁。', '回傳網頁。', 'Content-Type: text/html; charset=utf-8'],
+            ['text/css', '文字', 'CSS 樣式表。', '載入樣式檔；類型錯誤瀏覽器可能拒絕套用。', 'Content-Type: text/css'],
+            ['text/javascript', '文字', 'JavaScript（RFC 9239 建議用這個）。', '載入腳本、ES 模組一定要正確。', 'Content-Type: text/javascript; charset=utf-8'],
+            ['text/csv', '文字', '逗號分隔的表格資料。', '匯出 / 下載 CSV。', 'Content-Type: text/csv; charset=utf-8'],
+            ['text/markdown', '文字', 'Markdown 文件。', '提供 .md 檔。', 'Content-Type: text/markdown; charset=utf-8'],
+            ['text/event-stream', '文字', 'Server-Sent Events 事件串流。', '伺服器單向即時推播。', 'Content-Type: text/event-stream'],
+            ['application/json', '應用程式', 'JSON 資料。', 'REST API 的標準格式。', 'Content-Type: application/json'],
+            ['application/xml', '應用程式', 'XML 資料。', 'SOAP、RSS 等。', 'Content-Type: application/xml'],
+            ['application/x-www-form-urlencoded', '應用程式', '表單的預設編碼（key=value&key=value）。', 'HTML 表單 POST、OAuth token 請求。', 'Content-Type: application/x-www-form-urlencoded'],
+            ['multipart/form-data', '應用程式', '含檔案的表單，分段傳送。', '上傳檔案；需帶 boundary，通常由瀏覽器 / 函式庫自動產生。', 'Content-Type: multipart/form-data; boundary=----abc123'],
+            ['application/octet-stream', '應用程式', '任意二進位資料。', '不知道類型時的預設；瀏覽器通常直接下載。', 'Content-Type: application/octet-stream'],
+            ['application/pdf', '應用程式', 'PDF 文件。', '提供 PDF 預覽 / 下載。', 'Content-Type: application/pdf'],
+            ['application/zip', '應用程式', 'ZIP 壓縮檔。', '下載壓縮檔。', 'Content-Type: application/zip'],
+            ['application/gzip', '應用程式', 'gzip 壓縮檔。', '下載 .gz。', 'Content-Type: application/gzip'],
+            ['application/wasm', '應用程式', 'WebAssembly 模組。', '載入 .wasm；類型錯誤無法串流編譯。', 'Content-Type: application/wasm'],
+            ['application/ld+json', '應用程式', 'JSON-LD 結構化資料。', 'SEO 結構化資料。', 'Content-Type: application/ld+json'],
+            ['application/problem+json', '應用程式', 'RFC 9457 標準錯誤格式。', 'API 回傳一致的錯誤內容。', 'Content-Type: application/problem+json'],
+            ['application/x-ndjson', '應用程式', '每行一個 JSON（NDJSON）。', '串流大量紀錄。', 'Content-Type: application/x-ndjson'],
+            ['image/png', '圖片', 'PNG 圖片。', '截圖、需要透明背景。', 'Content-Type: image/png'],
+            ['image/jpeg', '圖片', 'JPEG 圖片。', '照片。', 'Content-Type: image/jpeg'],
+            ['image/gif', '圖片', 'GIF 圖片，可動畫。', '簡單動圖。', 'Content-Type: image/gif'],
+            ['image/webp', '圖片', 'WebP 圖片，體積較小。', '網頁圖片最佳化。', 'Content-Type: image/webp'],
+            ['image/svg+xml', '圖片', 'SVG 向量圖。', '圖示、可縮放圖形。', 'Content-Type: image/svg+xml'],
+            ['audio/mpeg', '音視訊', 'MP3 音訊。', '音樂 / 音訊播放。', 'Content-Type: audio/mpeg'],
+            ['video/mp4', '音視訊', 'MP4 影片。', '網頁影片播放。', 'Content-Type: video/mp4'],
+            ['video/webm', '音視訊', 'WebM 影片。', '開放格式的網頁影片。', 'Content-Type: video/webm'],
+            ['font/woff2', '字型', 'WOFF2 網頁字型。', '載入自訂字型。', 'Content-Type: font/woff2'],
+        ];
+        const CATS = {
+            status: ['1xx', '2xx', '3xx', '4xx', '5xx'],
+            header: ['快取', 'CORS', '安全', '認證', '內容', '連線', '其他'],
+            mime: ['文字', '應用程式', '圖片', '音視訊', '字型'],
+        };
+        const KIND_LABEL = { status: '狀態碼', header: 'Header', mime: 'MIME' };
+        const ITEMS = [
+            ...STATUS.map(([k, t, desc, when, fix]) => ({ kind: 'status', key: k, title: t, cat: k[0] + 'xx', desc, when, fix, example: `${k} ${t}` })),
+            ...HEADERS.map(([k, dir, cat, desc, when, example]) => ({ kind: 'header', key: k, title: dir, cat, desc, when, example })),
+            ...MIMES.map(([k, cat, desc, when, example]) => ({ kind: 'mime', key: k, title: cat, cat, desc, when, example })),
+        ];
+        const kindOf = (x) => KIND_LABEL[x.kind];
+        // 搜尋與排序：kind / cat 篩選；有關鍵字時依相關度（key 完全相符 < key 開頭 < title/key 包含 < 其他欄位包含），同分維持原順序；無關鍵字時狀態碼由小到大
+        function searchItems(items, q, { kind = '', cat = '' } = {}) {
+            const s = String(q ?? '').trim().toLowerCase();
+            const pool = items.filter(x => (!kind || x.kind === kind) && (!cat || x.cat === cat));
+            const scored = [];
+            pool.forEach((x, i) => {
+                const k = x.key.toLowerCase(), t = String(x.title).toLowerCase();
+                let sc;
+                if (!s) sc = 0;
+                else if (k === s) sc = 0;
+                else if (k.startsWith(s)) sc = 1;
+                else if (k.includes(s) || (x.kind === 'status' && t.includes(s))) sc = 2;
+                else if ([x.desc, x.when, x.fix, x.example, x.title, x.cat].some(f => f && String(f).toLowerCase().includes(s))) sc = 3;
+                else return;
+                scored.push([sc, i, x]);
+            });
+            scored.sort((a, b) => a[0] - b[0] || (!s && a[2].kind === 'status' && b[2].kind === 'status' ? a[2].key.localeCompare(b[2].key) : a[1] - b[1]));
+            return scored.map(r => r[2]);
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+        let kind = '';
+        function render() {
+            const sel = $('#cat'), cur = sel.value;
+            if (kind) { sel.hidden = false; sel.replaceChildren(new Option('全部分類', ''), ...CATS[kind].map(c => new Option(c, c))); sel.value = CATS[kind].includes(cur) ? cur : ''; } else { sel.hidden = true; sel.replaceChildren(); }
+            const rows = searchItems(ITEMS, $('#q').value, { kind, cat: kind ? sel.value : '' });
+            $('#count').textContent = `共 ${rows.length} 筆`;
+            $('#list').replaceChildren(...(rows.length ? rows : []).map(x => {
+                const d = el('details'), sm = el('summary');
+                sm.append(el('span', 'k', x.key), el('span', 't', x.kind === 'status' ? x.title : x.desc), el('span', 'c', x.kind === 'status' ? '' : kindOf(x) + ' · ' + x.cat));
+                const body = el('div', 'det');
+                const p = (label, text) => { const e = el('p'); e.append(el('b', '', label + '：'), document.createTextNode(text)); return e; };
+                body.append(p('白話說明', x.desc), p(x.kind === 'status' ? '何時會看到' : '何時用', x.when));
+                if (x.fix) body.append(p('排查方向', x.fix));
+                if (x.kind === 'header') body.append(p('方向', x.title));
+                if (x.example) { body.append(el('div', 'code', x.example)); const b = el('button', 'sm', '複製'); b.onclick = () => copyWithFeedback(b, x.example); body.append(b); }
+                d.append(sm, body); return d;
+            }));
+            if (!rows.length) $('#list').append(el('p', 'muted', '沒有符合的項目'));
+        }
+        $('#q').oninput = render; $('#cat').onchange = render;
+        $('#kinds').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; kind = b.dataset.k; [...$('#kinds').children].forEach(x => x.setAttribute('aria-pressed', x === b)); render(); };
+        render();
+    </script>
+</body>
+
+</html>

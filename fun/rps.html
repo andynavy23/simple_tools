@@ -40,6 +40,7 @@
         <h3>小提醒</h3>
         <ul>
         <li>平手不算分，該局重來</li>
+        <li>揭曉時雙方會先一起搖拳、再亮出，贏的一方會彈大一下、輸的一方變淡；這只是畫面效果，勝負在雙方都出拳後就決定了，連線的加密驗證流程不受影響。系統開啟「減少動態效果」、或畫面在背景時會直接顯示結果</li>
         <li>連線需要房主一直開著頁面；房主離開，遊戲就結束</li>
         <li>單機完全不連網；電腦只看你過去的出拳，不會偷看你這一局的選擇</li>
         </ul>
@@ -98,6 +99,20 @@
             display: block;
             font-size: 13px;
             color: var(--muted);
+        }
+
+        .arena>div {
+            transition: opacity .25s;
+        }
+
+        .arena>div.a-lose {
+            opacity: .45;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .arena>div {
+                transition: none;
+            }
         }
 
         .picks {
@@ -219,6 +234,9 @@
             return COUNTER[tops[Math.floor(rand() * tops.length)]];
         }
         const validReveal = (d) => !!d && Number.isInteger(d.round) && CHOICES.includes(d.choice) && typeof d.salt === 'string' && /^[0-9a-f]{32}$/.test(d.salt);
+        // 揭曉動畫（純視覺）：雙方先一起搖拳 SHAKE_MS，再亮出；贏的一方彈大一下、輸的一方變淡，平手雙方都輕彈。回傳 [我, 對手]
+        const SHAKE_MS = 520, POP_MS = 300;
+        const outcomeFx = (res) => (res > 0 ? ['win', 'lose'] : res < 0 ? ['lose', 'win'] : ['tie', 'tie']);
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -339,15 +357,38 @@
         }
         buildPicks();
 
+        // ---------- 揭曉動畫（render 一開始就先結束上一段動畫，結果一律由 G.shown 決定，動畫只是裝飾）----------
+        let fxR = null, lastShown = null;
+        const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches || document.hidden;
+        function settleR() { if (!fxR) return; const f = fxR; fxR = null; clearTimeout(f.t); f.anims.forEach(a => { try { a.cancel(); } catch (e) { } }); }
+        function paintArena() {
+            const fx = G.shown ? outcomeFx(G.shown.res) : null;
+            $('#a0').textContent = G.shown ? EMOJI[G.shown.me] : G.pick ? (solo ? EMOJI[G.pick] : '🔒') : '❔';
+            $('#a1').textContent = G.shown ? EMOJI[G.shown.opp] : G.oppCommit ? (solo ? '🤔' : '🔒') : '❔';
+            $('#a0').className = fx && fx[0] === 'lose' ? 'a-lose' : ''; $('#a1').className = fx && fx[1] === 'lose' ? 'a-lose' : '';
+        }
+        function revealFx() {
+            const a0 = $('#a0'), a1 = $('#a1'), fx = outcomeFx(G.shown.res), shown = G.shown;
+            a0.textContent = a1.textContent = EMOJI.rock; a0.className = a1.className = '';
+            const shake = (el, dir) => el.animate([{ transform: 'translateY(0) rotate(0deg)' }, { transform: `translateY(-16px) rotate(${-14 * dir}deg)` }, { transform: `translateY(6px) rotate(${8 * dir}deg)` }, { transform: 'translateY(0) rotate(0deg)' }], { duration: SHAKE_MS / 3, iterations: 3, easing: 'ease-in-out' });
+            const f = fxR = { anims: [shake(a0, 1), shake(a1, -1)] };
+            f.t = setTimeout(() => {
+                if (fxR !== f || G.shown !== shown) return;
+                fxR = null; paintArena();
+                [[a0, fx[0]], [a1, fx[1]]].filter(([, k]) => k !== 'lose').forEach(([el, k]) => el.animate([{ transform: 'scale(1)' }, { transform: `scale(${k === 'win' ? 1.4 : 1.15})`, offset: .4 }, { transform: 'scale(1)' }], { duration: POP_MS, easing: 'ease-out' }));
+            }, SHAKE_MS);
+        }
+
         function render() {
             if (!G) return;
+            settleR();
             const meName = solo ? '你' : isHost ? names[0] : names[1], oppName = solo ? '電腦' : isHost ? names[1] : names[0], ready = paired();
             $('#n0').textContent = solo ? meName : meName + '（我）'; $('#n1').textContent = oppName || '等待對手…';
             $('#s0').textContent = G.scores[0]; $('#s1').textContent = G.scores[1];
             $('#setup').hidden = !(isHost || solo) || G.round > 1 || G.pick !== null || G.over || G.hist.length > 0;
             $('#bestOf').value = bestOf; $('#bestOf').disabled = !(isHost || solo) || !ready;
-            $('#a0').textContent = G.shown ? EMOJI[G.shown.me] : G.pick ? (solo ? EMOJI[G.pick] : '🔒') : '❔';
-            $('#a1').textContent = G.shown ? EMOJI[G.shown.opp] : G.oppCommit ? (solo ? '🤔' : '🔒') : '❔';
+            paintArena();
+            if (G.shown !== lastShown) { lastShown = G.shown; if (G.shown && !reduced()) revealFx(); }
             let st;
             if (!ready) st = '等待對手加入…（把邀請連結傳給朋友）';
             else if (G.cheat) st = '⚠ 對手揭曉的選擇與先前送出的承諾不符，判定作弊';

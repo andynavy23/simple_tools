@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="猜字遊戲：Wordle 類，6 次機會猜四字成語或 5 字母英文單字，每日挑戰全台同題，可複製方塊分享，離線可玩。">
+    <meta property="og:title" content="猜字遊戲" />
+    <meta property="og:description" content="6 次機會猜成語或英文單字，每日挑戰與自由練習。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/word-guess.html" />
+    <meta name="st-keys" content="wordg_stats,wordg_daily_*">
+    <title>猜字遊戲</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 460px;
+        }
+
+        .seg {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .seg button {
+            flex: 1;
+        }
+
+        #info {
+            margin: 4px 0 0;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        #board {
+            --n: 5;
+            display: grid;
+            gap: 6px;
+            margin: 12px auto;
+            width: min(100%, calc(var(--n) * 66px + (var(--n) - 1) * 6px));
+        }
+
+        .r {
+            display: grid;
+            grid-template-columns: repeat(var(--n), 1fr);
+            gap: 6px;
+        }
+
+        .t {
+            aspect-ratio: 1;
+            display: grid;
+            place-items: center;
+            border: 2px solid var(--line);
+            border-radius: var(--radius-sm);
+            font-size: clamp(22px, 8vw, 32px);
+            font-weight: 800;
+            text-transform: uppercase;
+            color: var(--text);
+            user-select: none;
+        }
+
+        .t.zh {
+            font-size: clamp(26px, 9vw, 38px);
+        }
+
+        .t.filled {
+            border-color: var(--muted);
+        }
+
+        .t.c,
+        .t.p {
+            color: #fff;
+            border-color: transparent;
+        }
+
+        .t.c {
+            background: #538d4e;
+        }
+
+        .t.p {
+            background: #b59f3b;
+        }
+
+        .t.a {
+            background: color-mix(in srgb, var(--text) 22%, var(--card));
+            border-color: transparent;
+        }
+
+        #msg {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+        }
+
+        #zhBox {
+            display: flex;
+            gap: 8px;
+            margin-top: 6px;
+        }
+
+        #zhBox input {
+            flex: 1;
+            min-width: 0;
+            font-size: 20px;
+            text-align: center;
+        }
+
+        #zhChars {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        #zhChars button {
+            min-width: 44px;
+            padding: 0 6px;
+            font-size: 18px;
+        }
+
+        #kb {
+            display: grid;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .kr {
+            display: flex;
+            gap: 4px;
+            justify-content: center;
+        }
+
+        .kr button {
+            flex: 1;
+            min-width: 0;
+            height: 52px;
+            padding: 0;
+            font-size: 15px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .kr button.wide {
+            flex: 1.6;
+            font-size: 18px;
+        }
+
+        .k-c {
+            background: #538d4e !important;
+            color: #fff !important;
+        }
+
+        .k-p {
+            background: #b59f3b !important;
+            color: #fff !important;
+        }
+
+        .k-a {
+            opacity: .4;
+        }
+
+        #result {
+            margin-top: 14px;
+            text-align: center;
+        }
+
+        #result pre {
+            font: inherit;
+            font-size: 18px;
+            line-height: 1.35;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px;
+            margin: 8px auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            text-align: center;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .sgrid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            text-align: center;
+            margin: 8px 0 12px;
+        }
+
+        .sgrid b {
+            display: block;
+            font-size: 24px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .sgrid small {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .dist {
+            display: grid;
+            grid-template-columns: 18px 1fr;
+            gap: 4px 8px;
+            align-items: center;
+            font-size: 14px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .dist i {
+            display: block;
+            min-width: 22px;
+            padding: 0 6px;
+            border-radius: 4px;
+            background: var(--fill);
+            font-style: normal;
+            text-align: right;
+            box-sizing: border-box;
+        }
+
+        .dist i.hit {
+            background: #538d4e;
+            color: #fff;
+        }
+    </style>
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>Wordle 類的猜字遊戲：6 次機會，猜出電腦想的<b>四字成語</b>或 <b>5 個字母的英文單字</b>。每猜一次，每個字會變色告訴你離答案多近。完全離線、單機，不連線。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>通勤、排隊時動動腦，每天一題。</li>
+        <li>和朋友比「誰猜得比較少次」：每日挑戰全部人同一題，結果可複製貼到群組。</li>
+        <li>想練成語或英文單字。</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+        <li>上方選「成語」或「英文單字」，再選「每日挑戰」（每天一題，以台灣時間換日）或「自由練習」（隨機，可無限玩）。</li>
+        <li>英文：用畫面鍵盤（或電腦鍵盤）打滿 5 個字母，按 <kbd>Enter</kbd> 送出。成語：在輸入框打四個字，按「送出」。</li>
+        <li>顏色：<b>綠</b>＝字對、位置也對；<b>黃</b>＝答案裡有這個字、但位置不對；<b>灰</b>＝答案裡沒有（重複的字會依出現次數計算）。</li>
+        <li>6 次內猜中就贏；每日挑戰完成後會顯示結果與可複製的方塊分享文字。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">答案是 CRANE，你猜 CARES：C 綠；A 黃（CRANE 有 A，但在第 3 個）；R 黃；E 黃；S 灰。<br>成語答案「一心一意」，猜「一帆風順」：第 1 個「一」綠，其餘灰；猜「三心二意」：「心」「意」綠，其餘灰。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>成語只接受內建詞庫裡的成語（不是每個成語都有收錄）；英文只接受內建單字庫的字。不在庫內不會扣次數，會提示你換一個。</li>
+        <li>統計（勝率、連勝、猜中次數分布）和每日進度存在這台裝置，成語與英文分開計算；自由練習也會計入統計。每日進度只保留最近 30 天。</li>
+        <li>頁面下方「清除紀錄」會刪除這個遊戲的所有統計與每日進度（無法復原；頁面會重新載入，進行中的這一局會結束）。存放資料壞掉或被改過時，會自動當成沒有紀錄。</li>
+        <li>每日挑戰已完成就不能重玩，想繼續玩請用「自由練習」。</li>
+        <li>翻牌有小動畫；系統開啟「減少動態效果」或畫面在背景時會直接顯示結果。</li>
+        </ul>
+    </template>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>猜字遊戲</h1>
+        <p class="sub">6 次機會猜出四字成語或 5 字母英文單字。綠＝字與位置都對、黃＝有這個字但位置不對、灰＝沒有。</p>
+
+        <div class="card">
+            <div class="seg" id="modeSeg"><button data-m="zh" aria-pressed="true">成語</button><button data-m="en" aria-pressed="false">英文單字</button></div>
+            <div class="seg" id="kindSeg"><button data-k="daily" aria-pressed="true">每日挑戰</button><button data-k="free" aria-pressed="false">自由練習</button></div>
+            <p class="muted" id="info"></p>
+            <div id="board" aria-label="猜字盤面"></div>
+            <div id="msg" role="status" aria-live="polite"></div>
+            <div id="zhBox"><input id="zh" placeholder="輸入四字成語" aria-label="輸入四字成語" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="primary" id="zhGo">送出</button></div>
+            <div id="zhChars" aria-label="已猜過的字"></div>
+            <div id="kb" aria-label="螢幕鍵盤"></div>
+            <div id="result" hidden>
+                <div id="resTitle" style="font-weight:700"></div>
+                <pre id="share"></pre>
+                <div class="row"><button class="primary" id="copy">複製分享文字</button><button id="next">自由練習</button></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 id="stTitle">統計</h2>
+            <div class="sgrid" id="sgrid"></div>
+            <div class="dist" id="dist"></div>
+            <button class="sm" id="clearAll" style="margin-top:14px">清除紀錄</button>
+        </div>
+    </div>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        const ZH_WORDS = ('一心一意 一帆風順 一舉兩得 一石二鳥 一見鍾情 一針見血 一目了然 一鳴驚人 一絲不苟 一籌莫展 一模一樣 一字千金 一諾千金 一視同仁 一波三折 一氣呵成 一敗塗地 一落千丈 一葉知秋 一技之長 一箭雙鵰 一塵不染 一言九鼎 一望無際 一網打盡 一馬當先 一觸即發 一毛不拔 一勞永逸 一概而論 一拍即合 一口咬定 一意孤行 一事無成 一絲不掛 一年一度 ' +
+            '不可思議 不屈不撓 不翼而飛 不言而喻 不約而同 不謀而合 不勝枚舉 不知所措 不攻自破 不速之客 不恥下問 不遺餘力 不修邊幅 不卑不亢 不倫不類 不期而遇 不甘示弱 不自量力 不務正業 不由自主 不辭辛勞 不堪設想 不顧一切 不拘小節 不三不四 不動聲色 不寒而慄 不可救藥 不省人事 不計其數 不聞不問 不偏不倚 不亦樂乎 不置可否 不得而知 不敢恭維 不以為然 不相上下 不折不扣 不勞而獲 ' +
+            '無微不至 無憂無慮 無與倫比 無法無天 無可奈何 無所事事 無中生有 無濟於事 無懈可擊 無孔不入 無事生非 無動於衷 無緣無故 無地自容 無精打采 無影無蹤 無病呻吟 無獨有偶 無遠弗屆 無傷大雅 無關痛癢 無往不利 無理取鬧 無拘無束 無所不在 無所不能 無可厚非 無能為力 無堅不摧 ' +
+            '天長地久 天翻地覆 天衣無縫 天馬行空 天下無雙 天真爛漫 天涯海角 天崩地裂 天網恢恢 天經地義 天生麗質 天花亂墜 天寒地凍 天南地北 天作之合 天賦異稟 天災人禍 天理昭彰 天壤之別 天昏地暗 天道酬勤 天誅地滅 ' +
+            '地大物博 地動山搖 地廣人稀 地久天長 地利人和 ' +
+            '人山人海 人云亦云 人定勝天 人仰馬翻 人才輩出 人面桃花 人心惶惶 人之常情 人傑地靈 人情世故 人浮於事 人窮志短 人命關天 人多勢眾 人言可畏 人財兩失 人老珠黃 人微言輕 人琴俱亡 ' +
+            '心花怒放 心急如焚 心照不宣 心有餘悸 心平氣和 心懷鬼胎 心曠神怡 心不在焉 心甘情願 心安理得 心直口快 心神不寧 心灰意冷 心狠手辣 心領神會 心心相印 心滿意足 心驚膽戰 心口如一 心浮氣躁 心如刀割 心服口服 心猿意馬 心煩意亂 心想事成 心有靈犀 心如止水 心悅誠服 心力交瘁 心血來潮 ' +
+            '大公無私 大驚小怪 大器晚成 大智若愚 大刀闊斧 大張旗鼓 大海撈針 大功告成 大材小用 大快人心 大同小異 大相逕庭 大名鼎鼎 大義凜然 大顯身手 大放異彩 大勢所趨 大庭廣眾 大難臨頭 大有可為 大言不慚 大搖大擺 大街小巷 大吉大利 大惑不解 大失所望 大開眼界 大打出手 ' +
+            '小心翼翼 小題大作 小鳥依人 小家碧玉 小試牛刀 ' +
+            '千方百計 千鈞一髮 千變萬化 千載難逢 千辛萬苦 千言萬語 千里迢迢 千篇一律 千秋萬代 千絲萬縷 千山萬水 千姿百態 千真萬確 千奇百怪 千軍萬馬 千差萬別 千錘百鍊 千叮萬囑 千依百順 ' +
+            '萬紫千紅 萬事如意 萬無一失 萬象更新 萬眾一心 萬古長青 萬馬奔騰 萬家燈火 萬世師表 萬籟俱寂 萬不得已 萬水千山 萬事亨通 萬里無雲 萬劫不復 ' +
+            '百發百中 百折不撓 百戰百勝 百花齊放 百思不解 百感交集 百依百順 百年好合 百無聊賴 百口莫辯 百孔千瘡 百川歸海 百廢待舉 百年樹人 百里挑一 ' +
+            '九牛一毛 九死一生 九霄雲外 九五之尊 ' +
+            '三心二意 三顧茅廬 三言兩語 三長兩短 三番兩次 三令五申 三教九流 三生有幸 三思而行 三三兩兩 三足鼎立 三五成群 三姑六婆 三緘其口 ' +
+            '五光十色 五花八門 五穀豐登 五體投地 五湖四海 五顏六色 五味雜陳 五彩繽紛 五洲四海 五臟六腑 ' +
+            '七上八下 七手八腳 七嘴八舌 七零八落 七擒七縱 ' +
+            '十全十美 十拿九穩 十年寒窗 十萬火急 十惡不赦 十室九空 十指連心 ' +
+            '半途而廢 半信半疑 半斤八兩 半推半就 半夢半醒 半壁江山 ' +
+            '自力更生 自食其力 自相矛盾 自強不息 自暴自棄 自鳴得意 自言自語 自作自受 自給自足 自欺欺人 自討苦吃 自投羅網 自以為是 自私自利 自生自滅 自告奮勇 自食其果 自慚形穢 自顧不暇 自圓其說 自不量力 ' +
+            '口若懸河 口是心非 口蜜腹劍 口乾舌燥 口無遮攔 口口聲聲 口誅筆伐 口出狂言 ' +
+            '手忙腳亂 手舞足蹈 手足無措 手到擒來 手無寸鐵 手下留情 手不釋卷 手足情深 手腳並用 ' +
+            '眼花繚亂 眼高手低 眼明手快 眼疾手快 眼見為憑 ' +
+            '風和日麗 風調雨順 風起雲湧 風雨同舟 風塵僕僕 風平浪靜 風馳電掣 風吹草動 風燭殘年 風花雪月 風度翩翩 風捲殘雲 風雨無阻 風言風語 風靡一時 風光明媚 風姿綽約 風雨飄搖 ' +
+            '水到渠成 水落石出 水乳交融 水深火熱 水漲船高 水泄不通 水滴石穿 水清無魚 水火不容 水天一色 ' +
+            '山明水秀 山高水長 山清水秀 山盟海誓 山窮水盡 山重水複 山崩地裂 山珍海味 山河破碎 山雨欲來 ' +
+            '海闊天空 海枯石爛 海底撈月 海納百川 海市蜃樓 海角天涯 海誓山盟 海天一色 ' +
+            '花好月圓 花紅柳綠 花團錦簇 花言巧語 花容月貌 花天酒地 花前月下 花開富貴 花香鳥語 ' +
+            '月明星稀 月白風清 月下花前 月缺月圓 ' +
+            '日新月異 日久天長 日積月累 日理萬機 日復一日 日上三竿 日出而作 日薄西山 日月如梭 日暮途窮 日以繼夜 ' +
+            '春暖花開 春風得意 春回大地 春華秋實 春意盎然 春光明媚 春風化雨 春色滿園 春夏秋冬 ' +
+            '秋高氣爽 秋風掃葉 秋毫無犯 秋收冬藏 ' +
+            '學無止境 學以致用 學富五車 學貫中西 學而不厭 學海無涯 ' +
+            '知足常樂 知己知彼 知難而退 知恩圖報 知書達禮 知行合一 知無不言 ' +
+            '言簡意賅 言而有信 言行一致 言之有物 言聽計從 言歸於好 言過其實 言多必失 言不由衷 言外之意 言語道斷 言傳身教 ' +
+            '行雲流水 行屍走肉 行色匆匆 行之有效 行俠仗義 ' +
+            '成竹在胸 成人之美 成千上萬 成家立業 ' +
+            '功成名就 功虧一簣 功德無量 功不可沒 功高蓋世 功敗垂成 功名利祿 功成身退 ' +
+            '名正言順 名列前茅 名落孫山 名揚四海 名不虛傳 名垂青史 名副其實 名存實亡 名門望族 ' +
+            '和顏悅色 和藹可親 和風細雨 和平共處 和衷共濟 和盤托出 和氣生財 ' +
+            '平步青雲 平易近人 平安無事 平心而論 平淡無奇 平分秋色 平鋪直敘 平白無故 ' +
+            '安居樂業 安步當車 安然無恙 安分守己 安之若素 安身立命 安土重遷 ' +
+            '樂不思蜀 樂極生悲 樂在其中 樂善好施 樂此不疲 樂天知命 樂於助人 樂而忘返 ' +
+            '喜出望外 喜笑顏開 喜聞樂見 喜形於色 喜怒無常 喜上眉梢 喜新厭舊 喜從天降 ' +
+            '笑逐顏開 笑裡藏刀 笑容可掬 笑口常開 笑傲江湖 哭笑不得 哭天搶地 ' +
+            '愛不釋手 愛屋及烏 愛莫能助 愛憎分明 愛財如命 ' +
+            '恩重如山 恩將仇報 恩愛夫妻 恩怨分明 恩斷義絕 ' +
+            '情同手足 情投意合 情不自禁 情真意切 情有可原 情深義重 情景交融 情意綿綿 情竇初開 情非得已 ' +
+            '意氣風發 意味深長 意想不到 意猶未盡 意氣用事 意料之外 意興闌珊 意在言外 ' +
+            '得心應手 得天獨厚 得不償失 得過且過 得意忘形 得寸進尺 得道多助 得意洋洋 ' +
+            '順水推舟 順理成章 順藤摸瓜 順手牽羊 順其自然 ' +
+            '見仁見智 見義勇為 見風轉舵 見微知著 見賢思齊 見異思遷 見多識廣 見利忘義 見死不救 見怪不怪 見錢眼開 見縫插針 見機行事 見好就收 ' +
+            '驚天動地 驚心動魄 驚弓之鳥 驚慌失措 驚濤駭浪 驚世駭俗 驚鴻一瞥 驚魂未定 驚喜交加 ' +
+            '金玉滿堂 金碧輝煌 金榜題名 金蟬脫殼 金石為開 金口玉言 金枝玉葉 金屋藏嬌 金科玉律 金戈鐵馬 金迷紙醉 金城湯池 金玉良言 金童玉女 ' +
+            '陰錯陽差 陰魂不散 陰險狡詐 陰陽怪氣 陰謀詭計 ' +
+            '氣宇軒昂 氣急敗壞 氣勢磅礡 氣貫長虹 氣壯山河 氣喘吁吁 氣吞山河 氣息奄奄 氣象萬千 氣定神閒 氣味相投 氣勢洶洶 ' +
+            '事半功倍 事與願違 事必躬親 事過境遷 事在人為 事倍功半 事無巨細 事不宜遲 事出有因 事不關己 ' +
+            '落花流水 落井下石 落葉歸根 落落大方 落荒而逃 落英繽紛 落地生根 ' +
+            '雕蟲小技 雕梁畫棟 塵埃落定 ' +
+            '先見之明 先發制人 先禮後兵 先入為主 先聲奪人 先來後到 先睹為快 先斬後奏 先苦後甜 先天不足 先憂後樂 ' +
+            '當機立斷 當頭棒喝 當仁不讓 當之無愧 當局者迷 當務之急 ' +
+            '發憤圖強 發人深省 發揚光大 發號施令 發奮圖強 發人深思 ' +
+            '拔苗助長 拔刀相助 拔地而起 勞苦功高 勞燕分飛 勞師動眾 勞而無功 勞民傷財 ' +
+            '拍案叫絕 拍手稱快 拍案而起 咬牙切齒 咬文嚼字 咬緊牙關 ' +
+            '窮兵黷武 窮途末路 窮凶極惡 窮奢極侈 窮追不捨 窮則思變 窮鄉僻壤 窮困潦倒 ' +
+            '可歌可泣 可想而知 可乘之機 可圈可點 可有可無 可見一斑 可喜可賀 ' +
+            '思前想後 思緒萬千 思如泉湧 ' +
+            '破釜沉舟 破涕為笑 破鏡重圓 破綻百出 破口大罵 破罐破摔 破家蕩產 ' +
+            '速戰速決 遺臭萬年 遺世獨立 餘音繞樑 餘悸猶存 餘味無窮 ' +
+            '卑躬屈膝 卑鄙無恥 甘拜下風 甘之如飴 甘冒風險 ' +
+            '弱不禁風 弱肉強食 虎視眈眈 虎背熊腰 虎頭蛇尾 虎口餘生 虎落平陽 虎踞龍盤 虎虎生風 ' +
+            '量力而為 量體裁衣 量入為出 正大光明 正襟危坐 正中下懷 正本清源 正人君子 ' +
+            '設身處地 顧此失彼 顧影自憐 顧名思義 顧全大局 顧盼生姿 ' +
+            '節衣縮食 節外生枝 節哀順變 四面楚歌 四通八達 四海為家 四分五裂 四平八穩 四面八方 ' +
+            '寒窗苦讀 寒風刺骨 藥到病除 省吃儉用 計日程功 ' +
+            '聞過則喜 聞風而動 聞雞起舞 聞名遐邇 聞風喪膽 聞所未聞 ' +
+            '倚老賣老 倚門而望 倚馬可待 亦步亦趨 亦莊亦諧 亦師亦友 置若罔聞 置之不理 置身事外 置之度外 置之死地 ' +
+            '微不足道 微乎其微 微言大義 微服私訪 憂國憂民 憂心忡忡 憂心如焚 ' +
+            '與世無爭 與眾不同 與日俱增 與時俱進 與人為善 與虎謀皮 ' +
+            '非同小可 緣木求魚 故步自封 故弄玄虛 故技重施 故地重遊 故態復萌 ' +
+            '容光煥發 病入膏肓 病從口入 獨一無二 獨具匠心 獨樹一幟 獨斷專行 獨善其身 獨木難支 獨當一面 獨占鰲頭 ' +
+            '遠見卓識 遠走高飛 遠道而來 遠交近攻 遠離塵囂 傷風敗俗 傷天害理 傷心欲絕 傷筋動骨 ' +
+            '關懷備至 關門大吉 痛心疾首 痛定思痛 痛不欲生 痛改前非 痛快淋漓 痛哭流涕 ' +
+            '理直氣壯 理所當然 理屈詞窮 束手無策 束手待斃 束之高閣 束手就擒 ' +
+            '雪中送炭 錦上添花 畫蛇添足 守株待兔 掩耳盜鈴 對牛彈琴 狐假虎威 亡羊補牢 杯弓蛇影 刻舟求劍 井底之蛙 濫竽充數 紙上談兵 指鹿為馬 臥薪嘗膽 完璧歸趙 負荊請罪 草木皆兵 邯鄲學步 塞翁失馬 愚公移山 精衛填海 鶴立雞群 畫龍點睛 如魚得水 如虎添翼 如釋重負 如履薄冰 如火如荼 如數家珍 如影隨形 如雷貫耳 如沐春風 如夢初醒 如願以償 如獲至寶 如出一轍 ' +
+            '胸有成竹 守口如瓶 滄海桑田 滄海一粟 柳暗花明 絕處逢生 否極泰來 苦盡甘來 化險為夷 轉危為安 兵荒馬亂 兵不血刃 洗耳恭聽 虛心求教 謙虛謹慎 勤能補拙 持之以恆 鍥而不捨 堅持不懈 腳踏實地 循序漸進 突飛猛進 蒸蒸日上 欣欣向榮 繁榮昌盛 國泰民安 安邦定國 興高采烈 眉飛色舞 垂頭喪氣 目瞪口呆 瞠目結舌 啼笑皆非 忍俊不禁 義無反顧 奮不顧身 赴湯蹈火 挺身而出 捨己為人 助人為樂 以身作則 言出必行 說到做到 ' +
+            '鳥語花香 蛛絲馬跡 左右逢源 左顧右盼 前功盡棄 前仆後繼 前所未有 後來居上 後顧之憂 後生可畏 上下一心 上行下效 下不為例 里應外合 內憂外患 內外兼修 東奔西走 東張西望 南轅北轍 北雁南飛 東山再起 西裝革履 頭頭是道 頭破血流 面面俱到 面紅耳赤 面目全非 耳聰目明 耳濡目染 耳熟能詳 掌上明珠').split(/\s+/);
+
+        // 英文答案庫（常見的 5 字母單字）與「可接受的猜測」庫（答案庫 + 較少見但合法的字）
+        const EN_ANSWERS = ('about above abuse actor acute adapt admit adopt adult after again agent agree ahead alarm album alert alike alive allow alone along alter among anger angle angry apart apple apply arena argue arise armor array aside asset audio avoid awake award aware badly baker basic basin basis beach began begin being below bench berry birth black blade blame blank blast blend bless blind block blood bloom board boost booth bound brain brand brave bread break breed brick bride brief bring broad brown brush build bunch burst buyer cabin cable candy carry catch cause chain chair chalk charm chart chase cheap check cheek cheer chest chief child chill choir chose civil claim class clean clear clerk click cliff climb clock close cloth cloud coach coast color couch could count court cover craft crash crazy cream crime cross crowd crown cruel crush curve cycle daily dance death delay depth doubt dozen draft drama dream dress drift drink drive eager early earth eight elbow elder elect empty enemy enjoy enter equal error essay event every exact exist extra faith false fancy fault feast fence fever fiber field fifth fifty fight final first flame flash fleet flesh float flood floor flour focus force forge forth forty forum found frame fresh front fruit funny ghost giant given glass globe glory grace grade grain grand grant grape grass great green greet grief gross group grown guard guess guest guide habit happy harsh heart heavy hello honey honor horse hotel house human humor ideal image imply index inner input issue ivory jelly jewel joint judge juice knife knock known label labor large laser later laugh layer learn lease least leave legal lemon level light limit linen liver lobby local logic loose lover lower lucky lunch magic major maker march match maybe mayor meant media melon mercy merit metal meter might minor mixed model money month moral motor mount mouse mouth movie music naive nerve never newly night noble noise north novel nurse ocean offer often olive onion opera orbit order other ought outer owner paint panel paper party pasta patch pause peace pearl phase phone photo piano piece pilot pitch pizza place plain plane plant plate plaza point polar porch pound power press price pride prime print prior prize proof proud prove pulse punch pupil queen query quick quiet quite quote radio raise range rapid ratio reach react ready realm rebel refer reign relax reply rider ridge right rigid rival river roast robot rocky rough round route royal rural salad sauce scale scare scene scope score scout sense serve seven shade shake shall shape share sharp sheep sheet shelf shell shift shine shirt shock shoot shore short shown sight silly since sixth skill skirt sleep slice slide small smart smile smoke snake solar solid solve sorry sound south space spare speak speed spell spend spice spine split spoke sport spray squad stack staff stage stair stake stamp stand start state steam steel steep steer stick still stock stone store storm story stove strip study stuff style sugar suite sunny super sweet swept swift swing sword table taste teach tenth thank theme there thick thing think third those three throw thumb tiger tight tired title toast today token tooth topic total touch tough tower trace track trade trail train trash treat trend trial tribe trick truck truly trust truth twice uncle under union unite unity until upper upset urban usage usual valid value video virus visit vital vocal voice waste watch water weary weigh weird whale wheat wheel where which while white whole whose widow width woman world worry worth would wound write wrong yield young youth zebra').split(/\s+/);
+        const EN_EXTRA = ('abbey abort abyss acorn adage agile aging agony aisle alien align allay alley aloft aloof amber ample amuse angel ankle annex antic anvil aorta aphid apron arbor ardor aroma atlas attic audit avail avian bacon badge bagel baggy baron basil bathe baton bayou beard beast beech beefy belly bible bigot biome birch bison blaze bleak bleed blimp bliss bloke blond blown blush boast bonus borax bosom bossy bowel boxer brace braid brake brawl bribe brink brisk broil brood brook broom broth brute buddy budge buggy bugle bulge bulky bully bunny burly cadet cairn camel cameo canal canoe canon caper cargo carol carve caste cedar chaos chasm cheat chess chime china chirp chord chore chunk churn cider cigar cinch circa clamp clang clash clasp cleft cloak clone clown clump coral corny cough cramp crane crank crate crave crawl creak creek creep crest crisp croak crook crumb crust cubic curry curse daisy dairy datum dealt debut decay decor decoy delta demon dense depot derby devil diary digit diner dingy disco ditch dizzy dodge dowdy dread dried drill drool drown drunk dryer dusty dwarf dwell eagle easel eaten eerie elite elude ember emcee enact endow ensue envoy epoch erase erect erode evade evoke exalt excel exert exile expel fable facet fairy fatal fatty fauna feign feral ferry fetch fetus fiery filth finch fixed fjord flair flake flare flask flint flock flora fluid fluke flung flute foamy foggy folly forte foyer frail frank fraud freak fried frill frisk frost froze fudge fungi gaudy gauge gaunt gavel gecko genie genre ghoul girth gizmo glade gland glare glaze gleam glean glide glint gloat gloom gloss glove glued gnash gnome goose gorge gouge gourd grail graph grasp grate gravy graze greed grill grime grind gripe groan groin groom grope grout grove growl gruel gruff grunt guava guild guile guilt gummy gypsy hairy halve handy hardy harem harpy haste hasty hatch haunt haven hazel heave hedge heist hence heron hinge hippo hobby hoist holly homer hound hover hurry husky hyena icing idiom idiot igloo imbue impel inept infer ingot inlet irate irony itchy jaunt jazzy jerky jiffy joust jolly juicy jumbo kayak khaki kiosk knead kneel knelt knoll koala lanky lapse larva latch lathe latte leafy leash ledge leech leery lefty lemur lilac livid llama lodge lofty loyal lucid lunar lurch lusty lyric macho madam maize mango mania manor maple marsh mason mauve meaty medal melee mimic mince miner mirth miser moist molar mommy moody moose morph mossy motel motif mound mourn mucus mulch mummy murky mushy musty myrrh nanny nasal nasty naval needy newer niece ninja ninth nippy nomad notch nudge nutty nylon oasis oaken occur octet oddly offal ogled onset opium optic otter ounce outdo outgo oxide ozone paddy pagan pains palsy panic pansy papal parch parka parry paste patio patty pecan pedal penny perch peril perky pesto petal petty phony piety piggy pinch pixel pivot plaid plank plead pleat plied plumb plume plump plush poach poise poker polka poppy posse pouch prank prawn preen prick prism privy prone prong proxy prude prune psalm puffy pulpy pushy putty pygmy quail quake qualm quart quash quasi queer quell quest queue quilt quirk quota rabbi rabid racer radar radii rainy rajah ranch raven rayon razor reedy refit regal rehab relic remit renew repay repel rerun resin retry reuse revel rhino rhyme rifle rinse ripen risky ritzy rivet roomy rouge rowdy ruddy rugby ruler rumor rusty sadly saint salon salsa salty sandy sappy sassy satin satyr savor savvy scalp scamp scant scary scoff scold scoop scorn scrap scrub seedy seize shack shaft shaky shame shawl shear sheik shied shiny shoal shout shove shrub shrug shunt siege sieve silky siren sixty skate skimp skull skunk slang slant slash slate slave sleek sleet slept slime slimy sling slink sloop slope sloth slump slung slush smack smash smell smelt smirk smite smock snack snare snarl sneak sneer snide sniff snore snort snout snowy snuck soapy sober soggy sonic soupy spade spasm spawn spear speck spied spike spill spiny spire spite splat spoil spoof spook spool spoon spore spout spree sprig spunk spurn spurt squat squid stain stale stalk stall stank stare stark stash stead steak steal stiff sting stink stint stoic stoke stomp stood stool stoop stork stout strap straw stray strew strut stuck stump stung stunk stunt suave sulky surge surly swamp swarm swear sweat swell swirl swoop syrup tabby taboo tacit tacky taffy taint talon tango tangy taper tapir tardy tarot tawny teary tempo tenor tepid terse thigh thorn thump thyme tidal tilde timer timid tipsy titan tonic topaz torso totem toxic trait tramp trawl tread trill trite troll troop trout truce tulip tumor tunic tutor tweed twang tweak twirl twist udder ulcer ultra umbra unfit unify unlit untie unwed urine usher utter uvula vague valet valor vapor vault vegan venom venue verge verse vigil villa vinyl viola viper vixen vodka vomit voter vouch vowel wacky wafer wager wagon waist waltz waver weave wedge weedy whack whiff whirl whisk whoop wider wield wince winch windy wispy witch witty woozy wreck wrest wring wrist yacht yearn yeast yummy zesty zippy').split(/\s+/);
+        const ZH_SET = new Set(ZH_WORDS), EN_SET = new Set([...EN_ANSWERS, ...EN_EXTRA]);
+        const TRIES = 6, SHAPE = { zh: /^[一-鿿]{4}$/, en: /^[a-z]{5}$/ };
+        const MODES = { zh: { n: 4, answers: ZH_WORDS, set: ZH_SET }, en: { n: 5, answers: EN_ANSWERS, set: EN_SET } };
+        const FLIP_MS = 400, FLIP_STEP = 200;                                  // 翻牌動畫（純視覺）：每格間隔與單格時間
+        const CAP = 1e6, DAILY_KEEP = 30, DAILY_PREFIX = 'wordg_daily_';
+
+        const shapeOk = (mode, w) => typeof w === 'string' && !!SHAPE[mode] && SHAPE[mode].test(w);
+        const validWord = (mode, w) => shapeOk(mode, w) && MODES[mode].set.has(w);
+
+        // 比對：回傳每格 'c'（字與位置都對）/ 'p'（有這個字但位置不對）/ 'a'（沒有）；重複的字依答案裡的出現次數計算
+        function scoreGuess(guess, answer) {
+            const g = Array.from(guess), a = Array.from(answer), res = g.map(() => 'a'), left = {};
+            g.forEach((ch, i) => { if (ch === a[i]) res[i] = 'c'; else left[a[i]] = (left[a[i]] || 0) + 1; });
+            g.forEach((ch, i) => { if (res[i] === 'a' && left[ch] > 0) { res[i] = 'p'; left[ch]--; } });
+            return res;
+        }
+        // 每個猜過的字目前最好的狀態（c > p > a），給鍵盤 / 字表上色
+        function keyStates(guesses, answer) {
+            const rank = { a: 1, p: 2, c: 3 }, out = {};
+            guesses.forEach(w => scoreGuess(w, answer).forEach((s, i) => { const ch = Array.from(w)[i]; if (!out[ch] || rank[s] > rank[out[ch]]) out[ch] = s; }));
+            return out;
+        }
+        // 台灣時間（UTC+8）的日期字串
+        const twDate = (now = Date.now()) => new Date(now + 8 * 3600e3).toISOString().slice(0, 10);
+        // 每日題目：同一天、同一模式永遠同一題
+        function pickDaily(mode, date) {
+            const list = MODES[mode].answers;
+            return list[seeded(`wordg-${mode}-${date}`).int(list.length)];
+        }
+        // 把存檔裡的猜測整理成合法序列：只留形狀正確的字串、不重複、猜中後截斷、最多 6 次
+        function trimGuesses(gs, answer, mode) {
+            const out = [];
+            for (const w of Array.isArray(gs) ? gs : []) {
+                if (out.length >= TRIES) break;
+                if (!shapeOk(mode, w) || out.includes(w)) continue;
+                out.push(w);
+                if (w === answer) break;
+            }
+            return out;
+        }
+        const isWon = (gs, answer) => gs.length > 0 && gs[gs.length - 1] === answer;
+        const isDone = (gs, answer) => isWon(gs, answer) || gs.length >= TRIES;
+        // 每日進度存檔（每天一個鍵，內容 { zh: [猜測…], en: [猜測…] }）：載入時驗證容錯
+        function cleanDaily(raw) {
+            const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+            const pick = (mode) => (Array.isArray(o[mode]) ? o[mode].filter(w => shapeOk(mode, w)).slice(0, TRIES) : []);
+            return { zh: pick('zh'), en: pick('en') };
+        }
+        // 需要刪掉的每日進度鍵：只留日期最近的 DAILY_KEEP 天；前綴相同但日期格式不對的也刪
+        function dailyKeysToDelete(keys, keep = DAILY_KEEP) {
+            const re = /^wordg_daily_(\d{4}-\d{2}-\d{2})$/, good = [], del = [];
+            for (const k of keys) { const m = re.exec(k); if (m) good.push([m[1], k]); else if (typeof k === 'string' && k.startsWith(DAILY_PREFIX)) del.push(k); }
+            good.sort((x, y) => (x[0] < y[0] ? 1 : x[0] > y[0] ? -1 : 0));
+            return del.concat(good.slice(keep).map(x => x[1]));
+        }
+        // 統計（每個模式一份）：p 玩過、w 猜中、s 目前連勝、m 最長連勝、d[0..5] 第 1~6 次猜中的次數
+        const emptyStat = () => ({ p: 0, w: 0, s: 0, m: 0, d: [0, 0, 0, 0, 0, 0] });
+        function cleanStat(x) {
+            if (!x || typeof x !== 'object') return emptyStat();
+            const n = (v) => (Number.isInteger(v) && v >= 0 ? Math.min(v, CAP) : 0);
+            const d = (Array.isArray(x.d) ? x.d : []).slice(0, TRIES).map(n); while (d.length < TRIES) d.push(0);
+            const p = n(x.p), w = Math.min(n(x.w), p), s = Math.min(n(x.s), w);
+            return { p, w, s, m: Math.max(n(x.m), s), d };
+        }
+        const cleanStats = (raw) => ({ zh: cleanStat(raw && raw.zh), en: cleanStat(raw && raw.en) });
+        // 一局結束後更新統計（不改動輸入）；tries 為猜中時用的次數（1~6），輸了傳 0
+        function applyResult(stat, won, tries) {
+            const s = cleanStat(stat), up = (v) => Math.min(v + 1, CAP);
+            s.p = up(s.p);
+            if (won && tries >= 1 && tries <= TRIES) { s.w = up(s.w); s.s = up(s.s); s.m = Math.max(s.m, s.s); s.d[tries - 1] = up(s.d[tries - 1]); } else s.s = 0;
+            return s;
+        }
+        const winRate = (s) => (s.p ? Math.round(s.w / s.p * 100) : 0);
+        // 分享文字：標題 + 每次猜測的方塊
+        function shareText(mode, daily, date, guesses, answer) {
+            const E = { c: '🟩', p: '🟨', a: '⬛' }, won = isWon(guesses, answer);
+            const head = `猜字遊戲 ${mode === 'zh' ? '成語' : '英文'}${daily ? ' ' + date : '（練習）'} ${won ? guesses.length : 'X'}/${TRIES}`;
+            return [head, ...guesses.map(w => scoreGuess(w, answer).map(s => E[s]).join(''))].join('\n');
+        }
+        // 翻牌時間表：第 i 格開始翻的時間；到一半（FLIP_MS / 2）才換色；全部結束的時間
+        const flipPlan = (n) => ({ starts: Array.from({ length: n }, (_, i) => i * FLIP_STEP), half: FLIP_MS / 2, total: (n - 1) * FLIP_STEP + FLIP_MS });
+        // --- /pure ---
+
+        const { rnd, store, seeded } = Util;
+        const $ = (s) => document.querySelector(s);
+        const KEY_STATS = 'wordg_stats';
+        let mode = 'zh', kind = 'daily', date = twDate(), answer = '', guesses = [], cur = '', tok = 0, stats = cleanStats(store.get(KEY_STATS, null));
+        const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches || document.hidden;
+        const chars = (s) => Array.from(s);
+        const N = () => MODES[mode].n;
+
+        function pruneDaily() {
+            try { dailyKeysToDelete(Object.keys(localStorage)).forEach(k => localStorage.removeItem(k)); } catch (e) { }
+        }
+        const loadDaily = () => cleanDaily(store.get(DAILY_PREFIX + date, null));
+        function saveDaily() {
+            const o = loadDaily(); o[mode] = guesses.slice();
+            store.set(DAILY_PREFIX + date, o); pruneDaily();
+        }
+
+        // ---------- 畫面 ----------
+        function buildBoard() {
+            const b = $('#board'); b.style.setProperty('--n', N());
+            b.replaceChildren(...Array.from({ length: TRIES }, () => {
+                const r = document.createElement('div'); r.className = 'r'; r.setAttribute('role', 'row');
+                for (let i = 0; i < N(); i++) { const t = document.createElement('div'); t.className = 't' + (mode === 'zh' ? ' zh' : ''); r.append(t); }
+                return r;
+            }));
+            guesses.forEach((w, r) => paintRow(r, w, scoreGuess(w, answer)));
+            paintCur();
+        }
+        function paintRow(r, w, states) {
+            const ts = $('#board').children[r].children;
+            chars(w).forEach((ch, i) => { ts[i].textContent = ch; ts[i].className = 't' + (mode === 'zh' ? ' zh ' : ' ') + (states ? states[i] : 'filled'); });
+        }
+        function paintCur() {
+            const r = guesses.length; if (r >= TRIES) return;
+            const ts = $('#board').children[r].children, cs = chars(cur);
+            for (let i = 0; i < N(); i++) { ts[i].textContent = cs[i] || ''; ts[i].className = 't' + (mode === 'zh' ? ' zh' : '') + (cs[i] ? ' filled' : ''); }
+        }
+        const KB = ['qwertyuiop', 'asdfghjkl', '+zxcvbnm-'];
+        function buildKeys() {
+            $('#kb').replaceChildren(...KB.map(row => {
+                const d = document.createElement('div'); d.className = 'kr';
+                chars(row).forEach(k => {
+                    const b = document.createElement('button'); b.dataset.k = k;
+                    if (k === '+') { b.textContent = '⏎'; b.className = 'wide'; b.setAttribute('aria-label', '送出'); } else if (k === '-') { b.textContent = '⌫'; b.className = 'wide'; b.setAttribute('aria-label', '刪除'); } else b.textContent = k;
+                    b.onclick = () => press(k); d.append(b);
+                });
+                return d;
+            }));
+        }
+        function paintKeys() {
+            const st = keyStates(guesses, answer);
+            document.querySelectorAll('#kb button').forEach(b => { b.className = (b.className.replace(/\bk-\w\b/g, '') + (st[b.dataset.k] ? ' k-' + st[b.dataset.k] : '')).trim(); });
+            $('#zhChars').replaceChildren(...Object.keys(st).map(ch => {
+                const b = document.createElement('button'); b.textContent = ch; b.className = 'sm k-' + st[ch]; b.setAttribute('aria-label', '加入 ' + ch);
+                b.onclick = () => { if (chars(cur).length < 4 && !isDone(guesses, answer)) { cur += ch; $('#zh').value = cur; paintCur(); } };
+                return b;
+            }));
+        }
+        const say = (t) => { $('#msg').textContent = t; };
+
+        function renderStats() {
+            const s = stats[mode];
+            $('#stTitle').textContent = `統計（${mode === 'zh' ? '成語' : '英文單字'}）`;
+            $('#sgrid').innerHTML = [['玩過', s.p], ['勝率 %', winRate(s)], ['連勝', s.s], ['最長連勝', s.m]].map(([l, v]) => `<div><b>${v}</b><small>${l}</small></div>`).join('');
+            const mx = Math.max(1, ...s.d), hit = isWon(guesses, answer) ? guesses.length - 1 : -1;
+            $('#dist').replaceChildren(...s.d.flatMap((v, i) => {
+                const l = Object.assign(document.createElement('span'), { textContent: i + 1 }), bar = document.createElement('i');
+                bar.textContent = v; bar.style.width = Math.max(8, Math.round(v / mx * 100)) + '%'; if (i === hit) bar.className = 'hit';
+                return [l, bar];
+            }));
+        }
+        function showResult() {
+            const done = isDone(guesses, answer), won = isWon(guesses, answer);
+            $('#result').hidden = !done;
+            $('#zhBox').hidden = done || mode !== 'zh'; $('#kb').hidden = done || mode !== 'en'; $('#zhChars').hidden = mode !== 'zh';
+            if (!done) return;
+            $('#resTitle').textContent = won ? `🎉 第 ${guesses.length} 次猜中：${answer.toUpperCase()}` : `答案是「${mode === 'en' ? answer.toUpperCase() : answer}」`;
+            $('#share').textContent = shareText(mode, kind === 'daily', date, guesses, answer);
+            $('#next').textContent = kind === 'daily' ? '改玩自由練習' : '再玩一題';
+        }
+
+        // ---------- 流程 ----------
+        function newGame() {
+            tok++; cur = ''; $('#zh').value = ''; say(''); date = twDate();
+            if (kind === 'daily') { answer = pickDaily(mode, date); guesses = trimGuesses(loadDaily()[mode], answer, mode); } else { const l = MODES[mode].answers; answer = l[rnd(l.length)]; guesses = []; }
+            $('#info').textContent = kind === 'daily' ? `${date}（台灣時間）每日挑戰：今天大家同一題` : '自由練習：隨機出題，可無限玩';
+            document.querySelectorAll('#modeSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === mode));
+            document.querySelectorAll('#kindSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.k === kind));
+            buildBoard(); paintKeys(); showResult(); renderStats();
+            if (isDone(guesses, answer) && kind === 'daily') say('今天已經完成囉，明天再來！');
+        }
+        function press(k) {
+            if (isDone(guesses, answer)) return;
+            if (mode === 'zh') return;
+            if (k === '+') return submit();
+            if (k === '-') cur = cur.slice(0, -1); else if (/^[a-z]$/.test(k) && cur.length < 5) cur += k; else return;
+            say(''); paintCur();
+        }
+        function flipRow(r, w, done) {
+            const my = tok, st = scoreGuess(w, answer), ts = $('#board').children[r].children, p = flipPlan(N());
+            if (reduced()) { paintRow(r, w, st); return done(); }
+            chars(w).forEach((_, i) => setTimeout(() => {
+                if (my !== tok) return;
+                ts[i].animate([{ transform: 'rotateX(0deg)' }, { transform: 'rotateX(90deg)', offset: .5 }, { transform: 'rotateX(0deg)' }], { duration: FLIP_MS, easing: 'ease-in-out' });
+                setTimeout(() => { if (my === tok) ts[i].className = 't' + (mode === 'zh' ? ' zh ' : ' ') + st[i]; }, p.half);
+            }, p.starts[i]));
+            setTimeout(() => { if (my === tok) done(); }, p.total + 30);
+        }
+        function submit() {
+            if (isDone(guesses, answer)) return;
+            const w = cur;
+            if (chars(w).length !== N()) return say(mode === 'zh' ? '請輸入四個字' : '字母不夠 5 個');
+            if (!validWord(mode, w)) return say(mode === 'zh' ? '詞庫裡沒有這個成語，換一個試試' : '單字庫裡沒有這個字');
+            if (guesses.includes(w)) return say('這個已經猜過了');
+            const r = guesses.length; guesses.push(w); cur = ''; $('#zh').value = ''; say('');
+            if (kind === 'daily') saveDaily();
+            const done = isDone(guesses, answer);
+            if (done) { stats[mode] = applyResult(stats[mode], isWon(guesses, answer), isWon(guesses, answer) ? guesses.length : 0); store.set(KEY_STATS, stats); }
+            paintCur();
+            flipRow(r, w, () => { paintKeys(); showResult(); renderStats(); if (done) say(isWon(guesses, answer) ? '太棒了！' : '下次加油'); });
+        }
+
+        // ---------- 事件 ----------
+        $('#zh').addEventListener('input', (e) => {
+            cur = chars($('#zh').value).slice(0, 4).join('');
+            if (!e.isComposing) $('#zh').value = cur;
+            say(''); paintCur();
+        });
+        $('#zh').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); submit(); } });
+        $('#zhGo').onclick = submit;
+        addEventListener('keydown', (e) => {
+            if (mode !== 'en' || e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|SELECT|TEXTAREA)$/.test((e.target || {}).tagName || '')) return;
+            if (e.key === 'Enter') press('+'); else if (e.key === 'Backspace') press('-'); else if (/^[a-z]$/i.test(e.key)) press(e.key.toLowerCase());
+        });
+        document.querySelectorAll('#modeSeg button').forEach(b => { b.onclick = () => { mode = b.dataset.m; newGame(); }; });
+        document.querySelectorAll('#kindSeg button').forEach(b => { b.onclick = () => { kind = b.dataset.k; newGame(); }; });
+        $('#next').onclick = () => { kind = 'free'; newGame(); };
+        $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), $('#share').textContent, () => prompt('請手動複製：', $('#share').textContent));
+        $('#clearAll').onclick = () => {
+            if (!confirm('清除這個遊戲的所有統計與每日進度？無法復原。頁面會重新載入，正在進行的這一局會結束。')) return;
+            try { Object.keys(localStorage).filter(k => k === KEY_STATS || k.startsWith(DAILY_PREFIX)).forEach(k => localStorage.removeItem(k)); } catch (e) { }
+            location.reload();
+        };
+
+        buildKeys(); pruneDaily(); newGame();
+    </script>
+</body>
+
+</html>

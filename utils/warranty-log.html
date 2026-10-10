@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="購物與保固記錄：記下品名、購買日、價格與保固月數，自動算保固到期日並標示已過期 / 30 天內到期，可搜尋、篩選、匯出 CSV。資料只存在本機。">
+    <meta property="og:title" content="購物與保固記錄" />
+    <meta property="og:description" content="保固到期日自動算，快到期先提醒。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/warranty-log.html" />
+    <meta name="st-keys" content="warranty_items">
+    <title>購物與保固記錄</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        .fgrid select,
+        .fgrid input {
+            width: 100%;
+        }
+
+        .btns {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .msg {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 8px 0 0;
+            min-height: 1.2em;
+        }
+
+        .msg.bad {
+            color: var(--bad);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .stats div {
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+        }
+
+        .stats small {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .stats b {
+            font-size: 20px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .filters {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .filters input {
+            flex: 2 1 160px;
+            min-width: 0;
+        }
+
+        .filters select {
+            flex: 1 1 120px;
+            min-width: 0;
+        }
+
+        .item h2 {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin: 0 0 6px;
+            word-break: break-all;
+        }
+
+        .chip {
+            font-size: 12px;
+            font-weight: 400;
+            color: var(--muted);
+            background: var(--fill);
+            border-radius: 99px;
+            padding: 2px 10px;
+        }
+
+        .badge {
+            font-size: 12px;
+            font-weight: 700;
+            border-radius: 99px;
+            padding: 2px 10px;
+            color: #fff;
+        }
+
+        .badge.expired {
+            background: var(--bad);
+        }
+
+        .badge.soon {
+            background: var(--blue);
+            color: var(--on-blue);
+        }
+
+        .badge.ok {
+            background: var(--ok);
+        }
+
+        .badge.none {
+            background: var(--muted);
+            color: var(--bg);
+        }
+
+        .item .meta {
+            color: var(--muted);
+            font-size: 14px;
+            margin: 2px 0;
+            word-break: break-all;
+        }
+
+        .item .meta b {
+            color: var(--text);
+        }
+
+        .item.expired {
+            opacity: .75;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>購物與保固記錄</h1>
+        <p class="sub">記下買了什麼、保固到哪天，快到期就不會錯過。資料只存在這個瀏覽器。</p>
+
+        <div class="card">
+            <h2 id="formTitle">新增一筆</h2>
+            <div class="fgrid">
+                <div class="full"><label for="f_name">品名</label><input id="f_name" type="text" maxlength="60" placeholder="例如：冰箱、iPhone"></div>
+                <div><label for="f_cat">類別</label><select id="f_cat"></select></div>
+                <div><label for="f_date">購買日</label><input id="f_date" type="date"></div>
+                <div><label for="f_months">保固月數（0 = 無保固）</label><input id="f_months" type="number" min="0" max="600" step="1" value="12" inputmode="numeric"></div>
+                <div><label for="f_price">價格</label><input id="f_price" type="number" min="0" step="any" placeholder="可留白" inputmode="decimal"></div>
+                <div><label for="f_shop">店家</label><input id="f_shop" type="text" maxlength="40" placeholder="可留白"></div>
+                <div><label for="f_loc">發票 / 保固卡放哪裡</label><input id="f_loc" type="text" maxlength="100" placeholder="例如：書桌第二個抽屜"></div>
+                <div class="full"><label for="f_note">備註</label><input id="f_note" type="text" maxlength="200" placeholder="序號、客服電話…（可留白）"></div>
+            </div>
+            <p class="msg" id="expPrev"></p>
+            <div class="btns">
+                <button class="primary" id="save">新增</button>
+                <button id="cancel" hidden>取消編輯</button>
+            </div>
+            <p class="msg" id="formMsg"></p>
+        </div>
+
+        <div class="card">
+            <div class="stats" id="stats"></div>
+        </div>
+
+        <div class="card">
+            <div class="filters">
+                <input id="q" type="text" placeholder="搜尋品名、店家、備註…" aria-label="搜尋">
+                <select id="catFilter" aria-label="類別篩選"></select>
+            </div>
+        </div>
+
+        <div id="list"></div>
+
+        <div class="card">
+            <h2>資料管理</h2>
+            <p class="msg" style="margin:0 0 8px">最多 500 筆。單筆刪除在每筆右下角；這裡可以匯出或全部清除。</p>
+            <div class="btns" style="margin-top:0">
+                <button id="csv">匯出 CSV</button>
+                <button id="clearAll" style="color:var(--bad)">清除全部</button>
+            </div>
+            <p class="msg" id="dataMsg"></p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>家電、3C、家具的購物與保固記錄本：記下品名、購買日、保固月數，自動算出保固到期日，並標示「已過期」「30 天內到期」「未到期」。圖片不存，只記發票與保固卡放在哪。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>新買冰箱、手機、吸塵器，想記住保固到哪天。</li>
+        <li>東西壞了，想快速查「還在不在保固內」「發票放哪」。</li>
+        <li>年底看看今年花了多少錢、有哪些保固快到期。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>填「品名」「購買日」「保固月數」，其他欄位可留白；表單下方會即時顯示保固到期日。按「新增」。</li>
+        <li>清單排序：快到期的在最上面，接著是未到期、已過期（最近過期的在前），無保固的排最後。</li>
+        <li>用搜尋框與類別下拉篩選；上方統計會跟著篩選結果。</li>
+        <li>每筆的「編輯」可以修改，「刪除」會移除這一筆。</li>
+        <li>「匯出 CSV」下載全部記錄（Excel 可直接開啟）。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">冰箱，購買日 2026-01-31，保固 1 個月
+        → 到期日 2026-02-28（沒有 31 日的月份算月底）
+        冰箱，購買日 2026-03-10，保固 36 個月
+        → 到期日 2029-03-10</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>到期日以台灣時間（UTC+8）的今天判斷；到期當天仍算在保固內，剩 30 天以內標示「30 天內到期」。</li>
+        <li>實際保固範圍與起算日以店家與原廠規定為準，這裡只是記錄與估算。</li>
+        <li>資料只存在這個瀏覽器，清除網站資料會消失；右上角「💾」可匯出備份。</li>
+        <li>最多 500 筆，滿了要先刪除舊的才能新增；品名最長 60 字、店家 40 字、位置 100 字、備註 200 字。</li>
+        <li>「清除全部」會刪掉所有記錄且無法復原；載入到壞掉的資料會自動略過或補預設值。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { day, store, csvStringify } = Util;
+
+        // --- pure ---
+        const WL = { MAX: 500, NAME: 60, SHOP: 40, LOC: 100, NOTE: 200, MAX_MONTHS: 600, MAX_PRICE: 1e9 };
+        const CATS = ['家電', '3C 數位', '家具', '廚房衛浴', '車輛', '運動戶外', '其他'];
+        const STATUS_LABEL = { expired: '已過期', soon: '30 天內到期', ok: '未到期', none: '無保固' };
+
+        // 台灣今天（UTC+8，不看裝置時區）
+        const twToday = (ms = Date.now()) => new Date(ms + 8 * 36e5).toISOString().slice(0, 10);
+        // 真實存在的日期，1990–2100
+        function validDate(s) {
+            if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+            const p = day.parse(s);
+            return p.y >= 1990 && p.y <= 2100 && p.m >= 1 && p.m <= 12 && p.d >= 1 && p.d <= day.daysInMonth(p.y, p.m);
+        }
+        // 保固到期日 = 購買日 + 月數；日數超過當月就取月底（1/31 + 1 個月 = 2/28）
+        const expiryOf = (date, months) => day.addMonths(date, months);
+        // 狀態：months = 0 為無保固；到期當天仍在保固內；剩 30 天以內為 soon
+        function statusOf(it, today) {
+            if (!it.months) return { key: 'none', days: null, expiry: null };
+            const expiry = expiryOf(it.date, it.months), days = day.between(today, expiry);
+            return { key: days < 0 ? 'expired' : days <= 30 ? 'soon' : 'ok', days, expiry };
+        }
+        // 排序：未到期 / 快到期（到期日近的在前）→ 已過期（最近過期的在前）→ 無保固（買得晚的在前）
+        function sortItems(items, today) {
+            const rank = { soon: 0, ok: 0, expired: 1, none: 2 };
+            const info = new Map(items.map(it => [it, statusOf(it, today)]));
+            return [...items].sort((a, b) => {
+                const sa = info.get(a), sb = info.get(b);
+                if (rank[sa.key] !== rank[sb.key]) return rank[sa.key] - rank[sb.key];
+                const d = sa.key === 'none' ? (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)
+                    : sa.key === 'expired' ? (sa.expiry < sb.expiry ? 1 : sa.expiry > sb.expiry ? -1 : 0)
+                        : (sa.expiry < sb.expiry ? -1 : sa.expiry > sb.expiry ? 1 : 0);
+                return d || a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1);
+            });
+        }
+        // 搜尋（品名 / 店家 / 備註 / 位置 / 類別，不分大小寫）+ 類別篩選（空字串 = 全部）
+        function filterItems(items, q, cat) {
+            const k = String(q || '').trim().toLowerCase();
+            return items.filter(it => (!cat || it.cat === cat) && (!k || [it.name, it.shop, it.note, it.loc, it.cat].some(v => v.toLowerCase().includes(k))));
+        }
+        // 統計：筆數、總花費、30 天內到期數、已過期數
+        function statsOf(items, today) {
+            let total = 0, soon = 0, expired = 0;
+            for (const it of items) {
+                total += it.price;
+                const k = statusOf(it, today).key;
+                if (k === 'soon') soon++; else if (k === 'expired') expired++;
+            }
+            return { count: items.length, total: Math.round(total * 100) / 100, soon, expired };
+        }
+
+        const str = (v, n) => typeof v === 'string' ? v.trim().slice(0, n) : '';
+        const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        // 載入驗證：缺欄位補預設、超長截斷；沒有品名或日期壞掉的整筆丟掉
+        function normItem(r) {
+            if (!r || typeof r !== 'object') return null;
+            const name = str(r.name, WL.NAME);
+            if (!name || !validDate(r.date)) return null;
+            const m = Number(r.months), p = Number(r.price);
+            return {
+                id: str(r.id, 40) || newId(), name, cat: CATS.includes(r.cat) ? r.cat : '其他', date: r.date,
+                price: Number.isFinite(p) && p >= 0 && p <= WL.MAX_PRICE ? Math.round(p * 100) / 100 : 0,
+                shop: str(r.shop, WL.SHOP), months: Number.isInteger(m) && m >= 0 && m <= WL.MAX_MONTHS ? m : 0,
+                loc: str(r.loc, WL.LOC), note: str(r.note, WL.NOTE),
+            };
+        }
+        function normList(raw) {
+            if (!Array.isArray(raw)) return [];
+            const seen = new Set(), out = [];
+            for (const r of raw) {
+                const it = normItem(r);
+                if (!it || seen.has(it.id)) continue;
+                seen.add(it.id); out.push(it);
+                if (out.length >= WL.MAX) break;
+            }
+            return out;
+        }
+        // 表單檢查：回傳錯誤訊息，沒問題回傳 ''。raw 的欄位都是字串（來自輸入框）
+        function checkForm(r) {
+            const s = (v) => String(v ?? '').trim();
+            if (!s(r.name)) return '請填品名';
+            if (s(r.name).length > WL.NAME) return `品名最長 ${WL.NAME} 字`;
+            if (s(r.shop).length > WL.SHOP) return `店家最長 ${WL.SHOP} 字`;
+            if (s(r.loc).length > WL.LOC) return `位置最長 ${WL.LOC} 字`;
+            if (s(r.note).length > WL.NOTE) return `備註最長 ${WL.NOTE} 字`;
+            if (!validDate(s(r.date))) return '請選擇有效的購買日（1990–2100）';
+            const m = s(r.months) === '' ? NaN : Number(s(r.months));
+            if (!(Number.isInteger(m) && m >= 0 && m <= WL.MAX_MONTHS)) return `保固月數請填 0 到 ${WL.MAX_MONTHS} 的整數`;
+            if (s(r.price) !== '') { const p = Number(s(r.price)); if (!(Number.isFinite(p) && p >= 0 && p <= WL.MAX_PRICE)) return '價格請填 0 以上的數字'; }
+            return '';
+        }
+        const fromForm = (r, id) => normItem({ id, name: r.name, cat: r.cat, date: String(r.date).trim(), price: String(r.price ?? '').trim() === '' ? 0 : r.price, shop: r.shop, months: r.months, loc: r.loc, note: r.note });
+        // 新增：滿 500 筆拒絕（不默默刪舊的）
+        function addItem(list, r, id = newId()) {
+            const err = checkForm(r);
+            if (err) return { list, err };
+            if (list.length >= WL.MAX) return { list, err: `最多 ${WL.MAX} 筆，請先刪除不用的記錄` };
+            return { list: [...list, fromForm(r, id)], err: '' };
+        }
+        // 修改（用 id）
+        function updateItem(list, id, r) {
+            const err = checkForm(r);
+            if (err) return { list, err };
+            if (!list.some(x => x.id === id)) return { list, err: '找不到這筆記錄' };
+            return { list: list.map(x => x.id === id ? fromForm(r, id) : x), err: '' };
+        }
+        const removeItem = (list, id) => list.filter(x => x.id !== id);
+
+        // CSV：開頭是 = + - @ 的文字前補單引號，避免試算表當成公式
+        const csvGuard = (v) => { const s = String(v ?? ''); return /^[=+\-@\t\r]/.test(s) ? "'" + s : s; };
+        function toCsv(items, today) {
+            const rows = sortItems(items, today).map(it => {
+                const st = statusOf(it, today);
+                return [csvGuard(it.name), it.cat, it.date, it.price, csvGuard(it.shop), it.months, st.expiry || '', STATUS_LABEL[st.key], csvGuard(it.loc), csvGuard(it.note)];
+            });
+            return csvStringify(['品名', '類別', '購買日', '價格', '店家', '保固月數', '保固到期日', '狀態', '發票/保固卡位置', '備註'], rows);
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'warranty_items';
+        let items = normList(store.get(KEY, []));
+        let editId = null;
+        const money = (v) => Math.round(v).toLocaleString('zh-TW');
+        const save = () => store.set(KEY, items);
+        const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+
+        CATS.forEach(c => { $('#f_cat').append(new Option(c, c)); });
+        $('#catFilter').append(new Option('全部類別', ''));
+        CATS.forEach(c => { $('#catFilter').append(new Option(c, c)); });
+
+        const readForm = () => ({ name: $('#f_name').value, cat: $('#f_cat').value, date: $('#f_date').value, months: $('#f_months').value, price: $('#f_price').value, shop: $('#f_shop').value, loc: $('#f_loc').value, note: $('#f_note').value });
+        function resetForm() {
+            editId = null;
+            ['f_name', 'f_price', 'f_shop', 'f_loc', 'f_note'].forEach(i => { $('#' + i).value = ''; });
+            $('#f_cat').value = CATS[0]; $('#f_date').value = twToday(); $('#f_months').value = '12';
+            $('#formTitle').textContent = '新增一筆'; $('#save').textContent = '新增'; $('#cancel').hidden = true;
+            preview();
+        }
+        function preview() {
+            const d = $('#f_date').value, m = $('#f_months').value.trim(), n = Number(m);
+            $('#expPrev').textContent = validDate(d) && m !== '' && Number.isInteger(n) && n >= 0 && n <= WL.MAX_MONTHS ? (n === 0 ? '無保固' : '保固到期日：' + expiryOf(d, n)) : '';
+        }
+        function msg(text, bad) { const m = $('#formMsg'); m.textContent = text; m.className = 'msg' + (bad ? ' bad' : ''); }
+
+        function render() {
+            const today = twToday(), st = statsOf(filterItems(items, $('#q').value, $('#catFilter').value), today);
+            const sBox = $('#stats'); sBox.replaceChildren();
+            [['筆數', st.count], ['總花費', money(st.total)], ['30 天內到期', st.soon], ['已過期', st.expired]].forEach(([k, v]) => { const d = el('div'); d.append(el('small', '', k), el('b', '', v)); sBox.append(d); });
+            const list = $('#list'); list.replaceChildren();
+            const shown = sortItems(filterItems(items, $('#q').value, $('#catFilter').value), today);
+            if (!shown.length) { list.append(el('div', 'card muted', items.length ? '沒有符合的記錄' : '還沒有記錄，從上面新增第一筆吧')); return; }
+            shown.forEach(it => {
+                const s = statusOf(it, today), card = el('div', 'card item ' + s.key);
+                const h = el('h2', '', it.name);
+                h.append(el('span', 'chip', it.cat), el('span', 'badge ' + s.key, STATUS_LABEL[s.key]));
+                card.append(h);
+                const when = s.key === 'none' ? '無保固' : s.key === 'expired' ? `${s.expiry} 到期（已過 ${-s.days} 天）` : s.days === 0 ? `${s.expiry} 到期（今天）` : `${s.expiry} 到期（還有 ${s.days} 天）`;
+                const line = (label, v) => { if (!v) return; const p = el('div', 'meta'); p.append(label + '：', el('b', '', v)); card.append(p); };
+                line('保固', when);
+                line('購買', it.date + (it.shop ? ' ・ ' + it.shop : '') + (it.price ? ' ・ ' + money(it.price) + ' 元' : ''));
+                line('放在', it.loc); line('備註', it.note);
+                const b = el('div', 'btns');
+                const ed = el('button', 'sm', '編輯'); ed.onclick = () => startEdit(it.id);
+                const del = el('button', 'sm', '刪除'); del.setAttribute('aria-label', '刪除 ' + it.name); del.style.color = 'var(--bad)';
+                del.onclick = () => {
+                    if (!confirm(`刪除「${it.name}」？無法復原。`)) return;
+                    items = removeItem(items, it.id); if (editId === it.id) resetForm();
+                    save(); render();
+                };
+                b.append(ed, del); card.append(b); list.append(card);
+            });
+        }
+
+        function startEdit(id) {
+            const it = items.find(x => x.id === id); if (!it) return;
+            editId = id;
+            $('#f_name').value = it.name; $('#f_cat').value = it.cat; $('#f_date').value = it.date; $('#f_months').value = it.months;
+            $('#f_price').value = it.price || ''; $('#f_shop').value = it.shop; $('#f_loc').value = it.loc; $('#f_note').value = it.note;
+            $('#formTitle').textContent = '編輯記錄'; $('#save').textContent = '儲存'; $('#cancel').hidden = false;
+            preview(); msg('');
+            $('#formTitle').scrollIntoView({ block: 'start' });
+        }
+
+        $('#save').onclick = () => {
+            const r = readForm(), res = editId ? updateItem(items, editId, r) : addItem(items, r);
+            if (res.err) { msg(res.err, true); return; }
+            items = res.list; save(); const was = editId; resetForm(); msg(was ? '已儲存' : '已新增'); render();
+        };
+        $('#cancel').onclick = () => { resetForm(); msg(''); };
+        ['#f_date', '#f_months'].forEach(q => { $(q).oninput = preview; });
+        ['#q', '#catFilter'].forEach(q => { $(q).oninput = render; });
+        $('#csv').onclick = () => {
+            if (!items.length) { $('#dataMsg').textContent = '還沒有記錄可以匯出'; return; }
+            Util.download(new Blob(['﻿' + toCsv(items, twToday())], { type: 'text/csv;charset=utf-8' }), `購物保固記錄_${twToday()}.csv`);
+            $('#dataMsg').textContent = '已匯出 CSV';
+        };
+        $('#clearAll').onclick = () => {
+            if (!items.length) { $('#dataMsg').textContent = '目前沒有記錄'; return; }
+            if (!confirm(`清除全部 ${items.length} 筆記錄？無法復原。`)) return;
+            items = []; save(); resetForm(); msg(''); $('#dataMsg').textContent = '已清除全部'; render();
+        };
+        resetForm(); render();
+    </script>
+</body>
+
+</html>

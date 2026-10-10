@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="SemVer 與版本比較：解析版本、比較排序、判斷是否符合 npm 範圍（^ ~ 連字號 x 範圍 ||），並說明升級屬於 major / minor / patch。">
+    <meta property="og:title" content="SemVer 與版本比較" />
+    <meta property="og:description" content="解析語意化版本、排序、檢查 npm 範圍是否符合。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/semver.html" />
+    <title>SemVer 與版本比較</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row input {
+            flex: 1;
+            min-width: 140px;
+        }
+
+        textarea {
+            min-height: 110px;
+            resize: vertical;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+        }
+
+        .mono {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            overflow-wrap: anywhere;
+        }
+
+        .li b {
+            text-align: right;
+            overflow-wrap: anywhere;
+        }
+
+        .code {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 14px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin: 8px 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        .ok {
+            color: var(--ok);
+        }
+
+        .bad {
+            color: var(--bad);
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>SemVer 與版本比較</h1>
+        <p class="sub">解析語意化版本、比較排序、檢查 npm 範圍，全部在本機計算。</p>
+
+        <div class="card">
+            <h2>兩個版本：比較與升級類型</h2>
+            <label for="va">版本 A（舊）</label>
+            <input id="va" class="mono" placeholder="例如 1.4.2-beta.1+build.5" aria-label="版本 A" spellcheck="false" autocapitalize="off" value="1.4.2">
+            <label for="vb">版本 B（新）</label>
+            <input id="vb" class="mono" placeholder="例如 2.0.0" aria-label="版本 B" spellcheck="false" autocapitalize="off" value="2.0.0">
+            <div id="abOut"></div>
+        </div>
+
+        <div class="card">
+            <h2>版本清單：排序與範圍檢查</h2>
+            <label for="list">版本清單（空白、逗號或換行分隔）</label>
+            <textarea id="list" aria-label="版本清單" spellcheck="false" autocapitalize="off">1.0.0
+1.0.0-rc.1
+1.0.0-beta.11
+1.0.0-beta.2
+1.2.3
+1.9.0
+2.0.0-alpha
+2.0.0
+v0.3.1
+not-a-version</textarea>
+            <div class="chips"><button class="sm" id="asc" aria-pressed="true">由舊到新</button><button class="sm" id="desc" aria-pressed="false">由新到舊</button><button class="sm" id="copyList">複製排序結果</button></div>
+            <div id="listOut"></div>
+            <label for="range">npm 範圍</label>
+            <input id="range" class="mono" placeholder="例如 ^1.2.3 || >=2.0.0 <3.0.0-0" aria-label="npm 範圍" spellcheck="false" autocapitalize="off" value="^1.0.0">
+            <div id="rangeOut"></div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>依 semver.org 規範與 npm 的範圍寫法，解析版本號、排序、判斷版本是否落在範圍內，並說明升級屬於哪一級。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>看 package.json 的 <kbd>^1.2.3</kbd>、<kbd>~1.2</kbd> 到底會裝到哪些版本。</li>
+        <li>評估升級風險：從 1.4.2 到 2.0.0 是 major，可能有破壞性變更。</li>
+        <li>把一串版本號排出正確先後（<kbd>1.0.0-beta.2</kbd> 比 <kbd>1.0.0-beta.11</kbd> 舊）。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>上方填「版本 A（舊）」與「版本 B（新）」，會顯示各欄位、誰比較新、升級類型。</li>
+        <li>下方貼上版本清單，可切換「由舊到新 / 由新到舊」，無效的版本會標示原因。</li>
+        <li>在「npm 範圍」輸入範圍，會顯示展開後的等價比較式、清單中哪些符合，以及符合者中最高的版本。</li>
+        </ol>
+        <p>支援：<kbd>^</kbd> <kbd>~</kbd> <kbd>&gt;= &lt;= &gt; &lt; =</kbd>、連字號範圍 <kbd>1.2 - 2.3</kbd>、x 範圍 <kbd>1.2.x</kbd> <kbd>*</kbd>、<kbd>||</kbd> 組合；空白代表 AND。</p>
+        <h3>範例</h3>
+        <div class="eg">^1.2.3 → &gt;=1.2.3 &lt;2.0.0
+^0.2.3 → &gt;=0.2.3 &lt;0.3.0
+^0.0.3 → &gt;=0.0.3 &lt;0.0.4
+1.2.3 - 2.3 → &gt;=1.2.3 &lt;2.4.0
+1.4.2 → 2.0.0：major</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>預設不含預發行：2.0.0-beta.1 不符合 <kbd>^1.0.0</kbd>，也不符合 <kbd>&gt;=1.0.0</kbd>；只有範圍中有同一組 major.minor.patch 的預發行比較式（如 <kbd>^1.2.3-beta.1</kbd>）才會讓 1.2.3-beta.2 通過。</li>
+        <li>build 中繼資料（<kbd>+build.5</kbd>）不參與比較。</li>
+        <li>展開式中被省略的「-0」是 npm 用來排除下一版預發行的內部下界，顯示時已隱藏。</li>
+        <li>版本前的 <kbd>v</kbd> 與 <kbd>=</kbd> 會容忍；版本欄位不接受前導 0（01.2.3 無效）。</li>
+        <li>不儲存任何輸入，不上傳。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { copyWithFeedback } = Util;
+
+        // --- pure ---
+        const PRE_ID = /^[0-9A-Za-z-]+$/, NUM_ID = /^(0|[1-9]\d*)$/;
+        // 解析版本；loose 容忍前後空白與開頭的 v / =。失敗回傳 { error }
+        function parseVer(s, loose = true) {
+            let t = String(s ?? '');
+            if (loose) t = t.trim().replace(/^[v=]+\s*/i, '');
+            const m = /^(\d+)\.(\d+)\.(\d+)(?:-([^+]*))?(?:\+(.*))?$/.exec(t);
+            if (!m) return { error: '格式需為 主.次.修（例如 1.2.3）' };
+            for (let i = 1; i <= 3; i++) {
+                if (!NUM_ID.test(m[i])) return { error: '版本數字不可有前導 0' };
+                if (!Number.isSafeInteger(+m[i])) return { error: '版本數字過大' };
+            }
+            const pre = m[4] === undefined ? [] : m[4].split('.'), build = m[5] === undefined ? [] : m[5].split('.');
+            for (const x of pre) {
+                if (!x || !PRE_ID.test(x)) return { error: '預發行識別字只能是非空的 0-9 A-Z a-z -' };
+                if (/^\d+$/.test(x) && !NUM_ID.test(x)) return { error: '預發行的數字識別字不可有前導 0' };
+            }
+            for (const x of build) if (!x || !PRE_ID.test(x)) return { error: 'build 識別字只能是非空的 0-9 A-Z a-z -' };
+            return { major: +m[1], minor: +m[2], patch: +m[3], pre, build };
+        }
+        const isNumId = (x) => /^\d+$/.test(x);
+        // 數字識別字依位數再字串比較（不受大小限制）
+        const cmpId = (a, b) => {
+            const na = isNumId(a), nb = isNumId(b);
+            if (na && nb) return a.length !== b.length ? Math.sign(a.length - b.length) : a < b ? -1 : a > b ? 1 : 0;
+            if (na !== nb) return na ? -1 : 1; // 數字 < 文字
+            return a < b ? -1 : a > b ? 1 : 0;
+        };
+        // 依規範比較優先序（忽略 build）
+        function cmpVer(a, b) {
+            for (const k of ['major', 'minor', 'patch']) if (a[k] !== b[k]) return a[k] < b[k] ? -1 : 1;
+            if (!a.pre.length || !b.pre.length) return a.pre.length === b.pre.length ? 0 : a.pre.length ? -1 : 1; // 有預發行 < 正式版
+            for (let i = 0; i < Math.max(a.pre.length, b.pre.length); i++) {
+                if (a.pre[i] === undefined) return -1; // 較短者較小
+                if (b.pre[i] === undefined) return 1;
+                const c = cmpId(a.pre[i], b.pre[i]); if (c) return c;
+            }
+            return 0;
+        }
+        const fmtVer = (v) => `${v.major}.${v.minor}.${v.patch}${v.pre.length ? '-' + v.pre.join('.') : ''}${v.build.length ? '+' + v.build.join('.') : ''}`;
+        const fmtCore = (v) => `${v.major}.${v.minor}.${v.patch}`;
+        // 升級類型：major / minor / patch，任一端有預發行時加 pre 前綴；只差預發行為 prerelease；相同為 null
+        function diffVer(a, b) {
+            if (cmpVer(a, b) === 0) return null;
+            const hi = cmpVer(a, b) > 0 ? a : b;
+            for (const k of ['major', 'minor', 'patch']) if (a[k] !== b[k]) return (hi.pre.length ? 'pre' : '') + k;
+            return 'prerelease';
+        }
+        function sortVers(strs, desc = false) {
+            const ok = [], bad = [];
+            for (const s of strs) { const v = parseVer(s); v.error ? bad.push({ s, reason: v.error }) : ok.push({ s, v }); }
+            ok.sort((x, y) => (desc ? -1 : 1) * cmpVer(x.v, y.v));
+            return { ok, bad };
+        }
+        // 清單文字 → 版本字串陣列
+        const splitList = (t) => String(t ?? '').split(/[\s,;]+/).filter(Boolean);
+
+        // 範圍：回傳 OR 的集合，每集合是 AND 的比較式 { op, v, syn }；syn 表示展開時補的「-0」下界；無效回傳 null
+        const V = (major, minor, patch, pre = []) => ({ major, minor, patch, pre, build: [] });
+        const C = (op, v, syn = false) => ({ op, v, syn });
+        const LT0 = (a, b, c) => C('<', V(a, b, c, ['0']), true);
+        const ANY = () => [C('>=', V(0, 0, 0))], NONE = () => [C('<', V(0, 0, 0, ['0']), true)];
+        function parsePartial(s) {
+            const m = /^[v=]*(\d+|[xX*])(?:\.(\d+|[xX*])(?:\.(\d+|[xX*])(?:-([^+]*))?(?:\+(.*))?)?)?$/.exec(s);
+            if (!m) return null;
+            const n = (x) => x === undefined || /^[xX*]$/.test(x) ? null : x;
+            let [M, mi, p] = [n(m[1]), n(m[2]), n(m[3])];
+            if (M === null) { mi = null; p = null; } else if (mi === null) p = null;
+            if ([M, mi, p].some(x => x !== null && (!NUM_ID.test(x) || !Number.isSafeInteger(+x)))) return null;
+            let pre = [];
+            if (m[4] !== undefined) {
+                if (p === null) return null;
+                const v = parseVer(`${M}.${mi}.${p}-${m[4]}`); if (v.error) return null; pre = v.pre;
+            }
+            return { M: M === null ? null : +M, mi: mi === null ? null : +mi, p: p === null ? null : +p, pre };
+        }
+        function expandTok(t) {
+            const m = /^(<=|>=|<|>|=|\^|~>|~)?(.*)$/.exec(t), op = m[1] || '', P = parsePartial(m[2]);
+            if (!P) return null;
+            const { M, mi, p, pre } = P, full = p !== null;
+            if (M === null) return op === '>' || op === '<' ? NONE() : ANY();
+            const lo = V(M, mi ?? 0, p ?? 0, pre);
+            if (op === '^') {
+                const hi = M > 0 ? LT0(M + 1, 0, 0) : mi === null ? LT0(1, 0, 0) : mi > 0 || p === null ? LT0(0, mi + 1, 0) : LT0(0, 0, p + 1);
+                return [C('>=', lo), hi];
+            }
+            if (op === '~' || op === '~>') return [C('>=', lo), mi === null ? LT0(M + 1, 0, 0) : LT0(M, mi + 1, 0)];
+            const next = mi === null ? LT0(M + 1, 0, 0) : LT0(M, mi + 1, 0);
+            if (op === '' || op === '=') return full ? [C('=', lo)] : [C('>=', lo), next];
+            if (op === '>') return full ? [C('>', lo)] : [C('>=', mi === null ? V(M + 1, 0, 0) : V(M, mi + 1, 0))];
+            if (op === '>=') return [C('>=', lo)];
+            if (op === '<') return [full ? C('<', lo) : C('<', V(M, mi ?? 0, 0, ['0']), true)];
+            return full ? [C('<=', lo)] : [next]; // '<='
+        }
+        function parseRange(str) {
+            const sets = [];
+            for (let s of String(str ?? '').split('||')) {
+                s = s.trim().replace(/(\S+)\s+-\s+(\S+)/g, '>=$1 <=$2').replace(/(<=|>=|<|>|=|\^|~>|~)\s+/g, '$1');
+                const set = [];
+                for (const t of s ? s.split(/\s+/) : ['*']) { const e = expandTok(t); if (!e) return null; set.push(...e); }
+                sets.push(set);
+            }
+            return sets;
+        }
+        const fmtComp = (c) => (c.op === '=' ? '' : c.op) + (c.syn ? fmtCore(c.v) : fmtVer(c.v));
+        const fmtRange = (sets) => sets.map(set => set.map(fmtComp).join(' ')).join(' || ');
+        const compOk = (v, c) => { const r = cmpVer(v, c.v); return { '=': r === 0, '>': r > 0, '>=': r >= 0, '<': r < 0, '<=': r <= 0 }[c.op]; };
+        // 預發行版本只有在同一組 major.minor.patch 的比較式本身帶預發行時才能通過
+        const satisfies = (v, sets) => sets.some(set => set.every(c => compOk(v, c)) &&
+            (!v.pre.length || set.some(c => !c.syn && c.v.pre.length && c.v.major === v.major && c.v.minor === v.minor && c.v.patch === v.patch)));
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const li = (k, v, cls) => { const d = document.createElement('div'); d.className = 'li'; const s = document.createElement('span'); s.className = 'muted'; s.textContent = k; const b = document.createElement('b'); b.textContent = v; if (cls) b.className = cls; d.append(s, b); return d; };
+        const note = (t, cls = 'note') => { const p = document.createElement('p'); p.className = cls; p.textContent = t; return p; };
+        const KIND = { major: 'major（主版本，可能有破壞性變更）', minor: 'minor（次版本，向下相容的新功能）', patch: 'patch（修訂版，向下相容的修正）', prerelease: 'prerelease（只有預發行不同）', premajor: 'premajor（含預發行的主版本升級）', preminor: 'preminor（含預發行的次版本升級）', prepatch: 'prepatch（含預發行的修訂版升級）' };
+
+        function verCard(out, label, s) {
+            const v = parseVer(s);
+            if (v.error) { out.append(li(label, '無效：' + v.error, 'bad')); return null; }
+            out.append(li(label, fmtVer(v)), li('主 / 次 / 修', `${v.major} / ${v.minor} / ${v.patch}`));
+            if (v.pre.length) out.append(li('預發行', v.pre.join('.')));
+            if (v.build.length) out.append(li('build（不參與比較）', v.build.join('.')));
+            return v;
+        }
+        function showAB() {
+            const out = $('#abOut'); out.replaceChildren();
+            const a = verCard(out, 'A', $('#va').value), b = verCard(out, 'B', $('#vb').value);
+            if (!a || !b) return;
+            const c = cmpVer(a, b), d = diffVer(a, b);
+            out.append(li('比較', c === 0 ? 'A 與 B 優先序相同' : c < 0 ? 'B 比 A 新' : 'B 比 A 舊（這是降級）', c === 0 ? '' : c < 0 ? 'ok' : 'bad'), li('從 A 到 B', d ? KIND[d] : '沒有變化'));
+        }
+        let desc = false, lastSorted = '';
+        function showList() {
+            const out = $('#listOut'), ro = $('#rangeOut'); out.replaceChildren(); ro.replaceChildren();
+            const { ok, bad } = sortVers(splitList($('#list').value), desc);
+            lastSorted = ok.map(x => x.s).join('\n');
+            const rs = parseRange($('#range').value);
+            const hit = rs ? ok.filter(x => satisfies(x.v, rs)) : [];
+            if (rs) ro.append(Object.assign(document.createElement('div'), { className: 'code', textContent: fmtRange(rs) }));
+            else ro.append(note('範圍格式無效，請檢查每個比較式（例如 ^1.2.3、1.2 - 2.3、>=1 <2）', 'note bad'));
+            for (const x of ok) {
+                const d = document.createElement('div'); d.className = 'li'; const s = document.createElement('span'); s.className = 'mono'; s.textContent = x.s;
+                const b = document.createElement('b'); if (rs) { const y = satisfies(x.v, rs); b.textContent = y ? '符合' : '不符合'; b.className = y ? 'ok' : 'muted'; }
+                d.append(s, b); out.append(d);
+            }
+            for (const x of bad) out.append(li(x.s, '無效：' + x.reason, 'bad'));
+            if (rs) { const best = hit.reduce((m, x) => !m || cmpVer(x.v, m.v) > 0 ? x : m, null); ro.append(li('符合的版本中最高者', best ? best.s : '（沒有符合的版本）', best ? 'ok' : 'bad')); }
+            $('#copyList').disabled = !ok.length;
+        }
+        $('#va').oninput = $('#vb').oninput = showAB;
+        $('#list').oninput = $('#range').oninput = showList;
+        $('#asc').onclick = () => { desc = false; $('#asc').setAttribute('aria-pressed', true); $('#desc').setAttribute('aria-pressed', false); showList(); };
+        $('#desc').onclick = () => { desc = true; $('#asc').setAttribute('aria-pressed', false); $('#desc').setAttribute('aria-pressed', true); showList(); };
+        $('#copyList').onclick = () => copyWithFeedback($('#copyList'), lastSorted);
+        showAB(); showList();
+    </script>
+</body>
+
+</html>
