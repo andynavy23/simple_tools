@@ -166,6 +166,44 @@
             white-space: pre-line;
         }
 
+        #mtBars {
+            overflow-x: auto;
+        }
+
+        .tlin {
+            min-width: 640px;
+        }
+
+        .bar24 i.busy {
+            background: var(--bad);
+            opacity: .75;
+        }
+
+        .bz {
+            margin-top: 8px;
+        }
+
+        .bi {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 14px;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .bdel,
+        .badd {
+            min-height: 44px;
+            min-width: 44px;
+        }
+
+        .bdel {
+            background: none;
+            color: var(--muted);
+            font-size: 18px;
+        }
+
         .del {
             background: none;
             color: var(--muted);
@@ -223,6 +261,7 @@
                 <div class="row" style="margin-top:12px">
                     <select id="mtAdd" aria-label="加入城市"></select>
                     <button id="mtAddBtn">加入城市</button>
+                    <button id="mtClearBusy" hidden>清除全部忙碌時段</button>
                 </div>
                 <p class="meta" id="mtMsg" style="margin:8px 0 0"></p>
             </div>
@@ -251,6 +290,7 @@
         <li>切到「會議時間尋找」：選日期（預設今天）與會議長度，每個城市可調上班時段（預設 09:00–18:00），勾「午休 12:00–13:00 不上班」會略過午休。</li>
         <li>從下拉選單「加入城市」（來源是「時間對照」的城市清單，最多 6 個，至少留 2 個）；第一個城市（🧭）是橫軸的基準。</li>
         <li>藍色橫條是各城市的上班時段，綠色是全員重疊。沒有重疊時顯示「沒有共同上班時間」，並列出前 3 個最少人加班 / 半夜的時段。</li>
+        <li>每個城市下方可「加忙碌」：選日期與起訖時間（當地時間；結束早於開始代表跨午夜到隔天），紅色是忙碌。有忙碌時標題變成「共同空檔」，建議時段會避開所有人的忙碌，× 可刪單筆，「清除全部忙碌時段」會先確認。</li>
         <li>按「複製建議會議時間」貼給同事，每個城市都是當地時間，跨日會標「前一天 / 後一天」。</li>
         </ol>
         <h3>範例</h3>
@@ -264,8 +304,9 @@
         <li>夏令時間自動處理（含轉換當天只有 23 或 25 小時的情況），所以 UTC 位移會隨日期變。</li>
         <li>日期以第一個城市的當地日期為準；橫軸只顯示那一天。</li>
         <li>「加班」指下班後但 07:00–22:00 之間，「半夜」指 22:00–07:00，半夜的扣分比較重。</li>
+        <li>每個城市最多 20 筆忙碌時段（滿了會拒絕新增並提示，不會默默刪舊的）；建議排序先看加班 / 半夜分數，同分時「全員都在 08–21」的優先。橫條在手機可左右滑動。</li>
         <li>時區清單最多 30 個、會議城市最多 6 個，都記在這個瀏覽器；時間對照至少要留一個城市。</li>
-        <li>上班時段與城市只存在本機，可在右上角 💾 匯出備份；存檔資料壞掉時會自動回到預設值。</li>
+        <li>上班時段、忙碌時段與城市只存在本機，可在右上角 💾 匯出備份；存檔資料壞掉時會自動回到預設值。</li>
         </ul>
     </template>
 
@@ -304,6 +345,34 @@
         // ---------- 會議時間尋找 ----------
         const MAX_MEET = 6, MAX_ZONES = 30, STEP = 30 * 60000;
         const toMin = (s) => { const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(s); return m ? +m[1] * 60 + +m[2] : null; };
+        // 忙碌時段 { d: 'YYYY-MM-DD', s: 'HH:MM', e: 'HH:MM' }（該城市當地時間；e 早於 s 代表跨午夜到隔天）；最多 MAX_BUSY 筆，壞項目丟掉
+        const MAX_BUSY = 20;
+        const validDate = (s) => {
+            const m = typeof s === 'string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(s); if (!m) return false;
+            const y = +m[1], t = new Date(Date.UTC(y, +m[2] - 1, +m[3]));
+            return y >= 1900 && y <= 2200 && t.getUTCMonth() === +m[2] - 1 && t.getUTCDate() === +m[3];
+        };
+        function normBusy(a) {
+            const out = [];
+            for (const x of Array.isArray(a) ? a : []) {
+                if (out.length >= MAX_BUSY) break;
+                if (x && validDate(x.d) && toMin(x.s) !== null && toMin(x.e) !== null && x.s !== x.e) out.push({ d: x.d, s: x.s, e: x.e });
+            }
+            return out.sort((p, q) => (p.d + p.s < q.d + q.s ? -1 : p.d + p.s > q.d + q.s ? 1 : 0));
+        }
+        // 忙碌時段轉成 UTC 毫秒區間（跨午夜 / 夏令轉換日由 zonedToMs 處理）
+        function busyMs(list, zone) {
+            return normBusy(list).map(({ d, s, e }) => {
+                const [y, m, dd] = d.split('-').map(Number), a = toMin(s), b = toMin(e), [Y, M, D] = b > a ? [y, m, dd] : addDays(y, m, dd, 1);
+                return [zonedToMs(y, m, dd, Math.floor(a / 60), a % 60, zone), zonedToMs(Y, M, D, Math.floor(b / 60), b % 60, zone)];
+            }).sort((p, q) => p[0] - q[0]);
+        }
+        // 區間補集：A 扣掉 B（都是 [起, 迄) 毫秒區間清單）
+        const subtract = (A, B) => A.flatMap(([a, b]) => {
+            let ps = [[a, b]];
+            for (const [c, d] of B) ps = ps.flatMap(([x, y]) => d <= x || c >= y ? [[x, y]] : [[x, Math.min(y, c)], [Math.max(x, d), y]].filter(p => p[1] > p[0]));
+            return ps;
+        });
         // 讀取已存的設定：壞資料、重複或不認得的時區一律丟掉，時段不合理改回預設 09:00–18:00，最多 6 個城市
         function normMeet(raw, isZone) {
             const a = raw && Array.isArray(raw.cities) ? raw.cities : [], seen = new Set(), cities = [];
@@ -312,7 +381,7 @@
                 if (!c || typeof c.z !== 'string' || !isZone(c.z) || seen.has(c.z)) continue;
                 seen.add(c.z);
                 const s = toMin(c.s), e = toMin(c.e), good = s !== null && e !== null && s < e;
-                cities.push({ z: c.z, s: good ? c.s : '09:00', e: good ? c.e : '18:00', l: c.l === true });
+                cities.push({ z: c.z, s: good ? c.s : '09:00', e: good ? c.e : '18:00', l: c.l === true, ...(normBusy(c.b).length ? { b: normBusy(c.b) } : {}) });
             }
             return { cities };
         }
@@ -341,18 +410,20 @@
             const ref = cities[0].z, [y, m, d] = dateStr.split('-').map(Number), [Y, M, D] = addDays(y, m, d, 1);
             const t0 = zonedToMs(y, m, d, 0, 0, ref), t1 = zonedToMs(Y, M, D, 0, 0, ref);
             const full = cities.map(c => cityWindows(dateStr, c.z, c));
+            const busy = cities.map(c => busyMs(c.b, c.z)), anyBusy = busy.flat();
             const wins = full.map(w => clip(w, t0, t1));
-            const overlap = clip(full.reduce((a, w) => intersect(a, w)), t0, t1);
+            const overlap = clip(full.map((w, i) => subtract(w, busy[i])).reduce((a, w) => intersect(a, w)), t0, t1);
             const L = lenMin * 60000, all = [];
             for (let st = t0; st + L <= t1; st += STEP) {
-                let score = 0; const worst = cities.map(() => 0);
-                for (let c = st + STEP / 2; c < st + L; c += STEP) cities.forEach((ct, i) => { const p = penalty(c, ct.z, full[i]); score += p; worst[i] = Math.max(worst[i], p); });
-                all.push({ start: st, end: st + L, score, ot: worst.filter(w => w === 1).length, night: worst.filter(w => w === 3).length });
+                if (anyBusy.some(([a, b]) => a < st + L && b > st)) continue;   // 有人忙碌就不能當候選
+                let score = 0, cozy = true; const worst = cities.map(() => 0);
+                for (let c = st + STEP / 2; c < st + L; c += STEP) cities.forEach((ct, i) => { const p = penalty(c, ct.z, full[i]); score += p; worst[i] = Math.max(worst[i], p); const q = parts(c, ct.z), mm = q.h * 60 + q.mi; if (mm < 480 || mm >= 1260) cozy = false; });
+                all.push({ start: st, end: st + L, score, cozy, ot: worst.filter(w => w === 1).length, night: worst.filter(w => w === 3).length });
             }
-            all.sort((a, b) => a.score - b.score || a.start - b.start);
+            all.sort((a, b) => a.score - b.score || b.cozy - a.cozy || a.start - b.start);   // 同分時「全員在 08–21 舒適時段」優先
             const slots = [];
             for (const s of all) { if (slots.length >= 3) break; if (slots.every(p => s.start >= p.end || s.end <= p.start)) slots.push(s); }
-            return { t0, t1, wins, overlap, slots };
+            return { t0, t1, wins, overlap, slots, busy: busy.map(b => clip(b, t0, t1)), hasBusy: anyBusy.length > 0 };
         }
         const hhmm = (ms, zone) => { const p = parts(ms, zone); return String(p.h).padStart(2, '0') + ':' + String(p.mi).padStart(2, '0'); };
         // 該時間點在 zone 的日期與 refZone 差幾天，回傳 '' / '（前一天）' / '（後一天）'
@@ -471,10 +542,36 @@
         // ---------- 會議時間尋找（介面） ----------
         const MKEY = 'tz_meet';
         const isZone = (z) => ALL.includes(z) || DEFAULT.includes(z);
-        let meet = normMeet(Util.store.get(MKEY, null), isZone).cities;
-        if (meet.length < 2) meet = ['Asia/Taipei', 'America/New_York'].map(z => ({ z, s: '09:00', e: '18:00', l: false }));
+        let meet = normMeet(Util.store.get(MKEY, null), isZone).cities.map(c => ({ ...c, b: c.b || [] }));
+        if (meet.length < 2) meet = ['Asia/Taipei', 'America/New_York'].map(z => ({ z, s: '09:00', e: '18:00', l: false, b: [] }));
         const saveMeet = () => Util.store.set(MKEY, { cities: meet });
         let lastText = '';
+
+        // 每個城市的忙碌時段：清單（× 刪除，用在清單中的位置）+ 新增列
+        function busyBox(c, nm) {
+            const box = document.createElement('div'); box.className = 'bz';
+            c.b.forEach((x, k) => {
+                const it = document.createElement('div'); it.className = 'bi';
+                const [yy, mm, dd] = x.d.split('-');
+                it.append(`${+mm}/${+dd}（${yy}）${x.s}–${x.e}${toMin(x.e) < toMin(x.s) ? '（隔天）' : ''}`);
+                const b = document.createElement('button'); b.className = 'bdel'; b.textContent = '×'; b.setAttribute('aria-label', `刪除 ${nm} 的忙碌時段 ${x.d} ${x.s}-${x.e}`);
+                b.onclick = () => { c.b.splice(k, 1); saveMeet(); renderMeet(); };
+                it.append(b); box.append(it);
+            });
+            const r = document.createElement('div'); r.className = 'mtrow';
+            const mk = (type, value, label) => { const i = Object.assign(document.createElement('input'), { type, value }); i.setAttribute('aria-label', `${nm} 忙碌${label}`); return i; };
+            const d = mk('date', $('#mtDate').value, '日期'), s = mk('time', '14:00', '開始'), e = mk('time', '15:00', '結束');
+            const add = document.createElement('button'); add.className = 'badd'; add.textContent = '加忙碌';
+            add.onclick = () => {
+                const o = { d: d.value, s: s.value, e: e.value };
+                if (!validDate(o.d) || toMin(o.s) === null || toMin(o.e) === null) { $('#mtMsg').textContent = '請填完整的日期與起訖時間'; return; }
+                if (o.s === o.e) { $('#mtMsg').textContent = '起訖時間不能相同'; return; }
+                if (c.b.length >= MAX_BUSY) { $('#mtMsg').textContent = `每個城市最多 ${MAX_BUSY} 筆忙碌時段，請先刪除不用的`; return; }
+                $('#mtMsg').textContent = ''; c.b = normBusy([...c.b, o]); saveMeet(); renderMeet();
+            };
+            r.append(d, s, '–', e, add); box.append(r);
+            return box;
+        }
 
         function renderMeet() {
             const box = $('#mtCities'), names = meet.map(c => city(c.z));
@@ -500,8 +597,9 @@
                 cb.onchange = () => { c.l = cb.checked; saveMeet(); renderMeet(); };
                 lb.append(cb, '午休 12:00–13:00 不上班');
                 r.append(mk('s'), '–', mk('e'), lb);
-                row.append(top, r); return row;
+                row.append(top, r, busyBox(c, names[i])); return row;
             }));
+            $('#mtClearBusy').hidden = !meet.some(c => c.b.length);
             const free = zones.concat(DEFAULT).filter((z, i, a) => a.indexOf(z) === i && !meet.some(c => c.z === z));
             $('#mtAdd').replaceChildren(...free.map(z => new Option(city(z) + ' (' + z + ')', z)));
             $('#mtAddBtn').disabled = meet.length >= MAX_MEET || !free.length;
@@ -510,24 +608,25 @@
             const ds = $('#mtDate').value;
             if (!/^\d{4}-\d{2}-\d{2}$/.test(ds)) { $('#mtBars').textContent = '請選日期'; $('#mtRecs').replaceChildren(); $('#mtHead').textContent = ''; lastText = ''; return; }
             const plan = meetPlan(ds, meet, +$('#mtLen').value), ref = meet[0].z, span = plan.t1 - plan.t0, pc = (ms) => (ms - plan.t0) / span * 100;
-            const seg = (list, cls) => { const d = document.createElement('div'); d.className = 'bar24 ' + cls; list.forEach(([a, b]) => { const i = document.createElement('i'); i.style.left = pc(a) + '%'; i.style.width = pc(b) - pc(a) + '%'; d.append(i); }); return d; };
+            const seg = (list, cls, busy) => { const d = document.createElement('div'); d.className = 'bar24 ' + cls; list.forEach(([a, b]) => { const i = document.createElement('i'); i.style.left = pc(a) + '%'; i.style.width = pc(b) - pc(a) + '%'; d.append(i); }); (busy || []).forEach(([a, b]) => { const i = document.createElement('i'); i.className = 'busy'; i.style.left = pc(a) + '%'; i.style.width = pc(b) - pc(a) + '%'; d.append(i); }); return d; };
             const [y, m, dd] = ds.split('-').map(Number);
             const axis = document.createElement('div'); axis.className = 'axis';
             for (let h = 0; h <= 24; h += 3) { const sp = document.createElement('span'), ms = h === 24 ? plan.t1 : zonedToMs(y, m, dd, h, 0, ref); sp.textContent = h === 24 ? '24' : pad(h); sp.style.left = pc(ms) + '%'; axis.append(sp); }
             const label = (t, cls) => Object.assign(document.createElement('div'), { className: 'bn ' + (cls || ''), textContent: t });
-            $('#mtBars').replaceChildren(
-                ...meet.flatMap((c, i) => [label(`${names[i]}　上班 ${c.s}–${c.e}${c.l ? '（午休）' : ''}`), seg(plan.wins[i], 'w')]),
-                label('全員都在上班', 'ok'), seg(plan.overlap, 'all'), axis,
-                Object.assign(document.createElement('div'), { className: 'meta', textContent: `橫軸是「${names[0]}」當地時間 ${m}/${dd} 這一天（小時）` }));
+            const tl = document.createElement('div'); tl.className = 'tlin';
+            tl.append(
+                ...meet.flatMap((c, i) => [label(`${names[i]}　上班 ${c.s}–${c.e}${c.l ? '（午休）' : ''}${plan.busy[i].length ? '　紅色 = 忙碌' : ''}`), seg(plan.wins[i], 'w', plan.busy[i])]),
+                label(plan.hasBusy ? '全員上班且都有空' : '全員都在上班', 'ok'), seg(plan.overlap, 'all'), axis);
+            $('#mtBars').replaceChildren(tl, Object.assign(document.createElement('div'), { className: 'meta', textContent: `橫軸是「${names[0]}」當地時間 ${m}/${dd} 這一天（小時），手機可左右滑動` }));
             const top = plan.slots;
-            $('#mtHead').textContent = plan.overlap.length ? '共同上班時間' : '沒有共同上班時間';
+            $('#mtHead').textContent = plan.hasBusy ? (plan.overlap.length ? '共同空檔（已排除忙碌時段）' : '沒有共同空檔') : (plan.overlap.length ? '共同上班時間' : '沒有共同上班時間');
             const lines = plan.overlap.map(([a, b]) => `${hhmm(a, ref)}–${hhmm(b, ref)}`);
             const recs = [];
             if (lines.length) recs.push(Object.assign(document.createElement('div'), { className: 'rec', textContent: `${names[0]} 時間 ${lines.join('、')}` }));
             else recs.push(Object.assign(document.createElement('div'), { className: 'meta', textContent: '下面是「最少人需要加班 / 半夜」的前 3 個時段：' }));
             const out = [`建議會議時間（${ds}，${$('#mtLen').value} 分鐘）`];
             top.forEach((s, i) => {
-                const why = s.score === 0 ? '全員都在上班時間' : `${s.ot ? s.ot + ' 人需加班' : ''}${s.ot && s.night ? '、' : ''}${s.night ? s.night + ' 人在半夜' : ''}`;
+                const why = (s.score === 0 ? '全員都在上班時間' : `${s.ot ? s.ot + ' 人需加班' : ''}${s.ot && s.night ? '、' : ''}${s.night ? s.night + ' 人在半夜' : ''}`) + (s.cozy ? '，皆在 08–21 舒適時段' : '');
                 const t = slotText(s, meet, names);
                 recs.push(Object.assign(document.createElement('div'), { className: 'rec', textContent: `方案 ${i + 1}：${why}\n${t}` }));
                 out.push(`方案 ${i + 1}（${why}）\n${t}`);
@@ -541,9 +640,10 @@
         $('#mtAddBtn').onclick = () => {
             const z = $('#mtAdd').value;
             if (!z || meet.length >= MAX_MEET || meet.some(c => c.z === z)) return;
-            meet.push({ z, s: '09:00', e: '18:00', l: false }); $('#mtMsg').textContent = ''; saveMeet(); renderMeet();
+            meet.push({ z, s: '09:00', e: '18:00', l: false, b: [] }); $('#mtMsg').textContent = ''; saveMeet(); renderMeet();
         };
         $('#mtCopy').onclick = () => { if (lastText) Util.copyWithFeedback($('#mtCopy'), lastText, () => { $('#mtMsg').textContent = '無法自動複製，請手動選取上面的建議時間'; }); };
+        $('#mtClearBusy').onclick = () => { if (!confirm('要清除所有城市的忙碌時段嗎？城市與上班時段不受影響，清除後無法復原。')) return; meet.forEach(c => { c.b = []; }); saveMeet(); renderMeet(); };
         const tab = (meetOn) => { $('#paneConv').hidden = meetOn; $('#paneMeet').hidden = !meetOn; $('#tabConv').setAttribute('aria-pressed', !meetOn); $('#tabMeet').setAttribute('aria-pressed', meetOn); if (meetOn) renderMeet(); };
         $('#tabConv').onclick = () => tab(false); $('#tabMeet').onclick = () => tab(true);
         setNow();

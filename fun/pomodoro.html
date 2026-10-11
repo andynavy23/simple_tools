@@ -10,7 +10,7 @@
     <meta property="og:description" content="專注、休息自動輪替，記錄今天完成幾顆番茄，並統計近 7 / 30 天的專注時間。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/pomodoro.html" />
-    <meta name="st-keys" content="pomo_hist,pomo_stats,cfg-work,cfg-short,cfg-long">
+    <meta name="st-keys" content="pomo_hist,pomo_stats,cfg-work,cfg-short,cfg-long,pomo_tasks,pomo_cur,todo_items">
     <title>番茄鐘</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -94,8 +94,23 @@
             display: block;
         }
 
-        input {
+        input,
+        #task {
             width: 100%;
+        }
+
+        .trow {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--fill);
+            font-size: 14px;
+        }
+
+        .trow span:first-child {
+            min-width: 0;
+            overflow-wrap: anywhere;
         }
 
         .tabs {
@@ -153,6 +168,10 @@
                     <div id="label">專注</div>
                 </div>
             </div>
+            <div style="margin-bottom:12px">
+                <label for="task" class="muted" style="font-size:13px">正在做的待辦（完成的番茄會記在它身上）</label>
+                <select id="task"></select>
+            </div>
             <div class="btns">
                 <button class="primary" id="toggle">開始</button>
                 <button id="skip">跳過</button>
@@ -167,6 +186,9 @@
             <div class="chart" id="chart" aria-label="每日專注分鐘"></div>
             <div id="histStats"></div>
             <div class="row" style="margin-top:10px"><button class="sm" id="clearHist">清除專注紀錄</button></div>
+            <h2 style="margin-top:16px">待辦的番茄統計</h2>
+            <div id="taskStats"></div>
+            <div class="row" style="margin-top:10px"><button class="sm" id="clearTasks">清除待辦番茄統計</button></div>
         </div>
 
         <div class="card">
@@ -188,6 +210,7 @@
         </ul>
         <h3>怎麼用</h3>
         <ol>
+        <li>要記到某個待辦：先在「待辦清單」新增項目，回來在「正在做的待辦」選它；每完成一顆專注，番茄與分鐘就累計到該項目，待辦清單每項會顯示 🍅 數，也可依累計排序。</li>
         <li>下方可調整「專注」「休息」「長休息」分鐘數。</li>
         <li>按「開始」，倒數結束會響聲並自動切到休息。</li>
         <li>「暫停／繼續」可中斷，「跳過」直接換下一段，「重置」回到這段起點。</li>
@@ -200,6 +223,8 @@
         <li>以結束時間計算，分頁在背景也不會變慢；但<b>頁面需保持開啟</b>，手機鎖屏或關閉分頁可能中斷、也聽不到提示音。</li>
         <li>只有「專注」完整結束才會計入紀錄，跳過不算。紀錄只保留最近 400 天；「清除專注紀錄」會清空全部統計，無法復原。</li>
         <li>紀錄只存在這個瀏覽器，保留約 400 天。</li>
+        <li>待辦統計最多 500 個項目（滿了就不再為新項目累計，不會刪舊的）；待辦被刪除後，這裡的統計會在下次開啟本頁時自動清掉。「清除待辦番茄統計」只清各待辦的累計，不影響上面的每日紀錄與待辦本身，無法復原。</li>
+        <li>統計寫在這一頁自己的資料裡，待辦清單只讀取、不修改。</li>
         </ul>
     </template>
 
@@ -231,6 +256,31 @@
             if (!h || typeof h !== 'object' || Array.isArray(h)) return {};
             return Object.fromEntries(Object.entries(h).filter(([d, v]) => /^\d{4}-\d{2}-\d{2}$/.test(d) && v && Number.isFinite(v.count) && Number.isFinite(v.minutes) && v.count >= 0 && v.minutes >= 0));
         }
+
+        // 待辦番茄統計：{ 待辦id: { count, minutes } }；舊資料沒有這個鍵就是空物件，壞資料項目丟掉
+        const MAX_TASKS = 500, CAP = 1e6;
+        function cleanTasks(raw) {
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+            const out = [];
+            for (const [k, v] of Object.entries(raw)) {
+                if (out.length >= MAX_TASKS) break;
+                if (!k || k.length > 64 || !v || typeof v !== 'object') continue;
+                const c = Number(v.count), m = Number(v.minutes);
+                if (!Number.isFinite(c) || !Number.isFinite(m) || c < 0 || m < 0) continue;
+                out.push([k, { count: Math.min(Math.floor(c), CAP), minutes: Math.min(Math.floor(m), CAP) }]);
+            }
+            return Object.fromEntries(out);
+        }
+        // 待辦清單（todo_items）的有效項目
+        const todoList = (raw) => (Array.isArray(raw) ? raw : []).filter(i => i && typeof i.id === 'string' && i.id && typeof i.t === 'string' && i.t && typeof i.done === 'boolean');
+        // 只留還存在於待辦清單的項目（待辦被刪掉後，孤兒統計在這裡清掉）
+        const pruneTasks = (tasks, todos) => Object.fromEntries(Object.entries(tasks).filter(([id]) => todos.some(t => t.id === id)));
+        // 記一顆番茄；新項目超過上限就原樣回傳（拒絕新增）
+        function addPomo(tasks, id, mins) {
+            const t = tasks[id];
+            if (!t && Object.keys(tasks).length >= MAX_TASKS) return tasks;
+            return { ...tasks, [id]: { count: Math.min((t ? t.count : 0) + 1, CAP), minutes: Math.min((t ? t.minutes : 0) + mins, CAP) } };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -253,6 +303,21 @@
         if (old && /^\d{4}-\d{2}-\d{2}$/.test(old.date) && !hist[old.date] && old.count > 0) hist[old.date] = { count: old.count, minutes: old.minutes };
         const stats = () => hist[today()] || { count: 0, minutes: 0 };
         let histDays = 7;
+
+        // 待辦番茄統計：寫在自己的鍵 pomo_tasks（待辦頁只讀）；載入時以待辦 id 清單修剪孤兒
+        const readTodos = () => { const raw = store.get('todo_items', []); return { ok: Array.isArray(raw), list: todoList(raw) }; };
+        let tasks = cleanTasks(store.get('pomo_tasks', {}));
+        { const t = readTodos(); if (t.ok) { const p = pruneTasks(tasks, t.list); if (Object.keys(p).length !== Object.keys(tasks).length) { tasks = p; store.set('pomo_tasks', tasks); } } }
+        let cur = store.get('pomo_cur', '');
+        function renderTasks() {
+            const todos = readTodos().list, open = todos.filter(t => !t.done);
+            if (!open.some(t => t.id === cur)) cur = '';
+            const sel = $('#task');
+            sel.replaceChildren(new Option(open.length ? '（不指定）' : '（待辦清單沒有未完成項目）', ''), ...open.map(t => new Option(t.t + (tasks[t.id] ? `　🍅${tasks[t.id].count}` : ''), t.id)));
+            sel.value = cur;
+            const rows = todos.filter(t => tasks[t.id]).sort((a, b) => tasks[b.id].minutes - tasks[a.id].minutes).slice(0, 20);
+            $('#taskStats').replaceChildren(...(rows.length ? rows.map(t => { const r = document.createElement('div'); r.className = 'trow'; r.append(Object.assign(document.createElement('span'), { textContent: t.t }), Object.assign(document.createElement('span'), { textContent: `🍅 ${tasks[t.id].count} ・ ${tasks[t.id].minutes} 分鐘` })); return r; }) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '還沒有統計：在上方選一個待辦再開始專注。' })]));
+        }
 
         const minutes = (m) => {
             const v = parseInt($('#' + MODES[m].cfg).value, 10);
@@ -292,7 +357,8 @@
             running = false;
             clearInterval(timer);
             render();
-            renderHist();                  // 每秒更新的 render 不重畫圖表，只在換模式時更新
+            renderHist();
+            renderTasks();                 // 每秒更新的 render 不重畫圖表，只在換模式時更新
         }
 
         function finish() {
@@ -302,6 +368,7 @@
                 hist[today()] = { count: t.count + 1, minutes: t.minutes + minutes('work') };
                 hist = trim(hist, 400, today(), Util.day.between);
                 store.set('pomo_hist', hist);
+                if (cur && readTodos().list.some(t => t.id === cur)) { tasks = addPomo(tasks, cur, minutes('work')); store.set('pomo_tasks', tasks); }
                 round++;
                 setMode(round % CYCLE === 0 ? 'long' : 'short');
             } else {
@@ -329,6 +396,8 @@
 
         document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { histDays = +b.dataset.n; document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-pressed', x === b)); renderHist(); }; });
         $('#toggle').onclick = toggle;
+        $('#task').onchange = () => { cur = $('#task').value; store.set('pomo_cur', cur); };
+        $('#clearTasks').onclick = () => { if (!confirm('清除所有待辦的番茄統計？每日紀錄與待辦清單不受影響，無法復原。')) return; tasks = {}; store.set('pomo_tasks', tasks); renderTasks(); };
         // 一併移除舊版的 pomo_stats，否則下次載入會被併回歷史
         $('#clearHist').onclick = () => { if (!confirm('清除所有專注紀錄（圖表、連續天數、今日顆數）？無法復原。')) return; hist = {}; store.set('pomo_hist', hist); try { localStorage.removeItem('pomo_stats'); } catch (e) { } render(); renderHist(); };
         $('#skip').onclick = () => setMode(mode === 'work' ? 'short' : 'work');

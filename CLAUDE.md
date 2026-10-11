@@ -32,6 +32,7 @@
 - **本機資料一定要能備份**：頁面只要讀寫 localStorage，就必須在 `<head>` 宣告 `<meta name="st-keys" content="鍵1,鍵2,前綴_*">`（動態鍵用 `*` 結尾的前綴）；chrome.js 會因此在右上角出現「💾」，提供匯出 / 載入 JSON 備份（首頁是 `content="*"` 全站備份）。新增或改名鍵時同步更新這行（`tools.test.js` 會靜態檢查、`e2e_keys.mjs` 會執行期檢查）。讀取資料時一律驗證並容錯，因為還原會把舊版資料寫回來。
 - **連線遊戲必須有單機模式**（電腦玩家 / 練習模式），不連線也能玩。
 - 首頁（`index.html`）由卡片 `<a class="card" data-cat data-topic>` 自動產生分類磚 / 搜尋 / 最愛 / 最近使用；新工具要填 `data-topic`（見檔內註解）。
+- 新卡片還要填：`data-kw`（4–10 個詞、空白分隔，寫別名 / 英文名 / 用途詞，不重複標題與說明已有的詞）、`data-added="YYYY-MM-DD"`（上線當天，之後不改；30 天內顯示「新」並進「最近新增」）、`data-store="1"`（`TOOLS.md` 第 3 欄有 localStorage 鍵才加）。搜尋、篩選、新標籤、主題跳轉全由這些屬性自動產生；`tests/new-f1.test.js` 會檢查格式。首頁是 PWA（`sw.js`、`manifest.webmanifest`）：改了 `sw.js` 要同步 `index.html` 的 `SW_CACHE` 版本常數。
 
 ## 資料管理規則（每個會存資料的工具都要遵守；新增與改版都要逐條檢查）
 

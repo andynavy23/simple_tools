@@ -10,7 +10,7 @@
     <meta property="og:description" content="依到期日分組的極簡待辦清單。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/todo.html" />
-    <meta name="st-keys" content="todo_items">
+    <meta name="st-keys" content="todo_items,pomo_tasks">
     <title>待辦清單</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -74,6 +74,12 @@
         .it.done .t {
             text-decoration: line-through;
             color: var(--muted);
+        }
+
+        .it .pm {
+            color: var(--muted);
+            font-size: 13px;
+            white-space: nowrap;
         }
 
         .it .d {
@@ -187,6 +193,7 @@
         <div class="row vtabs" style="margin-bottom:12px">
             <button id="vList" aria-pressed="true">清單</button>
             <button id="vCal" aria-pressed="false">月曆</button>
+            <button id="sortPomo" aria-pressed="false">依番茄排序</button>
         </div>
 
         <div id="calView" hidden></div>
@@ -208,6 +215,7 @@
         <li>輸入「要做什麼？」，需要的話選「到期日」，按「新增」或 <kbd>Enter</kbd>。</li>
         <li>勾選左側方塊表示完成，會移到「已完成」。</li>
         <li>點文字可修改內容；▲▼ 調整同一組內的順序，✕ 刪除。</li>
+        <li>在「番茄鐘」頁選好「正在做的待辦」並完成專注後，這裡每項會顯示 🍅 累計番茄數與專注分鐘；按「依番茄排序」讓每一組內由多到少排列（排序時先不能 ▲▼ 調整，再按一次還原）。</li>
         <li>「清除已完成」一次刪除所有已完成項目（會先確認）。最多 500 項。</li>
         <li>按上方「月曆」：每天的格子顯示未完成的待辦數（逾期是紅色，全部完成顯示 ✓）；「‹ ›」換月份、「今天」回到本月。</li>
         <li>點某一天看當天待辦，可勾選、刪除，也能在下方輸入框直接新增（到期日就是那一天）。按「清單」切回原本的分組畫面。</li>
@@ -217,6 +225,7 @@
         <h3>小提醒</h3>
         <ul>
         <li>每項最多 100 字；到期日可不填，沒有到期日的待辦只會在「清單」的「沒有日期」裡，不會出現在月曆。</li>
+        <li>番茄數來自番茄鐘自己的資料（這頁只讀取、不修改）；刪除待辦後，它的番茄統計會在下次開啟番茄鐘時自動清掉；想清空全部統計請到番茄鐘按「清除待辦番茄統計」。</li>
         <li>清單與月曆用同一份資料，月曆不另外儲存東西，也記不住你上次看哪個視圖。</li>
         <li>資料只存在這個瀏覽器，不會上傳，也不會主動通知你；資料壞掉的項目載入時會被略過。</li>
         </ul>
@@ -254,6 +263,14 @@
         const validItem = (i) => !!i && typeof i.id === 'string' && typeof i.t === 'string' && i.t.length >= 1 && i.t.length <= 100 && (i.due === '' || /^\d{4}-\d{2}-\d{2}$/.test(i.due)) && typeof i.done === 'boolean';
         const dueLabel = (due, today, between) => { if (!due) return ''; const d = between(today, due); return d === 0 ? '今天' : d === 1 ? '明天' : d === -1 ? '昨天' : d < 0 ? `逾期 ${-d} 天` : `${d} 天後`; };
         const MAX_ITEMS = 500;
+        // 番茄鐘寫入的 pomo_tasks：{ 待辦id: { count, minutes } }；缺欄位 / 壞資料一律當 0
+        function pomoOf(tasks, id) {
+            const v = tasks && typeof tasks === 'object' && !Array.isArray(tasks) && Object.prototype.hasOwnProperty.call(tasks, id) ? tasks[id] : null;
+            const c = v && Number(v.count), m = v && Number(v.minutes);
+            return { count: Number.isFinite(c) && c > 0 ? Math.floor(c) : 0, minutes: Number.isFinite(m) && m > 0 ? Math.floor(m) : 0 };
+        }
+        // 依累計專注分鐘（再依番茄數）由多到少，穩定排序；不改原陣列
+        const sortByPomo = (list, tasks) => list.map((it, k) => [it, k, pomoOf(tasks, it.id)]).sort((a, b) => b[2].minutes - a[2].minutes || b[2].count - a[2].count || a[1] - b[1]).map(x => x[0]);
 
         // 月曆：某個月（YYYY-MM）每天的待辦數；lead = 該月 1 號前面要空幾格（週日起算）
         // n = 未完成、done = 已完成，late = 還有未完成且日期早於 today（逾期）；沒有日期的待辦不計
@@ -276,8 +293,10 @@
         const save = () => { $('#sub').textContent = SUB; store.set('todo_items', items); };
         const today = () => day.today();
 
+        let byPomo = false;
         function render() {
-            const gs = group(items, today(), day.between);
+            const tasks = store.get('pomo_tasks', {});
+            const gs = group(items, today(), day.between).map(g => byPomo ? { ...g, items: sortByPomo(g.items, tasks) } : g);
             $('#lists').replaceChildren(...(gs.length ? gs.map(g => {
                 const card = document.createElement('div'); card.className = 'card grp';
                 const h = document.createElement('h2'); h.className = g.key === 'late' ? 'late' : ''; h.append(g.label, Object.assign(document.createElement('small'), { textContent: g.items.length + ' 項' }));
@@ -287,11 +306,13 @@
                     cb.onchange = () => { it.done = cb.checked; save(); render(); };
                     const t = Object.assign(document.createElement('span'), { className: 't', textContent: it.t, title: '點一下修改' });
                     t.onclick = () => { const v = prompt('修改待辦事項', it.t); if (v !== null && v.trim()) { it.t = v.trim().slice(0, 100); save(); render(); } };
+                    const pt = pomoOf(tasks, it.id);
+                    const pm = Object.assign(document.createElement('span'), { className: 'pm', textContent: pt.count ? `🍅${pt.count}・${pt.minutes}分` : '' });
                     const d = Object.assign(document.createElement('span'), { className: 'd', textContent: it.done ? '' : dueLabel(it.due, today(), day.between) });
                     const mk = (txt, label, fn) => { const b = Object.assign(document.createElement('button'), { className: 'sm', textContent: txt, onclick: fn }); b.setAttribute('aria-label', label); return b; };
                     const up = mk('▲', '上移', () => { items = move(items, it.id, -1, today(), day.between); save(); render(); }), dn = mk('▼', '下移', () => { items = move(items, it.id, 1, today(), day.between); save(); render(); });
                     const del = mk('✕', '刪除', () => { items = items.filter(x => x.id !== it.id); save(); render(); });
-                    r.append(cb, t, d, ...(it.done ? [] : [up, dn]), del);
+                    r.append(cb, t, pm, d, ...(it.done || byPomo ? [] : [up, dn]), del);
                     return r;
                 }));
                 return card;
@@ -357,11 +378,13 @@
         }
         function setView(v) {
             view = v; $('#vList').setAttribute('aria-pressed', v === 'list'); $('#vCal').setAttribute('aria-pressed', v === 'cal');
-            $('#lists').hidden = v === 'cal'; $('#calView').hidden = v !== 'cal';
+            $('#sortPomo').hidden = v === 'cal'; $('#lists').hidden = v === 'cal'; $('#calView').hidden = v !== 'cal';
             if (v === 'cal' && !sel) sel = today();
             render();
         }
         $('#vList').onclick = () => setView('list'); $('#vCal').onclick = () => setView('cal');
+        $('#sortPomo').onclick = () => { byPomo = !byPomo; $('#sortPomo').setAttribute('aria-pressed', byPomo); render(); };
+        addEventListener('storage', (e) => { if (e.key === 'pomo_tasks') render(); });
         $('#add').onclick = add;
         $('#text').onkeydown = (e) => { if (e.key === 'Enter' && !e.isComposing) add(); };
         $('#clearDone').onclick = () => { if (!confirm(`清除 ${items.filter(i => i.done).length} 項已完成的待辦？無法復原。`)) return; items = items.filter(i => !i.done); save(); render(); };

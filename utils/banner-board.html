@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="迷你看板：把文字、時鐘、倒數或跑馬燈用大字全螢幕顯示，適合活動投影或拿手機當看板。">
+    <meta property="og:title" content="迷你看板" />
+    <meta property="og:description" content="全螢幕大字：文字、時鐘、倒數、跑馬燈。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/banner-board.html" />
+    <meta name="st-keys" content="banner_opts">
+    <title>迷你看板</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root { --wrap-w: 720px; }
+        label { font-weight: 600; display: block; margin: 10px 0 6px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .row > * { flex: 1; min-width: 120px; }
+        .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+        .tabs button { flex: 1 1 22%; padding-left: 4px; padding-right: 4px; }
+        .chk { display: flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 400; margin: 0; }
+        .chk input { width: 22px; height: 22px; flex: none; }
+        .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+        input[type=color] { min-height: 44px; padding: 2px; }
+        input[type=range] { width: 100%; min-height: 44px; }
+
+        .board { --fg: var(--text); --bg2: var(--card); position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg2); color: var(--fg); border-radius: var(--radius); border: 1px solid var(--line); cursor: pointer; user-select: none; -webkit-user-select: none; }
+        .board.full { position: fixed; inset: 0; z-index: 80; width: auto; aspect-ratio: auto; border-radius: 0; border: 0; height: 100vh; height: 100dvh; }
+        .txt { white-space: pre; text-align: center; line-height: 1.15; font-weight: 700; font-variant-numeric: tabular-nums; max-width: none; }
+        .txt2 { white-space: pre; text-align: center; line-height: 1.15; opacity: .85; }
+        .txt.mq { position: absolute; left: 0; top: 50%; animation: mq var(--dur, 10s) linear infinite; will-change: transform; }
+        @keyframes mq { from { transform: translate3d(var(--from, 100vw), -50%, 0); } to { transform: translate3d(var(--to, -100%), -50%, 0); } }
+        .blink { animation: blink 1s steps(1, end) infinite; }
+        @keyframes blink { 50% { opacity: .12; } }
+        .ctl { position: absolute; left: 0; right: 0; bottom: 0; padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); display: none; gap: 8px; align-items: center; flex-wrap: wrap; background: var(--card); color: var(--text); font-size: 14px; cursor: default; }
+        .board.full .ctl { display: flex; }
+        .board.full.hidectl .ctl { display: none; }
+        .ctl span { flex: 1 1 160px; }
+        @media (prefers-reduced-motion: reduce) { .blink { animation: none; } }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>迷你看板</h1>
+        <p class="sub">文字、時鐘、倒數、跑馬燈，大字全螢幕顯示。</p>
+
+        <div class="card">
+            <div class="board" id="board"><div class="txt" id="txt"></div><div class="txt2" id="txt2"></div>
+                <div class="ctl" id="ctl"><button id="exit" class="primary">退出看板</button><button id="fs">全螢幕</button><span id="fsNote"></span></div>
+            </div>
+            <div class="row" style="margin-top:10px"><button class="primary" id="enter">進入看板</button><button id="reset">重置設定</button></div>
+            <p class="note" id="enterNote">進入看板後，點一下畫面可顯示 / 隱藏控制列。</p>
+        </div>
+
+        <div class="card">
+            <div class="tabs" id="tabs"><button data-m="text">文字</button><button data-m="clock">時鐘</button><button data-m="countdown">倒數</button><button data-m="marquee">跑馬燈</button></div>
+
+            <div id="fText"><label for="text">內容（最多 200 字，可換行）</label><textarea id="text" rows="3" maxlength="200" aria-label="內容"></textarea></div>
+            <div id="fClock"><label class="chk"><input type="checkbox" id="h24">24 小時制</label><label class="chk"><input type="checkbox" id="secs">顯示秒</label><label class="chk"><input type="checkbox" id="date">顯示日期</label></div>
+            <div id="fCd">
+                <label for="cdKind">倒數方式</label>
+                <select id="cdKind" aria-label="倒數方式"><option value="min">N 分鐘</option><option value="at">到指定日期時間</option></select>
+                <div id="cdMinBox"><label for="cdMin">分鐘數（1–10080）</label><input id="cdMin" type="number" inputmode="numeric" min="1" max="10080" aria-label="分鐘數"></div>
+                <div id="cdAtBox"><label for="cdAt">目標日期時間</label><input id="cdAt" type="datetime-local" aria-label="目標日期時間"></div>
+                <div class="row" style="margin-top:8px"><button id="cdRestart">重新開始倒數</button></div>
+            </div>
+            <div id="fMq"><label for="speed">速度 <b id="speedV"></b></label><input id="speed" type="range" min="1" max="10" step="1" aria-label="跑馬燈速度"></div>
+
+            <h2 style="margin-top:14px">顏色</h2>
+            <div class="chips" id="presets"></div>
+            <div class="row"><div><label for="fg">字色</label><input id="fg" type="color" aria-label="字色"></div><div><label for="bg">底色</label><input id="bg" type="color" aria-label="底色"></div></div>
+            <label class="chk"><input type="checkbox" id="blink">文字閃爍</label>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>把一段文字、現在時間、倒數計時或跑馬燈，用盡量大的字鋪滿整個螢幕。字級會依螢幕大小自動算，手機橫放直放都能填滿。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>活動或會議投影：大字倒數「距離開始還有…」。</li>
+        <li>把舊手機或平板立著當時鐘、公告看板。</li>
+        <li>攤位、教室放一句歡迎詞或規則，用跑馬燈循環播放。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>在上方選「文字 / 時鐘 / 倒數 / 跑馬燈」，填對應設定，預覽會即時變化。</li>
+        <li>時鐘可選 24 小時制、顯示秒、顯示日期。</li>
+        <li>倒數可選「N 分鐘」或「到指定日期時間」；時間到會閃爍並嗶聲。按「重新開始倒數」可從頭計。</li>
+        <li>顏色有「主題、黑底黃字、白底黑字、綠底白字…」等高對比預設，也可自選字色與底色。</li>
+        <li>按「進入看板」滿版顯示；點一下畫面顯示 / 隱藏控制列；「退出看板」或 <kbd>Esc</kbd> 離開。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">倒數 → N 分鐘 → 5 → 進入看板
+顯示 00:05:00，每秒減一，到 00:00:00 時閃爍並嗶聲。
+文字「歡迎光臨」+ 黑底黃字 → 整個螢幕只有一行大黃字。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>iPhone Safari 不支援一般元素的真正全螢幕，會改成「隱藏控制列的看板模式」；想完全沒有網址列，可用分享選單的「加入主畫面」再開啟。</li>
+        <li>看板開著時會要求螢幕不要自動關閉（部分瀏覽器不支援，會自動略過）。</li>
+        <li>倒數嗶聲需要你先點過畫面才會響（瀏覽器限制）。進入看板時，「N 分鐘」倒數會重新開始。</li>
+        <li>文字想放更大，請用換行分成多行；單行太長會縮小。</li>
+        <li>本頁只記住上次的設定（存在這個瀏覽器）；「重置設定」會把它清掉並回到預設，無法復原。設定壞掉時會自動回到預設。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, beep } = Util;
+
+        // --- pure ---
+        const MODES = ['text', 'clock', 'countdown', 'marquee'];
+        const PRESETS = [['主題', '', ''], ['黑底黃字', '#000000', '#ffd400'], ['白底黑字', '#ffffff', '#000000'], ['綠底白字', '#0a6b2d', '#ffffff'], ['黑底白字', '#000000', '#ffffff'], ['藍底白字', '#0a3d91', '#ffffff']];
+        const DEFAULTS = { mode: 'text', text: '歡迎光臨', h24: true, secs: true, date: false, cdKind: 'min', cdAt: '', cdMin: 5, speed: 5, fg: '', bg: '', blink: false };
+        const hex = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : '';
+        function normOpts(o) {
+            o = o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+            const n = (v, lo, hi, d) => { const x = Math.round(Number(v)); return v === null || v === '' || !Number.isFinite(x) ? d : Math.min(hi, Math.max(lo, x)); };
+            const fg = hex(o.fg), bg = hex(o.bg), both = fg && bg;
+            return {
+                mode: MODES.includes(o.mode) ? o.mode : DEFAULTS.mode,
+                text: typeof o.text === 'string' ? o.text.slice(0, 200) : DEFAULTS.text,
+                h24: o.h24 !== false, secs: o.secs !== false, date: o.date === true,
+                cdKind: o.cdKind === 'at' ? 'at' : 'min',
+                cdAt: typeof o.cdAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(o.cdAt) ? o.cdAt : '',
+                cdMin: n(o.cdMin, 1, 10080, DEFAULTS.cdMin), speed: n(o.speed, 1, 10, DEFAULTS.speed),
+                fg: both ? fg : '', bg: both ? bg : '', blink: o.blink === true,
+            };
+        }
+        // 字寬估計（單位 em）：全形 / 中日韓 1，數字 0.62，標點空白 0.34，大寫 0.72，其餘 0.6（略偏大，寧可小不要溢出）
+        const charUnit = (c) => /[ᄀ-ᇿ⺀-￯]/.test(c) ? 1 : /\d/.test(c) ? 0.62 : /[:.,;!' ]/.test(c) ? 0.34 : /[A-Z]/.test(c) ? 0.72 : 0.6;
+        const lineUnits = (s) => [...s].reduce((a, c) => a + charUnit(c), 0);
+        // 在 W×H 的框內讓 lines 盡量大的字級（px）；extra 為額外的行高單位（如日期列）
+        function fitFont(W, H, lines, { extra = 0, pad = 0.06, lineH = 1.15, min = 10, max = 2000 } = {}) {
+            const ls = (Array.isArray(lines) ? lines : [lines]).map(String);
+            const wu = Math.max(0.1, ...ls.map(lineUnits)), hu = ls.length * lineH + extra;
+            const s = Math.min(W * (1 - 2 * pad) / wu, H * (1 - 2 * pad) / hu);
+            return Math.round(Math.min(max, Math.max(min, Number.isFinite(s) ? s : min)) * 10) / 10;
+        }
+        const P2 = (n) => String(n).padStart(2, '0');
+        function fmtClock(d, h24 = true, secs = true) {
+            const h = d.getHours(), s = secs ? ':' + P2(d.getSeconds()) : '';
+            if (h24) return `${P2(h)}:${P2(d.getMinutes())}${s}`;
+            return `${h < 12 ? '上午' : '下午'} ${h % 12 || 12}:${P2(d.getMinutes())}${s}`;
+        }
+        const fmtDate = (d) => `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 星期${'日一二三四五六'[d.getDay()]}`;
+        // 剩餘毫秒 → HH:MM:SS（超過一天為「N天 HH:MM:SS」）；已到或無效為 00:00:00
+        function fmtCountdown(ms) {
+            if (!Number.isFinite(ms) || ms <= 0) return '00:00:00';
+            const t = Math.ceil(ms / 1000), d = Math.floor(t / 86400), r = t % 86400;
+            return `${d ? d + '天 ' : ''}${P2(Math.floor(r / 3600))}:${P2(Math.floor(r % 3600 / 60))}:${P2(r % 60)}`;
+        }
+        // 倒數結束時間（毫秒）；'at' 為本地時間字串，無效回 null；'min' 從 startMs 起算
+        function cdEnd(o, startMs) {
+            if (o.cdKind === 'at') {
+                const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(o.cdAt || '');
+                if (!m) return null;
+                const t = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+                return Number.isFinite(t) ? t : null;
+            }
+            return startMs + o.cdMin * 60000;
+        }
+        // 跑馬燈：從右側框外移到左側框外；速度 1–10 對應每秒走 5%–50% 框寬
+        function marqueeSpec(textW, boxW, speed) {
+            const pps = Math.max(1, boxW) * 0.05 * Math.min(10, Math.max(1, speed));
+            return { from: boxW, to: -textW, dur: Math.round((boxW + textW) / pps * 100) / 100 };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const board = $('#board'), txt = $('#txt'), txt2 = $('#txt2');
+        let o = normOpts(store.get('banner_opts', null));
+        const save = () => store.set('banner_opts', o);
+        let endMs = null, finished = false, lastKey = '', wake = null;
+
+        function restartCd() { endMs = cdEnd(o, Date.now()); finished = false; lastKey = ''; render(); }
+
+        function render() {
+            const W = board.clientWidth, H = board.clientHeight; if (!W || !H) return;
+            let main = '', sub = '', blink = o.blink;
+            if (o.mode === 'text') main = o.text || ' ';
+            else if (o.mode === 'marquee') main = (o.text || ' ').replace(/\s*\n\s*/g, '  ');
+            else if (o.mode === 'clock') { const d = new Date(); main = fmtClock(d, o.h24, o.secs); if (o.date) sub = fmtDate(d); }
+            else {
+                const left = endMs === null ? NaN : endMs - Date.now();
+                main = endMs === null ? '--:--:--' : fmtCountdown(left);
+                if (endMs !== null && left <= 0) { blink = true; if (!finished) { finished = true; beep(); } }
+            }
+            txt.textContent = main; txt2.textContent = sub; txt2.hidden = !sub;
+            txt.classList.toggle('blink', blink); txt.classList.toggle('mq', o.mode === 'marquee');
+            const key = [o.mode, o.mode === 'text' || o.mode === 'marquee' ? main : main.length, sub ? 1 : 0, W, H, o.speed].join('|');
+            if (key === lastKey) return;
+            lastKey = key;
+            let size = o.mode === 'marquee' ? H * 0.5 : fitFont(W, H, main.split('\n'), { extra: sub ? 0.3 * 1.15 : 0 });
+            txt.style.fontSize = size + 'px'; txt2.style.fontSize = Math.round(size * 0.3 * 10) / 10 + 'px';
+            if (o.mode !== 'marquee') {   // 估算偏差的修正：實際量到太寬或太高就按比例縮小一次
+                const k = Math.min(1, W * 0.94 / (txt.offsetWidth || 1), H * 0.94 / ((txt.offsetHeight + (sub ? txt2.offsetHeight : 0)) || 1));
+                if (k < 1) { size = Math.floor(size * k * 10) / 10; txt.style.fontSize = size + 'px'; txt2.style.fontSize = Math.round(size * 0.3 * 10) / 10 + 'px'; }
+            } else {
+                const s = marqueeSpec(txt.offsetWidth, W, o.speed);
+                txt.style.setProperty('--from', s.from + 'px'); txt.style.setProperty('--to', s.to + 'px'); txt.style.setProperty('--dur', s.dur + 's');
+            }
+        }
+
+        function applyColors() { board.style.setProperty('--fg', o.fg || 'var(--text)'); board.style.setProperty('--bg2', o.bg || 'var(--card)'); }
+        function sync() {
+            [...$('#tabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.m === o.mode));
+            $('#fText').hidden = !(o.mode === 'text' || o.mode === 'marquee'); $('#fClock').hidden = o.mode !== 'clock'; $('#fCd').hidden = o.mode !== 'countdown'; $('#fMq').hidden = o.mode !== 'marquee';
+            $('#cdMinBox').hidden = o.cdKind !== 'min'; $('#cdAtBox').hidden = o.cdKind !== 'at';
+            $('#text').value = o.text; $('#h24').checked = o.h24; $('#secs').checked = o.secs; $('#date').checked = o.date; $('#blink').checked = o.blink;
+            $('#cdKind').value = o.cdKind; $('#cdMin').value = o.cdMin; $('#cdAt').value = o.cdAt; $('#speed').value = o.speed; $('#speedV').textContent = o.speed;
+            $('#fg').value = o.fg || '#000000'; $('#bg').value = o.bg || '#ffffff';
+            applyColors(); lastKey = ''; render();
+        }
+        const change = (fn, resetCd) => { fn(); o = normOpts(o); save(); if (resetCd) { endMs = cdEnd(o, Date.now()); finished = false; } sync(); };
+
+        $('#tabs').onclick = (e) => { const m = e.target.dataset.m; if (m) change(() => { o.mode = m; }, m === 'countdown'); };
+        $('#text').oninput = () => { o.text = $('#text').value.slice(0, 200); save(); lastKey = ''; render(); };
+        for (const k of ['h24', 'secs', 'date', 'blink']) $('#' + k).onchange = () => change(() => { o[k] = $('#' + k).checked; });
+        $('#cdKind').onchange = () => change(() => { o.cdKind = $('#cdKind').value; }, true);
+        $('#cdMin').onchange = () => change(() => { o.cdMin = $('#cdMin').value; }, true);
+        $('#cdAt').onchange = () => change(() => { o.cdAt = $('#cdAt').value; }, true);
+        $('#cdRestart').onclick = restartCd;
+        $('#speed').oninput = () => change(() => { o.speed = $('#speed').value; });
+        $('#fg').oninput = $('#bg').oninput = () => change(() => { o.fg = $('#fg').value; o.bg = $('#bg').value; });
+        $('#presets').replaceChildren(...PRESETS.map(p => { const b = document.createElement('button'); b.className = 'sm'; b.textContent = p[0]; b.onclick = () => change(() => { o.bg = p[1]; o.fg = p[2]; }); return b; }));
+        $('#reset').onclick = () => {
+            if (!confirm('要把看板設定重置為預設嗎？已記住的文字與顏色會被清除，無法復原。')) return;
+            try { localStorage.removeItem('banner_opts'); } catch (e) { }
+            o = normOpts(null); endMs = cdEnd(o, Date.now()); finished = false; sync();
+        };
+
+        // 看板模式（fixed 覆蓋層，不動 body）
+        const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+        async function lock() { try { if (navigator.wakeLock && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch (e) { wake = null; } }
+        function enter() {
+            board.classList.add('full'); board.classList.remove('hidectl'); lastKey = '';
+            if (o.mode === 'countdown' && o.cdKind === 'min') { endMs = cdEnd(o, Date.now()); finished = false; }
+            const req = board.requestFullscreen || board.webkitRequestFullscreen;
+            $('#fs').hidden = !req; $('#fsNote').textContent = req ? '點一下畫面可隱藏控制列。' : '此裝置不支援全螢幕，已切為看板模式（點一下畫面可隱藏控制列）；可用分享選單的「加入主畫面」。';
+            if (req) { try { Promise.resolve(req.call(board)).catch(() => { }); } catch (e) { } }
+            lock(); render();
+        }
+        function exit() {
+            board.classList.remove('full', 'hidectl'); lastKey = '';
+            try { if (fsEl()) (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch (e) { }
+            try { if (wake) wake.release(); } catch (e) { } wake = null; render();
+        }
+        $('#enter').onclick = enter; $('#exit').onclick = (e) => { e.stopPropagation(); exit(); };
+        $('#fs').onclick = (e) => { e.stopPropagation(); const req = board.requestFullscreen || board.webkitRequestFullscreen; if (fsEl()) (document.exitFullscreen || document.webkitExitFullscreen).call(document); else if (req) Promise.resolve(req.call(board)).catch(() => { }); };
+        $('#ctl').onclick = (e) => e.stopPropagation();
+        board.onclick = () => { if (board.classList.contains('full')) board.classList.toggle('hidectl'); };
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && board.classList.contains('full')) exit(); });
+        const fsChange = () => { if (!fsEl() && board.classList.contains('full') && board.dataset.fs) exit(); board.dataset.fs = fsEl() ? '1' : ''; };
+        document.addEventListener('fullscreenchange', fsChange); document.addEventListener('webkitfullscreenchange', fsChange);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden && board.classList.contains('full')) lock(); });
+        if (window.ResizeObserver) new ResizeObserver(() => { lastKey = ''; render(); }).observe(board); else addEventListener('resize', () => { lastKey = ''; render(); });
+
+        endMs = cdEnd(o, Date.now());
+        sync(); setInterval(render, 250);
+    </script>
+</body>
+
+</html>

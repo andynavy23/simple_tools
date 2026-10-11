@@ -5,12 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="UUID / 隨機資料產生：UUID v4、隨機整數與日期、測試用的假姓名與電話，可批次產生並複製。">
+    <meta name="description" content="UUID / 隨機資料產生：UUID、隨機整數與日期、假姓名電話，另可自訂欄位產生假資料表格，輸出 CSV / JSON / SQL INSERT / Markdown。">
     <meta property="og:title" content="UUID / 隨機資料產生" />
     <meta property="og:description" content="批次產生 UUID 與測試資料。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/random-data.html" />
-    <meta name="st-keys" content="rd_kind">
+    <meta name="st-keys" content="rd_kind,rd_cols">
     <title>UUID / 隨機資料產生</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -41,6 +41,63 @@
         input[type=number] {
             width: 90px;
         }
+
+        h2.tt {
+            margin: 0 0 8px;
+        }
+
+        .tcol {
+            display: grid;
+            gap: 8px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            padding: 10px;
+            margin-bottom: 8px;
+        }
+
+        .tcol .r {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .tcol .r>div {
+            flex: 1 1 110px;
+            min-width: 0;
+        }
+
+        .tcol label,
+        .tgrid label {
+            display: block;
+            color: var(--muted);
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+
+        .tcol input,
+        .tcol select,
+        .tgrid input,
+        .tgrid select {
+            width: 100%;
+        }
+
+        .tcol .ctl {
+            display: flex;
+            gap: 8px;
+        }
+
+        .tcol .ctl button {
+            min-width: 44px;
+            min-height: 44px;
+            padding: 6px 12px;
+        }
+
+        .tgrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
     </style>
 </head>
 
@@ -69,6 +126,25 @@
             <div class="row"><button class="primary" id="gen">產生</button><button id="copy">複製全部</button><span class="muted" id="info"></span></div>
             <textarea id="out" readonly aria-label="結果" spellcheck="false"></textarea>
         </div>
+
+        <div class="card" id="tblcard">
+            <h2 class="tt">假資料表格</h2>
+            <p class="muted" style="margin:0 0 10px">自訂欄位，一次產生整張測試資料表。姓名、電話、身分證、統編都是隨機組合的假資料。</p>
+            <div id="tcols"></div>
+            <div class="row"><select id="taddType" aria-label="新增欄位的型別"></select><button id="taddCol" type="button">＋ 新增欄位</button><span class="muted" id="tcount"></span></div>
+            <div class="tgrid">
+                <div><label for="tn">列數（1–10000）</label><input type="number" id="tn" min="1" max="10000" value="10" inputmode="numeric"></div>
+                <div><label for="tfmt">輸出格式</label><select id="tfmt"><option value="csv">CSV</option><option value="json">JSON</option><option value="jsonl">JSON Lines</option><option value="sql">SQL INSERT</option><option value="md">Markdown 表格</option></select></div>
+                <div><label for="tseed">種子（空白 = 每次不同）</label><input type="text" id="tseed" spellcheck="false" placeholder="例如 demo1"></div>
+            </div>
+            <div class="tgrid" id="tsqlopt" hidden>
+                <div><label for="ttable">表名</label><input type="text" id="ttable" maxlength="60" spellcheck="false" value="users"></div>
+                <div><label for="tdialect">資料庫</label><select id="tdialect"><option value="mysql">MySQL（反引號）</option><option value="pg">PostgreSQL（雙引號）</option><option value="sqlite">SQLite（雙引號）</option></select></div>
+            </div>
+            <div class="row"><button class="primary" id="tgen" type="button">產生表格</button><button id="tcopy" type="button">複製全部</button><button id="tdl" type="button">下載檔案</button><button id="treset" type="button">重設欄位</button></div>
+            <div class="muted" id="tinfo" style="margin-bottom:8px"></div>
+            <textarea id="tout" readonly aria-label="假資料表格結果" spellcheck="false"></textarea>
+        </div>
     </div>
 
     <template id="help">
@@ -79,6 +155,7 @@
         <li>開發時需要一堆唯一 ID（UUID v4）當資料庫主鍵或測試資料；想要能依時間排序的 ID 就用 UUID v7 或 ULID。</li>
         <li>做表單、報表的假資料，不想用真人姓名電話。</li>
         <li>臨時抽一個範圍內的數字或日期。</li>
+        <li>需要一整張假資料表（姓名、手機、信箱、地址、日期…）來測試報表、匯入或資料庫，用下方的「假資料表格」。</li>
         </ul>
         <h3>怎麼用</h3>
         <ol>
@@ -87,12 +164,21 @@
         <li>按「產生」，結果一行一筆列在下面的框裡。</li>
         <li>按「複製全部」把整個結果帶走。</li>
         </ol>
+        <h3>假資料表格怎麼用</h3>
+        <ol>
+        <li>在「假資料表格」卡片設定欄位：每欄有名稱與型別，部分型別有選項（整數 / 小數的範圍、日期起迄、列舉的選項、流水號起始值、文字語言）。用 ↑ ↓ 調順序、✕ 刪除，下拉選單加新欄位（最多 30 欄）。</li>
+        <li>填列數（1 到 10000）與輸出格式：CSV、JSON、JSON Lines、SQL INSERT、Markdown 表格。選 SQL 時可填表名並選 MySQL / PostgreSQL / SQLite，字串與識別字會依方言跳脫。</li>
+        <li>要重現同一份資料就填「種子」：同欄位、同列數、同種子一定得到完全相同的結果；空白則每次不同。</li>
+        <li>按「產生表格」，再用「複製全部」或「下載檔案」帶走；「重設欄位」回到預設欄位。</li>
+        </ol>
         <h3>範例</h3>
         <div class="eg">種類選「UUID v4」、數量 3、按「產生」
         → 出現 3 行，格式像 3f2b8c1e-9a4d-4e7b-8c21-5d0a6b7e1f90
         （第三段開頭固定是 4，代表版本 4）
 種類選「UUID v7」、時間基準「指定時間」2022-02-23 03:22:22（裝置為臺北時區）、數量 3
-→ 3 行都以 017f22e2-79b0-7 開頭（同一毫秒），第三段開頭固定是 7，整批由小到大排列</div>
+→ 3 行都以 017f22e2-79b0-7 開頭（同一毫秒），第三段開頭固定是 7，整批由小到大排列
+假資料表格：預設欄位（id / name / phone / email / birthday）、列數 3、種子填 demo、格式 SQL INSERT、表名 users
+→ 得到 INSERT INTO `users` (`id`, `name`, `phone`, `email`, `birthday`) VALUES 加 3 列；再按一次結果完全相同</div>
         <h3>小提醒</h3>
         <ul>
         <li>使用瀏覽器的安全亂數，全部在本機產生，不會上傳。</li>
@@ -100,6 +186,9 @@
         <li>隨機日期的起日不能晚於迄日。</li>
         <li>UUID v7 / ULID 是「可排序」的新式 ID：前段是毫秒時間，所以照文字排序 = 照時間排序，適合當資料庫主鍵。同一毫秒內產生的多筆，隨機部分會逐筆 +1，確保一批結果一定由小到大（產生後會顯示「字典序 = 時間序（已驗證）」）。</li>
         <li>「時間基準」選「現在」是用產生當下的時間；選「指定時間」則整批共用那個時間（以裝置時區解讀），靠遞增的隨機部分維持順序。UUID v7 可用大寫 / 不含連字號；ULID 固定是 26 個大寫字元，沒有這兩個選項。</li>
+        <li>假資料表格的身分證與統編只是「格式與檢查碼正確」的隨機號碼（演算法同「身分證 / 統編檢查」），可能剛好與真實號碼相同，只能用在測試，不可用來冒用或登錄。地址、市話也是隨機組合，不一定真的存在。</li>
+        <li>整數範圍限制在 ±1,000,000,000；列舉選項用逗號或換行分隔，空白時預設 A、B、C。</li>
+        <li>假資料表格只會記住「上次的欄位設定、列數、格式、表名」（本機 rd_cols，最多 30 欄），不保存產生出的資料也不保存種子；按「重設欄位」會清除並回到預設，無法復原。資料壞掉或被備份還原改壞時會自動改用預設值。</li>
         <li>UUID v7 / ULID 的時間可以被讀出來，不適合當作需要保密建立時間的 ID；要反查時間請到「時間戳轉換」的 ID 分頁。</li>
         </ul>
     </template>
@@ -152,6 +241,104 @@
         const isAscending = (a) => a.every((v, i) => i === 0 || a[i - 1] < v);
         // 「指定時間」欄的值（YYYY-MM-DDTHH:mm[:ss]，裝置時區）→ 毫秒；格式不對丟錯誤
         function baseMs(v) { const t = new Date(v).getTime(); if (!v || !Number.isFinite(t)) throw new Error('指定時間格式不對'); return t; }
+
+        // ---- 假資料表格 ----
+        const TBL_TYPES = { serial: '流水號', uuid: 'UUID', name: '姓名（中文）', ename: '姓名（英文）', mobile: '手機（09xx）', tel: '市話', email: '信箱', addr: '地址（臺灣）', twid: '身分證格式（測試用）', ubn: '統一編號（測試用）', date: '日期範圍', int: '整數範圍', float: '小數範圍', bool: '布林', enum: '列舉（自訂值）', text: '文字句子', ip: 'IP（IPv4）', color: '顏色（#RRGGBB）' };
+        const TBL_MAX_COLS = 30, TBL_MAX_ROWS = 10000;
+        const TBL_FORMATS = ['csv', 'json', 'jsonl', 'sql', 'md'], TBL_DIALECTS = ['mysql', 'pg', 'sqlite'];
+        const EN_FIRST = 'James Mary John Patricia Robert Jennifer Michael Linda William Elizabeth David Susan Richard Jessica Joseph Sarah Thomas Karen Daniel Nancy Emma Oliver Sophia Liam'.split(' ');
+        const EN_LAST = 'Smith Johnson Williams Brown Jones Garcia Miller Davis Wilson Anderson Taylor Thomas Moore Martin Jackson Thompson White Harris Clark Lewis Walker Young King Wright Scott'.split(' ');
+        const ZH_WORDS = '今天 天氣 很好 我們 一起 去 公園 散步 工作 完成 之後 可以 喝 咖啡 這個 週末 計畫 到 海邊 看 日出 朋友 準備 了 很多 點心 大家 都 開心 專案 進度 順利 會議 討論 新 的 想法'.split(' ');
+        const EN_WORDS = 'lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua quick brown fox jumps over lazy dog data test sample'.split(' ');
+        const TW_PLACES = { 臺北市: ['中正區', '大安區', '信義區', '士林區', '內湖區'], 新北市: ['板橋區', '中和區', '新店區', '三重區'], 桃園市: ['桃園區', '中壢區', '平鎮區'], 臺中市: ['西屯區', '北屯區', '南區', '豐原區'], 臺南市: ['東區', '安平區', '永康區'], 高雄市: ['前鎮區', '左營區', '三民區', '鳳山區'], 新竹市: ['東區', '北區', '香山區'], 彰化縣: ['彰化市', '員林市', '鹿港鎮'] };
+        const TW_ROADS = '中山路 中正路 民生路 民權路 忠孝路 仁愛路 信義路 和平路 光復路 建國路 復興路 文化路'.split(' ');
+        const ZH_NUM = '一二三四五';
+        // 身分證格式（規則同 utils/id-validator.html）：字母代碼十位 ×1 + 個位 ×9，其後 9 碼權重 8,7,6,5,4,3,2,1,1，總和 % 10 == 0
+        const TW_LETTER = { A: 10, B: 11, C: 12, D: 13, E: 14, F: 15, G: 16, H: 17, I: 34, J: 18, K: 19, L: 20, M: 21, N: 22, O: 35, P: 23, Q: 24, R: 25, S: 26, T: 27, U: 28, V: 29, W: 32, X: 30, Y: 31, Z: 33 };
+        function twIdSum(id) {
+            const n = TW_LETTER[id[0]]; let s = Math.floor(n / 10) + (n % 10) * 9;
+            [...id.slice(1)].forEach((c, i) => { s += +c * (i < 8 ? 8 - i : 1); });
+            return s;
+        }
+        function fakeTwId(r = rnd) {
+            let b = 'ABCDEFGHJKLMNPQRSTUVXYZ'[r(23)] + (1 + r(2)); for (let i = 0; i < 7; i++) b += r(10);
+            return b + (10 - twIdSum(b + '0') % 10) % 10;
+        }
+        // 統編：權重 1,2,1,2,1,2,4,1，乘積十位 + 個位相加；補一個檢查碼讓總和 % 10 == 0（新舊規則都合法）
+        function ubnSum(s) { const w = [1, 2, 1, 2, 1, 2, 4, 1]; return [...s].reduce((t, c, i) => { const p = +c * w[i]; return t + Math.floor(p / 10) + p % 10; }, 0); }
+        function fakeUbn(r = rnd) { let s = ''; for (let i = 0; i < 7; i++) s += r(10); return s + (10 - ubnSum(s + '0') % 10) % 10; }
+
+        const pick = (a, r) => a[r(a.length)];
+        const rf = (r) => r(4294967296) / 4294967296;
+        const tnum = (v, d) => { const n = Number(String(v ?? '').trim() === '' ? NaN : v); return Number.isFinite(n) ? n : d; };
+        const tint = (v, d) => Math.max(-1e9, Math.min(1e9, Math.trunc(tnum(v, d))));   // 整數範圍限制 ±1e9，跨度 < 2^32，種子才能完全重現
+        const enumList = (s) => { const l = String(s ?? '').split(/[,，\n]/).map(x => x.trim()).filter(Boolean); return l.length ? l : ['A', 'B', 'C']; };
+        const dateOk = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && day.shift(s, 0) === s;
+
+        // 一個欄位 c = { name, type, a, b, c }（a/b/c 依型別意義不同，見 UI 的 OPTDEF）產生第 i 列（0 起算）的值：數字 / 布林 / 字串
+        function genValue(col, r, i) {
+            const t = col.type;
+            switch (t) {
+                case 'serial': return Math.trunc(tnum(col.a, 1)) + i;
+                case 'uuid': return uuid4(r);
+                case 'name': return fakeName(r);
+                case 'ename': return pick(EN_FIRST, r) + ' ' + pick(EN_LAST, r);
+                case 'mobile': return fakePhone(r);
+                case 'tel': { const a = '0' + (2 + r(6)); return a + '-' + (a === '02' ? 2 + r(7) : 2 + r(8)) + Array.from({ length: a === '02' ? 7 : 6 + r(2) }, () => r(10)).join(''); }
+                case 'email': return fakeEmail(r);
+                case 'addr': { const city = pick(Object.keys(TW_PLACES), r), seg = r(3) ? '' : ZH_NUM[r(5)] + '段'; return city + pick(TW_PLACES[city], r) + pick(TW_ROADS, r) + seg + (1 + r(300)) + '號' + (r(2) ? (1 + r(15)) + '樓' : ''); }
+                case 'twid': return fakeTwId(r);
+                case 'ubn': return fakeUbn(r);
+                case 'date': { const a = String(col.a ?? '').trim(), b = String(col.b ?? '').trim(); if (!dateOk(a) || !dateOk(b)) throw new Error(`「${col.name}」的日期範圍格式不對`); if (a > b) throw new Error(`「${col.name}」的起日要早於迄日`); return randDate(a, b, r); }
+                case 'int': { const lo = tint(col.a, 1), hi = tint(col.b, 100); if (lo > hi) throw new Error(`「${col.name}」的最小值不能大於最大值`); return randInt(lo, hi, r); }
+                case 'float': {
+                    const lo = tnum(col.a, 0), hi = tnum(col.b, 1), d = Math.max(0, Math.min(6, Math.trunc(tnum(col.c, 2))));
+                    if (lo > hi) throw new Error(`「${col.name}」的最小值不能大於最大值`);
+                    return Math.min(hi, Math.max(lo, Number((lo + rf(r) * (hi - lo)).toFixed(d))));
+                }
+                case 'bool': return r(2) === 1;
+                case 'enum': return pick(enumList(col.a), r);
+                case 'text': return col.a === 'en' ? (() => { const s = Array.from({ length: 5 + r(8) }, () => pick(EN_WORDS, r)).join(' '); return s[0].toUpperCase() + s.slice(1) + '.'; })() : Array.from({ length: 5 + r(8) }, () => pick(ZH_WORDS, r)).join('') + '。';
+                case 'ip': return [1 + r(254), r(256), r(256), 1 + r(254)].join('.');
+                case 'color': return '#' + Array.from({ length: 6 }, () => '0123456789abcdef'[r(16)]).join('');
+                default: throw new Error('未知欄位型別');
+            }
+        }
+        // 清理欄位設定（載入舊資料 / 備份還原用）：不是陣列回傳 null；欄位名去空白、截 40 字、空的補 colN、重複的加 _N；最多 30 欄
+        function cleanCols(list) {
+            if (!Array.isArray(list)) return null;
+            const seen = {};
+            return list.filter(c => c && typeof c === 'object').slice(0, TBL_MAX_COLS).map((c, i) => {
+                const base = String(c.name ?? '').trim().slice(0, 40) || `col${i + 1}`; let name = base, k = 1;
+                while (seen[name]) name = `${base}_${++k}`;
+                seen[name] = 1;
+                const o = { name, type: TBL_TYPES[c.type] ? c.type : 'text' };
+                for (const k of ['a', 'b', 'c']) o[k] = String(c[k] ?? '').slice(0, 300);
+                return o;
+            });
+        }
+        // 產生資料：seed 空字串 = 安全亂數；非空 = 可重現（同欄位 + 列數 + 種子必得同一份）。回傳 { header, rows }
+        function genTable(cols, n, seed = '') {
+            n = Math.trunc(Number(n));
+            if (!Array.isArray(cols) || !cols.length) throw new Error('至少要有一個欄位');
+            if (!(n >= 1 && n <= TBL_MAX_ROWS)) throw new Error(`列數要在 1 到 ${TBL_MAX_ROWS} 之間`);
+            const s = String(seed ?? '').trim(), r = s === '' ? rnd : Util.seeded(s).int;
+            const rows = []; for (let i = 0; i < n; i++) rows.push(cols.map(c => genValue(c, r, i)));
+            return { header: cols.map(c => c.name), rows };
+        }
+        const toCSV = ({ header, rows }) => Util.csvStringify(header, rows);
+        const toJSON = ({ header, rows }) => JSON.stringify(rows.map(r => Object.fromEntries(header.map((h, i) => [h, r[i]]))), null, 2);
+        const toJSONL = ({ header, rows }) => rows.map(r => JSON.stringify(Object.fromEntries(header.map((h, i) => [h, r[i]])))).join('\n');
+        const toMD = ({ header, rows }) => { const c = (v) => String(v).replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>'); return ['| ' + header.map(c).join(' | ') + ' |', '| ' + header.map(() => '---').join(' | ') + ' |', ...rows.map(r => '| ' + r.map(c).join(' | ') + ' |')].join('\n'); };
+        // SQL INSERT：識別字（表名 / 欄名）MySQL 用反引號，PG / SQLite 用雙引號，內部同字元加倍；字串用單引號並把 ' 加倍（MySQL 另把 \ 加倍）；布林 MySQL / PG 用 TRUE/FALSE，SQLite 用 1/0；每 100 列一個 INSERT
+        function toSQL({ header, rows }, table = 'data', dialect = 'mysql') {
+            const my = dialect === 'mysql', qc = my ? '`' : '"', q = (s) => qc + String(s).split(qc).join(qc + qc) + qc;
+            const lit = (v) => typeof v === 'number' ? String(v) : typeof v === 'boolean' ? (dialect === 'sqlite' ? (v ? '1' : '0') : (v ? 'TRUE' : 'FALSE')) : "'" + (my ? String(v).replace(/\\/g, '\\\\') : String(v)).replace(/'/g, "''") + "'";
+            const head = `INSERT INTO ${q(String(table).trim() || 'data')} (${header.map(q).join(', ')}) VALUES\n`, out = [];
+            for (let i = 0; i < rows.length; i += 100) out.push(head + rows.slice(i, i + 100).map(r => '  (' + r.map(lit).join(', ') + ')').join(',\n') + ';');
+            return out.join('\n');
+        }
+        const formatTable = (t, fmt, { table, dialect } = {}) => ({ csv: toCSV, json: toJSON, jsonl: toJSONL, md: toMD, sql: (x) => toSQL(x, table, dialect) }[fmt] || toCSV)(t);
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -196,6 +383,68 @@
         $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), $('#out').value, () => $('#out').select());
         const k0 = store.get('rd_kind', 'uuid'); if ([...$('#kind').options].some(o => o.value === k0)) $('#kind').value = k0;
         renderOpts(); generate();
+
+        // ---- 假資料表格 UI ----
+        const today = day.today(), OPTDEF = {
+            serial: [['a', '起始值', 'number', '1']], int: [['a', '最小', 'number', '1'], ['b', '最大', 'number', '100']],
+            float: [['a', '最小', 'number', '0'], ['b', '最大', 'number', '1'], ['c', '小數位', 'number', '2']],
+            date: [['a', '從', 'date', day.shift(today, -365)], ['b', '到', 'date', today]], enum: [['a', '選項（逗號、換行分隔）', 'text', '紅,綠,藍']],
+            text: [['a', '語言', 'select', 'zh', [['zh', '中文'], ['en', 'English']]]],
+        };
+        const defOpts = (t) => { const o = { a: '', b: '', c: '' }; (OPTDEF[t] || []).forEach(([k, , , d]) => { o[k] = d; }); return o; };
+        const mk = (name, type) => ({ name, type, ...defOpts(type) });
+        const DEF = () => ({ cols: [mk('id', 'serial'), mk('name', 'name'), mk('phone', 'mobile'), mk('email', 'email'), mk('birthday', 'date')], fmt: 'csv', n: 10, table: 'users', dialect: 'mysql' });
+        function loadT() {
+            const d = DEF(), v = store.get('rd_cols', null); if (!v || typeof v !== 'object') return d;
+            const cols = cleanCols(v.cols); if (cols && cols.length) d.cols = cols;
+            if (TBL_FORMATS.includes(v.fmt)) d.fmt = v.fmt; if (TBL_DIALECTS.includes(v.dialect)) d.dialect = v.dialect;
+            const n = Math.trunc(Number(v.n)); if (n >= 1 && n <= TBL_MAX_ROWS) d.n = n;
+            if (typeof v.table === 'string') d.table = v.table.slice(0, 60);
+            return d;
+        }
+        let T = loadT(), tOutText = '';
+        const saveT = () => store.set('rd_cols', T);
+        const el = (tag, attrs = {}, kids = []) => { const e = document.createElement(tag); Object.assign(e, attrs); e.append(...kids); return e; };
+        const lab = (text, input) => el('div', {}, [el('label', { textContent: text }), input]);
+        function renderCols() {
+            $('#tcols').replaceChildren(...T.cols.map((c, i) => {
+                const nm = el('input', { type: 'text', value: c.name, maxLength: 40, spellcheck: false, oninput() { c.name = this.value; saveT(); } }); nm.setAttribute('aria-label', `第 ${i + 1} 欄名稱`);
+                const ty = el('select', { onchange() { Object.assign(c, { type: this.value }, defOpts(this.value)); saveT(); renderCols(); } }, Object.entries(TBL_TYPES).map(([k, v]) => new Option(v, k, false, k === c.type))); ty.setAttribute('aria-label', `第 ${i + 1} 欄型別`);
+                const opts = (OPTDEF[c.type] || []).map(([k, text, kind, , choices]) => {
+                    const inp = kind === 'select' ? el('select', {}, choices.map(([v, t]) => new Option(t, v, false, v === c[k]))) : el('input', { type: kind, value: c[k] ?? '', spellcheck: false });
+                    inp.oninput = inp.onchange = () => { c[k] = inp.value; saveT(); }; inp.setAttribute('aria-label', `${c.name} ${text}`); return lab(text, inp);
+                });
+                const mv = (d) => { const j = i + d; if (j < 0 || j >= T.cols.length) return; [T.cols[i], T.cols[j]] = [T.cols[j], T.cols[i]]; saveT(); renderCols(); };
+                const btn = (t, label, fn) => el('button', { type: 'button', textContent: t, title: label, onclick: fn, className: 'sm', disabled: false }, []);
+                const up = btn('↑', '上移', () => mv(-1)), dn = btn('↓', '下移', () => mv(1)), rm = btn('✕', '刪除這欄', () => { T.cols.splice(i, 1); saveT(); renderCols(); });
+                [up, dn, rm].forEach((b, k) => b.setAttribute('aria-label', ['上移', '下移', '刪除'][k] + `第 ${i + 1} 欄`)); up.disabled = i === 0; dn.disabled = i === T.cols.length - 1;
+                return el('div', { className: 'tcol' }, [el('div', { className: 'r' }, [lab('欄位名稱', nm), lab('型別', ty)]), ...(opts.length ? [el('div', { className: 'r' }, opts)] : []), el('div', { className: 'ctl' }, [up, dn, rm])]);
+            }));
+            $('#tcount').textContent = `${T.cols.length} / ${TBL_MAX_COLS} 欄`;
+        }
+        function genT(save = true) {
+            const sql = $('#tfmt').value === 'sql'; $('#tsqlopt').hidden = !sql;
+            T.fmt = $('#tfmt').value; T.table = $('#ttable').value; T.dialect = $('#tdialect').value;
+            const n = Math.trunc(Number($('#tn').value)); if (n >= 1 && n <= TBL_MAX_ROWS) T.n = n; if (save !== false) saveT();
+            try {
+                const t = genTable(cleanCols(T.cols), $('#tn').value, $('#tseed').value);
+                tOutText = formatTable(t, T.fmt, T); $('#tout').value = tOutText; $('#tinfo').textContent = `${t.rows.length} 列 × ${t.header.length} 欄`;
+            } catch (e) { tOutText = ''; $('#tout').value = ''; $('#tinfo').textContent = e.message; }
+        }
+        $('#taddType').replaceChildren(...Object.entries(TBL_TYPES).map(([k, v]) => new Option(v, k)));
+        $('#taddCol').onclick = () => {
+            if (T.cols.length >= TBL_MAX_COLS) { $('#tinfo').textContent = `最多 ${TBL_MAX_COLS} 欄，請先刪除不要的欄位`; return; }
+            const ty = $('#taddType').value; T.cols.push(mk(TBL_TYPES[ty].replace(/（.*/, '') + (T.cols.length + 1), ty)); saveT(); renderCols();
+        };
+        $('#tn').value = T.n; $('#tfmt').value = T.fmt; $('#ttable').value = T.table; $('#tdialect').value = T.dialect;
+        $('#tgen').onclick = genT; $('#tfmt').onchange = $('#tdialect').onchange = $('#ttable').oninput = $('#tn').onchange = genT;
+        $('#tcopy').onclick = () => Util.copyWithFeedback($('#tcopy'), $('#tout').value, () => $('#tout').select());
+        $('#tdl').onclick = () => { if (!tOutText) return; const ext = { csv: 'csv', json: 'json', jsonl: 'jsonl', sql: 'sql', md: 'md' }[T.fmt]; Util.download(new Blob([(T.fmt === 'csv' ? '﻿' : '') + tOutText], { type: 'text/plain;charset=utf-8' }), `fake-data.${ext}`); };
+        $('#treset').onclick = () => {
+            if (!confirm('重設欄位設定？目前的欄位、列數、輸出格式會回到預設，且無法復原。')) return;
+            T = DEF(); store.set('rd_cols', T); $('#tn').value = T.n; $('#tfmt').value = T.fmt; $('#ttable').value = T.table; $('#tdialect').value = T.dialect; $('#tseed').value = ''; renderCols(); genT(false);
+        };
+        renderCols(); genT(false);
     </script>
 </body>
 

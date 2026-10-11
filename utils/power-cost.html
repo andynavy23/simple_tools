@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="用電度數與電費試算：輸入電器功率與使用時數，依台電住宅累進電價（夏月 / 非夏月）估算每期度數與電費，也可用電表度數反推。">
+    <meta property="og:title" content="用電度數與電費試算" />
+    <meta property="og:description" content="電器功率 × 時數 → 度數與電費，台電住宅累進電價、夏月分段。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/power-cost.html" />
+    <meta name="st-keys" content="power_opts">
+    <title>用電度數與電費試算</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root { --wrap-w: 720px; }
+        label { font-weight: 600; display: block; margin: 10px 0 6px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .row > * { flex: 1; min-width: 120px; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+        .tabs button { flex: 1; }
+        .item { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 8px; padding: 10px 0; border-bottom: 1px solid var(--fill); }
+        .item:last-child { border-bottom: 0; }
+        .item .nm { grid-column: 1 / 3; }
+        .item .del { grid-column: 3; }
+        .item small { display: block; color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+        .item input { width: 100%; min-width: 0; }
+        .big { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .li b { font-variant-numeric: tabular-nums; text-align: right; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+        th, td { padding: 6px 4px; text-align: right; border-bottom: 1px solid var(--fill); }
+        th:first-child, td:first-child { text-align: left; }
+        .scroll { overflow-x: auto; }
+        .bar { height: 8px; background: var(--fill); border-radius: 4px; overflow: hidden; }
+        .bar i { display: block; height: 100%; background: var(--blue); }
+        .warn { color: var(--bad); }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>用電度數與電費試算</h1>
+        <p class="sub">電器功率 × 使用時數 → 每期度數與電費（台電住宅累進電價，估算用）。</p>
+
+        <div class="card">
+            <h2>電價表</h2>
+            <p class="note" id="rateNote"></p>
+            <div class="scroll"><table id="rateTbl"></table></div>
+            <p class="note">表內為「每月」級距；兩個月一期時級距加倍。夏月為每年 6/1–9/30。</p>
+        </div>
+
+        <div class="card">
+            <h2>計費期間</h2>
+            <label for="start">期間起日</label>
+            <input id="start" type="date" aria-label="期間起日">
+            <label for="months">期間長度</label>
+            <select id="months" aria-label="期間長度"><option value="1">1 個月</option><option value="2">2 個月（台電每兩個月抄表一次）</option></select>
+            <p class="note" id="periodNote"></p>
+        </div>
+
+        <div class="tabs" id="tabs"><button data-m="items" aria-pressed="true">用電器估算</button><button data-m="meter" aria-pressed="false">電表度數反推</button></div>
+
+        <div class="card" id="pgItems">
+            <h2>電器清單</h2>
+            <div class="row"><select id="preset" aria-label="常見電器"></select><button id="addPreset">加入</button><button id="addBlank">自訂一筆</button></div>
+            <p class="note">預設值只是常見的平均功率，請依銘牌或實際情況修改。清單最多 50 筆。</p>
+            <div id="items"></div>
+        </div>
+
+        <div class="card" id="pgMeter" hidden>
+            <h2>電表度數</h2>
+            <div class="row"><div><label for="prev">上期度數</label><input id="prev" inputmode="decimal" placeholder="例如 12345" aria-label="上期度數"></div><div><label for="cur">本期度數</label><input id="cur" inputmode="decimal" placeholder="例如 12815" aria-label="本期度數"></div></div>
+            <p class="note" id="meterNote">本期減上期 = 這一期用了幾度。</p>
+        </div>
+
+        <div class="card">
+            <h2>結果</h2>
+            <div class="li"><span class="muted">本期用電</span><span class="big" id="rKwh">0 度</span></div>
+            <div class="li"><span class="muted">電費（估）</span><span class="big" id="rCost">0 元</span></div>
+            <div class="li"><span class="muted">平均每度</span><b id="rAvg">-</b></div>
+            <div class="li"><span class="muted">相當於每月</span><b id="rMonthly">-</b></div>
+            <p class="note" id="rNote"></p>
+            <div class="scroll"><table id="rTbl"></table></div>
+            <div id="rShare"></div>
+        </div>
+
+        <div class="card">
+            <h2>節電小提醒</h2>
+            <div id="tips"></div>
+        </div>
+
+        <div class="card">
+            <button id="clearAll">清除全部輸入</button>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>幫你估算家裡一期（一或兩個月）用了幾度電、電費大約多少。依台電住宅累進電價計算，夏月（6/1–9/30）與非夏月的級距費率不同，期間跨夏月時會自動分段。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>想知道冷氣、熱水器這些電器一個月大概吃掉多少錢。</li>
+        <li>租屋或分攤電費，想核對電費單。</li>
+        <li>考慮換新家電或少開冷氣，想看省多少。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>在「計費期間」選期間起日與長度（台電是每兩個月抄表一次）。</li>
+        <li>「用電器估算」：從下拉選常見電器按「加入」，或按「自訂一筆」，填功率（W）、每天幾小時、每月使用幾天。</li>
+        <li>或切到「電表度數反推」，輸入上期與本期電表度數。</li>
+        <li>看「結果」的度數、電費與各級距明細，以及各電器占比。</li>
+        <li>最底下「清除全部輸入」會清掉本頁記住的內容。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">非夏月、1 個月、用 120 度
+→ 120 × 1.78 = 213.6 元
+夏月、1 個月、用 330 度
+→ 120 × 1.78 + 210 × 2.55 = 749.1 元
+2 個月一期、非夏月、用 240 度（級距加倍）
+→ 240 × 1.78 = 427.2 元</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>費率寫在頁面「電價表」，並標示生效日期；台電會調整電價，請自行核對台電公告，不一致時以公告與電費單為準。</li>
+        <li>只計算累進電價的電能費，不含其他代收項目；實際電費單金額以台電為準，這裡是估算。</li>
+        <li>期間跨 6/1 或 9/30 時，度數依天數分配到夏月與非夏月，級距也按比例切分，與台電的實際分攤方式可能有些微差距。</li>
+        <li>冷氣調高 1°C 約省 6% 是常見的粗略說法，實際依機型與環境而定。</li>
+        <li>本頁只記住上次輸入（電器清單最多 50 筆），存在這個瀏覽器；「清除全部輸入」會刪掉它且無法復原。資料壞掉時會自動回到預設。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, day } = Util;
+
+        // --- pure ---
+        // 費率常數表：台電「住宅用（表燈非時間電價）」累進電價，單位 元/度；upto 為「每月」級距上限度數。
+        // 生效日期與是否已調整，務必自行核對台電公告（本表為編寫時所知的最近一次公告值，不保證仍為現行費率）。
+        const RATES = {
+            effective: '2023-04-01',
+            note: '依 2023/4/1 起的住宅表燈累進費率（700 度以下之後未再調整；701 度以上的級距可能已由後續公告調整）。請自行核對台電公告。',
+            summer: [6, 9], // 夏月：6/1–9/30
+            tiers: [
+                { upto: 120, s: 1.78, n: 1.78 },
+                { upto: 330, s: 2.55, n: 2.26 },
+                { upto: 500, s: 3.80, n: 3.13 },
+                { upto: 700, s: 5.14, n: 4.24 },
+                { upto: 1000, s: 6.44, n: 5.28 },
+                { upto: Infinity, s: 8.46, n: 6.63 },
+            ],
+        };
+        const LIMITS = { items: 50, w: 20000, h: 24, d: 31, name: 20, kwh: 1e7 };
+        const PRESETS = [
+            ['冷氣', 900, 6, 30], ['冰箱（平均）', 60, 24, 30], ['電風扇', 40, 6, 30], ['電視', 100, 4, 30],
+            ['洗衣機', 500, 0.5, 20], ['電熱水器', 1500, 1, 30], ['電腦', 200, 6, 30], ['飲水機（平均）', 150, 8, 30],
+            ['除濕機', 300, 6, 30], ['電鍋', 700, 0.7, 30], ['吹風機', 1000, 0.2, 30], ['LED 燈', 10, 5, 30],
+        ];
+        const num = (v, lo, hi, def = 0) => { const n = Number(v); return v === '' || v === null || !Number.isFinite(n) ? def : Math.min(hi, Math.max(lo, n)); };
+        const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && day.shift(s, 0) === s;
+
+        // 單一電器一期的度數 = W / 1000 × 每天小時 × 每月天數 × 月數
+        const itemKwh = (it, months) => num(it.w, 0, LIMITS.w) / 1000 * num(it.h, 0, LIMITS.h) * num(it.d, 0, LIMITS.d) * months;
+        // 電表度數：本期 - 上期；不合理（空白、非數字、本期 < 上期）回傳 null
+        function meterKwh(prev, cur) {
+            const p = Number(prev), c = Number(cur);
+            if (String(prev).trim() === '' || String(cur).trim() === '' || !Number.isFinite(p) || !Number.isFinite(c) || p < 0 || c < p) return null;
+            return Math.min(c - p, LIMITS.kwh);
+        }
+        // 夏月天數：[start, start+n 個月) 之中落在 6/1–9/30 的天數；回傳 { summer, total }
+        function periodDays(start, months) {
+            const end = day.addMonths(start, months), total = day.between(start, end);
+            let summer = 0;
+            for (let i = 0; i < total; i++) { const m = day.parse(day.shift(start, i)).m; if (m >= RATES.summer[0] && m <= RATES.summer[1]) summer++; }
+            return { summer, total };
+        }
+        // 某一欄（s 夏月 / n 非夏月）的累進計費；scale = 月數（級距乘上它）。回傳 { cost, rows }
+        function tierCost(kwh, col, scale) {
+            kwh = Number.isFinite(kwh) ? Math.max(0, kwh) : 0;
+            let from = 0, cost = 0; const rows = [];
+            if (kwh <= 0 || scale <= 0) return { cost, rows };
+            for (const t of RATES.tiers) {
+                const cap = t.upto * scale, take = Math.min(kwh, cap) - from;
+                if (take > 0) { rows.push({ from, to: Math.min(kwh, cap), kwh: take, rate: t[col], cost: take * t[col] }); cost += take * t[col]; }
+                from = Math.max(from, Math.min(cap, kwh));
+                if (kwh <= cap) break;
+            }
+            return { cost, rows };
+        }
+        // 整期電費：度數依夏月天數比例分成兩段，各段級距 = 月數 × 該段比例
+        function calcBill(kwh, summerShare, months) {
+            kwh = Number.isFinite(kwh) ? Math.max(0, kwh) : 0;
+            const sh = Math.min(1, Math.max(0, summerShare)), sK = kwh * sh, nK = kwh - sK;
+            const s = tierCost(sK, 's', months * sh), n = tierCost(nK, 'n', months * (1 - sh));
+            const cost = s.cost + n.cost;
+            return { kwh, cost, avg: kwh > 0 ? cost / kwh : 0, summerKwh: sK, nonKwh: nK, rows: [...s.rows.map(r => ({ ...r, season: '夏月' })), ...n.rows.map(r => ({ ...r, season: '非夏月' }))] };
+        }
+        // 冷氣調高 1°C 的粗估：冷氣度數 × 6%，用「整期電費差」計（累進會讓省的是最高級距）
+        const AC_SAVE = 0.06;
+        function acSaving(totalKwh, acKwh, share, months) {
+            const cut = Math.min(acKwh, totalKwh) * AC_SAVE;
+            return { kwh: cut, money: calcBill(totalKwh, share, months).cost - calcBill(totalKwh - cut, share, months).cost };
+        }
+        // 讀取驗證：壞資料補預設、截斷到上限
+        function normOpts(o, today) {
+            o = o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+            const items = (Array.isArray(o.items) ? o.items : []).filter(x => x && typeof x === 'object').slice(0, LIMITS.items)
+                .map((x, i) => ({ id: i + 1, name: String(x.name ?? '').slice(0, LIMITS.name), w: num(x.w, 0, LIMITS.w), h: num(x.h, 0, LIMITS.h), d: num(x.d, 0, LIMITS.d, 30) }));
+            const dig = (v) => typeof v === 'string' && /^\d{0,9}(\.\d{0,3})?$/.test(v) ? v : '';
+            return { start: isDate(o.start) ? o.start : today.slice(0, 8) + '01', months: o.months === 1 ? 1 : 2, mode: o.mode === 'meter' ? 'meter' : 'items', prev: dig(o.prev), cur: dig(o.cur), items };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const f1 = (n) => (Math.round(n * 10) / 10).toLocaleString('zh-TW');
+        const o = normOpts(store.get('power_opts', null), day.today());
+        const save = () => store.set('power_opts', o);
+
+        function td(...a) { const r = document.createElement('tr'); for (const x of a) { const c = document.createElement(x.h ? 'th' : 'td'); c.textContent = x.h || x; r.append(c); } return r; }
+        function table(el, head, rows) { el.replaceChildren(td(...head.map(h => ({ h }))), ...rows.map(r => td(...r))); }
+
+        $('#rateNote').textContent = `費率生效日期：${RATES.effective}。${RATES.note}`;
+        table($('#rateTbl'), ['每月度數', '夏月 元/度', '非夏月 元/度'], RATES.tiers.map((t, i) => [`${i ? RATES.tiers[i - 1].upto + 1 : 1}–${t.upto === Infinity ? '以上' : t.upto}`, t.s.toFixed(2), t.n.toFixed(2)]));
+        $('#preset').replaceChildren(...PRESETS.map((p, i) => new Option(`${p[0]}（${p[1]}W）`, i)));
+
+        function renderItems() {
+            const box = $('#items'); box.replaceChildren();
+            for (const it of o.items) {
+                const d = document.createElement('div'); d.className = 'item'; d.dataset.id = it.id;
+                const f = (key, label, val, mode, cls = '') => `<div class="${cls}"><small>${label}</small><input data-k="${key}" ${mode ? `inputmode="${mode}"` : ''} value="${Util.esc(val)}" aria-label="${label}"></div>`;
+                d.innerHTML = f('name', '名稱', it.name, '', 'nm') + `<div class="del"><small>&nbsp;</small><button class="sm" data-del aria-label="刪除 ${Util.esc(it.name)}">刪除</button></div>` + f('w', '功率 W', it.w, 'decimal') + f('h', '每天小時', it.h, 'decimal') + f('d', '每月天數', it.d, 'numeric');
+                box.append(d);
+            }
+            if (!o.items.length) { const p = document.createElement('p'); p.className = 'note'; p.textContent = '還沒有電器，請從上方加入。'; box.append(p); }
+        }
+
+        function render() {
+            const months = o.months, { summer, total } = periodDays(o.start, months), share = total ? summer / total : 0;
+            $('#periodNote').textContent = `${o.start} 起 ${total} 天，其中夏月 ${summer} 天、非夏月 ${total - summer} 天。`;
+            let kwh, acKwh = 0, parts = [];
+            if (o.mode === 'meter') {
+                const k = meterKwh(o.prev, o.cur);
+                $('#meterNote').textContent = k === null ? '請輸入上期與本期度數（本期不能小於上期）。' : `本期 ${o.cur} − 上期 ${o.prev} = ${f1(k)} 度。`;
+                kwh = k ?? 0;
+            } else {
+                parts = o.items.map(it => ({ it, k: itemKwh(it, months) }));
+                kwh = Math.min(parts.reduce((s, p) => s + p.k, 0), LIMITS.kwh);
+                acKwh = parts.filter(p => p.it.name.includes('冷氣')).reduce((s, p) => s + p.k, 0);
+            }
+            const b = calcBill(kwh, share, months);
+            $('#rKwh').textContent = `${f1(b.kwh)} 度`;
+            $('#rCost').textContent = `${Math.round(b.cost).toLocaleString('zh-TW')} 元`;
+            $('#rAvg').textContent = b.kwh > 0 ? `${b.avg.toFixed(2)} 元` : '-';
+            $('#rMonthly').textContent = `${f1(b.kwh / months)} 度、約 ${Math.round(b.cost / months).toLocaleString('zh-TW')} 元`;
+            $('#rNote').textContent = b.kwh > 0 ? '各級距明細：' : '';
+            table($('#rTbl'), ['季別', '度數', '費率', '小計'], b.rows.map(r => [r.season, f1(r.kwh), r.rate.toFixed(2), f1(r.cost)]));
+            const sh = $('#rShare'); sh.replaceChildren();
+            if (o.mode === 'items' && b.kwh > 0) {
+                const h = document.createElement('p'); h.className = 'note'; h.textContent = '各電器占比（電費依度數比例分攤，僅供參考）：'; sh.append(h);
+                for (const p of parts.filter(p => p.k > 0).sort((a, c) => c.k - a.k)) {
+                    const pct = p.k / (b.kwh > 0 ? Math.max(b.kwh, 1e-9) : 1) * 100, d = document.createElement('div'); d.className = 'li';
+                    d.innerHTML = `<span>${Util.esc(p.it.name || '（未命名）')}</span><b>${f1(p.k)} 度・約 ${Math.round(b.cost * p.k / b.kwh)} 元（${pct.toFixed(0)}%）</b>`;
+                    const bar = document.createElement('div'); bar.className = 'bar'; bar.innerHTML = `<i style="width:${Math.min(100, pct)}%"></i>`; sh.append(d, bar);
+                }
+            }
+            const tips = [];
+            if (acKwh > 0) { const s = acSaving(kwh, acKwh, share, months); tips.push(`冷氣調高 1°C，粗估可省約 ${f1(s.kwh)} 度、${Math.round(s.money)} 元（以冷氣用電的 6% 粗估，實際依機型與環境而定）。`); }
+            tips.push('累進電價下，用電越多的那一段越貴：先減少最高級距的用電（冷氣、烘乾、電熱水器）最划算。', '冷氣設 26–28°C 並搭配電風扇循環；定期清洗濾網；不用的電器拔掉待機電源。');
+            $('#tips').replaceChildren(...tips.map(t => { const p = document.createElement('p'); p.className = 'note'; p.textContent = t; return p; }));
+        }
+
+        function sync() {
+            $('#start').value = o.start; $('#months').value = o.months; $('#prev').value = o.prev; $('#cur').value = o.cur;
+            [...$('#tabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.m === o.mode));
+            $('#pgItems').hidden = o.mode !== 'items'; $('#pgMeter').hidden = o.mode !== 'meter';
+            renderItems(); render();
+        }
+        const addItem = (name, w, h, d) => {
+            if (o.items.length >= LIMITS.items) { alert(`電器清單已達上限 ${LIMITS.items} 筆，請先刪除不用的項目。`); return; }
+            o.items.push({ id: Math.max(0, ...o.items.map(i => i.id)) + 1, name, w, h, d }); save(); renderItems(); render();
+        };
+        $('#addPreset').onclick = () => { const p = PRESETS[$('#preset').value]; if (p) addItem(...p); };
+        $('#addBlank').onclick = () => addItem('', 100, 1, 30);
+        $('#items').oninput = (e) => {
+            const k = e.target.dataset.k, row = e.target.closest('.item'); if (!k || !row) return;
+            const it = o.items.find(i => i.id === +row.dataset.id); if (!it) return;
+            it[k] = k === 'name' ? e.target.value.slice(0, LIMITS.name) : num(e.target.value, 0, k === 'w' ? LIMITS.w : k === 'h' ? LIMITS.h : LIMITS.d);
+            save(); render();
+        };
+        $('#items').onclick = (e) => {
+            if (!e.target.closest('[data-del]')) return;
+            const id = +e.target.closest('.item').dataset.id; o.items = o.items.filter(i => i.id !== id); save(); renderItems(); render();
+        };
+        $('#tabs').onclick = (e) => { const m = e.target.dataset.m; if (m) { o.mode = m; save(); sync(); } };
+        $('#start').onchange = () => { o.start = isDate($('#start').value) ? $('#start').value : o.start; save(); sync(); };
+        $('#months').onchange = () => { o.months = +$('#months').value === 1 ? 1 : 2; save(); render(); };
+        for (const k of ['prev', 'cur']) $('#' + k).oninput = () => { const v = $('#' + k).value.trim(); o[k] = /^\d{0,9}(\.\d{0,3})?$/.test(v) ? v : o[k]; if (o[k] !== v) $('#' + k).value = o[k]; save(); render(); };
+        $('#clearAll').onclick = () => {
+            if (!confirm('要清除本頁記住的全部輸入（電器清單、期間、電表度數）嗎？無法復原。')) return;
+            try { localStorage.removeItem('power_opts'); } catch (e) { }
+            Object.assign(o, normOpts(null, day.today())); sync();
+        };
+        sync();
+    </script>
+</body>
+
+</html>

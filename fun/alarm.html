@@ -97,6 +97,8 @@
         }
 
         #ringing {
+            overflow-y: auto;
+            padding: 16px;
             position: fixed;
             inset: 0;
             z-index: 50;
@@ -117,6 +119,31 @@
             justify-content: center;
         }
 
+        #taskBox {
+            display: grid;
+            gap: 10px;
+            justify-items: center;
+        }
+
+        #tPrompt {
+            font-size: 32px;
+            font-weight: 800;
+            letter-spacing: .05em;
+        }
+
+        #tAns {
+            width: min(80vw, 260px);
+            text-align: center;
+        }
+
+        #emerg {
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
+            justify-self: center;
+        }
+
         #ringing button {
             font-size: 20px;
             padding: 14px 36px;
@@ -133,6 +160,7 @@
         <div class="card">
             <div class="row"><input type="time" id="time" value="07:00" aria-label="時間"><input type="text" id="label" maxlength="20" placeholder="名稱（例如：起床）" aria-label="名稱"><button class="primary" id="add">新增鬧鐘</button></div>
             <div class="row"><span class="muted" style="font-size:13px">重複：</span><div class="days" id="days"></div><span class="muted" style="font-size:13px">（不選 = 只響一次）</span></div>
+            <div class="row"><span class="muted" style="font-size:13px">起床任務：</span><select id="task" aria-label="起床任務"><option value="none">無</option><option value="math">心算</option><option value="text">輸入隨機字串</option><option value="shake">搖動手機</option></select><select id="diff" aria-label="任務難度"><option value="easy">簡單</option><option value="normal" selected>普通</option><option value="hard">困難</option></select><select id="tn" aria-label="心算題數"><option value="1">1 題</option><option value="2">2 題</option><option value="3" selected>3 題</option><option value="4">4 題</option><option value="5">5 題</option></select></div>
             <div class="row"><label class="muted" style="font-size:14px"><input type="checkbox" id="notif"> 同時用系統通知提醒</label><span class="muted" id="notifMsg" style="font-size:13px"></span></div>
         </div>
 
@@ -141,6 +169,15 @@
     <div id="ringing" hidden>
         <div class="t" id="rtime"></div><div id="rlabel" style="font-size:24px"></div>
         <div class="row"><button class="primary" id="snooze">貪睡 5 分鐘</button><button id="stop">關閉</button></div>
+        <div id="taskBox" hidden>
+            <div id="tInfo" style="font-size:16px"></div>
+            <div id="tPrompt"></div>
+            <input type="text" id="tAns" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="答案">
+            <button class="primary" id="tOk">確認</button>
+            <button id="tPerm" hidden>允許動作感測</button>
+            <div id="tMsg" style="min-height:1.4em"></div>
+        </div>
+        <button class="sm" id="emerg" hidden>緊急關閉（連按 5 次或長按 3 秒）</button>
     </div>
 
     <template id="help">
@@ -157,6 +194,8 @@
         <li>選好時間、填「名稱」（可不填），按「新增鬧鐘」。</li>
         <li>要每週重複，就先點選星期（日～六）；<b>都不選＝只響一次</b>，響完自動關閉。</li>
         <li>想要系統通知，勾「同時用系統通知提醒」並允許權限。</li>
+        <li>要防止賴床，新增前選「起床任務」與難度：「心算」要連續答對 N 題、「輸入隨機字串」要照著打、「搖動手機」要搖到次數夠。響鈴時按「關閉」才會出題，完成才會停；貪睡鈕照常可用（貪睡產生的鬧鐘會沿用同樣的任務）。</li>
+        <li>被任務卡住怎麼辦：任務畫面下方的「緊急關閉」，<b>連按 5 次</b>（4 秒內）或<b>長按 3 秒</b>就能直接關掉。</li>
         <li>響鈴時按「貪睡 5 分鐘」會新增一個 5 分鐘後的鬧鐘，按「關閉」就停止。</li>
         <li>清單右側的勾選是開關，「刪除」可移除。最多 30 組。貪睡產生的鬧鐘響過之後會自動從清單移除。</li>
         </ol>
@@ -167,13 +206,15 @@
         <li><b>頁面必須保持開啟</b>：網頁無法在背景執行，關掉分頁、手機鎖屏或切到別的 App 太久都不會響。</li>
         <li>手機請把螢幕設成不自動鎖定並保持這個分頁在前景；重要的起床鬧鐘請用手機內建鬧鐘。</li>
         <li>第一次新增鬧鐘時會試播一聲，以解除瀏覽器對聲音的限制；手機若開靜音模式可能聽不到。</li>
-        <li>鬧鐘只存在這個瀏覽器，不會上傳。</li>
+        <li>搖動手機用裝置動作感測：iPhone 要按「允許動作感測」授權；沒有感測器、電腦或被拒絕時會自動改成心算 3 題。</li>
+        <li>任務只在這個頁面的響鈴畫面裡有效，不是真正的系統鎖定，需要準時起床請同時用手機內建鬧鐘。</li>
+        <li>鬧鐘（含任務設定）只存在這個瀏覽器，不會上傳；舊的鬧鐘一律當作「無任務」。</li>
         </ul>
     </template>
 
     <script src="../shared/js/util.js"></script>
     <script>
-        const { store, tone, rnd } = Util;
+        const { store, tone, rnd, seeded } = Util;
 
         // --- pure ---
         const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
@@ -211,12 +252,45 @@
         const isSnooze = (a) => a.id.startsWith('z');
         const dropDoneSnooze = (list) => list.filter(a => !(isSnooze(a) && !a.on));
         const snoozeLabel = (label) => (label || '鬧鐘').replace(/（貪睡）$/, '').slice(0, 16) + '（貪睡）';
+        // ---------- 起床任務 ----------
+        const TASKS = ['none', 'math', 'text', 'shake'], DIFFS = ['easy', 'normal', 'hard'];
+        const TASK_NAME = { none: '', math: '心算', text: '輸入字串', shake: '搖動手機' }, DIFF_NAME = { easy: '簡單', normal: '普通', hard: '困難' };
+        // 舊資料沒有任務欄位 → 補「無 / 普通 / 3 題」；欄位壞掉也補預設
+        function normAlarm(a) {
+            return { ...a, task: TASKS.includes(a.task) ? a.task : 'none', diff: DIFFS.includes(a.diff) ? a.diff : 'normal', n: Number.isInteger(a.n) && a.n >= 1 && a.n <= 5 ? a.n : 3 };
+        }
+        const taskText = (a) => a.task === 'none' ? '' : `${TASK_NAME[a.task]}${a.task === 'math' ? ' ' + a.n + ' 題' : ''}（${DIFF_NAME[a.diff]}）`;
+        // 一題心算（同一個種子永遠同一題）：簡單 = 兩位數加減；普通 = 兩位數加減 / 一位乘兩位；困難 = 三位數加減 / 兩位乘一位，答案一律是非負整數
+        function genMath(seed, diff) {
+            const r = seeded(seed), pick = (lo, hi) => lo + r.int(hi - lo + 1);
+            const op = r.int(diff === 'easy' ? 2 : 3);
+            let a, b;
+            if (op === 2) { a = diff === 'hard' ? pick(12, 29) : pick(3, 9); b = diff === 'hard' ? pick(6, 9) : pick(12, 29); return { q: `${a} × ${b}`, a: a * b }; }
+            const [lo, hi] = diff === 'easy' ? [10, 49] : diff === 'normal' ? [20, 99] : [100, 899];
+            a = pick(lo, hi); b = pick(lo, hi);
+            if (op === 0) return { q: `${a} + ${b}`, a: a + b };
+            if (a < b) [a, b] = [b, a];
+            return { q: `${a} − ${b}`, a: a - b };
+        }
+        const genMathSet = (seed, n, diff) => Array.from({ length: n }, (_, i) => genMath(`${seed}#${i}`, diff));
+        const TEXT_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';   // 去掉容易看錯的 I L O 0 1
+        const genText = (seed, diff) => { const r = seeded(seed), len = { easy: 4, normal: 6, hard: 8 }[diff] || 6; return Array.from({ length: len }, () => TEXT_CHARS[r.int(TEXT_CHARS.length)]).join(''); };
+        const checkNum = (expected, input) => { const t = String(input == null ? '' : input).normalize('NFKC').trim(); return /^-?\d+$/.test(t) && Number(t) === expected; };
+        const checkText = (expected, input) => String(input == null ? '' : input).normalize('NFKC').replace(/\s+/g, '').toUpperCase() === expected;
+        // 搖動：加速度（含重力）大小與 9.81 的差；任一軸缺值算 0
+        const shakeMag = (x, y, z) => { const v = [x, y, z].map(n => n == null ? NaN : Number(n)); return v.every(Number.isFinite) ? Math.abs(Math.hypot(...v) - 9.81) : 0; };
+        const SHAKE_THR = { easy: 8, normal: 12, hard: 16 }, SHAKE_NEED = { easy: 8, normal: 15, hard: 25 };
+        // 一次動作事件：強度過門檻且距上一次計數 ≥ 250ms 才 +1（避免一次揮動被重複計）
+        const shakeStep = (st, mag, t, diff) => mag >= (SHAKE_THR[diff] || 12) && t - st.last >= 250 ? { count: st.count + 1, last: t } : st;
+        // 緊急關閉：4 秒內累積的點擊時間；達 EMERG_TAPS 次就放行
+        const EMERG_TAPS = 5;
+        const tapStep = (taps, now) => [...taps.filter(t => now - t <= 4000), now];
         const daysText = (days) => (!days.length ? '只響一次' : days.length === 7 ? '每天' : days.join() === '1,2,3,4,5' ? '平日' : days.join() === '0,6' ? '週末' : '週' + days.map(d => WEEK[d]).join('、'));
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
         const rawAlarms = store.get('alarms', []);
-        let alarms = dropDoneSnooze((Array.isArray(rawAlarms) ? rawAlarms : []).filter(validAlarm)), picked = new Set(), lastKey = '', ringTimer = null, ringing = null, titleTimer = null;
+        let alarms = dropDoneSnooze((Array.isArray(rawAlarms) ? rawAlarms : []).filter(validAlarm).map(normAlarm)), picked = new Set(), lastKey = '', ringTimer = null, ringing = null, titleTimer = null;
         const save = () => { store.set('alarms', alarms); };
 
         $('#days').replaceChildren(...WEEK.map((w, i) => { const b = Object.assign(document.createElement('button'), { textContent: w }); b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', '週' + w); b.onclick = () => { picked.has(i) ? picked.delete(i) : picked.add(i); b.setAttribute('aria-pressed', picked.has(i)); }; return b; }));
@@ -226,7 +300,7 @@
             $('#empty').hidden = alarms.length > 0;
             $('#list').replaceChildren(...[...alarms].sort((a, b) => a.time.localeCompare(b.time)).map(a => {
                 const d = document.createElement('div'); d.className = 'al' + (a.on ? '' : ' off');
-                const meta = document.createElement('div'); meta.className = 'meta'; meta.append(Object.assign(document.createElement('div'), { className: 't', textContent: a.time }), Object.assign(document.createElement('small'), { textContent: `${a.label || '鬧鐘'}・${daysText(a.days)}${a.on ? '・' + untilText(now, nextRing(a, now)) : ''}` }));
+                const meta = document.createElement('div'); meta.className = 'meta'; meta.append(Object.assign(document.createElement('div'), { className: 't', textContent: a.time }), Object.assign(document.createElement('small'), { textContent: `${a.label || '鬧鐘'}・${daysText(a.days)}${a.task !== 'none' ? '・' + taskText(a) : ''}${a.on ? '・' + untilText(now, nextRing(a, now)) : ''}` }));
                 const cb = Object.assign(document.createElement('input'), { type: 'checkbox', checked: a.on }); cb.setAttribute('aria-label', '開關'); cb.onchange = () => { a.on = cb.checked; save(); render(); };
                 const del = Object.assign(document.createElement('button'), { className: 'sm', textContent: '刪除' }); del.onclick = () => { alarms = alarms.filter(x => x.id !== a.id); save(); render(); };
                 d.append(meta, cb, del); return d;
@@ -242,11 +316,64 @@
             if ($('#notif').checked && 'Notification' in window && Notification.permission === 'granted') { try { new Notification('⏰ ' + (a.label || '鬧鐘'), { body: a.time }); } catch (e) { } }
             if (!a.days.length) { if (isSnooze(a)) alarms = alarms.filter(x => x !== a); else a.on = false; save(); render(); }                              // 只響一次的響完就關
         }
-        function stopRing() { clearInterval(ringTimer); clearInterval(titleTimer); document.title = '網頁鬧鐘'; $('#ringing').hidden = true; ringing = null; }
-        $('#stop').onclick = stopRing;
+        function stopRing() { endTask(); clearInterval(ringTimer); clearInterval(titleTimer); document.title = '網頁鬧鐘'; $('#ringing').hidden = true; ringing = null; }
+        // 任務：響鈴中按「關閉」才開始；完成才呼叫 stopRing。貪睡不受影響
+        let task = null, taps = [], holdTimer = null, motionFn = null, motionTimer = null;
+        function endTask() {
+            if (motionFn) removeEventListener('devicemotion', motionFn); motionFn = null; clearTimeout(motionTimer); clearTimeout(holdTimer); taps = []; task = null;
+            $('#taskBox').hidden = true; $('#emerg').hidden = true; $('#stop').hidden = false; $('#tPerm').hidden = true;
+        }
+        function showQ() {
+            $('#tAns').value = ''; $('#tAns').hidden = false; $('#tOk').hidden = false;
+            $('#tInfo').textContent = task.kind === 'math' ? `心算：第 ${task.i + 1} / ${task.qs.length} 題` : '照著輸入下面的字（不分大小寫）';
+            $('#tPrompt').textContent = task.kind === 'math' ? task.qs[task.i].q + ' = ?' : task.text;
+            $('#tAns').inputMode = task.kind === 'math' ? 'numeric' : 'text'; $('#tAns').focus();
+        }
+        function startMathFallback(why) {
+            if (motionFn) removeEventListener('devicemotion', motionFn); motionFn = null; clearTimeout(motionTimer); $('#tPerm').hidden = true;
+            task = { kind: 'math', i: 0, qs: genMathSet(rnd(4294967296), 3, ringing.diff) }; showQ(); $('#tMsg').textContent = why;
+        }
+        function startShake() {
+            const need = SHAKE_NEED[ringing.diff], diff = ringing.diff; let st = { count: 0, last: 0 }, got = false;
+            task = { kind: 'shake' }; $('#tAns').hidden = true; $('#tOk').hidden = true;
+            const upd = () => { $('#tInfo').textContent = '用力搖動手機'; $('#tPrompt').textContent = `${st.count} / ${need}`; };
+            motionFn = (e) => {
+                const g = e.accelerationIncludingGravity; if (!g || g.x == null) return; got = true;
+                st = shakeStep(st, shakeMag(g.x, g.y, g.z), Date.now(), diff); upd(); if (st.count >= need) stopRing();
+            };
+            const listen = () => { addEventListener('devicemotion', motionFn); upd(); motionTimer = setTimeout(() => { if (!got) startMathFallback('偵測不到動作感測，改用心算'); }, 3000); };
+            if (typeof DeviceMotionEvent === 'undefined') return startMathFallback('這個裝置不支援動作感測，改用心算');
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                $('#tInfo').textContent = '需要動作感測權限'; $('#tPrompt').textContent = ''; $('#tPerm').hidden = false;
+                $('#tPerm').onclick = () => { $('#tPerm').hidden = true; DeviceMotionEvent.requestPermission().then(r => r === 'granted' ? listen() : startMathFallback('沒有動作感測權限，改用心算'), () => startMathFallback('沒有動作感測權限，改用心算')); };
+            } else listen();
+        }
+        function startTask() {
+            const a = ringing, seed = rnd(4294967296); $('#tMsg').textContent = '';
+            $('#taskBox').hidden = false; $('#stop').hidden = true; $('#emerg').hidden = false; $('#emerg').textContent = '緊急關閉（連按 5 次或長按 3 秒）';
+            if (a.task === 'math') { task = { kind: 'math', i: 0, qs: genMathSet(seed, a.n, a.diff) }; showQ(); }
+            else if (a.task === 'text') { task = { kind: 'text', text: genText(seed, a.diff) }; showQ(); }
+            else startShake();
+        }
+        $('#tOk').onclick = () => {
+            if (!task) return;
+            if (task.kind === 'math') {
+                if (checkNum(task.qs[task.i].a, $('#tAns').value)) { $('#tMsg').textContent = ''; if (++task.i >= task.qs.length) stopRing(); else showQ(); }
+                else { $('#tMsg').textContent = '答錯了，再試一次'; $('#tAns').value = ''; $('#tAns').focus(); }
+            } else if (task.kind === 'text') {
+                if (checkText(task.text, $('#tAns').value)) stopRing(); else { $('#tMsg').textContent = '不一樣，再試一次'; $('#tAns').value = ''; $('#tAns').focus(); }
+            }
+        };
+        $('#tAns').onkeydown = (e) => { if (e.key === 'Enter' && !e.isComposing) $('#tOk').click(); };
+        // 緊急關閉：連按 5 次（4 秒內）或長按 3 秒
+        $('#emerg').onclick = () => { taps = tapStep(taps, Date.now()); if (taps.length >= EMERG_TAPS) stopRing(); else $('#emerg').textContent = `再按 ${EMERG_TAPS - taps.length} 次就關閉（或長按 3 秒）`; };
+        $('#emerg').onpointerdown = () => { clearTimeout(holdTimer); holdTimer = setTimeout(stopRing, 3000); };
+        $('#emerg').onpointerup = $('#emerg').onpointerleave = $('#emerg').onpointercancel = () => clearTimeout(holdTimer);
+        $('#emerg').oncontextmenu = (e) => e.preventDefault();
+        $('#stop').onclick = () => { if (ringing && ringing.task && ringing.task !== 'none') startTask(); else stopRing(); };
         $('#snooze').onclick = () => {
             if (!ringing) return; const t = new Date(Date.now() + 5 * 60000);
-            alarms.push({ id: 'z' + Date.now().toString(36) + rnd(1e6).toString(36), time: hhmm(t), label: snoozeLabel(ringing.label), days: [], on: true }); save(); stopRing(); render();
+            alarms.push({ id: 'z' + Date.now().toString(36) + rnd(1e6).toString(36), time: hhmm(t), label: snoozeLabel(ringing.label), days: [], on: true, task: ringing.task, diff: ringing.diff, n: ringing.n }); save(); stopRing(); render();
         };
 
         setInterval(() => {
@@ -256,9 +383,9 @@
         setInterval(render, 20000);
 
         $('#add').onclick = () => {
-            const a = { id: Date.now().toString(36) + rnd(1e6).toString(36), time: $('#time').value, label: $('#label').value.trim(), days: [...picked].sort(), on: true };
+            const a = { id: Date.now().toString(36) + rnd(1e6).toString(36), time: $('#time').value, label: $('#label').value.trim(), days: [...picked].sort(), on: true, task: $('#task').value, diff: $('#diff').value, n: +$('#tn').value };
             if (!validAlarm(a) || alarms.length >= 30) return;
-            alarms.push(a); save(); $('#label').value = ''; render(); tone(660, 80, { vol: 0.08 });          // 順便解除瀏覽器對聲音的限制（需要使用者操作後才能發聲）
+            alarms.push(normAlarm(a)); save(); $('#label').value = ''; render(); tone(660, 80, { vol: 0.08 });          // 順便解除瀏覽器對聲音的限制（需要使用者操作後才能發聲）
         };
         $('#notif').onchange = async () => {
             if (!$('#notif').checked) return;
@@ -266,6 +393,8 @@
             const p = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
             if (p !== 'granted') { $('#notif').checked = false; $('#notifMsg').textContent = '沒有通知權限'; } else $('#notifMsg').textContent = '';
         };
+        $('#task').onchange = () => { $('#tn').hidden = $('#task').value !== 'math'; $('#diff').hidden = $('#task').value === 'none'; };
+        $('#task').onchange();
         render();
     </script>
 </body>
