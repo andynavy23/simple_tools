@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="五十音練習：平假名、片假名與羅馬拼音互測，可選行別，答錯的更常出現，有計時連擊與無限練習、對照表發音與各假名正確率統計，離線可玩。">
+    <meta property="og:title" content="五十音練習" />
+    <meta property="og:description" content="平假名、片假名、羅馬拼音互測，錯題加強。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/kana-quiz.html" />
+    <meta name="st-keys" content="kana_stats">
+    <title>五十音練習</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .tabs,
+        .chips,
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .tabs {
+            margin-bottom: 16px;
+        }
+
+        .tabs button {
+            flex: 1;
+            min-height: 44px;
+        }
+
+        .chips button {
+            min-height: 44px;
+            padding: 6px 14px;
+        }
+
+        .lab {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 12px 0 6px;
+        }
+
+        .hud {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            font-variant-numeric: tabular-nums;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .hud b {
+            color: var(--text);
+        }
+
+        .big {
+            text-align: center;
+            font-size: clamp(72px, 26vw, 132px);
+            line-height: 1.15;
+            margin: 10px 0 6px;
+            font-weight: 600;
+        }
+
+        .big.roma {
+            font-size: clamp(56px, 20vw, 100px);
+        }
+
+        .choices {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .choices button {
+            min-height: 64px;
+            font-size: 26px;
+        }
+
+        .choices button.ok {
+            outline: 3px solid var(--ok);
+        }
+
+        .choices button.bad {
+            outline: 3px solid var(--bad);
+        }
+
+        #typeRow input {
+            flex: 1;
+            min-width: 0;
+            font-size: 22px;
+            text-align: center;
+        }
+
+        #fb {
+            min-height: 28px;
+            text-align: center;
+            font-size: 18px;
+            margin: 10px 0 4px;
+        }
+
+        #fb.ok {
+            color: var(--ok);
+        }
+
+        #fb.bad {
+            color: var(--bad);
+        }
+
+        .res {
+            text-align: center;
+        }
+
+        .res .n {
+            font-size: 48px;
+            font-weight: 700;
+        }
+
+        .krow {
+            display: grid;
+            grid-template-columns: repeat(var(--n, 5), 1fr);
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+
+        .kc {
+            min-height: 60px;
+            padding: 4px 2px;
+            line-height: 1.25;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .kc b {
+            font-size: 22px;
+            font-weight: 600;
+        }
+
+        .kc small {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .kc.ok {
+            outline: 2px solid var(--ok);
+        }
+
+        .kc.bad {
+            outline: 2px solid var(--bad);
+        }
+
+        .kc.none {
+            opacity: .55;
+        }
+
+        .weak {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-top: 1px solid var(--line);
+        }
+
+        .weak b {
+            font-size: 28px;
+            min-width: 2.4em;
+        }
+
+        .weak span {
+            flex: 1;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>五十音練習</h1>
+        <p class="sub">平假名、片假名、羅馬拼音互測，答錯的會更常出現。</p>
+
+        <div class="tabs" id="tabs">
+            <button data-tab="play" aria-pressed="true">練習</button>
+            <button data-tab="table" aria-pressed="false">對照表</button>
+            <button data-tab="stat" aria-pressed="false">統計</button>
+        </div>
+
+        <div id="play">
+            <div class="card" id="setup">
+                <div class="lab" style="margin-top:0">文字</div>
+                <div class="chips" data-seg="script">
+                    <button data-v="hira" aria-pressed="true">平假名</button>
+                    <button data-v="kata" aria-pressed="false">片假名</button>
+                    <button data-v="mix" aria-pressed="false">混合</button>
+                </div>
+                <div class="lab">題型</div>
+                <div class="chips" data-seg="dir">
+                    <button data-v="k2r" aria-pressed="true">看假名選拼音</button>
+                    <button data-v="r2k" aria-pressed="false">看拼音選假名</button>
+                    <button data-v="type" aria-pressed="false">輸入拼音</button>
+                </div>
+                <div class="lab">模式</div>
+                <div class="chips" data-seg="mode">
+                    <button data-v="free" aria-pressed="true">無限練習</button>
+                    <button data-v="timed" aria-pressed="false">計時連擊 60 秒</button>
+                </div>
+                <div class="lab">範圍（可複選）</div>
+                <div class="chips" id="groups"></div>
+                <div class="row" style="margin-top:8px"><button class="sm" id="gAll">全選</button><button class="sm" id="gSeion">只選清音</button><span class="muted" id="gCount"></span></div>
+                <label class="row" style="margin-top:10px;min-height:44px"><input type="checkbox" id="snd"> 答題後念出發音（需要手機 / 瀏覽器有日文語音）</label>
+                <div class="row" style="margin-top:8px"><button class="primary" id="start" style="flex:1;min-height:52px">開始</button></div>
+                <p class="note" id="setupMsg"></p>
+            </div>
+
+            <div class="card" id="game" hidden>
+                <div class="hud"><span>得分 <b id="hScore">0</b></span><span>連擊 <b id="hCombo">0</b></span><span id="hTime"></span><span><b id="hRight">0</b> / <b id="hTotal">0</b></span></div>
+                <div class="big" id="big"></div>
+                <div class="choices" id="choices"></div>
+                <div class="row" id="typeRow" hidden><input type="text" id="ans" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" enterkeyhint="done" placeholder="輸入羅馬拼音" aria-label="羅馬拼音"><button class="primary" id="ansGo">送出</button></div>
+                <div id="fb" role="status"></div>
+                <div class="row"><button class="primary" id="nextBtn" hidden style="flex:1">下一題</button><button id="endBtn">結束</button></div>
+            </div>
+
+            <div class="card res" id="result" hidden>
+                <div class="muted" id="rTitle">練習結束</div>
+                <div class="n" id="rScore"></div>
+                <p id="rLine"></p>
+                <div class="row" style="justify-content:center"><button class="primary" id="again">再來一局</button><button id="toSetup">回設定</button></div>
+            </div>
+        </div>
+
+        <div id="table" hidden>
+            <div class="card"><p class="note" style="margin-top:0">點任何一格會念出該假名（需要裝置有日文語音，沒有就不會出聲）。每格由上到下：平假名、片假名、羅馬拼音。</p></div>
+            <div id="tblBody"></div>
+            <div class="card">
+                <h2>小提醒</h2>
+                <ul>
+                    <li><b>促音 っ / ッ</b>：小的「つ」，不發音、只停頓一拍，並讓後面的子音重複。きって → kitte、ざっし → zasshi。</li>
+                    <li><b>撥音 ん / ン</b>：獨立一拍的鼻音，羅馬拼音寫 n（也常寫 nn 或 n'，例如 しんい shin'i）。</li>
+                    <li><b>拗音</b>：「い段」假名 + 小的 ゃ ゅ ょ 合成一拍，例如 き + ゃ = きゃ kya；注意 ちゃ 與 ちや 不同。</li>
+                    <li><b>長音</b>：あ段加あ、い段加い、う段加う、え段加え / い、お段加お / う 會拉長一拍，片假名則用「ー」。</li>
+                    <li><b>助詞</b>：は 當助詞念 wa、へ 念 e、を 念 o。</li>
+                    <li><b>じ / ぢ、ず / づ</b>：發音相同，ぢ、づ 很少用（例如 はなぢ、こづつみ）。練習時 ぢ 接受 ji / di / zi，づ 接受 zu / du。</li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="stat" hidden>
+            <div class="card">
+                <div id="sSum"></div>
+                <div class="row" style="margin-top:10px"><button id="weakGo" class="primary">練習最弱 10 個</button><button id="clr">清除統計與最佳紀錄</button></div>
+                <p class="note" id="sMsg"></p>
+            </div>
+            <div class="card"><h2>最弱的 10 個</h2>
+                <div id="weakList"></div>
+            </div>
+            <div class="card"><h2>各假名正確率</h2>
+                <p class="note" style="margin-top:0">綠框 ≥ 80%、紅框 &lt; 80%；灰色代表還沒練過。</p>
+                <div id="allRates"></div>
+            </div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>五十音練習：平假名、片假名與羅馬拼音互相測驗，包含清音、濁音、半濁音與拗音；答錯的假名之後會更常出現。單機玩，不需要網路。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>剛開始學日文，要背熟五十音</li>
+        <li>平假名會了、片假名老是混淆，想分開加強</li>
+        <li>通勤或排隊時練幾分鐘，或用計時連擊挑戰自己</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+        <li>在「練習」選文字（平假名 / 片假名 / 混合）、題型（看假名選拼音 / 看拼音選假名 / 輸入拼音）、模式與範圍（あ行～わ行、濁音、半濁音、拗音可複選）</li>
+        <li>按「開始」。選擇題點按選項（鍵盤可按 <kbd>1</kbd>～<kbd>4</kbd>），輸入題打字後按 <kbd>Enter</kbd></li>
+        <li>答對自動下一題；答錯會顯示正確答案，按「下一題」（或 <kbd>Enter</kbd>）繼續</li>
+        <li>「計時連擊 60 秒」：每答對一題得 10 分，連擊越高加越多（最多每題 +10），答錯連擊歸零；時間到結算並記錄最佳分數</li>
+        <li>「對照表」可查全部假名並點擊發音；「統計」看每個假名的正確率與最弱 10 個，可一鍵練習最弱的</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">選「平假名 + 看假名選拼音 + 只選清音」：畫面出現「し」，選 <b>shi</b> 答對（輸入題輸入 <b>si</b> 也算對）。常見多種寫法都接受：shi / si、chi / ti、tsu / tu、fu / hu、ji / zi、sha / sya、ja / jya、ん 的 n / nn。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>每個假名的答對 / 答錯次數存在這個瀏覽器（鍵 kana_stats，最多 104 個假名，不會無限增長），可用右上角 💾 備份；「統計」頁的「清除統計與最佳紀錄」會刪除全部，無法復原</li>
+        <li>平假名與片假名共用同一份統計；手機或瀏覽器沒有日文語音時，發音會略過</li>
+        <li>拗音共 33 個（不含很少用的 ぢゃ、ぢゅ、ぢょ）；促音 っ 與長音 ー 不單獨出題，說明在「對照表」下方</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        // 資料：每行 [行名, 假名, 羅馬拼音（空白分隔，/ 後面是也接受的寫法）]；片假名由平假名換算（碼位 +0x60）
+        const SEION_ROWS = [
+            ['あ行', 'あいうえお', 'a i u e o'], ['か行', 'かきくけこ', 'ka ki ku ke ko'], ['さ行', 'さしすせそ', 'sa shi/si su se so'],
+            ['た行', 'たちつてと', 'ta chi/ti tsu/tu te to'], ['な行', 'なにぬねの', 'na ni nu ne no'], ['は行', 'はひふへほ', 'ha hi fu/hu he ho'],
+            ['ま行', 'まみむめも', 'ma mi mu me mo'], ['や行', 'やゆよ', 'ya yu yo'], ['ら行', 'らりるれろ', 'ra ri ru re ro'], ['わ行', 'わをん', "wa wo/o n/nn/n'"]];
+        const DAKU_ROWS = [['が行', 'がぎぐげご', 'ga gi gu ge go'], ['ざ行', 'ざじずぜぞ', 'za ji/zi zu ze zo'], ['だ行', 'だぢづでど', 'da ji/di/zi zu/du/dzu de do'], ['ば行', 'ばびぶべぼ', 'ba bi bu be bo']];
+        const HANDAKU_ROWS = [['ぱ行', 'ぱぴぷぺぽ', 'pa pi pu pe po']];
+        const YOON_ROWS = [['きゃ行', 'き', 'kya kyu kyo'], ['しゃ行', 'し', 'sha/sya shu/syu sho/syo'], ['ちゃ行', 'ち', 'cha/tya/cya chu/tyu/cyu cho/tyo/cyo'], ['にゃ行', 'に', 'nya nyu nyo'],
+            ['ひゃ行', 'ひ', 'hya hyu hyo'], ['みゃ行', 'み', 'mya myu myo'], ['りゃ行', 'り', 'rya ryu ryo'], ['ぎゃ行', 'ぎ', 'gya gyu gyo'], ['じゃ行', 'じ', 'ja/jya/zya ju/jyu/zyu jo/jyo/zyo'],
+            ['びゃ行', 'び', 'bya byu byo'], ['ぴゃ行', 'ぴ', 'pya pyu pyo']];
+        const G_DAKU = '濁音', G_HANDAKU = '半濁音', G_YOON = '拗音';
+        function buildKana() {
+            const out = [];
+            const add = (h, rs, g, row, grp) => out.push({ h, r: rs.split('/'), g, row, grp });
+            const each = (rows, g, grpOf) => rows.forEach(([row, hs, rs]) => {
+                const chars = g === 'yoon' ? [hs + 'ゃ', hs + 'ゅ', hs + 'ょ'] : [...hs];
+                rs.split(' ').forEach((r, i) => add(chars[i], r, g, row, grpOf(row)));
+            });
+            each(SEION_ROWS, 'seion', (row) => row); each(DAKU_ROWS, 'daku', () => G_DAKU); each(HANDAKU_ROWS, 'handaku', () => G_HANDAKU); each(YOON_ROWS, 'yoon', () => G_YOON);
+            return out;
+        }
+        const KANA = buildKana();
+        const KANA_BY_ID = Object.fromEntries(KANA.map(e => [e.h, e]));
+        const GROUPS = [...SEION_ROWS.map(r => r[0]), G_DAKU, G_HANDAKU, G_YOON];
+        const toKata = (h) => [...h].map(ch => String.fromCharCode(ch.charCodeAt(0) + 0x60)).join('');
+        const show = (e, script) => script === 'kata' ? toKata(e.h) : e.h;
+        const normInput = (s) => String(s).normalize('NFKC').toLowerCase().replace(/\s+/g, '').replace(/[’‘`´]/g, "'");
+        const accepts = (e, input) => e.r.includes(normInput(input));
+        const poolOf = (groups) => KANA.filter(e => groups.has(e.grp));
+
+        // 統計：{ s: { 平假名: [答對, 答錯] }, best: 計時最佳分 }；只收已知的假名（所以最多 104 筆），數字限制範圍
+        const STAT_CAP = 100000;
+        const cnt = (v) => { v = Math.floor(Number(v)); return Number.isFinite(v) && v > 0 ? Math.min(v, STAT_CAP) : 0; };
+        function cleanStats(x) {
+            const out = { s: {}, best: 0 };
+            if (!x || typeof x !== 'object' || Array.isArray(x)) return out;
+            const s = x.s && typeof x.s === 'object' && !Array.isArray(x.s) ? x.s : {};
+            for (const id of Object.keys(KANA_BY_ID)) {
+                const v = Object.prototype.hasOwnProperty.call(s, id) ? s[id] : null;
+                if (Array.isArray(v)) { const c = cnt(v[0]), w = cnt(v[1]); if (c || w) out.s[id] = [c, w]; }
+            }
+            out.best = cnt(x.best);
+            return out;
+        }
+        function recordAnswer(stats, id, right) {
+            if (!KANA_BY_ID[id]) return stats;
+            const cur = stats.s[id] || [0, 0], next = [cnt(cur[0] + (right ? 1 : 0)), cnt(cur[1] + (right ? 0 : 1))];
+            return { s: { ...stats.s, [id]: next }, best: stats.best };
+        }
+        const errRate = (st) => st ? (st[1] + 0.5) / (st[0] + st[1] + 1) : 0;           // 平滑後的錯誤率（練得少的不會一次錯就 100%）
+        const weightOf = (st) => st ? 1 + 6 * errRate(st) : 2;                           // 沒練過 2；全對的約 1.1；一直錯的約 6.5
+        function pickWeighted(pool, stats, rand, lastId) {
+            const c = pool.length > 1 ? pool.filter(e => e.h !== lastId) : pool;
+            if (!c.length) return null;
+            const ws = c.map(e => weightOf(stats.s[e.h])), total = ws.reduce((a, b) => a + b, 0);
+            let r = rand() * total;
+            for (let i = 0; i < c.length; i++) { r -= ws[i]; if (r < 0) return c[i]; }
+            return c[c.length - 1];
+        }
+        const shuf = (a, rand) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+        // 選項：1 個正確 + 3 個干擾；干擾不能和答案共用任何拼音（じ / ぢ 都是 ji、お / を 都是 o，否則會有兩個正確答案）；先取範圍內、再同類、最後全部
+        function pickChoices(e, pool, rand, script, dir, n = 4) {
+            const label = (x) => dir === 'r2k' ? show(x, script) : x.r[0];
+            const bad = (x) => x.h === e.h || x.r.some(r => e.r.includes(r));
+            const tiers = [shuf(pool, rand), shuf(KANA.filter(x => x.g === e.g), rand), shuf(KANA, rand)];
+            const used = new Set([label(e)]), opts = [];
+            for (const t of tiers) for (const x of t) { if (opts.length >= n - 1) break; if (bad(x) || used.has(label(x))) continue; used.add(label(x)); opts.push({ label: label(x), ok: false }); }
+            opts.push({ label: label(e), ok: true });
+            return shuf(opts, rand);
+        }
+        // 出題：dir = k2r（看假名選拼音）/ r2k（看拼音選假名）/ type（看假名輸入拼音）；scripts = ['hira'] / ['kata'] / ['hira','kata']
+        function makeQuestion({ pool, stats, rand, lastId, scripts, dir }) {
+            const e = pickWeighted(pool, stats, rand, lastId); if (!e) return null;
+            const script = scripts[Math.min(scripts.length - 1, Math.floor(rand() * scripts.length))];
+            return { id: e.h, e, script, dir, text: dir === 'r2k' ? e.r[0] : show(e, script), choices: dir === 'type' ? null : pickChoices(e, pool, rand, script, dir) };
+        }
+        const scoreFor = (combo) => 10 + Math.min(Math.max(combo, 1), 10);
+        // 最弱的 n 個：答錯過的，依平滑錯誤率由高到低（同分答錯次數多的在前）
+        function weakest(stats, n = 10) {
+            return KANA.filter(e => stats.s[e.h] && stats.s[e.h][1] > 0)
+                .map(e => { const [c, w] = stats.s[e.h]; return { id: e.h, c, w, rate: w / (c + w), er: errRate(stats.s[e.h]) }; })
+                .sort((a, b) => b.er - a.er || b.w - a.w).slice(0, n);
+        }
+        const totals = (stats) => Object.values(stats.s).reduce((t, [c, w]) => [t[0] + c, t[1] + w], [0, 0]);
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
+        const TIMED_SEC = 60;
+        let stats = cleanStats(Util.store.get('kana_stats', null));
+        const saveStats = () => Util.store.set('kana_stats', stats);
+        const S = { script: 'hira', dir: 'k2r', mode: 'free', sel: new Set(SEION_ROWS.map(r => r[0])) };
+        let G = null, speakOn = false, timerId = 0, nextId = 0;
+
+        // 分頁
+        function tab(name) {
+            $$('#tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.tab === name));
+            for (const t of ['play', 'table', 'stat']) $('#' + t).hidden = t !== name;
+            if (name === 'stat') renderStats();
+        }
+        $$('#tabs button').forEach(b => b.onclick = () => tab(b.dataset.tab));
+        $$('[data-seg]').forEach(box => box.onclick = (e) => {
+            const b = e.target.closest('button'); if (!b) return;
+            S[box.dataset.seg] = b.dataset.v; box.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+        });
+        $('#snd').onchange = (e) => { speakOn = e.target.checked; };
+
+        // 範圍
+        function renderGroups() {
+            $('#groups').replaceChildren(...GROUPS.map(g => {
+                const b = document.createElement('button'); b.textContent = g; b.setAttribute('aria-pressed', S.sel.has(g));
+                b.onclick = () => { S.sel.has(g) ? S.sel.delete(g) : S.sel.add(g); renderGroups(); }; return b;
+            }));
+            $('#gCount').textContent = `共 ${poolOf(S.sel).length} 個假名`;
+        }
+        $('#gAll').onclick = () => { S.sel = new Set(GROUPS); renderGroups(); };
+        $('#gSeion').onclick = () => { S.sel = new Set(SEION_ROWS.map(r => r[0])); renderGroups(); };
+
+        // 對照表
+        const say = (h) => Util.speak(h, { lang: 'ja-JP', rate: 0.8 });
+        function renderTable() {
+            const sections = [['清音（46）', SEION_ROWS, 5], ['濁音（20）', DAKU_ROWS, 5], ['半濁音（5）', HANDAKU_ROWS, 5], ['拗音（33）', YOON_ROWS, 3]];
+            $('#tblBody').replaceChildren(...sections.map(([title, rows, n]) => {
+                const card = document.createElement('div'); card.className = 'card'; const h = document.createElement('h2'); h.textContent = title; card.append(h);
+                for (const [row] of rows) {
+                    const line = document.createElement('div'); line.className = 'krow'; line.style.setProperty('--n', n);
+                    for (const e of KANA.filter(x => x.row === row)) {
+                        const b = document.createElement('button'); b.className = 'kc'; b.title = '點一下發音';
+                        b.append(Object.assign(document.createElement('b'), { textContent: e.h }), Object.assign(document.createElement('b'), { textContent: toKata(e.h) }), Object.assign(document.createElement('small'), { textContent: e.r[0] }));
+                        b.onclick = () => say(e.h); line.append(b);
+                    }
+                    card.append(line);
+                }
+                return card;
+            }));
+        }
+
+        // 統計
+        function renderStats() {
+            const [c, w] = totals(stats), n = c + w;
+            $('#sSum').textContent = n ? `累計作答 ${n} 題，正確率 ${Math.round(c / n * 100)}%　計時連擊最佳 ${stats.best} 分` : '還沒有紀錄，去「練習」答幾題吧。';
+            const wk = weakest(stats);
+            $('#weakGo').disabled = !wk.length;
+            $('#weakList').replaceChildren(...(wk.length ? wk.map(x => {
+                const d = document.createElement('div'); d.className = 'weak';
+                d.append(Object.assign(document.createElement('b'), { textContent: x.id }), Object.assign(document.createElement('span'), { textContent: `${KANA_BY_ID[x.id].r[0]}　${Math.round((1 - x.rate) * 100)}%（對 ${x.c} / 錯 ${x.w}）` }));
+                const sp = document.createElement('button'); sp.className = 'sm'; sp.textContent = '🔊'; sp.setAttribute('aria-label', '發音 ' + x.id); sp.onclick = () => say(x.id); d.append(sp); return d;
+            }) : [Object.assign(document.createElement('span'), { className: 'muted', textContent: '還沒有答錯過的假名。' })]));
+            const g = document.createElement('div'); g.className = 'krow'; g.style.setProperty('--n', 5);
+            g.replaceChildren(...KANA.map(e => {
+                const st = stats.s[e.h], d = document.createElement('div'); d.className = 'kc' + (st ? (st[0] / (st[0] + st[1]) >= 0.8 ? ' ok' : ' bad') : ' none');
+                d.append(Object.assign(document.createElement('b'), { textContent: e.h }), Object.assign(document.createElement('small'), { textContent: st ? Math.round(st[0] / (st[0] + st[1]) * 100) + '%' : '—' })); return d;
+            }));
+            $('#allRates').replaceChildren(g);
+        }
+        $('#clr').onclick = () => {
+            if (!confirm('確定清除五十音練習的全部統計與計時最佳紀錄？無法復原。')) return;
+            stats = { s: {}, best: 0 }; saveStats(); $('#sMsg').textContent = '已清除'; renderStats();
+        };
+        $('#weakGo').onclick = () => { const ids = new Set(weakest(stats).map(x => x.id)); tab('play'); start(KANA.filter(e => ids.has(e.h))); };
+
+        // 練習
+        function show3(name) { $('#setup').hidden = name !== 'setup'; $('#game').hidden = name !== 'game'; $('#result').hidden = name !== 'result'; }
+        function start(poolOverride) {
+            const pool = poolOverride || poolOf(S.sel);
+            if (!pool.length) { $('#setupMsg').textContent = '請至少選一個範圍'; return; }
+            $('#setupMsg').textContent = '';
+            G = { pool, scripts: S.script === 'mix' ? ['hira', 'kata'] : [S.script], dir: S.dir, timed: S.mode === 'timed', score: 0, combo: 0, maxCombo: 0, right: 0, total: 0, q: null, lastId: null, locked: false, end: Date.now() + TIMED_SEC * 1000 };
+            show3('game'); clearInterval(timerId);
+            if (G.timed) { timerId = setInterval(tickTime, 250); }
+            nextQ();
+        }
+        $('#start').onclick = () => start();
+        function tickTime() { if (!G || !G.timed) return; const left = Math.max(0, Math.ceil((G.end - Date.now()) / 1000)); $('#hTime').textContent = '⏱ ' + left + ' 秒'; if (G.end - Date.now() <= 0) finish(); }
+        function hud() { $('#hScore').textContent = G.score; $('#hCombo').textContent = G.combo; $('#hRight').textContent = G.right; $('#hTotal').textContent = G.total; $('#hTime').textContent = G.timed ? '⏱ ' + Math.max(0, Math.ceil((G.end - Date.now()) / 1000)) + ' 秒' : '無限練習'; }
+        function nextQ() {
+            clearTimeout(nextId); if (!G) return;
+            G.q = makeQuestion({ pool: G.pool, stats, rand: Math.random, lastId: G.lastId, scripts: G.scripts, dir: G.dir }); G.locked = false;
+            const q = G.q; $('#big').textContent = q.text; $('#big').classList.toggle('roma', q.dir === 'r2k');
+            $('#fb').textContent = ''; $('#fb').className = ''; $('#nextBtn').hidden = true;
+            $('#choices').hidden = !q.choices; $('#typeRow').hidden = !!q.choices;
+            if (q.choices) $('#choices').replaceChildren(...q.choices.map((o, i) => { const b = document.createElement('button'); b.textContent = o.label; b.dataset.i = i; b.onclick = () => choose(i); return b; }));
+            else { $('#ans').value = ''; $('#ans').disabled = false; $('#ansGo').disabled = false; if (!matchMedia('(pointer:coarse)').matches) $('#ans').focus(); }
+            hud();
+        }
+        function answer(right, shown) {
+            if (!G || G.locked) return; G.locked = true; const q = G.q;
+            stats = recordAnswer(stats, q.id, right); saveStats(); G.total++; G.lastId = q.id;
+            if (right) { G.right++; G.combo++; G.maxCombo = Math.max(G.maxCombo, G.combo); G.score += scoreFor(G.combo); } else G.combo = 0;
+            $('#fb').className = right ? 'ok' : 'bad'; $('#fb').textContent = right ? '✓ 正確' : `✗ 正確答案：${shown}`;
+            if (speakOn) say(q.e.h);
+            hud();
+            if (right || G.timed) nextId = setTimeout(nextQ, right ? 450 : 900); else $('#nextBtn').hidden = false;
+        }
+        function choose(i) {
+            if (!G || G.locked) return; const o = G.q.choices[i], btns = $$('#choices button');
+            btns[i].classList.add(o.ok ? 'ok' : 'bad'); if (!o.ok) btns[G.q.choices.findIndex(x => x.ok)].classList.add('ok');
+            answer(o.ok, G.q.choices.find(x => x.ok).label);
+        }
+        function submitType() {
+            if (!G || G.locked || !G.q || G.q.dir !== 'type') return; const v = $('#ans').value; if (!normInput(v)) return;
+            $('#ans').disabled = true; $('#ansGo').disabled = true; answer(accepts(G.q.e, v), G.q.e.r[0]);
+        }
+        $('#ansGo').onclick = submitType;
+        $('#nextBtn').onclick = nextQ;
+        $('#endBtn').onclick = () => finish();
+        document.addEventListener('keydown', (e) => {
+            if (!G || $('#game').hidden) return;
+            if (e.key === 'Enter') { if (G.locked) { if (!$('#nextBtn').hidden) nextQ(); } else if (document.activeElement === $('#ans')) submitType(); }
+            else if (/^[1-4]$/.test(e.key) && G.q && G.q.choices && document.activeElement.tagName !== 'INPUT') choose(+e.key - 1);
+        });
+        function finish() {
+            if (!G) return; clearInterval(timerId); clearTimeout(nextId);
+            const g = G; G = null; let line = `答對 ${g.right} / ${g.total} 題` + (g.total ? `（${Math.round(g.right / g.total * 100)}%）` : '') + `，最高連擊 ${g.maxCombo}`;
+            if (g.timed) {
+                const isBest = g.score > stats.best; if (isBest) { stats = { s: stats.s, best: g.score }; saveStats(); }
+                line += `。最佳紀錄 ${stats.best} 分` + (isBest ? '（新紀錄！）' : '');
+            }
+            $('#rTitle').textContent = g.timed ? '時間到' : '練習結束'; $('#rScore').textContent = g.timed ? g.score + ' 分' : `${g.right} / ${g.total}`; $('#rLine').textContent = line;
+            lastPool = g.pool; show3('result');
+        }
+        let lastPool = null;
+        $('#again').onclick = () => start(lastPool);
+        $('#toSetup').onclick = () => show3('setup');
+
+        renderGroups(); renderTable(); show3('setup');
+    </script>
+</body>
+
+</html>

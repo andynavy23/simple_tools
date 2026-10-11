@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="資料圖表產生器：貼上 CSV / TSV / 試算表資料，一鍵畫出長條、橫條、折線、面積、圓餅、環圈與散佈圖，可匯出 PNG。">
+    <meta property="og:title" content="資料圖表產生器" />
+    <meta property="og:description" content="貼上資料就出圖，支援 7 種圖表與色盲友善配色，匯出 PNG。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/chart-maker.html" />
+    <meta name="st-keys" content="chartm_opts">
+    <title>資料圖表產生器</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root { --wrap-w: 720px; }
+
+        label.lb { font-weight: 600; display: block; margin: 12px 0 6px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .row > * { min-width: 0; }
+        #data { min-height: 140px; font-family: ui-monospace, Menlo, Consolas, monospace; white-space: pre; overflow: auto; resize: vertical; }
+        .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+        .chk { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; background: var(--fill); border-radius: var(--btn-radius); cursor: pointer; }
+        .chk input { margin: 0; }
+        .cvwrap { width: 100%; }
+        #cv { display: block; max-width: 100%; border-radius: var(--radius-sm); }
+        .sw { display: inline-flex; gap: 3px; vertical-align: middle; }
+        .sw i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+        #pal { flex: 1; min-width: 140px; }
+        #msg, #info, #warn { margin: 8px 0 0; }
+        #warn { color: var(--bad); }
+        .full { flex: 1 1 100%; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>資料圖表產生器</h1>
+        <p class="sub">貼上 CSV / TSV / 試算表資料，選欄位就出圖；資料只在本機處理。</p>
+
+        <div class="card">
+            <label class="lb" for="data" style="margin-top:0">資料（可直接從 Excel / Google 試算表複製貼上）</label>
+            <textarea id="data" spellcheck="false" placeholder="月份,營收,成本&#10;1月,120,80&#10;2月,150,95&#10;3月,170,110"></textarea>
+            <div class="row" style="margin-top:8px">
+                <label class="chk"><input type="checkbox" id="hdr" checked> 第一列是標題</label>
+                <button id="sample" class="sm">載入範例</button>
+                <button id="clear" class="sm">清除資料</button>
+            </div>
+            <p class="note" id="info"></p>
+            <p class="note" id="warn" role="alert"></p>
+        </div>
+
+        <div class="card">
+            <h2>圖表設定</h2>
+            <div class="chips" id="types" role="group" aria-label="圖表類型"></div>
+            <div class="row">
+                <div class="full"><label class="lb" for="xcol" style="margin-top:4px">X 軸（類別）欄</label><select id="xcol" style="width:100%"></select></div>
+            </div>
+            <label class="lb">數值欄（可複選）</label>
+            <div class="chips" id="ycols"></div>
+            <label class="lb" for="title">圖表標題（選填）</label>
+            <input id="title" maxlength="60" placeholder="例如：2025 上半年營收" style="width:100%">
+            <div class="row" style="margin-top:12px">
+                <label class="chk"><input type="checkbox" id="legend" checked> 圖例</label>
+                <label class="chk"><input type="checkbox" id="labels"> 數值標籤</label>
+                <select id="pal" aria-label="配色"></select>
+                <span class="sw" id="sw" aria-hidden="true"></span>
+            </div>
+            <div class="row" style="margin-top:8px"><button id="reset" class="sm">重置圖表設定</button></div>
+        </div>
+
+        <div class="card">
+            <div class="cvwrap" id="cvwrap"><canvas id="cv" role="img" aria-label="圖表預覽"></canvas></div>
+            <div class="row" style="margin-top:12px">
+                <button class="primary" id="dl">下載 PNG</button>
+                <button id="cp">複製圖片</button>
+            </div>
+            <p class="note" id="msg" role="status"></p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>把一份表格資料變成圖表的小工具：貼上 CSV、TSV 或直接從試算表複製的內容，選好 X 軸與數值欄，就能畫出長條（群組 / 堆疊）、橫條、折線、面積、圓餅、環圈、散佈圖，並匯出成 PNG 圖片。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>要在簡報、報告或聊天裡放一張簡單的圖，不想開試算表。</li>
+        <li>快速看一份匯出資料的趨勢、占比或分布。</li>
+        <li>需要色盲朋友也看得清楚的配色。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>在「資料」框貼上內容（逗號、Tab、分號、直線分隔都會自動判斷），或按「載入範例」。</li>
+        <li>第一列若是欄位名稱就勾「第一列是標題」（貼上時會自動猜）。</li>
+        <li>點上方圖表類型；選「X 軸（類別）欄」與要畫的「數值欄」。圓餅 / 環圈只畫第一個選取的數值欄；散佈圖的 X 要是數字。</li>
+        <li>可填標題、開關「圖例」與「數值標籤」，並從 5 組配色挑一組（其中一組為色盲友善）。</li>
+        <li>按「下載 PNG」存圖，或「複製圖片」貼到別處。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">貼上：
+月份,營收,成本
+1月,120,80
+2月,150,95
+3月,170,110
+X 軸選「月份」，數值欄勾「營收」「成本」，類型選「長條（群組）」→ 每個月兩根並排的長條，圖例標出營收與成本。改成「折線」就變成兩條趨勢線。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>資料上限 5000 列 × 12 欄，超過的部分會被略過並提示。</li>
+        <li>數字可含千分位逗號（1,234）、百分號或貨幣符號（$、NT$）；不是數字的格子會略過（折線留空隙、長條不畫），並在上方提示有幾格被略過。</li>
+        <li>圓餅 / 環圈只畫大於 0 的數值，超過 12 個項目時把最小的合併成「其他」。</li>
+        <li>圖表顏色跟隨目前的外觀（淺色 / 深色）；PNG 以目前外觀的底色輸出。</li>
+        <li>只記住上次的圖表類型、配色、圖例與數值標籤開關（這個瀏覽器），<b>不會儲存你貼的資料</b>；重新整理後資料需要再貼一次。「重置圖表設定」會把記住的設定還原成預設（不影響目前貼的資料，無法復原）。</li>
+        <li>全部在你的瀏覽器計算，不會上傳。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { parseCSV, store, download } = Util;
+
+        // --- pure ---
+        const MAX_ROWS = 5000, MAX_COLS = 12, MAX_CHARS = 2000000;
+        const TYPES = ['bar', 'stack', 'hbar', 'line', 'area', 'pie', 'donut', 'scatter'];
+        const TYPE_NAMES = { bar: '長條（群組）', stack: '長條（堆疊）', hbar: '橫條', line: '折線', area: '面積', pie: '圓餅', donut: '環圈', scatter: '散佈' };
+        const PALETTES = [
+            { name: '經典', c: ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac', '#d37295', '#86bcb6'] },
+            { name: '鮮明', c: ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990', '#9a6324', '#808000'] },
+            { name: '柔和', c: ['#8cb4d9', '#f4b183', '#a9d18e', '#ffd966', '#c9a7e0', '#9fd8d0', '#f4a6b8', '#c5b79b', '#b4c7e7', '#d9d9d9', '#e2c08d', '#a5c8a0'] },
+            { name: '色盲友善', c: ['#0072B2', '#E69F00', '#009E73', '#D55E00', '#56B4E9', '#CC79A7', '#F0E442', '#999999', '#332288', '#88CCEE', '#AA4499', '#117733'] },
+            { name: '藍色系', c: ['#08306b', '#2171b5', '#6baed6', '#c6dbef', '#08519c', '#4292c6', '#9ecae1', '#deebf7', '#084594', '#2b8cbe', '#74a9cf', '#bdc9e1'] },
+        ];
+
+        // 漂亮刻度（Heckbert）：round 為 true 時四捨五入到 1/2/5/10，否則往上取
+        function niceNum(x, round) {
+            if (!(x > 0) || !isFinite(x)) return 1;
+            const e = Math.floor(Math.log10(x)), f = x / Math.pow(10, e);
+            const nf = round ? (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) : (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10);
+            return nf * Math.pow(10, e);
+        }
+        // 回傳 { min, max, step, ticks, dec }；min == max 時往 0 補（全 0 → 0..1）
+        function niceTicks(min, max, count = 5) {
+            if (!isFinite(min) || !isFinite(max)) { min = 0; max = 1; }
+            if (min > max) [min, max] = [max, min];
+            if (min === max) { if (min === 0) max = 1; else if (min > 0) min = 0; else max = 0; }
+            count = Math.max(2, Math.min(count | 0, 20));
+            const step = niceNum(niceNum(max - min, false) / (count - 1), true);
+            const dec = Math.max(0, Math.min(10, -Math.floor(Math.log10(step) + 1e-9)));
+            const k0 = Math.floor(min / step + 1e-9), k1 = Math.ceil(max / step - 1e-9), ticks = [];
+            for (let k = k0; k <= k1 && ticks.length < 60; k++) ticks.push(+(k * step).toFixed(dec));
+            return { min: ticks[0], max: ticks[ticks.length - 1], step, ticks, dec };
+        }
+        // 數字顯示：千分位、最多 dec 位小數（去尾 0）
+        function fmtNum(v, dec = 2) {
+            if (!isFinite(v)) return '';
+            if (Math.abs(v) >= 1e15 || (v !== 0 && Math.abs(v) < 1e-6)) return v.toExponential(2);
+            let s = v.toFixed(Math.min(dec, 10));
+            if (s.includes('.')) s = s.replace(/\.?0+$/, '');
+            if (s === '-0') s = '0';
+            const [i, f] = s.split('.');
+            return i.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (f ? '.' + f : '');
+        }
+        // 儲存格 → 數字（支援千分位、百分號、貨幣符號）；不是數字回傳 NaN
+        function toNum(s) {
+            s = String(s ?? '').trim().replace(/^(NT\$|US\$|[$¥€£])\s*/i, '').replace(/%$/, '');
+            if (!/^[-+]?(\d+|\d{1,3}(,\d{3})+)(\.\d+)?(e[-+]?\d+)?$/i.test(s) && !/^[-+]?\.\d+$/.test(s)) return NaN;
+            const v = parseFloat(s.replace(/,/g, ''));
+            return isFinite(v) ? v : NaN;
+        }
+        function detectDelim(text) {
+            const line = (String(text).split(/\r?\n/).find(l => l.trim()) || '').replace(/"[^"]*"/g, '');
+            if (line.includes('\t')) return '\t';
+            let best = ',', n = 0;
+            for (const d of [',', ';', '|']) { const c = line.split(d).length - 1; if (c > n) { n = c; best = d; } }
+            return n ? best : ',';
+        }
+        // 解析成二維陣列：略過空列、補齊欄數、套用 5000 列 × 12 欄上限。header 列算 1 列（不計入 5000）
+        function parseTable(text, hasHeader = true) {
+            text = String(text ?? '');
+            if (!text.trim()) return { rows: [], delim: ',', truncRows: false, truncCols: false };
+            if (text.length > MAX_CHARS) return { error: '資料太大（超過 200 萬字元），請縮小範圍', rows: [] };
+            const delim = detectDelim(text);
+            let rows;
+            try { rows = parseCSV(text, delim); } catch (e) { return { error: e.message, rows: [] }; }
+            rows = rows.map(r => r.map(c => c.trim())).filter(r => r.some(c => c !== ''));
+            const lim = MAX_ROWS + (hasHeader ? 1 : 0), truncRows = rows.length > lim;
+            if (truncRows) rows = rows.slice(0, lim);
+            const w = rows.reduce((a, r) => Math.max(a, r.length), 0), truncCols = w > MAX_COLS, W = Math.min(w, MAX_COLS);
+            rows = rows.map(r => { const x = r.slice(0, W); while (x.length < W) x.push(''); return x; });
+            return { rows, delim, truncRows, truncCols };
+        }
+        // 第一列像標題：第一列沒有任何數字，且往下有某欄是數字
+        function guessHeader(rows) {
+            if (rows.length < 2) return false;
+            const first = rows[0].filter(c => c !== '');
+            if (!first.length || first.some(c => !Number.isNaN(toNum(c)))) return false;
+            return rows[1].some(c => !Number.isNaN(toNum(c)));
+        }
+        const colName = (j) => { let s = '', n = j + 1; while (n > 0) { s = String.fromCharCode(65 + (n - 1) % 26) + s; n = Math.floor((n - 1) / 26); } return '欄 ' + s; };
+        // 欄位資訊：名稱（空白補「欄 A」、重複加 _2）、是否為數字欄（非空格子 ≥ 60% 是數字）
+        function columnInfo(rows, hasHeader) {
+            if (!rows.length) return { names: [], cols: [], rows: [] };
+            const w = rows[0].length, seen = {};
+            const names = Array.from({ length: w }, (_, j) => {
+                let k = (hasHeader ? rows[0][j] : '') || colName(j);
+                seen[k] = (seen[k] || 0) + 1; return seen[k] > 1 ? k + '_' + seen[k] : k;
+            });
+            const body = hasHeader ? rows.slice(1) : rows;
+            const cols = names.map((name, j) => {
+                let ne = 0, nn = 0;
+                for (const r of body) { if (r[j] !== '') { ne++; if (!Number.isNaN(toNum(r[j]))) nn++; } }
+                return { name, nonEmpty: ne, numCount: nn, isNum: nn > 0 && nn >= ne * 0.6 };
+            });
+            return { names, cols, rows: body };
+        }
+        // 預設選擇：X = 第一個非數字欄（都是數字則第 1 欄；只有 1 欄用列序號 -1）；Y = 其餘的數字欄
+        function defaultSel(info) {
+            const w = info.names.length;
+            if (!w) return { xcol: -1, ycols: [] };
+            let x = info.cols.findIndex(c => !c.isNum);
+            if (x < 0) x = w >= 2 ? 0 : -1;
+            const y = []; info.cols.forEach((c, j) => { if (j !== x && c.isNum) y.push(j); });
+            return { xcol: x, ycols: y };
+        }
+        // 建立繪圖模型：cats（X 標籤）、series（每個數值欄）、skipped（不是數字而略過的格數）、scatter 用的 xs
+        function buildModel(info, o) {
+            const rows = info.rows, ncol = info.names.length;
+            const cats = rows.map((r, i) => (o.xcol >= 0 ? String(r[o.xcol] ?? '') : String(i + 1)));
+            const skipped = [];
+            const series = (o.ycols || []).filter(j => Number.isInteger(j) && j >= 0 && j < ncol && j !== o.xcol).map(j => {
+                let bad = 0;
+                const vals = rows.map(r => { const s = r[j] ?? ''; if (s === '') return null; const v = toNum(s); if (Number.isNaN(v)) { bad++; return null; } return v; });
+                if (bad) skipped.push({ name: info.names[j], n: bad });
+                return { name: info.names[j], col: j, vals };
+            });
+            let xs = null, xFallback = false;
+            if (o.type === 'scatter') {
+                if (o.xcol >= 0 && info.cols[o.xcol] && info.cols[o.xcol].isNum) xs = rows.map(r => toNum(r[o.xcol] ?? ''));
+                else { xs = rows.map((_, i) => i + 1); xFallback = true; }
+            }
+            return { cats, series, skipped, xs, xFallback, type: o.type };
+        }
+        // 數值軸範圍：長條 / 面積含 0；堆疊用累加；折線 / 散佈用資料範圍。沒有任何數字回傳 null
+        function valueDomain(m, type) {
+            const all = [];
+            for (const s of m.series) for (const v of s.vals) if (v !== null) all.push(v);
+            if (!all.length) return null;
+            let lo = Math.min(...all), hi = Math.max(...all);
+            if (type === 'stack') {
+                lo = 0; hi = 0;
+                for (let i = 0; i < m.cats.length; i++) {
+                    let p = 0, n = 0;
+                    for (const s of m.series) { const v = s.vals[i]; if (v > 0) p += v; else if (v < 0) n += v; }
+                    hi = Math.max(hi, p); lo = Math.min(lo, n);
+                }
+            } else if (type === 'bar' || type === 'hbar' || type === 'area') { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
+            return [lo, hi];
+        }
+        // 座標映射
+        function linear(d0, d1, r0, r1) { return d0 === d1 ? () => (r0 + r1) / 2 : (v) => r0 + (v - d0) / (d1 - d0) * (r1 - r0); }
+        function bandScale(n, r0, r1, pad = 0.2) {
+            const step = n > 0 ? (r1 - r0) / n : 0;
+            return { step, bw: step * (1 - pad), start: (i) => r0 + i * step + step * pad / 2, center: (i) => r0 + (i + 0.5) * step };
+        }
+        // 圓餅：只取 > 0 的值；超過 maxN 個把最小的合併成「其他」；由大到小
+        function pieSlices(cats, vals, maxN = 12) {
+            let items = [], ignored = 0;
+            vals.forEach((v, i) => { if (v !== null && v !== undefined && v > 0) items.push({ label: cats[i] === '' || cats[i] === undefined ? String(i + 1) : cats[i], v }); else if (v !== null && v !== undefined) ignored++; });
+            items.sort((a, b) => b.v - a.v);
+            if (items.length > maxN) { const rest = items.slice(maxN - 1); items = items.slice(0, maxN - 1); items.push({ label: '其他', v: rest.reduce((a, x) => a + x.v, 0) }); }
+            return { slices: items, ignored };
+        }
+        function pieAngles(slices, start = -Math.PI / 2) {
+            const total = slices.reduce((a, s) => a + s.v, 0);
+            if (!(total > 0)) return [];
+            let a = start;
+            return slices.map((s, i) => { const f = s.v / total, a0 = a; a += f * 2 * Math.PI; return { i, a0, a1: i === slices.length - 1 ? start + 2 * Math.PI : a, frac: f }; });
+        }
+        // 色票上的文字顏色（黑 / 白）
+        function textOn(hex) {
+            const m = /^#([0-9a-f]{6})$/i.exec(hex); if (!m) return '#fff';
+            const n = parseInt(m[1], 16), l = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+            return l > 0.6 ? '#111' : '#fff';
+        }
+        // X 軸標籤太擠時每隔幾個顯示一個
+        const thinStep = (labelW, bandW) => Math.max(1, Math.ceil((labelW + 6) / Math.max(bandW, 1)));
+        // 記住的選項：驗證容錯
+        function normOpts(raw) {
+            const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+            return {
+                type: TYPES.includes(r.type) ? r.type : 'bar',
+                palette: Number.isInteger(r.palette) && r.palette >= 0 && r.palette < PALETTES.length ? r.palette : 0,
+                legend: r.legend !== false,
+                labels: r.labels === true,
+            };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'chartm_opts';
+        let opts = normOpts(store.get(KEY, null));
+        let info = { names: [], cols: [], rows: [] }, sel = { xcol: -1, ycols: [] }, sig = '', hdrTouched = false, parseInfo = {};
+
+        function save() { store.set(KEY, opts); }
+        function theme() {
+            const s = getComputedStyle(document.documentElement), v = (n, d) => s.getPropertyValue(n).trim() || d;
+            return { bg: v('--card', '#fff'), text: v('--text', '#111'), muted: v('--muted', '#666'), font: getComputedStyle(document.body).fontFamily || 'sans-serif' };
+        }
+
+        // ===== 繪圖 =====
+        function chartSize(W, m, o) {
+            let H = Math.round(Math.min(560, Math.max(280, W * 0.75)));
+            if (o.type === 'hbar') H = Math.round(Math.min(2400, Math.max(H, m.cats.length * (m.series.length * 12 + 8) + 110)));
+            return H;
+        }
+        function drawChart(cv, W, H, sc, m, o, C) {
+            cv.width = Math.round(W * sc); cv.height = Math.round(H * sc);
+            const g = cv.getContext('2d'); g.setTransform(sc, 0, 0, sc, 0, 0);
+            g.fillStyle = '#fff'; g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+            const pal = PALETTES[o.palette].c, col = (i) => pal[i % pal.length], t = o.type;
+            const F = (px, w = '400') => `${w} ${px}px ${C.font}`;
+            const txt = (s, x, y, al, bl, color, font) => { g.font = font || F(12); g.fillStyle = color || C.muted; g.textAlign = al; g.textBaseline = bl; g.fillText(s, x, y); };
+            const fit = (s, w, font) => { g.font = font || F(12); if (g.measureText(s).width <= w) return s; while (s.length > 1 && g.measureText(s + '…').width > w) s = s.slice(0, -1); return s + '…'; };
+            const grid = (x0, y0, x1, y1) => { g.save(); g.globalAlpha = 0.25; g.strokeStyle = C.muted; g.lineWidth = 1; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); g.restore(); };
+            const empty = (msg) => txt(msg, W / 2, H / 2, 'center', 'middle', C.muted, F(14));
+            const pie = t === 'pie' || t === 'donut';
+            let y = 10;
+            if (o.title) { txt(fit(o.title, W - 24, F(16, '600')), W / 2, y, 'center', 'top', C.text, F(16, '600')); y += 26; }
+            const ps = pie ? pieSlices(m.cats, m.series[0] ? m.series[0].vals : []) : null;
+            const items = pie ? ps.slices.map(s => s.label) : m.series.map(s => s.name);
+            if (!items.length || (!pie && !valueDomain(m, t)) || (pie && !ps.slices.length)) return empty('沒有可畫的數字資料');
+            if (o.legend && (pie || items.length > 1)) {
+                g.font = F(12); const lines = [[]], ws = [0];
+                for (let i = 0; i < items.length; i++) {
+                    const lab = fit(items[i], W - 60), w = 16 + g.measureText(lab).width + 14, L = lines[lines.length - 1];
+                    if (L.length && ws[ws.length - 1] + w > W - 24) { lines.push([]); ws.push(0); }
+                    lines[lines.length - 1].push({ lab, i, w }); ws[ws.length - 1] += w;
+                }
+                lines.forEach((L, k) => {
+                    let x = (W - ws[k]) / 2;
+                    for (const it of L) { g.fillStyle = col(it.i); g.fillRect(x, y + 4, 10, 10); txt(it.lab, x + 15, y + 9, 'left', 'middle', C.text); x += it.w; }
+                    y += 20;
+                });
+                y += 4;
+            }
+            const k = m.series.length, n = m.cats.length;
+            if (pie) {
+                const ang = pieAngles(ps.slices), cx = W / 2, cy = y + (H - y) / 2, r = Math.max(20, Math.min(W / 2 - 16, (H - y) / 2 - 12));
+                ang.forEach((a, i) => {
+                    g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, r, a.a0, a.a1); g.closePath(); g.fillStyle = col(i); g.fill();
+                    g.strokeStyle = C.bg; g.lineWidth = 2; g.stroke();
+                });
+                if (t === 'donut') { g.beginPath(); g.arc(cx, cy, r * 0.55, 0, Math.PI * 2); g.fillStyle = C.bg; g.fill(); }
+                if (o.labels) ang.forEach((a, i) => {
+                    if (a.frac < 0.04) return;
+                    const mid = (a.a0 + a.a1) / 2, rr = r * (t === 'donut' ? 0.775 : 0.65);
+                    txt((a.frac * 100).toFixed(a.frac < 0.1 ? 1 : 0) + '%', cx + Math.cos(mid) * rr, cy + Math.sin(mid) * rr, 'center', 'middle', textOn(col(i)), F(12, '600'));
+                });
+                if (t === 'donut') { const tot = ps.slices.reduce((s, x) => s + x.v, 0); txt(fmtNum(tot), cx, cy, 'center', 'middle', C.text, F(16, '600')); }
+                return;
+            }
+            const dom = valueDomain(m, t);
+            if (t === 'hbar') {
+                const T = niceTicks(dom[0], dom[1], W < 420 ? 4 : 6);
+                g.font = F(12); const cw = Math.min(W * 0.35, Math.max(...m.cats.map(c => g.measureText(c).width), 20));
+                const x0 = Math.ceil(cw) + 14, x1 = W - 26, y0 = y + 4, y1 = H - 28, xs = linear(T.min, T.max, x0, x1), B = bandScale(n, y0, y1, 0.2);
+                for (const v of T.ticks) { grid(xs(v), y0, xs(v), y1); txt(fmtNum(v, T.dec), xs(v), y1 + 6, 'center', 'top'); }
+                const st = thinStep(14, B.step);
+                for (let i = 0; i < n; i++) {
+                    if (i % st === 0) txt(fit(m.cats[i], cw), x0 - 6, B.center(i), 'right', 'middle', C.muted);
+                    const bh = B.bw / k;
+                    m.series.forEach((s, j) => {
+                        const v = s.vals[i]; if (v === null) return;
+                        const a = xs(0), b = xs(v), by = B.start(i) + j * bh;
+                        g.fillStyle = col(j); g.fillRect(Math.min(a, b), by, Math.max(Math.abs(b - a), 1), Math.max(bh - 0.5, 0.5));
+                        if (o.labels && n * k <= 60) txt(fmtNum(v), b + (v >= 0 ? 4 : -4), by + bh / 2, v >= 0 ? 'left' : 'right', 'middle', C.text, F(11));
+                    });
+                }
+                grid(xs(0), y0, xs(0), y1); return;
+            }
+            const sc2 = t === 'scatter';
+            const T = niceTicks(dom[0], dom[1], H < 340 ? 4 : 6);
+            g.font = F(12);
+            const lw = Math.max(...T.ticks.map(v => g.measureText(fmtNum(v, T.dec)).width));
+            const x0 = Math.ceil(lw) + 16, x1 = W - 14, y0 = y + 8, y1 = H - 30, ys = linear(T.min, T.max, y1, y0);
+            for (const v of T.ticks) { grid(x0, ys(v), x1, ys(v)); txt(fmtNum(v, T.dec), x0 - 6, ys(v), 'right', 'middle'); }
+            grid(x0, ys(Math.max(T.min, Math.min(0, T.max))), x1, ys(Math.max(T.min, Math.min(0, T.max))));
+            let px;
+            if (sc2) {
+                const xv = m.xs.filter(v => !Number.isNaN(v)), XT = niceTicks(Math.min(...xv), Math.max(...xv), W < 420 ? 4 : 6);
+                px = linear(XT.min, XT.max, x0 + 8, x1 - 8);
+                for (const v of XT.ticks) { grid(px(v), y0, px(v), y1); txt(fmtNum(v, XT.dec), px(v), y1 + 6, 'center', 'top'); }
+                const r = n > 800 ? 1.8 : n > 200 ? 2.5 : 3.5;
+                m.series.forEach((s, j) => {
+                    g.fillStyle = col(j); g.globalAlpha = n > 200 ? 0.6 : 0.85;
+                    s.vals.forEach((v, i) => { if (v === null || Number.isNaN(m.xs[i])) return; g.beginPath(); g.arc(px(m.xs[i]), ys(v), r, 0, Math.PI * 2); g.fill(); });
+                    g.globalAlpha = 1;
+                });
+                return;
+            }
+            const B = bandScale(n, x0, x1, 0.2), line = t === 'line' || t === 'area';
+            px = line ? (n > 1 ? (i) => x0 + 12 + i * (x1 - x0 - 24) / (n - 1) : () => (x0 + x1) / 2) : B.center;
+            g.font = F(12); let mw = 0; for (let i = 0; i < n && i < 400; i++) mw = Math.max(mw, Math.min(g.measureText(m.cats[i]).width, 90));
+            const st = thinStep(mw, line && n > 1 ? (x1 - x0 - 24) / (n - 1) : B.step);
+            for (let i = 0; i < n; i += st) txt(fit(m.cats[i], Math.min(90, Math.max(B.step * st - 4, 24))), px(i), y1 + 8, 'center', 'top');
+            if (!line) {
+                const base = ys(0);
+                if (t === 'bar') {
+                    const bw = B.bw / k;
+                    for (let i = 0; i < n; i++) m.series.forEach((s, j) => {
+                        const v = s.vals[i]; if (v === null) return;
+                        const bx = B.start(i) + j * bw, top = ys(v);
+                        g.fillStyle = col(j); g.fillRect(bx, Math.min(base, top), Math.max(bw - (bw > 4 ? 1 : 0), 0.8), Math.max(Math.abs(base - top), 1));
+                        if (o.labels && n * k <= 40) txt(fmtNum(v), bx + bw / 2, v >= 0 ? top - 3 : top + 3, 'center', v >= 0 ? 'bottom' : 'top', C.text, F(11));
+                    });
+                } else {
+                    for (let i = 0; i < n; i++) {
+                        let p = 0, q = 0;
+                        m.series.forEach((s, j) => {
+                            const v = s.vals[i]; if (!v) return;
+                            const a = v > 0 ? p : q, b = a + v; if (v > 0) p = b; else q = b;
+                            g.fillStyle = col(j); g.fillRect(B.start(i), Math.min(ys(a), ys(b)), Math.max(B.bw, 0.8), Math.max(Math.abs(ys(a) - ys(b)), 1));
+                            if (o.labels && n * k <= 40 && Math.abs(ys(a) - ys(b)) > 14) txt(fmtNum(v), B.center(i), (ys(a) + ys(b)) / 2, 'center', 'middle', textOn(col(j)), F(11));
+                        });
+                    }
+                }
+                return;
+            }
+            m.series.forEach((s, j) => {
+                const segs = []; let cur = [];
+                s.vals.forEach((v, i) => { if (v === null) { if (cur.length) segs.push(cur); cur = []; } else cur.push([px(i), ys(v), v]); });
+                if (cur.length) segs.push(cur);
+                for (const sg of segs) {
+                    if (t === 'area' && sg.length > 1) {
+                        g.beginPath(); g.moveTo(sg[0][0], ys(0)); sg.forEach(p => g.lineTo(p[0], p[1])); g.lineTo(sg[sg.length - 1][0], ys(0)); g.closePath();
+                        g.globalAlpha = 0.25; g.fillStyle = col(j); g.fill(); g.globalAlpha = 1;
+                    }
+                    g.beginPath(); sg.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])));
+                    g.strokeStyle = col(j); g.lineWidth = 2; g.lineJoin = 'round'; g.stroke();
+                    if (n <= 60 || sg.length === 1) for (const p of sg) { g.beginPath(); g.arc(p[0], p[1], 3, 0, Math.PI * 2); g.fillStyle = col(j); g.fill(); }
+                    if (o.labels && n <= 24) for (const p of sg) txt(fmtNum(p[2]), p[0], p[1] - 7, 'center', 'bottom', C.text, F(11));
+                }
+            });
+        }
+
+        // ===== 介面 =====
+        let raf = 0;
+        function render() { cancelAnimationFrame(raf); raf = requestAnimationFrame(doRender); }
+        function currentModel() { return buildModel(info, { type: opts.type, xcol: sel.xcol, ycols: sel.ycols }); }
+        function doRender() {
+            const cv = $('#cv'), W = Math.max(240, Math.floor($('#cvwrap').clientWidth)), m = currentModel(), H = chartSize(W, m, opts);
+            cv.style.width = W + 'px'; cv.style.height = H + 'px';
+            drawChart(cv, W, H, Math.min(window.devicePixelRatio || 1, 3), m, { ...opts, title: $('#title').value.trim() }, theme());
+            const w = [];
+            if (parseInfo.error) w.push(parseInfo.error);
+            if (parseInfo.truncRows) w.push('資料超過 5000 列，只使用前 5000 列。');
+            if (parseInfo.truncCols) w.push('資料超過 12 欄，只使用前 12 欄。');
+            for (const s of m.skipped) w.push(`欄「${s.name}」有 ${s.n} 格不是數字，已略過。`);
+            if ((opts.type === 'pie' || opts.type === 'donut') && m.series.length > 1) w.push('圓餅 / 環圈只畫第一個選取的數值欄。');
+            if (opts.type === 'scatter' && m.xFallback && info.rows.length) w.push('X 欄不是數字，散佈圖改用列序號當 X。');
+            if (info.rows.length && !m.series.length) w.push('請至少選一個數值欄。');
+            if (m.cats.length > 60 && ['bar', 'stack'].includes(opts.type)) w.push('資料筆數多，長條會很細；建議改用折線、面積或散佈圖。');
+            $('#warn').textContent = w.join(' ');
+            $('#cv').setAttribute('aria-label', '圖表預覽：' + (opts.title || TYPE_NAMES[opts.type]) + '，' + m.cats.length + ' 筆資料');
+        }
+        function renderControls() {
+            for (const b of $('#types').children) b.setAttribute('aria-pressed', b.dataset.t === opts.type);
+            $('#legend').checked = opts.legend; $('#labels').checked = opts.labels; $('#pal').value = opts.palette;
+            $('#sw').replaceChildren(...PALETTES[opts.palette].c.slice(0, 6).map(c => { const i = document.createElement('i'); i.style.background = c; return i; }));
+        }
+        function renderCols() {
+            const xs = $('#xcol'); xs.replaceChildren();
+            const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; xs.append(o); };
+            add(-1, '（列序號 1、2、3…）'); info.names.forEach((n, j) => add(j, n + (info.cols[j].isNum ? '（數字）' : '')));
+            xs.value = sel.xcol;
+            $('#ycols').replaceChildren(...info.names.map((n, j) => {
+                if (j === sel.xcol) return '';
+                const l = document.createElement('label'), c = document.createElement('input'), s = document.createElement('span');
+                l.className = 'chk'; c.type = 'checkbox'; c.checked = sel.ycols.includes(j); s.textContent = n;
+                c.onchange = () => { sel.ycols = c.checked ? [...new Set([...sel.ycols, j])].sort((a, b) => a - b) : sel.ycols.filter(x => x !== j); render(); };
+                l.append(c, s); return l;
+            }).filter(Boolean));
+        }
+        function reparse() {
+            const text = $('#data').value;
+            const p0 = parseTable(text, true);
+            if (!hdrTouched) $('#hdr').checked = guessHeader(p0.rows);
+            const hdr = $('#hdr').checked;
+            parseInfo = hdr ? p0 : parseTable(text, false);
+            info = columnInfo(parseInfo.rows, hdr);
+            const s = info.names.join('\u0001') + '|' + hdr;
+            if (s !== sig) { sig = s; sel = defaultSel(info); } else { sel.ycols = sel.ycols.filter(j => j < info.names.length); }
+            const dn = { ',': '逗號', '\t': 'Tab', ';': '分號', '|': '直線' };
+            $('#info').textContent = info.rows.length ? `偵測到：${dn[parseInfo.delim]}分隔，${info.rows.length} 列 × ${info.names.length} 欄${hdr ? '（含標題）' : ''}` : '貼上資料後會在這裡顯示偵測結果。';
+            renderCols(); render();
+        }
+
+        $('#types').replaceChildren(...TYPES.map(t => {
+            const b = document.createElement('button'); b.className = 'sm'; b.dataset.t = t; b.textContent = TYPE_NAMES[t];
+            b.onclick = () => { opts.type = t; save(); renderControls(); render(); }; return b;
+        }));
+        $('#pal').replaceChildren(...PALETTES.map((p, i) => { const o = document.createElement('option'); o.value = i; o.textContent = p.name; return o; }));
+        $('#pal').onchange = () => { opts.palette = +$('#pal').value; save(); renderControls(); render(); };
+        $('#legend').onchange = () => { opts.legend = $('#legend').checked; save(); render(); };
+        $('#labels').onchange = () => { opts.labels = $('#labels').checked; save(); render(); };
+        $('#xcol').onchange = () => { sel.xcol = +$('#xcol').value; sel.ycols = sel.ycols.filter(j => j !== sel.xcol); renderCols(); render(); };
+        $('#title').oninput = render;
+        $('#data').oninput = () => { reparse(); };
+        $('#hdr').onchange = () => { hdrTouched = true; reparse(); };
+        $('#sample').onclick = () => { $('#data').value = '月份,營收,成本,毛利率\n1月,120,80,33.3%\n2月,150,95,36.7%\n3月,170,110,35.3%\n4月,160,100,37.5%\n5月,210,130,38.1%\n6月,240,150,37.5%'; hdrTouched = false; reparse(); };
+        $('#clear').onclick = () => { if (!$('#data').value) return; if (!confirm('清除上方貼的資料？（只清畫面上的資料，無法復原）')) return; $('#data').value = ''; hdrTouched = false; reparse(); };
+        $('#reset').onclick = () => {
+            if (!confirm('把記住的圖表類型、配色、圖例與數值標籤還原成預設？不影響目前貼的資料，無法復原。')) return;
+            try { localStorage.removeItem(KEY); } catch (e) { }
+            opts = normOpts(null); renderControls(); render();
+        };
+        function pngBlob() {
+            return new Promise((res) => {
+                const m = currentModel(), W = Math.max(240, Math.floor($('#cvwrap').clientWidth)), H = chartSize(W, m, opts), cv = document.createElement('canvas');
+                drawChart(cv, W, H, W < 500 ? 3 : 2, m, { ...opts, title: $('#title').value.trim() }, theme());
+                cv.toBlob(res, 'image/png');
+            });
+        }
+        const say = (s) => { $('#msg').textContent = s; };
+        $('#dl').onclick = async () => { const b = await pngBlob(); if (!b) return say('產生圖片失敗。'); download(b, 'chart.png'); say('已下載 chart.png'); };
+        $('#cp').onclick = async () => {
+            try { const b = await pngBlob(); await navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]); say('已複製圖片。'); }
+            catch (e) { say('這個瀏覽器不支援複製圖片，請改用「下載 PNG」。'); }
+        };
+        window.addEventListener('resize', render);
+        new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ['data-ui-style', 'data-ui-mode'] });
+        renderControls(); reparse();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="德州撲克勝率計算：選手牌與公共牌，設定對手人數（可指定已知對手手牌），用蒙地卡羅模擬算出勝率、平分率、輸率與最終牌型機率。">
+    <meta property="og:title" content="德州撲克勝率計算" />
+    <meta property="og:description" content="選牌、設對手人數，蒙地卡羅模擬算勝率與牌型機率，全部在手機本機運算。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/poker-odds.html" />
+    <title>德州撲克勝率計算</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        [hidden] {
+            display: none !important;
+        }
+
+        label.f {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            margin: 10px 0 4px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>* {
+            flex: 1 1 130px;
+            min-width: 0;
+        }
+
+        .row select {
+            width: 100%;
+        }
+
+        .slot {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .slot:last-child {
+            border-bottom: 0;
+        }
+
+        .slot>button.lab {
+            min-width: 96px;
+            text-align: left;
+        }
+
+        .cc {
+            min-width: 44px;
+            padding: 8px 10px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .empty {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .suit {
+            margin: 8px 0 4px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+        }
+
+        .grid button {
+            min-height: 44px;
+            padding: 6px 0;
+            font-weight: 700;
+            font-size: 17px;
+        }
+
+        .grid button:disabled {
+            opacity: .25;
+        }
+
+        .red {
+            color: #d33;
+        }
+
+        .big {
+            font-size: 26px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .three {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            text-align: center;
+        }
+
+        .three .note {
+            margin: 0;
+        }
+
+        progress {
+            width: 100%;
+            height: 10px;
+        }
+
+        .bar {
+            display: flex;
+            height: 14px;
+            border-radius: 7px;
+            overflow: hidden;
+            margin: 10px 0;
+            background: var(--fill);
+        }
+
+        .bar i {
+            display: block;
+            height: 100%;
+        }
+
+        .ok {
+            color: var(--ok);
+        }
+
+        .bad {
+            color: var(--bad);
+        }
+
+        .cat {
+            display: grid;
+            grid-template-columns: 88px 1fr 58px;
+            gap: 8px;
+            align-items: center;
+            padding: 4px 0;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .cat .tr {
+            height: 10px;
+            background: var(--fill);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .cat .tr i {
+            display: block;
+            height: 100%;
+            background: var(--blue);
+        }
+
+        .cat span:last-child {
+            text-align: right;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>德州撲克勝率計算</h1>
+        <p class="sub">選好牌，模擬幾萬局算出勝率。</p>
+
+        <div class="card">
+            <div class="row">
+                <div><label class="f" for="nopp" style="margin-top:0">對手人數</label>
+                    <select id="nopp" aria-label="對手人數"></select>
+                </div>
+                <div><label class="f" for="iters" style="margin-top:0">模擬次數</label>
+                    <select id="iters" aria-label="模擬次數">
+                        <option value="5000">5,000（快）</option>
+                        <option value="20000" selected>20,000（預設）</option>
+                        <option value="100000">100,000（較準）</option>
+                    </select>
+                </div>
+            </div>
+            <p class="note">點左邊的名稱選擇要放牌的位置，再到下面點牌；點已選的牌可取消。未指定牌的對手會是隨機手牌。</p>
+            <div id="slots"></div>
+            <div class="row" style="margin-top:10px"><button id="clear" class="sm">全部清除</button></div>
+        </div>
+
+        <div class="card">
+            <div id="picker"></div>
+        </div>
+
+        <div class="card">
+            <div class="row">
+                <button id="go" class="primary">開始模擬</button>
+                <button id="stop" hidden>中止</button>
+            </div>
+            <p class="note bad" id="err"></p>
+            <progress id="prog" value="0" max="1" hidden></progress>
+        </div>
+
+        <div class="card" id="resCard" hidden>
+            <h2 id="resTitle">結果</h2>
+            <div class="three">
+                <div><div class="big ok" id="rWin">—</div><p class="note">勝率</p></div>
+                <div><div class="big" id="rTie">—</div><p class="note">平分</p></div>
+                <div><div class="big bad" id="rLose">—</div><p class="note">輸率</p></div>
+            </div>
+            <div class="bar" aria-hidden="true"><i id="bWin" style="background:var(--ok)"></i><i id="bTie" style="background:var(--muted)"></i><i id="bLose" style="background:var(--bad)"></i></div>
+            <p class="note" id="rNote"></p>
+            <h2 style="margin-top:16px">最終牌型機率</h2>
+            <div id="cats"></div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>德州撲克勝率計算機。選好自己的兩張手牌、已發出的公共牌（0–5 張）與對手人數，工具會隨機發出剩下的牌模擬許多局，算出你的勝率、平分率、輸率，以及你最後成牌的牌型機率。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>打牌後復盤：這手牌當時到底有多少勝算。</li>
+            <li>練習判斷：翻牌後聽順子或同花，跟注划不划算。</li>
+            <li>比較起手牌：A-K 同花對上 2 個對手，勝率大約多少。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+            <li>設定「對手人數」（1–8）與「模擬次數」。</li>
+            <li>點「我的手牌」，到下方點兩張牌；接著點「公共牌」選已翻開的牌（沒翻就不選）。</li>
+            <li>想指定某位對手的牌，點「對手 N」再選兩張；沒指定的對手會是隨機牌。</li>
+            <li>按「開始模擬」，畫面會顯示進度，可隨時「中止」。結果出現後可改牌再按一次。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">我的手牌 A♠ A♥、對手 1 人、指定對手手牌 K♦ K♣、不選公共牌（已被選走的牌會自動灰掉）
+→ 勝率約 82%、平分約 0.5%、輸率約 17.6%（隨機模擬，每次會有 ±0.3% 左右的誤差）</div>
+        <h3>小提醒</h3>
+        <ul>
+            <li>結果是蒙地卡羅模擬的估計值，次數越多越準，畫面會標示誤差範圍。</li>
+            <li>「平分」是你與對手牌力完全相同；另外會顯示把平分均分後的「期望勝率」。</li>
+            <li>對手若未指定牌就是從剩下的牌隨機發，不會考慮對手是否棄牌或下注行為。</li>
+            <li>全部在你的瀏覽器計算，不連線也不儲存任何資料。模擬時請不要切到別的程式，以免被系統暫停。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        // 牌 = 0..51：點數 = c % 13（0 = 2 … 12 = A），花色 = floor(c / 13)（0 黑桃 1 紅心 2 方塊 3 梅花）
+        const RANKS = '23456789TJQKA', SUITS = ['♠', '♥', '♦', '♣'], SUIT_KEYS = 'shdc';
+        const CATS = ['高牌', '一對', '兩對', '三條', '順子', '同花', '葫蘆', '四條', '同花順'];
+        const cardStr = (c) => (c % 13 === 8 ? '10' : RANKS[c % 13]) + SUITS[(c / 13) | 0];
+        // 'Ah' → 牌編號；不合法回傳 -1
+        function cardOf(s) {
+            const t = String(s || ''), r = RANKS.indexOf(t[0] && t[0].toUpperCase()), u = SUIT_KEYS.indexOf(t[1] && t[1].toLowerCase());
+            return t.length === 2 && r >= 0 && u >= 0 ? u * 13 + r : -1;
+        }
+        const handOf = (s) => s.trim().split(/\s+/).filter(Boolean).map(cardOf);
+
+        // 5–7 張取最強五張牌：回傳整數分數，越大越強；分數 = 牌型 × 13^5 + 5 個比較點數（base 13）
+        function evalHand(cs) {
+            const rc = new Array(13).fill(0), sc = [0, 0, 0, 0], sm = [0, 0, 0, 0]; let mask = 0;
+            for (let i = 0; i < cs.length; i++) { const c = cs[i], r = c % 13, s = (c / 13) | 0; rc[r]++; sc[s]++; sm[s] |= 1 << r; mask |= 1 << r; }
+            const pack = (cat, ks) => { let v = cat; for (let i = 0; i < 5; i++) v = v * 13 + (ks[i] || 0); return v; };
+            // 順子最高點：A-2-3-4-5 的最高點算 5（編號 3）
+            const sHigh = (m) => { for (let h = 12; h >= 4; h--) { const w = 31 << (h - 4); if ((m & w) === w) return h; } return (m & 0x100F) === 0x100F ? 3 : -1; };
+            const fs = sc.findIndex(x => x >= 5);
+            if (fs >= 0) { const h = sHigh(sm[fs]); if (h >= 0) return pack(8, [h]); }
+            const quads = [], trips = [], pairs = [];
+            for (let r = 12; r >= 0; r--) { if (rc[r] === 4) quads.push(r); else if (rc[r] === 3) trips.push(r); else if (rc[r] === 2) pairs.push(r); }
+            const top = (n, ex) => { const o = []; for (let r = 12; r >= 0 && o.length < n; r--) if (rc[r] && !ex.includes(r)) o.push(r); return o; };
+            if (quads.length) return pack(7, [quads[0], ...top(1, [quads[0]])]);
+            if (trips.length && (trips.length > 1 || pairs.length)) return pack(6, [trips[0], Math.max(trips.length > 1 ? trips[1] : -1, pairs.length ? pairs[0] : -1)]);
+            if (fs >= 0) { const o = []; for (let r = 12; r >= 0 && o.length < 5; r--) if (sm[fs] >> r & 1) o.push(r); return pack(5, o); }
+            const h = sHigh(mask); if (h >= 0) return pack(4, [h]);
+            if (trips.length) return pack(3, [trips[0], ...top(2, [trips[0]])]);
+            if (pairs.length >= 2) return pack(2, [pairs[0], pairs[1], ...top(1, [pairs[0], pairs[1]])]);
+            if (pairs.length) return pack(1, [pairs[0], ...top(3, [pairs[0]])]);
+            return pack(0, top(5, []));
+        }
+        const SC = 13 ** 5;
+        const catOf = (score) => Math.floor(score / SC);
+        const handName = (score) => { const c = catOf(score); return c === 8 && Math.floor(score % SC / 13 ** 4) === 12 ? '皇家同花順' : CATS[c]; };
+
+        // 檢查設定：hole 兩張、board 0–5 張、opps 1–8 位（每位 null = 隨機，或兩張牌）、牌不重複。回傳錯誤文字或 null
+        function validateSetup(cfg) {
+            const { hole, board, opps } = cfg || {};
+            if (!Array.isArray(hole) || hole.length !== 2) return '請先選好你的兩張手牌';
+            if (!Array.isArray(board) || board.length > 5) return '公共牌最多 5 張';
+            if (!Array.isArray(opps) || opps.length < 1 || opps.length > 8) return '對手人數請選 1–8';
+            const all = [...hole, ...board];
+            for (let i = 0; i < opps.length; i++) {
+                const o = opps[i]; if (o === null) continue;
+                if (!Array.isArray(o) || o.length !== 2) return `對手 ${i + 1} 要選滿兩張牌，或全部取消讓它隨機`;
+                all.push(...o);
+            }
+            if (!all.every(c => Number.isInteger(c) && c >= 0 && c < 52)) return '牌不正確';
+            if (new Set(all).size !== all.length) return '有重複的牌';
+            return null;
+        }
+        // 蒙地卡羅：makeSim(cfg).run(n, rng) 可分批呼叫，結果累積在 acc。rng() 回傳 [0,1)
+        function makeSim(cfg) {
+            const used = new Set([...cfg.hole, ...cfg.board, ...cfg.opps.filter(Boolean).flat()]);
+            const deck = []; for (let c = 0; c < 52; c++) if (!used.has(c)) deck.push(c);
+            const need = 5 - cfg.board.length, draw = need + 2 * cfg.opps.filter(o => !o).length;
+            const acc = { n: 0, win: 0, tie: 0, lose: 0, equity: 0, cats: new Array(9).fill(0) };
+            const run = (n, rng) => {
+                const L = deck.length;
+                for (let it = 0; it < n; it++) {
+                    for (let i = 0; i < draw; i++) { const j = i + Math.floor(rng() * (L - i)), t = deck[i]; deck[i] = deck[j]; deck[j] = t; }
+                    const board = cfg.board.concat(deck.slice(0, need)), hs = evalHand(cfg.hole.concat(board));
+                    acc.cats[catOf(hs)]++;
+                    let best = -1, cnt = 0, k = need;
+                    for (const o of cfg.opps) {
+                        const h = o || [deck[k++], deck[k++]], s = evalHand(h.concat(board));
+                        if (s > best) { best = s; cnt = 1; } else if (s === best) cnt++;
+                    }
+                    if (hs > best) { acc.win++; acc.equity++; } else if (hs === best) { acc.tie++; acc.equity += 1 / (cnt + 1); } else acc.lose++;
+                    acc.n++;
+                }
+            };
+            return { acc, run };
+        }
+        // 95% 信賴區間半寬（百分點）
+        const margin = (p, n) => n > 0 ? 196 * Math.sqrt(p * (1 - p) / n) : 0;
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+        let slots = { hero: [], board: [] }, target = 'hero', nOpp = 1, runId = 0;
+        const slotKeys = () => ['hero', 'board', ...Array.from({ length: nOpp }, (_, i) => 'o' + i)];
+        const slotMax = (k) => k === 'board' ? 5 : 2;
+        const slotName = (k) => k === 'hero' ? '我的手牌' : k === 'board' ? '公共牌' : '對手 ' + (+k.slice(1) + 1);
+        const usedBy = (c) => slotKeys().find(k => (slots[k] || []).includes(c));
+        const cardEl = (c, props) => { const b = el('button', Object.assign({ textContent: cardStr(c) }, props)); if (c >= 13 && c < 39) b.classList.add('red'); return b; };
+
+        function renderSlots() {
+            const box = $('#slots'); box.replaceChildren();
+            for (const k of slotKeys()) {
+                const lab = el('button', { className: 'lab sm', textContent: `${slotName(k)} ${(slots[k] || []).length}/${slotMax(k)}` });
+                lab.setAttribute('aria-pressed', String(target === k)); lab.dataset.slot = k;
+                lab.onclick = () => { target = k; renderSlots(); renderPicker(); };
+                const cs = (slots[k] || []).map(c => cardEl(c, { className: 'cc sm', title: '點一下取消' }));
+                cs.forEach((b, i) => b.onclick = () => { slots[k].splice(i, 1); stale(); renderSlots(); renderPicker(); });
+                box.append(el('div', { className: 'slot' }, lab, ...cs, ...(cs.length || k === 'hero' || k === 'board' ? [] : [el('span', { className: 'empty', textContent: '隨機' })])));
+            }
+        }
+        function buildPicker() {
+            const box = $('#picker'); box.replaceChildren();
+            for (let s = 0; s < 4; s++) {
+                box.append(el('div', { className: 'suit', textContent: SUITS[s] }));
+                const g = el('div', { className: 'grid' });
+                for (let r = 12; r >= 0; r--) {
+                    const c = s * 13 + r, b = cardEl(c, { id: 'c' + c }); b.onclick = () => pick(c); g.append(b);
+                }
+                box.append(g);
+            }
+        }
+        function renderPicker() {
+            for (let c = 0; c < 52; c++) {
+                const b = $('#c' + c), u = usedBy(c);
+                b.setAttribute('aria-pressed', String(u === target));
+                b.disabled = !!u && u !== target;
+            }
+        }
+        function pick(c) {
+            const u = usedBy(c);
+            if (u) { slots[u].splice(slots[u].indexOf(c), 1); }
+            else if (slots[target].length < slotMax(target)) {
+                slots[target].push(c);
+                if (target === 'hero' && slots.hero.length === 2 && slots.board.length < 5) target = 'board';
+            } else return;
+            stale(); renderSlots(); renderPicker();
+        }
+        function stale() { runId++; $('#resCard').hidden = true; $('#err').textContent = ''; setBusy(false); }
+        function setBusy(b) { $('#go').hidden = b; $('#stop').hidden = !b; $('#prog').hidden = !b; }
+        function cfgNow() { return { hole: slots.hero.slice(), board: slots.board.slice(), opps: Array.from({ length: nOpp }, (_, i) => { const o = slots['o' + i]; return o && o.length ? o.slice() : null; }) }; }
+
+        function go() {
+            const cfg = cfgNow(), e = validateSetup(cfg); $('#err').textContent = e || '';
+            if (e) return;
+            const total = +$('#iters').value, sim = makeSim(cfg), rng = Util.seeded(Date.now() + ':' + Math.random()), my = ++runId;
+            setBusy(true); $('#prog').max = total; $('#prog').value = 0;
+            const step = () => {
+                if (my !== runId) return;
+                sim.run(Math.min(1500, total - sim.acc.n), rng);
+                $('#prog').value = sim.acc.n; show(sim.acc, cfg, false);
+                if (sim.acc.n < total) setTimeout(step, 0); else { setBusy(false); show(sim.acc, cfg, true); }
+            };
+            setTimeout(step, 0);
+        }
+        function show(a, cfg, done) {
+            if (!a.n) return;
+            const pct = (x) => (x * 100).toFixed(1) + '%', w = a.win / a.n, t = a.tie / a.n, l = a.lose / a.n;
+            $('#resCard').hidden = false;
+            $('#resTitle').textContent = done ? '結果' : `模擬中… ${a.n.toLocaleString()} 局`;
+            $('#rWin').textContent = pct(w); $('#rTie').textContent = pct(t); $('#rLose').textContent = pct(l);
+            $('#bWin').style.width = w * 100 + '%'; $('#bTie').style.width = t * 100 + '%'; $('#bLose').style.width = l * 100 + '%';
+            const cur = cfg.board.length >= 3 ? `；目前牌型：${handName(evalHand(cfg.hole.concat(cfg.board)))}` : '';
+            $('#rNote').textContent = `期望勝率（平分均分）${pct(a.equity / a.n)}，勝率誤差約 ±${margin(w, a.n).toFixed(1)}%（${a.n.toLocaleString()} 局）${cur}`;
+            const box = $('#cats'); box.replaceChildren();
+            for (let c = 8; c >= 0; c--) { const p = a.cats[c] / a.n; box.append(el('div', { className: 'cat' }, el('span', { textContent: CATS[c] }), el('span', { className: 'tr' }, el('i', { style: `width:${Math.min(100, p * 100)}%` })), el('span', { textContent: pct(p) }))); }
+        }
+
+        $('#nopp').replaceChildren(...Array.from({ length: 8 }, (_, i) => new Option(String(i + 1) + ' 位', i + 1)));
+        $('#nopp').onchange = () => { nOpp = +$('#nopp').value; for (const k of Object.keys(slots)) if (k[0] === 'o' && +k.slice(1) >= nOpp) delete slots[k]; for (let i = 0; i < nOpp; i++) slots['o' + i] = slots['o' + i] || []; if (!slotKeys().includes(target)) target = 'hero'; stale(); renderSlots(); renderPicker(); };
+        $('#iters').onchange = stale;
+        $('#clear').onclick = () => { slots = { hero: [], board: [], o0: [] }; for (let i = 1; i < nOpp; i++) slots['o' + i] = []; target = 'hero'; stale(); renderSlots(); renderPicker(); };
+        $('#go').onclick = go;
+        $('#stop').onclick = () => { runId++; setBusy(false); $('#resTitle').textContent = '已中止（以下為目前的結果）'; };
+        slots.o0 = [];
+        buildPicker(); renderSlots(); renderPicker();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="寶寶作息記錄：一鍵記錄餵奶（母乳左右計時、瓶餵 ml、副食品）、睡眠與尿布，看今日時間軸、次數與間隔、近 7 / 14 天圖表，可匯出 CSV；資料只存在你的瀏覽器，不是醫療建議。">
+    <meta name="st-keys" content="baby_log">
+    <meta property="og:title" content="寶寶作息記錄" />
+    <meta property="og:description" content="一鍵記錄餵奶、睡眠、尿布，看今日統計與近 14 天圖表。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/baby-log.html" />
+    <title>寶寶作息記錄</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 600px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .since {
+            text-align: center;
+        }
+
+        .since .big {
+            font-size: 32px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            line-height: 1.2;
+        }
+
+        .quick {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .quick button {
+            min-height: 64px;
+            border-radius: var(--radius);
+            font-size: 17px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .quick button .ic {
+            font-size: 24px;
+        }
+
+        .f {
+            margin-bottom: 10px;
+        }
+
+        .f label {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .f input,
+        .f select {
+            width: 100%;
+        }
+
+        .ent {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .ent:last-child {
+            border-bottom: 0;
+        }
+
+        .ent .ic {
+            font-size: 22px;
+            flex: 0 0 auto;
+        }
+
+        .ent .body {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .ent .t {
+            font-variant-numeric: tabular-nums;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .ent button {
+            flex: 0 0 auto;
+            padding: 6px 12px;
+        }
+
+        .nav {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .nav b {
+            font-variant-numeric: tabular-nums;
+            text-align: center;
+            flex: 1;
+        }
+
+        .bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            height: 140px;
+            margin: 24px 0 4px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .bars div {
+            flex: 1;
+            min-width: 0;
+            background: var(--blue);
+            border-radius: 4px 4px 0 0;
+            min-height: 2px;
+            position: relative;
+        }
+
+        .bars div span {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: var(--muted);
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .bars.dense div span {
+            display: none;
+        }
+
+        .axis {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        .axis span {
+            flex: 1;
+            min-width: 0;
+            text-align: center;
+            font-size: 12px;
+            color: var(--muted);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .axis.dense span:nth-child(even) {
+            visibility: hidden;
+        }
+
+        .seg {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 4px;
+        }
+
+        #msg {
+            min-height: 22px;
+            margin: 0 0 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>寶寶作息記錄</h1>
+        <p class="sub">一鍵記錄餵奶、睡眠、尿布；時間以台灣時間（UTC+8）計算，資料只存在這個瀏覽器。</p>
+
+        <div class="card since">
+            <div class="muted">距離上次餵奶</div>
+            <div class="big" id="since">—</div>
+            <div class="muted" id="sinceNote"></div>
+        </div>
+
+        <div class="quick" id="quick">
+            <button id="qL"><span class="ic">🤱</span><span id="qLt">母乳 左</span></button>
+            <button id="qR"><span class="ic">🤱</span><span id="qRt">母乳 右</span></button>
+            <button id="qBottle"><span class="ic">🍼</span>瓶餵</button>
+            <button id="qSolid"><span class="ic">🥣</span>副食品</button>
+            <button id="qSleep"><span class="ic">😴</span><span id="qSleepT">睡眠 開始</span></button>
+            <button id="qPee"><span class="ic">💧</span>尿尿</button>
+            <button id="qPoo"><span class="ic">💩</span>便便</button>
+            <button id="qNote"><span class="ic">📝</span>備註</button>
+        </div>
+        <p class="note" id="msg" role="status"></p>
+
+        <div class="card" id="formCard" hidden>
+            <h2 id="formTitle">新增紀錄</h2>
+            <div class="f"><label for="fKind">類型</label><select id="fKind"></select></div>
+            <div class="f"><label for="fStart">時間（台灣時間）</label><input type="datetime-local" id="fStart"></div>
+            <div class="f" id="fEndW"><label for="fEnd">結束時間（留空 = 進行中）</label><input type="datetime-local" id="fEnd"></div>
+            <div class="f" id="fSideW"><label for="fSide">左右</label><select id="fSide"><option value="L">左</option><option value="R">右</option></select></div>
+            <div class="f" id="fMlW"><label for="fMl">奶量（ml，1–500）</label><input type="number" id="fMl" inputmode="numeric" min="1" max="500"></div>
+            <div class="f"><label for="fNote">備註（最多 100 字）</label><input type="text" id="fNote" maxlength="100"></div>
+            <div class="row"><button class="primary" id="fSave">儲存</button><button id="fCancel">取消</button></div>
+            <p class="note" id="fErr" style="color:var(--bad)"></p>
+        </div>
+
+        <div class="card">
+            <h2>今日統計</h2>
+            <div class="nav">
+                <button id="dPrev" aria-label="前一天">‹</button>
+                <b id="dLabel"></b>
+                <button id="dNext" aria-label="後一天">›</button>
+                <button class="sm" id="dToday">今天</button>
+            </div>
+            <div id="stats"></div>
+        </div>
+
+        <div class="card">
+            <h2>時間軸</h2>
+            <div id="timeline"></div>
+        </div>
+
+        <div class="card">
+            <h2>近期圖表</h2>
+            <div class="seg" id="rangeSeg">
+                <button class="sm" data-days="7" aria-pressed="true">近 7 天</button>
+                <button class="sm" data-days="14" aria-pressed="false">近 14 天</button>
+            </div>
+            <div class="seg" id="metricSeg">
+                <button class="sm" data-m="feeds" aria-pressed="true">餵奶次數</button>
+                <button class="sm" data-m="ml" aria-pressed="false">奶量 ml</button>
+                <button class="sm" data-m="sleep" aria-pressed="false">睡眠時數</button>
+                <button class="sm" data-m="diapers" aria-pressed="false">尿布次數</button>
+            </div>
+            <div class="bars" id="bars"></div>
+            <div class="axis" id="axis"></div>
+            <p class="note" id="chartNote"></p>
+        </div>
+
+        <div class="card">
+            <h2>資料</h2>
+            <p class="note" style="margin:0 0 10px" id="count"></p>
+            <div class="row"><button id="csv">匯出 CSV</button><button id="clear">清除全部</button></div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>給新手爸媽的作息記錄：餵奶（母乳左右計時、瓶餵 ml、副食品）、睡眠、尿布與備註，一鍵記下，自動統計今日次數、間隔與近 7 / 14 天趨勢。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>半夜餵奶迷迷糊糊，想一鍵記錄、不用算時間。</li>
+        <li>看診或和另一半交接時，需要說「今天餵幾次、睡多久」。</li>
+        <li>觀察寶寶作息有沒有慢慢規律。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>上方「距離上次餵奶」會一直更新；下面是快速鍵。</li>
+        <li>「母乳 左 / 右」按一下開始計時、再按一下停止；計時中按另一側會自動結束這一側並開始另一側（算兩筆）。</li>
+        <li>「瓶餵」「副食品」「備註」會打開表單，填奶量或內容後按「儲存」。</li>
+        <li>「睡眠 開始 / 結束」可跨午夜；「尿尿」「便便」按一下就記，剛按錯可按提示列的「復原」。</li>
+        <li>「今日統計」可用 ‹ › 看其他天；「時間軸」每筆有「編輯」與「刪除」，也能補記忘了按的時間。</li>
+        <li>「近期圖表」切換 7 / 14 天與指標；「匯出 CSV」可用試算表開啟。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">06:30 瓶餵 120 ml、10:00 母乳左 15 分、13:30 瓶餵 150 ml → 餵奶 3 次、瓶餵 270 ml、平均間隔 3 小時 30 分。<br>昨晚 22:30 睡、今天 06:30 醒 → 睡眠 8 小時，昨天算 1 小時 30 分、今天算 6 小時 30 分。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li><b>這不是醫療建議</b>：數字只是紀錄與參考，寶寶的餵食量、睡眠與排便是否正常，請諮詢小兒科醫師。</li>
+        <li>餵奶次數把母乳左、右各算一次；統計的「間隔」是兩次餵奶開始時間的平均差。</li>
+        <li>最多 3000 筆，滿了會拒絕新增並提示（請先「匯出 CSV」再刪除舊紀錄）；備註最多 100 字；一筆睡眠或母乳最長 24 小時。</li>
+        <li>「清除全部」會刪光所有紀錄且無法復原；單筆可在時間軸刪除。</li>
+        <li>資料只存在這個瀏覽器，可用右上角 💾 備份；備份寫回壞掉的資料會自動略過或修正。</li>
+        <li>時間一律以台灣時間（UTC+8）顯示與統計，每天 00:00 換日。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        const TZ = 8 * 3600000, DAYMS = 86400000;                                  // 台灣時間 UTC+8
+        const KINDS = { breast: '母乳', bottle: '瓶餵', solid: '副食品', sleep: '睡眠', pee: '尿尿', poo: '便便', note: '備註' };
+        const ICON = { breast: '🤱', bottle: '🍼', solid: '🥣', sleep: '😴', pee: '💧', poo: '💩', note: '📝' };
+        const FEEDS = ['breast', 'bottle', 'solid'];
+        const MAX_LOG = 3000, MAX_NOTE = 100, MAX_ML = 500, MAX_SPAN = DAYMS;
+        const T_MIN = Date.UTC(2000, 0, 1), T_MAX = Date.UTC(2100, 0, 1);
+        const hasEnd = (k) => k === 'breast' || k === 'sleep';
+
+        // 台灣時間：毫秒 → 'YYYY-MM-DD' / 'HH:MM' / 'YYYY-MM-DDTHH:MM'（datetime-local 的格式）；twParse 反向，格式或日期不存在回傳 NaN
+        const twDay = (ms) => new Date(ms + TZ).toISOString().slice(0, 10);
+        const twHM = (ms) => new Date(ms + TZ).toISOString().slice(11, 16);
+        const twLocal = (ms) => twDay(ms) + 'T' + twHM(ms);
+        function twParse(s) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})$/.exec(String(s).trim());
+            if (!m) return NaN;
+            const ms = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) - TZ;
+            return Number.isFinite(ms) && twLocal(ms) === `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}` ? ms : NaN;   // 2/30、25:00 這類會被改寫 → 視為不合法
+        }
+        const newId = () => 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+        // 單筆驗證 / 正規化（不合法回傳 null）：{ id, k, t, e?（母乳、睡眠；null = 進行中）, side?, ml?, note? }
+        function cleanEntry(x) {
+            if (!x || typeof x !== 'object' || !Object.prototype.hasOwnProperty.call(KINDS, x.k)) return null;
+            const t = Number(x.t);
+            if (!Number.isFinite(t) || t < T_MIN || t > T_MAX) return null;
+            const r = { id: typeof x.id === 'string' && /^[\w-]{1,40}$/.test(x.id) ? x.id : '', k: x.k, t: Math.floor(t) };
+            if (hasEnd(x.k)) {
+                if (x.e === null || x.e === undefined) r.e = null;
+                else { const e = Number(x.e); if (!Number.isFinite(e) || e < r.t || e - r.t > MAX_SPAN) return null; r.e = Math.floor(e); }
+            }
+            if (x.k === 'breast') r.side = x.side === 'R' ? 'R' : 'L';
+            if (x.k === 'bottle') { const ml = Math.round(Number(x.ml)); if (!(ml >= 1 && ml <= MAX_ML)) return null; r.ml = ml; }
+            const note = typeof x.note === 'string' ? x.note.trim().slice(0, MAX_NOTE) : '';
+            if (note) r.note = note;
+            if (x.k === 'note' && !note) return null;
+            return r;
+        }
+        const sortLog = (a) => a.map((x, i) => [x, i]).sort((p, q) => p[0].t - q[0].t || p[1] - q[1]).map(p => p[0]);
+        // 整份驗證（載入、還原備份）：壞項目略過、id 補齊且不重複、依時間排序、超過上限只留最新 MAX_LOG 筆
+        function cleanLog(a) {
+            if (!Array.isArray(a)) return [];
+            const seen = new Set(), out = [];
+            for (const x of a) {
+                const c = cleanEntry(x); if (!c) continue;
+                if (!c.id || seen.has(c.id)) c.id = newId() + out.length;
+                seen.add(c.id); out.push(c);
+            }
+            const s = sortLog(out);
+            return s.length > MAX_LOG ? s.slice(s.length - MAX_LOG) : s;
+        }
+        const ongoing = (log, k, exceptId) => log.find(x => x.k === k && x.e === null && x.id !== exceptId);
+        // 新增：回傳 { log, entry } 或 { err }；滿了拒絕、不偷刪舊的；同類型只能有一筆進行中
+        function addEntry(log, x) {
+            if (log.length >= MAX_LOG) return { err: `已達 ${MAX_LOG} 筆上限，請先匯出 CSV 並刪除舊紀錄` };
+            const c = cleanEntry(x); if (!c) return { err: '資料不正確' };
+            if (!c.id) c.id = newId();
+            if (c.e === null && ongoing(log, c.k, c.id)) return { err: `已有進行中的${KINDS[c.k]}，請先結束` };
+            return { log: sortLog([...log, c]), entry: c };
+        }
+        function updateEntry(log, id, patch) {
+            const old = log.find(x => x.id === id); if (!old) return { err: '找不到這筆紀錄' };
+            const c = cleanEntry({ ...patch, id }); if (!c) return { err: '資料不正確' };
+            if (c.e === null && ongoing(log, c.k, id)) return { err: `已有進行中的${KINDS[c.k]}，請先結束` };
+            return { log: sortLog(log.map(x => x.id === id ? c : x)), entry: c };
+        }
+        const deleteEntry = (log, id) => log.filter(x => x.id !== id);
+        // 結束進行中的母乳 / 睡眠：結束時間不早於開始、不超過 24 小時
+        function stopEntry(log, id, now) {
+            const x = log.find(y => y.id === id); if (!x || x.e !== null) return { err: '沒有進行中的紀錄' };
+            return updateEntry(log, id, { ...x, e: Math.min(Math.max(now, x.t), x.t + MAX_SPAN) });
+        }
+        // 進行中的紀錄算到現在（最多 24 小時，忘了按結束不會無限增加）
+        const effEnd = (x, now) => x.e !== null && x.e !== undefined ? x.e : Math.min(Math.max(now, x.t), x.t + MAX_SPAN);
+        // 跨午夜切割：[t, e) 依台灣時間每天 00:00 切成 [{ day, ms }]
+        function splitByDay(t, e) {
+            const out = [];
+            while (t < e) {
+                const dayStart = Math.floor((t + TZ) / DAYMS) * DAYMS - TZ, end = Math.min(e, dayStart + DAYMS);
+                out.push({ day: twDay(t), ms: end - t }); t = end;
+            }
+            return out;
+        }
+        // 某天統計：餵奶次數（母乳 / 瓶餵 / 副食品）、瓶餵總 ml、母乳總時間、睡眠總時間（含跨午夜切入的部分）、尿布、平均餵奶間隔（兩次餵奶開始時間的平均差）
+        function dayStats(log, day, now) {
+            const s = { feeds: 0, breast: 0, bottle: 0, solid: 0, ml: 0, breastMs: 0, sleepMs: 0, pee: 0, poo: 0, diapers: 0, notes: 0, avgGap: null, lastFeed: null };
+            const feedT = [];
+            for (const x of log) {
+                if (x.k === 'sleep') { for (const p of splitByDay(x.t, effEnd(x, now))) if (p.day === day) s.sleepMs += p.ms; continue; }
+                if (twDay(x.t) !== day) continue;
+                if (FEEDS.includes(x.k)) { s.feeds++; s[x.k]++; feedT.push(x.t); }
+                if (x.k === 'bottle') s.ml += x.ml;
+                if (x.k === 'breast') s.breastMs += effEnd(x, now) - x.t;
+                if (x.k === 'pee' || x.k === 'poo') { s[x.k]++; s.diapers++; }
+                if (x.k === 'note') s.notes++;
+            }
+            feedT.sort((a, b) => a - b);
+            if (feedT.length) s.lastFeed = feedT[feedT.length - 1];
+            if (feedT.length > 1) s.avgGap = (feedT[feedT.length - 1] - feedT[0]) / (feedT.length - 1);
+            return s;
+        }
+        // 最近一次餵奶（開始時間最晚、且不晚於現在）：{ t, since（毫秒）, k } 或 null
+        function lastFeed(log, now) {
+            let best = null;
+            for (const x of log) if (FEEDS.includes(x.k) && x.t <= now && (!best || x.t > best.t)) best = x;
+            return best ? { t: best.t, since: now - best.t, k: best.k } : null;
+        }
+        // 往回 n 天（含 endDay）每天的統計，由舊到新
+        function rangeStats(log, endDay, n, now) {
+            return Array.from({ length: n }, (_, i) => { const day = Util.day.shift(endDay, i - n + 1); return { day, ...dayStats(log, day, now) }; });
+        }
+        const metricOf = (s, m) => m === 'ml' ? s.ml : m === 'sleep' ? Math.round(s.sleepMs / 360000) / 10 : m === 'diapers' ? s.diapers : s.feeds;
+        function fmtDur(ms) {
+            const mins = Math.round(Math.max(0, ms) / 60000), h = Math.floor(mins / 60), m = mins % 60;
+            return h ? (m ? `${h} 小時 ${m} 分` : `${h} 小時`) : `${m} 分`;
+        }
+        function describe(x, now) {
+            const dur = hasEnd(x.k) ? (x.e === null ? '（進行中 ' + fmtDur(effEnd(x, now) - x.t) + '）' : ' ' + fmtDur(x.e - x.t)) : '';
+            const base = x.k === 'breast' ? `母乳 ${x.side === 'R' ? '右' : '左'}${dur}` : x.k === 'bottle' ? `瓶餵 ${x.ml} ml` : `${KINDS[x.k]}${dur}`;
+            return x.note ? `${base}　${x.note}` : base;
+        }
+        // 時間區間文字：'22:30 → 06:10（隔日）'
+        function timeRange(x) {
+            if (!hasEnd(x.k) || x.e === null) return twHM(x.t);
+            return `${twHM(x.t)} → ${twHM(x.e)}${twDay(x.e) !== twDay(x.t) ? '（隔日）' : ''}`;
+        }
+        // CSV（試算表開啟）：以 = + - @ 開頭的文字前面加單引號，避免被當成公式
+        const csvSafe = (s) => /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+        function toCsv(log) {
+            const rows = log.map(x => [twDay(x.t), twHM(x.t), x.e ? twLocal(x.e).replace('T', ' ') : '', KINDS[x.k], x.k === 'breast' ? (x.side === 'R' ? '右' : '左') : '', x.k === 'bottle' ? x.ml : '', hasEnd(x.k) && x.e !== null ? Math.round((x.e - x.t) / 60000) : '', csvSafe(x.note || '')]);
+            return Util.csvStringify(['日期', '開始', '結束', '類型', '左右', '奶量(ml)', '分鐘', '備註'], rows);
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let log = cleanLog(Util.store.get('baby_log', []));
+        let viewDay = twDay(Date.now()), editId = null, days = 7, metric = 'feeds', lastId = null, undoTimer = 0;
+        const save = () => Util.store.set('baby_log', log);
+
+        function say(text, undoId) {
+            clearTimeout(undoTimer); lastId = undoId || null;
+            const m = $('#msg'); m.textContent = text;
+            if (undoId) {
+                const b = document.createElement('button'); b.className = 'sm'; b.textContent = '復原'; b.style.marginLeft = '8px';
+                b.onclick = () => { log = deleteEntry(log, undoId); save(); say('已復原'); renderAll(); };
+                m.append(b);
+                undoTimer = setTimeout(() => { if ($('#msg').contains(b)) say(''); }, 8000);
+            }
+        }
+        function commit(res, text) {
+            if (res.err) { say(res.err); return false; }
+            log = res.log; if (!save()) { /* Util.store 已提示儲存失敗 */ }
+            say(text, res.entry && res.entry.id); renderAll(); return true;
+        }
+        const nowMs = () => Date.now();
+        const quickAdd = (x) => { const now = nowMs(); const r = addEntry(log, { ...x, t: now }); commit(r, r.entry ? `已記錄 ${ICON[r.entry.k]} ${describe(r.entry, now)} ${twHM(now)}` : ''); };
+        function toggleBreast(side) {
+            const cur = ongoing(log, 'breast');
+            if (cur) {
+                const r = stopEntry(log, cur.id, nowMs()); if (!commit(r, `已記錄 🤱 ${describe(r.entry || cur, nowMs())}`)) return;
+                if (cur.side === side) return;
+            }
+            quickAdd({ k: 'breast', side, e: null });
+        }
+        $('#qL').onclick = () => toggleBreast('L');
+        $('#qR').onclick = () => toggleBreast('R');
+        $('#qSleep').onclick = () => { const cur = ongoing(log, 'sleep'); if (cur) { const r = stopEntry(log, cur.id, nowMs()); commit(r, r.entry ? `已記錄 😴 ${describe(r.entry, nowMs())}` : ''); } else quickAdd({ k: 'sleep', e: null }); };
+        $('#qPee').onclick = () => quickAdd({ k: 'pee' });
+        $('#qPoo').onclick = () => quickAdd({ k: 'poo' });
+        const lastMl = () => { const b = [...log].reverse().find(x => x.k === 'bottle'); return b ? b.ml : 120; };
+        $('#qBottle').onclick = () => openForm(null, { k: 'bottle', t: nowMs(), ml: lastMl() });
+        $('#qSolid').onclick = () => openForm(null, { k: 'solid', t: nowMs() });
+        $('#qNote').onclick = () => openForm(null, { k: 'note', t: nowMs() });
+
+        // ----- 表單（新增 / 編輯）-----
+        $('#fKind').replaceChildren(...Object.entries(KINDS).map(([k, v]) => new Option(ICON[k] + ' ' + v, k)));
+        function syncForm() { const k = $('#fKind').value; $('#fEndW').hidden = !hasEnd(k); $('#fSideW').hidden = k !== 'breast'; $('#fMlW').hidden = k !== 'bottle'; }
+        $('#fKind').onchange = syncForm;
+        function openForm(id, x) {
+            editId = id; $('#formTitle').textContent = id ? '編輯紀錄' : '新增紀錄'; $('#fErr').textContent = '';
+            $('#fKind').value = x.k; $('#fStart').value = twLocal(x.t); $('#fEnd').value = x.e ? twLocal(x.e) : '';
+            $('#fSide').value = x.side === 'R' ? 'R' : 'L'; $('#fMl').value = x.ml || ''; $('#fNote').value = x.note || '';
+            syncForm(); $('#formCard').hidden = false; $('#formCard').scrollIntoView({ block: 'nearest' });
+        }
+        const closeForm = () => { editId = null; $('#formCard').hidden = true; };
+        $('#fCancel').onclick = closeForm;
+        $('#fSave').onclick = () => {
+            const k = $('#fKind').value, t = twParse($('#fStart').value);
+            if (Number.isNaN(t)) { $('#fErr').textContent = '請填正確的開始時間'; return; }
+            const x = { k, t, note: $('#fNote').value };
+            if (hasEnd(k)) { if ($('#fEnd').value) { x.e = twParse($('#fEnd').value); if (Number.isNaN(x.e)) { $('#fErr').textContent = '請填正確的結束時間'; return; } if (x.e < t) { $('#fErr').textContent = '結束時間不能早於開始時間'; return; } if (x.e - t > MAX_SPAN) { $('#fErr').textContent = '一筆最長 24 小時'; return; } } else x.e = null; }
+            if (k === 'breast') x.side = $('#fSide').value;
+            if (k === 'bottle') { x.ml = $('#fMl').value; if (!(Number(x.ml) >= 1 && Number(x.ml) <= MAX_ML)) { $('#fErr').textContent = `奶量請填 1–${MAX_ML} ml`; return; } }
+            if (k === 'note' && !x.note.trim()) { $('#fErr').textContent = '請填備註內容'; return; }
+            const r = editId ? updateEntry(log, editId, x) : addEntry(log, x);
+            if (r.err) { $('#fErr').textContent = r.err; return; }
+            const wasEdit = !!editId; closeForm();
+            viewDay = twDay(t);
+            commit(r, wasEdit ? '已更新' : `已記錄 ${ICON[k]} ${describe(r.entry, nowMs())}`);
+        };
+
+        // ----- 畫面 -----
+        function renderLive() {
+            const now = nowMs(), lf = lastFeed(log, now);
+            $('#since').textContent = lf ? fmtDur(lf.since) : '—';
+            $('#sinceNote').textContent = lf ? `${KINDS[lf.k]}　${twDay(lf.t) === twDay(now) ? '今天' : twDay(lf.t)} ${twHM(lf.t)}` : '還沒有餵奶紀錄';
+            for (const [id, side, name] of [['#qL', 'L', '左'], ['#qR', 'R', '右']]) {
+                const cur = ongoing(log, 'breast'), on = !!cur && cur.side === side;
+                $(id).setAttribute('aria-pressed', on); $(id + 't').textContent = on ? `停止 ${name} ${fmtDur(effEnd(cur, now) - cur.t)}` : `母乳 ${name}`;
+            }
+            const sl = ongoing(log, 'sleep');
+            $('#qSleep').setAttribute('aria-pressed', !!sl); $('#qSleepT').textContent = sl ? `睡眠 結束 ${fmtDur(effEnd(sl, now) - sl.t)}` : '睡眠 開始';
+        }
+        function renderStats() {
+            const now = nowMs(), s = dayStats(log, viewDay, now), isToday = viewDay === twDay(now);
+            $('#dLabel').textContent = viewDay + (isToday ? '（今天）' : '');
+            $('#dNext').disabled = viewDay >= twDay(now);
+            const rows = [
+                ['餵奶次數', `${s.feeds} 次（母乳 ${s.breast}・瓶餵 ${s.bottle}・副食品 ${s.solid}）`],
+                ['瓶餵總量', `${s.ml} ml`], ['母乳總時間', fmtDur(s.breastMs)],
+                ['平均餵奶間隔', s.avgGap === null ? '—' : fmtDur(s.avgGap)],
+                ['睡眠總時數', fmtDur(s.sleepMs)], ['尿布', `${s.diapers} 次（尿 ${s.pee}・便 ${s.poo}）`],
+            ];
+            $('#stats').replaceChildren(...rows.map(([a, b]) => Util.statRow(a, b)));
+        }
+        function renderTimeline() {
+            const now = nowMs(), list = log.filter(x => twDay(x.t) === viewDay).reverse();
+            $('#timeline').replaceChildren(...(list.length ? list.map(x => {
+                const row = document.createElement('div'), ic = document.createElement('span'), body = document.createElement('div'), t = document.createElement('div'), d = document.createElement('div');
+                row.className = 'ent'; ic.className = 'ic'; ic.textContent = ICON[x.k]; body.className = 'body'; t.className = 't'; t.textContent = timeRange(x); d.textContent = describe(x, now);
+                body.append(t, d);
+                const ed = document.createElement('button'); ed.className = 'sm'; ed.textContent = '編輯'; ed.onclick = () => openForm(x.id, x);
+                const del = document.createElement('button'); del.className = 'sm'; del.textContent = '刪除'; del.setAttribute('aria-label', '刪除 ' + describe(x, now));
+                del.onclick = () => { if (!confirm(`刪除這筆紀錄？\n${twHM(x.t)} ${describe(x, now)}`)) return; log = deleteEntry(log, x.id); if (editId === x.id) closeForm(); save(); say('已刪除'); renderAll(); };
+                row.append(ic, body, ed, del);
+                return row;
+            }) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '這一天還沒有紀錄' })]));
+        }
+        function renderChart() {
+            const now = nowMs(), st = rangeStats(log, twDay(now), days, now), vals = st.map(s => metricOf(s, metric)), max = Math.max(...vals, 0);
+            const unit = metric === 'ml' ? ' ml' : metric === 'sleep' ? ' 小時' : ' 次';
+            $('#bars').classList.toggle('dense', days > 7); $('#axis').classList.toggle('dense', days > 7);
+            $('#bars').replaceChildren(...vals.map((v, i) => {
+                const d = document.createElement('div'), sp = document.createElement('span');
+                d.style.height = max ? Math.max(1, v / max * 100) + '%' : '0'; d.title = `${st[i].day}：${v}${unit}`; sp.textContent = v || ''; d.append(sp); return d;
+            }));
+            $('#axis').replaceChildren(...st.map(s => Object.assign(document.createElement('span'), { textContent: s.day.slice(8) })));
+            const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+            $('#chartNote').textContent = max ? `平均每天 ${Math.round(avg * 10) / 10}${unit}，最高 ${max}${unit}（橫軸為日）` : '這段期間還沒有資料';
+        }
+        function renderAll() {
+            renderLive(); renderStats(); renderTimeline(); renderChart();
+            $('#count').textContent = `共 ${log.length} / ${MAX_LOG} 筆`;
+            $('#csv').disabled = $('#clear').disabled = !log.length;
+        }
+        $('#dPrev').onclick = () => { viewDay = Util.day.shift(viewDay, -1); renderStats(); renderTimeline(); };
+        $('#dNext').onclick = () => { if (viewDay < twDay(nowMs())) { viewDay = Util.day.shift(viewDay, 1); renderStats(); renderTimeline(); } };
+        $('#dToday').onclick = () => { viewDay = twDay(nowMs()); renderStats(); renderTimeline(); };
+        document.querySelectorAll('[data-days]').forEach(b => b.onclick = () => { days = +b.dataset.days; document.querySelectorAll('[data-days]').forEach(x => x.setAttribute('aria-pressed', x === b)); renderChart(); });
+        document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { metric = b.dataset.m; document.querySelectorAll('[data-m]').forEach(x => x.setAttribute('aria-pressed', x === b)); renderChart(); });
+        $('#csv').onclick = () => Util.download(new Blob(['﻿' + toCsv(log)], { type: 'text/csv;charset=utf-8' }), `baby-log-${twDay(nowMs())}.csv`);
+        $('#clear').onclick = () => {
+            if (!log.length || !confirm(`確定清除全部 ${log.length} 筆寶寶作息紀錄？\n會刪除所有餵奶、睡眠、尿布與備註，無法復原（建議先匯出 CSV）。`)) return;
+            log = []; closeForm(); save(); say('已清除全部紀錄'); renderAll();
+        };
+        renderAll();
+        setInterval(() => { renderLive(); if (viewDay === twDay(nowMs())) renderStats(); }, 1000);
+    </script>
+</body>
+
+</html>

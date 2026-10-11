@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="Git 指令速查與產生器：用白話情境找指令（commit 錯了、撤銷、stash、rebase…），每個都標示風險；也能用表單組出 commit、branch、log、reset、revert、tag 指令。">
+    <meta property="og:title" content="Git 指令速查與產生器" />
+    <meta property="og:description" content="白話情境找 Git 指令，標示會不會遺失資料；表單組指令並解釋每個旗標。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/git-helper.html" />
+    <title>Git 指令速查</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .tabs button {
+            flex: 1;
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0 0;
+        }
+
+        label.f {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            margin: 10px 0 4px;
+        }
+
+        .fld input[type=text],
+        .fld input:not([type]),
+        .fld input[type=number],
+        .fld select {
+            width: 100%;
+        }
+
+        label.chk {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 44px;
+        }
+
+        details.sc {
+            background: var(--card);
+            border: var(--card-border);
+            border-radius: var(--radius);
+            box-shadow: var(--card-shadow);
+            margin-bottom: 10px;
+            border-left: 5px solid var(--line);
+        }
+
+        details.sc.r-safe {
+            border-left-color: var(--ok);
+        }
+
+        details.sc.r-danger {
+            border-left-color: var(--bad);
+        }
+
+        details.sc.r-undo {
+            border-left-color: var(--muted);
+        }
+
+        details.sc>summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 12px 14px;
+            min-height: 44px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        details.sc>summary::-webkit-details-marker {
+            display: none;
+        }
+
+        details.sc .ttl {
+            font-weight: 700;
+        }
+
+        details.sc .rk {
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        details.sc .body {
+            padding: 0 14px 14px;
+        }
+
+        .chk-box {
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+
+        .cmd {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin: 8px 0 2px;
+        }
+
+        .code {
+            flex: 1;
+            min-width: 0;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 14px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            overflow-x: auto;
+            white-space: pre;
+        }
+
+        .code.danger {
+            outline: 2px solid var(--bad);
+        }
+
+        .cnote {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 0 0 6px;
+        }
+
+        .bad {
+            color: var(--bad);
+            font-weight: 700;
+        }
+
+        .flags li {
+            margin: 4px 0;
+            font-size: 14px;
+        }
+
+        .flags code {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            background: var(--fill);
+            border-radius: 4px;
+            padding: 1px 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>Git 指令速查</h1>
+        <p class="sub">用白話情境找指令，每個都標示會不會遺失資料。</p>
+
+        <div class="tabs"><button id="tabSc" aria-pressed="true">情境速查</button><button id="tabGen" aria-pressed="false">指令產生器</button></div>
+
+        <div id="pgSc">
+            <div class="card">
+                <input id="q" type="search" placeholder="搜尋：例如 撤銷、stash、遠端、rebase" aria-label="搜尋情境" style="width:100%" autocomplete="off">
+                <div class="chips" id="riskBtns"></div>
+                <p class="note" id="cnt"></p>
+            </div>
+            <div id="list"></div>
+        </div>
+
+        <div id="pgGen" hidden>
+            <div class="card">
+                <label class="f" for="gType" style="margin-top:0">要組哪種指令</label>
+                <select id="gType" style="width:100%"></select>
+                <div class="fld" id="gFields"></div>
+            </div>
+            <div class="card">
+                <h2>產生的指令</h2>
+                <div class="cmd"><div class="code" id="gOut"></div><button class="sm" id="gCopy">複製</button></div>
+                <p class="note" id="gRisk"></p>
+                <ul class="flags" id="gFlags"></ul>
+            </div>
+        </div>
+        <p class="note">指令以 POSIX shell（Git Bash、macOS、Linux）的引號規則產生；全部在你的瀏覽器計算。</p>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>Git 常用指令的白話速查。每個情境告訴你「想做什麼 → 用哪個指令」，並標示風險：<b>🟢 安全</b>（不會改動資料）、<b>🟡 可復原</b>（會改動，但能用 <kbd>git reflog</kbd> 等方式救回）、<b>🔴 會遺失資料或改寫歷史</b>。另有表單產生器，幫你組出指令並解釋每個旗標。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>commit 錯了、想撤銷或改訊息，但不確定該用 reset、revert 還是 amend。</li>
+            <li>要刪遠端分支、清理未追蹤檔案、強制推送，想先確認風險。</li>
+            <li>忘了 log 的格式或 stash 怎麼用。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+            <li>在「情境速查」搜尋關鍵字，或用上方的風險按鈕篩選。</li>
+            <li>點開情境，先看「做之前先確認」，再按指令旁的「複製」，貼到終端機。<kbd>&lt;hash&gt;</kbd>、<kbd>檔名</kbd> 這類佔位字要換成你的內容。</li>
+            <li>要自己組指令：切到「指令產生器」，選類型並填欄位，下方即時出現指令與每個旗標的說明。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">搜尋「改最後」→ 「改最後一個 commit 的訊息」🟡
+指令：git commit --amend -m "新訊息"
+產生器選 reset、模式 hard、目標 HEAD~1
+→ git reset --hard HEAD~1（紅色，會丟掉修改）</div>
+        <h3>小提醒</h3>
+        <ul>
+            <li>已經 push 的 commit，不要用 amend / reset / rebase 改寫，改用 <kbd>git revert</kbd>；否則要強制推送，會影響其他人。</li>
+            <li>風險標示是依指令本身判斷；紅色指令只要含 <kbd>--force</kbd>、<kbd>--hard</kbd>、<kbd>clean -f</kbd>、<kbd>rebase</kbd>、刪遠端等寫法就會出現。</li>
+            <li>不確定時先跑 <kbd>git status</kbd> 與 <kbd>git log --oneline -5</kbd> 看現況。</li>
+            <li>此工具不儲存任何資料，也不會連線。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { copyWithFeedback } = Util;
+
+        // --- pure ---
+        const RISK_RANK = { safe: 0, undo: 1, danger: 2 };
+        const RISK_LABEL = { safe: '🟢 安全', undo: '🟡 可復原', danger: '🔴 會遺失資料或改寫歷史' };
+
+        // 指令風險：先去掉引號內的字串（訊息裡的 -f 不算旗標），再比對寫法
+        function riskOfCommand(cmd) {
+            const c = String(cmd).replace(/'[^']*'|"[^"]*"/g, ' ');
+            const danger = [
+                /--force(?!-)/, /--force-with-lease/, /--force-if-includes/, /--mirror/,
+                /\s-[a-zA-Z]*f[a-zA-Z]*(\s|$)/, /--hard\b/, /\bbranch\s+(-[a-zA-Z]*D|--delete\s+--force)/,
+                /--delete\b/, /\bpush\s+\S+\s+:\S/, /filter-branch|filter-repo/, /\brebase\b/,
+                /\brestore\b(?!.*--staged)/, /\brestore\b.*--worktree/, /checkout\b.*\s--(\s|$)/, /checkout\s+\.(\s|$)/,
+                /--discard-changes/, /stash\s+(drop|clear)/, /reflog\s+(expire|delete)/, /gc\b.*--prune/, /update-ref\s+-d/,
+            ];
+            if (danger.some(r => r.test(c))) return 'danger';
+            const undo = [
+                /commit\b.*--amend/, /\breset\b/, /branch\s+(-d|--delete)\b/, /tag\s+(-d|--delete)\b/, /stash\s+(pop|apply)/,
+                /\bgit\s+merge\b/, /cherry-pick/, /\bremote\s+(remove|rm|set-url|add|rename)/, /\bgit\s+rm\b/, /\bpush\b/, /\bpull\b/,
+            ];
+            return undo.some(r => r.test(c)) ? 'undo' : 'safe';
+        }
+        const maxRisk = (list) => list.reduce((m, r) => RISK_RANK[r] > RISK_RANK[m] ? r : m, 'safe');
+
+        // 情境資料：risk 是整個情境的風險（不得低於任何一條指令）；check 是「做之前先確認」
+        const SCENARIOS = [
+            { id: 'wrong-keep', title: '我 commit 錯了，想退回但保留修改', risk: 'undo', tags: 'reset soft 撤銷 undo 上一個 commit 退回', desc: '最後一個 commit 內容或時機不對，想把它拆開重做，檔案修改都留著。', check: '只適用還沒 push 的 commit。已 push 的請看「還原已推送的 commit」。', cmds: [['git reset --soft HEAD~1', '退回一個 commit，修改仍在暫存區'], ['git reset HEAD~1', '退回一個 commit，修改留在工作目錄、取消暫存']] },
+            { id: 'wrong-drop', title: '我 commit 錯了，連修改一起丟掉', risk: 'danger', tags: 'reset hard 捨棄 丟掉 刪除 commit', desc: '最後一個 commit 與它的所有修改都不要了。', check: '先 git status 確認沒有未 commit 的重要修改（--hard 會一併清掉）。記下 git rev-parse HEAD 的結果，萬一後悔可用 git reflog 找回。', cmds: [['git reset --hard HEAD~1', '回到上一個 commit，工作目錄與暫存區都還原']] },
+            { id: 'discard', title: '撤銷還沒 commit 的變更', risk: 'danger', tags: 'restore checkout 還原 捨棄 工作目錄 修改', desc: '檔案改壞了，想回到最後一次 commit 的樣子。', check: '被還原的修改沒有 commit 過，無法救回。先用 git diff 看一次要丟掉什麼。', cmds: [['git restore 檔名', '還原單一檔案'], ['git restore .', '還原所有已追蹤檔案的修改']] },
+            { id: 'unstage', title: '取消 git add（不影響檔案內容）', risk: 'safe', tags: 'restore staged reset 取消暫存 add', desc: '不小心 add 了不想 commit 的檔案，只取消暫存，修改保留。', check: '無風險；git status 可確認結果。', cmds: [['git restore --staged 檔名', '取消單一檔案的暫存'], ['git restore --staged .', '取消全部暫存']] },
+            { id: 'amend-msg', title: '改最後一個 commit 的訊息', risk: 'undo', tags: 'amend 訊息 message 改 commit', desc: '訊息打錯字或想寫清楚一點。', check: '會產生新的 commit（hash 改變）。已 push 的不要改。', cmds: [['git commit --amend -m "新訊息"', '直接用新訊息取代']] },
+            { id: 'amend-file', title: '漏了檔案，補進最後一個 commit', risk: 'undo', tags: 'amend add 漏掉 補', desc: '剛 commit 完才發現少 add 一個檔案。', check: '會產生新的 commit。已 push 的不要改，改成另外 commit 一次。', cmds: [['git add 檔名', ''], ['git commit --amend --no-edit', '沿用原訊息']] },
+            { id: 'squash', title: '把最近幾個 commit 合併成一個', risk: 'undo', tags: 'squash 合併 整理 reset soft', desc: '把零碎的 commit 壓成一個乾淨的（以下以最近 3 個為例）。', check: '只適用還沒 push 的 commit，且中間沒有 merge commit。數字 3 換成要合併的數量。', cmds: [['git reset --soft HEAD~3', '退回三個 commit，修改都在暫存區'], ['git commit -m "合併後的訊息"', '重新 commit 成一個']] },
+            { id: 'switch', title: '換分支 / 開新分支', risk: 'safe', tags: 'switch checkout branch 分支 切換 新增', desc: '切到另一條分支，或從目前位置開一條新的。', check: '有未 commit 的修改時，若與目標分支衝突會拒絕切換；可先 stash。', cmds: [['git switch 分支名', '切換到既有分支'], ['git switch -c 新分支名', '建立並切換'], ['git branch -vv', '列出分支與追蹤關係']] },
+            { id: 'stash', title: '先把手上的修改暫存起來（stash）', risk: 'undo', tags: 'stash 暫存 擱置 切換 pop', desc: '改到一半要先去處理別的事，又不想 commit。', check: 'stash 預設不含未追蹤檔案，需要時加 -u。pop 若遇到衝突，stash 會保留。', cmds: [['git stash push -m "說明"', '存起來並還原工作目錄'], ['git stash push -u -m "說明"', '連未追蹤檔案一起存'], ['git stash list', '看有哪些暫存'], ['git stash pop', '取回最新一筆並從清單移除']] },
+            { id: 'merge', title: '把另一條分支合併進來', risk: 'undo', tags: 'merge 合併 分支', desc: '把功能分支的成果併回目前分支。', check: '先 git status 確認工作目錄乾淨。合併途中反悔可用 --abort。', cmds: [['git merge 分支名', ''], ['git merge --abort', '合併中遇到衝突想放棄時']] },
+            { id: 'rebase', title: '把我的分支接到最新的 main 之後（rebase）', risk: 'danger', tags: 'rebase 改寫歷史 更新分支 main', desc: '讓分支歷史呈一直線，commit 會被重新套用（hash 全變）。', check: '只對還沒分享給別人的分支做。做之前可先 git branch backup-xxx 留一份備份。已 push 的分支 rebase 後需要強制推送。', cmds: [['git fetch origin', ''], ['git rebase origin/main', '遇到衝突解完後 git rebase --continue，想放棄 git rebase --abort']] },
+            { id: 'rebase-i', title: '整理歷史：互動式 rebase', risk: 'danger', tags: 'rebase interactive 互動 squash reword 整理', desc: '可以改順序、合併、改訊息或刪除最近幾個 commit。', check: '會改寫歷史，只用在還沒 push 的 commit。做之前先 git branch backup-xxx。', cmds: [['git rebase -i HEAD~5', '在編輯器中把 pick 改成 squash / reword / drop']] },
+            { id: 'cherry', title: '只拿另一個分支的某個 commit（cherry-pick）', risk: 'undo', tags: 'cherry-pick 挑 單一 commit', desc: '把別的分支上的一個修正複製到目前分支。', check: '用 git log 分支名 --oneline 先找到正確的 hash。衝突時可 --abort 放棄。', cmds: [['git cherry-pick <hash>', ''], ['git cherry-pick --abort', '中途想放棄']] },
+            { id: 'revert', title: '還原已經推送的 commit', risk: 'safe', tags: 'revert 還原 已推送 push 反向', desc: '產生一個「反向」的新 commit 來抵銷舊的，不改寫歷史，最適合已分享出去的 commit。完成後再 git push 即可。', check: '若要還原的是 merge commit，要加 -m 1 指定保留哪一邊。', cmds: [['git revert <hash>', ''], ['git revert -m 1 <merge-hash>', '還原 merge commit（保留主線）']] },
+            { id: 'blame', title: '找出是誰改了這一行', risk: 'safe', tags: 'blame 誰改的 歷史 log 追查', desc: '查某一行或某段程式是哪個 commit、誰、什麼時候改的。', check: '唯讀指令，無風險。', cmds: [['git blame -L 10,20 檔名', '只看第 10–20 行'], ['git log -L 10,20:檔名', '看這幾行的完整演變'], ['git log -S"字串" --oneline', '找出哪個 commit 加入 / 移除了這段字串']] },
+            { id: 'file-history', title: '看某個檔案的歷史（含改名）', risk: 'safe', tags: 'log follow 檔案 歷史 改名', desc: '追蹤單一檔案每次改了什麼。', check: '唯讀指令，無風險。', cmds: [['git log --follow -p -- 檔名', '含差異內容']] },
+            { id: 'del-remote', title: '刪除遠端分支', risk: 'danger', tags: 'delete remote branch 遠端 刪除 分支 push', desc: '功能做完了，把遠端的分支清掉。', check: '確認該分支已合併、其他人不再使用。遠端刪除後本機仍保留，需另外刪。', cmds: [['git push origin --delete 分支名', '刪遠端分支'], ['git branch -d 分支名', '刪本機分支（未合併時會拒絕）'], ['git remote prune origin', '清掉本機殘留的遠端追蹤參照']] },
+            { id: 'clean', title: '清理未追蹤的檔案', risk: 'danger', tags: 'clean 未追蹤 untracked 清理 刪除', desc: '刪掉 build 產物、暫存檔等還沒被 git 管理的檔案。', check: '一定先用 -n 預覽！被刪的未追蹤檔案無法救回（不在 git 裡）。', cmds: [['git clean -nd', '預覽會刪哪些（不會真的刪）'], ['git clean -fd', '真的刪除檔案與資料夾']] },
+            { id: 'remote', title: '改 remote 網址', risk: 'undo', tags: 'remote set-url origin 網址 遠端', desc: '倉庫搬家，或要把 https 換成 ssh。', check: '先 git remote -v 看現況。', cmds: [['git remote -v', '看目前設定'], ['git remote set-url origin 新網址', '']] },
+            { id: 'reflog', title: '救回「不見了」的 commit', risk: 'safe', tags: 'reflog 救回 找回 遺失 reset hard', desc: 'reset --hard 或 rebase 之後發現弄丟了，reflog 記錄了 HEAD 走過的每一步（預設保留約 90 天）。', check: '只救得回「曾經 commit 過」的內容。找到 hash 後，建議先開新分支保存。', cmds: [['git reflog', '找到出事之前的那一行與 hash'], ['git branch rescue <hash>', '在該 commit 建立分支，內容就救回來了']] },
+            { id: 'force-push', title: 'rebase / amend 之後要更新遠端', risk: 'danger', tags: 'force push lease 強制推送', desc: '歷史被改寫後，一般 push 會被拒絕，需要強制推送。', check: '用 --force-with-lease：遠端若有別人新推的 commit 會拒絕，比 --force 安全。確認沒有同事在這條分支上工作。', cmds: [['git push --force-with-lease', '']] },
+            { id: 'untrack', title: '加進 .gitignore 了，但檔案還是被追蹤', risk: 'undo', tags: 'gitignore rm cached 取消追蹤', desc: '.gitignore 對已經被追蹤的檔案無效，要先從版本控制移除（本機檔案保留）。', check: '--cached 只移出 git，不刪本機檔案；之後記得 commit。', cmds: [['git rm --cached 檔名', '單一檔案'], ['git rm -r --cached 資料夾名', '整個資料夾']] },
+            { id: 'add-p', title: '只 commit 一部分修改', risk: 'safe', tags: 'add patch 部分 互動 hunk', desc: '同一個檔案改了好幾件事，想分成不同 commit。', check: '無風險；按 y 收下、n 略過、s 再切小塊。', cmds: [['git add -p', '逐塊挑選要暫存的修改']] },
+            { id: 'config', title: '設定名字與 email', risk: 'safe', tags: 'config user name email 設定', desc: '第一次使用 Git 要先設定，commit 才會有作者資訊。', check: '--global 套用到整台電腦；只想設定單一倉庫就拿掉它。', cmds: [['git config --global user.name "你的名字"', ''], ['git config --global user.email "you@example.com"', '']] },
+            { id: 'tag', title: '打版本標籤（tag）', risk: 'undo', tags: 'tag 版本 標籤 release', desc: '為某個 commit 標上版本號，例如 v1.0.0。', check: 'tag 不會自動推送，需要 push 上去。', cmds: [['git tag -a v1.0.0 -m "版本說明"', ''], ['git push origin v1.0.0', '']] },
+        ];
+
+        // 搜尋：空白分隔的關鍵字需全部出現（不分大小寫）；risk 為 'all' 或指定風險
+        function searchScenarios(list, q, risk = 'all') {
+            const ks = String(q || '').toLowerCase().split(/\s+/).filter(Boolean);
+            return list.filter(s => {
+                if (risk !== 'all' && s.risk !== risk) return false;
+                const hay = (s.title + ' ' + s.desc + ' ' + s.tags + ' ' + s.cmds.map(c => c[0] + ' ' + c[1]).join(' ')).toLowerCase();
+                return ks.every(k => hay.includes(k));
+            });
+        }
+
+        // 資料完整性檢查：回傳問題清單（空陣列代表通過）
+        function checkScenarios(list) {
+            const bad = [], seen = new Set();
+            for (const s of list) {
+                const n = s.id || '(無 id)';
+                if (!s.id || seen.has(s.id)) bad.push(n + ' id 缺少或重複'); seen.add(s.id);
+                if (!(s.risk in RISK_RANK)) bad.push(n + ' 缺風險標示');
+                if (!s.title || !s.desc || !s.check) bad.push(n + ' 缺標題 / 說明 / 確認提示');
+                if (!Array.isArray(s.cmds) || !s.cmds.length) { bad.push(n + ' 沒有指令'); continue; }
+                for (const [c] of s.cmds) {
+                    if (!/^git\s/.test(c)) bad.push(n + ' 指令不是 git 開頭：' + c);
+                    if (RISK_RANK[riskOfCommand(c)] > RISK_RANK[s.risk]) bad.push(n + ' 風險標示過低：' + c);
+                }
+            }
+            return bad;
+        }
+
+        // shell 引號：安全字元不加引號，其餘用單引號包起來
+        const q = (s) => /^[\w@%+=:,./~^{}-]+$/.test(s) ? s : `'${String(s).replace(/'/g, `'\\''`)}'`;
+
+        // 分支 / tag 名稱（git check-ref-format 的主要規則）
+        function validRef(name) {
+            const n = String(name || '');
+            if (!n || /[\s~^:?*[\\\x00-\x1f\x7f]/.test(n) || n.includes('..') || n.includes('@{') || n === '@') return false;
+            if (/^[-/.]|[/.]$|\.lock$|\/\/|\/\.|\.lock\//.test(n)) return false;
+            return true;
+        }
+        // 版本參照：hash、HEAD~2、origin/main、v1.0、HEAD@{1}
+        const validRev = (s) => /^[\w@{}~^./-]+$/.test(s || '') && !/^-/.test(s) && !String(s).includes('..');
+
+        // 每個 builder 回傳 { cmd, flags: [[旗標, 說明]], risk } 或 { err }
+        const mk = (parts, flags) => { const cmd = parts.join(' '); return { cmd, flags, risk: riskOfCommand(cmd) }; };
+
+        function buildCommit(o) {
+            const msg = String(o.msg || '').trim(), p = ['git commit'], f = [];
+            if (o.amend && o.noedit) { p.push('--amend --no-edit'); f.push(['--amend', '改寫最後一個 commit（產生新 hash）'], ['--no-edit', '沿用原本的訊息']); }
+            else {
+                if (!msg) return { err: '請輸入 commit 訊息' };
+                if (o.amend) { p.push('--amend'); f.push(['--amend', '改寫最後一個 commit（產生新 hash）']); }
+                p.push('-m', q(msg)); f.push(['-m', '直接在指令列給訊息']);
+            }
+            if (o.all) { p.splice(1, 0, '-a'); f.unshift(['-a', '自動暫存「已追蹤」檔案的修改（不含新檔案）']); }
+            if (o.empty) { p.push('--allow-empty'); f.push(['--allow-empty', '允許沒有任何修改的空 commit']); }
+            return mk(p, f);
+        }
+        function buildBranch(o) {
+            const act = o.action || 'create', name = String(o.name || '').trim();
+            if (act === 'list') return mk(['git branch -vv' + (o.all ? ' -a' : '')], [['-vv', '顯示最後 commit 與追蹤的遠端分支']].concat(o.all ? [['-a', '連遠端分支一起列']] : []));
+            if (!validRef(name)) return { err: '請輸入有效的分支名稱（不可含空白、~ ^ : ? * [ \\ 或 ..）' };
+            if (act === 'create') {
+                const from = String(o.from || '').trim(); if (from && !validRev(from)) return { err: '起點格式不正確' };
+                return mk(['git switch -c', name].concat(from ? [from] : []), [['switch -c', '建立新分支並立刻切過去']].concat(from ? [[from, '從這個 commit / 分支開始，不填則從目前位置']] : []));
+            }
+            if (act === 'switch') return mk(['git switch', name], [['switch', '切換到既有分支']]);
+            if (act === 'rename') {
+                const nn = String(o.newName || '').trim(); if (!validRef(nn)) return { err: '請輸入有效的新名稱' };
+                return mk(['git branch -m', name, nn], [['-m', '移動（改名）分支，只改本機']]);
+            }
+            if (act === 'delete') return mk(['git branch -d', name], [['-d', '刪除分支；尚未合併時會拒絕，比較安全']]);
+            if (act === 'forceDelete') return mk(['git branch -D', name], [['-D', '強制刪除，即使未合併（commit 只能靠 reflog 救）']]);
+            if (act === 'deleteRemote') return mk(['git push origin --delete', name], [['--delete', '刪除遠端上的這條分支，其他人會受影響']]);
+            return { err: '未知的動作' };
+        }
+        function buildLog(o) {
+            const fm = { oneline: [['--oneline', '每個 commit 一行（短 hash + 標題）']], graph: [['--oneline', '每個 commit 一行'], ['--graph', '用 ASCII 畫出分支圖'], ['--decorate', '顯示分支與 tag 名稱'], ['--all', '含所有分支']], stat: [['--stat', '列出每個 commit 改了哪些檔案與行數']], patch: [['-p', '顯示每個 commit 的完整差異']], pretty: [['--pretty=format:...', '自訂格式：%h 短 hash、%an 作者、%ad 日期、%s 標題'], ['--date=short', '日期用 YYYY-MM-DD']] };
+            const fmt = o.fmt || 'oneline', f = (fm[fmt] || fm.oneline).slice(), p = ['git log'];
+            p.push({ oneline: '--oneline', graph: '--oneline --graph --decorate --all', stat: '--stat', patch: '-p', pretty: `--pretty=format:'%h %an %ad %s' --date=short` }[fmt] || '--oneline');
+            const n = o.n === '' || o.n == null ? null : Number(o.n);
+            if (n !== null) { if (!Number.isInteger(n) || n < 1 || n > 9999) return { err: '數量請輸入 1–9999 的整數' }; p.push('-n', String(n)); f.push(['-n', '只看最近 ' + n + ' 筆']); }
+            for (const [k, flag, desc] of [['author', '--author', '只看某位作者（可用部分名字或 email）'], ['since', '--since', '只看某個時間之後，例如 "2 weeks ago" 或 2025-01-01'], ['grep', '--grep', 'commit 訊息含這段文字']]) {
+                const v = String(o[k] || '').trim(); if (v) { p.push(`${flag}=${q(v)}`); f.push([flag, desc]); }
+            }
+            const path = String(o.path || '').trim(); if (path) { p.push('--', q(path)); f.push(['-- 路徑', '只看影響這個檔案 / 資料夾的 commit']); }
+            return mk(p, f);
+        }
+        function buildReset(o) {
+            const mode = o.mode || 'mixed', t = String(o.target || 'HEAD~1').trim() || 'HEAD~1';
+            if (!['soft', 'mixed', 'hard'].includes(mode)) return { err: '未知的模式' };
+            if (!validRev(t)) return { err: '目標格式不正確（例如 HEAD~1、a1b2c3d、origin/main）' };
+            const d = { soft: '只移動分支指標，修改全留在暫存區', mixed: '移動指標並取消暫存，修改留在工作目錄（預設）', hard: '移動指標，並把暫存區與工作目錄一起還原：未 commit 的修改會消失' }[mode];
+            return mk(['git reset', '--' + mode, t], [['--' + mode, d], [t, '要退回到的位置；HEAD~1 = 往前一個 commit']]);
+        }
+        function buildRevert(o) {
+            const t = String(o.target || '').trim();
+            if (!t) return { err: '請輸入要還原的 commit（hash 或 HEAD）' };
+            if (!validRev(t)) return { err: 'commit 格式不正確' };
+            const p = ['git revert'], f = [];
+            if (o.mainline) { p.push('-m', String(o.mainline) === '2' ? '2' : '1'); f.push(['-m', '還原 merge commit 時，指定保留哪一個父親（通常 1 = 主線）']); }
+            if (o.noCommit) { p.push('--no-commit'); f.push(['--no-commit', '只套用反向修改，不自動 commit（可合併多個 revert 再一起 commit）']); }
+            if (o.noEdit) { p.push('--no-edit'); f.push(['--no-edit', '使用預設訊息，不開編輯器']); }
+            p.push(t); f.push([t, '要還原的 commit']);
+            return mk(p, f);
+        }
+        function buildTag(o) {
+            const act = o.action || 'create', name = String(o.name || '').trim();
+            if (act === 'list') return mk(['git tag -n'], [['-n', '列出 tag 與其說明']]);
+            if (!validRef(name)) return { err: '請輸入有效的 tag 名稱，例如 v1.0.0' };
+            if (act === 'create') {
+                const m = String(o.msg || '').trim(), tg = String(o.target || '').trim();
+                if (tg && !validRev(tg)) return { err: '目標格式不正確' };
+                const p = ['git tag'], f = [];
+                if (m) { p.push('-a', name, '-m', q(m)); f.push(['-a', '建立「附註」tag（含作者、日期與說明）'], ['-m', 'tag 說明']); } else { p.push(name); f.push([name, '輕量 tag（只是一個名稱）']); }
+                if (tg) { p.push(tg); f.push([tg, '標在這個 commit，不填則為目前 HEAD']); }
+                return mk(p, f);
+            }
+            if (act === 'push') return mk(['git push origin', name], [['origin ' + name, 'tag 不會隨 push 自動上傳，要指名推送']]);
+            if (act === 'delete') return mk(['git tag -d', name], [['-d', '刪除本機 tag（遠端不受影響）']]);
+            if (act === 'deleteRemote') return mk(['git push origin --delete', 'refs/tags/' + name], [['--delete', '刪除遠端的 tag'], ['refs/tags/…', '明確指定是 tag，避免與同名分支混淆']]);
+            return { err: '未知的動作' };
+        }
+
+        // 表單定義：欄位 t = text | check | select | number
+        const FORMS = {
+            commit: { label: 'commit（提交）', build: buildCommit, fields: [{ k: 'msg', l: '訊息', t: 'text' }, { k: 'all', l: '-a 自動暫存已追蹤檔案', t: 'check' }, { k: 'amend', l: '--amend 改寫最後一個 commit', t: 'check' }, { k: 'noedit', l: '--no-edit 沿用原訊息（需配合 amend）', t: 'check' }, { k: 'empty', l: '--allow-empty 允許空 commit', t: 'check' }] },
+            branch: { label: 'branch（分支）', build: buildBranch, fields: [{ k: 'action', l: '動作', t: 'select', o: [['create', '建立並切換'], ['switch', '切換'], ['rename', '改名'], ['delete', '刪除（-d，較安全）'], ['forceDelete', '強制刪除（-D）'], ['deleteRemote', '刪除遠端分支'], ['list', '列出分支']] }, { k: 'name', l: '分支名稱', t: 'text' }, { k: 'newName', l: '新名稱（改名時）', t: 'text' }, { k: 'from', l: '起點（建立時，可空白）', t: 'text' }, { k: 'all', l: '-a 含遠端分支（列出時）', t: 'check' }] },
+            log: { label: 'log（歷史）', build: buildLog, fields: [{ k: 'fmt', l: '格式', t: 'select', o: [['oneline', '一行一個'], ['graph', '分支圖'], ['stat', '含檔案統計'], ['patch', '含完整差異'], ['pretty', '自訂：hash 作者 日期 標題']] }, { k: 'n', l: '最近幾筆（可空白）', t: 'number' }, { k: 'author', l: '作者（可空白）', t: 'text' }, { k: 'since', l: '起始時間（可空白）', t: 'text' }, { k: 'grep', l: '訊息含文字（可空白）', t: 'text' }, { k: 'path', l: '路徑（可空白）', t: 'text' }] },
+            reset: { label: 'reset（退回）', build: buildReset, fields: [{ k: 'mode', l: '模式', t: 'select', o: [['soft', 'soft：保留修改與暫存'], ['mixed', 'mixed：保留修改、取消暫存'], ['hard', 'hard：全部丟掉（危險）']] }, { k: 'target', l: '目標', t: 'text', d: 'HEAD~1' }] },
+            revert: { label: 'revert（反向還原）', build: buildRevert, fields: [{ k: 'target', l: '要還原的 commit', t: 'text', d: 'HEAD' }, { k: 'mainline', l: '-m 還原 merge commit 時保留的父親', t: 'select', o: [['', '（不是 merge commit）'], ['1', '1（主線）'], ['2', '2']] }, { k: 'noCommit', l: '--no-commit 只套用、不自動 commit', t: 'check' }, { k: 'noEdit', l: '--no-edit 用預設訊息', t: 'check' }] },
+            tag: { label: 'tag（標籤）', build: buildTag, fields: [{ k: 'action', l: '動作', t: 'select', o: [['create', '建立'], ['push', '推送到遠端'], ['delete', '刪除本機'], ['deleteRemote', '刪除遠端'], ['list', '列出']] }, { k: 'name', l: 'tag 名稱', t: 'text', d: 'v1.0.0' }, { k: 'msg', l: '說明（有填則為附註 tag）', t: 'text' }, { k: 'target', l: '標在哪個 commit（可空白）', t: 'text' }] },
+        };
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+        let riskFilter = 'all';
+
+        function codeRow(cmd, note) {
+            const r = riskOfCommand(cmd), box = el('div', { className: 'code' + (r === 'danger' ? ' danger' : ''), textContent: cmd });
+            const b = el('button', { className: 'sm', textContent: '複製' }); b.onclick = () => copyWithFeedback(b, cmd);
+            const wrap = el('div');
+            wrap.append(el('div', { className: 'cmd' }, box, b));
+            if (note || r !== 'safe') wrap.append(el('p', { className: 'cnote' }, (r !== 'safe' ? RISK_LABEL[r] + ' ' : '') + (note || '')));
+            return wrap;
+        }
+        function renderList() {
+            const rows = searchScenarios(SCENARIOS, $('#q').value, riskFilter), list = $('#list');
+            $('#cnt').textContent = `${rows.length} / ${SCENARIOS.length} 個情境`;
+            list.replaceChildren(...rows.map(s => {
+                const d = el('details', { className: 'sc r-' + s.risk });
+                d.append(el('summary', {}, el('span', { className: 'ttl', textContent: s.title }), el('span', { className: 'rk', textContent: RISK_LABEL[s.risk] })));
+                const body = el('div', { className: 'body' }, el('p', { textContent: s.desc }), el('div', { className: 'chk-box', textContent: '做之前先確認：' + s.check }));
+                s.cmds.forEach(([c, n]) => body.append(codeRow(c, n)));
+                d.append(body); return d;
+            }));
+            if (!rows.length) list.append(el('p', { className: 'muted', textContent: '找不到符合的情境，換個關鍵字試試。' }));
+        }
+        const RB = [['all', '全部'], ['safe', '🟢 安全'], ['undo', '🟡 可復原'], ['danger', '🔴 危險']];
+        function renderRiskBtns() {
+            $('#riskBtns').replaceChildren(...RB.map(([k, t]) => { const b = el('button', { className: 'sm', textContent: t }); b.setAttribute('aria-pressed', String(riskFilter === k)); b.onclick = () => { riskFilter = k; renderRiskBtns(); renderList(); }; return b; }));
+        }
+
+        // 表單
+        let state = {};
+        function renderFields() {
+            const form = FORMS[$('#gType').value]; state = {};
+            const box = $('#gFields'); box.replaceChildren();
+            for (const f of form.fields) {
+                const id = 'g_' + f.k; state[f.k] = f.t === 'check' ? false : (f.d || (f.t === 'select' ? f.o[0][0] : ''));
+                let inp;
+                if (f.t === 'check') { inp = el('input', { type: 'checkbox', id }); const lab = el('label', { className: 'chk' }, inp, f.l); box.append(lab); }
+                else {
+                    box.append(el('label', { className: 'f', htmlFor: id, textContent: f.l }));
+                    if (f.t === 'select') { inp = el('select', { id }); f.o.forEach(([v, t]) => inp.append(new Option(t, v))); }
+                    else { inp = el('input', { id, type: f.t === 'number' ? 'number' : 'text', value: f.d || '', autocomplete: 'off', spellcheck: false }); if (f.t === 'number') inp.inputMode = 'numeric'; }
+                    box.append(inp);
+                }
+                const upd = () => { state[f.k] = f.t === 'check' ? inp.checked : inp.value; renderGen(); };
+                inp.addEventListener('input', upd); inp.addEventListener('change', upd);
+            }
+            renderGen();
+        }
+        function renderGen() {
+            const r = FORMS[$('#gType').value].build(state), out = $('#gOut');
+            $('#gFlags').replaceChildren();
+            if (r.err) { out.textContent = '—'; out.classList.remove('danger'); $('#gRisk').textContent = r.err; $('#gRisk').className = 'note bad'; $('#gCopy').disabled = true; return; }
+            out.textContent = r.cmd; out.classList.toggle('danger', r.risk === 'danger');
+            $('#gRisk').textContent = RISK_LABEL[r.risk]; $('#gRisk').className = 'note' + (r.risk === 'danger' ? ' bad' : '');
+            $('#gCopy').disabled = false; $('#gCopy').onclick = () => copyWithFeedback($('#gCopy'), r.cmd);
+            $('#gFlags').append(...r.flags.map(([a, b]) => el('li', {}, el('code', { textContent: a }), ' ' + b)));
+        }
+
+        function tab(t) {
+            $('#pgSc').hidden = t !== 'sc'; $('#pgGen').hidden = t !== 'gen';
+            $('#tabSc').setAttribute('aria-pressed', String(t === 'sc')); $('#tabGen').setAttribute('aria-pressed', String(t === 'gen'));
+        }
+        $('#tabSc').onclick = () => tab('sc'); $('#tabGen').onclick = () => tab('gen');
+        $('#q').addEventListener('input', renderList);
+        $('#gType').replaceChildren(...Object.entries(FORMS).map(([k, f]) => new Option(f.label, k)));
+        $('#gType').addEventListener('change', renderFields);
+        renderRiskBtns(); renderList(); renderFields();
+    </script>
+</body>
+
+</html>

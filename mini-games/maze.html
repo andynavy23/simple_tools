@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="迷宮：隨機產生 5×5 到 40×40 的迷宮，方向鍵按鈕或滑動操作，有每日挑戰、提示、足跡與最佳紀錄，離線可玩。">
+    <meta property="og:title" content="迷宮" />
+    <meta property="og:description" content="隨機迷宮與每日挑戰，手機好操作。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/maze.html" />
+    <meta name="st-keys" content="maze_best,maze_daily_*">
+    <title>迷宮</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 680px;
+        }
+
+        .bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .bar label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .stat {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 6px 12px;
+            font-variant-numeric: tabular-nums;
+            font-weight: 700;
+        }
+
+        #size {
+            width: 5.5em;
+        }
+
+        #cv {
+            display: block;
+            width: 100%;
+            max-width: 640px;
+            aspect-ratio: 1;
+            margin: 0 auto;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--line);
+            background: var(--card);
+            touch-action: auto;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #cv.swipe {
+            touch-action: none;
+        }
+
+        #dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 64px);
+            grid-template-rows: repeat(2, 64px);
+            gap: 8px;
+            justify-content: center;
+            margin: 14px 0 4px;
+        }
+
+        #dpad[hidden] {
+            display: none;
+        }
+
+        #dpad button {
+            min-width: 0;
+            min-height: 0;
+            padding: 0;
+            font-size: 26px;
+            touch-action: manipulation;
+        }
+
+        #dpad .u {
+            grid-column: 2;
+        }
+
+        #scrollBtn[hidden] {
+            display: none;
+        }
+
+        #msg {
+            text-align: center;
+            font-weight: 700;
+            margin-top: 10px;
+            min-height: 1.5em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>迷宮</h1>
+        <p class="sub">從左上角走到右下角的綠色終點。用方向鍵按鈕、鍵盤方向鍵 / WASD，或切到滑動模式。</p>
+
+        <div class="bar">
+            <select id="level" aria-label="難度">
+                <option value="easy" selected>簡單 10×10</option>
+                <option value="normal">普通 20×20</option>
+                <option value="hard">困難 30×30</option>
+            </select>
+            <label for="size">尺寸 <input id="size" type="number" min="5" max="40" step="1" inputmode="numeric" value="10"></label>
+            <button id="daily" aria-pressed="false" title="每天固定同一個迷宮（台灣時間）">每日挑戰</button>
+            <button class="primary" id="new" style="margin-left:auto">新迷宮</button>
+        </div>
+        <div class="bar">
+            <span class="stat">⏱ <span id="time">0.0</span></span>
+            <span class="stat">步數 <span id="steps">0</span></span>
+            <span class="stat">最短 <span id="short">0</span></span>
+            <span class="stat">最佳 <span id="best">—</span></span>
+        </div>
+
+        <canvas id="cv" role="img" aria-label="迷宮盤面"></canvas>
+        <div id="dpad">
+            <button class="u" data-d="0" aria-label="上">↑</button>
+            <button data-d="3" aria-label="左">←</button>
+            <button data-d="2" aria-label="下">↓</button>
+            <button data-d="1" aria-label="右">→</button>
+        </div>
+        <div id="msg" role="status" aria-live="polite"></div>
+
+        <div class="bar" style="justify-content:center;margin-top:10px">
+            <button id="modeBtn" aria-pressed="false" title="在迷宮上按住拖曳來移動">👆 滑動模式</button>
+            <button id="scrollBtn" aria-pressed="false" hidden title="開啟後，在迷宮上滑動會捲動頁面而不是移動">📜 捲動頁面</button>
+            <label><input type="checkbox" id="trail" checked> 顯示足跡</label>
+            <button id="hint">💡 提示 (3)</button>
+            <button id="solve">看答案</button>
+        </div>
+        <button class="sm" id="clearBest" style="margin-top:12px">清除最佳紀錄</button>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>隨機迷宮：從左上角出發，走到右下角的終點。迷宮是「完美迷宮」，任兩點之間只有一條不繞圈的路，但有很多死路。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>排隊或通勤時玩幾分鐘。</li>
+        <li>用「每日挑戰」和朋友比誰走得快、走得直。</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+        <li>選難度（簡單 10×10、普通 20×20、困難 30×30），或直接在「尺寸」填 5～40，按「新迷宮」。</li>
+        <li>用畫面下方的方向鍵按鈕（可按住連續走）、鍵盤方向鍵或 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動；第一步開始計時。</li>
+        <li>「👆 滑動模式」：在迷宮上按住並拖曳移動。這時迷宮上的滑動不會捲動頁面，要捲動請按「📜 捲動頁面」暫時關掉滑動，或在迷宮以外的地方滑。</li>
+        <li>「顯示足跡」標出走過的格子；「💡 提示」顯示下一步該往哪走，每局 3 次；「看答案」畫出最短路徑。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">簡單 10×10 的最短路是固定的某個步數（畫面「最短」）。你走了 60 步、最短 36 步，效率 = 36 ÷ 60 = 60%。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>每日挑戰依台灣時間，每天每種尺寸同一個迷宮，可重玩，只記最快的一次。</li>
+        <li>用了「看答案」這局成績不計；用提示仍會計。</li>
+        <li>啟用「減少動態效果」的裝置不會有移動動畫。</li>
+        <li>最佳紀錄每個尺寸一筆（最多 36 筆），每日挑戰只保留最近 30 天，存在這台裝置。可按下方「清除最佳紀錄」全部清掉（無法復原；頁面會重新載入，進行中的這一局會結束）。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        const MIN_N = 5, MAX_N = 40, LEVELS = { easy: 10, normal: 20, hard: 30 };
+        // 方向 0 上 1 右 2 下 3 左；迷宮 m[i] 的第 d 位 = 該格往 d 方向有通道；起點 0（左上），終點 n*n-1（右下）
+        const DIRS = [{ dr: -1, dc: 0 }, { dr: 0, dc: 1 }, { dr: 1, dc: 0 }, { dr: 0, dc: -1 }];
+        const clampN = (v) => { v = Math.round(+v); return Number.isFinite(v) ? Math.max(MIN_N, Math.min(MAX_N, v)) : 10; };
+
+        // 遞迴回溯（迭代版 DFS）：產生完美迷宮（連通、無環、n*n-1 條通道）。rand(k) 回傳 [0,k) 整數；同種子同迷宮
+        function genMaze(n, rand) {
+            const m = new Uint8Array(n * n), seen = new Uint8Array(n * n), st = [0]; seen[0] = 1;
+            while (st.length) {
+                const i = st[st.length - 1], r = Math.floor(i / n), c = i % n, opts = [];
+                for (let d = 0; d < 4; d++) { const rr = r + DIRS[d].dr, cc = c + DIRS[d].dc; if (rr >= 0 && rr < n && cc >= 0 && cc < n && !seen[rr * n + cc]) opts.push(d); }
+                if (!opts.length) { st.pop(); continue; }
+                const d = opts[rand(opts.length)], j = (r + DIRS[d].dr) * n + c + DIRS[d].dc;
+                m[i] |= 1 << d; m[j] |= 1 << ((d + 2) % 4); seen[j] = 1; st.push(j);
+            }
+            return m;
+        }
+        // 從 i 往 d 走一步：沒有牆擋住回傳新格編號，否則 -1（碰撞）
+        const stepTo = (m, n, i, d) => (d >= 0 && d < 4 && (m[i] >> d & 1)) ? (Math.floor(i / n) + DIRS[d].dr) * n + i % n + DIRS[d].dc : -1;
+        // BFS 最短路徑：回傳格子編號陣列（含頭尾），不通回傳 null
+        function shortest(m, n, from, to) {
+            const prev = new Int32Array(n * n).fill(-2); prev[from] = -1; const q = [from];
+            for (let h = 0; h < q.length; h++) {
+                const i = q[h]; if (i === to) break;
+                for (let d = 0; d < 4; d++) { const j = stepTo(m, n, i, d); if (j >= 0 && prev[j] === -2) { prev[j] = i; q.push(j); } }
+            }
+            if (prev[to] === -2) return null;
+            const p = []; for (let i = to; i !== -1; i = prev[i]) p.push(i);
+            return p.reverse();
+        }
+        // 下一步該往哪個方向（沿最短路）；已在終點或不通回傳 -1
+        function hintDir(m, n, from, to) {
+            const p = shortest(m, n, from, to);
+            if (!p || p.length < 2) return -1;
+            for (let d = 0; d < 4; d++) if (stepTo(m, n, from, d) === p[1]) return d;
+            return -1;
+        }
+        // 台灣時間（UTC+8）的日期 YYYY-MM-DD
+        const twDay = (ms = Date.now()) => new Date(ms + 8 * 36e5).toISOString().slice(0, 10);
+        // 每日鍵 maze_daily_<日期> 每天會多一個：只留最近 keep 天，回傳該刪的鍵
+        function staleDailyKeys(keys, today, keep = 30) {
+            const c = new Date(today + 'T00:00:00Z'); c.setUTCDate(c.getUTCDate() - keep);
+            const cut = c.toISOString().slice(0, 10);
+            return keys.filter(k => { const x = /^maze_daily_(\d{4}-\d{2}-\d{2})$/.exec(k); return x && x[1] < cut; });
+        }
+        // 紀錄 { "<尺寸>": { ms, steps } }：驗證、丟掉壞項目、最多 36 個尺寸
+        function cleanRecs(raw) {
+            const out = {};
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+            for (const k of Object.keys(raw).slice(0, 200)) {
+                const n = Number(k), v = raw[k];
+                if (Number.isInteger(n) && n >= MIN_N && n <= MAX_N && v && typeof v === 'object' && Number.isFinite(v.ms) && v.ms > 0 && v.ms <= 864e5 && Number.isInteger(v.steps) && v.steps > 0 && v.steps <= 1e6) out[n] = { ms: Math.round(v.ms), steps: v.steps };
+            }
+            return out;
+        }
+        // 新成績是否刷新紀錄；是就回傳更新後的紀錄物件，否則 null
+        function withRecord(recs, n, ms, steps) {
+            const old = recs[n];
+            if (old && old.ms <= ms) return null;
+            return { ...recs, [n]: { ms: Math.round(ms), steps } };
+        }
+        // 效率 = 最短步數 / 實際步數（%，整數）
+        const efficiency = (shortSteps, steps) => steps > 0 ? Math.min(100, Math.round(shortSteps / steps * 100)) : 0;
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        try { staleDailyKeys(Object.keys(localStorage), twDay()).forEach(k => localStorage.removeItem(k)); } catch (e) { }
+        const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        let n = 10, M, pos, steps, trail, sp, start, timer, won, cheated, hints, sol, hintCell, daily = null, vis = { x: .5, y: .5 };
+        let swipeMode = false, scrollMode = false;
+        const END = () => n * n - 1;
+        const recKey = () => daily ? 'maze_daily_' + daily : 'maze_best';
+        const getRecs = () => cleanRecs(Util.store.get(recKey(), null));
+
+        function newGame(isDaily = false) {
+            daily = isDaily === true ? twDay() : null;
+            $('#daily').setAttribute('aria-pressed', !!daily);
+            n = clampN($('#size').value); $('#size').value = n;
+            const seed = daily ? daily : Util.rnd(2 ** 32);
+            M = genMaze(n, Util.seeded('maze-' + seed + '-' + n).int);
+            pos = 0; steps = 0; trail = new Set([0]); sp = shortest(M, n, 0, END()).length - 1;
+            won = false; cheated = false; hints = 3; sol = null; hintCell = -1; start = 0;
+            clearInterval(timer); timer = null;
+            vis = { x: .5, y: .5 };
+            $('#msg').textContent = daily ? daily + ' 每日挑戰' : '';
+            $('#hint').disabled = false; $('#hint').textContent = '💡 提示 (3)';
+            stats(); draw();
+        }
+
+        function stats() {
+            $('#time').textContent = (start ? ((won ? won : Date.now()) - start) / 1000 : 0).toFixed(1);
+            $('#steps').textContent = steps; $('#short').textContent = sp;
+            const b = getRecs()[n]; $('#best').textContent = b ? `${(b.ms / 1000).toFixed(1)} 秒 / ${b.steps} 步` : '—';
+        }
+
+        function go(d) {
+            if (!M || won) return;
+            const j = stepTo(M, n, pos, d); if (j < 0) return;
+            if (!start) { start = Date.now(); timer = setInterval(stats, 100); }
+            pos = j; steps++; trail.add(j); hintCell = -1;
+            if (j === END()) win();
+            stats(); animate();
+        }
+
+        function win() {
+            won = Date.now(); clearInterval(timer);
+            const ms = won - start, eff = efficiency(sp, steps);
+            let note = '';
+            if (cheated) note = '（看過答案，成績不計）';
+            else {
+                const next = withRecord(getRecs(), n, ms, steps);
+                if (next) { Util.store.set(recKey(), next); note = '（新紀錄）'; }
+            }
+            $('#msg').textContent = `🎉 ${daily ? daily + ' 每日挑戰' : ''}抵達終點！用時 ${(ms / 1000).toFixed(1)} 秒、${steps} 步（最短 ${sp} 步，效率 ${eff}%）${note}`;
+            $('#hint').disabled = true;
+        }
+
+        function animate() {
+            const tx = pos % n + .5, ty = Math.floor(pos / n) + .5;
+            if (reduce || Math.abs(tx - vis.x) + Math.abs(ty - vis.y) < .03) { vis = { x: tx, y: ty }; draw(); return; }
+            vis = { x: vis.x + (tx - vis.x) * .5, y: vis.y + (ty - vis.y) * .5 };
+            draw(); requestAnimationFrame(animate);
+        }
+
+        function draw() {
+            if (!M) return;
+            const cv = $('#cv'), css = cv.clientWidth || 300, cell = Math.max(2, Math.floor(css * (devicePixelRatio || 1) / n)), px = cell * n;
+            if (cv.width !== px) { cv.width = px; cv.height = px; }
+            const x = cv.getContext('2d'), cs = getComputedStyle(document.documentElement), col = (k, d) => cs.getPropertyValue(k).trim() || d;
+            x.clearRect(0, 0, px, px);
+            const tint = (i, c, a) => { x.globalAlpha = a; x.fillStyle = c; x.fillRect((i % n) * cell, Math.floor(i / n) * cell, cell, cell); x.globalAlpha = 1; };
+            if ($('#trail').checked) trail.forEach(i => tint(i, col('--blue', '#07f'), .22));
+            tint(0, col('--blue', '#07f'), .12);
+            tint(END(), col('--ok', '#2a2'), .55);
+            if (hintCell >= 0) tint(hintCell, col('--ok', '#2a2'), .5);
+            if (sol) { x.strokeStyle = col('--bad', '#e44'); x.lineWidth = Math.max(2, cell / 4); x.lineJoin = x.lineCap = 'round'; x.beginPath(); sol.forEach((i, k) => { const px2 = (i % n + .5) * cell, py = (Math.floor(i / n) + .5) * cell; k ? x.lineTo(px2, py) : x.moveTo(px2, py); }); x.stroke(); }
+            x.strokeStyle = col('--text', '#222'); x.lineWidth = Math.max(1, Math.round(cell / 8)); x.lineCap = 'square'; x.beginPath();
+            for (let i = 0; i < n * n; i++) {
+                const x0 = (i % n) * cell, y0 = Math.floor(i / n) * cell, m = M[i];
+                if (!(m & 1)) { x.moveTo(x0, y0); x.lineTo(x0 + cell, y0); }
+                if (!(m & 8)) { x.moveTo(x0, y0); x.lineTo(x0, y0 + cell); }
+                if (!(m & 2)) { x.moveTo(x0 + cell, y0); x.lineTo(x0 + cell, y0 + cell); }
+                if (!(m & 4)) { x.moveTo(x0, y0 + cell); x.lineTo(x0 + cell, y0 + cell); }
+            }
+            x.stroke();
+            x.fillStyle = col('--blue', '#07f'); x.beginPath(); x.arc(vis.x * cell, vis.y * cell, cell * .32, 0, 7); x.fill();
+            cv.setAttribute('aria-label', `迷宮 ${n}×${n}，目前在第 ${Math.floor(pos / n) + 1} 列第 ${pos % n + 1} 欄，終點在右下角`);
+        }
+
+        // 方向鍵按鈕：按下就走一步，按住連續走；鍵盤啟動按鈕（click 的 detail 為 0）也走一步
+        let rep1 = 0, rep2 = 0;
+        const stopRep = () => { clearTimeout(rep1); clearInterval(rep2); };
+        document.querySelectorAll('#dpad button').forEach(b => {
+            const d = +b.dataset.d;
+            b.addEventListener('pointerdown', (e) => { e.preventDefault(); go(d); stopRep(); rep1 = setTimeout(() => { rep2 = setInterval(() => go(d), 110); }, 350); });
+            ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => b.addEventListener(t, stopRep));
+            b.addEventListener('click', (e) => { if (e.detail === 0) go(d); });
+        });
+        addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+            const d = { ArrowUp: 0, ArrowRight: 1, ArrowDown: 2, ArrowLeft: 3, w: 0, d: 1, s: 2, a: 3, W: 0, D: 1, S: 2, A: 3 }[e.key];
+            if (d !== undefined) { go(d); e.preventDefault(); }
+        });
+
+        // 滑動模式：在迷宮上拖曳，每拖過約 0.7 格就走一步（方向取較大的軸），走完重設起點，可連續拖
+        let sw = null;
+        const cv = $('#cv');
+        cv.addEventListener('pointerdown', (e) => { if (swipeMode && !scrollMode) { sw = { x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); } });
+        cv.addEventListener('pointermove', (e) => {
+            if (!sw) return;
+            const dx = e.clientX - sw.x, dy = e.clientY - sw.y, thr = Math.max(14, cv.clientWidth / n * .7);
+            if (Math.max(Math.abs(dx), Math.abs(dy)) < thr) return;
+            go(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 1 : 3) : (dy > 0 ? 2 : 0));
+            sw = { x: e.clientX, y: e.clientY };
+        });
+        ['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => { sw = null; }));
+        function applyMode() {
+            $('#modeBtn').setAttribute('aria-pressed', swipeMode); $('#scrollBtn').hidden = !swipeMode;
+            $('#scrollBtn').setAttribute('aria-pressed', scrollMode);
+            $('#dpad').hidden = swipeMode;
+            cv.classList.toggle('swipe', swipeMode && !scrollMode);
+        }
+        $('#modeBtn').onclick = () => { swipeMode = !swipeMode; scrollMode = false; applyMode(); };
+        $('#scrollBtn').onclick = () => { scrollMode = !scrollMode; applyMode(); };
+
+        $('#hint').onclick = () => {
+            if (won || hints <= 0) return;
+            const d = hintDir(M, n, pos, END()); if (d < 0) return;
+            hints--; hintCell = stepTo(M, n, pos, d);
+            $('#hint').textContent = `💡 提示 (${hints})`; if (!hints) $('#hint').disabled = true;
+            $('#msg').textContent = `提示：往${'上右下左'[d]}走（${'↑→↓←'[d]}）`; draw();
+        };
+        $('#solve').onclick = () => {
+            if (won) return;
+            cheated = true; sol = shortest(M, n, pos, END()); draw();
+            $('#msg').textContent = '已顯示答案，這局成績不計';
+        };
+        $('#trail').onchange = draw;
+        $('#new').onclick = () => newGame(false);
+        $('#daily').onclick = () => newGame(true);
+        $('#level').onchange = () => { $('#size').value = LEVELS[$('#level').value]; newGame(!!daily); };
+        $('#size').onchange = () => newGame(!!daily);
+        addEventListener('resize', draw);
+        $('#clearBest').onclick = () => {
+            if (!confirm('清除迷宮的所有最佳紀錄與每日挑戰紀錄？無法復原。頁面會重新載入，正在進行的這一局會結束。')) return;
+            try { Object.keys(localStorage).filter(k => k === 'maze_best' || k.startsWith('maze_daily_')).forEach(k => localStorage.removeItem(k)); } catch (e) { }
+            location.reload();
+        };
+        newGame(false);
+    </script>
+</body>
+
+</html>

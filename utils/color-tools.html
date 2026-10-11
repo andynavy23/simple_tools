@@ -130,6 +130,19 @@
             font-size: 28px;
             font-weight: 700;
         }
+        .cvdgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 10px 0; }
+        .cvdgrid figure { margin: 0; }
+        .cvdgrid figcaption { font-size: 13px; color: var(--muted); margin-top: 4px; }
+        .cvdgrid canvas { width: 100%; height: auto; border-radius: var(--radius-sm); border: 1px solid var(--fill); display: block; }
+        .cvdchips { display: flex; height: 56px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--fill); }
+        .cvdchips i { flex: 1; }
+        #cvdText { width: 100%; min-height: 72px; font-size: 16px; }
+        .pair { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+        .pair .dots { display: flex; gap: 4px; }
+        .pair .dots i { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--fill); }
+        .pair.flag b { color: var(--bad); }
+        .pair .det { color: var(--muted); font-size: 13px; flex: 1 1 100%; }
+        #cvdSev { width: 100%; }
     </style>
 </head>
 
@@ -184,6 +197,20 @@
             <p class="note">模擬紅色盲、綠色盲、藍黃色盲與全色盲者眼中的上方「文字 / 背景」組合，以及模擬後的對比度。</p>
             <div id="cvd"></div>
         </div>
+
+        <div class="card" id="cvdLab">
+            <h2>色盲模擬（色票 / 圖片）</h2>
+            <p class="note">貼上多個色碼，或選一張圖片（只在這台裝置處理，不會上傳；超過 1024px 會先縮小）。</p>
+            <textarea id="cvdText" spellcheck="false" aria-label="色票（可多個）" placeholder="#e53935 #43a047&#10;rgb(30,136,229)"></textarea>
+            <div class="row" style="margin-top:8px"><button id="cvdLib">帶入色票庫</button><button id="cvdMain">加入主色</button></div>
+            <div class="row"><label class="sub" style="margin:0;flex:1 1 100%;min-width:0">圖片 <input type="file" id="cvdFile" accept="image/*" style="max-width:100%"></label></div>
+            <div class="row"><label for="cvdKind" class="sub" style="margin:0">弱視</label><select id="cvdKind" aria-label="弱視類型"></select><label for="cvdSev" class="sub" style="margin:0">嚴重度 <b id="cvdSevV">50%</b></label></div>
+            <input type="range" id="cvdSev" min="0" max="100" value="50" aria-label="弱視嚴重度">
+            <div id="cvdMsg" class="note"></div>
+            <div id="cvdOut"></div>
+            <h3>配色診斷</h3>
+            <div id="cvdDiag" class="note">貼上兩個以上的色碼，會檢查兩兩之間在各種色盲下會不會太接近。</div>
+        </div>
     </div>
 
     <template id="help">
@@ -203,14 +230,16 @@
         <li>「配色產生」選配色方式，點色塊複製色碼</li>
         <li>「對比度檢查」設定文字與背景，看比值與 AA / AAA 是否通過</li>
         <li>「色覺模擬」顯示四種色覺下的對比，比值太低要換色</li>
+        <li>「色盲模擬」貼多個色碼或選圖片，同時看紅 / 綠 / 藍黃 / 全色盲與弱視（可拉嚴重度）；下方「配色診斷」會標出可能難以分辨的色票組合</li>
         </ol>
         <h3>範例</h3>
-        <div class="eg">主色 <b>#0071e3</b> = rgb(0, 113, 227) = hsl(210, 100%, 45%)。<br>文字 #1d1d1f、背景 #ffffff 的對比度是 <b>16.83 : 1</b>，四項標準全部通過。</div>
+        <div class="eg">色盲模擬貼上 <b>#e53935 #43a047</b>（紅、綠），診斷會標出這組在紅 / 綠色盲下 ΔE 很小、可能難以分辨。<br>主色 <b>#0071e3</b> = rgb(0, 113, 227) = hsl(210, 100%, 45%)。<br>文字 #1d1d1f、背景 #ffffff 的對比度是 <b>16.83 : 1</b>，四項標準全部通過。</div>
         <h3>小提醒</h3>
         <ul>
         <li>一般文字至少 4.5:1（AA），大字至少 3:1</li>
         <li>色票庫最多存 100 色，滿了要先刪除才能再存；只存在你的瀏覽器</li>
-        <li>色覺模擬是近似值，僅供參考</li>
+        <li>色覺模擬是近似值，僅供參考（Machado 2009 模型，線性 RGB 空間）；弱視是依嚴重度內插的簡化版</li>
+        <li>配色診斷用 CIE76 色差 ΔE：低於 10 視為「可能難以分辨」，色票最多 12 個；圖片與貼上的色碼不會儲存或上傳</li>
         </ul>
     </template>
 
@@ -316,6 +345,61 @@
             const used = new Set();
             const lines = list.map((s, i) => { let k = s.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || `color-${i + 1}`; let n = k, c = 2; while (used.has(n)) n = `${k}-${c++}`; used.add(n); return `  --${n}: ${s.hex};`; });
             return `:root {\n${lines.join('\n')}\n}`;
+        }
+        // ---- 色盲模擬：色票 / 圖片 ----
+        // 矩陣來源：Machado, Oliveira & Fernandes (2009) "A Physiologically-based Model for Simulation of Color Vision Deficiency"，嚴重度 1.0 的表；
+        // 「弱視」的嚴重度用「單位矩陣 → 嚴重度 1.0 矩陣」線性內插（論文的 0.1~0.9 各級表本來就近似這條線，這裡取簡化版）。
+        const IDENT3 = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+        const CVD_KINDS = [['protan', '紅色盲 Protanopia', CVD['紅色盲 Protanopia']], ['deutan', '綠色盲 Deuteranopia', CVD['綠色盲 Deuteranopia']], ['tritan', '藍黃色盲 Tritanopia', CVD['藍黃色盲 Tritanopia']], ['achro', '全色盲 Achromatopsia', CVD['全色盲 Achromatopsia']]];
+        const ANOMALY = { protan: '紅色弱 Protanomaly', deutan: '綠色弱 Deuteranomaly', tritan: '藍黃色弱 Tritanomaly' };
+        const mixMatrix = (m, sev) => { sev = clamp(Number.isFinite(+sev) ? +sev : 1, 0, 1); return m.map((row, i) => row.map((v, j) => IDENT3[i][j] + (v - IDENT3[i][j]) * sev)); };
+        const simulateSev = (c, matrix, sev = 1) => simulate(c, mixMatrix(matrix, sev));
+        const srgbLin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+        const linSrgb = (v) => { v = clamp(v, 0, 1); return 255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055); };
+        // 圖片：就地轉換 RGBA 資料 [from, to) 個像素（查表加速；alpha 不動），可分塊呼叫
+        const LIN_LUT = Array.from({ length: 256 }, (_, i) => srgbLin(i));
+        const OUT_LUT = Array.from({ length: 4096 }, (_, i) => Math.round(linSrgb(i / 4095)));
+        function simulateImage(data, matrix, from = 0, to = data.length / 4) {
+            const [a, b, c] = matrix;
+            for (let p = from; p < to; p++) {
+                const i = p * 4, r = LIN_LUT[data[i]], g = LIN_LUT[data[i + 1]], bl = LIN_LUT[data[i + 2]];
+                data[i] = OUT_LUT[Math.round(clamp(a[0] * r + a[1] * g + a[2] * bl, 0, 1) * 4095)];
+                data[i + 1] = OUT_LUT[Math.round(clamp(b[0] * r + b[1] * g + b[2] * bl, 0, 1) * 4095)];
+                data[i + 2] = OUT_LUT[Math.round(clamp(c[0] * r + c[1] * g + c[2] * bl, 0, 1) * 4095)];
+            }
+            return data;
+        }
+        // 縮到最長邊 ≤ max（不放大）
+        const fitSize = (w, h, max = 1024) => { const k = Math.min(1, max / Math.max(w, h, 1)); return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) }; };
+        // CIE L*a*b*（D65）與 ΔE（CIE76，簡易距離：約 2.3 是剛好看得出差別，< 10 通常難分辨）
+        function rgbToLab({ r, g, b }) {
+            const R = srgbLin(r), G = srgbLin(g), B = srgbLin(b);
+            const f = (t) => t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116;
+            const x = f((0.4124564 * R + 0.3575761 * G + 0.1804375 * B) / 0.95047), y = f(0.2126729 * R + 0.7151522 * G + 0.072175 * B), z = f((0.0193339 * R + 0.119192 * G + 0.9503041 * B) / 1.08883);
+            return { L: 116 * y - 16, a: 500 * (x - y), b: 200 * (y - z) };
+        }
+        const deltaE = (c1, c2) => { const p = rgbToLab(c1), q = rgbToLab(c2); return Math.hypot(p.L - q.L, p.a - q.a, p.b - q.b); };
+        // 從文字取出色碼（#hex / rgb() / hsl()，任何分隔），去重、最多 max 個
+        const MAX_PAL = 12;
+        function parsePalette(text, max = MAX_PAL) {
+            const out = [], seen = new Set(); let over = false;
+            for (const t of String(text).match(/#[0-9a-f]+|rgb\([^)]*\)|hsl\([^)]*\)/gi) || []) {
+                const c = parseColor(t); if (!c) continue;
+                const hex = toHex(c); if (seen.has(hex)) continue;
+                seen.add(hex); if (out.length >= max) { over = true; continue; } out.push(hex);
+            }
+            return { colors: out, over };
+        }
+        // 配色診斷：每一對顏色在正常與四種色盲下的 ΔE；任一種色盲 < thr 就標「可能難以分辨」，依最小 ΔE 由小到大
+        function diagnose(hexes, thr = 10) {
+            const cs = hexes.map(parseColor), pairs = [];
+            for (let i = 0; i < cs.length; i++) for (let j = i + 1; j < cs.length; j++) {
+                if (!cs[i] || !cs[j]) continue;
+                const orig = deltaE(cs[i], cs[j]); let min = Infinity, worst = '';
+                const sims = CVD_KINDS.map(([k, name, m]) => { const d = deltaE(simulate(cs[i], m), simulate(cs[j], m)); if (d < min) { min = d; worst = name; } return d; });
+                pairs.push({ a: hexes[i], b: hexes[j], orig, sims, min, worst, flag: min < thr, already: orig < thr });
+            }
+            return pairs.sort((p, q) => p.min - q.min);
         }
         // --- /pure ---
 
@@ -425,6 +509,79 @@
         bind('bg', 'bgp', renderContrast);
         renderMain();
         renderContrast();
+        // 色盲模擬（色票 / 圖片）
+        {
+            const kindSel = $('#cvdKind'), out = $('#cvdOut');
+            kindSel.replaceChildren(...Object.entries(ANOMALY).map(([k, v]) => new Option(v, k)));
+            let img = null, token = 0;
+            const MAX_IMG_BYTES = 20 * 1024 * 1024;
+            const cap = (text) => Object.assign(document.createElement('figcaption'), { textContent: text });
+            const kinds = () => [['原圖 / 原色', null], ...CVD_KINDS.map(([k, n, m]) => [n, m]), [`${ANOMALY[kindSel.value]}（${$('#cvdSev').value}%）`, mixMatrix(CVD_KINDS.find(x => x[0] === kindSel.value)[2], $('#cvdSev').value / 100)]];
+            function renderSwatches(cols) {
+                const g = document.createElement('div'); g.className = 'cvdgrid';
+                for (const [name, m] of kinds()) {
+                    const fig = document.createElement('figure'), bar = document.createElement('div'); bar.className = 'cvdchips';
+                    for (const hex of cols) { const i = document.createElement('i'); i.style.background = m ? toHex(simulate(parseColor(hex), m)) : hex; i.title = hex; bar.append(i); }
+                    fig.append(bar, cap(name)); g.append(fig);
+                }
+                out.replaceChildren(g);
+            }
+            // 圖片：每種色盲一張 canvas，一次處理 64 列、讓出主執行緒，大圖也不會卡住畫面
+            function renderImage() {
+                const my = ++token, { w, h } = fitSize(img.naturalWidth || img.width, img.naturalHeight || img.height, 1024);
+                const g = document.createElement('div'); g.className = 'cvdgrid'; out.replaceChildren(g);
+                const base = document.createElement('canvas'); base.width = w; base.height = h;
+                const bx = base.getContext('2d', { willReadFrequently: true }); bx.drawImage(img, 0, 0, w, h);
+                let src; try { src = bx.getImageData(0, 0, w, h); } catch (e) { $('#cvdMsg').textContent = '這張圖片無法讀取'; return; }
+                for (const [name, m] of kinds()) {
+                    const fig = document.createElement('figure'), cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+                    fig.append(cv, cap(name)); g.append(fig);
+                    const cx = cv.getContext('2d'), id = new ImageData(new Uint8ClampedArray(src.data), w, h);
+                    if (!m) { cx.putImageData(id, 0, 0); continue; }
+                    let y = 0;
+                    const step = () => { if (my !== token) return; const to = Math.min(h, y + 64); simulateImage(id.data, m, y * w, to * w); y = to; if (y < h) setTimeout(step, 0); else cx.putImageData(id, 0, 0); };
+                    setTimeout(step, 0);
+                }
+            }
+            function renderDiag(cols) {
+                const box = $('#cvdDiag');
+                if (cols.length < 2) { box.className = 'note'; box.textContent = '貼上兩個以上的色碼，會檢查兩兩之間在各種色盲下會不會太接近。'; return; }
+                const pairs = diagnose(cols), bad = pairs.filter(p => p.flag), names = CVD_KINDS.map(k => k[1].split(' ')[0]);
+                box.className = '';
+                const head = document.createElement('p'); head.textContent = bad.length ? `${pairs.length} 組中有 ${bad.length} 組可能難以分辨（ΔE < 10）` : `${pairs.length} 組在四種色盲下都分得開（ΔE ≥ 10）`; head.style.color = bad.length ? 'var(--bad)' : 'var(--ok)';
+                box.replaceChildren(head, ...pairs.map(p => {
+                    const d = document.createElement('div'); d.className = 'pair' + (p.flag ? ' flag' : '');
+                    const dots = document.createElement('span'); dots.className = 'dots';
+                    for (const hex of [p.a, p.b]) { const i = document.createElement('i'); i.style.background = hex; dots.append(i); }
+                    const t = document.createElement('b'); t.textContent = `${p.a} ↔ ${p.b}　${p.flag ? (p.already ? '本來就接近' : '可能難以分辨') : '分得開'}`;
+                    const det = document.createElement('span'); det.className = 'det'; det.textContent = `正常 ΔE ${p.orig.toFixed(1)}；` + p.sims.map((v, i) => `${names[i]} ${v.toFixed(1)}`).join('、') + (p.flag ? `（最接近：${p.worst.split(' ')[0]}）` : '');
+                    d.append(dots, t, det); return d;
+                }));
+            }
+            function run() {
+                $('#cvdSevV').textContent = $('#cvdSev').value + '%';
+                if (img) { renderImage(); renderDiag([]); return; }
+                const { colors, over } = parsePalette($('#cvdText').value);
+                $('#cvdMsg').textContent = over ? `色票最多 ${MAX_PAL} 個，多的忽略` : '';
+                if (!colors.length) { out.replaceChildren(); renderDiag([]); return; }
+                renderSwatches(colors); renderDiag(colors);
+            }
+            $('#cvdText').oninput = () => { img = null; run(); };
+            $('#cvdSev').oninput = kindSel.onchange = run;
+            const addText = (arr) => { const t = $('#cvdText'); t.value = (t.value.trim() ? t.value.trim() + ' ' : '') + arr.join(' '); img = null; run(); };
+            $('#cvdLib').onclick = () => { if (!lib.length) { $('#cvdMsg').textContent = '色票庫是空的'; return; } addText(lib.map(s => s.hex)); };
+            $('#cvdMain').onclick = () => { const c = parseColor($('#color').value); if (c) addText([toHex(c)]); };
+            $('#cvdFile').onchange = (e) => {
+                const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+                if (!/^image\//.test(f.type)) { $('#cvdMsg').textContent = '請選圖片檔'; return; }
+                if (f.size > MAX_IMG_BYTES) { $('#cvdMsg').textContent = '圖片超過 20MB，請先縮小'; return; }
+                const url = URL.createObjectURL(f), im = new Image();
+                im.onload = () => { URL.revokeObjectURL(url); img = im; $('#cvdMsg').textContent = `${f.name}（${im.naturalWidth}×${im.naturalHeight}，處理時縮到最長邊 ≤ 1024）`; run(); };
+                im.onerror = () => { URL.revokeObjectURL(url); $('#cvdMsg').textContent = '圖片讀取失敗'; };
+                im.src = url;
+            };
+            run();
+        }
     </script>
 </body>
 

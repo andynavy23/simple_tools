@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="面額點算與找零：輸入各面額鈔票硬幣的張數算出總額與換整建議；輸入應付與實付算出找零與最少張數組合。新臺幣為主，可切換日圓、美元、人民幣。">
+    <meta property="og:title" content="面額點算與找零" />
+    <meta property="og:description" content="點鈔票算總額、算找零與最少張數組合，支援新臺幣、日圓、美元、人民幣。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/cash-count.html" />
+    <title>面額點算與找零</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        label.f {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            margin: 10px 0 4px;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        .w {
+            width: 100%;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .tabs button {
+            flex: 1;
+        }
+
+        .chk {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 44px;
+        }
+
+        .chk input {
+            width: 22px;
+            height: 22px;
+        }
+
+        .dn {
+            display: grid;
+            grid-template-columns: 1fr 96px minmax(72px, auto);
+            gap: 8px;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .dn:last-child {
+            border-bottom: 0;
+        }
+
+        .dn b {
+            font-variant-numeric: tabular-nums;
+        }
+
+        .dn .sub2 {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            color: var(--muted);
+        }
+
+        .dn input {
+            text-align: right;
+            width: 100%;
+        }
+
+        .kind {
+            font-size: 12px;
+            color: var(--muted);
+            margin-left: 4px;
+        }
+
+        .big {
+            font-size: 28px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .bad {
+            color: var(--bad);
+        }
+
+        .ok {
+            color: var(--ok);
+        }
+
+        ul.plain {
+            margin: 6px 0 0;
+            padding-left: 20px;
+        }
+
+        ul.plain li {
+            margin: 4px 0;
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>面額點算與找零</h1>
+        <p class="sub">點鈔票算總額、算找零與最少張數。</p>
+
+        <div class="card">
+            <label class="f" for="cur" style="margin-top:0">幣別</label>
+            <select id="cur" class="w" aria-label="幣別"></select>
+            <label class="chk" id="optBox"><input type="checkbox" id="opt"> 顯示 2000 元與 20 元紀念鈔</label>
+        </div>
+
+        <div class="tabs" role="group" aria-label="模式">
+            <button id="tabCount" aria-pressed="true">點算張數</button>
+            <button id="tabChange" aria-pressed="false">找零</button>
+        </div>
+
+        <div id="pgCount">
+            <div class="card">
+                <div id="rows"></div>
+                <div class="row" style="margin-top:12px"><button id="clear" class="sm">清除全部張數</button></div>
+            </div>
+            <div class="card">
+                <div class="note" style="margin-top:0">總額</div>
+                <div class="big" id="total">0</div>
+                <p class="note" id="pieces"></p>
+            </div>
+            <div class="card" id="conCard">
+                <h2>換整建議</h2>
+                <p class="note" style="margin-top:0">同樣的總額，用最少張數表示：</p>
+                <div id="con"></div>
+            </div>
+            <div class="card">
+                <h2>大額換小額</h2>
+                <label class="f" for="brk" style="margin-top:0">想把哪一種面額換開</label>
+                <select id="brk" class="w" aria-label="要換開的面額"></select>
+                <div id="brkOut"></div>
+            </div>
+        </div>
+
+        <div id="pgChange" hidden>
+            <div class="card">
+                <label class="f" for="due" style="margin-top:0">應付金額</label>
+                <input id="due" class="w" inputmode="decimal" autocomplete="off" placeholder="例如 387" aria-label="應付金額">
+                <label class="f" for="paid">實付金額</label>
+                <input id="paid" class="w" inputmode="decimal" autocomplete="off" placeholder="例如 500" aria-label="實付金額">
+                <div class="row" style="margin-top:10px" id="quick"></div>
+                <div class="row" style="margin-top:10px"><button id="clear2" class="sm">清除</button></div>
+            </div>
+            <div class="card">
+                <div class="note" style="margin-top:0" id="chLabel">找零</div>
+                <div class="big" id="chAmt">—</div>
+                <div id="chOut"></div>
+            </div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>收銀、擺攤、存錢筒清點時用的小工具。可以輸入各面額鈔票與硬幣的張數算出總額，也可以輸入應付與實付算出要找多少、用哪些面額最少張。預設是新臺幣，也能切換日圓、美元、人民幣。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>擺攤、社團收款後清點現金，核對帳目。</li>
+            <li>收銀時快速算找零，並知道最少要拿幾張。</li>
+            <li>把一堆零錢想換成整齊的大鈔，或把 1000 元換成零錢備用。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+            <li>選「幣別」。新臺幣可勾選顯示 2000 元與 20 元紀念鈔。</li>
+            <li>「點算張數」：在每個面額輸入張數（數字鍵盤），下方即時顯示小計、總額與「換整建議」。</li>
+            <li>「大額換小額」：選一種面額，看用更小的面額怎麼換最少張。</li>
+            <li>「找零」：輸入應付與實付，立即顯示找零金額與最少張數組合。可按快捷鈕帶入常見的實付金額。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">新臺幣：1000 x 2、500 x 1、100 x 3、50 x 2、10 x 7、1 x 5
+→ 總額 NT$2,975（20 張）；換整建議最少 9 張：1000 × 2、500 × 1、200 × 2、50 × 1、10 × 2、5 × 1
+找零：應付 387、實付 500 → 找 113 元 = 100 x 1、10 x 1、1 x 3</div>
+        <h3>小提醒</h3>
+        <ul>
+            <li>找零的組合是「最少張數」；對這些面額組貪心法就是最佳解（測試用動態規劃逐一核對過）。</li>
+            <li>張數上限 100 萬；金額輸入超出合理範圍或實付不足時會提示。</li>
+            <li>美元以美分、人民幣以角計算，沒有浮點誤差。</li>
+            <li>此工具不儲存任何資料，重新整理就會清空。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        // 面額一律用「最小單位」整數（新臺幣 / 日圓：元；美元：分；人民幣：角）。opt = 預設隱藏的紀念面額
+        const CURRENCIES = {
+            twd: { name: '新臺幣 TWD', sym: 'NT$', scale: 0, denoms: [{ v: 2000, k: '紀念鈔', opt: 1 }, { v: 1000, k: '鈔' }, { v: 500, k: '鈔' }, { v: 200, k: '鈔' }, { v: 100, k: '鈔' }, { v: 50, k: '硬幣' }, { v: 20, k: '紀念鈔', opt: 1 }, { v: 10, k: '硬幣' }, { v: 5, k: '硬幣' }, { v: 1, k: '硬幣' }] },
+            jpy: { name: '日圓 JPY', sym: '¥', scale: 0, denoms: [{ v: 10000, k: '鈔' }, { v: 5000, k: '鈔' }, { v: 2000, k: '鈔' }, { v: 1000, k: '鈔' }, { v: 500, k: '硬幣' }, { v: 100, k: '硬幣' }, { v: 50, k: '硬幣' }, { v: 10, k: '硬幣' }, { v: 5, k: '硬幣' }, { v: 1, k: '硬幣' }] },
+            usd: { name: '美元 USD', sym: '$', scale: 2, denoms: [{ v: 10000, k: '鈔' }, { v: 5000, k: '鈔' }, { v: 2000, k: '鈔' }, { v: 1000, k: '鈔' }, { v: 500, k: '鈔' }, { v: 200, k: '鈔' }, { v: 100, k: '鈔' }, { v: 25, k: '硬幣' }, { v: 10, k: '硬幣' }, { v: 5, k: '硬幣' }, { v: 1, k: '硬幣' }] },
+            cny: { name: '人民幣 CNY', sym: '¥', scale: 1, denoms: [{ v: 1000, k: '鈔' }, { v: 500, k: '鈔' }, { v: 200, k: '鈔' }, { v: 100, k: '鈔' }, { v: 50, k: '鈔' }, { v: 10, k: '1 元' }, { v: 5, k: '硬幣' }, { v: 1, k: '硬幣' }] },
+        };
+        const MAX_COUNT = 1000000, MAX_MINOR = 1e12;
+
+        // 該幣別目前要顯示的面額（由大到小）；showOpt = 是否含紀念面額
+        const activeDenoms = (cur, showOpt) => CURRENCIES[cur].denoms.filter(d => showOpt || !d.opt);
+
+        // 張數：空白 = 0；只接受非負整數，超過上限回傳 NaN
+        function parseCount(s) {
+            const t = String(s == null ? '' : s).trim();
+            if (!t) return 0;
+            if (!/^\d+$/.test(t)) return NaN;
+            const n = Number(t); return n > MAX_COUNT ? NaN : n;
+        }
+        // 金額字串 → 最小單位整數；小數位數超過幣別上限、負數、非數字回傳 NaN；空白回傳 NaN
+        function parseAmount(s, scale) {
+            const t = String(s == null ? '' : s).trim().replace(/,/g, '');
+            const m = /^(\d+)(?:\.(\d*))?$/.exec(t);
+            if (!m) return NaN;
+            const frac = m[2] || '';
+            if (frac.length > scale) return NaN;
+            const v = Number(m[1]) * 10 ** scale + Number((frac + '0'.repeat(scale)).slice(0, scale) || 0);
+            return v > MAX_MINOR ? NaN : v;
+        }
+        // 最小單位 → 顯示字串（含千分位；必要時兩位小數）
+        function fmtMoney(minor, cur) {
+            const c = CURRENCIES[cur];
+            if (!Number.isFinite(minor)) return '—';
+            const neg = minor < 0, a = Math.abs(minor), p = 10 ** c.scale;
+            const whole = Math.floor(a / p), frac = a % p;
+            const w = String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            return (neg ? '-' : '') + c.sym + w + (c.scale ? '.' + String(frac).padStart(c.scale, '0') : '');
+        }
+        // 面額標籤：不含幣別符號
+        function denomLabel(v, cur) {
+            const c = CURRENCIES[cur], p = 10 ** c.scale;
+            return (v / p).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: c.scale });
+        }
+        // counts：{ 面額: 張數 } → 總額與張數
+        function total(counts) {
+            let sum = 0, pieces = 0;
+            for (const [v, n] of Object.entries(counts || {})) { if (Number.isInteger(n) && n > 0) { sum += Number(v) * n; pieces += n; } }
+            return { sum, pieces };
+        }
+        // 貪心找零：values 為可用面額；回傳 { 面額: 張數 }（不含 0），湊不出來（剩餘 > 0）回傳 null
+        function change(amount, values) {
+            if (!Number.isInteger(amount) || amount < 0) return null;
+            const vs = values.slice().sort((a, b) => b - a), out = {}; let rest = amount;
+            for (const v of vs) { const n = Math.floor(rest / v); if (n) { out[v] = n; rest -= n * v; } }
+            return rest === 0 ? out : null;
+        }
+        // 動態規劃：最少張數（只用來核對貪心；amount 不宜太大）。回傳張數，湊不出來回傳 Infinity
+        function minPieces(amount, values) {
+            const dp = new Array(amount + 1).fill(Infinity); dp[0] = 0;
+            for (let a = 1; a <= amount; a++) for (const v of values) if (v <= a && dp[a - v] + 1 < dp[a]) dp[a] = dp[a - v] + 1;
+            return dp[amount];
+        }
+        const countPieces = (m) => Object.values(m).reduce((a, n) => a + n, 0);
+        // 換整：同樣總額的最少張數表示，並列出與目前的差異（正 = 要多拿，負 = 要換掉）
+        function consolidate(counts, values) {
+            const { sum, pieces } = total(counts), best = change(sum, values) || {};
+            const moves = values.slice().sort((a, b) => b - a).map(v => ({ v, from: Number.isInteger(counts[v]) && counts[v] > 0 ? counts[v] : 0, to: best[v] || 0 })).filter(x => x.from !== x.to);
+            return { sum, from: pieces, to: countPieces(best), best, moves };
+        }
+        // 大額換小額：把一個面額 value 換成「不超過 cap 的面額」的最少張數；cap 取所有比 value 小的面額
+        function breakInto(value, values) {
+            return values.filter(v => v < value).sort((a, b) => b - a).map(cap => ({ cap, combo: change(value, values.filter(v => v <= cap)) })).filter(x => x.combo);
+        }
+        // 找零：回傳 { change, combo } 或 { short: 不足金額 }；amount 與 paid 皆為最小單位整數
+        function makeChange(due, paid, values) {
+            if (!Number.isInteger(due) || !Number.isInteger(paid) || due < 0 || paid < 0) return { err: '金額不正確' };
+            if (paid < due) return { short: due - paid };
+            const ch = paid - due; return { change: ch, combo: change(ch, values) };
+        }
+        // 實付快捷：大於等於應付的最小「整齊」金額（用現有面額往上進位到各面額的倍數），去重、最多 4 個
+        function quickPaid(due, values) {
+            if (!(due > 0)) return [];
+            const set = new Set();
+            for (const v of values) { const x = Math.ceil(due / v) * v; if (x >= due && x <= MAX_MINOR) set.add(x); }
+            return [...set].sort((a, b) => a - b).slice(0, 4);
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let cur = 'twd', counts = {}, mode = 'count';
+        const vals = () => activeDenoms(cur, $('#opt').checked).map(d => d.v);
+        const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+        const comboText = (m) => Object.keys(m).map(Number).sort((a, b) => b - a).map(v => `${denomLabel(v, cur)} × ${m[v]}`).join('、');
+
+        function buildRows() {
+            const box = $('#rows'); box.replaceChildren();
+            for (const d of activeDenoms(cur, $('#opt').checked)) {
+                const inp = el('input', { type: 'text', inputMode: 'numeric', pattern: '[0-9]*', placeholder: '0', autocomplete: 'off' });
+                inp.id = 'n_' + d.v; inp.setAttribute('aria-label', denomLabel(d.v, cur) + ' 張數'); inp.value = counts[d.v] || '';
+                const sub = el('span', { className: 'sub2', id: 's_' + d.v });
+                inp.addEventListener('input', () => {
+                    const n = parseCount(inp.value);
+                    if (Number.isNaN(n)) { inp.style.outline = '2px solid var(--bad)'; delete counts[d.v]; }
+                    else { inp.style.outline = ''; if (n) counts[d.v] = n; else delete counts[d.v]; }
+                    renderCount();
+                });
+                box.append(el('label', { className: 'dn', htmlFor: inp.id }, el('span', {}, el('b', { textContent: denomLabel(d.v, cur) }), el('span', { className: 'kind', textContent: d.k })), inp, sub));
+            }
+            // 隱藏的面額不計入
+            for (const k of Object.keys(counts)) if (!vals().includes(Number(k))) delete counts[k];
+            const sel = $('#brk'); sel.replaceChildren(...activeDenoms(cur, $('#opt').checked).slice(0, -1).map(d => new Option(fmtMoney(d.v, cur), d.v)));
+        }
+        function renderCount() {
+            const vs = vals(), c = {}; vs.forEach(v => { if (counts[v]) c[v] = counts[v]; });
+            for (const v of vs) { const s = $('#s_' + v); if (s) s.textContent = c[v] ? fmtMoney(v * c[v], cur) : ''; }
+            const t = total(c); $('#total').textContent = fmtMoney(t.sum, cur); $('#pieces').textContent = t.pieces ? `共 ${t.pieces} 張（枚）` : '輸入張數後會顯示總額';
+            const r = consolidate(c, vs), box = $('#con'); box.replaceChildren();
+            if (!t.sum) box.append(el('p', { className: 'note', textContent: '—' }));
+            else if (!r.moves.length) box.append(el('p', { className: 'ok', textContent: '已經是最少張數了。' }));
+            else {
+                box.append(el('p', { textContent: `最少 ${r.to} 張（目前 ${r.from} 張）：${comboText(r.best)}` }));
+                box.append(el('ul', { className: 'plain' }, ...r.moves.map(m => el('li', { textContent: `${denomLabel(m.v, cur)}：${m.from} → ${m.to}（${m.to > m.from ? '多拿 ' + (m.to - m.from) : '換掉 ' + (m.from - m.to)}）` }))));
+            }
+            renderBreak();
+        }
+        function renderBreak() {
+            const v = Number($('#brk').value), box = $('#brkOut'); box.replaceChildren();
+            if (!v) return;
+            const rows = breakInto(v, vals());
+            box.append(el('ul', { className: 'plain' }, ...rows.map(r => el('li', { textContent: `最大用 ${denomLabel(r.cap, cur)}：${comboText(r.combo)}（${countPieces(r.combo)} 張）` }))));
+        }
+        function renderChange() {
+            const sc = CURRENCIES[cur].scale, due = parseAmount($('#due').value, sc), paid = parseAmount($('#paid').value, sc), out = $('#chOut');
+            out.replaceChildren(); $('#chLabel').textContent = '找零'; $('#chAmt').className = 'big';
+            const qk = $('#quick'); qk.replaceChildren();
+            if (!Number.isNaN(due) && due > 0) for (const x of quickPaid(due, vals())) { const b = el('button', { className: 'sm', textContent: fmtMoney(x, cur) }); b.onclick = () => { $('#paid').value = x / 10 ** sc; renderChange(); }; qk.append(b); }
+            if (Number.isNaN(due) || Number.isNaN(paid)) {
+                $('#chAmt').textContent = '—';
+                const bad = ($('#due').value.trim() && Number.isNaN(due)) || ($('#paid').value.trim() && Number.isNaN(paid));
+                out.append(el('p', { className: 'note' + (bad ? ' bad' : ''), textContent: bad ? `請輸入正確的金額（最多 ${sc} 位小數，不可為負）` : '請輸入應付與實付金額' }));
+                return;
+            }
+            const r = makeChange(due, paid, vals());
+            if (r.short) { $('#chLabel').textContent = '還差'; $('#chAmt').textContent = fmtMoney(r.short, cur); $('#chAmt').className = 'big bad'; return; }
+            $('#chAmt').textContent = fmtMoney(r.change, cur);
+            if (!r.change) out.append(el('p', { className: 'ok', textContent: '剛好，不用找零。' }));
+            else if (r.combo) out.append(el('p', { textContent: `最少 ${countPieces(r.combo)} 張（枚）` }), el('ul', { className: 'plain' }, ...Object.keys(r.combo).map(Number).sort((a, b) => b - a).map(v => el('li', { textContent: `${denomLabel(v, cur)} × ${r.combo[v]}` }))));
+            else out.append(el('p', { className: 'note bad', textContent: '目前面額組合湊不出這個金額' }));
+        }
+        function tab(t) {
+            mode = t; $('#pgCount').hidden = t !== 'count'; $('#pgChange').hidden = t !== 'change';
+            $('#tabCount').setAttribute('aria-pressed', String(t === 'count')); $('#tabChange').setAttribute('aria-pressed', String(t === 'change'));
+            if (t === 'change') renderChange();
+        }
+        function refresh() { $('#optBox').hidden = cur !== 'twd'; buildRows(); renderCount(); renderChange(); }
+        $('#cur').replaceChildren(...Object.entries(CURRENCIES).map(([k, c]) => new Option(c.name, k)));
+        $('#cur').onchange = () => { cur = $('#cur').value; counts = {}; $('#due').value = $('#paid').value = ''; refresh(); };
+        $('#opt').onchange = refresh;
+        $('#brk').onchange = renderBreak;
+        $('#tabCount').onclick = () => tab('count'); $('#tabChange').onclick = () => tab('change');
+        $('#clear').onclick = () => { counts = {}; buildRows(); renderCount(); };
+        $('#clear2').onclick = () => { $('#due').value = $('#paid').value = ''; renderChange(); };
+        $('#due').addEventListener('input', renderChange); $('#paid').addEventListener('input', renderChange);
+        refresh();
+    </script>
+</body>
+
+</html>

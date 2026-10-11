@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="跑步配速與完賽預測：配速、時速、距離、完賽時間三者算第四者；用 Riegel 公式預測其他距離，並列出等速或後半加速（negative split）的分段配速表。">
+    <meta property="og:title" content="跑步配速與完賽預測" />
+    <meta property="og:description" content="配速、時速、距離、時間互算，Riegel 完賽預測，分段配速表。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/pace-calc.html" />
+    <meta name="st-keys" content="pace_opts">
+    <title>跑步配速計算</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        label.f {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            margin: 10px 0 4px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row input {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 8px 0;
+        }
+
+        input.w,
+        select.w {
+            width: 100%;
+        }
+
+        .big {
+            font-size: 22px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .tw {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-variant-numeric: tabular-nums;
+        }
+
+        th,
+        td {
+            text-align: right;
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--fill);
+            white-space: nowrap;
+        }
+
+        th:first-child,
+        td:first-child {
+            text-align: left;
+        }
+
+        th {
+            color: var(--muted);
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .bad {
+            color: var(--bad);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>跑步配速計算</h1>
+        <p class="sub">配速、時速、距離、完賽時間，知道其中兩個就能算第三個。</p>
+
+        <div class="card">
+            <label class="f" for="mode" style="margin-top:0">我要算</label>
+            <select id="mode" class="w">
+                <option value="pace">配速 / 時速（已知距離與時間）</option>
+                <option value="time">完賽時間（已知距離與配速）</option>
+                <option value="dist">距離（已知時間與配速）</option>
+            </select>
+
+            <div id="boxDist">
+                <label class="f" for="distV">距離</label>
+                <div class="chips" id="presets"></div>
+                <div class="row"><input id="distV" inputmode="decimal" placeholder="例如 5" aria-label="距離"><select id="distU" aria-label="距離單位"><option value="km">公里</option><option value="mi">英里</option></select></div>
+            </div>
+            <div id="boxTime">
+                <label class="f" for="timeV">完賽時間（h:mm:ss、mm:ss 或小數分）</label>
+                <input id="timeV" class="w" inputmode="text" autocomplete="off" placeholder="例如 25:30 或 1:45:00" aria-label="完賽時間">
+            </div>
+            <div id="boxRate">
+                <label class="f" for="rateV">配速或時速</label>
+                <div class="row"><input id="rateV" inputmode="text" autocomplete="off" placeholder="例如 5:30 或 11.5" aria-label="配速或時速"><select id="rateU" aria-label="速度單位">
+                        <option value="pkm">配速 min/km</option>
+                        <option value="pmi">配速 min/mile</option>
+                        <option value="kmh">時速 km/h</option>
+                        <option value="mph">時速 mph</option>
+                    </select></div>
+            </div>
+            <p class="note bad" id="err"></p>
+        </div>
+
+        <div class="card" id="resCard">
+            <h2>結果</h2>
+            <div id="res"></div>
+        </div>
+
+        <div class="card" id="rgCard">
+            <h2>完賽時間預測（Riegel）</h2>
+            <p class="note" style="margin-top:0">以上面的距離與時間為基準：T2 = T1 × (D2 ÷ D1)<sup>k</sup></p>
+            <label class="f" for="rk">疲勞指數 k（1.00–1.20，預設 1.06）</label>
+            <input id="rk" class="w" inputmode="decimal" value="1.06" aria-label="Riegel 指數">
+            <div class="tw" id="rgOut"></div>
+        </div>
+
+        <div class="card" id="spCard">
+            <h2>分段配速表</h2>
+            <label class="f" for="neg" style="margin-top:0">前慢後快（negative split）幅度 %，0 = 等速</label>
+            <input id="neg" class="w" inputmode="decimal" value="0" aria-label="前慢後快百分比">
+            <p class="note" id="spNote"></p>
+            <div class="tw" id="spOut"></div>
+        </div>
+
+        <div class="card">
+            <button id="reset">清除記住的輸入</button>
+            <p class="note">只會記住上次的輸入選項（在這台裝置），按上方按鈕可清除。</p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>跑步配速計算機：距離、完賽時間、配速（每公里或每英里幾分幾秒）、時速，知道其中兩個就算出另一個；再用 Riegel 公式預測其他距離的完賽時間，並列出分段配速表。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>想用 5 公里 25 分的成績，估計 10K、半馬、全馬能跑多快。</li>
+            <li>想破 2 小時半馬，要知道每公里配速是多少。</li>
+            <li>比賽前排每公里的目標時間，或想練習「後半加速」。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+            <li>選「我要算」：配速、完賽時間，或距離。</li>
+            <li>距離可按 5K、10K、半馬、全馬快捷鈕，或自己輸入並選公里 / 英里。</li>
+            <li>時間可輸入 <kbd>1:45:00</kbd>（時:分:秒）、<kbd>25:30</kbd>（分:秒）或 <kbd>25.5</kbd>（小數分鐘）。</li>
+            <li>配速或時速欄用右邊選單切換 min/km、min/mile、km/h、mph。</li>
+            <li>下方自動出現 Riegel 預測與分段配速表；分段表的幅度填 3，代表前半慢 3%、後半快 3%，總時間不變。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">距離 5 公里、時間 25:00
+→ 配速 5:00 /km（8:03 /mile）、時速 12.00 km/h
+Riegel（k = 1.06）：10K ≈ 52:07、半馬 ≈ 1:55:36、全馬 ≈ 4:02:49</div>
+        <h3>小提醒</h3>
+        <ul>
+            <li>Riegel 公式對約 3K 到全馬之間的距離較準；實際成績還要看訓練量、路線與天氣，只當參考。</li>
+            <li>秒數會四捨五入顯示，例如 59.5 秒顯示為 1:00。</li>
+            <li>半馬 21.0975 公里、全馬 42.195 公里；1 英里 = 1.609344 公里。</li>
+            <li>「記住的輸入」只存上次選項這一份小資料，可用最下方按鈕清除，也能用右上角 💾 備份。</li>
+            <li>心率區間請用「健康計算機」。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store } = Util;
+
+        // --- pure ---
+        const KM_PER_MI = 1.609344;
+        const PRESETS = [['5k', '5K', 5], ['10k', '10K', 10], ['half', '半馬', 21.0975], ['full', '全馬', 42.195]];
+        const MAX_KM = 10000, MAX_SEC = 1e7;
+
+        // 時間字串 → 秒；支援 h:mm:ss、mm:ss（分鐘可超過 59）、小數分鐘；不合法回傳 NaN
+        function parseTime(s) {
+            const t = String(s == null ? '' : s).trim().replace(/：/g, ':');
+            if (!t) return NaN;
+            if (t.includes(':')) {
+                const p = t.split(':');
+                if (p.length > 3 || p.some(x => !/^\d+(\.\d+)?$/.test(x))) return NaN;
+                const n = p.map(Number);
+                if (n.slice(1).some(x => x >= 60)) return NaN;
+                if (p.slice(0, -1).some(x => x.includes('.'))) return NaN;
+                return n.reduce((a, x) => a * 60 + x, 0);
+            }
+            if (!/^\d+(\.\d+)?$/.test(t)) return NaN;
+            return Number(t) * 60;
+        }
+        // 秒 → 'm:ss' 或 'h:mm:ss'；先四捨五入到整秒再拆（59.5 秒 → 1:00，不會出現 0:60）
+        function fmtTime(sec) {
+            if (!Number.isFinite(sec) || sec < 0) return '—';
+            const t = Math.round(sec), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = t % 60, P = (n) => String(n).padStart(2, '0');
+            return h ? `${h}:${P(m)}:${P(s)}` : `${m}:${P(s)}`;
+        }
+        // 配速一律 m:ss（超過 60 分也用分鐘數，例如 75:00）
+        function fmtPace(sec) {
+            if (!Number.isFinite(sec) || sec < 0) return '—';
+            const t = Math.round(sec), s = t % 60;
+            return `${Math.floor(t / 60)}:${String(s).padStart(2, '0')}`;
+        }
+        const fmtNum = (n, d = 2) => Number.isFinite(n) ? n.toFixed(d) : '—';
+        const parseNum = (s) => { const t = String(s == null ? '' : s).trim(); return /^\d+(\.\d+)?$|^\.\d+$/.test(t) ? Number(t) : NaN; };
+
+        // 已知三者（distKm、timeSec、secPerKm）中的兩個，算出全部；mode 指定「要算的」
+        function calc(mode, { distKm, timeSec, secPerKm }) {
+            const need = (v, name) => (Number.isFinite(v) && v > 0) ? null : name + '必須是大於 0 的數字';
+            let e;
+            if (mode === 'pace') { e = need(distKm, '距離') || need(timeSec, '時間'); if (!e) secPerKm = timeSec / distKm; }
+            else if (mode === 'time') { e = need(distKm, '距離') || need(secPerKm, '配速'); if (!e) timeSec = secPerKm * distKm; }
+            else if (mode === 'dist') { e = need(timeSec, '時間') || need(secPerKm, '配速'); if (!e) distKm = timeSec / secPerKm; }
+            else e = '未知的模式';
+            if (e) return { err: e };
+            if (![distKm, timeSec, secPerKm].every(Number.isFinite) || distKm > MAX_KM || timeSec > MAX_SEC || secPerKm > 36000 || secPerKm < 0.01) return { err: '數值超出合理範圍' };
+            return { distKm, timeSec, secPerKm, kmh: 3600 / secPerKm };
+        }
+        // 速度欄輸入 → 每公里秒數。unit：pkm（min/km）、pmi（min/mile）、kmh、mph
+        function rateToSecPerKm(text, unit) {
+            if (unit === 'kmh' || unit === 'mph') {
+                const v = parseNum(text); if (!(v > 0)) return NaN;
+                return 3600 / (unit === 'mph' ? v * KM_PER_MI : v);
+            }
+            const s = parseTime(text); if (!(s > 0)) return NaN;
+            return unit === 'pmi' ? s / KM_PER_MI : s;
+        }
+        const toKm = (v, unit) => unit === 'mi' ? v * KM_PER_MI : v;
+        const fromKm = (km, unit) => unit === 'mi' ? km / KM_PER_MI : km;
+
+        // Riegel：T2 = T1 × (D2 / D1)^k
+        function riegel(t1, d1, d2, k = 1.06) {
+            if (!(t1 > 0 && d1 > 0 && d2 > 0 && k >= 1 && k <= 1.2)) return NaN;
+            return t1 * Math.pow(d2 / d1, k);
+        }
+        const RIEGEL_DISTS = [['1 英里', KM_PER_MI], ['3K', 3], ['5K', 5], ['10K', 10], ['15K', 15], ['半馬', 21.0975], ['全馬', 42.195], ['50K', 50]];
+
+        // 分段表：每 unit（km 或 mi）一段，最後一段可能不足一整單位。neg = 前後半的配速差百分比
+        // 前半距離配速 = 平均 ×(1+neg%)，後半 = 平均 ×(1−neg%)；因兩半等長，總時間不變
+        function splits(distKm, totalSec, unit = 'km', neg = 0) {
+            if (!(distKm > 0 && totalSec > 0) || !(neg >= 0 && neg < 100)) return [];
+            const len = unit === 'mi' ? KM_PER_MI : 1, D = distKm / len, P = totalSec / D, half = D / 2, f = neg / 100;
+            const timeBetween = (a, b) => {
+                const first = Math.max(0, Math.min(b, half) - a), second = Math.max(0, b - Math.max(a, half));
+                return P * (1 + f) * first + P * (1 - f) * second;
+            };
+            const out = []; let cum = 0;
+            const n = Math.ceil(D - 1e-9);
+            for (let i = 0; i < n; i++) {
+                const a = i, b = Math.min(i + 1, D), seg = timeBetween(a, b);
+                cum += seg;
+                out.push({ n: i + 1, len: b - a, segTime: seg, cumTime: i === n - 1 ? totalSec : cum, pace: seg / (b - a) });
+            }
+            return out;
+        }
+
+        // 讀取記住的輸入：驗證型別與長度，壞資料回到預設
+        const OPT_DEFAULT = { mode: 'pace', preset: '5k', dist: '5', distU: 'km', time: '25:00', rate: '', rateU: 'pkm', k: '1.06', neg: '0' };
+        function loadOpts(raw) {
+            const o = Object.assign({}, OPT_DEFAULT);
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return o;
+            const str = (k, max = 20) => { if (typeof raw[k] === 'string' && raw[k].length <= max) o[k] = raw[k]; };
+            const pick = (k, list) => { if (list.includes(raw[k])) o[k] = raw[k]; };
+            pick('mode', ['pace', 'time', 'dist']); pick('distU', ['km', 'mi']); pick('rateU', ['pkm', 'pmi', 'kmh', 'mph']);
+            pick('preset', ['5k', '10k', 'half', 'full', 'custom']);
+            ['dist', 'time', 'rate', 'k', 'neg'].forEach(k => str(k));
+            return o;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'pace_opts';
+        let o = loadOpts(store.get(KEY, null));
+
+        const save = () => store.set(KEY, o);
+        function readInputs() {
+            const dKm = toKm(parseNum(o.dist), o.distU), tSec = parseTime(o.time), spk = rateToSecPerKm(o.rate, o.rateU);
+            return { distKm: dKm, timeSec: tSec, secPerKm: spk };
+        }
+        const li = (k, v) => Util.statRow(k, v);
+
+        function render() {
+            const m = o.mode;
+            $('#boxDist').hidden = m === 'dist'; $('#boxTime').hidden = m === 'pace'; $('#boxRate').hidden = m === 'time';
+            const r = calc(m, readInputs()), res = $('#res');
+            res.replaceChildren(); $('#err').textContent = '';
+            for (const c of ['#rgCard', '#spCard']) $(c).hidden = !!r.err;
+            if (r.err) { $('#err').textContent = r.err; $('#resCard').hidden = false; res.append(li('請輸入完整資料', '—')); return; }
+            const mi = r.distKm / KM_PER_MI, spm = r.secPerKm * KM_PER_MI;
+            res.append(li('距離', `${fmtNum(r.distKm, 3)} km（${fmtNum(mi, 3)} mile）`), li('完賽時間', fmtTime(r.timeSec)), li('配速', `${fmtPace(r.secPerKm)} /km　${fmtPace(spm)} /mile`), li('時速', `${fmtNum(r.kmh)} km/h　${fmtNum(r.kmh / KM_PER_MI)} mph`));
+            // Riegel
+            const k = parseNum($('#rk').value), tb = $('#rgOut');
+            if (!(k >= 1 && k <= 1.2)) tb.textContent = '指數 k 請輸入 1.00–1.20';
+            else tb.replaceChildren(table(['距離', '預測時間', '配速 /km'], RIEGEL_DISTS.map(([n, d]) => { const t = riegel(r.timeSec, r.distKm, d, k); return [n, fmtTime(t), fmtPace(t / d)]; })));
+            // 分段
+            const ng = parseNum($('#neg').value), sp = $('#spOut');
+            if (!(ng >= 0 && ng <= 20)) { sp.textContent = '幅度請輸入 0–20'; $('#spNote').textContent = ''; return; }
+            const unit = o.rateU === 'pmi' || o.rateU === 'mph' || o.distU === 'mi' && o.mode !== 'pace' ? 'mi' : 'km';
+            const rows = splits(r.distKm, r.timeSec, unit, ng), L = unit === 'mi' ? 'mile' : 'km';
+            $('#spNote').textContent = rows.length > 400 ? '距離太長，只列出前 400 段' : `每 ${L} 一段` + (ng ? `；前半約 ${fmtPace(r.secPerKm * (unit === 'mi' ? KM_PER_MI : 1) * (1 + ng / 100))} /${L}，後半約 ${fmtPace(r.secPerKm * (unit === 'mi' ? KM_PER_MI : 1) * (1 - ng / 100))} /${L}` : '，等速');
+            sp.replaceChildren(table([L, '本段', '累計', `配速 /${L}`], rows.slice(0, 400).map(s => [s.len < 1 ? fmtNum(s.n - 1 + s.len, 2) : String(s.n), fmtTime(s.segTime), fmtTime(s.cumTime), fmtPace(s.pace)])));
+        }
+        function table(head, rows) {
+            const t = document.createElement('table'), th = t.createTHead().insertRow();
+            head.forEach(h => th.appendChild(Object.assign(document.createElement('th'), { textContent: h })));
+            const tb = t.createTBody(); rows.forEach(r => { const tr = tb.insertRow(); r.forEach(c => tr.insertCell().textContent = c); });
+            return t;
+        }
+
+        function renderPresets() {
+            $('#presets').replaceChildren(...[...PRESETS, ['custom', '自訂']].map(([id, name]) => {
+                const b = Object.assign(document.createElement('button'), { className: 'sm', textContent: name }); b.setAttribute('aria-pressed', String(o.preset === id));
+                b.dataset.p = id;
+                b.onclick = () => { o.preset = id; if (id !== 'custom') { const km = PRESETS.find(p => p[0] === id)[2]; $('#distV').value = o.dist = String(+fromKm(km, o.distU).toFixed(4)); } save(); renderPresets(); render(); };
+                return b;
+            }));
+        }
+        function bind(id, key, onChange) {
+            $(id).addEventListener('input', () => { o[key] = $(id).value; if (onChange) onChange(); save(); render(); });
+        }
+        function fill() {
+            $('#mode').value = o.mode; $('#distV').value = o.dist; $('#distU').value = o.distU; $('#timeV').value = o.time; $('#rateV').value = o.rate; $('#rateU').value = o.rateU; $('#rk').value = o.k; $('#neg').value = o.neg;
+        }
+        bind('#mode', 'mode'); bind('#distV', 'dist', () => { o.preset = 'custom'; renderPresets(); }); bind('#timeV', 'time'); bind('#rateV', 'rate'); bind('#rateU', 'rateU'); bind('#rk', 'k'); bind('#neg', 'neg');
+        $('#distU').addEventListener('change', () => {
+            o.distU = $('#distU').value;
+            if (o.preset !== 'custom') { const km = PRESETS.find(p => p[0] === o.preset)[2]; o.dist = String(+fromKm(km, o.distU).toFixed(4)); $('#distV').value = o.dist; }
+            save(); render();
+        });
+        $('#reset').onclick = () => {
+            if (!confirm('要清除記住的輸入並還原預設嗎？（無法復原）')) return;
+            try { localStorage.removeItem(KEY); } catch (e) { }
+            o = loadOpts(null); fill(); renderPresets(); render();
+        };
+        fill(); renderPresets(); render();
+    </script>
+</body>
+
+</html>

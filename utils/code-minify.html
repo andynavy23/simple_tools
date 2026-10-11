@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="程式碼壓縮與格式化：HTML、CSS、JavaScript、JSON 的安全壓縮（只去註解與多餘空白）與簡易美化，並自動驗證結果。">
+    <meta property="og:title" content="程式碼壓縮與格式化" />
+    <meta property="og:description" content="HTML / CSS / JS / JSON 安全壓縮與美化，顯示縮減比例並驗證。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/code-minify.html" />
+    <title>程式碼壓縮與格式化</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root { --wrap-w: 760px; }
+
+        label.lb { font-weight: 600; display: block; margin: 12px 0 6px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .row > * { min-width: 0; }
+        .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+        .chk { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; background: var(--fill); border-radius: var(--btn-radius); cursor: pointer; }
+        .chk input { margin: 0; }
+        textarea.code { min-height: 200px; font-family: ui-monospace, Menlo, Consolas, monospace; white-space: pre; overflow: auto; resize: vertical; width: 100%; tab-size: 2; }
+        #stat { font-weight: 700; font-variant-numeric: tabular-nums; margin: 10px 0 0; }
+        #ver { margin: 6px 0 0; }
+        #ver.bad, #err { color: var(--bad); }
+        #ver.ok { color: var(--ok); }
+        #err { margin: 8px 0 0; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>程式碼壓縮與格式化</h1>
+        <p class="sub">HTML、CSS、JavaScript、JSON：安全壓縮（只去註解與多餘空白）與簡易美化；全部在本機處理。</p>
+
+        <div class="card">
+            <div class="chips" id="langs" role="group" aria-label="語言"></div>
+            <div class="chips" id="modes" role="group" aria-label="動作"></div>
+            <label class="chk"><input type="checkbox" id="keep" checked> 保留條件註解與授權註解</label>
+        </div>
+
+        <div class="card">
+            <label class="lb" for="src" style="margin-top:0">輸入</label>
+            <textarea id="src" class="code" spellcheck="false" placeholder="貼上要處理的程式碼（上限 1MB）"></textarea>
+            <div class="row" style="margin-top:8px">
+                <button id="sample" class="sm">載入範例</button>
+                <button id="clear" class="sm">清空</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <label class="lb" for="dst" style="margin-top:0">結果</label>
+            <textarea id="dst" class="code" readonly spellcheck="false" aria-label="處理結果"></textarea>
+            <p id="stat" role="status"></p>
+            <p id="ver" role="status"></p>
+            <p id="err" role="alert"></p>
+            <div class="row" style="margin-top:12px">
+                <button class="primary" id="copy">複製結果</button>
+                <button id="dl">下載</button>
+                <button id="swap">結果放回輸入</button>
+            </div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>把 HTML、CSS、JavaScript、JSON 的程式碼壓小（去掉註解與多餘空白），或把擠成一團的程式碼排整齊。壓縮刻意做得保守：<b>只去註解與空白，不改變數名稱、不重寫程式</b>，所以結果的行為和原本一樣。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>要把小小的網頁、樣式或腳本縮小再貼到別處（信件、CMS、書籤腳本）。</li>
+        <li>拿到被壓成一行的 CSS / JS，想先排整齊再看。</li>
+        <li>想知道一份檔案去掉註解空白後能省多少。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>點上方語言（貼上時會自動猜），再選「壓縮」或「美化」。</li>
+        <li>把程式碼貼進「輸入」，結果即時出現在「結果」，並顯示「壓縮前後大小與百分比」。</li>
+        <li>下方「驗證」會自動檢查結果有沒有被改壞（見下方說明）。</li>
+        <li>按「複製結果」或「下載」；「結果放回輸入」可以接著做下一步（例如壓縮後再美化）。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">CSS 輸入：
+a { color : red ; }
+/* 註解 */
+.box > p { margin : 0 auto ; width: calc(100% - 10px) }
+壓縮結果：
+a{color:red}.box>p{margin:0 auto;width:calc(100% - 10px)}
+（calc 裡的運算子空白一定保留；88 → 57 位元組，縮小 35.2%）</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li><b>JavaScript</b>：用簡易分詞（能辨認字串、樣板字串、正規表示式與註解），保留換行、只壓縮行內空白與註解，避免換行被拿掉造成「自動補分號（ASI）」出錯，所以結果仍是多行；只有在 <code>{</code>、<code>;</code>、<code>,</code> 後面的換行會併起來。不會改名、不會刪沒用到的程式碼。這不是完整的語法分析器，極少見的寫法（例如在 <code>)</code> 後面直接接正規表示式）可能判斷錯，請以「驗證」為準。</li>
+        <li>「保留條件註解與授權註解」預設勾選：保留 <code>/*! … */</code>、含 <code>@license</code> / <code>@preserve</code> 的註解與 HTML 條件註解；取消勾選就全部移除。</li>
+        <li><b>CSS</b>：保留字串與 <code>url()</code>、calc 等括號內的運算子空白，去掉最後一個分號；不改數值與色碼。</li>
+        <li><b>HTML</b>：<code>pre</code>、<code>textarea</code> 原樣保留，<code>script</code> / <code>style</code> 裡的內容用 JS / CSS 規則壓縮（不是 JS 的 <code>type</code>，如 text/template，原樣保留）；行內元素之間的空白保留成一個空格。條件註解（<code>&lt;!--[if IE]&gt;</code>）可勾選保留。</li>
+        <li><b>JSON</b>：會先解析再輸出，格式錯誤會指出位置；超過 15 位的整數會失去精度，重複的鍵只保留最後一個。</li>
+        <li><b>美化</b>是簡易版：CSS、HTML 以縮排為主，JS 是 token 層級（換行、大括號、分號）的縮排，不是完整 parser，複雜寫法排出來可能不好看，但不會改變程式內容。</li>
+        <li><b>驗證</b>：JS 用瀏覽器 <code>new Function</code> 檢查壓縮前後都能編譯（ES module 的 import / export 無法編譯，會改只比對 token）並比對 token 序列；CSS 比對規則數、選擇器數與宣告數；HTML 比對標籤與屬性序列和文字內容；JSON 比對解析後的內容。</li>
+        <li>單檔上限 1MB；不會儲存或上傳你貼的內容。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { download } = Util;
+
+        // --- pure ---
+        const MAX_BYTES = 1048576;
+        const LANGS = ['html', 'css', 'js', 'json'];
+        const LANG_NAMES = { html: 'HTML', css: 'CSS', js: 'JavaScript', json: 'JSON' };
+        const byteLen = (s) => new TextEncoder().encode(String(s)).length;
+        const pctSaved = (a, b) => (a ? Math.round((1 - b / a) * 1000) / 10 : 0);
+
+        // ===== JavaScript 分詞（簡易：字串、樣板字串、正規表示式、註解、數字、識別字、運算子）=====
+        const JS_RE_AFTER = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'throw', 'case', 'do', 'else', 'yield', 'await']);
+        const RE_WS = /\s+/y, RE_NUM = /0[xXbBoO][\da-fA-F_]+n?|(?:\d[\d_]*(?:\.[\d_]*)?|\.\d[\d_]*)(?:[eE][+-]?\d+)?n?/y, RE_WORD = /[\p{L}\p{N}_$\\\u200c\u200d]+/uy;
+        const RE_OP = /(?:>>>=|\.\.\.|===|!==|\*\*=|<<=|>>=|>>>|&&=|\|\|=|\?\?=|=>|==|!=|<=|>=|&&|\|\||\?\?|\?\.(?!\d)|\+\+|--|\+=|-=|\*=|\/=|%=|&=|\|=|\^=|<<|>>|\*\*)/y;
+        function scanString(s, i) {
+            const q = s[i]; i++;
+            while (i < s.length) { const c = s[i]; if (c === '\\') { i += 2; continue; } if (c === q) return i + 1; if (c === '\n') return i; i++; }
+            return s.length;
+        }
+        function scanBraces(s, i) {   // i 在 "${" 之後；回傳對應 "}" 之後的位置
+            let d = 1, last = '(';   // last：上一個非空白字元，用來判斷 / 是正規表示式還是除號
+            while (i < s.length) {
+                const c = s[i];
+                if (c === '"' || c === "'") { i = scanString(s, i); last = 'x'; continue; }
+                if (c === '`') { i = scanTemplate(s, i); last = 'x'; continue; }
+                if (c === '/' && s[i + 1] === '/') { while (i < s.length && s[i] !== '\n') i++; continue; }
+                if (c === '/' && s[i + 1] === '*') { const e = s.indexOf('*/', i + 2); i = e < 0 ? s.length : e + 2; continue; }
+                if (c === '/' && /[(,=:[!&|?{};+\-*%<>~^]/.test(last)) { const e = scanRegex(s, i); if (e > 0) { i = e; last = 'x'; continue; } }
+                if (c === '{') d++; else if (c === '}' && --d === 0) return i + 1;
+                if (!/\s/.test(c)) last = c;
+                i++;
+            }
+            return s.length;
+        }
+        function scanTemplate(s, i) {
+            i++;
+            while (i < s.length) {
+                const c = s[i];
+                if (c === '\\') { i += 2; continue; }
+                if (c === '`') return i + 1;
+                if (c === '$' && s[i + 1] === '{') { i = scanBraces(s, i + 2); continue; }
+                i++;
+            }
+            return s.length;
+        }
+        function scanRegex(s, i) {   // 失敗回傳 -1
+            let j = i + 1, cls = false;
+            while (j < s.length) {
+                const c = s[j];
+                if (c === '\n' || c === '\r') return -1;
+                if (c === '\\') { j += 2; continue; }
+                if (cls) { if (c === ']') cls = false; } else if (c === '[') cls = true; else if (c === '/') { j++; while (j < s.length && /[A-Za-z]/.test(s[j])) j++; return j; }
+                j++;
+            }
+            return -1;
+        }
+        const regexOk = (p) => !p || (p.k === 'p' ? !(p.v === ')' || p.v === ']' || p.v === '++' || p.v === '--') : p.k === 'word' && JS_RE_AFTER.has(p.v));
+        // 回傳 [{k: ws|cm|hb|str|tpl|re|num|word|p, v}]；把 v 全部接起來就是原文
+        function jsTokens(s) {
+            s = String(s);
+            const out = [], n = s.length; let i = 0, prev = null;
+            const push = (k, v) => { const t = { k, v }; out.push(t); if (k !== 'ws' && k !== 'cm' && k !== 'hb') prev = t; i += v.length; };
+            if (s.startsWith('#!')) { const e = s.indexOf('\n'); push('hb', e < 0 ? s : s.slice(0, e)); }
+            while (i < n) {
+                const c = s[i];
+                RE_WS.lastIndex = i; if (RE_WS.test(s)) { push('ws', s.slice(i, RE_WS.lastIndex)); continue; }
+                if (c === '/' && s[i + 1] === '/') { let e = i; while (e < n && s[e] !== '\n' && s[e] !== '\r' && s[e] !== '\u2028' && s[e] !== '\u2029') e++; push('cm', s.slice(i, e)); continue; }
+                if (c === '/' && s[i + 1] === '*') { const e = s.indexOf('*/', i + 2); push('cm', s.slice(i, e < 0 ? n : e + 2)); continue; }
+                if (c === '"' || c === "'") { push('str', s.slice(i, scanString(s, i))); continue; }
+                if (c === '`') { push('tpl', s.slice(i, scanTemplate(s, i))); continue; }
+                if (c === '/' && regexOk(prev)) { const e = scanRegex(s, i); if (e > 0) { push('re', s.slice(i, e)); continue; } }
+                if ((c >= '0' && c <= '9') || (c === '.' && s[i + 1] >= '0' && s[i + 1] <= '9')) { RE_NUM.lastIndex = i; if (RE_NUM.test(s)) { push('num', s.slice(i, RE_NUM.lastIndex)); continue; } }
+                RE_WORD.lastIndex = i; if (RE_WORD.test(s)) { push('word', s.slice(i, RE_WORD.lastIndex)); continue; }
+                RE_OP.lastIndex = i; if (RE_OP.test(s)) { push('p', s.slice(i, RE_OP.lastIndex)); continue; }
+                push('p', String.fromCodePoint(s.codePointAt(i)));
+            }
+            return out;
+        }
+        // 去掉空白與註解後的 token 序列（驗證用）
+        const jsSig = (s) => jsTokens(s).filter(t => t.k !== 'ws' && t.k !== 'cm' && t.k !== 'hb').map(t => t.v).join('\u0001');
+        const NL_RE = /[\n\r\u2028\u2029]/;
+        const isWordCh = (c) => /[\p{L}\p{N}_$\\\u200c\u200d]/u.test(c);
+        const keepCm = (v) => /^\/\*!|@license|@preserve/.test(v);
+        // 兩個運算子接起來會變成別的運算子（+ + → ++、< = → <=、! => → !=）
+        function opMerge(a, b) { if (a.k !== 'p' || b.k !== 'p') return false; RE_OP.lastIndex = 0; return RE_OP.test(a.v + b.v) && RE_OP.lastIndex > a.v.length; }
+        function needSpace(a, b) {
+            const ca = a.v[a.v.length - 1], cb = b.v[0];
+            if (opMerge(a, b)) return true;
+            return (isWordCh(ca) && isWordCh(cb)) || (ca === '/' && cb === '/') || (a.k === 'num' && cb === '.') || (ca === '.' && b.k === 'num');
+        }
+        // 保守壓縮：去註解、壓縮行內空白、把空白行與縮排去掉；換行保留（只有 { ; , 之後的換行併起來，這些之後不會觸發自動補分號）
+        function minifyJS(src, o = {}) {
+            const keepBang = o.keep !== false, toks = jsTokens(src), parts = []; let nl = false, sp = false, last = null, tailNl = true;   // 用陣列接字串並自己記「結尾是不是換行」，避免大檔反覆壓平字串變成 O(n²)
+            for (const t of toks) {
+                if (t.k === 'ws') { if (NL_RE.test(t.v)) nl = true; else sp = true; continue; }
+                if (t.k === 'hb') { parts.push(t.v + '\n'); tailNl = true; continue; }
+                if (t.k === 'cm') {
+                    if (keepBang && keepCm(t.v)) { if (!tailNl) parts.push('\n'); parts.push(t.v + '\n'); tailNl = true; last = null; nl = false; sp = false; continue; }
+                    if (t.v.startsWith('/*') && NL_RE.test(t.v)) nl = true; else sp = true;
+                    continue;
+                }
+                if (!tailNl) {
+                    if (nl) { if (!(last && last.k === 'p' && (last.v === '{' || last.v === ';' || last.v === ','))) parts.push('\n'); }
+                    else if (sp && last && needSpace(last, t)) parts.push(' ');
+                }
+                parts.push(t.v); tailNl = false; last = t; nl = false; sp = false;
+            }
+            return parts.join('').replace(/\n+$/, '');
+        }
+
+        // ===== JavaScript 簡易美化（token 層級；不會改動任何 token，只調整空白與換行）=====
+        const KW_SP = new Set(['if', 'for', 'while', 'switch', 'catch', 'with', 'return', 'typeof', 'void', 'delete', 'in', 'of', 'instanceof', 'new', 'await', 'yield', 'case', 'else', 'do', 'function', 'async', 'throw', 'var', 'let', 'const', 'import', 'export', 'from', 'default', 'extends']);
+        const NOSP_AFTER = new Set(['(', '[', '.', '?.', '!', '~', '#', '@', '...']);
+        function beautifyJS(src, ind = '  ') {
+            const sig = []; let nlf = false;
+            for (const t of jsTokens(src)) { if (t.k === 'ws') { if (NL_RE.test(t.v)) nlf = true; } else { sig.push({ k: t.k, v: t.v, nl: nlf }); nlf = false; } }
+            let out = '', line = '', level = 0, lineLevel = 0, pd = 0, bd = 0, tern = 0, pend = false, uPrev = false, caseLbl = false, p = null, pp = null;
+            const st = [];
+            const add = (s) => { if (!line) lineLevel = level; line += s; };
+            const brk = () => { if (line.trim()) out += ind.repeat(lineLevel) + line.trimEnd() + '\n'; line = ''; pend = false; };
+            const isOperand = (x) => !!x && ((x.k === 'word' && !JS_RE_AFTER.has(x.v)) || x.k === 'num' || x.k === 'str' || x.k === 'tpl' || x.k === 're' || (x.k === 'p' && (x.v === ')' || x.v === ']')));
+            const afterBrace = (nx) => { pend = !!nx && nx.k !== 'p' && nx.k !== 'cm' && !['else', 'catch', 'finally', 'while', 'in', 'of', 'instanceof'].includes(nx.v); };
+            for (let i = 0; i < sig.length; i++) {
+                const t = sig[i], nx = sig[i + 1], v = t.v, isP = t.k === 'p';
+                if (t.k === 'hb') { out += v + '\n'; continue; }
+                if (t.k === 'cm') {
+                    if (t.nl && line.trim()) brk();
+                    add((line ? ' ' : '') + v);
+                    if (v.startsWith('//') || NL_RE.test(v) || pend) brk();
+                    continue;
+                }
+                if ((pend || t.nl) && line.trim()) brk();
+                const postfix = isP && (v === '++' || v === '--') && isOperand(p) && !t.nl;
+                const unary = isP && (((v === '+' || v === '-') && !isOperand(p)) || ((v === '++' || v === '--') && !postfix));
+                const afterDot = !!pp && (pp.v === '.' || pp.v === '?.');
+                let sp = true;
+                if (!p || !line) sp = false;
+                else if (isP && [')', ']', ';', ',', '.', '?.'].includes(v)) sp = false;
+                else if (isP && v === ':') sp = tern > 0;
+                else if (postfix) sp = false;
+                else if (p.k === 'p' && NOSP_AFTER.has(p.v)) sp = false;
+                else if (uPrev) sp = (v[0] === '+' || v[0] === '-') && p.v[p.v.length - 1] === v[0];
+                else if (isP && v === '(') sp = p.k === 'word' ? KW_SP.has(p.v) && !afterDot : p.k === 'p' ? ![')', ']', '}', '++', '--'].includes(p.v) : false;
+                else if (isP && v === '[') sp = p.k === 'word' ? KW_SP.has(p.v) && !afterDot : p.k === 'p' ? ![')', ']', '}'].includes(p.v) : false;
+                else if (t.k === 'tpl' && p.k === 'word' && !KW_SP.has(p.v)) sp = false;
+                if (!sp && p && line && needSpace(p, t)) sp = true;   // 不留空白會讓兩個 token 黏成別的 token 時一定要留
+                if (isP && v === '{') {
+                    if (nx && nx.k === 'p' && nx.v === '}') { add((sp ? ' ' : '') + '{}'); i++; p = nx; pp = t; uPrev = false; afterBrace(sig[i + 1]); continue; }
+                    add((sp ? ' ' : '') + '{'); st.push({ pd, bd, tern, caseLbl }); pd = bd = tern = 0; caseLbl = false; level++; pend = true;
+                } else if (isP && v === '}') {
+                    if (line.trim()) brk();
+                    const s = st.pop(); if (s) { pd = s.pd; bd = s.bd; tern = s.tern; caseLbl = s.caseLbl; }
+                    level = Math.max(0, level - 1); add('}'); afterBrace(nx);
+                } else {
+                    add((sp ? ' ' : '') + v);
+                    if (isP) {
+                        if (v === ';') { if (pd === 0) pend = true; }
+                        else if (v === ',') { if (pd === 0 && bd === 0) pend = true; }
+                        else if (v === '(') pd++; else if (v === ')') pd = Math.max(0, pd - 1);
+                        else if (v === '[') bd++; else if (v === ']') bd = Math.max(0, bd - 1);
+                        else if (v === '?') tern++;
+                        else if (v === ':') { if (tern > 0) tern--; else if (caseLbl && pd === 0) { caseLbl = false; pend = true; } }
+                    } else if (t.k === 'word' && !afterDot && pd === 0 && (v === 'case' || (v === 'default' && nx && nx.v === ':'))) caseLbl = true;
+                }
+                uPrev = unary; pp = p; p = t;
+            }
+            brk();
+            return out.replace(/\n+$/, '');
+        }
+
+        // ===== CSS =====
+        // 分詞：cm 註解、str 字串、url 未加引號的 url(...)、ws 空白、c 單一字元（含 \ 跳脫）
+        function cssTokens(s) {
+            s = String(s); const out = [], n = s.length; let i = 0;
+            while (i < n) {
+                const c = s[i]; let e = -1, k = 'c';
+                if (c === '/' && s[i + 1] === '*') { const x = s.indexOf('*/', i + 2); e = x < 0 ? n : x + 2; k = 'cm'; }
+                else if (c === '"' || c === "'") { e = i + 1; while (e < n && s[e] !== c && s[e] !== '\n') { if (s[e] === '\\') e++; e++; } e = Math.min(n, s[e] === c ? e + 1 : e); k = 'str'; }
+                else if ((c === 'u' || c === 'U') && /^url\(\s*(?!["'\s])/i.test(s.slice(i, i + 12))) { const x = s.indexOf(')', i); e = x < 0 ? n : x + 1; k = 'url'; }
+                else if (/\s/.test(c)) { e = i + 1; while (e < n && /\s/.test(s[e])) e++; k = 'ws'; }
+                else if (c === '\\') { const m = /^\\[0-9a-fA-F]{1,6}[ \t\n\r\f]?|^\\[^]/.exec(s.slice(i, i + 9)); e = i + (m ? m[0].length : 1); }
+                else e = i + 1;
+                out.push({ k, v: s.slice(i, e) }); i = e;
+            }
+            return out;
+        }
+        // 從第 i 個 token 往後看：先遇到 ; 或 } 是宣告（color:red），先遇到 { 是選擇器（巢狀 CSS 的 &:hover）
+        function cssDeclAhead(toks, i) { let d = 0; for (let j = i + 1; j < toks.length; j++) { const t = toks[j]; if (t.k !== 'c') continue; if (t.v === '(') d++; else if (t.v === ')') d--; else if (d === 0) { if (t.v === '{') return false; if (t.v === ';' || t.v === '}') return true; } } return true; }
+        function minifyCSS(src, o = {}) {
+            const keep = o.keep !== false, toks = cssTokens(src), parts = []; let pend = false, depth = 0, braces = 0, stmt = true, atRule = false, pc = '';
+            const tail = () => { const l = parts[parts.length - 1]; pc = l ? l[l.length - 1] : ''; };
+            for (let i = 0; i < toks.length; i++) {
+                const t = toks[i];
+                if (t.k === 'ws') { pend = true; continue; }
+                if (t.k === 'cm') { if (keep && /^\/\*!|@license|@preserve/.test(t.v)) { if (parts.length && pc !== '\n') parts.push('\n'); parts.push(t.v + '\n'); pc = '\n'; pend = false; } else pend = true; continue; }
+                const c = t.v[0];
+                if (stmt) { atRule = c === '@'; stmt = false; }
+                if (t.k === 'c' && c === '}') { while (parts.length && parts[parts.length - 1] === ';') parts.pop(); tail(); }
+                if (pend && parts.length && pc !== '\n' && !(t.k === 'c' && c === ':' && /[\w-]/.test(pc) && ((braces > 0 && depth === 0 && cssDeclAhead(toks, i)) || (atRule && depth > 0)))) {
+                    const tightAfter = '{};,([:' + (depth === 0 ? '>~' : ''), tightBefore = '{};,)]' + (depth === 0 ? '>~' : '');
+                    if (!tightAfter.includes(pc) && !(t.k === 'c' && tightBefore.includes(c))) { parts.push(' '); pc = ' '; }
+                }
+                const v = t.k === 'url' && t.v.endsWith(')') ? 'url(' + t.v.slice(4, -1).trim() + ')' : t.v;
+                parts.push(v); pc = v[v.length - 1]; pend = false;
+                if (t.k === 'c') { if (c === '(') depth++; else if (c === ')') depth = Math.max(0, depth - 1); else if (depth === 0 && c === '{') { braces++; stmt = true; } else if (depth === 0 && c === '}') { braces = Math.max(0, braces - 1); stmt = true; } else if (depth === 0 && c === ';') stmt = true; }
+            }
+            return parts.join('').trim();
+        }
+        const CSS_NESTED = /^@(media|supports|layer|container|document|scope|starting-style|-?[a-z]+-?keyframes|font-feature-values)\b/i;
+        function beautifyCSS(src, ind = '  ') {
+            const toks = cssTokens(src); let out = '', line = '', level = 0, pd = 0, bd = 0, sp = false;
+            const st = [], ctxSel = () => !st.length || st[st.length - 1] === 'nested';
+            const brk = () => { const l = line.trim(); if (l) out += ind.repeat(level) + l + '\n'; line = ''; sp = false; };
+            const put = (s) => { if (sp && line && !/[\s(\[]$/.test(line) && s[0] !== ')' && s[0] !== ']') line += ' '; line += s; sp = false; };
+            for (let i = 0; i < toks.length; i++) {
+                const t = toks[i], v = t.v;
+                if (t.k === 'ws') { sp = true; continue; }
+                if (t.k === 'cm') { brk(); line = v; brk(); continue; }
+                if (t.k !== 'c') { put(v); continue; }
+                if (v === '{' && pd === 0) {
+                    line = line.trimEnd() + (line.trim() ? ' {' : '{'); st.push(CSS_NESTED.test(line.trim()) ? 'nested' : 'rule'); brk(); level++;
+                } else if (v === '}' && pd === 0) {
+                    if (line.trim()) { if (st[st.length - 1] === 'rule' && !line.trimEnd().endsWith(';')) line = line.trimEnd() + ';'; brk(); }
+                    level = Math.max(0, level - 1); st.pop(); line = '}'; brk(); if (level === 0) out += '\n';
+                } else if (v === ';' && pd === 0) { line = line.trimEnd() + ';'; brk(); }
+                else if (v === ',') {
+                    line = line.trimEnd() + ','; if (pd === 0 && bd === 0 && ctxSel()) brk(); else sp = true;
+                } else if (v === ':' && ((pd === 0 && !ctxSel() && cssDeclAhead(toks, i)) || (pd > 0 && /^\s*@/.test(line) && /[\w-]$/.test(line)))) { line = line.trimEnd() + ': '; sp = false; }
+                else if ((v === '>' || v === '~') && pd === 0 && bd === 0 && ctxSel() && !/^\s*@/.test(line) && !(toks[i + 1] && toks[i + 1].v === '=')) { line = line.trimEnd() + ' ' + v + ' '; sp = false; }
+                else { if (v === '(') pd++; else if (v === ')') pd = Math.max(0, pd - 1); else if (v === '[') bd++; else if (v === ']') bd = Math.max(0, bd - 1); put(v); }
+            }
+            brk();
+            return out.replace(/\n+$/, '');
+        }
+        // 規則數、選擇器數、宣告數（驗證用）
+        function cssStats(src) {
+            let rules = 0, selectors = 0, decls = 0, seg = '', pd = 0, bd = 0, commas = 0;
+            for (const t of cssTokens(src)) {
+                if (t.k === 'cm') continue;
+                if (t.k === 'ws') { seg += ' '; continue; }
+                if (t.k !== 'c') { seg += 'x'; continue; }
+                const v = t.v;
+                if (v === '(') pd++; else if (v === ')') pd = Math.max(0, pd - 1); else if (v === '[') bd++; else if (v === ']') bd = Math.max(0, bd - 1);
+                if (pd === 0 && bd === 0 && v === ',') commas++;
+                if (pd === 0 && v === '{') { rules++; if (!seg.trim().startsWith('@')) selectors += commas + 1; seg = ''; commas = 0; }
+                else if (pd === 0 && (v === '}' || v === ';')) { if (seg.trim()) decls++; seg = ''; commas = 0; }
+                else seg += v;
+            }
+            return { rules, selectors, decls };
+        }
+
+        // ===== HTML =====
+        const RAW_EL = new Set(['script', 'style', 'pre', 'textarea']);
+        const VOID_EL = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+        const BLOCK_EL = new Set('html head body title meta link base script style noscript template div p h1 h2 h3 h4 h5 h6 ul ol li dl dt dd table thead tbody tfoot tr td th caption colgroup col section article aside nav header footer main figure figcaption form fieldset legend hr br pre blockquote address details summary menu option optgroup'.split(' '));
+        const tagEnd = (s, i) => { let q = ''; for (let j = i; j < s.length; j++) { const c = s[j]; if (q) { if (c === q) q = ''; } else if (c === '"' || c === "'") q = c; else if (c === '>') return j + 1; } return s.length; };
+        // 分詞：cm 註解、dt <!...>、tag（name、close）、verb（pre / textarea 整個元素）、rawc（script / style 的內容）、text
+        function htmlTokens(s) {
+            s = String(s); const out = [], n = s.length; let i = 0;
+            const RE_TAG = /<(\/?)([a-zA-Z][^\s/>]*)/y;
+            while (i < n) {
+                if (s[i] === '<') {
+                    if (s.startsWith('<!--', i)) { const e = s.indexOf('-->', i + 4), end = e < 0 ? n : e + 3; out.push({ k: 'cm', v: s.slice(i, end) }); i = end; continue; }
+                    if (s[i + 1] === '!' || s[i + 1] === '?') { const e = tagEnd(s, i); out.push({ k: 'dt', v: s.slice(i, e) }); i = e; continue; }
+                    RE_TAG.lastIndex = i; const m = RE_TAG.exec(s);
+                    if (m) {
+                        const e = tagEnd(s, i), name = m[2].toLowerCase(), close = !!m[1], v = s.slice(i, e);
+                        if (!close && RAW_EL.has(name) && !/\/>$/.test(v)) {
+                            const rc = new RegExp('</' + name + '\\s*>', 'i');
+                            const rest = s.slice(e), mm = rc.exec(rest), ci = mm ? mm.index : rest.length;
+                            if (name === 'pre' || name === 'textarea') { const endI = mm ? e + ci + mm[0].length : n; out.push({ k: 'verb', name, v: s.slice(i, endI) }); i = endI; continue; }
+                            out.push({ k: 'tag', name, close: false, v }); out.push({ k: 'rawc', name, v: rest.slice(0, ci) }); i = e + ci; continue;
+                        }
+                        out.push({ k: 'tag', name, close, v }); i = e; continue;
+                    }
+                }
+                let j = i + 1; while (j < n) { j = s.indexOf('<', j); if (j < 0) { j = n; break; } if (/[a-zA-Z/!?]/.test(s[j + 1] || '')) break; j++; }
+                out.push({ k: 'text', v: s.slice(i, j) }); i = j;
+            }
+            return out;
+        }
+        const normTag = (v) => { let r = '', q = '', ws = false; for (const c of v) { if (q) { r += c; if (c === q) q = ''; continue; } if (/\s/.test(c)) { ws = true; continue; } if (ws) { r += ' '; ws = false; } if (c === '"' || c === "'") q = c; r += c; } return r.replace(/ >$/, '>'); };
+        const attr = (tag, name) => { const m = new RegExp('\\s' + name + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s>]+))', 'i').exec(tag); return m ? (m[1] ?? m[2] ?? m[3] ?? '') : null; };
+        const isCondCm = (v) => /^<!--\s*\[if\b/i.test(v) || /^<!--\s*<!\[endif\]/i.test(v) || /^<!\[endif\]/i.test(v);
+        function rawContent(tag, content, fn) {
+            const ty = (attr(tag.v, 'type') || '').toLowerCase().trim();
+            if (tag.name === 'style') return !ty || ty === 'text/css' ? fn.css(content) : content;
+            if (!ty || /^(text|application)\/(x-)?(java|ecma)script$|^module$|^text\/jscript$/.test(ty)) return fn.js(content);
+            if (/json$|^importmap$/.test(ty)) { try { return JSON.stringify(JSON.parse(content)); } catch (e) { return content.trim(); } }
+            return content;
+        }
+        function minifyHTML(src, o = {}) {
+            const keep = o.keep !== false, fn = { css: (c) => minifyCSS(c, { keep }), js: (c) => minifyJS(c, { keep }) };
+            const toks = []; let prevTag = null;
+            for (const t of htmlTokens(src)) {
+                if (t.k === 'cm') { if (keep && isCondCm(t.v)) toks.push(t); continue; }
+                if (t.k === 'text' && toks.length && toks[toks.length - 1].k === 'text') { toks[toks.length - 1] = { k: 'text', v: toks[toks.length - 1].v + t.v }; continue; }
+                if (t.k === 'rawc') { const tg = toks[toks.length - 1]; toks.push({ k: 'rawc', v: rawContent(tg, t.v, fn) }); continue; }
+                toks.push(t);
+            }
+            const isBlk = (t) => !!t && (t.k === 'dt' || t.k === 'cm' || (t.k === 'tag' && BLOCK_EL.has(t.name)) || (t.k === 'verb' && t.name === 'pre'));
+            let res = '';
+            toks.forEach((t, i) => {
+                if (t.k === 'text') {
+                    let x = t.v.replace(/[ \t\r\n\f]+/g, ' ');
+                    if (i === 0 || isBlk(toks[i - 1])) x = x.replace(/^ /, '');
+                    if (i === toks.length - 1 || isBlk(toks[i + 1])) x = x.replace(/ $/, '');
+                    res += x;
+                } else if (t.k === 'tag') res += normTag(t.v);
+                else res += t.v;
+            });
+            return res.trim();
+        }
+        function beautifyHTML(src, o = {}, ind = '  ') {
+            const fnCss = (c) => beautifyCSS(c, ind), fnJs = (c) => beautifyJS(c, ind);
+            const toks = htmlTokens(src), lines = []; let depth = 0, needNl = true, pend = false; const stack = [];
+            let bo = false;
+            const nl = (t) => { lines.push({ d: depth, t }); needNl = false; pend = false; };
+            const inline = (s, space) => { if (needNl || !lines.length) nl(s); else lines[lines.length - 1].t += (space ? ' ' : '') + s; pend = false; };
+            toks.forEach((t, i) => {
+                if (t.k === 'text') {
+                    const x = t.v.replace(/[ \t\r\n\f]+/g, ' '), b = x.trim();
+                    if (!b) { if (x && !bo) pend = true; return; }
+                    inline(b, !bo && (/^ /.test(x) || pend)); pend = / $/.test(x); bo = false; return;
+                }
+                if (t.k !== 'text') bo = false;
+                if (t.k === 'cm' || t.k === 'dt') { nl(t.v.trim()); needNl = true; pend = false; return; }
+                if (t.k === 'verb') { if (t.name === 'pre') { nl(t.v); needNl = true; } else inline(t.v, pend); pend = false; return; }
+                if (t.k === 'rawc') {
+                    const tg = toks[i - 1], c = rawContent(tg, t.v, { css: fnCss, js: fnJs }).replace(/^\s*\n/, '').replace(/\s+$/, '');
+                    if (c.trim()) c.split('\n').forEach(l => lines.push({ d: depth, t: l, raw: true })); return;
+                }
+                const tag = normTag(t.v), blk = BLOCK_EL.has(t.name);
+                if (!t.close) {
+                    if (blk) {
+                        nl(tag); bo = true;
+                        if (VOID_EL.has(t.name) || /\/>$/.test(tag)) needNl = true; else { stack.push({ name: t.name, idx: lines.length - 1 }); depth++; }
+                    } else { inline(tag, pend); if (t.name === 'br') needNl = true; }
+                } else if (blk) {
+                    let k = stack.length - 1; while (k >= 0 && stack[k].name !== t.name) k--;
+                    if (k < 0) { nl(tag); needNl = true; return; }
+                    const top = stack[k]; stack.length = k; depth = Math.max(0, depth - 1);
+                    if (lines.length - 1 === top.idx && !needNl) lines[top.idx].t += tag; else nl(tag);
+                    needNl = true; pend = false;
+                } else inline(tag, pend);
+            });
+            return lines.map(l => (l.raw && !l.t.trim() ? '' : ind.repeat(l.d) + l.t)).join('\n');
+        }
+        // 驗證用：獨立於分詞器的簡易比對
+        function tagSeq(src) {
+            const s = String(src).replace(/<!--[\s\S]*?-->/g, '').replace(/<(script|style|textarea|pre)\b([^>]*)>[\s\S]*?<\/\1\s*>/gi, '<$1$2></$1>');
+            return [...s.matchAll(/<(\/?)([a-zA-Z][^\s/>]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/g)].map(m => (m[1] ? '/' : '') + m[2].toLowerCase() + (m[1] ? '' : '[' + [...m[3].matchAll(/([^\s=\/"'<>]+)(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?/g)].map(a => a[1].toLowerCase()).join(',') + ']'));
+        }
+        const htmlText = (src) => String(src).replace(/<!--[\s\S]*?-->/g, '').replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '').replace(/<[^>]*>/g, '').replace(/\s+/g, '');
+
+        // ===== JSON =====
+        function minifyJSON(src) { return JSON.stringify(JSON.parse(src)); }
+        function beautifyJSON(src, ind = '  ') { return JSON.stringify(JSON.parse(src), null, ind); }
+
+        // ===== 統一入口 =====
+        // 回傳 { out, error }；超過 1MB 不處理
+        function run(lang, mode, src, o = {}) {
+            src = String(src ?? '');
+            if (!LANGS.includes(lang)) return { out: '', error: '未知的語言：' + lang };
+            if (byteLen(src) > MAX_BYTES) return { out: '', error: '內容超過 1MB，請分段處理。' };
+            if (!src.trim()) return { out: '' };
+            try {
+                const min = mode !== 'beautify';
+                const f = { html: min ? minifyHTML : beautifyHTML, css: min ? minifyCSS : beautifyCSS, js: min ? minifyJS : beautifyJS, json: min ? minifyJSON : beautifyJSON }[lang];
+                return { out: min ? f(src, o) : f(src) };
+            } catch (e) { return { out: '', error: lang === 'json' ? 'JSON 格式錯誤：' + e.message : '處理失敗：' + e.message }; }
+        }
+        const compiles = (s) => { try { new Function(s); return true; } catch (e) { return false; } };
+        // 驗證前後是否等價；回傳 { ok, msg }
+        function verify(lang, before, after) {
+            try {
+                if (lang === 'js') {
+                    const cb = compiles(before), ca = compiles(after), same = jsSig(before) === jsSig(after);
+                    const parts = [cb ? '編譯：原始 OK' : '編譯：原始無法編譯（可能是 ES module 或語法錯誤，只比對 token）', ca ? '結果 OK' : '結果無法編譯', same ? 'token 序列一致' : 'token 序列不同'];
+                    return { ok: same && ca === cb, msg: parts.join('；') };
+                }
+                if (lang === 'css') {
+                    const a = cssStats(before), b = cssStats(after), same = a.rules === b.rules && a.selectors === b.selectors && a.decls === b.decls;
+                    return { ok: same, msg: `規則數 ${a.rules}→${b.rules}、選擇器數 ${a.selectors}→${b.selectors}、宣告數 ${a.decls}→${b.decls}` + (same ? '，一致' : '，不一致') };
+                }
+                if (lang === 'html') {
+                    const a = tagSeq(before), b = tagSeq(after), sameTags = a.join('|') === b.join('|'), sameText = htmlText(before) === htmlText(after);
+                    return { ok: sameTags && sameText, msg: `標籤序列 ${a.length}→${b.length} ${sameTags ? '一致' : '不一致'}；文字內容${sameText ? '一致' : '不一致'}` };
+                }
+                const same = JSON.stringify(JSON.parse(before)) === JSON.stringify(JSON.parse(after));
+                return { ok: same, msg: same ? '解析後的內容一致' : '解析後的內容不同' };
+            } catch (e) { return { ok: false, msg: '驗證失敗：' + e.message }; }
+        }
+        // 貼上時猜語言
+        function guessLang(src) {
+            const s = String(src).trim();
+            if (!s) return null;
+            if (/^<(!doctype|html|head|body|div|p|span|a|ul|ol|table|script|style|meta|link|!--)/i.test(s) || /^<[a-z][\w-]*[\s>]/i.test(s)) return 'html';
+            if (/^[{[]/.test(s)) { try { JSON.parse(s); return 'json'; } catch (e) { } }
+            const c = s.replace(/^(\s*\/\*[\s\S]*?\*\/)+/, '').trim();
+            if (/^@(media|import|charset|font-face|keyframes|supports|layer|container|namespace|page)\b/i.test(c) || /^[^{};=]*\{\s*[\w-]+\s*:[^;{}]*[;}]/.test(c)) return 'css';
+            return 'js';
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const SAMPLES = {
+            html: '<!DOCTYPE html>\n<html>\n  <head>\n    <title> 範例 </title>\n    <style>\n      /* 版面 */\n      body { margin : 0 ; }\n    </style>\n  </head>\n  <body>\n    <!-- 主要內容 -->\n    <div class="box">\n      <p>  Hello,   <b>world</b>!  </p>\n      <pre>  保留\n    縮排  </pre>\n    </div>\n    <script>\n      // 問候\n      const hi = (n) => `Hello ${n}`;\n      console.log( hi( "A" ) ) ;\n    <\/script>\n  </body>\n</html>',
+            css: 'a { color : red ; }\n/* 註解 */\n.box > p {\n  margin : 0 auto ;\n  width : calc(100% - 10px) ;\n  background : url( "a b.png" ) ;\n}\n@media (max-width: 600px) { .box { display : none } }',
+            js: '// 加總\nfunction sum( list ) {\n  let total = 0 ;   /* 初始 */\n  for ( const n of list ) {\n    total += n ;\n  }\n  return total ;\n}\nconst re = /a b\\/c/g ;\nconsole.log( `總和 ${ sum( [ 1 , 2 , 3 ] ) }` , re ) ;',
+            json: '{ "name" : "範例",\n  "list" : [ 1 , 2 , 3 ],\n  "nested" : { "ok" : true , "none" : null } }',
+        };
+        let lang = 'js', mode = 'minify', langTouched = false, timer = 0, lastOut = '';
+        function renderBtns() {
+            for (const b of $('#langs').children) b.setAttribute('aria-pressed', b.dataset.v === lang);
+            for (const b of $('#modes').children) b.setAttribute('aria-pressed', b.dataset.v === mode);
+        }
+        function process() {
+            const src = $('#src').value, r = run(lang, mode, src, { keep: $('#keep').checked });
+            $('#err').textContent = r.error || '';
+            $('#dst').value = lastOut = r.out;
+            if (!src.trim() || r.error) { $('#stat').textContent = ''; $('#ver').textContent = ''; $('#ver').className = ''; return; }
+            const a = byteLen(src), b = byteLen(r.out), pc = pctSaved(a, b);
+            $('#stat').textContent = `${a.toLocaleString()} B → ${b.toLocaleString()} B（${pc >= 0 ? '縮小 ' + pc : '增加 ' + (-pc)}%）`;
+            const v = verify(lang, src, r.out);
+            $('#ver').textContent = (v.ok ? '驗證通過：' : '驗證未通過：') + v.msg; $('#ver').className = v.ok ? 'ok' : 'bad';
+        }
+        const later = () => { clearTimeout(timer); timer = setTimeout(process, 250); };
+        $('#langs').replaceChildren(...LANGS.map(v => { const b = document.createElement('button'); b.className = 'sm'; b.dataset.v = v; b.textContent = LANG_NAMES[v]; b.onclick = () => { lang = v; langTouched = true; renderBtns(); process(); }; return b; }));
+        $('#modes').replaceChildren(...[['minify', '壓縮'], ['beautify', '美化']].map(([v, t]) => { const b = document.createElement('button'); b.className = 'sm'; b.dataset.v = v; b.textContent = t; b.onclick = () => { mode = v; renderBtns(); process(); }; return b; }));
+        $('#src').oninput = () => { if (!langTouched) { const g = guessLang($('#src').value); if (g && g !== lang) { lang = g; renderBtns(); } } later(); };
+        $('#keep').onchange = process;
+        $('#sample').onclick = () => { $('#src').value = SAMPLES[lang]; process(); };
+        $('#clear').onclick = () => { $('#src').value = ''; langTouched = false; process(); };
+        $('#swap').onclick = () => { if (!lastOut) return; $('#src').value = lastOut; process(); };
+        $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), $('#dst').value, () => $('#dst').select());
+        $('#dl').onclick = () => { if (!lastOut) return; download(new Blob([lastOut], { type: 'text/plain;charset=utf-8' }), (mode === 'minify' ? 'min.' : 'pretty.') + ({ html: 'html', css: 'css', js: 'js', json: 'json' })[lang]); };
+        renderBtns();
+    </script>
+</body>
+
+</html>
