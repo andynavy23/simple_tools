@@ -11,7 +11,7 @@
 - `index.html`：首頁，只負責導覽；分類與搜尋由卡片自動產生。
 - `game-assist/ mini-games/ fun/ utils/ reading/`：資料夾 = 首頁分類，一個工具一支 HTML，頁面專屬的 CSS / JS 寫在頁面內。
 - `shared/css/theme.css`（5 套風格 × 淺色 / 深色 + 手機基礎樣式）、`shared/css/maple.css`（楓之谷風格）、`shared/js/chrome.js`（套用風格 / 明暗、右上角「？說明」與「🎨外觀」）、`shared/js/util.js`（全域 `Util`）、`shared/js/p2p-room.js`（全域 `P2PRoom`，房主制 PeerJS 連線）。
-- `TOOLS.md`：工具清單（功能、localStorage 鍵、是否連線），**提新點子前先查**；`tests/`：node 測試；`assets/`：素材與首頁分享圖；`temp_*`：暫存檔（已 gitignore）。
+- `TOOLS.md`：工具清單（功能、localStorage 鍵、是否連線），**提新點子前先查**；`IDEAS.md`：尚未實作的點子 / 待改進清單（做完就從裡面刪除，不留已完成項目）；`tests/`：node 測試；`assets/`：素材與首頁分享圖；`temp_*`：暫存檔（已 gitignore）。
 
 ## 共用模組收錄原則
 
@@ -48,19 +48,26 @@
 
 ## 測試
 
+測試是固定腳本，**通過時不該花任何心力或 token**：用安靜的執行器，只有失敗才會印出內容，只針對失敗的那幾項去讀、去修。
+
 ```bash
-node tests/shared.test.js   # 共用模組（記憶體內的假 PeerJS）
-node tests/tools.test.js    # 各工具純邏輯，約 1–1.5 分鐘；順便檢查 TOOLS.md / README / index 與頁面一致
+node tests/run.mjs                    # 共用模組 + 工具單元測試（shared.test.js、tools.test.js，後者已含 solo-* / new-*，約 1 分鐘）
+node tests/run.mjs 頁名片段            # 只跑「內容提到該片段」的單元測試與 e2e，例如 markdown-preview
+node tests/run.mjs --ios [片段]        # iPhone 17 版面稽核（真 WebKit，6 種視窗，約 25 秒，有快取）
+node tests/run.mjs --smoke [片段]      # 全站煙霧測試（Edge 手機視窗：無例外、無 404、無橫向溢出，約 25 秒）
+node tests/run.mjs --e2e               # tests/e2e/ 內所有頁面 e2e
 ```
 
-- **只跑受這次變動影響的測試**：改哪一頁就跑涵蓋那一頁的單元測試與 E2E（`grep -l 頁名 <E2E 資料夾>/e2e_*.mjs`、`node tests/<對應檔>.test.js`），不要每次整套重跑；`tools.test.js`（約 1 分鐘）只在改到它涵蓋的頁面、登錄文件（index / README / TOOLS）或共用檔時才跑；改共用檔（theme.css / chrome.js / util.js / p2p-room.js）才做較大範圍回歸，且只挑受影響的類型。
-- 純邏輯寫在頁面的 `// --- pure ---` 與 `// --- /pure ---` 之間，測試用 `load(file, 'names')` 取出來執行。
-- 單機模式 / 電腦玩家的測試放 `tests/solo-<批次>.test.js`（用 `tests/_load.js` 的 `load`），`tools.test.js` 會自動載入全部 `solo-*.test.js`。
-- 畫面與 P2P 要在真實瀏覽器測（puppeteer-core + Edge，需 `--disable-extensions`，點擊用 DOM `.click()`）；連線工具開多個分頁。
+- **不要把測試輸出整段讀進對話**：用 `node tests/run.mjs …`（通過只有一行）；直接跑 `tools.test.js` 會印幾百行 `ok`。失敗時才看最後幾行，修完只重跑那一個檔。
+- **只跑受這次變動影響的測試**：改哪一頁就跑 `node tests/run.mjs 頁名`；`tools.test.js` 只在改到它涵蓋的頁面、登錄文件（index / README / TOOLS）或共用檔時才跑；改共用檔（theme.css / chrome.js / util.js / p2p-room.js）才做較大範圍回歸，且只挑受影響的類型。
+- 純邏輯寫在頁面的 `// --- pure ---` 與 `// --- /pure ---` 之間，測試用 `load(file, 'names')` 取出來執行（`tests/<批次>.test.js`；單機 / 電腦玩家放 `solo-*.test.js`，新工具放 `new-*.test.js`，`tools.test.js` 會自動載入）。
+- **畫面 / P2P / 下載的測試是 repo 內的固定腳本**，放 `tests/e2e/*.mjs`（不要寫在 repo 以外的暫存資料夾，工作階段結束就消失）。一律用 `tests/e2e/lib.mjs` 的 `launchEdge()`（Edge + puppeteer-core；第一次需在 `tests/e2e` 執行 `npm install`）：它把下載導到暫存資料夾、結束時整個暫存設定檔與 Edge 一併清掉（包含測試中途失敗的情況），**不要自己 `puppeteer.launch`**（會把下載檔丟進使用者的「下載」資料夾、留下殘留視窗）。連線工具開多個分頁，點擊用 DOM `.click()`；腳本結尾要 `await browser.close()`。
+- 新增 / 修改頁面時，把它的畫面行為寫成 `tests/e2e/<頁名>.mjs`（例如 `markdown-layout.mjs` 驗證原文再長也不會撐寬 / 拉長整頁），之後同類問題由腳本擋下，不用再人工看。
+- 截圖等除錯產物放暫存資料夾（系統 temp），用完刪除，不要留在 repo 或「下載」。
 
 ## 新增 / 合併工具
 
 1. 先查 `TOOLS.md`：是既有工具的子集或延伸 → 擴充它（指名要加的分頁），不另開新檔；兩個工具共用同一份資料 / 輸入 → 合併。
-2. 新增：依分類建 `<category>/xxx.html`（含 chrome.js 與 help 模板），並在 `index.html`（複製一張 `<a class="card">`，填 `data-cat` / `data-topic`）、`README.md` 表格、`TOOLS.md`、`tests/tools.test.js` 各補一筆。
+2. 新增：依分類建 `<category>/xxx.html`（含 chrome.js 與 help 模板），並在 `index.html`（複製一張 `<a class="card">`，填 `data-cat` / `data-topic`）、`README.md` 表格、`TOOLS.md`、`tests/tools.test.js` 各補一筆；若點子來自 `IDEAS.md`，做完把該項從 `IDEAS.md` 刪除。
 3. 刪除或改名頁面時，同步改上述四處，並讓舊 localStorage 鍵能被新頁面帶過去。
 4. 提供「每日挑戰」用 `Util.seeded(種子)`；台灣時間用 UTC+8 算術；`Util.rnd(n)` 只支援 n ≤ 2^32。
