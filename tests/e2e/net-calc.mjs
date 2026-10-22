@@ -1,0 +1,46 @@
+// net-calc：各分頁輸出、錯誤提示、手機不橫向溢出
+import assert from 'assert';
+import { launchEdge, openPage } from './lib.mjs';
+const browser = await launchEdge();
+const { page, errors } = await openPage(browser, 'utils/net-calc.html');
+const txt = (sel) => page.$eval(sel, e => e.textContent);
+const type = async (sel, v) => page.evaluate((s, x) => { const e = document.querySelector(s); e.value = x; e.dispatchEvent(new Event('input', { bubbles: true })); }, sel, v);
+const tab = (i) => page.evaluate((n) => document.querySelector(`#tabs button[data-i="${n}"]`).click(), i);
+const overflow = () => page.evaluate(() => document.scrollingElement.scrollWidth - innerWidth);
+
+let t = await txt('#cidrOut');
+assert.ok(t.includes('192.168.1.0/24') && t.includes('254') && t.includes('255.255.255.0') && t.includes('私有'), 'CIDR 預設');
+await type('#inIp', '192.168.1.200'); assert.ok((await txt('#inOut')).includes('在'));
+await type('#inIp', '10.0.0.1'); assert.ok((await txt('#inOut')).includes('不在'));
+await type('#splitP', '26'); assert.ok((await txt('#splitOut')).includes('192.168.1.192/26'));
+await type('#needH', '500'); assert.ok((await txt('#needOut')).includes('/23'));
+await type('#cidr', '2001:db8::/32'); t = await txt('#cidrOut'); assert.ok(t.includes('2001:db8:ffff:ffff:ffff:ffff:ffff:ffff') && t.includes('文件'));
+await type('#splitP', '64'); assert.ok((await txt('#splitOut')).includes('4,294,967,296'));
+await type('#cidr', 'bogus'); assert.ok((await txt('#cidrOut')).includes('格式不正確'));
+assert.ok(await overflow() <= 1, 'CIDR 溢出');
+
+await tab(1); assert.ok(await page.$eval('#p1', e => !e.hidden)); assert.ok((await txt('#v4Out')).includes('0xC0A80101'));
+await type('#v4', '0xC0A80102'); assert.ok((await txt('#v4Out')).includes('192.168.1.2'));
+await type('#v4', '999.1.1.1'); assert.ok((await txt('#v4Out')).includes('格式不正確'));
+assert.ok(await overflow() <= 1, 'v4 溢出');
+await tab(2); await type('#v6', '2001:0db8:0:0:0:0:0:1'); t = await txt('#v6Out'); assert.ok(t.includes('2001:db8::1') && t.includes('ip6.arpa'));
+await type('#v6', 'fe80::1'); assert.ok((await txt('#v6Out')).includes('link-local'));
+assert.ok(await overflow() <= 1, 'v6 溢出');
+await tab(3); t = await txt('#macOut'); assert.ok(t.includes('00-0C-29-4F-8A-01') && t.includes('VMware') && t.includes('單播'));
+await type('#mac', '01:00:5e:00:00:01'); assert.ok((await txt('#macOut')).includes('群播'));
+await type('#mac', '12'); assert.ok((await txt('#macOut')).includes('12 個十六進位'));
+assert.ok(await overflow() <= 1, 'mac 溢出');
+await tab(4); t = await txt('#dlOut'); assert.ok(t.includes('分') && t.includes('Mbps'));
+await type('#dlSize', '100'); await page.select('#dlSu', 'MB'); await type('#dlBw', '8'); await type('#dlEff', '100'); assert.ok((await txt('#dlOut')).includes('1 分 40 秒'), await txt('#dlOut'));
+await type('#dlEff', '0'); assert.ok((await txt('#dlOut')).includes('請輸入'));
+assert.ok(await overflow() <= 1, 'dl 溢出');
+await tab(5); assert.ok((await txt('#slaOut')).includes('8 小時 45 分 36 秒')); assert.ok((await txt('#slaTbl')).includes('99.999%'));
+await type('#slaL', '99.9, 99.9'); assert.ok((await txt('#slaSer')).includes('99.80010%'));
+await type('#slaP', '200'); assert.ok((await txt('#slaOut')).includes('0–100'));
+assert.ok(await overflow() <= 1, 'sla 溢出');
+await tab(6); t = await txt('#capOut'); assert.ok(t.includes('180') && t.includes('600'), t);
+await type('#cQps', '-5'); assert.ok((await txt('#capOut')).includes('0 以上'));
+assert.ok(await overflow() <= 1, 'cap 溢出');
+assert.deepEqual(errors, []);
+await browser.close();
+console.log('net-calc OK');

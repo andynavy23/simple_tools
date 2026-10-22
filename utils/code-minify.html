@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="程式碼壓縮與格式化：HTML、CSS、JavaScript、JSON 的安全壓縮（只去註解與多餘空白）與簡易美化，並自動驗證結果。">
+    <meta name="description" content="程式碼壓縮與格式化：HTML、CSS、JavaScript、JSON 的安全壓縮（只去註解與多餘空白）與簡易美化，另有 SVG 優化預覽與 CSS ⇄ SCSS 巢狀轉換，並自動驗證結果。">
     <meta property="og:title" content="程式碼壓縮與格式化" />
     <meta property="og:description" content="HTML / CSS / JS / JSON 安全壓縮與美化，顯示縮減比例並驗證。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
@@ -28,6 +28,9 @@
         #ver.bad, #err { color: var(--bad); }
         #ver.ok { color: var(--ok); }
         #err { margin: 8px 0 0; }
+        .svgPrev { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+        .svgPrev figure { margin: 0; text-align: center; color: var(--muted); font-size: 13px; }
+        .svgPrev img { width: 100%; height: 150px; object-fit: contain; border-radius: var(--radius-sm); background: repeating-conic-gradient(var(--fill) 0 25%, transparent 0 50%) 0 0 / 16px 16px; }
     </style>
 </head>
 
@@ -35,7 +38,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>程式碼壓縮與格式化</h1>
-        <p class="sub">HTML、CSS、JavaScript、JSON：安全壓縮（只去註解與多餘空白）與簡易美化；全部在本機處理。</p>
+        <p class="sub">HTML、CSS、JavaScript、JSON：安全壓縮（只去註解與多餘空白）與簡易美化；也能優化 SVG、轉換 CSS ⇄ SCSS 巢狀。全部在本機處理。</p>
 
         <div class="card">
             <div class="chips" id="langs" role="group" aria-label="語言"></div>
@@ -50,6 +53,12 @@
                 <button id="sample" class="sm">載入範例</button>
                 <button id="clear" class="sm">清空</button>
             </div>
+        </div>
+
+        <div class="card" id="svgBox" hidden>
+            <div class="row"><label for="svgPrec">小數位數</label><select id="svgPrec"><option>0</option><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select><span class="muted">路徑與座標的數字精度，越少檔案越小、細節越粗</span></div>
+            <div class="svgPrev"><figure><img id="svgA" alt="原始 SVG 預覽"><figcaption>原始</figcaption></figure><figure><img id="svgB" alt="處理後 SVG 預覽"><figcaption>處理後</figcaption></figure></div>
+            <div class="row"><button id="svgUri" class="sm">複製 data URI</button><button id="svgCss" class="sm">複製 CSS background</button></div>
         </div>
 
         <div class="card">
@@ -74,6 +83,8 @@
         <li>要把小小的網頁、樣式或腳本縮小再貼到別處（信件、CMS、書籤腳本）。</li>
         <li>拿到被壓成一行的 CSS / JS，想先排整齊再看。</li>
         <li>想知道一份檔案去掉註解空白後能省多少。</li>
+        <li>設計工具匯出的 SVG 很肥，想去掉多餘資訊並預覽、轉成 data URI 放進 CSS。</li>
+        <li>要把巢狀的 SCSS 攤成純 CSS，或把平的 CSS 整理成巢狀寫法。</li>
         </ul>
         <h3>怎麼用</h3>
         <ol>
@@ -81,6 +92,8 @@
         <li>把程式碼貼進「輸入」，結果即時出現在「結果」，並顯示「壓縮前後大小與百分比」。</li>
         <li>下方「驗證」會自動檢查結果有沒有被改壞（見下方說明）。</li>
         <li>按「複製結果」或「下載」；「結果放回輸入」可以接著做下一步（例如壓縮後再美化）。</li>
+        <li>SVG：選「SVG」，貼上程式碼，下方會並排預覽「原始 / 處理後」；「優化」會移除註解、metadata、編輯器專用屬性、預設值與沒用到的 id，並把路徑數字四捨五入到「小數位數」；可複製 data URI 或 CSS background。</li>
+        <li>CSS ⇄ SCSS：選「CSS ⇄ SCSS」，「展平」把巢狀規則攤開（&amp; 換成父選擇器，@media 往外冒泡），「巢狀化」把連續、開頭相同的規則收成巢狀。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">CSS 輸入：
@@ -99,6 +112,8 @@ a{color:red}.box>p{margin:0 auto;width:calc(100% - 10px)}
         <li><b>JSON</b>：會先解析再輸出，格式錯誤會指出位置；超過 15 位的整數會失去精度，重複的鍵只保留最後一個。</li>
         <li><b>美化</b>是簡易版：CSS、HTML 以縮排為主，JS 是 token 層級（換行、大括號、分號）的縮排，不是完整 parser，複雜寫法排出來可能不好看，但不會改變程式內容。</li>
         <li><b>驗證</b>：JS 用瀏覽器 <code>new Function</code> 檢查壓縮前後都能編譯（ES module 的 import / export 無法編譯，會改只比對 token）並比對 token 序列；CSS 比對規則數、選擇器數與宣告數；HTML 比對標籤與屬性序列和文字內容；JSON 比對解析後的內容。</li>
+        <li><b>SVG 優化</b>：預覽用 <code>&lt;img&gt;</code> 載入 data URI，SVG 裡的腳本不會執行、也不會載入外部資源，內容也不會被插進頁面。圖形不改寫：只移除多餘內容、壓縮路徑（弧線的旗標會正確處理）與數字、縮短色碼；預設值屬性只在整份文件都沒有其他設定、也沒有 style / script 時才移除。小數位數太少會讓細節變粗，請看預覽。保留 title / desc（無障礙用）。驗證只比對繪圖元素數量。</li>
+        <li><b>CSS ⇄ SCSS</b> 只處理巢狀規則與 &amp; 選擇器（含 &amp;-suffix、&amp;:hover、@media 冒泡）。變數（$x）、mixin、@include、@if / @each、函式與運算<b>不會被計算</b>，只原樣保留；<code>//</code> 行註解在轉成 CSS 時會被移除。巢狀化只收連續的規則、不改變規則先後順序，逗號選擇器與 @keyframes 不處理。驗證比對所有宣告的內容與數量。</li>
         <li>單檔上限 1MB；不會儲存或上傳你貼的內容。</li>
         </ul>
     </template>
@@ -109,8 +124,8 @@ a{color:red}.box>p{margin:0 auto;width:calc(100% - 10px)}
 
         // --- pure ---
         const MAX_BYTES = 1048576;
-        const LANGS = ['html', 'css', 'js', 'json'];
-        const LANG_NAMES = { html: 'HTML', css: 'CSS', js: 'JavaScript', json: 'JSON' };
+        const LANGS = ['html', 'css', 'js', 'json', 'svg', 'scss'];
+        const LANG_NAMES = { html: 'HTML', css: 'CSS', js: 'JavaScript', json: 'JSON', svg: 'SVG', scss: 'CSS ⇄ SCSS' };
         const byteLen = (s) => new TextEncoder().encode(String(s)).length;
         const pctSaved = (a, b) => (a ? Math.round((1 - b / a) * 1000) / 10 : 0);
 
@@ -471,6 +486,8 @@ a{color:red}.box>p{margin:0 auto;width:calc(100% - 10px)}
             if (byteLen(src) > MAX_BYTES) return { out: '', error: '內容超過 1MB，請分段處理。' };
             if (!src.trim()) return { out: '' };
             try {
+                if (lang === 'svg') return { out: mode === 'beautify' ? beautifySvg(src) : optimizeSvg(src, o) };
+                if (lang === 'scss') return { out: mode === 'nest' ? cssToScss(src) : scssToCss(src) };
                 const min = mode !== 'beautify';
                 const f = { html: min ? minifyHTML : beautifyHTML, css: min ? minifyCSS : beautifyCSS, js: min ? minifyJS : beautifyJS, json: min ? minifyJSON : beautifyJSON }[lang];
                 return { out: min ? f(src, o) : f(src) };
@@ -480,6 +497,8 @@ a{color:red}.box>p{margin:0 auto;width:calc(100% - 10px)}
         // 驗證前後是否等價；回傳 { ok, msg }
         function verify(lang, before, after) {
             try {
+                if (lang === 'svg') { const a = svgShapes(before), b = svgShapes(after); return { ok: a === b, msg: `繪圖元素數 ${a}→${b}` + (a === b ? '，一致' : '，不一致') }; }
+                if (lang === 'scss') { const a = declBag(before), b = declBag(after), same = a.join('\n') === b.join('\n'); return { ok: same, msg: `宣告數 ${a.length}→${b.length}，` + (same ? '宣告內容一致' : '宣告內容不一致') }; }
                 if (lang === 'js') {
                     const cb = compiles(before), ca = compiles(after), same = jsSig(before) === jsSig(after);
                     const parts = [cb ? '編譯：原始 OK' : '編譯：原始無法編譯（可能是 ES module 或語法錯誤，只比對 token）', ca ? '結果 OK' : '結果無法編譯', same ? 'token 序列一致' : 'token 序列不同'];
@@ -501,12 +520,209 @@ a{color:red}.box>p{margin:0 auto;width:calc(100% - 10px)}
         function guessLang(src) {
             const s = String(src).trim();
             if (!s) return null;
+            if (/^(<\?xml[^>]*>\s*|<!--[\s\S]*?-->\s*|<!DOCTYPE[^>]*>\s*)*<svg[\s>]/i.test(s)) return 'svg';
             if (/^<(!doctype|html|head|body|div|p|span|a|ul|ol|table|script|style|meta|link|!--)/i.test(s) || /^<[a-z][\w-]*[\s>]/i.test(s)) return 'html';
             if (/^[{[]/.test(s)) { try { JSON.parse(s); return 'json'; } catch (e) { } }
             const c = s.replace(/^(\s*\/\*[\s\S]*?\*\/)+/, '').trim();
+            if (/(^|[\s;{])&[\w:.\-\[]/.test(c) || /^\s*\$[\w-]+\s*:/m.test(c) || /^\s*@(mixin|include)\b/m.test(c)) return 'scss';
             if (/^@(media|import|charset|font-face|keyframes|supports|layer|container|namespace|page)\b/i.test(c) || /^[^{};=]*\{\s*[\w-]+\s*:[^;{}]*[;}]/.test(c)) return 'css';
             return 'js';
         }
+
+        // ===== SVG 優化（不改圖形，只去掉多餘內容與壓縮數字）=====
+        const SVG_DEF_ATTR = { 'fill-rule': 'nonzero', 'clip-rule': 'nonzero', 'fill-opacity': '1', 'stroke-opacity': '1', opacity: '1', 'stroke-width': '1', 'stroke-linecap': 'butt', 'stroke-linejoin': 'miter', 'stroke-miterlimit': '4', 'stroke-dasharray': 'none', 'stroke-dashoffset': '0', display: 'inline', visibility: 'visible', version: '1.1' };
+        const SVG_NUM_ATTR = new Set(['x', 'y', 'cx', 'cy', 'r', 'rx', 'ry', 'x1', 'y1', 'x2', 'y2', 'points', 'transform', 'stroke-width', 'opacity', 'fill-opacity', 'stroke-opacity', 'offset']);
+        const SVG_COLOR_ATTR = new Set(['fill', 'stroke', 'stop-color', 'color', 'flood-color']);
+        const SVG_NUM_RE = /[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g;
+        const svgFmt = (s, p) => {
+            let v = Number(s); if (!Number.isFinite(v)) return s;
+            v = Number(v.toFixed(p)); let t = String(v);
+            if (v !== 0 && Math.abs(v) < 1) t = t.replace(/^(-?)0\./, '$1.');
+            return t === '-0' ? '0' : t;
+        };
+        // 路徑資料：逐命令解析（弧線的兩個旗標是單一字元，不能當一般數字處理），四捨五入後用最短分隔重組；解析不了回傳 null
+        function svgPath(d, p) {
+            const SIG = { m: 2, l: 2, h: 1, v: 1, c: 6, s: 4, q: 4, t: 2, a: 7, z: 0 }, n = d.length;
+            const numRe = /[\s,]*([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)/y, flagRe = /[\s,]*([01])/y;
+            let i = 0, out = '', prev = '';
+            const skip = () => { while (i < n && /[\s,]/.test(d[i])) i++; };
+            for (; ;) {
+                skip(); if (i >= n) break;
+                const c = d[i], k = SIG[c.toLowerCase()]; if (k === undefined) return null;
+                i++; out += c; prev = '';
+                if (k === 0) continue;
+                for (let first = true; ; first = false) {
+                    skip();
+                    if (i >= n || /[a-zA-Z]/.test(d[i])) { if (first) return null; break; }
+                    for (let a = 0; a < k; a++) {
+                        const flag = k === 7 && (a === 3 || a === 4), re = flag ? flagRe : numRe; re.lastIndex = i;
+                        const m = re.exec(d); if (!m) return null; i = re.lastIndex;
+                        const t = flag ? m[1] : svgFmt(m[1], p);
+                        out += (!prev || t[0] === '-' || (prev.includes('.') && t[0] === '.' && !flag) ? '' : ' ') + t; prev = t;
+                    }
+                }
+            }
+            return out;
+        }
+        const svgHex = (v) => String(v).replace(/^#([0-9a-f])\1([0-9a-f])\2([0-9a-f])\3$/i, '#$1$2$3');
+        const svgNums = (s, p) => s.replace(SVG_NUM_RE, (m) => svgFmt(m, p));
+        // o.precision：小數位數（0–6，預設 3）；o.keep：保留 <!--! 開頭的授權註解
+        function optimizeSvg(src, o = {}) {
+            const p = Math.min(6, Math.max(0, Number.isFinite(+o.precision) ? Math.round(+o.precision) : 3));
+            let s = String(src).replace(/<\?[\s\S]*?\?>/g, '').replace(/<!DOCTYPE[^>]*(?:\[[\s\S]*?\])?\s*>/gi, '')
+                .replace(/<!--[\s\S]*?-->/g, (c) => (o.keep !== false && c.startsWith('<!--!') ? c : ''))
+                .replace(/<metadata\b[\s\S]*?<\/metadata\s*>/gi, '').replace(/<(sodipodi|inkscape|rdf|cc|dc):[\w-]+\b[^>]*\/>/gi, '').replace(/<(sodipodi|inkscape|rdf|cc|dc):([\w-]+)\b[^>]*>[\s\S]*?<\/\1:\2\s*>/gi, '');
+            const hasText = /<text\b/i.test(s), hasCode = /<(style|script)\b/i.test(s), xlink = /\sxlink:/.test(s.replace(/\sxmlns:xlink=/g, ''));
+            // 預設值的屬性大多會繼承：只有整份文件都沒有「非預設值」的同名設定（也沒有 style / script）才能安全移除
+            const isDef = (k, v) => v.trim() === SVG_DEF_ATTR[k] || (/^[-+]?[\d.]+$/.test(v.trim()) && +v === +SVG_DEF_ATTR[k]);
+            const defOk = {};
+            for (const k of Object.keys(SVG_DEF_ATTR)) { defOk[k] = !hasCode; for (const m of s.matchAll(new RegExp('[\\s;"\']' + k + '\\s*[=:]\\s*["\']?([^"\';}]*)', 'g'))) if (!isDef(k, m[1])) defOk[k] = false; }
+            const used = (id) => new RegExp('#' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\w-])').test(s);
+            s = s.replace(/<([a-zA-Z][\w:.-]*)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/g, (all, name, rest, close) => {
+                const lname = name.toLowerCase(), attrs = [];
+                for (const m of rest.matchAll(/([^\s=\/>"']+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'))?/g)) {
+                    const k = m[1], lk = k.toLowerCase(); let v = m[2] ?? m[3], q = m[3] !== undefined ? "'" : '"';
+                    if (v === undefined) { attrs.push(k); continue; }
+                    if (/^(inkscape|sodipodi|sketch|serif):/i.test(k) || /^xmlns:(inkscape|sodipodi|dc|cc|rdf|sketch|serif|svg)$/i.test(k) || lk === 'data-name' || lk === 'enable-background' || lk === 'baseprofile') continue;
+                    if (lk === 'xmlns:xlink' && !xlink) continue;
+                    if (lk === 'xml:space' && !hasText) continue;
+                    if (defOk[lk] && isDef(lk, v)) continue;
+                    if ((lk === 'x' || lk === 'y') && /^(svg|rect|image|use)$/.test(lname) && /^0(\.0*)?(px)?$/.test(v.trim())) continue;
+                    if (lk === 'id' && !hasCode && !used(v)) continue;
+                    if (lk === 'style' && !v.trim()) continue;
+                    if (lk === 'd' && lname === 'path') { const r = svgPath(v, p); if (r !== null) v = r; }
+                    else if (SVG_NUM_ATTR.has(lk) && !(lk === 'transform' && /[a-z]/i.test(v.replace(/(?:translate|scale|rotate|skewX|skewY|matrix)/g, '')))) v = lk === 'points' || lk === 'transform' ? svgNums(v, p).trim() : /^\s*[-+]?[\d.]+(?:e[-+]?\d+)?\s*$/i.test(v) ? svgFmt(v.trim(), p) : v;
+                    else if (SVG_COLOR_ATTR.has(lk)) v = svgHex(v.trim());
+                    if (v.includes('"') && q === '"') q = "'";
+                    attrs.push(k + '=' + q + v + q);
+                }
+                return '<' + name + (attrs.length ? ' ' + attrs.join(' ') : '') + close + '>';
+            });
+            s = s.replace(hasText ? />[ \t]*\r?\n\s*</g : />\s+</g, '><');
+            for (let prev = ''; prev !== s;) { prev = s; s = s.replace(/<(g|defs)(?:\s+id="[^"]*")?\s*(?:\/>|><\/\1>)/g, '').replace(/<(g|defs)\s*><\/\1>/g, ''); }
+            return s.trim();
+        }
+        // 美化：一個標籤一行、依層級縮排；只含文字的元素（<text>、<title>）維持一行；不改任何內容
+        function beautifySvg(src, ind = '  ') {
+            const toks = String(src).match(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<(?:[^>"']|"[^"]*"|'[^']*')*>|[^<]+/g) || [], lines = []; let d = 0;
+            const close = (t) => t && /^<\//.test(t);
+            for (let i = 0; i < toks.length; i++) {
+                const t = toks[i];
+                if (t[0] !== '<') { if (t.trim()) lines.push(ind.repeat(d) + t.trim()); continue; }
+                if (close(t)) { d = Math.max(0, d - 1); lines.push(ind.repeat(d) + t); continue; }
+                if (/^<[!?]/.test(t) || /\/>$/.test(t)) { lines.push(ind.repeat(d) + t); continue; }
+                const n1 = toks[i + 1], n2 = toks[i + 2];
+                if (close(n1)) { lines.push(ind.repeat(d) + t + n1); i += 1; continue; }
+                if (n1 && n1[0] !== '<' && close(n2)) { lines.push(ind.repeat(d) + t + n1.trim() + n2); i += 2; continue; }
+                lines.push(ind.repeat(d) + t); d++;
+            }
+            return lines.join('\n');
+        }
+        // 繪圖元素數量（驗證用：優化前後必須一樣）
+        const svgShapes = (src) => (String(src).replace(/<!--[\s\S]*?-->/g, '').match(/<(path|rect|circle|ellipse|line|polyline|polygon|text|use|image|tspan)\b/gi) || []).length;
+        // 轉成可放進 <img src> / CSS url() 的 data URI（百分比編碼，比 base64 小）；沒有 xmlns 會補上
+        function svgDataUri(svg) {
+            let t = String(svg).trim(); if (!/<svg\b[^>]*\sxmlns\s*=/i.test(t)) t = t.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+            return 'data:image/svg+xml,' + encodeURIComponent(t).replace(/%20/g, ' ').replace(/%3D/g, '=').replace(/%3A/g, ':').replace(/%2F/g, '/').replace(/%2C/g, ',');
+        }
+
+        // ===== CSS ⇄ SCSS 巢狀 =====
+        // 只處理「巢狀規則」與 & 選擇器（含 @media 等條件式 at-rule 的冒泡）；變數、mixin、@include、@if 運算、插值運算不會被計算，只原樣保留
+        const SCSS_BUBBLE = /^@(media|supports|layer|container|document|scope|starting-style)\b/i;
+        const SCSS_RAW_AT = /^@(-[a-z]+-)?(keyframes|font-face|page|property|counter-style|font-feature-values|viewport)\b/i;
+        // 在最外層（括號、引號之外）以 sep 切開並去頭尾空白
+        function splitTop(str, sep = ',') {
+            const out = []; let cur = '', d = 0, q = '';
+            for (const c of String(str)) {
+                if (q) { cur += c; if (c === q) q = ''; continue; }
+                if (c === '"' || c === "'") { q = c; cur += c; continue; }
+                if (c === '(' || c === '[') d++; else if (c === ')' || c === ']') d = Math.max(0, d - 1);
+                if (c === sep && d === 0) { out.push(cur.trim()); cur = ''; } else cur += c;
+            }
+            out.push(cur.trim()); return out.filter(Boolean);
+        }
+        // 解析成節點樹：{type:'rule',sel,body} / {type:'at',head,body} / {type:'decl',text} / {type:'atstmt',text} / {type:'comment',text}；// 行註解會被丟掉
+        function parseNested(src) {
+            const toks = cssTokens(src); let i = 0, depth = 0;
+            for (const t of toks) if (t.k === 'c') { if (t.v === '{') depth++; else if (t.v === '}' && --depth < 0) throw new Error('有多餘的 }'); }
+            if (depth !== 0) throw new Error('大括號 { } 沒有成對');
+            const stmt = (t) => (t[0] === '@' ? { type: 'atstmt', text: t } : { type: 'decl', text: t.replace(/^([^:]+?)\s*:\s*/, '$1: ') });
+            function block() {
+                const nodes = []; let buf = '', pd = 0;
+                const flush = () => { const t = buf.trim(); buf = ''; return t; };
+                while (i < toks.length) {
+                    const t = toks[i++];
+                    if (t.k === 'ws') { buf += ' '; continue; }
+                    if (t.k === 'cm') { if (!buf.trim()) nodes.push({ type: 'comment', text: t.v }); continue; }
+                    if (t.k === 'c') {
+                        const v = t.v;
+                        if (v === '/' && toks[i] && toks[i].k === 'c' && toks[i].v === '/') { while (i < toks.length && !(toks[i].k === 'ws' && toks[i].v.includes('\n'))) i++; continue; }
+                        if (v === '{' && buf.endsWith('#')) { let d = 1; buf += '{'; while (i < toks.length && d) { const x = toks[i++]; if (x.v === '{') d++; else if (x.v === '}') d--; buf += x.v; } continue; }   // #{...} 插值：原樣保留
+                        if (v === '(') pd++; else if (v === ')') pd = Math.max(0, pd - 1);
+                        if (pd === 0 && v === '{') { const head = flush(), body = block(); nodes.push(head[0] === '@' ? { type: 'at', head, body } : { type: 'rule', sel: head, body }); continue; }
+                        if (pd === 0 && v === '}') { const d = flush(); if (d) nodes.push(stmt(d)); return nodes; }
+                        if (pd === 0 && v === ';') { const d = flush(); if (d) nodes.push(stmt(d)); continue; }
+                    }
+                    buf += t.v;
+                }
+                const d = flush(); if (d) nodes.push(stmt(d)); return nodes;
+            }
+            return block();
+        }
+        function printNodes(nodes, lvl = 0) {
+            const ind = '  '.repeat(lvl), isBlock = (n) => n.type === 'rule' || n.type === 'at';
+            return nodes.map((n, k) => {
+                let s;
+                if (n.type === 'decl' || n.type === 'atstmt') s = ind + n.text + ';';
+                else if (n.type === 'comment') s = ind + n.text;
+                else s = ind + (n.type === 'rule' ? splitTop(n.sel).join(',\n' + ind) : n.head) + (n.body.length ? ' {\n' + printNodes(n.body, lvl + 1) + '\n' + ind + '}' : ' {}');
+                return (k && lvl === 0 && (isBlock(n) || isBlock(nodes[k - 1])) ? '\n' : '') + s;
+            }).join('\n');
+        }
+        // 展平：把巢狀規則攤成一層，& 換成父選擇器，條件式 at-rule 往外冒泡
+        function flattenNodes(nodes, sels) {
+            const isKid = (n) => n.type === 'rule' || (n.type === 'at' && SCSS_BUBBLE.test(n.head));
+            const expand = (n) => {
+                if (n.type === 'rule') return flattenNodes(n.body, sels ? sels.flatMap(p => splitTop(n.sel).map(c => (c.includes('&') ? c.replace(/&/g, p) : p + ' ' + c))) : splitTop(n.sel));
+                const inner = flattenNodes(n.body, sels); return inner.length ? [{ type: 'at', head: n.head, body: inner }] : [];
+            };
+            if (!sels) return nodes.flatMap(n => (isKid(n) ? expand(n) : [n]));      // 最上層：依原本順序；宣告、@import、mixin 等原樣
+            const own = nodes.filter(n => !isKid(n));                                // 規則內的宣告、@include、@extend、註解：提到規則本體
+            return [...(own.length ? [{ type: 'rule', sel: sels.join(', '), body: own }] : []), ...nodes.filter(isKid).flatMap(expand)];
+        }
+        function scssToCss(src) { return printNodes(flattenNodes(parseNested(src), null)); }
+        // 反向：把「連續、開頭相同」的規則收成巢狀（& 用在 :hover、::before 等），只收連續的規則，所以不會改變規則的先後順序
+        function selHead(sel) {
+            if (/^[&>+~@]/.test(sel) || splitTop(sel).length !== 1) return null;
+            let d = 0, q = '', e = sel.length;
+            for (let i = 0; i < sel.length; i++) { const c = sel[i]; if (q) { if (c === q) q = ''; continue; } if (c === '"' || c === "'") q = c; else if (c === '(' || c === '[') d++; else if (c === ')' || c === ']') d--; else if (d === 0 && /[\s>+~]/.test(c)) { e = i; break; } }
+            const comp = sel.slice(0, e), rest = sel.slice(e).trim(); let ci = -1; d = 0;
+            for (let i = 0; i < comp.length; i++) { const c = comp[i]; if (c === '(' || c === '[') d++; else if (c === ')' || c === ']') d--; else if (d === 0 && c === ':') { ci = i; break; } }
+            return ci > 0 ? { base: comp.slice(0, ci), suffix: comp.slice(ci), rest } : { base: comp, suffix: '', rest };
+        }
+        function nestNodes(nodes) {
+            const out = []; let g = null;
+            const close = () => { if (!g) return; if (g.items.length < 2) out.push(...g.items.map(x => x.n)); else out.push({ type: 'rule', sel: g.key, body: nestNodes(g.body) }); g = null; };
+            for (const n of nodes) {
+                const flat = n.type === 'rule' && n.body.every(b => b.type === 'decl'), h = flat ? selHead(n.sel) : null;
+                if (!h || !h.base) {
+                    close();
+                    out.push(n.type === 'rule' ? { ...n, body: nestNodes(n.body) } : n.type === 'at' && SCSS_BUBBLE.test(n.head) ? { ...n, body: nestNodes(n.body) } : n);
+                    continue;
+                }
+                const exact = !h.suffix && !h.rest;
+                if (g && (g.key !== h.base || (exact && g.child))) close();
+                if (!g) g = { key: h.base, items: [], body: [], child: false };
+                g.items.push({ n });
+                if (exact) g.body.push(...n.body);
+                else { g.child = true; g.body.push({ type: 'rule', sel: (h.suffix ? '&' + h.suffix : '') + (h.suffix && h.rest ? ' ' : '') + h.rest, body: n.body }); }
+            }
+            close();
+            return out;
+        }
+        function cssToScss(src) { return printNodes(nestNodes(parseNested(src))); }
+        // 驗證用：所有宣告文字排序後比對（展平 / 巢狀化都不該增減或改寫宣告）
+        function declBag(src) { const o = []; (function w(ns) { for (const n of ns) { if (n.type === 'decl' || n.type === 'atstmt') o.push(n.text); else if (n.body) w(n.body); } })(parseNested(src)); return o.sort(); }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -514,17 +730,26 @@ a{color:red}.box>p{margin:0 auto;width:calc(100% - 10px)}
             html: '<!DOCTYPE html>\n<html>\n  <head>\n    <title> 範例 </title>\n    <style>\n      /* 版面 */\n      body { margin : 0 ; }\n    </style>\n  </head>\n  <body>\n    <!-- 主要內容 -->\n    <div class="box">\n      <p>  Hello,   <b>world</b>!  </p>\n      <pre>  保留\n    縮排  </pre>\n    </div>\n    <script>\n      // 問候\n      const hi = (n) => `Hello ${n}`;\n      console.log( hi( "A" ) ) ;\n    <\/script>\n  </body>\n</html>',
             css: 'a { color : red ; }\n/* 註解 */\n.box > p {\n  margin : 0 auto ;\n  width : calc(100% - 10px) ;\n  background : url( "a b.png" ) ;\n}\n@media (max-width: 600px) { .box { display : none } }',
             js: '// 加總\nfunction sum( list ) {\n  let total = 0 ;   /* 初始 */\n  for ( const n of list ) {\n    total += n ;\n  }\n  return total ;\n}\nconst re = /a b\\/c/g ;\nconsole.log( `總和 ${ sum( [ 1 , 2 , 3 ] ) }` , re ) ;',
+            svg: '<?xml version="1.0" encoding="UTF-8"?>\n<!-- Generator: Editor -->\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" width="48" height="48" viewBox="0 0 48 48" version="1.1" id="svg1">\n  <metadata><rdf:RDF></rdf:RDF></metadata>\n  <g id="layer1" fill-rule="nonzero">\n    <circle id="c1" cx="24.000000" cy="24.000000" r="20.123456" fill="#ffcc00" stroke="#000000" stroke-width="2.50000"/>\n    <path d="M 14.000000 28.000000 Q 24.000000 40.123456 34.000000 28.000000" fill="none" stroke="#000000" stroke-width="2"/>\n  </g>\n</svg>',
+            scss: '// 導覽列\n.nav {\n  color: red;\n  ul { margin: 0; li { display: inline; &:hover { color: blue; } } }\n  &-item { padding: 4px; }\n  @media (min-width: 600px) { color: green; }\n}',
             json: '{ "name" : "範例",\n  "list" : [ 1 , 2 , 3 ],\n  "nested" : { "ok" : true , "none" : null } }',
         };
         let lang = 'js', mode = 'minify', langTouched = false, timer = 0, lastOut = '';
+        // 動作按鈕依語言不同：SVG 是「優化 / 美化」，CSS ⇄ SCSS 是「展平 / 巢狀化」
+        const MODES = { svg: [['minify', '優化'], ['beautify', '美化']], scss: [['flatten', '展平（SCSS → CSS）'], ['nest', '巢狀化（CSS → SCSS）']] }, DEF_MODES = [['minify', '壓縮'], ['beautify', '美化']];
         function renderBtns() {
             for (const b of $('#langs').children) b.setAttribute('aria-pressed', b.dataset.v === lang);
-            for (const b of $('#modes').children) b.setAttribute('aria-pressed', b.dataset.v === mode);
+            const ms = MODES[lang] || DEF_MODES; if (!ms.some(m => m[0] === mode)) mode = ms[0][0];
+            $('#modes').replaceChildren(...ms.map(([v, t]) => { const b = document.createElement('button'); b.className = 'sm'; b.dataset.v = v; b.textContent = t; b.setAttribute('aria-pressed', v === mode); b.onclick = () => { mode = v; renderBtns(); process(); }; return b; }));
+        }
+        function svgPreview(src, out) {
+            $('#svgBox').hidden = lang !== 'svg'; if (lang !== 'svg') return;
+            $('#svgA').src = src.trim() ? svgDataUri(src) : ''; $('#svgB').src = out ? svgDataUri(out) : '';
         }
         function process() {
-            const src = $('#src').value, r = run(lang, mode, src, { keep: $('#keep').checked });
-            $('#err').textContent = r.error || '';
-            $('#dst').value = lastOut = r.out;
+            const src = $('#src').value, r = run(lang, mode, src, { keep: $('#keep').checked, precision: +$('#svgPrec').value });
+            $('#err').textContent = r.error || (lang === 'svg' && src.trim() && new DOMParser().parseFromString(src, 'image/svg+xml').querySelector('parsererror') ? '輸入不是格式正確的 SVG（XML 有誤），結果可能不完整。' : '');
+            $('#dst').value = lastOut = r.out; svgPreview(src, r.out);
             if (!src.trim() || r.error) { $('#stat').textContent = ''; $('#ver').textContent = ''; $('#ver').className = ''; return; }
             const a = byteLen(src), b = byteLen(r.out), pc = pctSaved(a, b);
             $('#stat').textContent = `${a.toLocaleString()} B → ${b.toLocaleString()} B（${pc >= 0 ? '縮小 ' + pc : '增加 ' + (-pc)}%）`;
@@ -533,14 +758,15 @@ a{color:red}.box>p{margin:0 auto;width:calc(100% - 10px)}
         }
         const later = () => { clearTimeout(timer); timer = setTimeout(process, 250); };
         $('#langs').replaceChildren(...LANGS.map(v => { const b = document.createElement('button'); b.className = 'sm'; b.dataset.v = v; b.textContent = LANG_NAMES[v]; b.onclick = () => { lang = v; langTouched = true; renderBtns(); process(); }; return b; }));
-        $('#modes').replaceChildren(...[['minify', '壓縮'], ['beautify', '美化']].map(([v, t]) => { const b = document.createElement('button'); b.className = 'sm'; b.dataset.v = v; b.textContent = t; b.onclick = () => { mode = v; renderBtns(); process(); }; return b; }));
         $('#src').oninput = () => { if (!langTouched) { const g = guessLang($('#src').value); if (g && g !== lang) { lang = g; renderBtns(); } } later(); };
-        $('#keep').onchange = process;
+        $('#keep').onchange = $('#svgPrec').onchange = process;
+        $('#svgUri').onclick = () => { if (lastOut && lang === 'svg') Util.copyWithFeedback($('#svgUri'), svgDataUri(lastOut), () => { }); };
+        $('#svgCss').onclick = () => { if (lastOut && lang === 'svg') Util.copyWithFeedback($('#svgCss'), 'background-image: url("' + svgDataUri(lastOut) + '");', () => { }); };
         $('#sample').onclick = () => { $('#src').value = SAMPLES[lang]; process(); };
         $('#clear').onclick = () => { $('#src').value = ''; langTouched = false; process(); };
         $('#swap').onclick = () => { if (!lastOut) return; $('#src').value = lastOut; process(); };
         $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), $('#dst').value, () => $('#dst').select());
-        $('#dl').onclick = () => { if (!lastOut) return; download(new Blob([lastOut], { type: 'text/plain;charset=utf-8' }), (mode === 'minify' ? 'min.' : 'pretty.') + ({ html: 'html', css: 'css', js: 'js', json: 'json' })[lang]); };
+        $('#dl').onclick = () => { if (!lastOut) return; download(new Blob([lastOut], { type: lang === 'svg' ? 'image/svg+xml' : 'text/plain;charset=utf-8' }), lang === 'scss' ? (mode === 'nest' ? 'nested.scss' : 'flat.css') : (mode === 'minify' ? 'min.' : 'pretty.') + ({ html: 'html', css: 'css', js: 'js', json: 'json', svg: 'svg' })[lang]); };
         renderBtns();
     </script>
 </body>

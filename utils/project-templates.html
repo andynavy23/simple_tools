@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="專案樣板產生器：.gitignore、開源授權 LICENSE、README 與徽章、.editorconfig、package.json、tsconfig、ESLint / Prettier、Dependabot / Renovate、GitHub Actions workflow，表單勾選即產生，全部在瀏覽器計算。">
+    <meta property="og:title" content="專案樣板產生器" />
+    <meta property="og:description" content="新專案常用設定檔一頁產生：gitignore、授權、README、tsconfig、CI workflow…" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/project-templates.html" />
+    <meta name="st-keys" content="projt_opts">
+    <title>專案樣板產生器</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 720px;
+        }
+
+        label.f {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            margin: 10px 0 4px;
+        }
+
+        .fld input[type=text],
+        .fld input:not([type]),
+        .fld select {
+            width: 100%;
+        }
+
+        label.chk {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 44px;
+        }
+
+        .cmd {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin: 8px 0 2px;
+        }
+
+        .code {
+            flex: 1;
+            min-width: 0;
+            max-height: 55vh;
+            max-height: 55dvh;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 13px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            overflow: auto;
+            white-space: pre;
+        }
+
+        .bad {
+            color: var(--bad);
+            font-weight: 700;
+        }
+
+        .flags li {
+            margin: 4px 0;
+            font-size: 14px;
+        }
+
+        .flags code {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            background: var(--fill);
+            border-radius: 4px;
+            padding: 1px 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>專案樣板產生器</h1>
+        <p class="sub">新專案常用的設定檔，勾一勾就產生。</p>
+
+        <div class="card">
+            <label class="f" for="pType" style="margin-top:0">要產生哪一個檔案</label>
+            <select id="pType" style="width:100%"></select>
+            <div class="fld" id="pFields"></div>
+        </div>
+        <div class="card">
+            <h2>產生結果</h2>
+            <p class="note" id="pFile"></p>
+            <div class="cmd"><div class="code" id="pOut"></div><button class="sm" id="pCopy">複製</button></div>
+            <p class="note" id="pErr"></p>
+            <ul class="flags" id="pNotes"></ul>
+        </div>
+        <p class="note"><button class="sm" id="pReset">重置選項</button>　只記住上次的選擇，內容不會上傳。</p>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>新專案常用設定檔的產生器：<b>.gitignore</b>、<b>LICENSE</b>（含問答導引）、<b>README 與 shields 徽章</b>、<b>.editorconfig</b>、<b>package.json</b>、<b>tsconfig.json</b>、<b>ESLint</b>、<b>Prettier</b>、<b>Dependabot / Renovate</b>、<b>GitHub Actions workflow</b>。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>開新倉庫，要快速補齊 gitignore、授權、CI 與格式設定。</li>
+            <li>不確定該選哪種開源授權，想用問題導引出建議。</li>
+            <li>想知道 tsconfig 每個選項在做什麼（產生時會逐項說明）。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+            <li>上方下拉選要產生的檔案，填寫或勾選欄位。</li>
+            <li>下方即時出現內容與建議檔名，按「複製」貼進專案。</li>
+            <li>欄位有錯（例如 package 名稱格式不對）會在結果區紅字提示。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">.gitignore：勾 Node、VS Code、macOS
+→ 各段以 # ===== 來源 ===== 分隔，重複的規則只保留第一次
+LICENSE：不允許閉源、要專利條款 → 推薦 Apache-2.0
+Actions：Node + push + pull_request + 快取 → .github/workflows/ci.yml</div>
+        <h3>小提醒</h3>
+        <ul>
+            <li><b>授權</b>：MIT、BSD-2、BSD-3、ISC、Unlicense 輸出完整全文；<b>Apache-2.0、GPL-3.0、MPL-2.0</b> 只輸出標準檔頭與官方全文連結（長文不憑記憶產生以免抄錯），請從連結下載官方全文存成 LICENSE。授權推薦只是參考，不是法律意見；正式採用前請對照 choosealicense.com 或 SPDX 官方文字。</li>
+            <li>Actions 的 action 版本（checkout@v4 等）與語言版本是常見值，請依官方最新版調整；發佈步驟需先在倉庫設定好 Secrets（例如 NPM_TOKEN）與 Pages。</li>
+            <li>.gitignore 無法讓「已追蹤」的檔案忽略，需先 <kbd>git rm --cached</kbd>。</li>
+            <li>資料：只記住上次選的檔案類型與欄位（本機 projt_opts，壞資料會回到預設，大小有上限）；「重置選項」會清掉它（先確認）。用右上角備份即可管理這個鍵。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { copyWithFeedback, store } = Util;
+
+        // --- pure ---
+        // ===== .gitignore =====
+        const GI = {
+            node: ['Node.js', 'node_modules/\nnpm-debug.log*\nyarn-debug.log*\nyarn-error.log*\npnpm-debug.log*\n.npm/\n.eslintcache\n*.tsbuildinfo\ndist/\nbuild/\ncoverage/\n.env\n.env.local\n.env.*.local'],
+            python: ['Python', '__pycache__/\n*.py[cod]\n.venv/\nvenv/\n*.egg-info/\ndist/\nbuild/\n.pytest_cache/\n.mypy_cache/\n.ruff_cache/\n.coverage\nhtmlcov/\n.env'],
+            java: ['Java / Gradle / Maven', '*.class\n*.jar\n*.war\ntarget/\n.gradle/\nbuild/\nout/\nhs_err_pid*'],
+            go: ['Go', '*.exe\n*.test\n*.out\nvendor/\nbin/'],
+            rust: ['Rust', 'target/\n**/*.rs.bk\n# 應用程式建議提交 Cargo.lock；函式庫可取消下一行註解\n# Cargo.lock'],
+            dotnet: ['.NET', 'bin/\nobj/\n*.user\n*.suo\n.vs/\npackages/'],
+            php: ['PHP / Composer', 'vendor/\ncomposer.phar\n.phpunit.result.cache\n.env'],
+            ruby: ['Ruby', '*.gem\n.bundle/\nvendor/bundle/\nlog/\ntmp/\n.env'],
+            cpp: ['C / C++', '*.o\n*.obj\n*.a\n*.so\n*.dll\n*.exe\n*.out\nbuild/\ncmake-build-*/'],
+            next: ['React / Next.js', '.next/\nout/\nbuild/\n.vercel\n.env*.local'],
+            nuxt: ['Vue / Nuxt', '.nuxt/\n.output/\ndist/'],
+            django: ['Django', '*.sqlite3\nmedia/\nstaticfiles/\nlocal_settings.py'],
+            vscode: ['VS Code', '.vscode/*\n!.vscode/settings.json\n!.vscode/extensions.json\n*.code-workspace'],
+            jetbrains: ['JetBrains', '.idea/\n*.iml'],
+            vim: ['Vim', '*.swp\n*.swo\n*~\n.netrwhist'],
+            macos: ['macOS', '.DS_Store\n.AppleDouble\n._*'],
+            windows: ['Windows', 'Thumbs.db\nehthumbs.db\nDesktop.ini\n$RECYCLE.BIN/'],
+            linux: ['Linux', '*~\n.directory\n.Trash-*\n.nfs*'],
+        };
+        // 合併：每段前加來源註解；非空白非註解的規則只保留第一次出現（註解一律保留）
+        function mergeGitignore(ids, db = GI) {
+            const seen = new Set(), out = []; let dups = 0;
+            for (const id of ids) {
+                if (!db[id]) continue;
+                const lines = [`# ===== ${db[id][0]} =====`];
+                for (const l of db[id][1].split('\n')) {
+                    if (l && !l.startsWith('#')) { if (seen.has(l)) { dups++; continue; } seen.add(l); }
+                    lines.push(l);
+                }
+                out.push(lines.join('\n'));
+            }
+            return { text: out.join('\n\n') + (out.length ? '\n' : ''), dups };
+        }
+
+        // ===== LICENSE =====
+        const BSD_DISC = `THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+`;
+        const BSD_HEAD = `Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+`;
+        const BSD3_EXTRA = `3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+`;
+        // 完整全文：{Y} 年份、{H} 持有人
+        const LICENSE_FULL = {
+            'mit': `MIT License
+
+Copyright (c) {Y} {H}
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+`,
+            'bsd-2-clause': `BSD 2-Clause License
+
+Copyright (c) {Y}, {H}
+
+` + BSD_HEAD + BSD_DISC,
+            'bsd-3-clause': `BSD 3-Clause License
+
+Copyright (c) {Y}, {H}
+
+` + BSD_HEAD + BSD3_EXTRA + BSD_DISC,
+            'isc': `ISC License
+
+Copyright (c) {Y} {H}
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+`,
+            'unlicense': `This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any
+means.
+
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the
+software to the public domain. We make this dedication for the benefit
+of the public at large and to the detriment of our heirs and
+successors. We intend this dedication to be an overt act of
+relinquishment in perpetuity of all present and future rights to this
+software under copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+For more information, please refer to <https://unlicense.org>
+`,
+        };
+        // 只輸出標準檔頭 + 官方全文連結
+        const LICENSE_HEAD = {
+            'apache-2.0': ['Apache-2.0', 'https://www.apache.org/licenses/LICENSE-2.0.txt', `Copyright {Y} {H}
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+`],
+            'gpl-3.0': ['GPL-3.0-or-later', 'https://www.gnu.org/licenses/gpl-3.0.txt', `Copyright (C) {Y} {H}
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+`],
+            'mpl-2.0': ['MPL-2.0', 'https://www.mozilla.org/media/MPL/2.0/index.txt', `This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at https://mozilla.org/MPL/2.0/.
+`],
+        };
+        const LICENSE_NAME = { 'mit': 'MIT', 'bsd-2-clause': 'BSD-2-Clause', 'bsd-3-clause': 'BSD-3-Clause', 'isc': 'ISC', 'unlicense': 'Unlicense', 'apache-2.0': 'Apache-2.0', 'gpl-3.0': 'GPL-3.0-or-later', 'mpl-2.0': 'MPL-2.0' };
+        // 問答導引：closed 衍生作品可否閉源、patent 需要專利條款、copyleft 不可閉源時 strong 整個專案 / file 只限修改的檔案、pd 放棄著作權
+        function recommendLicense(o) {
+            if (o.pd) return { id: 'unlicense', why: '你要放棄著作權：Unlicense 是公眾領域宣告（部分法域不承認，必要時改用 MIT）。' };
+            if (o.closed === 'no') {
+                return o.copyleft === 'file'
+                    ? { id: 'mpl-2.0', why: '衍生作品不可閉源，但只要求「修改過的檔案」公開：MPL-2.0（檔案層級 copyleft），可與閉源程式碼混用。' }
+                    : { id: 'gpl-3.0', why: '衍生作品必須整個以相同授權公開：GPL-3.0（強 copyleft）。' };
+            }
+            return o.patent === 'yes'
+                ? { id: 'apache-2.0', why: '允許閉源且要明確專利授權與專利報復條款：Apache-2.0。' }
+                : { id: 'mit', why: '允許閉源、要求最少：MIT（最常見；ISC、BSD 是近似選擇）。' };
+        }
+        function buildLicense(o) {
+            const year = String(o.year || '').trim(), holder = String(o.holder || '').trim();
+            if (!/^\d{4}(-\d{4})?$/.test(year)) return { err: '年份請輸入 2026 或 2024-2026 格式' };
+            if (!holder || holder.length > 100) return { err: '請輸入持有人（作者或組織名稱，100 字內）' };
+            const rec = recommendLicense(o), id = o.pick && o.pick !== 'auto' ? o.pick : rec.id;
+            const fill = (t) => t.replace(/\{Y\}/g, year).replace(/\{H\}/g, () => holder);
+            const notes = [['推薦', rec.why]];
+            if (LICENSE_FULL[id]) return { text: fill(LICENSE_FULL[id]), file: 'LICENSE', notes: notes.concat([['package.json', `"license": "${LICENSE_NAME[id]}"`]]) };
+            const [spdx, url, head] = LICENSE_HEAD[id];
+            return { text: fill(head), file: '原始碼檔頭（LICENSE 請另下載官方全文）', notes: notes.concat([['完整全文', `${url}：下載後存成 LICENSE；此處的檔頭貼在原始碼檔案開頭`], ['package.json', `"license": "${spdx}"`]]) };
+        }
+
+        // ===== README 與徽章 =====
+        const validRepo = (s) => /^[\w.-]+\/[\w.-]+$/.test(s || '');
+        function buildReadme(o) {
+            const repo = String(o.repo || '').trim(), name = String(o.name || '').trim();
+            if (!validRepo(repo)) return { err: '倉庫請輸入 owner/repo 格式，例如 andynavy23/simple_tools' };
+            if (!name) return { err: '請輸入專案名稱' };
+            const gh = 'https://github.com/' + repo, img = 'https://img.shields.io/', b = [];
+            if (o.bCi) { const wf = String(o.wf || 'ci.yml').trim(); if (!/^[\w.-]+\.ya?ml$/.test(wf)) return { err: 'workflow 檔名要是 xxx.yml' }; b.push(`[![CI](${img}github/actions/workflow/status/${repo}/${wf})](${gh}/actions/workflows/${wf})`); }
+            if (o.bLicense) b.push(`[![License](${img}github/license/${repo})](${gh}/blob/HEAD/LICENSE)`);
+            if (o.bNpm) { const pkg = String(o.pkg || '').trim(); if (!validNpmName(pkg)) return { err: 'npm 套件名稱格式不正確' }; b.push(`[![npm](${img}npm/v/${pkg})](https://www.npmjs.com/package/${pkg})`); }
+            if (o.bRelease) b.push(`[![Release](${img}github/v/release/${repo})](${gh}/releases)`);
+            if (o.bStars) b.push(`[![Stars](${img}github/stars/${repo}?style=social)](${gh})`);
+            const L = [`# ${name}`, ''];
+            if (b.length) L.push(b.join(' '), '');
+            L.push(String(o.desc || '').trim() || '一句話說明這個專案做什麼。', '');
+            if (o.sInstall) L.push('## 安裝', '', '```bash', `git clone ${gh}.git`, `cd ${repo.split('/')[1]}`, '```', '');
+            if (o.sUsage) L.push('## 使用方式', '', '```bash', '# 範例指令', '```', '');
+            if (o.sContrib) L.push('## 貢獻', '', '歡迎開 Issue 或 Pull Request。提交前請先執行測試。', '');
+            if (o.sLicense) L.push('## 授權', '', `本專案以 ${String(o.license || 'MIT').trim() || 'MIT'} 授權，詳見 [LICENSE](LICENSE)。`, '');
+            return { text: L.join('\n'), file: 'README.md', notes: [['徽章', 'shields.io 的圖片網址；徽章依倉庫即時顯示，倉庫須為公開才看得到狀態']] };
+        }
+
+        // ===== .editorconfig =====
+        function buildEditorconfig(o) {
+            const size = Number(o.size);
+            if (o.style === 'space' && !(Number.isInteger(size) && size >= 1 && size <= 8)) return { err: '縮排空格數請輸入 1–8' };
+            const L = ['root = true', '', '[*]', `indent_style = ${o.style}`];
+            if (o.style === 'space') L.push(`indent_size = ${size}`);
+            L.push(`end_of_line = ${o.eol}`, `charset = ${o.charset}`, `insert_final_newline = ${o.finalNl ? 'true' : 'false'}`, `trim_trailing_whitespace = ${o.trim ? 'true' : 'false'}`);
+            if (o.md) L.push('', '[*.md]', 'trim_trailing_whitespace = false');
+            if (o.make) L.push('', '[Makefile]', 'indent_style = tab');
+            return { text: L.join('\n') + '\n', file: '.editorconfig', notes: [['root = true', '停止往上層資料夾找設定'], ['indent_style / indent_size', '縮排用 Tab 或空格（幾格）'], ['end_of_line', '換行字元：lf（Unix）、crlf（Windows）'], ['insert_final_newline', '檔案結尾補一個換行'], ['trim_trailing_whitespace', '存檔時刪行尾空白；Markdown 兩個空白代表換行，所以另外關掉'], ['Makefile', 'Makefile 必須用 Tab']] };
+        }
+
+        // ===== package.json =====
+        const validNpmName = (n) => typeof n === 'string' && n.length >= 1 && n.length <= 214 && /^(@[a-z0-9~-][a-z0-9._~-]*\/)?[a-z0-9~-][a-z0-9._~-]*$/.test(n);
+        const validSemver = (v) => /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/.test(v || '');
+        const validSpdx = (s) => /^(UNLICENSED|[A-Za-z0-9.+-]+( (AND|OR|WITH) [A-Za-z0-9.+-]+)*)$/.test(s || '');
+        function buildPackage(o) {
+            const name = String(o.name || '').trim(), ver = String(o.version || '').trim(), lic = String(o.license || '').trim(), repo = String(o.repo || '').trim();
+            if (!validNpmName(name)) return { err: '名稱只能小寫英數與 . _ ~ -，可用 @scope/name 形式，最長 214' };
+            if (!validSemver(ver)) return { err: '版本要符合 semver，例如 1.0.0 或 1.0.0-beta.1' };
+            if (lic && !validSpdx(lic)) return { err: '授權請用 SPDX 代號，例如 MIT、Apache-2.0、UNLICENSED' };
+            if (repo && !validRepo(repo)) return { err: '倉庫請輸入 owner/repo' };
+            const p = { name, version: ver };
+            const desc = String(o.desc || '').trim(); if (desc) p.description = desc;
+            p.type = o.type; p.main = String(o.main || '').trim() || 'index.js';
+            const sc = {}; if (o.sStart) sc.start = 'node ' + p.main; if (o.sTest) sc.test = 'node --test'; if (o.sBuild) sc.build = 'tsc'; if (o.sLint) sc.lint = 'eslint .';
+            if (Object.keys(sc).length) p.scripts = sc;
+            const au = String(o.author || '').trim(); if (au) p.author = au;
+            if (lic) p.license = lic;
+            if (repo) { p.repository = { type: 'git', url: `git+https://github.com/${repo}.git` }; p.bugs = { url: `https://github.com/${repo}/issues` }; p.homepage = `https://github.com/${repo}#readme`; }
+            if (o.engines) p.engines = { node: '>=20' };
+            if (o.priv) p.private = true;
+            return { text: JSON.stringify(p, null, 2) + '\n', file: 'package.json', notes: [['type', 'module = 用 import / export；commonjs = 用 require'], ['main', '被 require / import 時的入口檔'], ['scripts', '用 npm run <名稱> 執行；start / test 可省略 run'], ['private', 'true 時 npm 會拒絕發佈，避免誤傳'], ['build / lint', '預設填 tsc 與 eslint，需先安裝對應套件']] };
+        }
+
+        // ===== tsconfig =====
+        const TS_DESC = {
+            target: '編譯後的 JavaScript 版本', lib: '可用的內建型別（DOM 才有 document / window）', module: '輸出的模組格式', moduleResolution: '怎麼找 import 的檔案：bundler 給打包工具用、NodeNext 給 Node 原生 ESM',
+            jsx: '處理 JSX 的方式：react-jsx 不必每檔 import React', strict: '一次開啟所有嚴格檢查（建議）', noEmit: '只做型別檢查不輸出檔案（由打包工具負責輸出）', isolatedModules: '確保每個檔案可單獨編譯（打包工具需要）',
+            skipLibCheck: '略過 .d.ts 檢查，編譯更快', esModuleInterop: '讓 import x from "cjs-lib" 正常運作', forceConsistentCasingInFileNames: '檔名大小寫不一致時報錯（避免換系統才壞）', outDir: '輸出資料夾', rootDir: '原始碼根目錄（讓輸出結構與 src 一致）',
+            declaration: '產生 .d.ts 型別宣告（函式庫必要）', declarationMap: '讓編輯器可從 .d.ts 跳回原始碼', sourceMap: '產生 .map 方便除錯', noUncheckedIndexedAccess: '陣列 / 物件索引結果含 undefined，更安全', noImplicitOverride: '覆寫父類別方法必須寫 override', resolveJsonModule: '允許 import .json', types: '只載入列出的全域型別套件',
+        };
+        function buildTsconfig(o) {
+            const base = { frontend: { target: 'ES2022', lib: ['ES2022', 'DOM', 'DOM.Iterable'], module: 'ESNext', moduleResolution: 'bundler', jsx: o.jsx ? 'react-jsx' : undefined, noEmit: true, isolatedModules: true, resolveJsonModule: true }, node: { target: 'ES2022', lib: ['ES2022'], module: 'NodeNext', moduleResolution: 'NodeNext', outDir: 'dist', rootDir: 'src', types: ['node'], resolveJsonModule: true }, library: { target: 'ES2020', lib: ['ES2020'], module: 'NodeNext', moduleResolution: 'NodeNext', outDir: 'dist', rootDir: 'src', declaration: true, declarationMap: true, sourceMap: true } }[o.kind];
+            if (!base) return { err: '未知的用途' };
+            const c = {}; for (const [k, v] of Object.entries(base)) if (v !== undefined) c[k] = v;
+            if (o.strict) { c.strict = true; }
+            if (o.extra) { c.noUncheckedIndexedAccess = true; c.noImplicitOverride = true; }
+            c.esModuleInterop = true; c.forceConsistentCasingInFileNames = true; c.skipLibCheck = true;
+            const t = { compilerOptions: c, include: [o.kind === 'frontend' ? 'src' : 'src/**/*'] };
+            if (o.kind !== 'frontend') t.exclude = ['node_modules', 'dist'];
+            return { text: JSON.stringify(t, null, 2) + '\n', file: 'tsconfig.json', notes: Object.keys(c).map(k => [k, TS_DESC[k] || '']).concat(o.kind === 'node' ? [['types: ["node"]', '需先安裝 @types/node']] : []) };
+        }
+
+        // ===== ESLint / Prettier =====
+        function buildEslint(o) {
+            const L = ["import js from '@eslint/js';", "import globals from 'globals';"], pk = ['eslint', '@eslint/js', 'globals'], ex = [];
+            if (o.ts) { L.push("import tseslint from 'typescript-eslint';"); pk.push('typescript-eslint'); }
+            if (o.prettier) { L.push("import prettier from 'eslint-config-prettier';"); pk.push('eslint-config-prettier'); }
+            L.push('', 'export default [', "  { ignores: ['dist/', 'build/', 'coverage/', 'node_modules/'] },", '  js.configs.recommended,');
+            if (o.ts) L.push('  ...tseslint.configs.recommended,');
+            if (o.prettier) L.push('  prettier,');
+            const g = o.env === 'both' ? ['browser', 'node'] : [o.env];
+            L.push(`  { languageOptions: { globals: { ${g.map(x => '...globals.' + x).join(', ')} } } },`, '];');
+            return { text: L.join('\n') + '\n', file: 'eslint.config.js', notes: [['安裝', 'npm i -D ' + pk.join(' ')], ['格式', 'ESLint 9+ 的 flat config（eslint.config.js）；package.json 需 "type": "module" 才能用 import'], ['globals', '宣告執行環境的全域變數，避免 no-undef 誤報'], ['eslint-config-prettier', '關掉與 Prettier 衝突的格式規則']] };
+        }
+        function buildPrettier(o) {
+            const w = Number(o.width), tab = Number(o.tab);
+            if (!Number.isInteger(w) || w < 40 || w > 200) return { err: '行寬請輸入 40–200' };
+            if (!Number.isInteger(tab) || tab < 1 || tab > 8) return { err: '縮排請輸入 1–8' };
+            const p = { semi: !!o.semi, singleQuote: !!o.single, tabWidth: tab, printWidth: w, trailingComma: o.comma };
+            return { text: JSON.stringify(p, null, 2) + '\n', file: '.prettierrc', notes: [['semi', '句尾加分號'], ['singleQuote', '字串用單引號'], ['tabWidth', '縮排空格數'], ['printWidth', '超過這個寬度才換行'], ['trailingComma', 'all = 多行結構最後一項也加逗號（diff 較乾淨）'], ['安裝', 'npm i -D prettier；格式化：npx prettier --write .']] };
+        }
+
+        // ===== YAML 輸出（只支援 object / array / 字串 / 數字 / 布林）=====
+        const yKey = (k) => /^[\w.-]+$/.test(k) ? k : JSON.stringify(k);
+        function yScalar(v) {
+            if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+            const s = String(v);
+            return /^[A-Za-z_./~-][\w ./@~*+=-]*$/.test(s) && !/ $/.test(s) && !/^(true|false|null|yes|no|on|off|y|n|~)$/i.test(s) && !/^[-+.]?\d/.test(s) ? s : JSON.stringify(s);
+        }
+        const yFlat = (a) => a.every(x => x === null || typeof x !== 'object');
+        function toYaml(v, ind = 0) {
+            const pad = ' '.repeat(ind);
+            if (Array.isArray(v)) return v.map(x => x && typeof x === 'object' ? pad + '- ' + toYaml(x, ind + 2).slice(ind + 2) : pad + '- ' + yScalar(x)).join('\n');
+            return Object.entries(v).map(([k, x]) => {
+                if (typeof x === 'string' && x.includes('\n')) return `${pad}${yKey(k)}: |\n` + x.replace(/\n+$/, '').split('\n').map(l => ' '.repeat(ind + 2) + l).join('\n');
+                if (Array.isArray(x)) return x.length === 0 ? `${pad}${yKey(k)}: []` : yFlat(x) ? `${pad}${yKey(k)}: [${x.map(yScalar).join(', ')}]` : `${pad}${yKey(k)}:\n` + toYaml(x, ind + 2);
+                if (x && typeof x === 'object') return Object.keys(x).length ? `${pad}${yKey(k)}:\n` + toYaml(x, ind + 2) : `${pad}${yKey(k)}: {}`;
+                return `${pad}${yKey(k)}: ${yScalar(x)}`;
+            }).join('\n');
+        }
+
+        // ===== Dependabot / Renovate =====
+        const DEP_ECO = { npm: 'npm', pip: 'pip', 'github-actions': 'GitHub Actions', docker: 'Docker', gomod: 'Go modules', cargo: 'Cargo', maven: 'Maven', composer: 'Composer', bundler: 'Bundler', nuget: 'NuGet' };
+        const DEP_INT = { daily: '每天', weekly: '每週', monthly: '每月' };
+        function buildDeps(o) {
+            const eco = Object.keys(DEP_ECO).filter(k => o['e_' + k]);
+            if (!eco.length) return { err: '請至少勾選一個生態系' };
+            if (!(o.interval in DEP_INT)) return { err: '未知的頻率' };
+            if (o.tool === 'renovate') {
+                const r = { $schema: 'https://docs.renovatebot.com/renovate-schema.json', extends: ['config:recommended'] };
+                if (o.interval === 'weekly') r.schedule = ['before 6am on monday']; else if (o.interval === 'monthly') r.schedule = ['before 6am on the first day of the month'];
+                const rules = []; if (o.auto) rules.push({ matchUpdateTypes: ['minor', 'patch'], automerge: true });
+                if (rules.length) r.packageRules = rules;
+                return { text: JSON.stringify(r, null, 2) + '\n', file: 'renovate.json', notes: [['config:recommended', 'Renovate 官方建議預設'], ['managers', 'Renovate 會自動偵測所有生態系，不必逐一勾選（勾選只用來確認你有用到）'], ['automerge', '小版本與修補版通過 CI 後自動合併，需倉庫有 CI 才安全'], ['啟用', '到 github.com/apps/renovate 安裝 Renovate 應用程式']] };
+            }
+            const updates = eco.map(e => { const u = { 'package-ecosystem': e, directory: '/', schedule: { interval: o.interval } }; if (o.group) u.groups = { 'minor-and-patch': { 'update-types': ['minor', 'patch'] } }; return u; });
+            return { text: toYaml({ version: 2, updates }) + '\n', file: '.github/dependabot.yml', notes: [['package-ecosystem', 'Dependabot 的生態系識別字'], ['directory', '"/" = 倉庫根目錄；monorepo 需每個資料夾各一筆'], ['schedule.interval', DEP_INT[o.interval] + '檢查更新'], ['groups', '把小版本與修補版合成一個 PR，減少 PR 數量'], ['github-actions', 'Actions 的版本也建議納入更新']] };
+        }
+
+        // ===== GitHub Actions =====
+        const WF_LANG = { node: 'Node.js', python: 'Python', go: 'Go', rust: 'Rust', java: 'Java（Maven）' };
+        function wfSteps(o) {
+            const co = { uses: 'actions/checkout@v4' }, c = !!o.cache;
+            switch (o.lang) {
+                case 'node': { const w = { 'node-version': '20' }; if (c) w.cache = 'npm'; if (o.deploy === 'npm') w['registry-url'] = 'https://registry.npmjs.org'; return [co, { uses: 'actions/setup-node@v4', with: w }, { run: 'npm ci' }, { run: 'npm test' }, { run: 'npm run build --if-present' }]; }
+                case 'python': { const w = { 'python-version': '3.12' }; if (c) w.cache = 'pip'; return [co, { uses: 'actions/setup-python@v5', with: w }, { run: 'pip install -r requirements.txt' }, { run: 'pytest' }]; }
+                case 'go': return [co, { uses: 'actions/setup-go@v5', with: { 'go-version': '1.22', 'cache': c } }, { run: 'go build ./...' }, { run: 'go test ./...' }];
+                case 'rust': { const s = [co, { uses: 'dtolnay/rust-toolchain@stable' }]; if (c) s.push({ uses: 'actions/cache@v4', with: { path: '~/.cargo/registry\n~/.cargo/git\ntarget', key: "${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}" } }); return s.concat([{ run: 'cargo build --verbose' }, { run: 'cargo test --verbose' }]); }
+                default: { const w = { distribution: 'temurin', 'java-version': '21' }; if (c) w.cache = 'maven'; return [co, { uses: 'actions/setup-java@v4', with: w }, { run: 'mvn -B verify' }]; }
+            }
+        }
+        function buildWorkflow(o) {
+            const name = String(o.name || '').trim(), br = String(o.branch || '').trim();
+            if (!name) return { err: '請輸入 workflow 名稱' };
+            if (!/^[\w./-]+$/.test(br)) return { err: '分支名稱只能含英數與 . _ / -' };
+            if (!(o.lang in WF_LANG)) return { err: '未知的語言' };
+            const on = {};
+            if (o.tPush || o.tTag) { on.push = {}; if (o.tPush) on.push.branches = [br]; if (o.tTag) on.push.tags = ['v*']; }
+            if (o.tPr) on.pull_request = { branches: [br] };
+            if (o.tCron) on.schedule = [{ cron: '0 0 * * 1' }];
+            if (o.tManual) on.workflow_dispatch = {};
+            if (!Object.keys(on).length) return { err: '請至少勾選一種觸發方式' };
+            if (o.deploy === 'npm' && o.lang !== 'node') return { err: '發佈到 npm 只能搭配 Node.js' };
+            if (o.deploy !== 'none' && !(o.tPush || o.tTag)) return { err: '部署需要「推送」或「版本標籤」觸發' };
+            const dist = String(o.dist || '').trim() || 'dist';
+            if (!/^[\w./-]+$/.test(dist)) return { err: '輸出資料夾格式不正確' };
+            const jobs = { build: { 'runs-on': 'ubuntu-latest', steps: wfSteps(o) } };
+            const wf = { name, on, jobs };
+            if (o.deploy === 'pages') {
+                jobs.build.steps.push({ uses: 'actions/upload-pages-artifact@v3', with: { path: dist } });
+                wf.permissions = { contents: 'read' };
+                jobs.deploy = { needs: 'build', if: `github.ref == 'refs/heads/${br}'`, 'runs-on': 'ubuntu-latest', permissions: { pages: 'write', 'id-token': 'write' }, environment: { name: 'github-pages', url: '${{ steps.deployment.outputs.page_url }}' }, steps: [{ id: 'deployment', uses: 'actions/deploy-pages@v4' }] };
+            } else if (o.deploy === 'npm') {
+                jobs.build.steps.push({ if: "startsWith(github.ref, 'refs/tags/v')", run: 'npm publish', env: { NODE_AUTH_TOKEN: '${{ secrets.NPM_TOKEN }}' } });
+            }
+            const notes = [['on', '什麼時候執行'], ['actions/checkout', '把程式碼拉下來，幾乎每個 job 第一步'], ['版本', 'action 與語言版本是常見值，請依官方最新版調整']];
+            if (o.cache) notes.push(['快取', '依鎖檔快取依賴，加速重跑']);
+            if (o.deploy === 'pages') notes.push(['Pages', '需在倉庫 Settings → Pages 把來源設為 GitHub Actions；輸出資料夾為 ' + dist]);
+            if (o.deploy === 'npm') notes.push(['npm publish', '需在 Secrets 設定 NPM_TOKEN；只在 v* 標籤推送時執行']);
+            return { text: toYaml(wf) + '\n', file: '.github/workflows/ci.yml', notes };
+        }
+
+        // ===== 表單定義（t: text | check | select）=====
+        const T = (k, l, d = '') => ({ k, l, t: 'text', d }), C = (k, l, d = false) => ({ k, l, t: 'check', d }), S = (k, l, o, d) => ({ k, l, t: 'select', o, d: d == null ? o[0][0] : d });
+        const FORMS = {
+            gitignore: { label: '.gitignore', build: (o) => { const ids = Object.keys(GI).filter(k => o[k]); if (!ids.length) return { err: '請至少勾選一項' }; const r = mergeGitignore(ids); return { text: r.text, file: '.gitignore', notes: [['合併', `共 ${ids.length} 段，去掉 ${r.dups} 條重複規則`], ['註解', '每段開頭的 # ===== 來源 ===== 保留，方便日後維護']] }; }, fields: Object.entries(GI).map(([k, v]) => C(k, v[0], k === 'node' || k === 'vscode')) },
+            license: { label: 'LICENSE（含授權推薦）', build: buildLicense, fields: [T('year', '年份', String(new Date().getFullYear())), T('holder', '持有人'), S('closed', '別人改你的程式後，可以閉源嗎？', [['yes', '可以（寬鬆）'], ['no', '不可以（要公開）']]), S('patent', '需要專利授權條款？（允許閉源時）', [['no', '不需要'], ['yes', '需要']]), S('copyleft', '不可閉源時，範圍是？', [['strong', '整個專案同授權'], ['file', '只限修改過的檔案']]), C('pd', '直接放棄著作權（公眾領域）'), S('pick', '要輸出的授權', [['auto', '依上面問題推薦']].concat(Object.entries(LICENSE_NAME).map(([k, v]) => [k, v])))] },
+            readme: { label: 'README 與徽章', build: buildReadme, fields: [T('repo', '倉庫（owner/repo）'), T('name', '專案名稱'), T('desc', '一句話說明'), T('license', '授權名稱', 'MIT'), C('bCi', '徽章：CI 狀態', true), T('wf', 'CI workflow 檔名', 'ci.yml'), C('bLicense', '徽章：授權', true), C('bNpm', '徽章：npm 版本'), T('pkg', 'npm 套件名稱'), C('bRelease', '徽章：最新 Release'), C('bStars', '徽章：Stars'), C('sInstall', '章節：安裝', true), C('sUsage', '章節：使用方式', true), C('sContrib', '章節：貢獻'), C('sLicense', '章節：授權', true)] },
+            editorconfig: { label: '.editorconfig', build: buildEditorconfig, fields: [S('style', '縮排', [['space', '空格'], ['tab', 'Tab']]), T('size', '空格數', '2'), S('eol', '換行', [['lf', 'lf'], ['crlf', 'crlf']]), S('charset', '編碼', [['utf-8', 'utf-8'], ['utf-8-bom', 'utf-8-bom'], ['latin1', 'latin1']]), C('finalNl', '檔案結尾補換行', true), C('trim', '刪行尾空白', true), C('md', 'Markdown 例外（不刪行尾空白）', true), C('make', 'Makefile 用 Tab')] },
+            package: { label: 'package.json', build: buildPackage, fields: [T('name', '名稱', 'my-project'), T('version', '版本', '1.0.0'), T('desc', '說明'), S('type', '模組類型', [['module', 'module（ESM）'], ['commonjs', 'commonjs']]), T('main', '入口檔', 'index.js'), C('sStart', 'script：start', true), C('sTest', 'script：test', true), C('sBuild', 'script：build'), C('sLint', 'script：lint'), T('author', '作者'), T('license', '授權（SPDX）', 'MIT'), T('repo', '倉庫（owner/repo，可空白）'), C('engines', '限定 Node >= 20'), C('priv', 'private（禁止發佈）')] },
+            tsconfig: { label: 'tsconfig.json', build: buildTsconfig, fields: [S('kind', '用途', [['frontend', '前端（打包工具）'], ['node', 'Node 應用程式'], ['library', '函式庫（產生 .d.ts）']]), C('jsx', '前端用 JSX（React）'), C('strict', 'strict 嚴格模式', true), C('extra', '額外嚴格選項')] },
+            eslint: { label: 'ESLint 設定', build: buildEslint, fields: [C('ts', '使用 TypeScript', false), S('env', '執行環境', [['browser', '瀏覽器'], ['node', 'Node'], ['both', '兩者']]), C('prettier', '搭配 Prettier（關掉衝突規則）', true)] },
+            prettier: { label: 'Prettier 設定', build: buildPrettier, fields: [C('semi', '句尾分號', true), C('single', '單引號', true), T('tab', '縮排空格數', '2'), T('width', '行寬', '100'), S('comma', '尾逗號', [['all', 'all'], ['es5', 'es5'], ['none', 'none']])] },
+            deps: { label: 'Dependabot / Renovate', build: buildDeps, fields: [S('tool', '工具', [['dependabot', 'Dependabot'], ['renovate', 'Renovate']]), S('interval', '頻率', Object.entries(DEP_INT), 'weekly'), C('group', '（Dependabot）小版本合成一個 PR'), C('auto', '（Renovate）小版本自動合併')].concat(Object.entries(DEP_ECO).map(([k, v]) => C('e_' + k, '生態系：' + v, k === 'npm' || k === 'github-actions'))) },
+            actions: { label: 'GitHub Actions workflow', build: buildWorkflow, fields: [T('name', 'workflow 名稱', 'CI'), S('lang', '語言', Object.entries(WF_LANG)), T('branch', '主分支', 'main'), C('tPush', '觸發：推送到主分支', true), C('tPr', '觸發：Pull Request', true), C('tTag', '觸發：推送版本標籤 v*'), C('tCron', '觸發：每週排程'), C('tManual', '觸發：手動執行'), C('cache', '快取依賴', true), S('deploy', '部署', [['none', '不部署'], ['pages', 'GitHub Pages'], ['npm', '發佈到 npm（Node）']]), T('dist', '建置輸出資料夾（Pages 用）', 'dist')] },
+        };
+        // 讀回上次選項：驗證型別、截斷長度，壞資料回到預設
+        function loadOpts(raw) {
+            const out = { type: Object.keys(FORMS)[0], vals: {} };
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+            if (typeof raw.type === 'string' && raw.type in FORMS) out.type = raw.type;
+            const vs = raw.vals && typeof raw.vals === 'object' && !Array.isArray(raw.vals) ? raw.vals : {};
+            for (const [t, form] of Object.entries(FORMS)) {
+                const src = vs[t]; if (!src || typeof src !== 'object') continue;
+                const o = {};
+                for (const f of form.fields) {
+                    const v = src[f.k];
+                    if (f.t === 'check' && typeof v === 'boolean') o[f.k] = v;
+                    else if (f.t === 'select' && typeof v === 'string' && f.o.some(x => x[0] === v)) o[f.k] = v;
+                    else if (f.t === 'text' && typeof v === 'string') o[f.k] = v.slice(0, 200);
+                }
+                out.vals[t] = o;
+            }
+            return out;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+        let S0 = loadOpts(store.get('projt_opts', null)), cur = {};
+        const persist = () => { S0.vals[S0.type] = cur; store.set('projt_opts', S0); };
+
+        function renderFields() {
+            const form = FORMS[S0.type], box = $('#pFields'), saved = S0.vals[S0.type] || {};
+            box.replaceChildren(); cur = {};
+            for (const f of form.fields) {
+                const id = 'p_' + f.k, v = f.k in saved ? saved[f.k] : f.d; cur[f.k] = v;
+                let inp;
+                if (f.t === 'check') { inp = el('input', { type: 'checkbox', id, checked: v }); box.append(el('label', { className: 'chk' }, inp, f.l)); }
+                else {
+                    box.append(el('label', { className: 'f', htmlFor: id, textContent: f.l }));
+                    if (f.t === 'select') { inp = el('select', { id }); f.o.forEach(([ov, t]) => inp.append(new Option(t, ov))); inp.value = v; }
+                    else inp = el('input', { id, type: 'text', value: v, autocomplete: 'off', spellcheck: false, maxLength: 200 });
+                    box.append(inp);
+                }
+                const upd = () => { cur[f.k] = f.t === 'check' ? inp.checked : inp.value; persist(); renderOut(); };
+                inp.addEventListener('input', upd); inp.addEventListener('change', upd);
+            }
+            renderOut();
+        }
+        function renderOut() {
+            const r = FORMS[S0.type].build(cur);
+            $('#pNotes').replaceChildren();
+            $('#pErr').textContent = r.err || ''; $('#pErr').className = 'note' + (r.err ? ' bad' : '');
+            $('#pCopy').disabled = !!r.err;
+            if (r.err) { $('#pOut').textContent = '—'; $('#pFile').textContent = ''; return; }
+            $('#pOut').textContent = r.text; $('#pFile').textContent = '建議檔名：' + r.file;
+            $('#pCopy').onclick = () => copyWithFeedback($('#pCopy'), r.text);
+            $('#pNotes').append(...r.notes.map(([a, b]) => el('li', {}, el('code', { textContent: a }), ' ' + b)));
+        }
+        $('#pType').replaceChildren(...Object.entries(FORMS).map(([k, f]) => new Option(f.label, k)));
+        $('#pType').value = S0.type;
+        $('#pType').addEventListener('change', () => { S0.type = $('#pType').value; persist(); renderFields(); });
+        $('#pReset').onclick = () => {
+            if (!confirm('要清除記住的選項並回到預設嗎？（只清除這個工具的設定，無法復原）')) return;
+            try { localStorage.removeItem('projt_opts'); } catch (e) { /* 無痕 */ }
+            S0 = loadOpts(null); $('#pType').value = S0.type; renderFields();
+        };
+        renderFields();
+    </script>
+</body>
+
+</html>

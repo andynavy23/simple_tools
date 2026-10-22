@@ -90,6 +90,83 @@
         .m small {
             color: var(--muted);
         }
+
+        details.card > summary {
+            font-weight: 700;
+            cursor: pointer;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+        }
+
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 8px 0;
+        }
+
+        .row > button {
+            flex: 1 1 auto;
+        }
+
+        .ex {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--fill);
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .ex > div {
+            min-width: 0;
+            word-break: break-all;
+        }
+
+        .ex small, .ref small, .lang small {
+            color: var(--muted);
+        }
+
+        .ref {
+            padding: 6px 0;
+            border-bottom: 1px solid var(--fill);
+            word-break: break-all;
+        }
+
+        .ref b {
+            color: var(--blue);
+        }
+
+        #ref h3 {
+            margin: 12px 0 2px;
+            font-size: 15px;
+        }
+
+        .xl {
+            padding: 4px 0;
+            display: flex;
+            gap: 10px;
+            word-break: break-all;
+        }
+
+        .xl b {
+            flex: 0 0 auto;
+            max-width: 45%;
+        }
+
+        .xl.bad b {
+            color: var(--bad);
+        }
+
+        .lang pre {
+            margin: 4px 0 10px;
+            padding: 8px 10px;
+            background: var(--fill);
+            border-radius: 10px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
     </style>
 </head>
 
@@ -127,6 +204,40 @@ bob@test.com, carol@sample.com</textarea>
             <h2>比對明細</h2>
             <div id="list"></div>
         </div>
+
+        <details class="card" id="secRef">
+            <summary>語法速查與範例庫</summary>
+            <h2 style="margin-top:8px">常用範例（點「帶入」直接測試）</h2>
+            <div id="recipes"></div>
+            <h2 style="margin-top:14px">語法速查</h2>
+            <div id="ref"></div>
+        </details>
+
+        <details class="card" id="secExp">
+            <summary>正則逐段解說</summary>
+            <p class="sub">把上方「樣式」拆成片段，用白話解釋每一段；看不懂的語法會標示「未解析」。</p>
+            <div id="explain"></div>
+        </details>
+
+        <details class="card" id="secInf">
+            <summary>從範例推測正則</summary>
+            <p class="sub">每行一個字串。只做保守的簡單推測（數字、英文字母、固定符號、中文字的組合），結果不一定是你要的，請自行檢查。</p>
+            <label for="infPos" class="sub" style="display:block;margin:6px 0">應該符合（每行一個）</label>
+            <textarea id="infPos" class="mono" style="min-height:90px" spellcheck="false">A123456789
+B234567890
+F198765432</textarea>
+            <label for="infNeg" class="sub" style="display:block;margin:6px 0">不該符合（可留空）</label>
+            <textarea id="infNeg" class="mono" style="min-height:70px" spellcheck="false">123456789
+AB12345678</textarea>
+            <div class="row"><button type="button" id="infGo">推測</button></div>
+            <div id="infOut"></div>
+        </details>
+
+        <details class="card" id="secLang">
+            <summary>輸出為各語言字串</summary>
+            <p class="sub">把上方「樣式」與旗標轉成程式碼，已處理跳脫。語法在各語言略有差異（例如具名群組、Unicode 範圍），貼進去後請再測一次。</p>
+            <div id="langOut" class="lang"></div>
+        </details>
     </div>
 
     <template id="help">
@@ -150,11 +261,19 @@ bob@test.com, carol@sample.com</textarea>
         文字：alice@example.com 與 bob@test.com, carol@sample.com
         → 3 個符合
         → #1 "alice@example.com"，位置 0，群組 1 "alice"，群組 2 "example"</div>
+        <h3>語法速查、解說、推測、輸出</h3>
+        <ul>
+        <li><b>語法速查與範例庫</b>：展開後可看字元類別、量詞、錨點、群組、斷言、旗標速查；範例庫按「帶入」會把樣式、旗標與示範文字填進上方。</li>
+        <li><b>正則逐段解說</b>：自動拆解「樣式」並逐段白話說明，不支援的語法標示「未解析」。</li>
+        <li><b>從範例推測</b>：貼「應該符合」與「不該符合」的字串，產生保守的候選樣式並驗證全部範例；只認得數字、英文字母、固定符號與中文字，無法推測時會明說。</li>
+        <li><b>輸出為各語言字串</b>：產生 JS / Python / Go / Java 的字串字面值，可一鍵複製。</li>
+        </ul>
         <h3>小提醒</h3>
         <ul>
         <li>樣式有語法錯誤時，上方會用紅字顯示原因。</li>
         <li>最多列出 500 筆比對；沒勾 g 只會找第一個。</li>
-        <li>文字只在本機處理，不會上傳。</li>
+        <li>文字只在本機處理，不會上傳；這個工具不存任何本機資料。</li>
+        <li>解說與推測只是輔助，語法細節請以實際測試為準。</li>
         </ul>
     </template>
 
@@ -177,11 +296,152 @@ bob@test.com, carol@sample.com</textarea>
             }
             return { matches, truncated };
         }
+        // 逐段解說：回傳 [{ tok, desc, depth, bad }]（bad = 未解析）
+        const ESC_DESC = { d: '數字 0-9', D: '非數字', w: '英數字或底線', W: '非英數字底線', s: '空白字元（空格、Tab、換行）', S: '非空白字元', b: '單字邊界', B: '非單字邊界', n: '換行', t: 'Tab', r: '歸位字元', f: '換頁字元', v: '垂直 Tab', 0: 'NUL 字元' };
+        function escDesc(src, i) { // src[i] 是反斜線；回傳 { len, desc, bad }
+            const c = src[i + 1], rest = src.slice(i);
+            if (c === undefined) return { len: 1, desc: '結尾多餘的反斜線', bad: true };
+            if (ESC_DESC[c]) return { len: 2, desc: ESC_DESC[c] };
+            if (/[1-9]/.test(c)) { const m = /^\d+/.exec(src.slice(i + 1))[0]; return { len: 1 + m.length, desc: `反向參照：與第 ${m} 組相同的內容` }; }
+            let m;
+            if (c === 'k') return (m = /^\\k<([^>]+)>/.exec(rest)) ? { len: m[0].length, desc: `反向參照：與群組「${m[1]}」相同的內容` } : { len: 2, desc: '\\k 語法不完整', bad: true };
+            if (c === 'u') return (m = /^\\u(?:\{([0-9a-fA-F]+)\}|([0-9a-fA-F]{4}))/.exec(rest)) ? { len: m[0].length, desc: `Unicode 字元 U+${(m[1] || m[2]).toUpperCase()}` } : { len: 2, desc: '\\u 後面格式不對', bad: true };
+            if (c === 'x') return (m = /^\\x([0-9a-fA-F]{2})/.exec(rest)) ? { len: 4, desc: `字元碼 0x${m[1].toUpperCase()}` } : { len: 2, desc: '\\x 後面格式不對', bad: true };
+            if (c === 'p' || c === 'P') return (m = /^\\[pP]\{([^}]+)\}/.exec(rest)) ? { len: m[0].length, desc: `Unicode 屬性 ${m[1]}${c === 'P' ? '（取反）' : ''}（需要 u 旗標）` } : { len: 2, desc: '\\p 後面格式不對', bad: true };
+            if (/[a-zA-Z]/.test(c)) return { len: 2, desc: '不認得的跳脫序列', bad: true };
+            return { len: 2, desc: `字面的「${c}」`, lit: c };
+        }
+        function explainRegex(src) {
+            const out = [], n = src.length; let i = 0, depth = 0, lit = '', gc = 0, operand = false;
+            const flush = () => { if (lit) { out.push({ tok: lit, desc: `字面文字「${lit}」`, depth, bad: false }); lit = ''; } };
+            const add = (tok, desc, bad, d = depth) => { flush(); out.push({ tok, desc, depth: d, bad: !!bad }); };
+            const quantLen = (j) => { const c = src[j]; if (c === '*' || c === '+' || c === '?') return 1; const m = /^\{\d+(,\d*)?\}/.exec(src.slice(j)); return m ? m[0].length : 0; };
+            while (i < n) {
+                const c = src[i];
+                if (c === '\\') {
+                    const e = escDesc(src, i);
+                    if (e.lit && !quantLen(i + e.len)) { lit += e.lit; operand = true; i += e.len; continue; }
+                    add(src.substr(i, e.len), e.desc, e.bad); operand = !/^\\[bB]/.test(src.substr(i, 2)); i += e.len; continue;
+                }
+                if (c === '[') {
+                    let j = i + 1; const neg = src[j] === '^'; if (neg) j++;
+                    const items = []; let closed = false;
+                    while (j < n) {
+                        if (src[j] === ']') { closed = true; break; }
+                        let a = src[j], len = 1;
+                        if (a === '\\') { const e = escDesc(src, j); len = e.len; a = e.lit || `${src.substr(j, len)}（${e.desc}）`; }
+                        if (src[j] !== '\\' && src[j + 1] === '-' && src[j + 2] !== undefined && src[j + 2] !== ']') { items.push(`${a} 到 ${src[j + 2]}`); j += 3; }
+                        else { items.push(a); j += len; }
+                    }
+                    if (!closed) { add(src.slice(i), '字元集合沒有用 ] 結尾', true); i = n; break; }
+                    add(src.slice(i, j + 1), (neg ? '不是下列任何一個字元：' : '下列任一個字元：') + (items.join('、') || '（空）')); operand = true; i = j + 1; continue;
+                }
+                if (c === '(') {
+                    let tok, desc, bad = false, m;
+                    if (src.startsWith('(?:', i)) { tok = '(?:'; desc = '群組（不記錄）'; }
+                    else if (src.startsWith('(?=', i)) { tok = '(?='; desc = '正向先行斷言：後面必須接著'; }
+                    else if (src.startsWith('(?!', i)) { tok = '(?!'; desc = '負向先行斷言：後面不能接著'; }
+                    else if (src.startsWith('(?<=', i)) { tok = '(?<='; desc = '正向後行斷言：前面必須是'; }
+                    else if (src.startsWith('(?<!', i)) { tok = '(?<!'; desc = '負向後行斷言：前面不能是'; }
+                    else if ((m = /^\(\?<([^=!>]+)>/.exec(src.slice(i)))) { tok = m[0]; desc = `具名群組「${m[1]}」（第 ${++gc} 組）`; }
+                    else if (src.startsWith('(?', i)) { tok = '(?'; desc = '不認得的群組語法'; bad = true; }
+                    else { tok = '('; desc = `群組（第 ${++gc} 組，記錄比對內容）`; }
+                    add(tok, desc, bad); operand = false; i += tok.length; if (!bad) depth++; continue;
+                }
+                if (c === ')') { if (depth === 0) add(')', '多餘的 )，沒有對應的 (', true); else { depth--; add(')', '群組結束'); } operand = true; i++; continue; }
+                if (c === '|') { add('|', '或者（左右兩邊擇一）'); operand = false; i++; continue; }
+                if (c === '^') { add('^', '開頭（字串開頭；m 旗標時為每行開頭）'); operand = false; i++; continue; }
+                if (c === '$') { add('$', '結尾（字串結尾；m 旗標時為每行結尾）'); operand = false; i++; continue; }
+                if (c === '.') { add('.', '任意一個字元（s 旗標才含換行）'); operand = true; i++; continue; }
+                const q = quantLen(i);
+                if (q) {
+                    let tok = src.substr(i, q), d;
+                    if (c === '*') d = '前一項重複 0 次或更多次'; else if (c === '+') d = '前一項重複 1 次或更多次'; else if (c === '?') d = '前一項出現 0 或 1 次（可有可無）';
+                    else { const m = /^\{(\d+)(,(\d*))?\}/.exec(tok); d = m[2] === undefined ? `前一項剛好重複 ${m[1]} 次` : m[3] === '' ? `前一項重複 ${m[1]} 次以上` : `前一項重複 ${m[1]} 到 ${m[3]} 次`; }
+                    i += q; if (src[i] === '?') { tok += '?'; d += '（非貪婪：盡量少）'; i++; }
+                    const bad = !operand && !lit;
+                    add(tok, bad ? '前面沒有可重複的項目' : d, bad); operand = false; continue;
+                }
+                if (quantLen(i + 1)) flush();
+                lit += c; operand = true; i++;
+            }
+            flush();
+            if (depth > 0) out.push({ tok: '', desc: `有 ${depth} 個 ( 沒有用 ) 關閉`, depth: 0, bad: true });
+            return out;
+        }
+
+        // 輸出為各語言字串字面值
+        function escStr(s, lang) {
+            let o = '';
+            for (const ch of s) {
+                const cp = ch.codePointAt(0);
+                if (ch === '\\') o += '\\\\'; else if (ch === '"') o += '\\"'; else if (ch === '\n') o += '\\n'; else if (ch === '\r') o += '\\r'; else if (ch === '\t') o += '\\t';
+                else if (cp < 32 || cp === 127) o += (lang === 'py' || lang === 'go' ? '\\x' + cp.toString(16).padStart(2, '0') : '\\u' + cp.toString(16).padStart(4, '0'));
+                else o += ch;
+            }
+            return o;
+        }
+        // 回傳 [{ lang, code, note }]
+        function toLangStrings(src, flags) {
+            const f = [...new Set(flags.replace(/[^gimsuy]/g, ''))].join('');
+            const js = '/' + src.replace(/\\.|\/|\[(?:\\.|[^\]\\])*\]/g, (m) => m === '/' ? '\\/' : m).replace(/\n/g, '\\n') + '/' + f;
+            const jsStr = `new RegExp("${escStr(src, 'js')}", "${f}")`;
+            // 原始字串不能含引號 / 換行，也不能以奇數個反斜線結尾
+            const raw = !/["\n\r]/.test(src) && !/(^|[^\\])(\\\\)*\\$/.test(src);
+            const pyLit = raw ? `r"${src}"` : `"${escStr(src, 'py')}"`;
+            const pf = [f.includes('i') && 're.I', f.includes('m') && 're.M', f.includes('s') && 're.S'].filter(Boolean).join(' | ');
+            const goInline = ['i', 'm', 's'].filter(x => f.includes(x)).join('');
+            const goSrc = (goInline ? `(?${goInline})` : '') + src;
+            const goLit = !/[`]/.test(goSrc) ? '`' + goSrc + '`' : `"${escStr(goSrc, 'go')}"`;
+            const jf = [f.includes('i') && 'Pattern.CASE_INSENSITIVE', f.includes('m') && 'Pattern.MULTILINE', f.includes('s') && 'Pattern.DOTALL', f.includes('u') && 'Pattern.UNICODE_CASE'].filter(Boolean).join(' | ');
+            return [
+                { lang: 'JavaScript', code: js + '\n' + jsStr, note: '字面值與字串建構兩種寫法' },
+                { lang: 'Python', code: `re.compile(${pyLit}${pf ? ', ' + pf : ''})`, note: raw ? 'r"..." 原始字串，不必再加倍反斜線' : '含引號或結尾反斜線，改用一般字串並加倍跳脫' },
+                { lang: 'Go', code: `regexp.MustCompile(${goLit})`, note: 'Go 用 RE2：不支援反向參照與斷言；旗標以 (?ims) 寫在樣式前面' },
+                { lang: 'Java', code: `Pattern.compile("${escStr(src, 'java')}"${jf ? ', ' + jf : ''})`, note: '反斜線都要加倍' }
+            ];
+        }
+
+        // 從範例推測（保守）：回傳 { candidates: [{ re, level }] } 或 { error }
+        function inferRegex(pos, neg) {
+            pos = pos.filter(x => x !== ''); neg = neg.filter(x => x !== '');
+            if (!pos.length) return { error: '請至少貼一個「應該符合」的字串' };
+            if (pos.length > 200 || neg.length > 200) return { error: '範例最多各 200 行' };
+            const kindOf = (c) => /\d/.test(c) ? 'd' : /[A-Za-z]/.test(c) ? 'a' : /[一-鿿]/.test(c) ? 'c' : 'L';
+            const tok = (s) => { const t = []; for (const ch of s) { const k = kindOf(ch), last = t[t.length - 1]; if (k !== 'L' && last && last.k === k) last.s += ch; else t.push({ k, s: ch }); } return t; };
+            const key = (t) => t.map(x => x.k === 'L' ? 'L' + x.s : x.k).join('\u0001');
+            const groups = new Map();
+            for (const s of pos) { const t = tok(s), k = key(t); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); }
+            const q = (lens, loose) => { const mn = Math.min(...lens), mx = Math.max(...lens); return loose ? (mn === 1 && mx === 1 ? '' : '+') : mn === mx ? (mn === 1 ? '' : `{${mn}}`) : `{${mn},${mx}}`; };
+            const esc = (s) => s.replace(/[.*+?^${}()|[\]\\\/-]/g, '\\$&');
+            const build = (loose) => [...groups.values()].map(rows => rows[0].map((x, i) => {
+                const texts = rows.map(r => r[i].s), lens = texts.map(t => [...t].length);
+                if (x.k === 'L') return esc(x.s);
+                if (x.k === 'd') return '\\d' + q(lens, loose);
+                if (x.k === 'c') return '[\\u4e00-\\u9fff]' + q(lens, loose);
+                if (!loose && new Set(texts).size === 1) return esc(texts[0]);
+                const cls = texts.every(t => /^[a-z]+$/.test(t)) ? 'a-z' : texts.every(t => /^[A-Z]+$/.test(t)) ? 'A-Z' : 'A-Za-z';
+                return `[${cls}]` + q(lens, loose);
+            }).join(''));
+            const candidates = [], seen = new Set();
+            for (const [loose, level] of [[false, '精確（保留固定文字與長度）'], [true, '寬鬆（長度不限）']]) {
+                const parts = build(loose);
+                const re = '^' + (parts.length === 1 ? parts[0] : '(?:' + parts.join('|') + ')') + '$';
+                if (seen.has(re)) continue; seen.add(re);
+                let r; try { r = new RegExp(re); } catch { continue; }
+                if (pos.every(s => r.test(s)) && !neg.some(s => r.test(s))) candidates.push({ re, level });
+            }
+            if (!candidates.length) return { error: '推測不出同時符合所有範例、又排除不該符合字串的樣式（可能範例太雜，或不該符合的字串與應符合的結構太像）' };
+            return { candidates };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
 
         function render() {
+            renderMain(); renderExplain(); renderLang();
+        }
+        function renderMain() {
             const flags = [...document.querySelectorAll('.flags input:checked')].map(i => i.value).join('');
             const text = $('#text').value;
             const r = findMatches($('#re').value, flags, text);
@@ -218,7 +478,81 @@ bob@test.com, carol@sample.com</textarea>
             });
         }
 
-        document.querySelectorAll('input, textarea').forEach(i => i.oninput = render);
+        // --- 範例庫 / 速查 / 解說 / 推測 / 輸出 ---
+        const RECIPES = [
+            ['電子郵件', '[\\w.+-]+@[\\w-]+(?:\\.[\\w-]+)+', 'g', 'alice@example.com\nbob.lee+tag@mail.example.co.jp\nnot-an-email'],
+            ['台灣手機', '^09\\d{2}-?\\d{3}-?\\d{3}$', 'gm', '0912345678\n0912-345-678\n0812345678'],
+            ['日期 YYYY-MM-DD', '^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$', 'gm', '2026-10-22\n2026-13-01\n2026-02-31（格式對，但不檢查大小月）'],
+            ['網址 http(s)', 'https?:\\/\\/[^\\s/$.?#][^\\s]*', 'g', '看 https://example.com/a?b=1 或 http://localhost:8080/x'],
+            ['IPv4', '^((25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1?\\d?\\d)$', 'gm', '192.168.0.1\n255.255.255.255\n256.1.1.1'],
+            ['台灣身分證格式', '^[A-Z][12]\\d{8}$', 'gm', 'A123456789\nB234567890\na123456789\nA323456789'],
+            ['十六進位色碼', '#(?:[0-9a-fA-F]{3}){1,2}\\b', 'g', '#fff #1a2B3c #12345 #abcdefg'],
+            ['統一編號（8 碼）', '^\\d{8}$', 'gm', '12345678\n1234567\n123456789'],
+            ['時間 HH:MM（24 小時）', '^([01]\\d|2[0-3]):[0-5]\\d$', 'gm', '09:30\n23:59\n24:00'],
+            ['頭尾空白', '^\\s+|\\s+$', 'gm', '  前後有空白  \n正常'],
+            ['中文字', '[\\u4e00-\\u9fff]+', 'g', 'Hello 世界 abc 你好']
+        ];
+        const REF = [
+            ['字元類別', [['.', '任意字元（不含換行）'], ['\\d \\D', '數字 / 非數字'], ['\\w \\W', '英數底線 / 其他'], ['\\s \\S', '空白 / 非空白'], ['[abc]', 'a、b 或 c'], ['[^abc]', '除了 a、b、c'], ['[a-z]', 'a 到 z'], ['\\p{L}', 'Unicode 字母（需 u 旗標）']]],
+            ['量詞', [['*', '0 次或更多'], ['+', '1 次或更多'], ['?', '0 或 1 次'], ['{3}', '剛好 3 次'], ['{2,}', '至少 2 次'], ['{2,5}', '2 到 5 次'], ['*? +? ??', '非貪婪（盡量少）']]],
+            ['錨點與邊界', [['^', '開頭（m 時每行）'], ['$', '結尾（m 時每行）'], ['\\b', '單字邊界'], ['\\B', '非單字邊界']]],
+            ['群組與參照', [['(abc)', '捕獲群組'], ['(?:abc)', '非捕獲群組'], ['(?<名稱>abc)', '具名群組'], ['a|b', 'a 或 b'], ['\\1', '反向參照第 1 組'], ['\\k<名稱>', '反向參照具名群組']]],
+            ['斷言（不消耗字元）', [['(?=abc)', '後面必須是 abc'], ['(?!abc)', '後面不能是 abc'], ['(?<=abc)', '前面必須是 abc'], ['(?<!abc)', '前面不能是 abc']]],
+            ['旗標', [['g', '全部比對'], ['i', '忽略大小寫'], ['m', '^ $ 對每行生效'], ['s', '. 含換行'], ['u', 'Unicode 模式'], ['y', 'sticky（從 lastIndex 起黏著比對）']]]
+        ];
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
+        const flagsNow = () => [...document.querySelectorAll('.flags input:checked')].map(i => i.value).join('');
+        function loadRecipe(r) {
+            $('#re').value = r[1];
+            document.querySelectorAll('.flags input').forEach(i => i.checked = r[2].includes(i.value));
+            $('#text').value = r[3]; render();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        function copyBtn(getText) {
+            const b = el('button', '', '複製'); b.type = 'button';
+            b.onclick = () => Util.copyText(getText()).then(() => { b.textContent = '已複製'; setTimeout(() => b.textContent = '複製', 1200); }, () => { });
+            return b;
+        }
+        RECIPES.forEach(r => {
+            const d = el('div', 'ex'), l = el('div'), b = el('button', '', '帶入');
+            b.type = 'button'; b.onclick = () => loadRecipe(r);
+            const code = el('code', 'mono', r[1]); code.style.fontSize = '13px';
+            l.append(el('b', '', r[0]), el('br'), code); d.append(l, b); $('#recipes').append(d);
+        });
+        REF.forEach(([title, rows]) => {
+            $('#ref').append(el('h3', '', title));
+            rows.forEach(([k, v]) => { const d = el('div', 'ref'); d.append(el('b', 'mono', k), ' ', el('small', '', v)); $('#ref').append(d); });
+        });
+        function renderExplain() {
+            const box = $('#explain'); box.replaceChildren();
+            const src = $('#re').value;
+            if (!src) { box.textContent = '上方「樣式」是空的'; return; }
+            explainRegex(src).forEach(r => {
+                const d = el('div', 'xl' + (r.bad ? ' bad' : '')); d.style.paddingLeft = r.depth * 14 + 'px';
+                d.append(el('b', 'mono', r.tok || '…'), el('span', '', r.bad ? '未解析：' + r.desc : r.desc)); box.append(d);
+            });
+        }
+        function renderLang() {
+            const box = $('#langOut'); box.replaceChildren();
+            const src = $('#re').value;
+            if (!src) { box.textContent = '上方「樣式」是空的'; return; }
+            toLangStrings(src, flagsNow()).forEach(o => {
+                box.append(el('b', '', o.lang), ' ', el('small', '', o.note), el('pre', 'mono', o.code), copyBtn(() => o.code));
+            });
+        }
+        $('#infGo').onclick = () => {
+            const out = $('#infOut'); out.replaceChildren();
+            const lines = (id) => $(id).value.split(/\r?\n/);
+            const r = inferRegex(lines('#infPos'), lines('#infNeg'));
+            if (r.error) { const p = el('p', '', r.error); p.style.color = 'var(--bad)'; out.append(p); return; }
+            r.candidates.forEach(c => {
+                const d = el('div', 'ex'), l = el('div'), b = el('button', '', '帶入');
+                b.type = 'button'; b.onclick = () => loadRecipe(['', c.re, '', lines('#infPos').concat(lines('#infNeg')).join('\n')]);
+                l.append(el('small', '', c.level), el('br'), el('code', 'mono', c.re)); d.append(l, b); out.append(d);
+            });
+            out.append(el('p', 'sub', '以上樣式已驗證：全部「應該符合」都符合、「不該符合」都不符合。'));
+        };
+        document.querySelectorAll('.flags input, #re, #text').forEach(i => i.oninput = render);
         render();
     </script>
 </body>

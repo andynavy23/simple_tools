@@ -18,10 +18,19 @@
             display: flex;
             gap: 8px;
             margin-bottom: 14px;
+            flex-wrap: wrap;
         }
 
         .tabs button {
             flex: 1;
+            min-width: 100px;
+        }
+
+        textarea.ta {
+            width: 100%;
+            min-height: 120px;
+            font-size: 16px;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
         }
 
         .chips {
@@ -162,7 +171,7 @@
         <h1>Git 指令速查</h1>
         <p class="sub">用白話情境找指令，每個都標示會不會遺失資料。</p>
 
-        <div class="tabs"><button id="tabSc" aria-pressed="true">情境速查</button><button id="tabGen" aria-pressed="false">指令產生器</button></div>
+        <div class="tabs"><button id="tabSc" aria-pressed="true">情境速查</button><button id="tabGen" aria-pressed="false">指令產生器</button><button id="tabTxt" aria-pressed="false">CHANGELOG / Hooks</button></div>
 
         <div id="pgSc">
             <div class="card">
@@ -186,6 +195,20 @@
                 <ul class="flags" id="gFlags"></ul>
             </div>
         </div>
+        <div id="pgTxt" hidden>
+            <div class="card">
+                <label class="f" for="tType" style="margin-top:0">要產生什麼</label>
+                <select id="tType" style="width:100%"></select>
+                <div class="fld" id="tFields"></div>
+            </div>
+            <div class="card">
+                <h2>產生結果</h2>
+                <p class="note" id="tFile"></p>
+                <div class="cmd"><div class="code" id="tOut" style="max-height:55vh;max-height:55dvh;overflow:auto"></div><button class="sm" id="tCopy">複製</button></div>
+                <p class="note" id="tErr"></p>
+                <ul class="flags" id="tNotes"></ul>
+            </div>
+        </div>
         <p class="note">指令以 POSIX shell（Git Bash、macOS、Linux）的引號規則產生；全部在你的瀏覽器計算。</p>
     </div>
 
@@ -197,23 +220,28 @@
             <li>commit 錯了、想撤銷或改訊息，但不確定該用 reset、revert 還是 amend。</li>
             <li>要刪遠端分支、清理未追蹤檔案、強制推送，想先確認風險。</li>
             <li>忘了 log 的格式或 stash 怎麼用。</li>
+            <li>想照 Conventional Commits 寫 commit 訊息、從 commit 清單整理 CHANGELOG，或設定 pre-commit / commit-msg hook。</li>
         </ul>
         <h3>怎麼用</h3>
         <ol>
             <li>在「情境速查」搜尋關鍵字，或用上方的風險按鈕篩選。</li>
             <li>點開情境，先看「做之前先確認」，再按指令旁的「複製」，貼到終端機。<kbd>&lt;hash&gt;</kbd>、<kbd>檔名</kbd> 這類佔位字要換成你的內容。</li>
-            <li>要自己組指令：切到「指令產生器」，選類型並填欄位，下方即時出現指令與每個旗標的說明。</li>
+            <li>要自己組指令：切到「指令產生器」，選類型並填欄位，下方即時出現指令與每個旗標的說明。選「cc（Conventional Commits）」可填類型 / scope / 描述 / BREAKING CHANGE，會檢查格式與標題長度（上限 72 字元，建議 50）。</li>
+            <li>「CHANGELOG / Hooks」分頁：貼上 <kbd>git log --oneline</kbd> 的輸出，依 feat / fix 等類型分組成 Keep a Changelog 格式；或勾選檢查項目產生 pre-commit、commit-msg 腳本。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">搜尋「改最後」→ 「改最後一個 commit 的訊息」🟡
 指令：git commit --amend -m "新訊息"
 產生器選 reset、模式 hard、目標 HEAD~1
-→ git reset --hard HEAD~1（紅色，會丟掉修改）</div>
+→ git reset --hard HEAD~1（紅色，會丟掉修改）
+貼上「a1b2c3d feat(ui): 新增深色模式」→ ### Added - **ui:** 新增深色模式</div>
         <h3>小提醒</h3>
         <ul>
             <li>已經 push 的 commit，不要用 amend / reset / rebase 改寫，改用 <kbd>git revert</kbd>；否則要強制推送，會影響其他人。</li>
             <li>風險標示是依指令本身判斷；紅色指令只要含 <kbd>--force</kbd>、<kbd>--hard</kbd>、<kbd>clean -f</kbd>、<kbd>rebase</kbd>、刪遠端等寫法就會出現。</li>
             <li>不確定時先跑 <kbd>git status</kbd> 與 <kbd>git log --oneline -5</kbd> 看現況。</li>
+            <li>CHANGELOG 只認 <kbd>type(scope): 描述</kbd> 格式的行（可有開頭 hash 或 - *）；docs / test / chore / ci / build 不收錄，無法辨識的行會列出數量。標題含 <kbd>!</kbd> 或有 BREAKING CHANGE 的項目會標上粗體 BREAKING。</li>
+            <li>Hooks 要存成 <kbd>.git/hooks/pre-commit</kbd>（commit-msg 同理）並 <kbd>chmod +x</kbd>；或放在 <kbd>.githooks/</kbd> 後執行 <kbd>git config core.hooksPath .githooks</kbd> 讓團隊共用。secrets 掃描只是簡單樣式比對，不能取代專門工具（如 gitleaks）；緊急時可用 <kbd>git commit --no-verify</kbd> 略過。</li>
             <li>此工具不儲存任何資料，也不會連線。</li>
         </ul>
     </template>
@@ -395,6 +423,88 @@
             return { err: '未知的動作' };
         }
 
+
+        // ===== Conventional Commits =====
+        const CC_TYPES = [['feat', '新功能'], ['fix', '修正錯誤'], ['docs', '文件'], ['style', '格式（不影響邏輯）'], ['refactor', '重構'], ['perf', '效能'], ['test', '測試'], ['build', '建置 / 依賴'], ['ci', 'CI 設定'], ['chore', '雜項'], ['revert', '還原']];
+        const CC_RE = /^([a-z]+)(?:\(([^()\s][^()]*)\))?(!)?: (\S.*)$/;
+        function buildCC(o) {
+            const type = o.type, scope = String(o.scope || '').trim(), desc = String(o.desc || '').trim(), body = String(o.body || '').trim(), br = String(o.breaking || '').trim();
+            if (!CC_TYPES.some(t => t[0] === type)) return { err: '請選擇類型' };
+            if (scope && !/^[\w./-]+$/.test(scope)) return { err: 'scope 只能含英數與 . _ / -' };
+            if (!desc) return { err: '請輸入描述' };
+            const title = `${type}${scope ? '(' + scope + ')' : ''}${br ? '!' : ''}: ${desc}`;
+            if (title.length > 72) return { err: `標題 ${title.length} 字元，超過 72；請縮短描述` };
+            if (!CC_RE.test(title)) return { err: '標題格式不符 type(scope): 描述' };
+            const p = ['git commit -m', q(title)], f = [[title, `標題 ${title.length} 字元` + (title.length > 50 ? '（建議 ≤ 50）' : '')], ['type', '類型：feat 會對應 minor 版本、fix 對應 patch']];
+            if (scope) f.push(['(scope)', '影響範圍，例如模組或元件名']);
+            if (body) { p.push('-m', q(body)); f.push(['第二個 -m', '內文段落（說明為什麼改）']); }
+            if (br) { p.push('-m', q('BREAKING CHANGE: ' + br)); f.push(['!', '標題的驚嘆號與 BREAKING CHANGE: 腳註表示不相容的變更，對應 major 版本']); }
+            if (/[.。]$/.test(desc)) f.push(['⚠ 句尾標點', '描述結尾通常不加句號']);
+            return mk(p, f);
+        }
+
+        // ===== CHANGELOG =====
+        const CL_MAP = { feat: 'Added', fix: 'Fixed', perf: 'Changed', refactor: 'Changed', style: 'Changed', revert: 'Changed' };
+        const CL_ORDER = ['Added', 'Changed', 'Fixed'];
+        // 每行：可有 - * 或 7–40 碼 hash 開頭；回傳 {items:[{type,scope,desc,breaking}], skipped, unknown}
+        function parseCommits(text) {
+            const items = []; let skipped = 0, unknown = 0;
+            for (const raw of String(text || '').split(/\r?\n/)) {
+                const line = raw.trim(); if (!line) continue;
+                const m = /^(?:[-*]\s+)?(?:[0-9a-f]{7,40}\s+)?(\w+)(?:\(([^)]*)\))?(!)?:\s+(.+)$/.exec(line);
+                if (!m) { unknown++; continue; }
+                const type = m[1].toLowerCase();
+                if (!(type in CL_MAP)) { if (CC_TYPES.some(t => t[0] === type)) skipped++; else unknown++; continue; }
+                items.push({ type, scope: m[2] || '', desc: m[4], breaking: !!m[3] || /BREAKING[ -]CHANGE/.test(m[4]) });
+            }
+            return { items, skipped, unknown };
+        }
+        function buildChangelog(o) {
+            const ver = String(o.version || '').trim(), date = String(o.date || '').trim();
+            if (!/^\d+\.\d+\.\d+([-+][0-9A-Za-z.-]+)?$/.test(ver) && ver !== 'Unreleased') return { err: '版本請輸入 1.2.0 或 Unreleased' };
+            if (ver !== 'Unreleased' && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { err: '日期請輸入 YYYY-MM-DD' };
+            const r = parseCommits(o.commits);
+            if (!r.items.length) return { err: '沒有可收錄的 commit（需要 feat / fix / perf / refactor / style / revert 開頭的 type(scope): 描述）' };
+            const L = [ver === 'Unreleased' ? '## [Unreleased]' : `## [${ver}] - ${date}`];
+            for (const sec of CL_ORDER) {
+                const its = r.items.filter(i => CL_MAP[i.type] === sec); if (!its.length) continue;
+                L.push('', `### ${sec}`, ...its.map(i => `- ${i.breaking ? '**BREAKING** ' : ''}${i.scope ? '**' + i.scope + ':** ' : ''}${i.desc}`));
+            }
+            return { text: L.join('\n') + '\n', file: 'CHANGELOG.md（貼在檔案標題之下）', notes: [['收錄', `${r.items.length} 筆；略過 docs / test / chore / ci / build ${r.skipped} 筆`], ['無法辨識', `${r.unknown} 行不是 type(scope): 描述 格式，未收錄`], ['對應', 'feat → Added；fix → Fixed；perf / refactor / style / revert → Changed']] };
+        }
+
+        // ===== Git hooks =====
+        const HOOK_TYPES = CC_TYPES.map(t => t[0]).join('|');
+        function buildHook(o) {
+            if (o.hook === 'commit-msg') {
+                const sh = `#!/bin/sh
+# commit-msg：檢查第一行是否為 Conventional Commits，且不超過 72 字元
+msg=$(head -n 1 "$1")
+case "$msg" in
+  Merge\\ *|Revert\\ *|fixup!\\ *|squash!\\ *) exit 0 ;;
+esac
+if ! printf '%s\\n' "$msg" | grep -Eq '^(${HOOK_TYPES})(\\([^)]+\\))?!?: .+'; then
+  echo "commit 訊息格式不符：type(scope): 描述（例如 feat(ui): 新增深色模式）" >&2
+  exit 1
+fi
+if [ "\${#msg}" -gt 72 ]; then
+  echo "標題超過 72 字元（目前 \${#msg}）" >&2
+  exit 1
+fi
+`;
+                return { text: sh, file: '.git/hooks/commit-msg', notes: [['安裝', '存成 .git/hooks/commit-msg 並 chmod +x；Windows 用 Git Bash 執行'], ['$1', 'Git 傳入的訊息檔路徑'], ['略過', 'merge / revert / fixup 訊息不檢查']] };
+            }
+            if (!o.diffcheck && !o.secrets && !o.test) return { err: '請至少勾選一項檢查' };
+            let sh = '#!/bin/sh\n# pre-commit：任何一項失敗就中止 commit\n';
+            if (o.diffcheck) sh += '\n# 1. 行尾空白與衝突標記\nif ! git diff --cached --check; then\n  echo "暫存內容有行尾空白或衝突標記" >&2\n  exit 1\nfi\n';
+            if (o.secrets) sh += `\n# 2. 簡易 secrets 掃描（只看這次新增的行）\nif git diff --cached -U0 | grep '^+' | grep -v '^+++' | grep -Eiq 'AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|(api[_-]?key|secret|token|password)[[:space:]]*[=:][[:space:]]*["'"'"'][^"'"'"' ]{8,}'; then\n  echo "偵測到疑似密鑰或密碼，請確認後移除（確定沒問題可用 git commit --no-verify）" >&2\n  exit 1\nfi\n`;
+            if (o.test) sh += '\n# 3. 測試（依專案改成你的指令）\nnpm test --silent || exit 1\n';
+            return { text: sh, file: '.git/hooks/pre-commit', notes: [['安裝', '存成 .git/hooks/pre-commit 並 chmod +x；團隊共用可放 .githooks/ 再 git config core.hooksPath .githooks'], ['--cached', '只檢查已 git add 的內容'], ['secrets', '比對 AWS Access Key、私鑰標頭、key/secret/token/password = "…" 樣式；只是簡例，會有漏報與誤報'], ['--no-verify', '緊急時可略過所有 hook']] };
+        }
+        const TFORMS = {
+            changelog: { label: 'CHANGELOG（Keep a Changelog）', build: buildChangelog, fields: [{ k: 'version', l: '版本', t: 'text', d: '1.0.0' }, { k: 'date', l: '日期（YYYY-MM-DD）', t: 'text', d: '' }, { k: 'commits', l: '貼上 commit 清單（git log --oneline）', t: 'area' }] },
+            hook: { label: 'Git hooks 範本', build: buildHook, fields: [{ k: 'hook', l: 'Hook', t: 'select', o: [['pre-commit', 'pre-commit（commit 前檢查）'], ['commit-msg', 'commit-msg（檢查訊息格式）']] }, { k: 'diffcheck', l: 'pre-commit：行尾空白 / 衝突標記', t: 'check', d: true }, { k: 'secrets', l: 'pre-commit：secrets 掃描', t: 'check', d: true }, { k: 'test', l: 'pre-commit：執行 npm test', t: 'check' }] },
+        };
         // 表單定義：欄位 t = text | check | select | number
         const FORMS = {
             commit: { label: 'commit（提交）', build: buildCommit, fields: [{ k: 'msg', l: '訊息', t: 'text' }, { k: 'all', l: '-a 自動暫存已追蹤檔案', t: 'check' }, { k: 'amend', l: '--amend 改寫最後一個 commit', t: 'check' }, { k: 'noedit', l: '--no-edit 沿用原訊息（需配合 amend）', t: 'check' }, { k: 'empty', l: '--allow-empty 允許空 commit', t: 'check' }] },
@@ -402,6 +512,7 @@
             log: { label: 'log（歷史）', build: buildLog, fields: [{ k: 'fmt', l: '格式', t: 'select', o: [['oneline', '一行一個'], ['graph', '分支圖'], ['stat', '含檔案統計'], ['patch', '含完整差異'], ['pretty', '自訂：hash 作者 日期 標題']] }, { k: 'n', l: '最近幾筆（可空白）', t: 'number' }, { k: 'author', l: '作者（可空白）', t: 'text' }, { k: 'since', l: '起始時間（可空白）', t: 'text' }, { k: 'grep', l: '訊息含文字（可空白）', t: 'text' }, { k: 'path', l: '路徑（可空白）', t: 'text' }] },
             reset: { label: 'reset（退回）', build: buildReset, fields: [{ k: 'mode', l: '模式', t: 'select', o: [['soft', 'soft：保留修改與暫存'], ['mixed', 'mixed：保留修改、取消暫存'], ['hard', 'hard：全部丟掉（危險）']] }, { k: 'target', l: '目標', t: 'text', d: 'HEAD~1' }] },
             revert: { label: 'revert（反向還原）', build: buildRevert, fields: [{ k: 'target', l: '要還原的 commit', t: 'text', d: 'HEAD' }, { k: 'mainline', l: '-m 還原 merge commit 時保留的父親', t: 'select', o: [['', '（不是 merge commit）'], ['1', '1（主線）'], ['2', '2']] }, { k: 'noCommit', l: '--no-commit 只套用、不自動 commit', t: 'check' }, { k: 'noEdit', l: '--no-edit 用預設訊息', t: 'check' }] },
+            cc: { label: 'cc（Conventional Commits）', build: buildCC, fields: [{ k: 'type', l: '類型', t: 'select', o: CC_TYPES.map(([k, v]) => [k, k + '：' + v]) }, { k: 'scope', l: 'scope（可空白）', t: 'text' }, { k: 'desc', l: '描述', t: 'text' }, { k: 'body', l: '內文（可空白）', t: 'text' }, { k: 'breaking', l: 'BREAKING CHANGE 說明（有填才算）', t: 'text' }] },
             tag: { label: 'tag（標籤）', build: buildTag, fields: [{ k: 'action', l: '動作', t: 'select', o: [['create', '建立'], ['push', '推送到遠端'], ['delete', '刪除本機'], ['deleteRemote', '刪除遠端'], ['list', '列出']] }, { k: 'name', l: 'tag 名稱', t: 'text', d: 'v1.0.0' }, { k: 'msg', l: '說明（有填則為附註 tag）', t: 'text' }, { k: 'target', l: '標在哪個 commit（可空白）', t: 'text' }] },
         };
         // --- /pure ---
@@ -465,11 +576,45 @@
             $('#gFlags').append(...r.flags.map(([a, b]) => el('li', {}, el('code', { textContent: a }), ' ' + b)));
         }
 
-        function tab(t) {
-            $('#pgSc').hidden = t !== 'sc'; $('#pgGen').hidden = t !== 'gen';
-            $('#tabSc').setAttribute('aria-pressed', String(t === 'sc')); $('#tabGen').setAttribute('aria-pressed', String(t === 'gen'));
+        // CHANGELOG / Hooks 分頁（欄位 t：text | check | select | area）
+        let tstate = {};
+        function renderTFields() {
+            const form = TFORMS[$('#tType').value], box = $('#tFields'); tstate = {}; box.replaceChildren();
+            for (const f of form.fields) {
+                const id = 't_' + f.k; tstate[f.k] = f.t === 'check' ? !!f.d : (f.d || (f.t === 'select' ? f.o[0][0] : ''));
+                if (f.k === 'date') tstate.date = new Date(Date.now() + 8 * 36e5).toISOString().slice(0, 10);   // 台灣時間今天
+                let inp;
+                if (f.t === 'check') { inp = el('input', { type: 'checkbox', id, checked: tstate[f.k] }); box.append(el('label', { className: 'chk' }, inp, f.l)); }
+                else {
+                    box.append(el('label', { className: 'f', htmlFor: id, textContent: f.l }));
+                    if (f.t === 'select') { inp = el('select', { id }); f.o.forEach(([v, t]) => inp.append(new Option(t, v))); }
+                    else if (f.t === 'area') inp = el('textarea', { id, className: 'ta', spellcheck: false, maxLength: 50000 });
+                    else inp = el('input', { id, type: 'text', value: tstate[f.k], autocomplete: 'off', spellcheck: false });
+                    box.append(inp);
+                }
+                const upd = () => { tstate[f.k] = f.t === 'check' ? inp.checked : inp.value; renderTOut(); };
+                inp.addEventListener('input', upd); inp.addEventListener('change', upd);
+            }
+            renderTOut();
         }
-        $('#tabSc').onclick = () => tab('sc'); $('#tabGen').onclick = () => tab('gen');
+        function renderTOut() {
+            const r = TFORMS[$('#tType').value].build(tstate);
+            $('#tNotes').replaceChildren();
+            $('#tErr').textContent = r.err || ''; $('#tErr').className = 'note' + (r.err ? ' bad' : '');
+            $('#tCopy').disabled = !!r.err;
+            if (r.err) { $('#tOut').textContent = '—'; $('#tFile').textContent = ''; return; }
+            $('#tOut').textContent = r.text; $('#tFile').textContent = '建議檔名：' + r.file;
+            $('#tCopy').onclick = () => copyWithFeedback($('#tCopy'), r.text);
+            $('#tNotes').append(...r.notes.map(([a, b]) => el('li', {}, el('code', { textContent: a }), ' ' + b)));
+        }
+        function tab(t) {
+            $('#pgSc').hidden = t !== 'sc'; $('#pgGen').hidden = t !== 'gen'; $('#pgTxt').hidden = t !== 'txt';
+            for (const [id, k] of [['#tabSc', 'sc'], ['#tabGen', 'gen'], ['#tabTxt', 'txt']]) $(id).setAttribute('aria-pressed', String(t === k));
+        }
+        $('#tabSc').onclick = () => tab('sc'); $('#tabGen').onclick = () => tab('gen'); $('#tabTxt').onclick = () => tab('txt');
+        $('#tType').replaceChildren(...Object.entries(TFORMS).map(([k, f]) => new Option(f.label, k)));
+        $('#tType').addEventListener('change', renderTFields);
+        renderTFields();
         $('#q').addEventListener('input', renderList);
         $('#gType').replaceChildren(...Object.entries(FORMS).map(([k, f]) => new Option(f.label, k)));
         $('#gType').addEventListener('change', renderFields);

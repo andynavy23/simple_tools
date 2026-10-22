@@ -87,6 +87,27 @@
             margin: 8px 0 0;
         }
 
+        .bt {
+            border-collapse: collapse;
+            font: 13px/1.5 ui-monospace, Consolas, monospace;
+            width: 100%;
+        }
+
+        .bt th, .bt td {
+            padding: 6px 8px;
+            border-bottom: 1px solid var(--line);
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        .bt td.g {
+            font-size: 18px;
+        }
+
+        .bt td.no {
+            color: var(--muted);
+        }
+
         .ck {
             display: flex;
             align-items: center;
@@ -107,6 +128,7 @@
         <div class="row tabs" style="margin-bottom:16px">
             <button id="tabFile" aria-pressed="true">檔案轉碼</button>
             <button id="tabPaste" aria-pressed="false">貼上亂碼修復</button>
+            <button id="tabBytes" aria-pressed="false">位元組並排</button>
         </div>
 
         <div id="paneFile">
@@ -150,6 +172,20 @@
                 <div id="mojOut"></div>
             </div>
         </div>
+
+        <div id="paneBytes" hidden>
+            <div class="card">
+                <label for="bytIn" style="margin-top:0">輸入文字</label>
+                <textarea id="bytIn" rows="3" maxlength="2000" placeholder="例如 中文、é、😀" aria-label="要檢視位元組的文字"></textarea>
+                <p class="note">同一段文字在各種編碼下的位元組並排；「—」表示該編碼放不下這個字。最多 300 個字。</p>
+            </div>
+            <div class="card" id="bytCard" hidden>
+                <div style="overflow-x:auto"><table class="bt" id="bytTbl"></table></div>
+                <h2 style="margin-top:16px">亂碼會長怎樣</h2>
+                <p class="note">把這段文字的 UTF-8 位元組「誤當成」別的編碼讀，就會出現下面這些亂碼（可貼到「貼上亂碼修復」還原）。</p>
+                <div id="bytHint"></div>
+            </div>
+        </div>
     </div>
 
     <template id="help">
@@ -165,6 +201,7 @@
         <ol>
         <li>「檔案轉碼」：選擇文字檔，會自動偵測並顯示理由與信心；預覽不對就改「以哪種編碼讀取」。</li>
         <li>確認預覽正常後，設定 BOM 與換行，按「下載 UTF-8 檔案」。</li>
+        <li>「位元組並排」：輸入文字，並排看它在 UTF-8、UTF-16LE / BE、Big5、GBK 的位元組；下方列出「UTF-8 位元組被誤當成別的編碼」會變成什麼亂碼，幫你判斷成因。</li>
         <li>「貼上亂碼修復」：把亂碼貼進去，下方列出各種還原候選，綠色「最佳」是中日文字元最像正常文字的一個，按「複製」帶走。</li>
         </ol>
         <h3>範例</h3>
@@ -177,6 +214,7 @@
         <li>編碼選單只列出你的瀏覽器支援的項目。上限：檔案 20MB；貼上文字 20000 字。</li>
         <li>不能修復的類型：資訊已經遺失的亂碼，例如出現 <kbd>�</kbd> 或 <kbd>锟斤拷</kbd>（原始位元組已被取代）；多次連環亂碼只嘗試一層。</li>
         <li>預覽只看前 N 行，下載時轉換整個檔案；若原檔含無法解讀的位元組，會以 � 取代並提示。</li>
+        <li>位元組並排的 Big5 / GBK 是用瀏覽器的解碼器反查得到（只收錄 1–2 位元組的字，每個結果都經解碼驗證）；放不下的字顯示「—」，GBK 的四位元組字（罕用字、部分 emoji）不列。一次最多 300 個字。</li>
         <li>隱私與儲存：檔案與文字只在這個分頁處理，不會上傳，也不會存進本機，關閉即清空。</li>
         </ul>
     </template>
@@ -321,14 +359,31 @@
             cands.sort((a, b) => b.score - a.score);
             return { orig, lossy, cands, best: cands.length && cands[0].score > orig + 0.3 ? cands[0] : null };
         }
+
+        // ---- 位元組並排 ----
+        const hx = (u8) => [...u8].map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+        const u16 = (str, le) => { const o = []; for (let i = 0; i < str.length; i++) { const c = str.charCodeAt(i); o.push(le ? [c & 255, c >> 8] : [c >> 8, c & 255]); } return Uint8Array.from(o.flat()); };
+        const BYTE_MAX = 300;
+        // 每個字（code point）在各編碼的位元組（16 進位字串，放不下為 null）；Big5 / GBK 由 encodeWith 反查（已由 TextDecoder 驗證）
+        function byteRows(text) {
+            return [...String(text)].slice(0, BYTE_MAX).map(ch => {
+                const big5 = encodeWith(ch, 'big5'), gbk = encodeWith(ch, 'gbk');
+                return { ch, cp: 'U+' + ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0'), utf8: hx(new TextEncoder().encode(ch)), utf16le: hx(u16(ch, true)), utf16be: hx(u16(ch, false)), big5: big5 && hx(big5), gbk: gbk && hx(gbk) };
+            });
+        }
+        // 亂碼成因：整段文字的 UTF-8 位元組被誤當成 label 讀（非嚴格解碼）
+        function mojiHints(text) {
+            const b = new TextEncoder().encode(String(text).slice(0, BYTE_MAX));
+            return ['windows-1252', 'iso-8859-1', 'big5', 'gbk', 'shift_jis'].filter(l => supportedEncs([l]).length).map(l => ({ as: NAME[l] || l, text: new TextDecoder(l).decode(b) }));
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
         const MAX_FILE = 20 * 1024 * 1024;
         let bytes = null, fname = 'text.txt';
 
-        const tab = (paste) => { $('#paneFile').hidden = paste; $('#panePaste').hidden = !paste; $('#tabFile').setAttribute('aria-pressed', !paste); $('#tabPaste').setAttribute('aria-pressed', paste); };
-        $('#tabFile').onclick = () => tab(false); $('#tabPaste').onclick = () => tab(true);
+        const tab = (t) => { for (const [k, id] of [['file', 'File'], ['paste', 'Paste'], ['bytes', 'Bytes']]) { $('#pane' + id).hidden = k !== t; $('#tab' + id).setAttribute('aria-pressed', k === t); } };
+        $('#tabFile').onclick = () => tab('file'); $('#tabPaste').onclick = () => tab('paste'); $('#tabBytes').onclick = () => tab('bytes');
 
         const ENCS = supportedEncs();
         $('#enc').replaceChildren(...ENCS.map(e => new Option(NAME[e] || e.toUpperCase(), e)));
@@ -386,6 +441,18 @@
             });
         }
         $('#mojIn').oninput = renderMoj;
+
+        function renderBytes() {
+            const s = $('#bytIn').value;
+            $('#bytCard').hidden = !s;
+            if (!s) return;
+            const cell = (tag, t, cls) => { const e = document.createElement(tag); e.textContent = t; if (cls) e.className = cls; return e; };
+            const rows = byteRows(s), tbl = $('#bytTbl');
+            const head = document.createElement('tr'); head.append(...['字', '碼位', 'UTF-8', 'UTF-16LE', 'UTF-16BE', 'Big5', 'GBK'].map(t => cell('th', t)));
+            tbl.replaceChildren(head, ...rows.map(r => { const tr = document.createElement('tr'); tr.append(cell('td', r.ch.trim() ? r.ch : '␣', 'g'), cell('td', r.cp), cell('td', r.utf8), cell('td', r.utf16le), cell('td', r.utf16be), ...[r.big5, r.gbk].map(v => cell('td', v || '—', v ? '' : 'no'))); return tr; }));
+            $('#bytHint').replaceChildren(...mojiHints(s).map(h => { const d = document.createElement('div'); d.className = 'cand'; const w = cell('div', 'UTF-8 被當成 ' + h.as + ' 讀', 'why'); d.append(w, cell('div', h.text, 'txt')); return d; }));
+        }
+        $('#bytIn').oninput = renderBytes;
     </script>
 </body>
 

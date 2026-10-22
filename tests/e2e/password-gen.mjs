@@ -1,0 +1,31 @@
+// password-gen：分頁、TOTP、強度評估、secret 不寫入 localStorage
+import assert from 'assert';
+import crypto from 'crypto';
+import { launchEdge, openPage } from './lib.mjs';
+const browser = await launchEdge();
+const { page, errors } = await openPage(browser, 'utils/password-gen.html');
+const ev = (f, ...a) => page.evaluate(f, ...a);
+const click = (s) => ev((s) => document.querySelector(s).click(), s);
+const set = (s, v) => ev((s, v) => { const e = document.querySelector(s); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); }, s, v);
+const txt = (s) => ev((s) => document.querySelector(s).textContent, s);
+assert.ok((await txt('#pw')).length >= 8);
+await click('[data-t=totp]');
+assert.equal(await ev(() => document.querySelector('#tab-totp').hidden), false);
+await set('#totpSecret', 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ');           // = 12345678901234567890
+await page.waitForFunction(() => /^\d{6}$/.test(document.querySelector('#totpCode').textContent));
+const code = await txt('#totpCode');
+const hotp = (t) => { const m = Buffer.alloc(8); m.writeBigUInt64BE(BigInt(Math.floor(t / 30))); const h = crypto.createHmac('sha1', '12345678901234567890').update(m).digest(), o = h[19] & 15; return String((h.readUInt32BE(o) & 0x7fffffff) % 1e6).padStart(6, '0'); };
+const now = Date.now() / 1000;
+assert.ok([hotp(now), hotp(now - 30)].includes(code), 'TOTP 與 node 計算不符：' + code);
+await set('#totpSecret', 'abc1'); await page.waitForFunction(() => document.querySelector('#totpMsg').textContent.includes('不合法'));
+assert.equal(await ev(() => Object.keys(localStorage).length), 0, 'secret 不可寫入 localStorage');
+await click('#totpClear'); assert.equal(await txt('#totpCode'), '------');
+await click('[data-t=chk]'); await set('#chk', 'MyPassword1234');
+assert.ok((await txt('#chkOut')).includes('常見字根'));
+const t1 = await txt('#chkOut');
+await ev(() => { const s = document.querySelector('#hashAlgo'); s.selectedIndex = 5; s.dispatchEvent(new Event('change')); });
+assert.notEqual(await txt('#chkOut'), t1);
+assert.equal(await ev(() => document.scrollingElement.scrollWidth <= innerWidth), true);
+assert.deepEqual(errors, []);
+await browser.close();
+console.log('password-gen OK');

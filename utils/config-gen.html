@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="伺服器與部署設定產生器：nginx、Apache / .htaccess、Caddy、systemd、SSH config、logrotate、Kubernetes、Prometheus、Ansible、Terraform、Shell 指令、備份排程，表單產生、逐行說明、一鍵複製。">
+    <meta property="og:title" content="伺服器與部署設定產生器" />
+    <meta property="og:description" content="表單產生各種設定檔與指令，附逐行說明；nginx location 命中測試。離線計算。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/config-gen.html" />
+    <meta name="st-keys" content="cfgen_opts">
+    <title>伺服器與部署設定產生器</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 720px;
+        }
+
+        label.f {
+            display: block;
+            font-weight: 600;
+            margin: 12px 0 6px;
+        }
+
+        label.f small {
+            font-weight: 400;
+            color: var(--muted);
+        }
+
+        select {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+        }
+
+        textarea {
+            min-height: 84px;
+            resize: vertical;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+        }
+
+        .grid2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        @media (max-width: 480px) {
+            .grid2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .chk {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 44px;
+        }
+
+        .code {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 14px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin: 8px 0;
+            overflow-x: auto;
+            white-space: pre;
+            max-width: 100%;
+            min-height: 44px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .warnbox {
+            margin-top: 10px;
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        .warnbox div::before {
+            content: "• ";
+        }
+
+        .ex {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--fill);
+            font-size: 14px;
+        }
+
+        .ex:last-child {
+            border-bottom: 0;
+        }
+
+        .ex code {
+            display: block;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            overflow-x: auto;
+            white-space: pre;
+            max-width: 100%;
+        }
+
+        .ex span {
+            color: var(--muted);
+        }
+
+        .ex.bad code,
+        .ex.bad span {
+            color: var(--bad);
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>伺服器與部署設定產生器</h1>
+        <p class="sub">選範本、填表單，產生設定檔或指令，附逐行說明。全部在本機處理。</p>
+
+        <div class="card">
+            <label class="f" for="tpl">範本</label>
+            <select id="tpl"></select>
+            <div id="form"></div>
+            <div class="row" style="margin-top:12px"><button class="sm" id="reset">重置此範本</button><button class="sm" id="resetAll">全部重置</button></div>
+        </div>
+
+        <div class="card">
+            <h2>輸出</h2>
+            <div class="code" id="out"></div>
+            <button class="sm" id="copy">複製</button>
+            <div class="warnbox" id="warns"></div>
+        </div>
+
+        <div class="card">
+            <h2>逐行說明</h2>
+            <div id="exp"></div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>把常見的伺服器、部署設定與指令做成表單：選一個範本、填幾個欄位，就產生設定檔（或指令），並逐行說明每個設定在做什麼，一鍵複製。包含 nginx（反向代理、靜態站、HTTPS 轉址、gzip、快取、CORS）、nginx location 命中測試、Apache / .htaccess、Caddyfile、systemd service / timer、SSH config、logrotate、Kubernetes、Prometheus 告警、Ansible、Terraform、Shell 指令（find / grep / tar / rsync / ssh / scp / rm）、備份腳本 + crontab。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>忘了某個設定檔的語法，想先有個能用的骨架再改。</li>
+        <li>想看懂別人給的設定：每行旁邊有簡短說明。</li>
+        <li>寫 Kubernetes YAML 怕縮排與引號錯誤；組 find / rsync 指令怕下錯旗標。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>上方選「範本」，下方出現對應欄位（有些範本還有「類型」下拉）。</li>
+        <li>填欄位，輸出即時更新；黃字的提醒是缺漏或可疑的地方，不會阻擋輸出。</li>
+        <li>按「複製」貼到伺服器；紅色的說明代表危險寫法（如 <kbd>rm -rf</kbd>、<kbd>--delete</kbd>、<kbd>-delete</kbd>），執行前請再確認。</li>
+        <li>「nginx location 測試」：每行一條 location 規則（<kbd>location ^~ /static/ {</kbd> 或只寫 <kbd>^~ /static/</kbd>），再輸入請求路徑，會指出命中哪一條並說明為什麼。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">nginx 反向代理：網域 example.com、後端 http://127.0.0.1:3000 → server / location / proxy_pass 與標頭設定
+location 測試：規則 = /、/、/api/、^~ /static/、~* \.(png|jpg)$；路徑 /static/a.png
+→ 命中 ^~ /static/（^~ 命中後不再看正規式）
+find：路徑 /var/log、名稱 *.log、修改超過 30 天、動作「刪除」→ find ... -delete（紅色標示）</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>產生的是「常見可用」的基本設定；不確定的選項刻意不寫。上線前請依你的環境（版本、路徑、發行版）檢查。YAML 由本頁自行輸出，字串會加引號避免 no、1.10、0755 被誤判型別。</li>
+        <li>nginx location 測試只模擬匹配順序（=、^~、~、~*、最長前綴），不處理 rewrite、巢狀 location 與 URI 正規化的全部細節；正規式以 JavaScript 引擎比對，與 nginx 的 PCRE 大致相同但不完全一致。</li>
+        <li>指令與腳本會在你的伺服器上執行，請先在測試環境或加上預覽旗標（find 去掉 -delete、rsync -n）確認。</li>
+        <li>只會記住上次選的範本與各欄位內容（鍵 cfgen_opts，每個欄位有長度上限），不會累積資料，可用右上角 💾 備份；「重置此範本 / 全部重置」會清掉記住的內容（先確認、無法復原）。壞掉的記憶資料會被忽略。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, copyWithFeedback } = Util;
+
+        // --- pure ---
+        const SAFE_SH = /^[A-Za-z0-9_@%+=:,./-]+$/;
+        const shq = (s) => { s = String(s); return s === '' ? "''" : SAFE_SH.test(s) || /^~\/[A-Za-z0-9_@%+=:,./-]*$/.test(s) ? s : "'" + s.replace(/'/g, "'\\''") + "'"; };
+        const n = (x) => String(x ?? '').trim();
+        const ls = (x) => String(x ?? '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        const kv = (x) => ls(x).map(s => { const i = s.indexOf('='); return i < 0 ? [s, ''] : [s.slice(0, i).trim(), s.slice(i + 1)]; });
+        const isPort = (p) => /^\d+$/.test(p) && +p >= 1 && +p <= 65535;
+        const isHost = (h) => /^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$/.test(h);
+        const isIp = (s) => /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(s) && s.split('/')[0].split('.').every(x => +x <= 255) || /^[0-9a-fA-F:]+(\/\d{1,3})?$/.test(s) && s.includes(':');
+        const DANGER = /(^|\s)rm\s+-[a-z]*(rf|fr)|--delete\b|\s-delete\b|\bmkfs\b|\bdd\s+if=|chmod\s+-R\s+777|force_destroy\s*=\s*true/;
+
+        // --- YAML（自行輸出，不依賴函式庫）---
+        const YAML_RESERVED = /^(true|false|yes|no|on|off|null|y|n|~)$/i;
+        const ys = (v) => typeof v === 'number' || typeof v === 'boolean' ? String(v) : v === null ? 'null'
+            : /^[A-Za-z_][A-Za-z0-9_.\/-]*$/.test(v) && !YAML_RESERVED.test(v) ? v : JSON.stringify(String(v));
+        function toYaml(v, ind = 0) {
+            const pad = ' '.repeat(ind), out = [];
+            if (Array.isArray(v)) {
+                for (const it of v) {
+                    if (it && typeof it === 'object' && (Array.isArray(it) ? it.length : Object.keys(it).length)) {
+                        const sub = toYaml(it, ind + 2).split('\n'); sub[0] = pad + '- ' + sub[0].slice(ind + 2); out.push(...sub);
+                    } else out.push(pad + '- ' + (it && typeof it === 'object' ? (Array.isArray(it) ? '[]' : '{}') : ys(it)));
+                }
+            } else {
+                for (const [k, x] of Object.entries(v)) {
+                    if (x === undefined) continue;
+                    if (x && typeof x === 'object') {
+                        const empty = Array.isArray(x) ? !x.length : !Object.keys(x).length;
+                        out.push(pad + ys(k) + ':' + (empty ? (Array.isArray(x) ? ' []' : ' {}') : '\n' + toYaml(x, ind + 2)));
+                    } else out.push(pad + ys(k) + ': ' + ys(x));
+                }
+            }
+            return out.join('\n');
+        }
+
+        // --- nginx location 匹配（=、^~、~、~*、最長前綴）---
+        function parseLoc(text) {
+            const rules = [], bad = [];
+            for (const raw of String(text ?? '').split(/\r?\n/)) {
+                let t = raw.trim();
+                if (!t || t[0] === '#' || t[0] === '}') continue;
+                t = t.replace(/\s+\{[^{}]*\}?\s*;?$/, '').replace(/^location\s+/, '');
+                const m = /^(=|\^~|~\*|~)\s+(.+)$/.exec(t) || /^()(\S.*)$/.exec(t);
+                if (!m) continue;
+                let pat = m[2].trim().replace(/^(["'])(.*)\1$/, '$2');
+                if (pat[0] === '@') { bad.push(`命名 location ${pat} 不參與路徑匹配，已略過`); continue; }
+                const r = { mod: m[1], pat, text: (m[1] ? m[1] + ' ' : '') + pat };
+                if (m[1] === '~' || m[1] === '~*') { try { r.re = new RegExp(pat, m[1] === '~*' ? 'i' : ''); } catch (e) { bad.push(`正規式無法解析：${pat}`); continue; } }
+                rules.push(r);
+            }
+            return { rules, bad };
+        }
+        // 回傳 { winner(索引或 -1), path, rules, notes[] }
+        function nginxMatch(rulesText, reqPath) {
+            const { rules, bad } = parseLoc(rulesText);
+            let p = String(reqPath ?? '').trim().replace(/[?#].*$/, '').replace(/\/{2,}/g, '/');
+            const notes = [...bad];
+            if (!p.startsWith('/')) { p = '/' + p; }
+            let winner = -1, reason = '', best = -1;
+            const i0 = rules.findIndex(r => r.mod === '=' && r.pat === p);
+            if (i0 >= 0) { winner = i0; reason = '精確匹配 = 完全相同，立刻結束，不再看其他規則'; }
+            else {
+                rules.forEach((r, i) => { if ((r.mod === '' || r.mod === '^~') && p.startsWith(r.pat) && (best < 0 || r.pat.length > rules[best].pat.length)) best = i; });
+                if (best >= 0 && rules[best].mod === '^~') { winner = best; reason = '最長前綴帶有 ^~，命中後不再檢查正規式'; }
+                else {
+                    const ri = rules.findIndex(r => r.re && r.re.test(p));
+                    if (ri >= 0) { winner = ri; reason = best >= 0 ? `最長前綴 ${rules[best].text} 沒有 ^~，所以接著依檔案順序檢查正規式，第一條符合的勝出（${rules[ri].mod}）` : '沒有前綴命中，依檔案順序檢查正規式，第一條符合的勝出'; }
+                    else if (best >= 0) { winner = best; reason = '沒有正規式符合，採用最長前綴匹配'; }
+                    else reason = '沒有任何規則符合（nginx 會回 404 或走 server 預設）';
+                }
+            }
+            rules.forEach((r, i) => {
+                r.status = i === winner ? '命中' : r.mod === '=' ? '不符合（路徑不完全相同）' : (r.mod === '' || r.mod === '^~') ? (p.startsWith(r.pat) ? '前綴符合，但不是最長 / 被取代' : '前綴不符合') : (r.re.test(p) ? '正規式符合，但被其他規則優先' : '正規式不符合');
+            });
+            return { winner, path: p, rules, notes, reason };
+        }
+
+        // --- 範本定義 ---
+        const T = (k, label, def = '', hint = '', w) => ({ k, label, type: 'text', def, hint, w });
+        const A = (k, label, def = '', hint = '', w) => ({ k, label, type: 'area', def, hint, w });
+        const S = (k, label, opts, def, hint = '', w) => ({ k, label, type: 'select', opts, def: def ?? opts[0][0], hint, w });
+        const C = (k, label, def = false, w) => ({ k, label, type: 'check', def, w });
+        const is = (k, ...vals) => (v) => vals.includes(v[k]);
+        const out = (lines, warns = []) => ({ text: lines.join('\n'), warns });
+        const need = (w, v, k, label) => { if (!n(v[k])) w.push(`尚未填寫：${label}`); };
+        const num = (x, d) => { const s = n(x); return /^\d+$/.test(s) ? s : d; };
+
+        const D = {
+            nginx: { server: '一個虛擬主機（站台）區塊', listen: '監聽埠；443 ssl 表示在該埠啟用 HTTPS', server_name: '此區塊負責的網域', location: '依請求路徑套用的規則區塊', proxy_pass: '把請求轉給後端服務', proxy_http_version: '連後端使用 HTTP/1.1（WebSocket 需要）', 'proxy_set_header Host': '把原始網域傳給後端', 'proxy_set_header X-Real-IP': '傳遞用戶端真實 IP', 'proxy_set_header X-Forwarded-For': '代理路徑上的 IP 串列', 'proxy_set_header X-Forwarded-Proto': '原始協定（http / https）', 'proxy_set_header Upgrade': 'WebSocket 升級標頭', 'proxy_set_header Connection': 'WebSocket 連線標頭', root: '靜態檔案根目錄', index: '目錄請求的預設檔', try_files: '依序嘗試檔案，都找不到就用最後一項', return: '直接回應；301 = 永久轉址', gzip: '開啟 gzip 壓縮', gzip_types: '要壓縮的 MIME 類型（text/html 預設就會壓）', gzip_min_length: '小於此位元組數不壓縮', gzip_vary: '加 Vary: Accept-Encoding，讓快取正確', gzip_proxied: '代理請求也壓縮', gzip_comp_level: '壓縮等級 1–9，越高越耗 CPU', expires: '快取期限（Expires / Cache-Control: max-age）', 'add_header Cache-Control': '額外的快取標頭；immutable 表示內容不會變', add_header: '加上回應標頭（always 讓錯誤回應也帶）', access_log: 'off = 不記錄此類請求', ssl_certificate: '憑證（fullchain）路徑', ssl_certificate_key: '私鑰路徑', if: '條件判斷（location 內只建議配 return 使用）' },
+            apache: { '<VirtualHost': '一個虛擬主機區塊', ServerName: '此主機負責的網域', ServerAlias: '其他網域別名', DocumentRoot: '網站根目錄', '<Directory': '針對目錄的設定', Require: '存取控制（Apache 2.4 語法）', AllowOverride: '允許該目錄的 .htaccess 覆蓋設定', ErrorLog: '錯誤日誌；${APACHE_LOG_DIR} 為 Debian / Ubuntu 變數，RHEL 系請改 logs/', CustomLog: '存取日誌與格式', Redirect: '轉址（需 mod_alias）', RewriteEngine: '啟用 mod_rewrite', RewriteCond: '條件：目前不是 HTTPS', RewriteRule: '轉到 https，301 永久轉址', '<IfModule': '模組存在時才套用，避免模組沒開時整站 500', ExpiresActive: '啟用快取期限（mod_expires）', ExpiresByType: '依 MIME 類型設定快取期限', AddOutputFilterByType: '對這些類型做壓縮（mod_deflate）', '<RequireAll>': '以下全部條件都要成立', Options: '目錄選項' },
+            caddy: { encode: '回應壓縮', reverse_proxy: '反向代理到後端', root: '靜態檔根目錄', file_server: '提供靜態檔案', try_files: '找不到檔案時改回 index.html（SPA 路由）', redir: '轉址', header: '加上回應標頭' },
+            systemd: { '[Unit]': '單元描述與相依順序', Description: '單元說明文字', After: '在這些單元之後啟動', '[Service]': '服務本身的設定', Type: 'simple = 主程序即服務；oneshot = 跑完即結束', ExecStart: '啟動指令（必須是絕對路徑）', WorkingDirectory: '工作目錄', User: '以此使用者執行', Environment: '環境變數', Restart: '何時自動重啟', RestartSec: '重啟前等待秒數', '[Install]': 'enable 時的掛載設定', WantedBy: '開機到此 target 時一併啟動', '[Timer]': '排程設定', OnCalendar: '依日曆時間觸發（systemd-analyze calendar 可驗證）', Persistent: '錯過的排程在開機後補跑', Unit: '要觸發的服務單元' },
+            ssh: { Host: '別名；ssh 別名 即套用以下設定', HostName: '實際主機或 IP', User: '登入使用者', Port: 'SSH 埠', IdentityFile: '私鑰檔', IdentitiesOnly: '只用指定的金鑰，不嘗試 agent 內其他金鑰', ProxyJump: '經由跳板機連線', ServerAliveInterval: '每 N 秒送心跳，避免閒置斷線', ServerAliveCountMax: '連續幾次心跳沒回應就斷線' },
+            logrotate: { daily: '每日輪替', weekly: '每週輪替', monthly: '每月輪替', rotate: '保留幾份舊日誌', compress: '用 gzip 壓縮舊日誌', delaycompress: '最近一份先不壓縮（程式可能還在寫）', missingok: '檔案不存在不報錯', notifempty: '空檔不輪替', create: '輪替後建立新檔，指定權限與擁有者', copytruncate: '複製後清空原檔，不需通知程式；複製與清空之間的日誌可能遺失', sharedscripts: '多個檔案只執行一次腳本', postrotate: '輪替後執行的指令' },
+            k8s: { apiVersion: 'API 群組與版本', kind: '資源種類', metadata: '名稱、命名空間、標籤', name: '資源名稱（小寫、數字、連字號）', namespace: '所屬命名空間', labels: '標籤，供 selector 選取', spec: '期望狀態', replicas: 'Pod 副本數', selector: '選取要管理的 Pod', matchLabels: '標籤需完全相符', template: 'Pod 範本', containers: '容器清單', image: '容器映像', ports: '開放的埠', containerPort: '容器內監聽埠', env: '環境變數', resources: '資源需求與上限', requests: '排程時保證的資源', limits: '資源上限，超過記憶體會被 OOMKill', type: 'Service 類型（ClusterIP 僅叢集內）', targetPort: '轉到 Pod 的埠', port: 'Service 對外的埠', rules: 'Ingress 路由規則', host: '網域', paths: '路徑清單', pathType: 'Prefix = 前綴比對', backend: '轉發的後端 Service', tls: 'HTTPS 憑證 Secret', secretName: '存放憑證的 Secret', ingressClassName: '由哪個 Ingress 控制器處理', data: '設定資料（鍵值）', schedule: 'cron 排程（分 時 日 月 週）', jobTemplate: '每次觸發建立的 Job 範本', restartPolicy: 'Job 的 Pod 失敗時重啟策略', command: '覆寫容器啟動指令' },
+            prom: { groups: '規則群組', alert: '告警名稱', expr: 'PromQL 條件，成立時進入 pending', for: '持續成立多久才觸發，避免瞬間尖峰', labels: '告警標籤，供 Alertmanager 分流', severity: '嚴重程度', annotations: '告警說明文字，可用 {{ $labels.xxx }} 帶入標籤', summary: '一句話摘要', description: '詳細說明，{{ $value }} 為目前數值' },
+            ansible: { hosts: '要套用的主機群組', become: '用 sudo 提權', tasks: '依序執行的任務', 'ansible.builtin.package': '安裝 / 移除套件（自動選 apt、dnf 等）', 'ansible.builtin.service': '管理服務', 'ansible.builtin.file': '管理檔案或目錄', 'ansible.builtin.user': '管理使用者', state: '期望狀態', enabled: '是否開機啟動', mode: '權限（八進位字串，需加引號）', owner: '擁有者', shell: '登入 shell', groups: '附加群組', append: '追加群組而非覆蓋' },
+            tf: { resource: '宣告一個資源：類型 + 本地名稱', cidr_block: '網段', enable_dns_hostnames: '啟用 DNS 主機名稱', vpc_id: '所屬 VPC（引用其他資源的屬性）', map_public_ip_on_launch: '啟動的執行個體自動配公網 IP', availability_zone: '可用區', ami: '機器映像 ID（依區域而不同，請自行確認）', instance_type: '執行個體規格', tags: '標籤', bucket: 'S3 儲存貯體名稱（全球唯一，3–63 字元小寫）', force_destroy: 'true = 刪除貯體時連同物件一併刪除', block_public_acls: '擋掉公開 ACL', block_public_policy: '擋掉公開貯體政策', ignore_public_acls: '忽略既有公開 ACL', restrict_public_buckets: '限制公開貯體存取', status: '版本控制狀態', policy: 'IAM 政策文件（JSON）', assume_role_policy: '誰可以扮演此角色', role: '要附加政策的角色', policy_arn: '政策的 ARN' },
+        };
+
+        // 從輸出逐行對照說明（以第一個詞或「第一詞 第二詞」為鍵，同一鍵只說明一次）
+        function explain(doc, text) {
+            const seen = new Set(), res = [];
+            for (const raw of String(text).split('\n')) {
+                const line = raw.trim().replace(/^- /, '');
+                if (!line || line[0] === '#') continue;
+                const w = line.split(/[\s:=]+/).filter(Boolean), cands = [w[0] + ' ' + (w[1] || ''), w[0]];
+                if (line[0] === '[' || line[0] === '<') cands.push(line.replace(/[\s>].*$/, ''));
+                const key = cands.find(c => doc[c] !== undefined);
+                if (key && !seen.has(key)) { seen.add(key); res.push([raw.trim(), doc[key], DANGER.test(raw)]); }
+            }
+            return res;
+        }
+
+        const TPL = [];
+        const add = (id, name, fields, gen, doc) => TPL.push({ id, name, fields, gen, doc });
+
+        const KIND = (...o) => S('kind', '類型', o, o[0][0]);
+        // ---- nginx ----
+        add('nginx', 'nginx 設定（代理 / 靜態 / 轉址 / gzip / 快取 / CORS）', [
+            KIND(['proxy', '反向代理'], ['static', '靜態網站'], ['redirect', 'HTTP 轉 HTTPS'], ['gzip', 'gzip 壓縮'], ['cache', '靜態檔快取'], ['cors', 'CORS 標頭']),
+            T('domain', '網域 server_name', 'example.com', '', is('kind', 'proxy', 'static', 'redirect')),
+            T('upstream', '後端位址', 'http://127.0.0.1:3000', '', is('kind', 'proxy')),
+            C('ws', '支援 WebSocket', false, is('kind', 'proxy')),
+            T('root', '網站根目錄 root', '/var/www/html', '', is('kind', 'static')),
+            C('spa', '單頁應用（找不到就回 index.html）', false, is('kind', 'static')),
+            C('ssl', '啟用 HTTPS（憑證路徑用 Let’s Encrypt 預設位置）', false, is('kind', 'proxy', 'static')),
+            T('days', '快取天數', '30', '', is('kind', 'cache')),
+            T('origin', '允許的來源 Origin', '*', '例如 https://app.example.com', is('kind', 'cors')),
+            T('methods', '允許的方法', 'GET, POST, OPTIONS', '', is('kind', 'cors')),
+            T('headers', '允許的標頭', 'Content-Type, Authorization', '', is('kind', 'cors')),
+        ], (v) => {
+            const w = [], d = n(v.domain) || 'example.com', L = [];
+            const dm = (x) => { if (x && !/^[A-Za-z0-9*.-]+( [A-Za-z0-9*.-]+)*$/.test(x)) w.push('網域格式可能不對：' + x); };
+            if (v.kind === 'gzip') return out(['gzip on;', 'gzip_vary on;', 'gzip_proxied any;', 'gzip_comp_level 5;', 'gzip_min_length 1024;', 'gzip_types text/plain text/css application/json application/javascript text/xml application/xml image/svg+xml;'], ['放在 http 或 server 區塊內']);
+            if (v.kind === 'cache') { const dd = num(v.days, '30'); if (!/^\d+$/.test(n(v.days))) w.push('天數需為整數，已用 30'); return out(['location ~* \\.(?:css|js|png|jpe?g|gif|svg|ico|webp|woff2?)$ {', `    expires ${dd}d;`, '    add_header Cache-Control "public, immutable";', '    access_log off;', '}'], ['immutable 僅適用檔名含雜湊（改內容就換檔名）的資源；否則使用者可能長時間看到舊檔']); }
+            if (v.kind === 'cors') {
+                const o = n(v.origin) || '*'; if (o === '*') w.push('Origin 為 * 時不能搭配帶 Cookie 的請求（credentials）；要帶憑證請指定單一來源');
+                else if (!/^https?:\/\/[^\s/]+$/.test(o)) w.push('Origin 格式應為 https://網域（結尾不要加 /）');
+                const q = (s) => s.replace(/["\\\r\n]/g, '');
+                return out(['location / {', `    add_header Access-Control-Allow-Origin "${q(o)}" always;`, `    add_header Access-Control-Allow-Methods "${q(n(v.methods))}" always;`, `    add_header Access-Control-Allow-Headers "${q(n(v.headers))}" always;`, '    if ($request_method = OPTIONS) {', '        return 204;', '    }', '}'], w);
+            }
+            dm(d);
+            if (v.kind === 'redirect') return out(['server {', '    listen 80;', `    server_name ${d};`, '    return 301 https://$host$request_uri;', '}'], w);
+            const ssl = v.ssl;
+            L.push('server {', ssl ? '    listen 443 ssl;' : '    listen 80;', `    server_name ${d};`);
+            if (ssl) { const first = d.split(' ')[0]; L.push(`    ssl_certificate /etc/letsencrypt/live/${first}/fullchain.pem;`, `    ssl_certificate_key /etc/letsencrypt/live/${first}/privkey.pem;`); }
+            if (v.kind === 'proxy') {
+                const u = n(v.upstream); if (!/^https?:\/\/[^\s;]+$/.test(u)) w.push('後端位址應為 http://主機:埠');
+                L.push('', '    location / {', `        proxy_pass ${u.replace(/[\s;]/g, '')};`, '        proxy_http_version 1.1;', '        proxy_set_header Host $host;', '        proxy_set_header X-Real-IP $remote_addr;', '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;', '        proxy_set_header X-Forwarded-Proto $scheme;');
+                if (v.ws) L.push('        proxy_set_header Upgrade $http_upgrade;', '        proxy_set_header Connection "upgrade";');
+                L.push('    }');
+            } else {
+                const r = n(v.root); if (!r.startsWith('/')) w.push('root 應為絕對路徑');
+                L.push(`    root ${r.replace(/[\s;]/g, '')};`, '    index index.html;', '', '    location / {', v.spa ? '        try_files $uri $uri/ /index.html;' : '        try_files $uri $uri/ =404;', '    }');
+            }
+            L.push('}'); if (ssl) w.push('HTTPS 需先取得憑證（例如 certbot）；通常再搭配一個「HTTP 轉 HTTPS」區塊');
+            return out(L, w);
+        }, D.nginx);
+
+        add('nginxloc', 'nginx location 規則測試', [
+            A('rules', 'location 規則（一行一條）', 'location = / {\nlocation / {\nlocation /api/ {\nlocation ^~ /static/ {\nlocation ~* \\.(png|jpg)$ {', '可只寫修飾符與路徑，例如 ^~ /static/'),
+            T('path', '請求路徑', '/static/logo.png'),
+        ], (v) => {
+            const r = nginxMatch(v.rules, v.path), w = [...r.notes];
+            if (!r.rules.length) w.push('沒有可解析的規則');
+            const text = r.winner >= 0 ? `請求 ${r.path} → 命中 location ${r.rules[r.winner].text}\n原因：${r.reason}` : `請求 ${r.path} → 無命中\n原因：${r.reason}`;
+            const ex = r.rules.map(x => [x.text, x.status]);
+            ex.push(['順序 1：=', '精確匹配，命中即結束'], ['順序 2：前綴', '一般前綴與 ^~ 都算前綴，記住「最長」的一條；若它帶 ^~ 就直接採用'], ['順序 3：~ / ~*', '依檔案出現順序檢查正規式（~ 區分大小寫、~* 不分），第一條符合者勝出'], ['順序 4', '沒有正規式符合才用步驟 2 記住的最長前綴']);
+            return { text, warns: w, ex };
+        });
+
+        // ---- Apache ----
+        add('apache', 'Apache VirtualHost / .htaccess', [
+            KIND(['vhost', 'VirtualHost'], ['redirect', '.htaccess 轉址'], ['https', '.htaccess 強制 HTTPS'], ['cache', '.htaccess 快取'], ['gzip', '.htaccess 壓縮'], ['blockip', '.htaccess 擋 IP']),
+            T('domain', '網域 ServerName', 'example.com', '', is('kind', 'vhost')),
+            T('root', '網站根目錄', '/var/www/html', '', is('kind', 'vhost')),
+            T('target', '轉址目標', 'https://example.com/', '', is('kind', 'redirect')),
+            T('days', '快取天數', '30', '', is('kind', 'cache')),
+            A('ips', 'IP 或網段（一行一個）', '203.0.113.5\n198.51.100.0/24', '', is('kind', 'blockip')),
+        ], (v) => {
+            const w = [];
+            switch (v.kind) {
+                case 'vhost': { const d = n(v.domain), r = n(v.root); need(w, v, 'domain', '網域'); if (!r.startsWith('/')) w.push('網站根目錄應為絕對路徑');
+                    return out(['<VirtualHost *:80>', `    ServerName ${d.replace(/\s/g, '')}`, `    DocumentRoot ${shq(r)}`, `    <Directory ${shq(r)}>`, '        Options -Indexes', '        AllowOverride All', '        Require all granted', '    </Directory>', `    ErrorLog \${APACHE_LOG_DIR}/${d.replace(/[^A-Za-z0-9.-]/g, '') || 'site'}-error.log`, `    CustomLog \${APACHE_LOG_DIR}/${d.replace(/[^A-Za-z0-9.-]/g, '') || 'site'}-access.log combined`, '</VirtualHost>'], w); }
+                case 'redirect': { const t = n(v.target); if (!/^https?:\/\/\S+$/.test(t)) w.push('轉址目標應為 http(s):// 開頭的網址'); return out([`Redirect permanent / ${t}`], w); }
+                case 'https': return out(['RewriteEngine On', 'RewriteCond %{HTTPS} !=on', 'RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]'], ['需啟用 mod_rewrite；若前面有負載平衡器 / CDN 終結 HTTPS，條件要改看 X-Forwarded-Proto，否則會無限轉址']);
+                case 'cache': { const dd = num(v.days, '30'); if (!/^\d+$/.test(n(v.days))) w.push('天數需為整數，已用 30'); const e = `"access plus ${dd} days"`; return out(['<IfModule mod_expires.c>', '    ExpiresActive On', `    ExpiresByType image/jpeg ${e}`, `    ExpiresByType image/png ${e}`, `    ExpiresByType image/webp ${e}`, `    ExpiresByType image/svg+xml ${e}`, `    ExpiresByType text/css ${e}`, `    ExpiresByType application/javascript ${e}`, '</IfModule>'], w); }
+                case 'gzip': return out(['<IfModule mod_deflate.c>', '    AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml application/javascript application/json image/svg+xml', '</IfModule>']);
+                default: { const ips = ls(v.ips); if (!ips.length) w.push('尚未填寫 IP'); for (const i of ips) if (!isIp(i)) w.push('IP 格式可能不對：' + i);
+                    return out(['<RequireAll>', '    Require all granted', ...ips.filter(isIp).map(i => `    Require not ip ${i}`), '</RequireAll>'], w); }
+            }
+        }, D.apache);
+
+        // ---- Caddy ----
+        add('caddy', 'Caddyfile', [
+            KIND(['proxy', '反向代理'], ['static', '靜態網站'], ['redirect', 'www 轉址到主網域']),
+            T('domain', '網域', 'example.com'),
+            T('upstream', '後端位址', 'localhost:3000', '', is('kind', 'proxy')),
+            T('root', '網站根目錄', '/var/www/html', '', is('kind', 'static')),
+            C('spa', '單頁應用（找不到就回 index.html）', false, is('kind', 'static')),
+        ], (v) => {
+            const w = [], d = n(v.domain).replace(/\s/g, ''); need(w, v, 'domain', '網域');
+            if (v.kind === 'redirect') return out([`www.${d} {`, `    redir https://${d}{uri} permanent`, '}'], w);
+            if (v.kind === 'proxy') { const u = n(v.upstream).replace(/\s/g, ''); need(w, v, 'upstream', '後端位址'); return out([`${d} {`, '    encode gzip zstd', `    reverse_proxy ${u}`, '}'], [...w, 'Caddy 會自動申請並更新 HTTPS 憑證（網域需指向本機且 80 / 443 可連）']); }
+            const r = n(v.root); if (!r.startsWith('/')) w.push('root 應為絕對路徑');
+            return out([`${d} {`, `    root * ${r}`, '    encode gzip zstd', ...(v.spa ? ['    try_files {path} /index.html'] : []), '    file_server', '}'], w);
+        }, D.caddy);
+
+        // ---- systemd ----
+        add('systemd', 'systemd .service / .timer', [
+            KIND(['service', '常駐服務 .service'], ['timer', '定時任務 .timer + .service']),
+            T('name', '單元名稱', 'myapp', '不含副檔名'),
+            T('desc', '說明', 'My application'),
+            T('exec', '啟動指令 ExecStart', '/usr/bin/node /opt/myapp/server.js', '需用絕對路徑'),
+            T('user', '執行使用者', 'www-data'),
+            T('dir', '工作目錄', '/opt/myapp'),
+            A('env', '環境變數（一行一個 KEY=值）', 'NODE_ENV=production', '', is('kind', 'service')),
+            S('restart', '重啟策略', [['on-failure', 'on-failure（失敗才重啟）'], ['always', 'always'], ['no', 'no']], 'on-failure', '', is('kind', 'service')),
+            T('cal', '排程 OnCalendar', '*-*-* 03:00:00', '例如 daily、Mon *-*-* 09:00:00', is('kind', 'timer')),
+            C('persistent', '錯過的排程開機後補跑 Persistent', true, is('kind', 'timer')),
+        ], (v) => {
+            const w = [], nm = n(v.name); if (!/^[A-Za-z0-9_.@-]+$/.test(nm)) w.push('單元名稱只能用英數字與 _ . @ -');
+            const ex = n(v.exec); if (!ex.startsWith('/')) w.push('ExecStart 的程式必須是絕對路徑（systemd 不會查 PATH）');
+            const L = [], svc = (type) => {
+                L.push('[Unit]', `Description=${n(v.desc) || nm}`, ...(type === 'simple' ? ['After=network.target'] : []), '', '[Service]', `Type=${type}`, `ExecStart=${ex}`);
+                if (n(v.dir)) L.push(`WorkingDirectory=${n(v.dir)}`);
+                if (n(v.user)) L.push(`User=${n(v.user)}`);
+                if (type === 'simple') {
+                    for (const [k, x] of kv(v.env)) { if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(k)) w.push('環境變數名稱不合法：' + k); else L.push(`Environment="${k}=${x.replace(/["\\]/g, '\\$&')}"`); }
+                    L.push(`Restart=${v.restart}`); if (v.restart !== 'no') L.push('RestartSec=5');
+                    L.push('', '[Install]', 'WantedBy=multi-user.target');
+                }
+            };
+            if (v.kind === 'service') { svc('simple'); return out([`# /etc/systemd/system/${nm}.service`, ...L, '', '# 啟用：sudo systemctl daemon-reload && sudo systemctl enable --now ' + nm], w); }
+            svc('oneshot');
+            const cal = n(v.cal); if (!cal) w.push('尚未填寫 OnCalendar');
+            return out([`# /etc/systemd/system/${nm}.service`, ...L, '', `# /etc/systemd/system/${nm}.timer`, '[Unit]', `Description=Timer for ${nm}`, '', '[Timer]', `OnCalendar=${cal}`, ...(v.persistent ? ['Persistent=true'] : []), `Unit=${nm}.service`, '', '[Install]', 'WantedBy=timers.target', '', '# 啟用：sudo systemctl daemon-reload && sudo systemctl enable --now ' + nm + '.timer'], w);
+        }, D.systemd);
+
+        // ---- SSH config ----
+        add('ssh', 'SSH config（多主機 / 跳板機 / 金鑰）', [
+            A('hosts', '主機清單（一行一台）', 'web web.example.com deploy 22 ~/.ssh/id_ed25519 -\ndb 10.0.0.5 admin - ~/.ssh/id_ed25519 web', '格式：別名 主機 使用者 埠 金鑰 跳板別名；不設定的欄位寫 -'),
+            C('alive', '加上 Host * 的連線保活（ServerAliveInterval）', true),
+            C('only', '只使用指定的金鑰 IdentitiesOnly', true),
+        ], (v) => {
+            const w = [], rows = ls(v.hosts).map(l => l.split(/\s+/)), names = rows.map(r => r[0]), L = [];
+            const g = (x) => x === undefined || x === '-' ? '' : x;
+            if (!rows.length) w.push('尚未填寫主機');
+            for (const r of rows) {
+                const [a, h, u, p, k, j] = r.map(g);
+                if (!/^[A-Za-z0-9_.-]+$/.test(a)) { w.push('別名只能用英數字與 _ . -：' + a); continue; }
+                if (!h || !isHost(h) && !isIp(h)) w.push(`${a} 的主機格式可能不對`);
+                if (p && !isPort(p)) w.push(`${a} 的埠不合法：${p}`);
+                if (j && !names.includes(j) && !/^[^@\s]+@[^\s]+$/.test(j)) w.push(`${a} 的跳板 ${j} 不在清單內`);
+                if (names.indexOf(a) !== names.lastIndexOf(a)) w.push('別名重複：' + a);
+                if (j === a) w.push(`${a} 的跳板不能是自己`);
+                L.push(`Host ${a}`, `    HostName ${h}`);
+                if (u) L.push(`    User ${u}`); if (p) L.push(`    Port ${p}`);
+                if (k) { L.push(`    IdentityFile ${/\s/.test(k) ? '"' + k + '"' : k}`); if (v.only) L.push('    IdentitiesOnly yes'); }
+                if (j) L.push(`    ProxyJump ${j}`);
+                L.push('');
+            }
+            if (v.alive) L.push('Host *', '    ServerAliveInterval 60', '    ServerAliveCountMax 3');
+            while (L.length && L[L.length - 1] === '') L.pop();
+            if (rows.length) w.push('放到 ~/.ssh/config，權限建議 chmod 600');
+            return out(L, w);
+        }, D.ssh);
+
+        // ---- logrotate ----
+        add('logrotate', 'logrotate', [
+            T('path', '日誌路徑', '/var/log/myapp/*.log', '可用萬用字元'),
+            S('freq', '頻率', [['daily', '每日'], ['weekly', '每週'], ['monthly', '每月']], 'daily'),
+            T('rotate', '保留份數', '14'),
+            C('compress', '壓縮 compress', true), C('delay', '延後壓縮 delaycompress', true),
+            C('missing', '檔案不存在不報錯 missingok', true), C('notempty', '空檔不輪替 notifempty', true),
+            T('create', '輪替後建立新檔（權限 使用者 群組）', '0640 root adm', '留空則不寫 create'),
+            C('copytruncate', '複製後清空 copytruncate（程式不能重開日誌檔時用）', false),
+            T('post', '輪替後指令 postrotate', '', '例如 systemctl reload myapp'),
+        ], (v) => {
+            const w = [], p = n(v.path); if (!p.startsWith('/')) w.push('路徑應為絕對路徑'); if (/\s/.test(p)) w.push('路徑含空白，需自行加引號');
+            if (!/^\d+$/.test(n(v.rotate))) w.push('保留份數需為整數，已用 7');
+            const L = [`${p} {`, `    ${v.freq}`, `    rotate ${num(v.rotate, '7')}`];
+            if (v.compress) L.push('    compress'); if (v.delay) L.push('    delaycompress'); if (v.missing) L.push('    missingok'); if (v.notempty) L.push('    notifempty');
+            if (v.copytruncate) { L.push('    copytruncate'); w.push('copytruncate 在複製與清空之間寫入的日誌可能遺失'); }
+            else if (n(v.create)) { if (!/^[0-7]{3,4}( \S+ \S+)?$/.test(n(v.create))) w.push('create 格式：0640 使用者 群組'); L.push(`    create ${n(v.create)}`); }
+            if (n(v.post)) L.push('    postrotate', `        ${n(v.post)}`, '    endscript');
+            L.push('}'); w.push('存成 /etc/logrotate.d/名稱；用 logrotate -d 設定檔 先預演');
+            return out(L, w);
+        }, D.logrotate);
+
+        // ---- Kubernetes ----
+        const dns1123 = (s) => /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(s) && s.length <= 63;
+        add('k8s', 'Kubernetes（Deployment / Service / Ingress / ConfigMap / CronJob）', [
+            KIND(['deploy', 'Deployment'], ['svc', 'Service'], ['ingress', 'Ingress'], ['cm', 'ConfigMap'], ['cron', 'CronJob']),
+            T('name', '名稱', 'myapp', '小寫英數字與 -'),
+            T('ns', '命名空間 namespace', '', '留空 = 不寫（用 default）'),
+            T('image', '映像', 'nginx:1.27', '', is('kind', 'deploy', 'cron')),
+            T('replicas', '副本數', '2', '', is('kind', 'deploy')),
+            T('port', '埠 port', '80', '', is('kind', 'deploy', 'svc', 'ingress')),
+            A('env', '環境變數（KEY=值）', '', '', is('kind', 'deploy')),
+            T('cpu', 'CPU requests', '100m', '留空不寫', is('kind', 'deploy')),
+            T('mem', '記憶體 limits', '256Mi', '留空不寫', is('kind', 'deploy')),
+            S('stype', 'Service 類型', [['ClusterIP', 'ClusterIP'], ['NodePort', 'NodePort'], ['LoadBalancer', 'LoadBalancer']], 'ClusterIP', '', is('kind', 'svc')),
+            T('host', '網域 host', 'example.com', '', is('kind', 'ingress')),
+            T('path', '路徑 path', '/', '', is('kind', 'ingress')),
+            T('tls', 'TLS Secret 名稱', '', '留空 = 不啟用 TLS', is('kind', 'ingress')),
+            T('iclass', 'ingressClassName', '', '例如 nginx；留空不寫', is('kind', 'ingress')),
+            A('data', 'ConfigMap 資料（KEY=值，一行一個）', 'LOG_LEVEL=info', '', is('kind', 'cm')),
+            T('sched', 'cron 排程', '0 3 * * *', '分 時 日 月 週', is('kind', 'cron')),
+            T('cmd', '容器指令（可空）', '', '例如 echo hello', is('kind', 'cron')),
+        ], (v) => {
+            const w = [], nm = n(v.name), meta = { name: nm }, lab = { app: nm };
+            if (!nm) w.push('尚未填寫：名稱'); else if (!dns1123(nm)) w.push('名稱需為小寫英數字與 -，開頭結尾為英數字，最長 63 字元');
+            if (n(v.ns)) { if (!dns1123(n(v.ns))) w.push('namespace 格式不合法'); meta.namespace = n(v.ns); }
+            const portN = () => { if (!isPort(n(v.port))) { w.push('埠需為 1–65535'); return 80; } return +n(v.port); };
+            let doc;
+            switch (v.kind) {
+                case 'deploy': {
+                    if (!n(v.image)) w.push('尚未填寫：映像'); else if (/:latest$/.test(n(v.image)) || !/[:@]/.test(n(v.image))) w.push('建議指定明確版本標籤，避免 latest 造成不可重現的部署');
+                    if (!/^\d+$/.test(n(v.replicas))) w.push('副本數需為非負整數');
+                    const c = { name: nm, image: n(v.image), ports: [{ containerPort: portN() }] };
+                    const env = kv(v.env).filter(([k]) => /^[A-Za-z_][A-Za-z0-9_.-]*$/.test(k) || (w.push('環境變數名稱不合法：' + k), false));
+                    if (env.length) c.env = env.map(([name, value]) => ({ name, value }));
+                    const res = {}; if (n(v.cpu)) res.requests = { cpu: n(v.cpu) }; if (n(v.mem)) res.limits = { memory: n(v.mem) };
+                    for (const [k, x] of [['cpu', v.cpu], ['mem', v.mem]]) if (n(x) && !/^\d+(\.\d+)?(m|Mi|Gi|Ki|k|M|G)?$/.test(n(x))) w.push(`資源量格式可能不對：${n(x)}（例：100m、256Mi）`);
+                    if (Object.keys(res).length) c.resources = res;
+                    doc = { apiVersion: 'apps/v1', kind: 'Deployment', metadata: { ...meta, labels: lab }, spec: { replicas: +num(v.replicas, '1'), selector: { matchLabels: lab }, template: { metadata: { labels: lab }, spec: { containers: [c] } } } };
+                    break;
+                }
+                case 'svc': { const p = portN(); doc = { apiVersion: 'v1', kind: 'Service', metadata: meta, spec: { type: v.stype, selector: lab, ports: [{ port: p, targetPort: p, protocol: 'TCP' }] } }; break; }
+                case 'ingress': {
+                    if (!n(v.host)) w.push('尚未填寫：網域'); else if (!/^[A-Za-z0-9*.-]+$/.test(n(v.host))) w.push('網域格式不合法');
+                    if (!n(v.path).startsWith('/')) w.push('path 需以 / 開頭');
+                    const spec = {}; if (n(v.iclass)) spec.ingressClassName = n(v.iclass);
+                    spec.rules = [{ host: n(v.host), http: { paths: [{ path: n(v.path) || '/', pathType: 'Prefix', backend: { service: { name: nm, port: { number: portN() } } } }] } }];
+                    if (n(v.tls)) spec.tls = [{ hosts: [n(v.host)], secretName: n(v.tls) }];
+                    doc = { apiVersion: 'networking.k8s.io/v1', kind: 'Ingress', metadata: meta, spec };
+                    break;
+                }
+                case 'cm': { const e = kv(v.data), data = {}; for (const [k, x] of e) { if (!/^[A-Za-z0-9._-]+$/.test(k)) w.push('ConfigMap 鍵名只能用英數字與 - _ .：' + k); else data[k] = x; } if (!e.length) w.push('尚未填寫資料'); doc = { apiVersion: 'v1', kind: 'ConfigMap', metadata: meta, data }; break; }
+                default: {
+                    if (!n(v.image)) w.push('尚未填寫：映像');
+                    const sc = n(v.sched); if (sc.split(/\s+/).length !== 5 && !/^@(hourly|daily|weekly|monthly|yearly)$/.test(sc)) w.push('排程需為 5 欄（分 時 日 月 週）');
+                    const c = { name: nm, image: n(v.image) }, cm = n(v.cmd);
+                    if (cm) c.command = /["'\\$`;&|<>]/.test(cm) ? ['sh', '-c', cm] : cm.split(/\s+/);
+                    doc = { apiVersion: 'batch/v1', kind: 'CronJob', metadata: meta, spec: { schedule: sc, jobTemplate: { spec: { template: { spec: { containers: [c], restartPolicy: 'OnFailure' } } } } } };
+                }
+            }
+            return out([toYaml(doc)], w);
+        }, D.k8s);
+
+        // ---- Prometheus ----
+        const PQ = {
+            cpu: ['HighCpuUsage', (v, t) => `100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > ${t}`, 'CPU 使用率過高', 'CPU 使用率為 {{ $value | printf "%.1f" }}%', ['rate(...[5m])', '過去 5 分鐘 idle 時間的每秒增加量，即 idle 比例'], ['avg by (instance)', '把每顆核心平均成每台機器一個值'], ['100 - x * 100', 'idle 轉成使用率 %']],
+            mem: ['HighMemoryUsage', (v, t) => `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > ${t}`, '記憶體使用率過高', '記憶體使用率為 {{ $value | printf "%.1f" }}%', ['MemAvailable / MemTotal', '可用記憶體佔總量的比例（含可回收的快取）'], ['1 - 比例', '轉為已使用比例，乘 100 變 %']],
+            disk: ['DiskSpaceLow', (v, t) => `(1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) * 100 > ${t}`, '磁碟空間不足', '{{ $labels.mountpoint }} 已使用 {{ $value | printf "%.1f" }}%', ['fstype!~"tmpfs|overlay"', '排除記憶體與容器的虛擬檔案系統（!~ = 正規式不符合）'], ['avail / size', '可用空間佔總容量比例']],
+            e5xx: ['HighHttp5xxRate', (v, t) => `sum(rate(${v.metric}{${v.label}=~"5.."}[5m])) / sum(rate(${v.metric}[5m])) * 100 > ${t}`, '5xx 錯誤比率過高', '5xx 比率為 {{ $value | printf "%.2f" }}%', ['=~"5.."', '狀態碼符合正規式 5 開頭的三位數'], ['sum(rate(5xx)) / sum(rate(全部))', '5 分鐘內 5xx 請求數佔全部請求數的比例']],
+        };
+        add('prom', 'Prometheus 告警規則', [
+            S('kind', '規則', [['cpu', 'CPU 使用率'], ['mem', '記憶體使用率'], ['disk', '磁碟使用率'], ['e5xx', 'HTTP 5xx 比率'], ['all', '全部四條']], 'cpu'),
+            T('th', '門檻 %', '80'),
+            T('for', '持續時間 for', '5m', '例如 5m、1h'),
+            S('sev', '嚴重程度 severity', [['warning', 'warning'], ['critical', 'critical'], ['info', 'info']], 'warning'),
+            T('metric', '請求計數指標名稱', 'http_requests_total', '', is('kind', 'e5xx', 'all')),
+            T('label', '狀態碼標籤名稱', 'status', '', is('kind', 'e5xx', 'all')),
+        ], (v) => {
+            const w = [], th = n(v.th); if (!/^\d+(\.\d+)?$/.test(th) || +th > 100) w.push('門檻需為 0–100 的數字，已用 80');
+            const t = /^\d+(\.\d+)?$/.test(th) && +th <= 100 ? th : '80'; if (!/^\d+[smhdw]$/.test(n(v.for))) w.push('持續時間格式應如 5m、1h');
+            if (!/^[A-Za-z_:][A-Za-z0-9_:]*$/.test(n(v.metric)) || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(n(v.label))) w.push('指標或標籤名稱格式不合法');
+            const keys = v.kind === 'all' ? ['cpu', 'mem', 'disk', 'e5xx'] : [v.kind], ex = [];
+            const vv = { metric: n(v.metric), label: n(v.label) };
+            const rules = keys.map(k => { const q = PQ[k]; ex.push(...q.slice(4).map(e => [e[0], e[1]])); return { alert: q[0], expr: q[1](vv, t), for: n(v.for), labels: { severity: v.sev }, annotations: { summary: q[2] + ' {{ $labels.instance }}', description: q[3] } }; });
+            if (keys.includes('e5xx')) w.push('指標名稱依你的應用 / 匯出器而定，請改成實際存在的指標');
+            if (keys.some(k => k !== 'e5xx')) w.push('CPU / 記憶體 / 磁碟規則使用 node_exporter 的指標');
+            return { text: toYaml({ groups: [{ name: 'host-alerts', rules }] }), warns: w, ex: [...explain(D.prom, toYaml({ groups: [{ name: 'g', rules }] })), ...ex] };
+        });
+
+        // ---- Ansible ----
+        add('ansible', 'Ansible playbook', [
+            T('hosts', '主機群組 hosts', 'all'),
+            C('become', '提權 become（sudo）', true),
+            A('pkgs', '套件（一行一個）', 'nginx\ngit'),
+            S('pstate', '套件狀態', [['present', 'present（安裝）'], ['latest', 'latest（更新到最新）'], ['absent', 'absent（移除）']], 'present'),
+            T('svc', '服務名稱', 'nginx', '留空不產生任務'),
+            S('sstate', '服務狀態', [['started', 'started'], ['restarted', 'restarted'], ['stopped', 'stopped']], 'started'),
+            C('enabled', '開機啟動 enabled', true),
+            T('fpath', '檔案 / 目錄路徑', '/opt/app', '留空不產生任務'),
+            S('fstate', '檔案狀態', [['directory', 'directory（建立目錄）'], ['touch', 'touch（建立空檔）'], ['absent', 'absent（刪除）']], 'directory'),
+            T('fmode', '權限 mode', '0755'),
+            T('fowner', '擁有者 owner', ''),
+            T('uname', '使用者名稱', '', '留空不產生任務'),
+            T('ushell', '登入 shell', '/bin/bash'),
+            T('ugroups', '附加群組（逗號分隔）', 'sudo'),
+        ], (v) => {
+            const w = [], tasks = [];
+            const pk = ls(v.pkgs); if (pk.length) { for (const p of pk) if (!/^[A-Za-z0-9][A-Za-z0-9+._-]*$/.test(p)) w.push('套件名稱可能不對：' + p); tasks.push({ name: v.pstate === 'absent' ? 'Remove packages' : 'Install packages', 'ansible.builtin.package': { name: pk, state: v.pstate } }); }
+            if (n(v.svc)) { if (!/^[A-Za-z0-9_.@-]+$/.test(n(v.svc))) w.push('服務名稱不合法'); tasks.push({ name: `Manage service ${n(v.svc)}`, 'ansible.builtin.service': { name: n(v.svc), state: v.sstate, enabled: !!v.enabled } }); }
+            if (n(v.fpath)) {
+                if (!n(v.fpath).startsWith('/')) w.push('路徑應為絕對路徑'); const f = { path: n(v.fpath), state: v.fstate };
+                if (v.fstate !== 'absent') { if (n(v.fmode)) { if (!/^0?[0-7]{3,4}$/.test(n(v.fmode))) w.push('mode 需為八進位，例 0755'); f.mode = n(v.fmode); } if (n(v.fowner)) f.owner = n(v.fowner); }
+                else w.push('state: absent 會刪除該路徑（目錄會連同內容）');
+                tasks.push({ name: `Ensure ${n(v.fpath)} is ${v.fstate}`, 'ansible.builtin.file': f });
+            }
+            if (n(v.uname)) { if (!/^[a-z_][a-z0-9_-]*$/.test(n(v.uname))) w.push('使用者名稱需為小寫英數字與 _ -'); const u = { name: n(v.uname), state: 'present' }; if (n(v.ushell)) u.shell = n(v.ushell); const g = n(v.ugroups).split(',').map(s => s.trim()).filter(Boolean); if (g.length) { u.groups = g.join(','); u.append = true; } tasks.push({ name: `Create user ${n(v.uname)}`, 'ansible.builtin.user': u }); }
+            if (!tasks.length) w.push('尚未填寫任何任務');
+            const play = { name: 'Configure servers', hosts: n(v.hosts) || 'all' }; if (v.become) play.become = true; play.tasks = tasks;
+            return out(['---', toYaml([play])], w);
+        }, D.ansible);
+
+        // ---- Terraform ----
+        const hcl = (s) => JSON.stringify(String(s)).replace(/\$\{/g, '$${').replace(/%\{/g, '%%{');
+        add('tf', 'Terraform 常見資源（VPC / EC2 / S3 / IAM）', [
+            S('kind', '資源', [['vpc', 'VPC + 子網路'], ['ec2', 'EC2 執行個體'], ['s3', 'S3 儲存貯體'], ['iam', 'IAM 政策 + 角色']], 'vpc'),
+            T('name', '本地名稱', 'main', '只能用英數字、_ -'),
+            T('cidr', 'VPC 網段', '10.0.0.0/16', '', is('kind', 'vpc')),
+            T('subcidr', '子網路網段', '10.0.1.0/24', '', is('kind', 'vpc')),
+            T('ami', 'AMI ID', 'ami-xxxxxxxx', '依區域而不同，請自行查詢', is('kind', 'ec2')),
+            T('itype', '規格', 't3.micro', '', is('kind', 'ec2')),
+            T('bucket', '貯體名稱', 'my-unique-bucket-name', '', is('kind', 's3', 'iam')),
+            C('ver', '啟用版本控制', true, is('kind', 's3')),
+        ], (v) => {
+            const w = [], nm = n(v.name), L = []; if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(nm)) w.push('本地名稱只能用英數字、_ -，且不能以數字開頭');
+            const cidr = (x, l) => { if (!/^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/.test(x)) w.push(l + ' 格式應為 10.0.0.0/16'); };
+            const bk = n(v.bucket); const chkB = () => { if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bk)) w.push('貯體名稱需 3–63 字元、小寫英數字 . -'); };
+            switch (v.kind) {
+                case 'vpc': cidr(n(v.cidr), 'VPC 網段'); cidr(n(v.subcidr), '子網路網段');
+                    L.push(`resource "aws_vpc" "${nm}" {`, `  cidr_block           = ${hcl(n(v.cidr))}`, '  enable_dns_hostnames = true', '', '  tags = {', `    Name = ${hcl(nm)}`, '  }', '}', '', `resource "aws_subnet" "${nm}_public" {`, `  vpc_id                  = aws_vpc.${nm}.id`, `  cidr_block              = ${hcl(n(v.subcidr))}`, '  map_public_ip_on_launch = true', '', '  tags = {', `    Name = ${hcl(nm + '-public')}`, '  }', '}'); break;
+                case 'ec2': if (!/^ami-[0-9a-f]+$/.test(n(v.ami))) w.push('AMI ID 應為 ami-xxxxxxxx（依區域查詢）');
+                    L.push(`resource "aws_instance" "${nm}" {`, `  ami           = ${hcl(n(v.ami))}`, `  instance_type = ${hcl(n(v.itype))}`, '', '  tags = {', `    Name = ${hcl(nm)}`, '  }', '}'); w.push('未指定子網路、安全群組與金鑰，會使用預設 VPC；正式環境請補上'); break;
+                case 's3': chkB();
+                    L.push(`resource "aws_s3_bucket" "${nm}" {`, `  bucket = ${hcl(bk)}`, '}', '', `resource "aws_s3_bucket_public_access_block" "${nm}" {`, `  bucket                  = aws_s3_bucket.${nm}.id`, '  block_public_acls       = true', '  block_public_policy     = true', '  ignore_public_acls      = true', '  restrict_public_buckets = true', '}');
+                    if (v.ver) L.push('', `resource "aws_s3_bucket_versioning" "${nm}" {`, `  bucket = aws_s3_bucket.${nm}.id`, '', '  versioning_configuration {', '    status = "Enabled"', '  }', '}'); break;
+                default: chkB();
+                    L.push(`resource "aws_iam_policy" "${nm}_s3_read" {`, `  name = ${hcl(nm + '-s3-read')}`, '', '  policy = jsonencode({', '    Version = "2012-10-17"', '    Statement = [{', '      Effect   = "Allow"', '      Action   = ["s3:GetObject", "s3:ListBucket"]', `      Resource = [${hcl('arn:aws:s3:::' + bk)}, ${hcl('arn:aws:s3:::' + bk + '/*')}]`, '    }]', '  })', '}', '', `resource "aws_iam_role" "${nm}" {`, `  name = ${hcl(nm)}`, '', '  assume_role_policy = jsonencode({', '    Version = "2012-10-17"', '    Statement = [{', '      Effect    = "Allow"', '      Action    = "sts:AssumeRole"', '      Principal = { Service = "ec2.amazonaws.com" }', '    }]', '  })', '}', '', `resource "aws_iam_role_policy_attachment" "${nm}" {`, `  role       = aws_iam_role.${nm}.name`, `  policy_arn = aws_iam_policy.${nm}_s3_read.arn`, '}');
+            }
+            w.push('只是常見片段，不含 provider 與 backend；請以 terraform fmt、validate、plan 確認'); return out(L, w);
+        }, D.tf);
+
+        // ---- Shell 指令 ----
+        const cmdOut = (parts, ex, warns) => ({ text: parts.join(' '), warns, ex: ex.map(e => [e[0], e[1], e[2] || DANGER.test(e[0])]) });
+        add('shell', 'Shell 指令（find / grep / tar / rsync / ssh / scp / rm）', [
+            KIND(['find', 'find 找檔案'], ['grep', 'grep 搜文字'], ['tar', 'tar 打包解壓'], ['rsync', 'rsync 同步'], ['ssh', 'ssh 連線'], ['scp', 'scp 複製'], ['rm', 'rm 刪除']),
+            // find
+            T('fpath', '起點目錄', '/var/log', '', is('kind', 'find')), T('fname', '檔名樣式 -name', '*.log', '', is('kind', 'find')),
+            S('ftype', '類型 -type', [['', '不限'], ['f', '檔案 f'], ['d', '目錄 d']], 'f', '', is('kind', 'find')),
+            T('mtime', '修改時間 -mtime（天）', '+30', '+30 = 超過 30 天', is('kind', 'find')), T('fsize', '大小 -size', '', '例如 +100M', is('kind', 'find')),
+            S('fact', '動作', [['print', '只列出（預設）'], ['delete', '刪除 -delete']], 'print', '', is('kind', 'find')),
+            // grep
+            T('gpat', '搜尋文字 / 正規式', 'error', '', is('kind', 'grep')), T('gpath', '路徑', '.', '', is('kind', 'grep')), T('ginc', '只搜檔名樣式 --include', '*.log', '', is('kind', 'grep')),
+            C('gr', '遞迴 -r', true, is('kind', 'grep')), C('gi', '忽略大小寫 -i', false, is('kind', 'grep')), C('gn', '顯示行號 -n', true, is('kind', 'grep')), C('gc', '只顯示筆數 -c', false, is('kind', 'grep')),
+            C('gv', '反向（不含）-v', false, is('kind', 'grep')), C('gF', '固定字串 -F（不用正規式）', false, is('kind', 'grep')), C('gw', '整字比對 -w', false, is('kind', 'grep')),
+            // tar
+            S('tmode', '動作', [['c', '打包'], ['x', '解壓'], ['t', '列出內容']], 'c', '', is('kind', 'tar')), T('tfile', '壓縮檔', 'backup.tar.gz', '', is('kind', 'tar')),
+            T('tsrc', '要打包的路徑（空白分隔）', 'data config', '', (v) => v.kind === 'tar' && v.tmode === 'c'),
+            S('tcomp', '壓縮', [['z', 'gzip（.tar.gz）'], ['j', 'bzip2（.tar.bz2）'], ['J', 'xz（.tar.xz）'], ['', '不壓縮（.tar）']], 'z', '', is('kind', 'tar')),
+            T('tdir', '切換目錄 -C', '', '解壓到哪個目錄', is('kind', 'tar')), T('texc', '排除 --exclude', '', '例如 node_modules', is('kind', 'tar')),
+            // rsync
+            T('rsrc', '來源', './site/', '結尾 / = 只同步內容', is('kind', 'rsync')), T('rdst', '目的地', 'user@host:/var/www/site/', '', is('kind', 'rsync')),
+            C('ra', '封存模式 -a（保留權限、時間、子目錄）', true, is('kind', 'rsync')), C('rv', '詳細 -v', true, is('kind', 'rsync')), C('rz', '傳輸壓縮 -z', true, is('kind', 'rsync')),
+            C('rn', '試跑 -n（不真的改動）', true, is('kind', 'rsync')), C('rp', '進度 --progress', false, is('kind', 'rsync')), C('rdel', '刪除目的地多出的檔案 --delete', false, is('kind', 'rsync')),
+            T('rexc', '排除 --exclude', '', '', is('kind', 'rsync')),
+            // ssh
+            T('suser', '使用者', 'deploy', '', is('kind', 'ssh', 'scp')), T('shost', '主機', 'example.com', '', is('kind', 'ssh')), T('sport', '埠 -p', '', '留空 = 22', is('kind', 'ssh', 'scp')),
+            T('skey', '金鑰 -i', '', '例如 ~/.ssh/id_ed25519', is('kind', 'ssh', 'scp')), T('sjump', '跳板機 -J', '', '例如 user@bastion', is('kind', 'ssh')),
+            T('slocal', '本機轉發 -L', '', '本機埠:目標主機:目標埠，例 8080:localhost:80', is('kind', 'ssh')), T('sremote', '遠端指令', '', '留空 = 開互動 shell', is('kind', 'ssh')),
+            // scp
+            T('csrc', '來源', './file.txt', '', is('kind', 'scp')), T('cdst', '目的地', 'user@host:/tmp/', '', is('kind', 'scp')), C('cr', '遞迴 -r（複製目錄）', false, is('kind', 'scp')),
+            // rm
+            T('rpath', '要刪除的路徑', './build', '', is('kind', 'rm')), C('rr', '遞迴 -r', true, is('kind', 'rm')), C('rf', '強制 -f（不確認、忽略不存在）', false, is('kind', 'rm')), C('ri', '逐一確認 -i', false, is('kind', 'rm')),
+        ], (v) => {
+            const w = [], P = [], E = [], q = shq;
+            const sshOpts = (portFlag) => { if (n(v.sport)) { if (!isPort(n(v.sport))) w.push('埠不合法'); P.push(portFlag + ' ' + q(n(v.sport))); E.push([portFlag + ' ' + n(v.sport), '連線埠']); } if (n(v.skey)) { P.push('-i ' + q(n(v.skey))); E.push(['-i ' + n(v.skey), '指定私鑰']); } };
+            switch (v.kind) {
+                case 'find': {
+                    const path = n(v.fpath) || '.'; P.push('find', q(path)); E.push(['find', '在目錄樹中搜尋'], [path, '起點目錄']);
+                    if (v.ftype) { P.push('-type ' + v.ftype); E.push(['-type ' + v.ftype, v.ftype === 'f' ? '只找一般檔案' : '只找目錄']); }
+                    if (n(v.fname)) { P.push('-name ' + q(n(v.fname))); E.push(['-name ' + q(n(v.fname)), '檔名樣式（區分大小寫；不分大小寫用 -iname）。加引號避免被 shell 先展開']); }
+                    if (n(v.mtime)) { if (!/^[+-]?\d+$/.test(n(v.mtime))) w.push('-mtime 需為整數，可加 +/-'); P.push('-mtime ' + n(v.mtime)); E.push(['-mtime ' + n(v.mtime), '依「修改時間」的天數：+N 超過 N 天、-N 在 N 天內']); }
+                    if (n(v.fsize)) { if (!/^[+-]?\d+[kMGcbw]?$/.test(n(v.fsize))) w.push('-size 格式例：+100M'); P.push('-size ' + n(v.fsize)); E.push(['-size ' + n(v.fsize), '依大小：+ 超過、- 小於（k / M / G 單位）']); }
+                    if (v.fact === 'delete') { P.push('-delete'); E.push(['-delete', '直接刪除找到的項目，無法復原；需放在最後', true]); w.push('先把 -delete 拿掉，確認列出的清單正確再執行'); if (!v.ftype && !n(v.fname) && !n(v.mtime) && !n(v.fsize)) w.push('沒有任何篩選條件，-delete 會刪掉起點目錄底下全部內容！'); }
+                    return cmdOut(P, E, w);
+                }
+                case 'grep': {
+                    P.push('grep'); E.push(['grep', '搜尋符合的文字行']);
+                    for (const [k, f, d] of [['gr', '-r', '遞迴搜尋子目錄'], ['gi', '-i', '忽略大小寫'], ['gn', '-n', '顯示行號'], ['gc', '-c', '只顯示符合的行數'], ['gv', '-v', '反向：只顯示不含的行'], ['gF', '-F', '把樣式當固定字串，不解析正規式'], ['gw', '-w', '只比對完整單字']]) if (v[k]) { P.push(f); E.push([f, d]); }
+                    if (n(v.ginc)) { P.push('--include=' + q(n(v.ginc))); E.push(['--include=' + q(n(v.ginc)), '只搜尋符合檔名樣式的檔案（搭配 -r）']); if (!v.gr) w.push('--include 通常搭配 -r 才有意義'); }
+                    if (!n(v.gpat)) w.push('尚未填寫搜尋文字'); P.push('-e ' + q(n(v.gpat))); E.push(['-e ' + q(n(v.gpat)), '搜尋樣式（-e 讓以 - 開頭的樣式也安全）']);
+                    const gp = n(v.gpath) || '.'; if (!v.gr && gp === '.') w.push('沒有 -r 時 grep 無法搜尋目錄'); P.push(q(gp)); E.push([gp, '搜尋位置']);
+                    return cmdOut(P, E, w);
+                }
+                case 'tar': {
+                    const f = n(v.tfile); if (!f) w.push('尚未填寫壓縮檔'); P.push('tar'); E.push(['tar', '封存工具']);
+                    const flags = v.tmode + (v.tcomp || '') + 'f'; P.push('-' + flags);
+                    E.push(['-' + flags, { c: 'c = 建立封存', x: 'x = 解開封存', t: 't = 列出內容' }[v.tmode] + (v.tcomp ? '；' + v.tcomp + ' = ' + { z: 'gzip', j: 'bzip2', J: 'xz' }[v.tcomp] + ' 壓縮' : '') + '；f = 後面接檔名']);
+                    P.push(q(f)); E.push([f, '封存檔']);
+                    const ext = /\.(tar|tgz)$|\.tar\.(gz|bz2|xz)$/; if (f && !ext.test(f)) w.push('壓縮檔副檔名通常是 .tar.gz / .tar.bz2 / .tar.xz / .tar');
+                    if (n(v.tdir)) { P.push('-C ' + q(n(v.tdir))); E.push(['-C ' + n(v.tdir), '先切換到此目錄再操作']); }
+                    if (n(v.texc) && v.tmode !== 't') { P.push('--exclude=' + q(n(v.texc))); E.push(['--exclude=' + n(v.texc), '排除符合的檔案']); }
+                    if (v.tmode === 'c') { const s = n(v.tsrc).split(/\s+/).filter(Boolean); if (!s.length) w.push('尚未填寫要打包的路徑'); P.push(...s.map(q)); E.push([s.join(' '), '要打包的路徑']); }
+                    if (v.tmode === 'x') w.push('解壓會覆蓋同名檔案；來源不明的壓縮檔請先用「列出內容」檢查路徑');
+                    return cmdOut(P, E, w);
+                }
+                case 'rsync': {
+                    P.push('rsync'); E.push(['rsync', '增量同步檔案']);
+                    for (const [k, f, d] of [['ra', '-a', '封存模式：遞迴並保留權限、時間、連結'], ['rv', '-v', '顯示處理的檔案'], ['rz', '-z', '傳輸時壓縮'], ['rn', '-n', '試跑：只顯示會做什麼，不真的改動'], ['rp', '--progress', '顯示傳輸進度']]) if (v[k]) { P.push(f); E.push([f, d]); }
+                    if (v.rdel) { P.push('--delete'); E.push(['--delete', '刪除目的地有、來源沒有的檔案，無法復原', true]); w.push(v.rn ? '目前有 -n 試跑，確認輸出後再拿掉 -n 正式執行' : '--delete 且沒有 -n：建議先加 -n 試跑，確認不會誤刪'); }
+                    if (n(v.rexc)) { P.push('--exclude=' + q(n(v.rexc))); E.push(['--exclude=' + n(v.rexc), '排除符合的檔案']); }
+                    if (!n(v.rsrc) || !n(v.rdst)) w.push('來源與目的地都要填寫');
+                    P.push(q(n(v.rsrc)), q(n(v.rdst))); E.push([n(v.rsrc), '來源（結尾有 / 只同步內容，沒有 / 會連目錄本身一起）'], [n(v.rdst), '目的地（user@host:路徑 表示走 SSH）']);
+                    return cmdOut(P, E, w);
+                }
+                case 'ssh': {
+                    P.push('ssh'); E.push(['ssh', '遠端登入']); sshOpts('-p');
+                    if (n(v.sjump)) { P.push('-J ' + q(n(v.sjump))); E.push(['-J ' + n(v.sjump), '經由跳板機連線']); }
+                    if (n(v.slocal)) { if (!/^\d+:[^:\s]+:\d+$/.test(n(v.slocal))) w.push('-L 格式：本機埠:目標主機:目標埠'); P.push('-L ' + q(n(v.slocal))); E.push(['-L ' + n(v.slocal), '本機埠轉發：連本機埠就等於從遠端去連目標']); }
+                    const h = n(v.shost); if (!h) w.push('尚未填寫主機'); else if (!isHost(h) && !isIp(h)) w.push('主機格式可能不對');
+                    const tgt = (n(v.suser) ? n(v.suser) + '@' : '') + h; P.push(q(tgt)); E.push([tgt, '登入目標（使用者@主機）']);
+                    if (n(v.sremote)) { P.push(q(n(v.sremote))); E.push([n(v.sremote), '登入後直接執行的指令']); }
+                    return cmdOut(P, E, w);
+                }
+                case 'scp': {
+                    P.push('scp'); E.push(['scp', '透過 SSH 複製檔案']); sshOpts('-P'); if (v.cr) { P.push('-r'); E.push(['-r', '遞迴複製目錄']); }
+                    if (!n(v.csrc) || !n(v.cdst)) w.push('來源與目的地都要填寫'); P.push(q(n(v.csrc)), q(n(v.cdst))); E.push([n(v.csrc), '來源'], [n(v.cdst), '目的地（遠端寫成 user@host:路徑）']); w.push('scp 的埠旗標是大寫 -P（與 ssh 的 -p 不同）');
+                    return cmdOut(P, E, w);
+                }
+                default: {
+                    const p = n(v.rpath); if (!p) w.push('尚未填寫路徑'); else if (/^(\/|~\/?|\.|\.\.|\*|\/\*)$/.test(p)) w.push('路徑看起來是根目錄、家目錄或目前目錄，極度危險！');
+                    const fl = (v.rr ? 'r' : '') + (v.rf ? 'f' : '') + (v.ri ? 'i' : ''); P.push('rm'); E.push(['rm', '刪除檔案（不經資源回收筒，無法復原）']); if (fl) { P.push('-' + fl); E.push(['-' + fl, [v.rr ? 'r = 遞迴刪除目錄' : '', v.rf ? 'f = 不詢問、忽略不存在' : '', v.ri ? 'i = 每個都確認' : ''].filter(Boolean).join('；'), v.rr && v.rf]); }
+                    if (v.rr && v.rf) w.push('rm -rf 不會詢問且無法復原；執行前先用 ls 確認路徑，變數展開為空時尤其危險');
+                    P.push(q(p)); E.push([p, '要刪除的目標']);
+                    return cmdOut(P, E, w);
+                }
+            }
+        });
+
+        // ---- 備份腳本 + crontab ----
+        add('backup', '備份腳本 + crontab', [
+            T('src', '要備份的目錄', '/var/www', '', undefined),
+            S('target', '備份目標', [['local', '本機目錄'], ['ssh', '遠端（scp，user@host:/路徑）'], ['s3', 'S3（aws s3 cp）']], 'local'),
+            T('dest', '目的地', '/backup', '本機 /路徑；遠端 user@host:/路徑；S3 s3://貯體/路徑'),
+            T('prefix', '檔名前綴', 'site'),
+            T('keep', '保留天數', '14', '', is('target', 'local', 'ssh')),
+            S('freq', '頻率', [['daily', '每天'], ['weekly', '每週日']], 'daily'),
+            T('time', '執行時間 HH:MM', '02:30'),
+        ], (v) => {
+            const w = [], src = n(v.src), dest = n(v.dest), pre = n(v.prefix) || 'backup', keep = n(v.keep);
+            if (!src.startsWith('/')) w.push('備份目錄需為絕對路徑'); if (!/^[A-Za-z0-9_.-]+$/.test(pre)) w.push('檔名前綴只能用英數字與 _ . -');
+            const tm = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(n(v.time)); if (!tm) w.push('時間格式 HH:MM（24 小時制）');
+            if (v.target !== 's3' && !/^[1-9]\d{0,3}$/.test(keep)) w.push('保留天數需為 1–9999 的整數');
+            const kd = /^[1-9]\d{0,3}$/.test(keep) ? keep : '14';
+            const L = ['#!/bin/bash', 'set -euo pipefail', '', `SRC=${shq(src)}`, `PREFIX=${shq(pre)}`, 'ARCHIVE="/tmp/${PREFIX}-$(date +%Y%m%d-%H%M%S).tar.gz"', '', '# 打包', 'tar -czf "$ARCHIVE" -C "$(dirname "$SRC")" "$(basename "$SRC")"'];
+            if (v.target === 'local') {
+                if (!dest.startsWith('/')) w.push('本機目的地需為絕對路徑');
+                L.push(`DEST=${shq(dest)}`, 'mkdir -p "$DEST"', 'mv "$ARCHIVE" "$DEST"/', '', `# 刪除超過 ${kd} 天的舊備份`, `find "$DEST" -name "\${PREFIX}-*.tar.gz" -mtime +${kd} -delete`);
+            } else if (v.target === 'ssh') {
+                const i = dest.indexOf(':'), host = i < 0 ? '' : dest.slice(0, i), rp = i < 0 ? '' : dest.slice(i + 1);
+                if (!host || !rp.startsWith('/')) w.push('遠端目的地格式：user@host:/絕對路徑');
+                L.push(`HOST=${shq(host)}`, `RPATH=${shq(rp)}`, 'scp -q "$ARCHIVE" "$HOST:$RPATH/"', 'rm -f "$ARCHIVE"', '', `# 刪除遠端超過 ${kd} 天的舊備份`, `ssh "$HOST" "find $(printf '%q' "$RPATH") -name \\"\${PREFIX}-*.tar.gz\\" -mtime +${kd} -delete"`);
+                w.push('需先設定好 SSH 金鑰登入（排程無法輸入密碼）');
+            } else {
+                if (!/^s3:\/\/[a-z0-9][a-z0-9.-]+(\/.*)?$/.test(dest)) w.push('S3 目的地格式：s3://貯體/路徑');
+                L.push(`DEST=${shq(dest.replace(/\/+$/, ''))}`, 'aws s3 cp "$ARCHIVE" "$DEST/"', 'rm -f "$ARCHIVE"');
+                w.push('S3 舊備份請用貯體的 Lifecycle 規則自動過期，腳本不刪除遠端資料；需先設定好 aws 憑證');
+            }
+            const [hh, mm] = tm ? [+tm[1], +tm[2]] : [2, 30];
+            L.push('', `# ---- 以下是 crontab 排程列（crontab -e 貼上；腳本存成 /usr/local/bin/backup.sh 並 chmod +x）----`, `${mm} ${hh} * * ${v.freq === 'weekly' ? '0' : '*'} /usr/local/bin/backup.sh >> /var/log/backup.log 2>&1`);
+            return out(L, w);
+        }, {
+            set: '遇錯誤即停止；-u 禁用未定義變數；pipefail 讓管線中任一段失敗都算失敗', SRC: '要備份的來源', PREFIX: '備份檔名前綴', ARCHIVE: '暫存壓縮檔（含時間戳記）', tar: '打包並 gzip 壓縮；-C 先切到上層目錄，備份檔內只含相對路徑', DEST: '備份目的地', mkdir: '確保目的地目錄存在', mv: '把壓縮檔移到目的地', find: '依修改時間找出舊備份並刪除（-delete 無法復原，請確認前綴與路徑）', HOST: '遠端主機', RPATH: '遠端目錄', scp: '上傳到遠端', rm: '刪除本機暫存檔', ssh: '在遠端刪除舊備份', aws: '上傳到 S3',
+        });
+
+        // 預設值 / 讀回驗證
+        const MAXV = 2000;
+        const defaults = (t) => Object.fromEntries(t.fields.map(f => [f.k, f.def]));
+        function sanitize(t, raw) {
+            const o = defaults(t); if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return o;
+            for (const f of t.fields) {
+                const x = raw[f.k];
+                if (f.type === 'check') { if (typeof x === 'boolean') o[f.k] = x; }
+                else if (typeof x === 'string') { if (f.type === 'select') { if (f.opts.some(p => p[0] === x)) o[f.k] = x; } else o[f.k] = x.slice(0, MAXV); }
+            }
+            return o;
+        }
+        function sanitizeState(raw) {
+            const s = { tpl: TPL[0].id, vals: {} }; if (!raw || typeof raw !== 'object') return s;
+            if (TPL.some(t => t.id === raw.tpl)) s.tpl = raw.tpl;
+            const vs = raw.vals && typeof raw.vals === 'object' ? raw.vals : {};
+            for (const t of TPL) if (vs[t.id] !== undefined) s.vals[t.id] = sanitize(t, vs[t.id]);
+            return s;
+        }
+        const render = (t, vals) => { const r = t.gen(vals); return { text: r.text, warns: r.warns || [], ex: (r.ex || explain(t.doc || {}, r.text)).map(e => [e[0], e[1], !!(e[2] || DANGER.test(e[0]))]) }; };
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'cfgen_opts';
+        let state = sanitizeState(store.get(KEY, null));
+        const cur = () => TPL.find(t => t.id === state.tpl);
+        const vals = () => state.vals[state.tpl] || (state.vals[state.tpl] = defaults(cur()));
+        const save = () => store.set(KEY, state);
+        const addMsgs = (box, arr) => { box.replaceChildren(...arr.map(t => { const d = document.createElement('div'); d.textContent = t; return d; })); };
+
+        function drawForm() {
+            const t = cur(), v = vals(), box = $('#form'), g = document.createElement('div');
+            box.replaceChildren(g);
+            for (const f of t.fields) {
+                if (f.w && !f.w(v)) continue;
+                const id = 'f_' + f.k, wrap = document.createElement('div');
+                let el;
+                if (f.type === 'check') {
+                    const lab = document.createElement('label'); lab.className = 'chk';
+                    el = document.createElement('input'); el.type = 'checkbox'; el.checked = !!v[f.k]; el.id = id;
+                    lab.append(el, document.createTextNode(f.label)); wrap.append(lab);
+                } else {
+                    const lab = document.createElement('label'); lab.className = 'f'; lab.htmlFor = id; lab.textContent = f.label + ' ';
+                    if (f.hint) { const s = document.createElement('small'); s.textContent = '（' + f.hint + '）'; lab.append(s); }
+                    el = document.createElement(f.type === 'select' ? 'select' : f.type === 'area' ? 'textarea' : 'input'); el.id = id;
+                    if (f.type === 'select') for (const [val, txt] of f.opts) el.add(new Option(txt, val));
+                    else { el.maxLength = MAXV; el.autocomplete = 'off'; el.spellcheck = false; if (f.type === 'area') el.rows = 4; }
+                    el.value = v[f.k]; wrap.append(lab, el);
+                }
+                el.onchange = el.oninput = () => {
+                    v[f.k] = f.type === 'check' ? el.checked : el.value;
+                    save();
+                    if (f.type !== 'area' && f.type !== 'text' && t.fields.some(x => x.w && x.w !== f.w)) drawForm();   // 類型 / 選項改變 → 重畫可見欄位
+                    show();
+                };
+                g.append(wrap);
+            }
+        }
+        function show() {
+            const r = render(cur(), vals());
+            $('#out').textContent = r.text;
+            addMsgs($('#warns'), r.warns);
+            const box = $('#exp'); box.replaceChildren();
+            if (!r.ex.length) { box.textContent = '沒有可說明的項目'; return; }
+            for (const [line, expl, bad] of r.ex) {
+                const d = document.createElement('div'); d.className = 'ex' + (bad ? ' bad' : '');
+                const c = document.createElement('code'), s = document.createElement('span'); c.textContent = line; s.textContent = (bad ? '危險：' : '') + expl; d.append(c, s); box.append(d);
+            }
+        }
+        function pick() { drawForm(); show(); }
+        const sel = $('#tpl');
+        for (const t of TPL) sel.add(new Option(t.name, t.id));
+        sel.value = state.tpl;
+        sel.onchange = () => { state.tpl = sel.value; save(); pick(); };
+        $('#copy').onclick = () => copyWithFeedback($('#copy'), $('#out').textContent);
+        $('#reset').onclick = () => { if (!confirm('把「' + cur().name + '」的欄位恢復預設，並清除記住的內容。無法復原。')) return; delete state.vals[state.tpl]; save(); pick(); };
+        $('#resetAll').onclick = () => { if (!confirm('把所有範本的欄位恢復預設，並清除記住的內容。無法復原。')) return; state = { tpl: state.tpl, vals: {} }; save(); pick(); };
+        pick();
+    </script>
+</body>
+
+</html>

@@ -15,23 +15,23 @@
 | [幸運頻道計算機](game-assist/lucky-channel.html) | 遊戲輔助 | 依角色、怪物、日期算今日幸運頻道 |
 | [決策轉盤](fun/wheel.html) | 趣味 | 輸入選項轉盤決定，支援權重，清單自動記住；內建午餐 / 晚餐 / 飲料 / 宵夜 / 週末活動 / 運動常用清單 |
 | [番茄鐘](fun/pomodoro.html) | 趣味 | 專注 / 休息 / 長休息自動輪替，記錄每日番茄數與專注分鐘，近 7 / 30 天圖表與連續天數；可選正在做的待辦，完成的專注記到該項目，並清理已刪除待辦的孤兒統計 |
-| [純文字整理](utils/text-tools.html) | 工具 | 去重複、排序、刪空行、全半形、大小寫，可復原；即時字數 / 閱讀時間；中文 / 英文假文產生；符號表分頁：16 類符號與 emoji、搜尋、點擊複製並累積、最近使用、全形 ↔ 半形對照表；新增閱讀時間與詞頻統計（速度可調、英文單字 / 中文單字 / 二字詞）；新增命名風格轉換（camelCase / PascalCase / snake_case / kebab-case / CONSTANT_CASE / dot.case / Title Case / Sentence case，可切開連續大寫縮寫，一次最多 5000 行） |
+| [純文字整理](utils/text-tools.html) | 工具 | 去重複、排序、刪空行、全半形、大小寫，可復原；即時字數 / 閱讀時間；中文 / 英文假文產生；符號表分頁：16 類符號與 emoji、搜尋、點擊複製並累積、最近使用、全形 ↔ 半形對照表；新增閱讀時間與詞頻統計（速度可調、英文單字 / 中文單字 / 二字詞）；新增命名風格轉換（camelCase / PascalCase / snake_case / kebab-case / CONSTANT_CASE / dot.case / Title Case / Sentence case，可切開連續大寫縮寫，一次最多 5000 行）；另有 emoji 搜尋（約 700 個）、Unicode 字元資訊、換行符轉換、千分位、SQL IN、陣列字面值、路徑轉換分頁 |
 | [單位與匯率換算](utils/unit-converter.html) | 工具 | 長度、重量、坪、溫度等單位、烹飪（杯 / 匙 / 公克，依 15 種食材密度），以及即時匯率（需連網，有離線快取） |
-| [密碼產生器](utils/password-gen.html) | 工具 | 以瀏覽器安全亂數在本機產生密碼，可排除易混淆字元；強度檢測（熵、常見弱密碼、連號 / 鍵盤順序、估計破解時間，只在本機計算） |
+| [密碼產生器](utils/password-gen.html) | 工具 | 以瀏覽器安全亂數在本機產生密碼，可排除易混淆字元；強度檢測（熵、常見弱密碼、連號 / 鍵盤順序、估計破解時間，只在本機計算）；新增 TOTP 驗證碼分頁（RFC 6238，secret 不寫入本機）與密碼強度評估（常見字根、破解速度依雜湊演算法而異，數量級為假設） |
 | [捲軸期望值計算機](game-assist/scroll-calculator.html) | 遊戲輔助 | 算衝捲平均花費與各把握度所需次數，可設定失敗損毀機率 |
 | [翻牌記憶遊戲](mini-games/memory-match.html) | 小遊戲 | 單人挑戰最少步數，或連線（最多 4 人，房主驗證）輪流翻牌；單機：單人，或和電腦比賽 |
 | [打字速度測試](mini-games/typing-test.html) | 小遊戲 | 中文 / 英文 / 程式碼 / 自訂文章打字測速，每分鐘字數與正確率（自訂文章不記最佳）；歷史成績走勢與最常打錯的字 |
 | [白噪音 / 環境音](fun/white-noise.html) | 趣味 | 即時合成白 / 粉紅 / 棕噪音、雨聲、風聲、機械鍵盤與打字機聲，可定時 |
 | [分帳計算](utils/split-bill.html) | 工具 | 多人多筆支出分帳，轉帳次數最少；小費快算（百分比、人數、每人湊整數） |
 | [時區轉換](utils/timezone.html) | 工具 | 一個時間對照多個城市，處理夏令時間；即時看板（每秒更新、日夜圖示）；會議時間尋找：選 2–6 城市與上班時段（可午休），24 小時橫條找共同上班時段，無重疊時推薦最少加班 / 半夜時段，可複製建議時間（DST、跨日正確）；會議時間新增共同空檔（每城市最多 20 筆忙碌時段，扣除後列出共同空檔，CSS 時間軸） |
-| [正規表示式測試器](utils/regex-tester.html) | 工具 | 即時標示符合內容、群組與位置 |
+| [正規表示式測試器](utils/regex-tester.html) | 工具 | 即時標示符合內容、群組與位置；新增語法速查與範例庫、逐段解說、從範例推測、輸出各語言字串 |
 | [色彩工具](utils/color-tools.html) | 工具 | 色碼互轉、配色產生（互補 / 類似 / 三角 / 分裂 / 四角 / 單色 / 漸層）、色票庫（存檔、複製成 CSS 變數）、WCAG 對比度檢查、四種色覺缺陷模擬；新增色盲模擬（色票或圖片本機處理；紅 / 綠 / 藍黃 / 全色盲與弱視，Machado 2009 矩陣；配色診斷標示難以分辨的色票） |
-| [文字差異比對](utils/text-diff.html) | 工具 | 逐行或逐字詞（行內標示）差異比對 |
-| [編碼解碼](utils/encode-decode.html) | 工具 | Base64 / URL / Unicode / HTML 實體 / 十六進位；JWT 解析（顯示過期時間，不驗簽）；網址參數拆解 / 組合；SHA-1 / 256 / 384 / 512 雜湊（文字與檔案，可貼官方值比對）；摩斯密碼、凱薩密碼、ROT13；字元檢視：逐字素列出碼位 / UTF-8 / UTF-16 / 類別 / 腳本，標示零寬、BOM、NBSP、方向控制、同形異義字元；可移除零寬與方向控制字元；NFC / NFD / NFKC / NFKD 正規化（不存資料） |
+| [文字差異比對](utils/text-diff.html) | 工具 | 逐行或逐字詞（行內標示）差異比對；新增 JSON 結構 diff（依鍵與元素比對，陣列可依索引或指定鍵） |
+| [編碼解碼](utils/encode-decode.html) | 工具 | Base64 / URL / Unicode / HTML 實體 / 十六進位；JWT 解析（顯示過期時間，不驗簽）；網址參數拆解 / 組合；SHA-1 / 256 / 384 / 512 雜湊（文字與檔案，可貼官方值比對）；摩斯密碼、凱薩密碼、ROT13；字元檢視：逐字素列出碼位 / UTF-8 / UTF-16 / 類別 / 腳本，標示零寬、BOM、NBSP、方向控制、同形異義字元；可移除零寬與方向控制字元；NFC / NFD / NFKC / NFKD 正規化（不存資料）；另有 Base32、Base58 / Base58Check、URL 批次編碼、HTML 實體查表、檔案轉 data URI、雜湊類型辨識 |
 | [倒數日 / 紀念日](utils/countdown.html) | 工具 | 還有 / 已經幾天，可設定每年重複（週年）；「今日倒數」到下班時刻的時分秒與進度條；每個日期可附清單（旅行行李範本、勾選進度）；匯出 .ics（全天事件、每年重複用 RRULE） |
-| [QR Code 產生器](utils/qr-code.html) | 工具 | 自行實作的 QR 編碼器（版本 1–40、容錯 L/M/Q/H）；Code 128（B / C 自動選）與 EAN-13 條碼（與 JsBarcode 逐位元比對過）；可下載 PNG；範本：Wi-Fi / vCard 3.0 / 電話 / 簡訊 / Email / 地理位置 / 行事曆事件 / 網址，自動跳脫；敏感資料不寫入 localStorage |
-| [JSON 整理器](utils/json-formatter.html) | 工具 | 美化 / 壓縮 / 驗證、錯誤定位、樹狀檢視；JSON ↔ YAML、JSON ↔ CSV 轉換；另可把 JSON 當範例產生型別：TypeScript（interface / type）、JSON Schema（draft 2020-12）、Mongoose Schema、Python dataclass、Go struct，多筆陣列合併欄位推論；格式轉換新增 JSON ⇄ YAML ⇄ TOML 互轉（自行實作 TOML 常用範圍，不支援項目會報錯並帶行號） |
-| [Markdown 即時預覽](utils/markdown-preview.html) | 工具 | 標題 / 清單 / 表格 / 程式碼，輸出前消毒，可複製 HTML；新增表格工具：填格子輸出 Markdown 表格、CSV / TSV 轉表格、表格轉 CSV（中文欄寬以全形計） |
+| [QR Code 產生器](utils/qr-code.html) | 工具 | 自行實作的 QR 編碼器（版本 1–40、容錯 L/M/Q/H）；Code 128（B / C 自動選）與 EAN-13 條碼（與 JsBarcode 逐位元比對過）；可下載 PNG；範本：Wi-Fi / vCard 3.0 / 電話 / 簡訊 / Email / 地理位置 / 行事曆事件 / 網址，自動跳脫；敏感資料不寫入 localStorage；條碼新增 Code 39 與 SVG 輸出、高度可調 |
+| [JSON 整理器](utils/json-formatter.html) | 工具 | 美化 / 壓縮 / 驗證、錯誤定位、樹狀檢視；JSON ↔ YAML、JSON ↔ CSV 轉換；另可把 JSON 當範例產生型別：TypeScript（interface / type）、JSON Schema（draft 2020-12）、Mongoose Schema、Python dataclass、Go struct，多筆陣列合併欄位推論；格式轉換新增 JSON ⇄ YAML ⇄ TOML 互轉（自行實作 TOML 常用範圍，不支援項目會報錯並帶行號）；新增 JSONPath / jq 查詢、鍵整理與欄位選取改名、INI / .properties / .env ⇄ JSON、i18n（JSON / PO / CSV）互轉與缺漏鍵檢查；產生型別加 GraphQL、protobuf、SQL CREATE TABLE |
+| [Markdown 即時預覽](utils/markdown-preview.html) | 工具 | 標題 / 清單 / 表格 / 程式碼，輸出前消毒，可複製 HTML；新增表格工具：填格子輸出 Markdown 表格、CSV / TSV 轉表格、表格轉 CSV（中文欄寬以全形計）；新增 HTML → Markdown 轉換（列出無法轉換的元素） |
 | [猜字遊戲](mini-games/word-guess.html) | 小遊戲 | Wordle 類 6 次機會，四字成語（939 個，輸入以詞庫驗證）與 5 字母英文單字（答案 600 / 可猜 1449）；每日挑戰以台灣時間為種子、完成後可複製 🟩🟨⬛ 分享文字；自由練習、螢幕鍵盤與已猜字表顏色提示、翻牌動畫；統計（勝率、連勝、分布）成語與英文分開記；單機不連線 |
 | [2048](mini-games/game-2048.html) | 小遊戲 | 方向鍵 / WASD / 觸控滑動，記錄最高分；每日挑戰（每天同一組亂數）；方塊滑動 / 合併 / 新方塊動畫（尊重系統「減少動態效果」） |
 | [踩地雷](mini-games/minesweeper.html) | 小遊戲 | 三種難度、第一步必安全、連鎖展開與快速開格，記錄最佳時間；每日挑戰（每天同一個雷區） |
@@ -56,16 +56,16 @@
 | [規劃撲克](fun/planning-poker.html) | 趣味 | 費氏數列 / T-shirt 牌組；翻牌前只看得到誰出了牌；平均 / 中位數 / 分佈；單機：同一台裝置傳遞估點 |
 | [記帳本](utils/expense-tracker.html) | 工具 | 收支分類、月統計、分類佔比；固定支出 / 訂閱（每週 / 月 / 年、下次扣款日、折合每月 / 每年、一鍵記入明細）；資料只在本機，可匯出 CSV（防公式注入）；外幣記帳：17 種外幣，匯率取自單位換算器的匯率快取並於記帳當下鎖定，同存外幣金額 / 幣別 / 匯率 / 台幣金額，離線可手動輸入匯率，CSV 多三欄 |
 | [反應速度測試](mini-games/reaction-time.html) | 小遊戲 | 隨機等待、搶跑偵測、5 次平均，記錄歷史最佳與中位數 |
-| [進位 / 位元運算工具](utils/base-converter.html) | 工具 | 2 / 8 / 10 / 16 / 36 進位互轉（BigInt）、位元運算（8–64 位元、二補數）、float32 / float64 拆解；新增浮點數視覺化分頁（IEEE 754 單 / 雙精度位元、精確十進位值、0.1+0.2≠0.3 示範） |
-| [Cron 表達式解析](utils/cron-parser.html) | 工具 | 5 欄位 cron（* , - / ?、月份星期縮寫、@daily）中文說明與未來 10 次執行時間 |
-| [螢幕 / 鍵盤 / 滑鼠測試](utils/screen-test.html) | 工具 | 全螢幕純色輪播、鍵盤配置逐鍵亮燈、滑鼠按鍵 / 雙擊 / 滾輪偵測；螢幕 PPI、實際尺寸與長寬比計算；新增「相機」分頁（裝置、QVGA 到 4K、實際解析度 / fps、鏡像、拍照、前後鏡頭）與「麥克風」分頁（音量表 dBFS + 峰值、回音 / 噪音 / 增益開關、錄 5 秒回放，只存記憶體） |
+| [進位 / 位元運算工具](utils/base-converter.html) | 工具 | 2 / 8 / 10 / 16 / 36 進位互轉（BigInt）、位元運算（8–64 位元、二補數）、float32 / float64 拆解；新增浮點數視覺化分頁（IEEE 754 單 / 雙精度位元、精確十進位值、0.1+0.2≠0.3 示範）；新增「文字 ⇄ 進位」分頁（UTF-8 / UTF-16 位元組互轉） |
+| [Cron 表達式解析](utils/cron-parser.html) | 工具 | 5 欄位 cron（* , - / ?、月份星期縮寫、@daily）中文說明與未來 10 次執行時間；新增 cron / systemd OnCalendar / GitHub Actions 排程語法互轉 |
+| [螢幕 / 鍵盤 / 滑鼠測試](utils/screen-test.html) | 工具 | 全螢幕純色輪播、鍵盤配置逐鍵亮燈、滑鼠按鍵 / 雙擊 / 滾輪偵測；螢幕 PPI、實際尺寸與長寬比計算；新增「相機」分頁（裝置、QVGA 到 4K、實際解析度 / fps、鏡像、拍照、前後鏡頭）與「麥克風」分頁（音量表 dBFS + 峰值、回音 / 噪音 / 增益開關、錄 5 秒回放，只存記憶體）；新增「瀏覽器環境」分頁（環境與功能支援，可複製成回報文字，不連網） |
 | [單字閃卡](fun/flashcards.html) | 趣味 | 多詞庫、簡化版 SM-2 間隔重複（重來 / 困難 / 良好 / 簡單），進度存在本機 |
 | [數織 Nonogram](mini-games/nonogram.html) | 小遊戲 | 5 / 10 / 15 格；出題器用逐行推理驗證可解且唯一；拖曳塗色、標 ✕，記錄最佳時間 |
 | [黑白棋](mini-games/othello.html) | 小遊戲 | 本機雙人、對電腦（簡單 / 普通 / 困難）或連線（房主判定）；合法步提示、無子可下自動跳過、雙方無步結算；單機：單機對電腦、悔棋與提示；落子與翻面動畫（尊重系統「減少動態效果」） |
 | [骰子賽跑](fun/board-race.html) | 趣味 | 30 格賽道與前進 / 後退 / 暫停 / 再擲事件格；骰子由房主端擲出；單機：單機和 1–3 位電腦賽跑；擲骰翻滾、棋子逐格跳動與事件格提示動畫（尊重系統「減少動態效果」） |
 | [誰是臥底](fun/spy-game.html) | 趣味 | 3–10 人；詞只私下傳給本人；輪流描述（不能含自己的詞）、投票淘汰，7 人以上 2 位臥底；單機：同一台裝置傳遞，可加電腦玩家 |
 | [猜拳](fun/rps.html) | 趣味 | 三 / 五 / 七戰制；每局先交換雜湊承諾、兩邊都出完才揭曉並驗證，對手更改選擇會被判作弊；單機：單機對電腦（簡單 / 普通）；搖拳揭曉與勝負強調動畫（尊重系統「減少動態效果」） |
-| [圖片壓縮 / 縮圖 / 轉檔](utils/image-resize.html) | 工具 | 等比縮放、品質調整、JPEG / PNG / WebP 轉檔、SVG 轉 PNG（向量可放大到任意尺寸）；圖片不上傳，重新編碼會移除 EXIF |
+| [圖片壓縮 / 縮圖 / 轉檔](utils/image-resize.html) | 工具 | 等比縮放、品質調整、JPEG / PNG / WebP 轉檔、SVG 轉 PNG（向量可放大到任意尺寸）；圖片不上傳，重新編碼會移除 EXIF；新增 App 圖示 / Favicon 尺寸包（PNG、maskable、ico、manifest 片段、ZIP） |
 | [待辦清單](fun/todo.html) | 趣味 | 到期日分組（逾期 / 今天 / 明天 / 之後 / 無日期 / 已完成）、組內上下調整、點文字修改；月曆視圖：每日待辦數與逾期、點日期看 / 新增、可換月；每項顯示累計番茄數與專注分鐘，可依番茄排序（讀取番茄鐘的統計） |
 | [簡易畫板](fun/sketchpad.html) | 趣味 | 畫筆 / 橡皮擦、調色盤、手寫筆感壓、復原重做（含清除）、存 PNG；簽名模式：透明背景、單色筆、裁切空白匯出透明 PNG、可複製到剪貼簿，不存資料 |
 | [成語接龍](fun/idiom-chain.html) | 趣味 | 2–8 人；內建 1000+ 成語自動驗證，詞庫外的四字詞由房主裁決；每人 3 命、30 秒限時；單機：單機和電腦接龍（三種難度） |
@@ -79,7 +79,7 @@
 | [UUID / 隨機資料產生](utils/random-data.html) | 工具 | UUID v4、整數、日期、假姓名 / 手機 / Email；最多 1000 筆；新增 UUID v7 / ULID（可排序，同毫秒單調遞增；可選現在 / 指定時間），最多 1000 筆；新增假資料表格（最多 30 欄、18 種欄位型別、1–10000 列，輸出 CSV / JSON / JSON Lines / SQL INSERT / Markdown，可用種子重現） |
 | [週期表](utils/periodic-table.html) | 工具 | 118 元素、10 種類別著色與篩選、原子量 / 族 / 週期 / 常溫狀態 / 電子組態（含例外），中英文與符號搜尋 |
 | [油耗 / 行車成本](utils/fuel-log.html) | 工具 | 加滿到加滿法計算每段油耗（沒加滿的併入下一次）、整體平均、最近 12 段走勢、匯出 CSV |
-| [CSV / TSV 表格工具](utils/csv-tool.html) | 工具 | RFC 4180 解析（引號、跳脫、儲存格內換行）、自動判斷分隔符號、排序與篩選、輸出 JSON / Markdown / TSV |
+| [CSV / TSV 表格工具](utils/csv-tool.html) | 工具 | RFC 4180 解析（引號、跳脫、儲存格內換行）、自動判斷分隔符號、排序與篩選、輸出 JSON / Markdown / TSV；新增 XLSX 讀寫（單一工作表、10MB 上限） |
 | [畫圖接力](fun/art-relay.html) | 趣味 | 2–8 人；每人固定顏色（由房主決定、不能偽造）、限時輪流、可設輪數；筆跡經房主驗證後轉送；單機：單人練習（依序畫 3–6 格、看成果牆） |
 | [搶票校時鐘](utils/ticket-clock.html) | 工具 | 臺灣時間（UTC+8）到毫秒、不受裝置時區影響；網路校時（多來源取往返最短、顯示誤差）；開賣倒數與最後 10 秒提示音；提前毫秒補償；記錄按下時間差；螢幕常亮 |
 | [賓果](fun/bingo.html) | 趣味 | 1–12 人（一個人也能玩）；房主洗牌叫號（手動 / 3–8 秒自動）；卡片由房主發、喊賓果由房主驗證；單機：單機和 1–3 位電腦比賽 |
@@ -89,9 +89,9 @@
 | [拼圖](mini-games/jigsaw.html) | 小遊戲 | 3×3–6×6；內建 canvas 圖片或上傳照片（置中裁切、不上傳）；步數、時間、最少步數參考與最佳紀錄 |
 | [便條紙](fun/sticky-notes.html) | 趣味 | 最多 200 張、6 種顏色、釘選、搜尋、複製與匯出 .txt；不讀取剪貼簿 |
 | [網頁鬧鐘](fun/alarm.html) | 趣味 | 多組、重複星期、貪睡 5 分鐘、系統通知；明確警告網頁無法在關閉分頁或鎖屏後響鈴；新增起床任務（心算 / 輸入隨機字串 / 搖動手機），貪睡沿用任務，附緊急關閉 |
-| [文字加密 / 解密](utils/aes-crypt.html) | 工具 | AES-256-GCM + PBKDF2-SHA256 60 萬次；隨機鹽與 IV；密文帶版本前綴；改動或密碼錯誤會被偵測 |
-| [時間戳轉換](utils/timestamp.html) | 工具 | Unix 時間戳（秒 / 毫秒自動判斷）與日期互轉；顯示 UTC、ISO 8601、相對時間；13 個常用時區 + 裝置時區（含夏令時間）；即時顯示現在時間戳；ObjectId 分頁：貼上多個 MongoDB ObjectId（≤200）解出建立時間 / 隨機值 / 計數器並可複製 TSV，時間或時間戳轉最小 / 最大 ObjectId 與 $gte / $lt 查詢片段，快捷今天 / 昨天 / 最近 7 天 / 本月；ID 分頁擴充：自動判斷 ObjectId / UUID（v1/v6/v7 解時間）/ ULID / KSUID / Snowflake（Discord / Twitter / 自訂 epoch），可複製 TSV；時間可轉該時間的 UUID v7 / ULID 及其最小 / 最大值 |
-| [CSS 產生器](utils/css-gen.html) | 工具 | 陰影（含內陰影）、線性 / 放射漸層（2–3 色標）、圓角（四角獨立，px / %）；即時預覽；複製 CSS |
+| [文字加密 / 解密](utils/aes-crypt.html) | 工具 | AES-256-GCM + PBKDF2-SHA256 60 萬次；隨機鹽與 IV；密文帶版本前綴；改動或密碼錯誤會被偵測；新增金鑰對與憑證分頁（RSA / ECDSA 金鑰對、X.509 解析、PEM ⇄ DER） |
+| [時間戳轉換](utils/timestamp.html) | 工具 | Unix 時間戳（秒 / 毫秒自動判斷）與日期互轉；顯示 UTC、ISO 8601、相對時間；13 個常用時區 + 裝置時區（含夏令時間）；即時顯示現在時間戳；ObjectId 分頁：貼上多個 MongoDB ObjectId（≤200）解出建立時間 / 隨機值 / 計數器並可複製 TSV，時間或時間戳轉最小 / 最大 ObjectId 與 $gte / $lt 查詢片段，快捷今天 / 昨天 / 最近 7 天 / 本月；ID 分頁擴充：自動判斷 ObjectId / UUID（v1/v6/v7 解時間）/ ULID / KSUID / Snowflake（Discord / Twitter / 自訂 epoch），可複製 TSV；時間可轉該時間的 UUID v7 / ULID 及其最小 / 最大值；新增「批次轉換」分頁（多行時間戳或日期互轉，可複製 TSV） |
+| [CSS 產生器](utils/css-gen.html) | 工具 | 陰影（含內陰影）、線性 / 放射漸層（2–3 色標）、圓角（四角獨立，px / %）；即時預覽；複製 CSS；新增 Flexbox / Grid 版面視覺化（輸出 .container / .item CSS） |
 | [輪值表](utils/duty-roster.html) | 工具 | 每天 / 每週 / 每兩週 / 每月輪換；跳過週六日；指定從第幾位開始；每人次數；標出下一個輪到的人；複製成文字；家事分配分頁：家事（頻率、1–3 分）與成員，自動分配（輪流 + 總分差最小 + 避免連續同人）、打勾、本週 / 本月每人完成次數與分數、複製文字 |
 | [數字滑塊](mini-games/sliding-puzzle.html) | 小遊戲 | 3×3 / 4×4 / 5×5；點擊或方向鍵 / WASD 滑動；隨機走法打亂（一定有解）；步數、時間與各尺寸最佳紀錄 |
 | [終極井字棋](mini-games/ultimate-ttt.html) | 小遊戲 | 9 個小棋盤，下在哪格對手就得去對應棋盤；對應棋盤已結束則任選；本機雙人或連線（房主驗證每一步）；單機：單機對電腦（三種難度） |
@@ -110,27 +110,27 @@
 | [水平儀 / 指南針](utils/level-compass.html) | 工具 | 水平儀（平放 / 立起、歸零校正）、指南針（絕對方位，磁偏角未修正）、坡度（度 / % / 高:長）；iOS 需授權感測器，無感測器時可用模擬輸入預覽；不存資料 |
 | [照片 EXIF 檢視與清除](utils/exif-viewer.html) | 工具 | JPEG / PNG / WebP 自行解析 EXIF（相機、鏡頭、時間、曝光、方向、GPS 與地圖文字連結、縮圖）與 XMP / IPTC / ICC 區段；無損移除中繼資料（可保留方向）或 canvas 重新編碼；清除後重新解析；最多 20 張、單張 30MB；不存資料 |
 | [錄音機 / 音檔剪輯](utils/audio-recorder.html) | 工具 | getUserMedia + MediaRecorder 錄音（webm/opus、mp4、ogg 依瀏覽器）、暫停 / 繼續、即時音量條；清單可播放、改名、刪除、下載原格式或 16-bit WAV；單次 60 分鐘、清單 20 段；只存記憶體，未下載會提醒；不存資料；音檔剪輯：載入本機音檔（mp3/wav/m4a/aac/ogg/webm/flac，≤100MB、≤30 分鐘）或清單錄音，波形選取、裁剪 / 刪除 / 複製 / 插入靜音 / 淡入淡出 / 音量 / 正規化 / 反轉 / 裁首尾靜音 / 調速、復原重做 20 步、合併多段、匯出 WAV 或壓縮格式（即時錄製，需等於音檔長度的時間）；不支援 MP3；有未下載或未匯出內容離開會提醒 |
-| [亂碼修復 / 編碼轉換](utils/encoding-fixer.html) | 工具 | 檔案轉碼（自動偵測 BOM / UTF-8 / Big5 / GBK / SJIS 等，手動指定、預覽、另存 UTF-8，可選 BOM 與換行，上限 20MB）；貼上亂碼逆向修復（互錯組合評分排序）；含 � 的無法修復；不存資料 |
-| [chmod 權限計算器](utils/chmod-calc.html) | 工具 | 勾選、八進位、符號三向同步，含 setuid / setgid / sticky；常見組合速查；umask 計算；符號模式模擬（u/g/o/a、+ - =、r w x X s t、g=u）；產生 chmod 與 find 指令；不存資料 |
+| [亂碼修復 / 編碼轉換](utils/encoding-fixer.html) | 工具 | 檔案轉碼（自動偵測 BOM / UTF-8 / Big5 / GBK / SJIS 等，手動指定、預覽、另存 UTF-8，可選 BOM 與換行，上限 20MB）；貼上亂碼逆向修復（互錯組合評分排序）；含 � 的無法修復；不存資料；新增「位元組並排」分頁（UTF-8 / UTF-16 / Big5 / GBK 位元組並排與亂碼成因提示） |
+| [chmod 權限計算器](utils/chmod-calc.html) | 工具 | 勾選、八進位、符號三向同步，含 setuid / setgid / sticky；常見組合速查；umask 計算；符號模式模擬（u/g/o/a、+ - =、r w x X s t、g=u）；產生 chmod 與 find 指令；不存資料；umask 新增反推與常見值說明 |
 | [股票交易成本與損益試算](utils/stock-cost.html) | 工具 | 臺股現股 / 零股 / 當沖 / ETF 手續費（折扣、最低手續費）、證交稅、淨損益、報酬率、損益平衡賣價；進位可選；股利補充保費與殖利率；分批買進（最多 20 批）平均成本；費率稅率皆可改（以當時法規與券商為準）；只存偏好設定 |
 | [重訓記錄](fun/workout-log.html) | 趣味 | 內建 30 個動作加自訂（上限 50）；多組重量 × 次數、RPE、備註；預估 1RM（Epley / Brzycki）、三種 PR 並標 🏆、近 12 次 1RM 折線圖、每週訓練量；kg / lb 顯示切換；訓練紀錄上限 5000 次；刪某動作全部紀錄、刪一年前、清除全部 |
 | [睡眠記錄](fun/sleep-log.html) | 趣味 | 入睡與起床時間（跨午夜自動算日期）、品質 1–5、備註；近 7 / 14 / 30 天平均時數、平均入睡 / 起床、規律度、睡眠債（目標可調）、近 14 天長條圖；上限 3650 筆；刪單筆、刪一年前、清除全部；僅供參考，不是醫療建議 |
 | [MongoDB 指令產生器](utils/mongo-query.html) | 工具 | find / findOne / countDocuments / distinct / aggregate / 新增 / 更新 / 取代 / 刪除 / createIndex；條件建構器（15 種運算子、8 種值型別、一層巢狀 and / or）、投影、排序、limit / skip、12 種更新運算子、聚合階段（可上下移）、索引（unique / TTL / partialFilter）；輸出 mongosh、Node.js、pymongo、Compass JSON 並一鍵複製；8 個快速範本；寫入類操作條件為空時紅色警告；不連線資料庫；只存上次的操作與輸出格式 |
 | [螢幕分享](utils/screen-share.html) | 工具 | 電腦分享螢幕 / 視窗 / 分頁（可含系統聲音），其他裝置開連結或輸入 6 碼房號觀看；PeerJS 點對點 WebRTC，最多 4 位觀看者（可踢除，顯示連線狀態）；畫質可選 15 / 30 fps 與最大寬度；觀看端顯示解析度 / fps / 位元率 / 延遲，支援全螢幕；手機瀏覽器無法分享螢幕（只能觀看）；對稱型 NAT 需 TURN，本工具未提供；內附手機鏡像到電腦的說明（scrcpy、Miracast、AirPlay、Chromecast）；不存資料；新增螢幕錄影：「只錄影（不分享）」模式（可錄系統聲音、可混入麥克風，暫停 / 繼續，預覽後下載 webm，不支援時 mp4；單次 60 分鐘 / 1GB 上限）與分享時「同時錄製這次分享」；僅桌面瀏覽器，錄影只存記憶體 |
-| [SQL 指令產生器](utils/sql-query.html) | 工具 | MySQL / PostgreSQL / SQLite / SQL Server；SELECT（別名與聚合、DISTINCT、最多 4 個 JOIN、AND/OR 一層巢狀條件、GROUP BY / HAVING、多欄排序、分頁）、每組最新一筆（視窗函式）、INSERT（單筆 / 多筆 / upsert）、UPDATE、DELETE、CREATE TABLE、CREATE INDEX、ALTER TABLE；輸出純 SQL（字面值已跳脫）、參數化、Node.js、Python；識別字一律加引號；無條件的 UPDATE / DELETE 紅色警告；七個快速範本；不連線、不提供 DROP / TRUNCATE；只存上次的方言 / 操作 / 輸出格式 |
+| [SQL 指令產生器](utils/sql-query.html) | 工具 | MySQL / PostgreSQL / SQLite / SQL Server；SELECT（別名與聚合、DISTINCT、最多 4 個 JOIN、AND/OR 一層巢狀條件、GROUP BY / HAVING、多欄排序、分頁）、每組最新一筆（視窗函式）、INSERT（單筆 / 多筆 / upsert）、UPDATE、DELETE、CREATE TABLE、CREATE INDEX、ALTER TABLE；輸出純 SQL（字面值已跳脫）、參數化、Node.js、Python；識別字一律加引號；無條件的 UPDATE / DELETE 紅色警告；七個快速範本；不連線、不提供 DROP / TRUNCATE；只存上次的方言 / 操作 / 輸出格式；新增「格式化 SQL」分頁（關鍵字大小寫、子句換行、子查詢與 CASE 縮排、逗號位置、保證 token 序列不變） |
 | [音頻產生器 / 聽力頻率測試](utils/tone-generator.html) | 工具 | Web Audio 六種波形（正弦 / 方波 / 三角 / 鋸齒 / 白噪音 / 粉紅噪音），20–20000 Hz，音量 -60 至 -6 dBFS（預設 -30）；左右聲道測試（含左→右輪流）、定時停止；頻率掃描（線性 / 對數、可循環）；聽力頻率測試（8–20 kHz 共 10 階，非醫療）；雙耳拍；即時頻譜 / 波形；需點擊才發聲、離開頁面即停止；不存資料 |
 | [字幕時間軸工具](utils/subtitle-tool.html) | 工具 | 解析 SRT / VTT / ASS（基本）/ SBV，自動偵測編碼（失敗時可改用 Big5 / GBK）；就地編輯 / 新增 / 刪除 / 排序；整體平移（可指定範圍）、兩點線性校正、幀率轉換；合併重疊或過短、依字數拆分（不拆英文單字與 emoji）、搜尋取代（含 regex）；檢查七類問題並一鍵修正，復原 10 步；輸出 SRT / VTT / SBV / 純文字 / CSV（CRLF / LF、BOM）；單檔 5 MB、5 萬行；不做簡繁轉換、ASS 只讀；不存資料 |
 | [跨裝置傳檔 / 傳文字](utils/file-drop.html) | 工具 | 兩台裝置開同一連結或輸入 6 碼房號，PeerJS 點對點 WebRTC 互傳檔案與文字（1 對 1，第三位被拒）；多檔依序傳送（選擇 / 拖放），每塊 16KB 並依 bufferedAmount 背壓，顯示進度 / 速度 / 剩餘時間，可取消；逐塊 + 總 CRC32 校驗（非加密雜湊）；單檔 ≤ 500MB（接收端記憶體暫存最多 30 個 / 1GB）；文字單則 ≤ 50,000 字、記憶體內最多 100 則；檔名過濾；壞訊息忽略並計數；任何知道房號者可連入、信令用公共 PeerJS、對稱型 NAT 需 TURN（未提供）；不存資料 |
 | [JWT 解碼與檢查](utils/jwt-decoder.html) | 工具 | 解 header / payload（base64url 容錯），顯示 exp / iat / nbf 本地時間與已過期 / 還有多久，附 iss / sub / aud / jti 說明；風險提示（alg none、無簽章、HS 與非對稱提醒、jku / x5u / jwk / kid、過期）；可用 Web Crypto 驗 HS256/384/512 簽章並產生測試用 HS JWT；不支援 RS / ES 驗證；不存資料 |
-| [HTTP 狀態碼與 Header 速查](utils/http-ref.html) | 工具 | 內建 63 個標準狀態碼（白話說明、何時看到、排查方向）、50 個 Header（含 CORS / 快取）與 28 個 MIME，附範例值；搜尋、分類篩選、展開詳情、一鍵複製；不收錄非標準碼；不存資料 |
-| [SemVer 與版本比較](utils/semver.html) | 工具 | 解析版本（含 prerelease / build）、比較排序並標出無效版本、判斷是否符合 npm 範圍（^ ~ >= <=、連字號、x 範圍、||）並顯示展開後的等價比較式、說明 A 升到 B 屬於 major / minor / patch / prerelease；不存資料 |
-| [Docker / .env 小幫手](utils/docker-helper.html) | 工具 | 表單產生 docker run 與 docker-compose.yml，可貼 docker run 指令（支援引號與 \ 續行）解析回表單，不認得的旗標保留並提醒；.env 檢查（重複鍵、空值、格式錯誤、未加引號含空白、疑似密鑰）、排序、輸出整理版、轉 compose environment；compose 不含多服務與健康檢查；只存上次分頁 |
+| [HTTP 狀態碼與 Header 速查](utils/http-ref.html) | 工具 | 內建 63 個標準狀態碼（白話說明、何時看到、排查方向）、50 個 Header（含 CORS / 快取）與 28 個 MIME，附範例值；搜尋、分類篩選、展開詳情、一鍵複製；不收錄非標準碼；不存資料；新增「安全標頭」（CORS / CSP 產生器與現有標頭檢查）與「Cookie 解析」（Set-Cookie 欄位表與常見問題提醒） |
+| [SemVer 與版本比較](utils/semver.html) | 工具 | 解析版本（含 prerelease / build）、比較排序並標出無效版本、判斷是否符合 npm 範圍（^ ~ >= <=、連字號、x 範圍、||）並顯示展開後的等價比較式、說明 A 升到 B 屬於 major / minor / patch / prerelease；不存資料；新增依 Conventional Commits 判斷升級等級並算下一版（含 0.x 與預發行） |
+| [Docker / .env 小幫手](utils/docker-helper.html) | 工具 | 表單產生 docker run 與 docker-compose.yml，可貼 docker run 指令（支援引號與 \ 續行）解析回表單，不認得的旗標保留並提醒；.env 檢查（重複鍵、空值、格式錯誤、未加引號含空白、疑似密鑰）、排序、輸出整理版、轉 compose environment；compose 不含多服務與健康檢查；只存上次分頁；新增 compose 服務範本庫（Redis / PostgreSQL / MySQL / MariaDB / MongoDB / RabbitMQ）、多語言多階段 Dockerfile 與 .dockerignore 產生、.env 命名檢查 |
 | [中文數字與金額大寫](utils/cn-number.html) | 工具 | 阿拉伯數字、中文小寫、大寫、新臺幣金額大寫互轉（到 16 位，含小數與負數）；民國與西元互轉、支票日期大寫；口語省略單位不接受；不存資料 |
 | [年度綜合所得稅概算](utils/income-tax.html) | 工具 | 免稅額（含 70 歲以上與扶養）、標準或列舉扣除、薪資 / 儲蓄投資 / 身障 / 教育學費特別扣除、基本生活費差額、累進稅額、邊際與有效稅率；稅制數字集中在頁面頂端並標註試算年度（114 年度），請自行核對；未納入幼兒學前 / 長照 / 房租扣除、股利分開計稅等；只存上次輸入（可清除） |
 | [購物與保固記錄](utils/warranty-log.html) | 工具 | 記品名、類別、購買日、價格、店家、保固月數（自動算到期日，月底取月底）、備註與發票 / 保固卡存放位置（不存圖片）；依到期排序並標示已過期 / 30 天內到期 / 未到期 / 無保固；搜尋與類別篩選、統計、匯出 CSV；上限 500 筆、清除全部；UTC+8 判斷今天 |
 | [資料圖表產生器](utils/chart-maker.html) | 工具 | 貼 CSV / TSV / 分號 / 直線分隔（自動判斷），可選第一列是標題；選 X 欄與多個數值欄；群組 / 堆疊長條、橫條、折線、面積、圓餅、環圈、散佈；5 組配色（含色盲友善）、圖例、數值標籤、標題；匯出 PNG（下載或複製）；上限 5000 列 × 12 欄，非數字格略過並提示；只存圖表設定（類型、配色等），不存資料內容，可重置 |
-| [程式碼壓縮與格式化](utils/code-minify.html) | 工具 | HTML / CSS / JS / JSON 壓縮與簡易美化；壓縮只去註解與多餘空白、不改名，JS 保留換行，pre / textarea 原樣保留，可選保留條件註解與授權註解；顯示前後大小與百分比；自動驗證（JS token 序列與可編譯、CSS 規則 / 選擇器 / 宣告數、HTML 標籤屬性序列、JSON 解析結果）；上限 1MB；JSON 壓縮超過 15 位整數會失精度；不存資料 |
-| [Git 指令速查](utils/git-helper.html) | 工具 | 約 26 個白話情境，每個有風險標示（🟢安全 / 🟡可復原 / 🔴會遺失資料或改寫歷史）、「做之前先確認」提示與一鍵複製，可搜尋與依風險篩選；指令產生器涵蓋 commit / branch / log / reset / revert / tag 並解釋每個旗標；--force、--hard、clean -f、branch -D、rebase、刪遠端一律標紅；風險判斷為字串規則，不解析 Git 語意；不存資料 |
+| [程式碼壓縮與格式化](utils/code-minify.html) | 工具 | HTML / CSS / JS / JSON 壓縮與簡易美化；壓縮只去註解與多餘空白、不改名，JS 保留換行，pre / textarea 原樣保留，可選保留條件註解與授權註解；顯示前後大小與百分比；自動驗證（JS token 序列與可編譯、CSS 規則 / 選擇器 / 宣告數、HTML 標籤屬性序列、JSON 解析結果）；上限 1MB；JSON 壓縮超過 15 位整數會失精度；不存資料；另有 SVG 優化（預覽、data URI）與 CSS ⇄ SCSS 巢狀轉換 |
+| [Git 指令速查](utils/git-helper.html) | 工具 | 約 26 個白話情境，每個有風險標示（🟢安全 / 🟡可復原 / 🔴會遺失資料或改寫歷史）、「做之前先確認」提示與一鍵複製，可搜尋與依風險篩選；指令產生器涵蓋 commit / branch / log / reset / revert / tag 並解釋每個旗標；--force、--hard、clean -f、branch -D、rebase、刪遠端一律標紅；風險判斷為字串規則，不解析 Git 語意；不存資料；另有 Conventional Commits 產生、CHANGELOG 產生（Keep a Changelog）、Git hooks 範本 |
 | [跑步配速計算](utils/pace-calc.html) | 工具 | 配速（min/km、min/mile）、時速、距離、完賽時間三者算第四者；距離快捷 5K / 10K / 半馬 / 全馬 / 自訂；Riegel 預測 8 個距離（指數 1.00–1.20，預設 1.06）；分段配速表（等速 / 前慢後快 0–20%）；時間輸入支援 h:mm:ss / mm:ss / 小數分；只存上次輸入，可清除 |
 | [面額點算與找零](utils/cash-count.html) | 工具 | 新臺幣為主（可勾選 2000 與 20 元紀念鈔），可切換日圓 / 美元 / 人民幣；模式一依各面額張數算小計與總額、換整建議；模式二輸入應付與實付算找零與最少張數（已用 DP 驗證貪心成立）；數字鍵盤友善；面額為憑記憶列出，請自行核對；不存資料 |
 | [德州撲克勝率計算](utils/poker-odds.html) | 工具 | 選 2 張手牌、0–5 張公共牌、1–8 位對手（可個別指定對手牌）；蒙地卡羅預設 20,000 局（可選 5,000 / 100,000），分批執行可中止並標示誤差；輸出勝率 / 平分 / 輸率 / 期望勝率與 9 種最終牌型機率；牌型評估器已用全部 2,598,960 手 5 張牌的分布驗證；不存資料 |
@@ -139,9 +139,17 @@
 | [迷宮](mini-games/maze.html) | 小遊戲 | DFS 完美迷宮（連通無環、同種子同迷宮），5×5～40×40（簡單 10 / 普通 20 / 困難 30）；每日挑戰（台灣時間）；預設方向鍵按鈕，可切滑動模式（附「捲動頁面」切換），支援鍵盤 / WASD；計時、步數、最短步數與效率、足跡、提示（每局 3 次）、看答案（不計成績）；單機 |
 | [大老二](mini-games/big-two.html) | 小遊戲 | 台灣常見規則：梅花 3 先手、2 最大、花色 ♠>♥>♦>♣；單張 / 對子 / 五張牌型（順子<同花<葫蘆<鐵支<同花順），三條可選單出；過牌後本輪不能再出；先出完者勝，其餘依剩餘張數計分；規則可選（順子規則預設 A2345 最小、剩 10 張以上加倍等）；連線每手倒數可選；單機 1 真人 + 3 電腦（簡單 / 普通 / 困難）；連線 1–4 位真人（房主制，空位由電腦補、斷線託管、同暱稱可重連），房主驗證一切出牌；不存資料 |
 | [網址參數解析與組合](utils/url-parser.html) | 工具 | 貼 URL 拆成協定 / 帳密 / 主機 / 埠 / 路徑逐段 / query 表格式編輯 / hash；重組時可選編碼方式、空值處理、鍵名排序、主機轉 punycode；一鍵移除追蹤參數（utm_*、fbclid、gclid…）；批次抽取某參數；未修改的參數原樣往返；不存資料 |
-| [Excel 公式速查](utils/excel-formula.html) | 工具 | 79 個常用函式，每個有語法、白話說明、範例資料表與結果、常見錯誤、Google 試算表差異、Excel 版本需求（依印象整理，以實際軟體為準）；分類篩選與搜尋；「我想做…」問答導引；範例結果由程式求值驗證；不存資料 |
+| [Excel 公式速查](utils/excel-formula.html) | 工具 | 79 個常用函式，每個有語法、白話說明、範例資料表與結果、常見錯誤、Google 試算表差異、Excel 版本需求（依印象整理，以實際軟體為準）；分類篩選與搜尋；「我想做…」問答導引；範例結果由程式求值驗證；不存資料；新增「快捷鍵」分頁（Windows / macOS 搜尋，附 Google 試算表差異；macOS 鍵位請自行核對） |
 | [用電度數與電費試算](utils/power-cost.html) | 工具 | 電器清單（名稱、功率 W、每天小時、每月天數，12 種預設，最多 50 筆）算每期度數與電費；期間跨 6/1–9/30 依天數分夏月與非夏月；可由電表上期 / 本期度數反推；各電器占比與冷氣調高 1°C 粗估；費率採 2023/4 起的住宅累進值（701 度以上未確認），頁面標註生效日期，請自行核對台電公告；只存上次輸入，可清除 |
 | [迷你看板](utils/banner-board.html) | 工具 | 文字 / 時鐘（12/24 小時、秒、日期）/ 倒數（N 分鐘或指定時間，結束閃爍與嗶聲）/ 跑馬燈；字級自動填滿、高對比預設與自訂色、閃爍；fixed 滿版看板，點一下顯示 / 隱藏控制列，支援 Fullscreen API（iOS 不支援時改看板模式）與 Wake Lock；只存上次設定，可重置 |
+| [開發速查表](utils/dev-cheatsheets.html) | 工具 | 42 個主題（命令列 / 語言與框架 / 網路與 Web / 資料庫 / 安全 / 其他）的指令與語法列，分類 + 搜尋（比對標題、關鍵字、內容列）、展開卡片、每列一鍵複製；Linux 指令附 🟢🟡🔴 風險，危險指令標紅；XSS 測試字串僅供自有系統並附警語；內容為整理參考，版本與錯誤碼請以官方文件為準；不存資料 |
+| [專案樣板產生器](utils/project-templates.html) | 工具 | .gitignore（多範本合併去重）/ LICENSE 推薦與產生（MIT、BSD、ISC、Unlicense 全文；Apache、GPL、MPL 只給標頭與官方連結）/ README 與 shields 徽章 / .editorconfig / package.json / tsconfig（逐項說明）/ ESLint / Prettier / Dependabot·Renovate / GitHub Actions workflow；只存上次檔案類型與欄位，可重置 |
+| [伺服器與部署設定產生器](utils/config-gen.html) | 工具 | 14 種範本：nginx 與 location 規則測試、Apache / .htaccess、Caddyfile、systemd、SSH config、logrotate、Kubernetes（Deployment / Service / Ingress / ConfigMap / CronJob）、Prometheus 告警、Ansible、Terraform、Shell 指令（逐旗標解釋，危險寫法標紅）、備份腳本加 crontab；YAML 自行輸出並正確加引號；語法僅做格式檢查，未用官方工具驗證；只存上次範本與欄位，可重置 |
+| [HTTP 請求轉換與測試](utils/http-request.html) | 工具 | curl / Postman JSON / 表單轉 fetch、axios、Python requests、Go、curl、.http（不認得的旗標會列出）；用 fetch 發請求看狀態、標頭、內容、耗時並解說 CORS 錯誤（不帶憑證）；WebSocket 客戶端（記錄上限 500）；連線只對你填的網址；只存上次選項，不存網址 / 標頭 / 本體 |
+| [網站 meta 與 SEO 產生器](utils/web-meta.html) | 工具 | OG / Twitter Card 產生與 LINE / FB / X 示意預覽；JSON-LD（Article / Product / FAQ / LocalBusiness）；robots.txt 產生、驗證、路徑測試；sitemap.xml 產生與驗證；搜尋結果預覽與截斷；slug 批次；UTM 批次（上限 500）；預覽樣式與長度上限為示意；只存上次分頁 |
+| [網路與容量計算](utils/net-calc.html) | 工具 | CIDR / IPv6 子網（BigInt）、IPv4 進位與私有位址判斷、IPv6 縮寫與展開、MAC 格式互轉（廠商前綴只內建少數、不完整）、下載時間（KB / KiB、Mbps / MB/s、損耗比例可調）、SLA 可用度換算、容量與併發估算；不存資料 |
+| [檔案檢視器](utils/file-inspector.html) | 工具 | Hexdump（視窗式讀取、搜尋、跳偏移）、檔案類型偵測（52 種魔術位元組對照副檔名）、ZIP 內容檢視（中央目錄、預覽文字檔、zip bomb / zip slip 警示，需 Safari 16.4+）、隱寫檢視（附加資料、位元平面、LSB）；單檔 ≤ 50MB，本機處理；不存資料 |
+| [AI 開發小幫手](utils/ai-helper.html) | 工具 | Token 粗估（誤差大，不精確）、模型費用（自填單價，不內建價格）、上下文長度表（自填）、Function calling Schema、Prompt 範本庫（變數替換、CSV 批次、結構檢查；上限 200 筆）、向量 cosine / 歐氏 / 內積；不連線 |
 | [摸魚閱讀器](reading/stealth-reader.html) | 閱讀 | 本機載入 txt 小說，偽裝 ERP 後台、老闆鍵、進度記憶（開發中） |
 
 ## 使用

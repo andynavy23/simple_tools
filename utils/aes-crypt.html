@@ -53,6 +53,49 @@
         .ok {
             color: var(--ok);
         }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .tabs button {
+            flex: 1 1 auto;
+        }
+
+        .kv {
+            display: flex;
+            gap: 10px;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--fill);
+            font-size: 14px;
+        }
+
+        .kv>span {
+            flex: 0 0 5.5em;
+            color: var(--muted);
+        }
+
+        .kv>b {
+            font-weight: 500;
+            word-break: break-all;
+            white-space: pre-wrap;
+            min-width: 0;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+
+        .out textarea {
+            min-height: 90px;
+            font-size: 13px;
+        }
+
+        .out label {
+            display: block;
+            margin-top: 10px;
+            font-size: 13px;
+        }
     </style>
 </head>
 
@@ -62,6 +105,12 @@
         <h1>文字加密 / 解密</h1>
         <p class="sub">AES-256-GCM + PBKDF2-SHA256（60 萬次）。加密結果是一串文字，可以貼進任何地方，只有知道密碼的人能解開。<b>忘記密碼就無法救回</b>，這裡不會保存密碼。</p>
 
+        <div class="tabs" id="tabs">
+            <button data-t="text" aria-pressed="true">文字加密</button>
+            <button data-t="key" aria-pressed="false">金鑰對與憑證</button>
+        </div>
+
+        <div id="tab-text">
         <div class="card">
             <label for="pw" class="muted" style="font-size:13px">密碼</label>
             <div class="row" style="margin-top:4px"><input type="password" id="pw" autocomplete="off" placeholder="至少 8 個字元，越長越好"><label class="muted" style="font-size:14px"><input type="checkbox" id="show"> 顯示</label></div>
@@ -75,6 +124,36 @@
             <div class="row"><button id="copy">複製結果</button><button id="swap">結果放回內容</button></div>
         </div>
         <p class="note">注意：這是「文字」加密，不是檔案或通訊加密。密碼太短或太常見仍然容易被猜到；加密不會隱藏「有一段密文存在」這件事。</p>
+        </div>
+
+        <div id="tab-key" hidden>
+            <div class="card">
+                <h2>產生金鑰對</h2>
+                <div class="row">
+                    <select id="kpKind" aria-label="演算法"><option value="rsa-oaep">RSA-OAEP（加密）</option><option value="rsa-pss">RSA-PSS（簽章）</option><option value="ecdsa">ECDSA P-256（簽章）</option></select>
+                    <select id="kpBits" aria-label="RSA 位元數"><option>2048</option><option>3072</option><option>4096</option></select>
+                    <button class="primary" id="kpGen">產生</button><span class="muted" id="kpBusy"></span>
+                </div>
+                <div class="err" id="kpErr" role="alert"></div>
+                <p class="note" id="kpWarn" hidden><b>私鑰請妥善保管：</b>任何拿到私鑰的人都能冒充你或解開你的資料；不要貼進聊天、截圖或上傳。這裡產生的金鑰只存在這個頁面的記憶體，關掉頁面就消失，不會儲存或傳送。</p>
+                <div class="out" id="kpOut"></div>
+            </div>
+            <div class="card">
+                <h2>解析 X.509 憑證</h2>
+                <textarea id="certIn" spellcheck="false" aria-label="PEM 憑證" placeholder="貼上 -----BEGIN CERTIFICATE----- … 或 DER 的 Base64 / hex" style="min-height:110px"></textarea>
+                <div class="row"><button class="primary" id="certGo">解析</button></div>
+                <div class="err" id="certErr" role="alert"></div>
+                <div id="certOut"></div>
+            </div>
+            <div class="card">
+                <h2>PEM ⇄ DER 轉換</h2>
+                <textarea id="cvIn" spellcheck="false" aria-label="PEM、Base64 或 hex" placeholder="貼上 PEM、DER 的 Base64 或 hex（可含空白與冒號）" style="min-height:110px"></textarea>
+                <div class="row"><label class="muted" for="cvLabel" style="font-size:13px">輸出 PEM 標籤</label><select id="cvLabel" aria-label="PEM 標籤"><option value="">自動辨識</option></select><button class="primary" id="cvGo">轉換</button></div>
+                <div class="err" id="cvErr" role="alert"></div>
+                <div id="cvType"></div>
+                <div class="out" id="cvOut"></div>
+            </div>
+        </div>
     </div>
 
     <template id="help">
@@ -93,6 +172,7 @@
         <li>按「複製結果」帶走；要還原時，把密文貼進「內容」、輸入同一個密碼，按「解密 ↓」</li>
         <li>「結果放回內容」可以把結果搬到上面，方便連續操作</li>
         </ol>
+        <p>另有「金鑰對與憑證」分頁：產生 RSA-OAEP / RSA-PSS / ECDSA P-256 金鑰對（輸出 PEM 與 JWK）、解析 X.509 憑證（主體、簽發者、有效期、SAN、序號、簽章演算法、SHA-256 指紋）、PEM 與 DER（Base64 / hex）互轉並辨識是憑證、私鑰、公鑰還是 CSR。</p>
         <h3>範例</h3>
         <div class="eg">密碼：<b>my-secret-2026</b>；內容：<b>銀行密碼 1234</b><br>按「加密 ↓」會得到 <b>v1.</b> 開頭的一長串文字。把它貼回內容、輸入同一個密碼並按「解密 ↓」，就會看到「銀行密碼 1234」。同樣的內容每次加密結果都不同，這是正常的。</div>
         <h3>小提醒</h3>
@@ -101,6 +181,9 @@
         <li>密碼太短或太常見仍然容易被猜到，建議 12 個字元以上</li>
         <li>只能解開這個工具加密的密文（開頭是 v1.），密文被改過一個字就會解密失敗</li>
         <li>運算要花一點時間（刻意增加破解難度），按下後請稍等</li>
+        <li><b>私鑰要保密</b>：金鑰對只在這個頁面的記憶體產生，不會儲存或上傳，關掉頁面就沒了，請自己複製保存到安全的地方；不要把私鑰貼進聊天或截圖。</li>
+        <li>憑證解析只讀取公開資訊，不會驗證憑證鏈或是否被信任；解析不了的欄位會直接顯示原始十六進位。RSA 4096 產生可能要幾秒。</li>
+        <li>PEM 與 DER 只是編碼不同（Base64 文字 vs 二進位），轉換不會改變內容；貼上加密的私鑰（ENCRYPTED PRIVATE KEY）只能辨識類型，無法解密。</li>
         </ul>
     </template>
 
@@ -139,6 +222,149 @@
             let buf; try { buf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct); } catch (e) { throw new Error('解密失敗：密碼不對，或密文被改動過'); }
             return dec.decode(buf);
         }
+
+        // ---------- 金鑰對、PEM、ASN.1 / X.509 ----------
+        const toHex = (b) => [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+        const fromHex = (s) => { const t = String(s).replace(/[\s:]/g, ''); if (!/^([0-9a-fA-F]{2})+$/.test(t)) throw new Error('不是合法的 hex'); return Uint8Array.from(t.match(/../g).map(h => parseInt(h, 16))); };
+        const toB64 = (b) => { let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000)); return btoa(s); };
+        const fromB64 = (s) => { const t = String(s).replace(/\s+/g, ''); if (!/^[A-Za-z0-9+/_-]*={0,2}$/.test(t)) throw new Error('不是合法的 Base64'); const b = t.replace(/=+$/, '').replace(/-/g, '+').replace(/_/g, '/'); return Uint8Array.from(atob(b + '='.repeat((4 - b.length % 4) % 4)), c => c.charCodeAt(0)); };
+        const toPem = (label, der) => `-----BEGIN ${label}-----\n${(toB64(der).match(/.{1,64}/g) || []).join('\n')}\n-----END ${label}-----`;
+        // 接受 PEM（取第一個區塊）、hex 或 Base64；回傳 { label, bytes }
+        function decodeAny(text) {
+            const t = String(text).trim(); if (!t) throw new Error('請貼上內容');
+            const m = t.match(/-----BEGIN ([A-Z0-9 ]+)-----([\s\S]*?)-----END \1-----/);
+            if (m) return { label: m[1], bytes: fromB64(m[2].replace(/^[A-Za-z-]+:.*$/gm, '')) };
+            if (/^[0-9a-fA-F\s:]+$/.test(t) && t.replace(/[\s:]/g, '').length % 2 === 0) return { label: '', bytes: fromHex(t) };
+            return { label: '', bytes: fromB64(t) };
+        }
+
+        // 簡易 DER 解析：node = { tag, start, end, value, raw, children? }；不支援不定長度與多位元組 tag
+        function readNode(b, p, end, depth) {
+            if (depth > 20) throw new Error('ASN.1 巢狀太深');
+            if (p + 2 > end) throw new Error('DER 資料被截斷');
+            const tag = b[p]; let q = p + 1, len = b[q++];
+            if ((tag & 31) === 31) throw new Error('不支援多位元組 tag');
+            if (len === 0x80) throw new Error('不支援不定長度');
+            if (len & 0x80) { const n = len & 0x7f; if (n > 4 || q + n > end) throw new Error('長度欄位不合法'); len = 0; for (let i = 0; i < n; i++) len = len * 256 + b[q++]; }
+            if (q + len > end) throw new Error('長度超出資料範圍（資料被截斷或不是 DER）');
+            const node = { tag, start: p, end: q + len, value: b.subarray(q, q + len), raw: b.subarray(p, q + len) };
+            if (tag & 0x20) { node.children = []; for (let c = q; c < q + len;) { const ch = readNode(b, c, q + len, depth + 1); node.children.push(ch); c = ch.end; } }
+            return node;
+        }
+        const derToTree = (b) => readNode(b, 0, b.length, 0);
+
+        const OIDS = {
+            '1.2.840.113549.1.1.1': 'rsaEncryption', '1.2.840.113549.1.1.5': 'sha1WithRSAEncryption', '1.2.840.113549.1.1.10': 'rsassaPss', '1.2.840.113549.1.1.11': 'sha256WithRSAEncryption', '1.2.840.113549.1.1.12': 'sha384WithRSAEncryption', '1.2.840.113549.1.1.13': 'sha512WithRSAEncryption',
+            '1.2.840.10045.2.1': 'ecPublicKey', '1.2.840.10045.4.1': 'ecdsa-with-SHA1', '1.2.840.10045.4.3.2': 'ecdsa-with-SHA256', '1.2.840.10045.4.3.3': 'ecdsa-with-SHA384', '1.2.840.10045.4.3.4': 'ecdsa-with-SHA512', '1.3.101.112': 'Ed25519', '1.3.101.110': 'X25519',
+            '1.2.840.10045.3.1.7': 'P-256 (prime256v1)', '1.3.132.0.34': 'P-384 (secp384r1)', '1.3.132.0.35': 'P-521 (secp521r1)',
+            '2.5.4.3': 'CN', '2.5.4.5': 'serialNumber', '2.5.4.6': 'C', '2.5.4.7': 'L', '2.5.4.8': 'ST', '2.5.4.9': 'street', '2.5.4.10': 'O', '2.5.4.11': 'OU', '1.2.840.113549.1.9.1': 'emailAddress', '0.9.2342.19200300.100.1.25': 'DC',
+            '2.5.29.14': 'subjectKeyIdentifier', '2.5.29.15': 'keyUsage', '2.5.29.17': 'subjectAltName', '2.5.29.19': 'basicConstraints', '2.5.29.31': 'cRLDistributionPoints', '2.5.29.32': 'certificatePolicies', '2.5.29.35': 'authorityKeyIdentifier', '2.5.29.37': 'extKeyUsage', '1.3.6.1.5.5.7.1.1': 'authorityInfoAccess',
+        };
+        const oidName = (o) => OIDS[o] || o;
+        function oidStr(v) {
+            if (!v.length) return '';
+            const parts = []; let n = 0n;
+            for (const x of v) { n = (n << 7n) | BigInt(x & 127); if (!(x & 128)) { parts.push(n); n = 0n; } }
+            const f = parts[0], first = f < 80n ? [f / 40n, f % 40n] : [2n, f - 80n];
+            return [...first, ...parts.slice(1)].join('.');
+        }
+        function strVal(n) {
+            if ([0x0C, 0x13, 0x16, 0x1A].includes(n.tag)) return new TextDecoder().decode(n.value);
+            if (n.tag === 0x14) return String.fromCharCode(...n.value);
+            if (n.tag === 0x1E) return new TextDecoder('utf-16be').decode(n.value);
+            return '#' + toHex(n.value);                    // 解析不了的型別：原始十六進位
+        }
+        const nameStr = (n) => (n.children || []).map(rdn => (rdn.children || []).map(av => { const [o, v] = av.children || []; return o && v ? `${oidName(oidStr(o.value))}=${strVal(v)}` : '#' + toHex(av.raw); }).join('+')).join(', ');
+        function timeVal(n) {
+            const t = new TextDecoder().decode(n.value);
+            const m = n.tag === 0x17 ? t.match(/^(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)?Z$/) : t.match(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)?Z$/);
+            if (!m) return t || '#' + toHex(n.value);
+            const y = n.tag === 0x17 ? (+m[1] < 50 ? 2000 : 1900) + +m[1] : +m[1];
+            return `${y}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6] || '00'}Z`;
+        }
+        const intHex = (n) => { let v = n.value; if (v.length > 1 && v[0] === 0 && (v[1] & 0x80)) v = v.subarray(1); return [...v].map(x => x.toString(16).padStart(2, '0').toUpperCase()).join(':'); };
+        function ipStr(v) { if (v.length === 4) return [...v].join('.'); if (v.length === 16) { const g = []; for (let i = 0; i < 16; i += 2) g.push(((v[i] << 8) | v[i + 1]).toString(16)); return g.join(':'); } return '#' + toHex(v); }
+        function generalName(n) {
+            const a = () => new TextDecoder().decode(n.value);
+            switch (n.tag) {
+                case 0x82: return 'DNS:' + a(); case 0x81: return 'email:' + a(); case 0x86: return 'URI:' + a(); case 0x87: return 'IP:' + ipStr(n.value);
+                case 0xA4: return 'dirName:' + (n.children && n.children[0] ? nameStr(n.children[0]) : '#' + toHex(n.value));
+                default: return `type[${n.tag & 31}]:#${toHex(n.value)}`;
+            }
+        }
+        const KU = ['digitalSignature', 'nonRepudiation', 'keyEncipherment', 'dataEncipherment', 'keyAgreement', 'keyCertSign', 'cRLSign', 'encipherOnly', 'decipherOnly'];
+        const hexShort = (v) => '#' + toHex(v.subarray(0, 48)) + (v.length > 48 ? '…' : '');
+        function extText(oid, v) {
+            try {
+                const t = derToTree(v);
+                if (oid === '2.5.29.17') return t.children.map(generalName).join(', ');
+                if (oid === '2.5.29.19') { const ca = (t.children || []).find(c => c.tag === 1), pl = (t.children || []).find(c => c.tag === 2); return `CA:${ca && ca.value[0] ? 'TRUE' : 'FALSE'}` + (pl ? `, pathlen:${parseInt(toHex(pl.value) || '0', 16)}` : ''); }
+                if (oid === '2.5.29.15' && t.tag === 3) return KU.filter((_, i) => (t.value[1 + (i >> 3)] || 0) & (0x80 >> (i & 7))).join(', ') || hexShort(v);
+                if (oid === '2.5.29.14' && t.tag === 4) return toHex(t.value);
+            } catch (e) { /* 落到原始十六進位 */ }
+            return hexShort(v);
+        }
+        function pubKeyText(spki) {
+            const [alg, bits] = spki.children || []; if (!alg || !bits || !alg.children) return '#' + toHex(spki.raw.subarray(0, 48));
+            const o = oidStr(alg.children[0].value);
+            try {
+                if (o === '1.2.840.113549.1.1.1') { const n = derToTree(bits.value.subarray(1)).children[0].value; let i = 0; while (i < n.length - 1 && n[i] === 0) i++; return `RSA ${(n.length - i) * 8 - Math.clz32(n[i]) + 24} bits`; }
+                if (o === '1.2.840.10045.2.1' && alg.children[1]) return `EC ${oidName(oidStr(alg.children[1].value))}`;
+            } catch (e) { /* 原始顯示 */ }
+            return oidName(o);
+        }
+        const algText = (n) => n && n.children && n.children[0] ? oidName(oidStr(n.children[0].value)) : '#' + toHex(n ? n.raw : []);
+
+        // 解析憑證；非憑證結構丟出錯誤
+        async function parseCert(der) {
+            const t = derToTree(der), bad = () => new Error('這不是 X.509 憑證的結構（可能是私鑰、公鑰或 CSR）');
+            if (t.tag !== 0x30 || !t.children || t.children.length < 3 || t.children[0].tag !== 0x30 || !t.children[0].children) throw bad();
+            const k = t.children[0].children; let i = 0, version = 1;
+            if (k[0] && k[0].tag === 0xA0) { version = (k[0].children && k[0].children[0] ? k[0].children[0].value.at(-1) : 0) + 1; i = 1; }
+            if (k.length < i + 6 || k[i].tag !== 2 || !k[i + 3].children || k[i + 3].children.length < 2) throw bad();
+            const [serial, , issuer, validity, subject, spki] = k.slice(i, i + 6), exts = [];
+            const ext = k.slice(i + 6).find(x => x.tag === 0xA3);
+            for (const e of (ext && ext.children && ext.children[0] && ext.children[0].children) || []) {
+                const c = e.children || [], o = c[0] ? oidStr(c[0].value) : '', val = c[c.length - 1];
+                exts.push({ oid: o, name: oidName(o), critical: c.length === 3 && !!c[1].value[0], text: val ? extText(o, val.value) : '' });
+            }
+            const san = exts.find(e => e.oid === '2.5.29.17');
+            return {
+                version, serial: intHex(serial), sigAlg: algText(t.children[1]), issuer: nameStr(issuer), subject: nameStr(subject),
+                notBefore: timeVal(validity.children[0]), notAfter: timeVal(validity.children[1]), san: san ? san.text.split(', ') : [], pubKey: pubKeyText(spki), exts,
+                fingerprint: toHex(new Uint8Array(await crypto.subtle.digest('SHA-256', t.raw))).toUpperCase().match(/../g).join(':'),
+            };
+        }
+
+        // 辨識 PEM / DER 的類型。有標籤用標籤，沒有就看結構。回傳 { type, label }（label 是建議的 PEM 標籤）
+        function identify(der, label) {
+            const L = String(label || '').toUpperCase();
+            if (L) {
+                const type = L.includes('CERTIFICATE REQUEST') ? 'CSR' : L.includes('CERTIFICATE') ? '憑證' : L.includes('PRIVATE KEY') ? '私鑰' : L.includes('PUBLIC KEY') ? '公鑰' : '其他（' + L + '）';
+                return { type, label: L };
+            }
+            let t; try { t = derToTree(der); } catch (e) { return { type: '未知', label: '' }; }
+            const c = t.children || [], tg = (i) => c[i] && c[i].tag;
+            if (t.tag !== 0x30) return { type: '未知', label: '' };
+            if (c.length === 3 && tg(0) === 0x30 && tg(1) === 0x30 && tg(2) === 3) return (c[0].children || []).length <= 4 ? { type: 'CSR', label: 'CERTIFICATE REQUEST' } : { type: '憑證', label: 'CERTIFICATE' };
+            if (c.length === 2 && tg(0) === 0x30 && tg(1) === 3) return { type: '公鑰', label: 'PUBLIC KEY' };
+            if (c.length === 2 && tg(0) === 2 && tg(1) === 2) return { type: '公鑰', label: 'RSA PUBLIC KEY' };
+            if (c.length >= 3 && tg(0) === 2 && tg(1) === 0x30 && tg(2) === 4) return { type: '私鑰', label: 'PRIVATE KEY' };
+            if (c.length >= 9 && tg(0) === 2) return { type: '私鑰', label: 'RSA PRIVATE KEY' };
+            if (c.length >= 2 && tg(0) === 2 && tg(1) === 4) return { type: '私鑰', label: 'EC PRIVATE KEY' };
+            return { type: '未知', label: '' };
+        }
+
+        // 產生金鑰對（記憶體內，不儲存）；回傳 PKCS#8 / SPKI 的 PEM 與 JWK 文字
+        async function generateKeyPair(kind, bits = 2048) {
+            const rsa = kind !== 'ecdsa', sign = kind !== 'rsa-oaep';
+            if (rsa && ![2048, 3072, 4096].includes(+bits)) throw new Error('RSA 位元數只能是 2048、3072 或 4096');
+            const algo = rsa ? { name: sign ? 'RSA-PSS' : 'RSA-OAEP', modulusLength: +bits, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' } : { name: 'ECDSA', namedCurve: 'P-256' };
+            const kp = await crypto.subtle.generateKey(algo, true, sign ? ['sign', 'verify'] : ['encrypt', 'decrypt']);
+            const ex = (f, k) => crypto.subtle.exportKey(f, k);
+            const [sk, pk, jsk, jpk] = await Promise.all([ex('pkcs8', kp.privateKey), ex('spki', kp.publicKey), ex('jwk', kp.privateKey), ex('jwk', kp.publicKey)]);
+            return { privPem: toPem('PRIVATE KEY', new Uint8Array(sk)), pubPem: toPem('PUBLIC KEY', new Uint8Array(pk)), privJwk: JSON.stringify(jsk, null, 2), pubJwk: JSON.stringify(jpk, null, 2) };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -159,6 +385,49 @@
         $('#pw').oninput = () => { const n = $('#pw').value.length; $('#pwHint').textContent = !n ? '' : n < 8 ? `太短（${n}／至少 8）` : n < 12 ? '可以，但越長越安全（建議 12 個字元以上）' : '長度足夠'; };
         $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), $('#out').value, () => $('#out').select());
         $('#swap').onclick = () => { $('#in').value = $('#out').value; $('#out').value = ''; };
+
+        // ---------- 分頁與金鑰對 / 憑證 ----------
+        const h = (t, p = {}, ...c) => { const e = document.createElement(t); Object.assign(e, p); e.append(...c); return e; };
+        $('#tabs').onclick = (e) => {
+            const t = e.target.dataset.t; if (!t) return;
+            for (const k of ['text', 'key']) $('#tab-' + k).hidden = k !== t;
+            [...$('#tabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.t === t));
+        };
+        function outBox(box, label, text) {
+            const id = 'ob' + Math.random().toString(36).slice(2, 8), ta = h('textarea', { id, readOnly: true, value: text, spellcheck: false }), btn = h('button', { className: 'sm', textContent: '複製' });
+            btn.onclick = () => Util.copyWithFeedback(btn, text, () => ta.select());
+            box.append(h('label', { htmlFor: id, textContent: label }), ta, btn);
+        }
+        const kv = (k, v) => h('div', { className: 'kv' }, h('span', { textContent: k }), h('b', { textContent: v }));
+        $('#kpKind').onchange = () => { $('#kpBits').hidden = $('#kpKind').value === 'ecdsa'; };
+        $('#kpGen').onclick = async () => {
+            $('#kpErr').textContent = ''; $('#kpOut').replaceChildren(); $('#kpGen').disabled = true; $('#kpBusy').textContent = '產生中…';
+            await new Promise(r => setTimeout(r, 30));
+            try {
+                const k = await generateKeyPair($('#kpKind').value, +$('#kpBits').value), o = $('#kpOut');
+                outBox(o, '私鑰 PEM（PKCS#8）', k.privPem); outBox(o, '公鑰 PEM（SPKI）', k.pubPem); outBox(o, '私鑰 JWK', k.privJwk); outBox(o, '公鑰 JWK', k.pubJwk);
+                $('#kpWarn').hidden = false;
+            } catch (e) { $('#kpErr').textContent = '產生失敗：' + e.message; }
+            $('#kpBusy').textContent = ''; $('#kpGen').disabled = false;
+        };
+        $('#certGo').onclick = async () => {
+            $('#certErr').textContent = ''; $('#certOut').replaceChildren();
+            try {
+                const d = decodeAny($('#certIn').value), c = await parseCert(d.bytes), o = $('#certOut');
+                o.append(kv('版本', 'v' + c.version), kv('序號', c.serial), kv('主體', c.subject || '（空）'), kv('簽發者', c.issuer || '（空）'), kv('有效起', c.notBefore), kv('有效迄', c.notAfter), kv('簽章演算法', c.sigAlg), kv('公鑰', c.pubKey), kv('SAN', c.san.join('\n') || '（無）'), kv('SHA-256 指紋', c.fingerprint));
+                const now = new Date().toISOString(), st = now < c.notBefore ? '尚未生效' : now > c.notAfter ? '已過期' : '目前在有效期內';
+                o.append(kv('狀態', st + '（依這台電腦的時鐘）'), ...c.exts.map(e => kv('擴充', `${e.name}${e.critical ? '（critical）' : ''}：${e.text}`)));
+            } catch (e) { $('#certErr').textContent = e.message; }
+        };
+        for (const l of ['CERTIFICATE', 'PRIVATE KEY', 'PUBLIC KEY', 'CERTIFICATE REQUEST', 'RSA PRIVATE KEY', 'EC PRIVATE KEY', 'RSA PUBLIC KEY']) $('#cvLabel').append(h('option', { textContent: l }));
+        $('#cvGo').onclick = () => {
+            $('#cvErr').textContent = ''; $('#cvOut').replaceChildren(); $('#cvType').replaceChildren();
+            try {
+                const d = decodeAny($('#cvIn').value), id = identify(d.bytes, d.label), label = $('#cvLabel').value || id.label || 'DATA';
+                $('#cvType').append(kv('類型', id.type + (id.type === '私鑰' ? '（請妥善保管，不要貼到不信任的地方）' : '')), kv('大小', d.bytes.length + ' 位元組'));
+                outBox($('#cvOut'), 'DER（Base64）', toB64(d.bytes)); outBox($('#cvOut'), 'DER（hex）', toHex(d.bytes)); outBox($('#cvOut'), 'PEM（' + label + '）', toPem(label, d.bytes));
+            } catch (e) { $('#cvErr').textContent = e.message; }
+        };
     </script>
 </body>
 

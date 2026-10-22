@@ -181,6 +181,12 @@
             <div class="row"><input type="text" id="um" maxlength="4" inputmode="numeric" value="022" autocomplete="off" aria-label="umask"></div>
             <p class="err" id="umErr"></p>
             <div id="umOut"></div>
+            <div class="row" id="umChips"></div>
+            <div id="umNote"></div>
+            <h3 style="margin:14px 0 6px">反推：想要這樣的預設權限，umask 要設多少</h3>
+            <div class="row"><select id="rvKind" aria-label="目標種類"><option value="dir">新資料夾</option><option value="file">新檔案</option></select><input type="text" id="rvPerm" maxlength="4" inputmode="numeric" value="755" autocomplete="off" aria-label="想要的預設權限"></div>
+            <p class="err" id="rvErr"></p>
+            <div id="rvOut"></div>
         </div>
 
         <div class="card">
@@ -211,7 +217,7 @@
         <li>在九宮格勾選擁有者 / 群組 / 其他人的讀（r）寫（w）執行（x）；特殊位元有 setuid / setgid / sticky。</li>
         <li>或直接在「數字」輸入 3 或 4 位八進位數，或在「符號」輸入 9 字元（可含 s S t T）。輸入不合法會顯示紅字，不會改動目前的權限。</li>
         <li>「產生指令」可複製 chmod、遞迴與 find 的組合。</li>
-        <li>「umask 計算」輸入 umask 看新檔案 / 資料夾預設權限。</li>
+        <li>「umask 計算」輸入 umask 看新檔案 / 資料夾預設權限，或點 022 / 002 / 077 等常見值看說明；也可在「反推」填想要的預設權限（新資料夾或新檔案），算出該設多少 umask。</li>
         <li>「符號模式模擬」輸入目前權限與 <kbd>u+x,g-w</kbd> 之類，看結果。</li>
         </ol>
         <h3>範例</h3>
@@ -224,6 +230,8 @@
         <li>s / t 小寫代表同時有執行權限；大寫 S / T 代表有特殊位元但沒有執行權限（通常是設定錯誤）。</li>
         <li>X 只在「對象是目錄」或「原本已有任何執行位元」時才加執行，適合 <kbd>chmod -R a+rX</kbd>。</li>
         <li>不處理 ACL、擴充屬性、chattr；符號模式支援 r w x X s t，以及 u/g/o 複製權限（如 g=u）。</li>
+        <li>umask 是位元遮罩，不是相減；新檔案從 666 起算（永遠不會預設有執行位元），新資料夾從 777 起算。反推新檔案時，umask 以 666 為基準計算。</li>
+        <li>常見 umask：022（檔案 644 / 資料夾 755）、002（664 / 775）、077（600 / 700）。umask 只影響之後新建的檔案，不改既有的；指令設定只在目前的 shell 有效。</li>
         <li>777 與 o+w 讓所有人可寫，通常是不安全的做法。</li>
         <li>隱私與儲存：一切在本機計算，這個頁面不使用任何本機儲存，關閉即清空。</li>
         </ul>
@@ -346,6 +354,22 @@
             [0o2775, '共用專案資料夾', '新檔案繼承群組（setgid），群組成員可寫。'],
             [0o4755, 'setuid 程式（如 passwd）', '執行時以擁有者身分運作；只給受信任的程式。'],
         ];
+
+        // 反推：想要新資料夾 / 新檔案的預設權限 → umask（遮罩位元，不是相減）。不合法回傳 { error }
+        function umaskFor(s, kind) {
+            const t = parseOctal(s);
+            if (t === null) return { error: '請輸入 3 或 4 位八進位（例如 755、644）' };
+            const want = t & 0o777;
+            if (kind === 'file') {
+                if (want & 0o111) return { error: '新檔案的預設是 666（沒有執行位元），不可能預設就有 x；請輸入不含 1、3、5、7 的權限，例如 644、664、600' };
+                const um = 0o666 & ~want;
+                return { umask: um, file: 0o666 & ~um, dir: 0o777 & ~um };
+            }
+            const um = 0o777 & ~want;
+            return { umask: um, file: 0o666 & ~um, dir: 0o777 & ~um };
+        }
+        // 常見 umask 與說明
+        const UMASK_COMMON = [['022', '最常見：自己可寫，群組與其他人只能讀（檔案 644、資料夾 755）'], ['002', '群組可寫，適合共同開發（檔案 664、資料夾 775）；不少發行版對一般使用者用這個'], ['077', '只有自己能存取（檔案 600、資料夾 700），適合機敏資料'], ['027', '群組可讀、其他人完全不能碰（檔案 640、資料夾 750）'], ['007', '自己與群組可讀寫，其他人完全不能碰（檔案 660、資料夾 770）']];
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -433,6 +457,25 @@
         $('#simDir').onchange = showSim;
 
         render(); showUmask(); showSim();
+        // 常見值與反推
+        UMASK_COMMON.forEach(([v]) => { const b = document.createElement('button'); b.className = 'sm'; b.type = 'button'; b.textContent = v; b.onclick = () => { $('#um').value = v; showUmask(); }; $('#umChips').append(b); });
+        function umNote() {
+            const v = $('#um').value.trim().padStart(3, '0').slice(-3), hit = UMASK_COMMON.find(([k]) => k === v), n = $('#umNote'); n.replaceChildren();
+            const p = document.createElement('p'); p.className = 'note';
+            p.textContent = (hit ? `${hit[0]}：${hit[1]}。` : '') + 'umask 是「遮罩」：新檔案從 666、新資料夾從 777 起算，把 umask 裡為 1 的位元關掉（不是十進位相減）。只影響之後新建的檔案，不會改已存在的；用 umask 查看、umask 022 設定（只在目前的 shell 有效）。';
+            n.append(p);
+        }
+        function showRv() {
+            const r = umaskFor($('#rvPerm').value, $('#rvKind').value), out = $('#rvOut'); out.replaceChildren(); $('#rvErr').textContent = '';
+            if (r.error) { $('#rvErr').textContent = r.error; return; }
+            const li = (k, v) => { const d = document.createElement('div'); d.className = 'li'; const a = document.createElement('span'); a.className = 'muted'; a.textContent = k; const b = document.createElement('b'); b.className = 'mono'; b.textContent = v; d.append(a, b); return d; };
+            out.append(li('umask', toOctal(r.umask).padStart(3, '0')), li('指令', `umask ${toOctal(r.umask).padStart(3, '0')}`), li('實際新檔案', `${toOctal(r.file)}　${toSym(r.file)}`), li('實際新資料夾', `${toOctal(r.dir)}　${toSym(r.dir)}`));
+        }
+        $('#rvPerm').oninput = $('#rvKind').onchange = showRv;
+        $('#um').addEventListener('input', umNote);
+        $('#umChips').addEventListener('click', umNote);
+        umNote(); showRv();
+
     </script>
 </body>
 

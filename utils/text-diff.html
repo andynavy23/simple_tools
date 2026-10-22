@@ -116,7 +116,11 @@
                 <button class="primary" id="go">比對</button>
                 <label><input type="checkbox" id="ws"> 忽略行首尾空白</label>
                 <label><input type="checkbox" id="ci"> 忽略大小寫</label>
-                <label>比對單位 <select id="unit"><option value="line">逐行</option><option value="word">逐字詞（行內標示）</option></select></label>
+                <label>比對單位 <select id="unit"><option value="line">逐行</option><option value="word">逐字詞（行內標示）</option><option value="json">JSON 結構（依鍵與元素）</option></select></label>
+                <span id="jsonOpts" class="bar" style="margin:0" hidden>
+                    <label>陣列比對 <select id="arrMode"><option value="index">依索引</option><option value="key">依指定鍵</option></select></label>
+                    <label id="arrKeyL" hidden>鍵名 <input type="text" id="arrKey" value="id" maxlength="100" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:7em" aria-label="用來配對陣列元素的鍵名"></label>
+                </span>
             </div>
         </div>
 
@@ -139,17 +143,20 @@
         <ol>
         <li>左邊（手機在上面）貼「原始文字」，右邊（下面）貼「修改後文字」。</li>
         <li>視需要勾選「忽略行首尾空白」、「忽略大小寫」。</li>
-        <li>「比對單位」選「逐行」或「逐字詞（行內標示）」。</li>
+        <li>「比對單位」選「逐行」或「逐字詞（行內標示）」；兩邊都是 JSON 時選「JSON 結構」，會列出新增、刪除、變更的路徑與前後值（鍵的順序不影響結果）。「陣列比對」可選「依索引」（第幾項對第幾項），或「依指定鍵」（例如用 id 配對，項目換位置不算差異）。</li>
         <li>按「比對」，結果在下方，長行會自動換行。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">原始：line2 換行 line3
         修改後：line2 換行 line4
-        逐行比對 → 新增 1 行、刪除 1 行（line3 標紅、line4 標綠，line2 不標）</div>
+        逐行比對 → 新增 1 行、刪除 1 行（line3 標紅、line4 標綠，line2 不標）
+        JSON 結構：{"a":1,"b":[1,2]} 對 {"a":2,"b":[1,2,3]}
+        → 變更 $.a（1 → 2）、新增 $.b[2]: 3</div>
         <h3>小提醒</h3>
         <ul>
         <li>兩段文字太長（行數乘積超過 400 萬）會無法比對。</li>
         <li>逐字詞模式中文每字一個單位，英數字連續算一個詞。</li>
+        <li>JSON 結構模式：路徑寫法如 <kbd>$.items[id=2].price</kbd>；依指定鍵時，沒有該鍵的元素依出現順序配對、重複的鍵值依出現順序配對（路徑尾端加 #2…）；單純的型別變更（例如 1 變 "1"）算「變更」；差異超過 5000 筆會停止並請你縮小範圍。「忽略空白 / 大小寫」在這個模式不適用。</li>
         <li>全部在本機處理，不會上傳。</li>
         </ul>
     </template>
@@ -203,11 +210,88 @@
             for (const o of ops) { const last = out[out.length - 1]; if (last && last.t === o.t) last.text += o.text; else out.push({ ...o }); }
             return out;
         }
+
+        // ---------- JSON 結構 diff ----------
+        // 以鍵 / 陣列元素比較（物件鍵順序不影響結果）。回傳 [{ t: 'add' | 'del' | 'chg', path, before?, after? }]
+        // opts.arrayKey：陣列元素是物件時，用這個鍵的值配對（順序變動不算差異）；沒有這個鍵的元素依出現順序配對。不指定就依索引比對
+        // 差異超過 opts.max（預設 5000）筆或巢狀超過 500 層會丟出錯誤
+        const jdPath = (p, k) => typeof k === 'number' ? `${p}[${k}]` : /^[A-Za-z_$][\w$]*$/.test(k) ? `${p}.${k}` : `${p}[${JSON.stringify(k)}]`;
+        function diffJSON(a, b, opts = {}) {
+            const out = [], key = opts.arrayKey ? String(opts.arrayKey) : '', MAX = opts.max || 5000;
+            const isO = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
+            const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+            const push = (o) => { if (out.length >= MAX) throw new Error(`差異超過 ${MAX} 筆，請縮小範圍再比對`); out.push(o); };
+            // 陣列元素的配對編號：[{ id, label, v }]
+            const ids = (arr) => {
+                const seen = new Map(); let nokey = 0;
+                return arr.map((v) => {
+                    let id, label;
+                    if (isO(v) && own(v, key) && ['string', 'number', 'boolean'].includes(typeof v[key])) { id = 'k' + JSON.stringify(v[key]); label = key + '=' + String(v[key]); }
+                    else { id = 'n' + nokey; label = '?' + nokey++; }
+                    const c = (seen.get(id) || 0) + 1; seen.set(id, c);
+                    if (c > 1) { id += '#' + c; label += '#' + c; }
+                    return { id, label, v };
+                });
+            };
+            const walk = (x, y, p, d) => {
+                if (d > 500) throw new Error('巢狀超過 500 層，無法比對');
+                if (isO(x) && isO(y)) {
+                    for (const k of Object.keys(x)) { if (own(y, k)) walk(x[k], y[k], jdPath(p, k), d + 1); else push({ t: 'del', path: jdPath(p, k), before: x[k] }); }
+                    for (const k of Object.keys(y)) if (!own(x, k)) push({ t: 'add', path: jdPath(p, k), after: y[k] });
+                } else if (Array.isArray(x) && Array.isArray(y)) {
+                    if (key) {
+                        const ia = ids(x), ib = ids(y), mb = new Map(ib.map(e => [e.id, e]));
+                        for (const e of ia) { const f = mb.get(e.id); if (f) { walk(e.v, f.v, `${p}[${e.label}]`, d + 1); mb.delete(e.id); } else push({ t: 'del', path: `${p}[${e.label}]`, before: e.v }); }
+                        for (const e of mb.values()) push({ t: 'add', path: `${p}[${e.label}]`, after: e.v });
+                    } else {
+                        for (let i = 0; i < Math.max(x.length, y.length); i++) {
+                            if (i >= x.length) push({ t: 'add', path: jdPath(p, i), after: y[i] });
+                            else if (i >= y.length) push({ t: 'del', path: jdPath(p, i), before: x[i] });
+                            else walk(x[i], y[i], jdPath(p, i), d + 1);
+                        }
+                    }
+                } else if (x !== y) push({ t: 'chg', path: p, before: x, after: y });
+            };
+            walk(a, b, '$', 0);
+            return out;
+        }
+        // 文字版：兩邊都要是有效 JSON。回傳 { ok, diffs } 或 { ok:false, error }
+        function diffJSONText(aText, bText, opts = {}) {
+            const parse = (t, who) => { if (!t.trim()) throw new Error(`${who}是空的`); try { return JSON.parse(t); } catch (e) { throw new Error(`${who}不是有效的 JSON：${e.message}`); } };
+            try { return { ok: true, diffs: diffJSON(parse(aText, '原始文字'), parse(bText, '修改後文字'), opts) }; }
+            catch (e) { return { ok: false, error: e instanceof RangeError ? '巢狀太深，無法比對' : e.message }; }
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
 
+        const syncUnit = () => {
+            const json = $('#unit').value === 'json';
+            $('#jsonOpts').hidden = !json; $('#arrKeyL').hidden = !json || $('#arrMode').value !== 'key';
+            ['#ws', '#ci'].forEach(x => { $(x).closest('label').hidden = json; });
+        };
+        $('#unit').onchange = syncUnit; $('#arrMode').onchange = syncUnit;
+        const showV = (v) => { const t = JSON.stringify(v); return t.length > 200 ? t.slice(0, 200) + '…' : t; };
+        function runJson() {
+            const out = $('#out');
+            $('#result').hidden = false; out.replaceChildren();
+            if ($('#a').value.length + $('#b').value.length > 4000000) { $('#sum').textContent = '文字太長（超過 400 萬字元），無法比對'; return; }
+            const key = $('#arrMode').value === 'key' ? $('#arrKey').value.trim() : '';
+            if ($('#arrMode').value === 'key' && !key) { $('#sum').textContent = '請填入用來配對陣列元素的鍵名'; return; }
+            const r = diffJSONText($('#a').value, $('#b').value, { arrayKey: key });
+            if (!r.ok) { $('#sum').textContent = '✗ ' + r.error; return; }
+            const n = (t) => r.diffs.filter(d => d.t === t).length;
+            $('#sum').textContent = r.diffs.length ? `新增 ${n('add')} 處、刪除 ${n('del')} 處、變更 ${n('chg')} 處` : '兩份 JSON 的結構與值相同';
+            const line = (cls, mark, text) => { const d = document.createElement('div'), m = document.createElement('i'), sp = document.createElement('span'); d.className = 'ln ' + cls; m.textContent = mark; sp.textContent = text; d.append(m, sp); out.append(d); };
+            for (const d of r.diffs) {
+                if (d.t === 'add') line('add', '+', `${d.path}: ${showV(d.after)}`);
+                else if (d.t === 'del') line('del', '-', `${d.path}: ${showV(d.before)}`);
+                else { line('del', '-', `${d.path}: ${showV(d.before)}`); line('add', '+', `${d.path}: ${showV(d.after)}`); }
+            }
+        }
+
         $('#go').onclick = () => {
+            if ($('#unit').value === 'json') return runJson();
             const ws = $('#ws').checked, ci = $('#ci').checked;
             const key = (x) => { if (ws) x = x.trim(); return ci ? x.toLowerCase() : x; };
             const norm = (t) => t.replace(/\r\n/g, '\n');

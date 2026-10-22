@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="AI 開發小幫手：Token 估算、模型費用計算、上下文長度對照表、Function calling Schema 產生、Prompt 範本庫與向量相似度，全在本機計算。">
+    <meta property="og:title" content="AI 開發小幫手" />
+    <meta property="og:description" content="Token 估算、費用計算、Function calling Schema、Prompt 範本庫、向量相似度。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/ai-helper.html" />
+    <meta name="st-keys" content="aihelp_prompts,aihelp_opts">
+    <title>AI 開發小幫手</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 720px;
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+            font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans TC", monospace;
+        }
+
+        label.f {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            margin: 10px 0 4px;
+        }
+
+        input:where(:not([type=checkbox])),
+        select {
+            max-width: 100%;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .tabs button {
+            flex: 1 1 auto;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin: 8px 0;
+        }
+
+        .row>input,
+        .row>select {
+            flex: 1 1 120px;
+            min-width: 0;
+        }
+
+        .crow {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--fill);
+            align-items: center;
+        }
+
+        .crow>* {
+            flex: 1 1 120px;
+            min-width: 0;
+        }
+
+        .crow>.sm,
+        .crow>.chk {
+            flex: 0 0 auto;
+        }
+
+        .chk {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 14px;
+            min-height: 44px;
+        }
+
+        .kv {
+            display: flex;
+            gap: 10px;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--fill);
+            font-size: 14px;
+        }
+
+        .kv>span {
+            flex: 0 0 7em;
+            color: var(--muted);
+        }
+
+        .kv>b {
+            font-weight: 600;
+            word-break: break-all;
+            min-width: 0;
+        }
+
+        .small {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .err {
+            color: var(--bad);
+            min-height: 1.3em;
+            font-size: 14px;
+        }
+
+        .ok {
+            color: var(--ok);
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 8px 0;
+        }
+
+        input[type=checkbox] {
+            width: 20px;
+            height: 20px;
+            accent-color: var(--blue);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>AI 開發小幫手</h1>
+        <p class="sub">做 AI 應用時常用的小計算：估 token、算費用、產生 function calling 的 schema、整理 Prompt 範本、比對向量。全在本機運算。</p>
+
+        <div class="tabs" id="tabs">
+            <button data-t="tok">Token 估算</button>
+            <button data-t="cost">費用計算</button>
+            <button data-t="ctx">上下文長度</button>
+            <button data-t="fn">Function Schema</button>
+            <button data-t="prompt">Prompt 範本庫</button>
+            <button data-t="vec">向量相似度</button>
+        </div>
+
+        <!-- Token 估算 -->
+        <section id="t-tok" hidden>
+            <div class="card">
+                <h2>Token 數量估算</h2>
+                <textarea id="tokIn" spellcheck="false" aria-label="要估算的文字" placeholder="貼上要送進模型的文字（不會儲存）"></textarea>
+                <div id="tokOut" style="margin-top:8px"></div>
+                <button id="tokToCost" class="sm">把估算值帶到「費用計算」的輸入 token</button>
+                <p class="note">這是<b>粗略近似</b>：英文約 4 個字元 ≈ 1 token，中日韓文字約 1–1.5 個字元 ≈ 1 token。實際數字依模型的 tokenizer 而異，誤差可能達 ±30% 以上，程式碼、emoji、罕見字更不準。要精確請用該模型的官方計數工具，或以 API 回傳的 usage 為準。</p>
+            </div>
+        </section>
+
+        <!-- 費用 -->
+        <section id="t-cost" hidden>
+            <div class="card">
+                <h2>模型費用計算</h2>
+                <p class="small" style="margin:0 0 6px">本工具<b>不內建任何模型價格</b>（價格常調整）。請到該服務的官方定價頁，把「每百萬 token」的單價抄進來。</p>
+                <div class="row"><input id="c-inTok" type="number" min="0" step="any" inputmode="decimal" aria-label="每次輸入 token 數" placeholder="每次輸入 token 數，例如 2000"><input id="c-outTok" type="number" min="0" step="any" inputmode="decimal" aria-label="每次輸出 token 數" placeholder="每次輸出 token 數，例如 500"></div>
+                <div class="row"><input id="c-pIn" type="number" min="0" step="any" inputmode="decimal" aria-label="輸入單價（每百萬 token）" placeholder="輸入單價 / 百萬 token（請自行填入）"><input id="c-pOut" type="number" min="0" step="any" inputmode="decimal" aria-label="輸出單價（每百萬 token）" placeholder="輸出單價 / 百萬 token（請自行填入）"></div>
+                <div class="row"><input id="c-calls" type="number" min="0" step="any" inputmode="decimal" aria-label="每月呼叫次數" placeholder="每月呼叫次數，例如 30000"><input id="c-unit" type="text" maxlength="12" aria-label="幣別標示" placeholder="幣別標示，例如 USD"></div>
+                <div id="costOut"></div>
+            </div>
+        </section>
+
+        <!-- 上下文長度 -->
+        <section id="t-ctx" hidden>
+            <div class="card">
+                <h2>上下文長度速查</h2>
+                <p class="small" style="margin:0 0 6px">這張表<b>由你自己填</b>：各模型的上下文長度會隨版本改變，這裡不內建數字。請從官方文件抄最新數值（單位：token），資料存在這台裝置的瀏覽器。</p>
+                <label class="f" for="ctxUse">目前提示約多少 token（可選，會顯示佔各模型上下文的比例）</label>
+                <input id="ctxUse" type="number" min="0" step="any" inputmode="decimal" style="width:100%">
+                <div id="ctxRows"></div>
+                <div class="row"><button class="primary" id="ctxAdd">新增一列</button><button id="ctxClear">清空這張表</button></div>
+                <p class="err" id="ctxMsg" role="alert"></p>
+            </div>
+        </section>
+
+        <!-- Function Schema -->
+        <section id="t-fn" hidden>
+            <div class="card">
+                <h2>Function calling Schema 產生</h2>
+                <div class="row"><input id="fnName" placeholder="函式名稱，例如 get_weather" aria-label="函式名稱" autocapitalize="off"><select id="fnStyle" aria-label="輸出格式"><option value="openai">工具定義（type: function 包法）</option><option value="anthropic">工具定義（input_schema 包法）</option><option value="schema">只輸出參數的 JSON Schema</option></select></div>
+                <input id="fnDesc" placeholder="函式說明（模型靠它決定何時呼叫）" aria-label="函式說明" style="width:100%">
+                <h2 style="margin-top:14px">參數</h2>
+                <div id="fnRows"></div>
+                <div class="row"><button class="primary" id="fnAdd">新增參數</button></div>
+                <p class="err" id="fnErr" role="alert"></p>
+                <label class="f" for="fnOut">輸出（可直接 JSON.parse）</label>
+                <textarea id="fnOut" readonly spellcheck="false" style="min-height:200px"></textarea>
+                <div class="row"><button id="fnCopy">複製 JSON</button></div>
+            </div>
+        </section>
+
+        <!-- Prompt 範本庫 -->
+        <section id="t-prompt" hidden>
+            <div class="card">
+                <h2>我的範本 <span class="small" id="pCount"></span></h2>
+                <div class="row"><select id="pFilter" aria-label="依分類篩選"></select></div>
+                <div class="chips" id="pList"></div>
+                <p class="small" style="margin:0">內建範本（點一下載入編輯器，存檔才會變成你的範本）：</p>
+                <div class="chips" id="pStart"></div>
+            </div>
+            <div class="card">
+                <h2>編輯</h2>
+                <div class="row"><input id="pTitle" maxlength="100" placeholder="標題" aria-label="標題"><input id="pCat" maxlength="30" list="pCats" placeholder="分類（可自訂）" aria-label="分類"></div>
+                <datalist id="pCats"></datalist>
+                <textarea id="pBody" maxlength="20000" spellcheck="false" aria-label="Prompt 內容" style="min-height:180px" placeholder="用 {{變數名}} 標出要替換的地方，例如：請把 {{text}} 翻成 {{lang}}。"></textarea>
+                <div class="small" id="pLen"></div>
+                <div class="row"><button class="primary" id="pSave">儲存</button><button id="pNew">新增空白</button><button id="pDel">刪除這份</button><button id="pClear">清除全部範本</button></div>
+                <p class="err" id="pMsg" role="alert"></p>
+                <h2>結構檢查</h2>
+                <div id="pCheck"></div>
+            </div>
+            <div class="card">
+                <h2>代入變數</h2>
+                <div id="pVars"></div>
+                <label class="f" for="pOut">結果</label>
+                <textarea id="pOut" readonly spellcheck="false"></textarea>
+                <div class="row"><button id="pCopy">複製結果</button></div>
+            </div>
+            <div class="card">
+                <h2>CSV 批次產生</h2>
+                <p class="small" style="margin:0 0 6px">第一列是變數名（欄名要和 <kbd>{{x}}</kbd> 一樣），之後每列產生一份，最多 200 份。</p>
+                <textarea id="pCsv" spellcheck="false" aria-label="CSV" placeholder="name,topic&#10;小明,日記&#10;小華,旅遊"></textarea>
+                <div class="row"><button class="primary" id="pBatch">批次產生</button><button id="pBatchCopy">複製全部</button></div>
+                <p class="err" id="pBatchMsg" role="alert"></p>
+                <textarea id="pBatchOut" readonly spellcheck="false" aria-label="批次結果"></textarea>
+            </div>
+        </section>
+
+        <!-- 向量 -->
+        <section id="t-vec" hidden>
+            <div class="card">
+                <h2>向量相似度</h2>
+                <label class="f" for="vA">向量 A（數字用逗號或空白分隔，可含 [ ]）</label>
+                <textarea id="vA" spellcheck="false" style="min-height:80px" placeholder="0.12, -0.5, 0.33"></textarea>
+                <label class="f" for="vB">向量 B</label>
+                <textarea id="vB" spellcheck="false" style="min-height:80px" placeholder="0.10, -0.4, 0.30"></textarea>
+                <div class="row"><button id="vEg">填入範例</button></div>
+                <p class="err" id="vErr" role="alert"></p>
+                <div id="vOut"></div>
+                <p class="note">教學用：餘弦相似度看「方向」（1 同向、0 垂直、−1 反向），不受長度影響，是文字嵌入最常用的比較方式；歐氏距離看「點與點的距離」；內積同時受方向與長度影響，向量都已正規化（長度 1）時內積就等於餘弦相似度。</p>
+            </div>
+        </section>
+
+        <div class="card">
+            <h2>資料管理</h2>
+            <p class="small" style="margin:0 0 8px">這個頁面存在本機的資料：Prompt 範本（最多 200 份、每份 ≤ 20000 字），以及上次的分頁、費用輸入與上下文表。右上角「💾」可匯出 / 載入備份。</p>
+            <div class="row"><button id="optClear">清除分頁 / 費用 / 上下文表設定</button></div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>做 AI 應用時常用的六個小工具：Token 數量估算、模型費用計算、上下文長度對照表、Function calling Schema 產生、Prompt 範本庫、向量相似度。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>想知道一段文字大概多少 token、每月會花多少錢。</li>
+        <li>要幫模型定義一個工具（function calling），又懶得手寫 JSON Schema。</li>
+        <li>常用的 Prompt 想存成範本、換個變數就能重複使用，或用 CSV 一次產生很多份。</li>
+        <li>想用教學的角度看兩個向量有多像。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li><b>Token 估算</b>：貼上文字，看估算值與範圍。可一鍵帶到費用計算。</li>
+        <li><b>費用計算</b>：填每次輸入 / 輸出 token、<b>你自己查來的</b>每百萬 token 單價、每月呼叫次數，算出每次與每月費用。</li>
+        <li><b>上下文長度</b>：自己新增模型列並填上下文 token 數；填「目前提示 token」會顯示各模型已用的比例。</li>
+        <li><b>Function Schema</b>：填函式名稱、說明、參數（型別、說明、可選值、必填），複製輸出的 JSON。</li>
+        <li><b>Prompt 範本庫</b>：寫好內容按「儲存」；用 <kbd>{{變數}}</kbd> 標變數，下方會自動出現欄位；「CSV 批次產生」第一列放變數名，每列產生一份；「結構檢查」看角色 / 任務 / 限制 / 輸出格式是否齊全。</li>
+        <li><b>向量相似度</b>：貼兩個維度相同的向量，算餘弦相似度、餘弦距離、歐氏距離、內積。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">每次輸入 2000、輸出 500 token，單價分別填 3 與 15（每百萬 token），每月 30000 次
+        → 每次 0.0135、每月 405（單位依你填的幣別；這組單價只是示範，請改成實際價格）<br>
+        向量 A = 1, 2, 3、B = 2, 4, 6 → 餘弦相似度 1（方向完全相同）</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>Token 數是<b>粗略估算</b>，依模型而異、誤差可能很大；計費以 API 回傳為準。本頁不內建任何模型價格或上下文數字，避免過時，請自行填入。</li>
+        <li>Token 估算、Schema、向量輸入的內容<b>不會儲存</b>；Prompt 範本、上次分頁、費用輸入與上下文表存在這台裝置的瀏覽器。</li>
+        <li>範本最多 200 份、每份 ≤ 20000 字，滿了會拒絕新增並提示（不會偷偷刪舊的）；上下文表最多 50 列。</li>
+        <li>刪除：範本編輯器的「刪除這份」刪單份，「清除全部範本」刪全部；頁面最下方可清除分頁 / 費用 / 上下文表設定。都會先詢問，無法復原。</li>
+        <li>範本請勿存放金鑰、密碼等機密；備份檔是明文。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        const TABS = ['tok', 'cost', 'ctx', 'fn', 'prompt', 'vec'];
+        const PROMPT_MAX = 200, BODY_MAX = 20000, CTX_MAX = 50, FN_PARAM_MAX = 30;
+
+        // 粗略估算 token：中日韓每個字元約 1–1.5 個字元 / token、其他字元約 3.5–4.5 字元 / token（取 1.25 與 4 為中間值）。誤差大，只作參考
+        const CJK_RE = /[぀-ヿ㐀-䶿一-鿿豈-﫿가-힯＀-￯]|[\u{20000}-\u{2FFFF}]/gu;
+        function estimateTokens(text) {
+            const t = String(text || ''), chars = [...t].length, cjk = (t.match(CJK_RE) || []).length, other = chars - cjk;
+            return {
+                chars, cjk, other, words: (t.match(/[A-Za-z0-9_]+/g) || []).length,
+                low: Math.round(cjk / 1.5 + other / 4.5), mid: Math.round(cjk / 1.25 + other / 4), high: Math.round(cjk / 1 + other / 3.5),
+            };
+        }
+
+        const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+        // 單價為「每百萬 token」；全部由使用者輸入，空白或不合法當 0
+        function calcCost({ inTok, outTok, pIn, pOut, calls }) {
+            const perCall = (num(inTok) * num(pIn) + num(outTok) * num(pOut)) / 1e6, n = num(calls);
+            return { perCall, month: perCall * n, monthTokens: (num(inTok) + num(outTok)) * n };
+        }
+
+        // ---------- Function calling schema ----------
+        const FN_TYPES = [['string', '字串'], ['number', '數字'], ['integer', '整數'], ['boolean', '布林'], ['array:string', '字串陣列'], ['array:number', '數字陣列'], ['array:integer', '整數陣列'], ['object', '物件']];
+        function buildSchema({ name, desc, params, style }) {
+            const errors = [], props = {}, required = [], seen = new Set();
+            if (!/^[A-Za-z0-9_-]{1,64}$/.test(name || '')) errors.push('函式名稱只能用英數、底線、連字號，長度 1–64');
+            for (const p of params || []) {
+                const pn = String(p.name || '').trim();
+                if (!/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(pn)) { errors.push(`參數名稱「${pn}」不合法（英文字母或底線開頭，只含英數與底線）`); continue; }
+                if (seen.has(pn)) { errors.push(`參數名稱重複：${pn}`); continue; }
+                seen.add(pn);
+                const type = p.type || 'string', o = type.startsWith('array:') ? { type: 'array', items: { type: type.slice(6) } } : { type };
+                if (p.desc) o.description = p.desc;
+                const base = type.startsWith('array:') ? type.slice(6) : type, en = String(p.enumText || '').split(/[,，\n]/).map(x => x.trim()).filter(Boolean);
+                if (en.length && ['string', 'number', 'integer'].includes(type)) {
+                    const vals = en.map(x => base === 'string' ? x : Number(x));
+                    if (base !== 'string' && vals.some(v => !Number.isFinite(v) || (base === 'integer' && !Number.isInteger(v)))) errors.push(`參數 ${pn} 的可選值必須都是${base === 'integer' ? '整數' : '數字'}`);
+                    else o.enum = vals;
+                }
+                props[pn] = o; if (p.required) required.push(pn);
+            }
+            if (errors.length) return { json: '', errors };
+            const schema = { type: 'object', properties: props }; if (required.length) schema.required = required;
+            const d = desc ? { description: desc } : {};
+            const out = style === 'anthropic' ? { name, ...d, input_schema: schema } : style === 'schema' ? { ...d, ...schema } : { type: 'function', function: { name, ...d, parameters: schema } };
+            return { json: JSON.stringify(out, null, 2), errors };
+        }
+
+        // ---------- Prompt 範本 ----------
+        const VAR_RE = /\{\{\s*([A-Za-z0-9_一-鿿.-]+)\s*\}\}/g;
+        const extractVars = (body) => [...new Set([...String(body).matchAll(VAR_RE)].map(m => m[1]))];
+        // 有給值的變數（包含空字串）才替換，沒給的保留 {{x}}；用函式取代，值裡的 $& 不會被當成樣式
+        const fillVars = (body, values) => String(body).replace(VAR_RE, (m, n) => (Object.prototype.hasOwnProperty.call(values, n) ? String(values[n]) : m));
+        function batchFill(body, csvText) {
+            const rows = Util.parseCSV(csvText), header = (rows[0] || []).map(x => x.trim()), data = rows.slice(1);
+            const missing = extractVars(body).filter(v => !header.includes(v));
+            return { outputs: data.slice(0, 200).map(r => fillVars(body, Object.fromEntries(header.map((k, i) => [k, r[i] ?? ''])))), missing, truncated: data.length > 200 };
+        }
+        // 好的 Prompt 通常有：角色、任務、限制、輸出格式。以關鍵字粗略判斷，只是提醒
+        const CHECKS = [
+            ['role', '角色', /你是|你將扮演|扮演|擔任|身為|角色|\byou are\b|\bact as\b|\brole\b/i, '說明模型要扮演誰，例如「你是資深後端工程師」'],
+            ['task', '任務', /任務|請|幫我|協助|需要你|目標|審查|翻譯|摘要|分析|撰寫|產生|整理|說明|\btask\b|\bplease\b|\bwrite\b|\btranslate\b|\bsummari[sz]e\b|\banaly[sz]e\b|\bgenerate\b|\bexplain\b|\breview\b|\bcreate\b/i, '清楚寫出要做什麼'],
+            ['limits', '限制', /限制|不要|不得|必須|務必|避免|禁止|規則|只能|不可|僅|\bmust\b|\bdo not\b|\bdon't\b|\bnever\b|\bavoid\b|\bconstraints?\b|\brules?\b|\bonly\b/i, '列出不能做或必須遵守的事'],
+            ['format', '輸出格式', /輸出|格式|json|表格|markdown|條列|清單|\bformat\b|\boutput\b|\btable\b|\bbullet/i, '指定回覆的格式，例如 JSON 或條列'],
+        ];
+        const checkStructure = (body) => CHECKS.map(([key, label, re, hint]) => ({ key, label, ok: re.test(String(body || '')), hint }));
+
+        const STARTERS = [
+            { title: '程式碼審查', cat: '開發', body: '你是資深軟體工程師。\n任務：審查下面的 {{language}} 程式碼，找出 bug、安全問題與可讀性問題。\n限制：不要改變原本的行為；只指出有把握的問題，不確定的標註「待確認」。\n輸出格式：以條列呈現，每項包含「位置、問題、建議修法」。\n\n{{code}}' },
+            { title: '重點摘要', cat: '文字', body: '你是專業的編輯。\n任務：把下面的文章整理成重點摘要。\n限制：只能根據原文，不得添加原文沒有的資訊；總共不超過 {{count}} 點。\n輸出格式：以條列呈現，每點一句話。\n\n{{text}}' },
+            { title: '翻譯', cat: '文字', body: '你是專業的翻譯。\n任務：請把下面的內容翻譯成{{lang}}。\n限制：保留專有名詞與程式碼不翻；語氣與原文一致，不要加註解。\n輸出格式：只輸出譯文，不要多餘說明。\n\n{{text}}' },
+            { title: '擷取成 JSON', cat: '資料', body: '你是資料擷取助手。\n任務：從下面的文字擷取 {{fields}}。\n限制：找不到的欄位填 null，不得自行猜測。\n輸出格式：只輸出一個合法的 JSON 物件，不要 Markdown 程式碼框。\n\n{{text}}' },
+        ];
+
+        const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
+        const newId = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        // 載入驗證：壞資料補預設、id 去重、截斷到上限
+        function normalizePrompts(raw) {
+            if (!Array.isArray(raw)) return [];
+            const seen = new Set(), out = [];
+            for (const x of raw) {
+                if (!x || typeof x !== 'object' || Array.isArray(x)) continue;
+                let id = typeof x.id === 'string' && x.id && x.id.length <= 40 && !seen.has(x.id) ? x.id : newId();
+                while (seen.has(id)) id = newId();
+                seen.add(id);
+                out.push({ id, title: str(x.title, 100) || '未命名', cat: str(x.cat, 30), body: str(x.body, BODY_MAX), ts: Number.isFinite(x.ts) ? x.ts : 0 });
+                if (out.length >= PROMPT_MAX) break;
+            }
+            return out;
+        }
+        const COST_KEYS = ['inTok', 'outTok', 'pIn', 'pOut', 'calls'];
+        function normalizeOpts(raw) {
+            const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}, c = r.cost && typeof r.cost === 'object' ? r.cost : {};
+            const cost = { unit: str(c.unit, 12) || 'USD' };
+            for (const k of COST_KEYS) cost[k] = typeof c[k] === 'string' ? c[k].slice(0, 20) : typeof c[k] === 'number' && Number.isFinite(c[k]) ? String(c[k]) : '';
+            const ctx = (Array.isArray(r.ctx) ? r.ctx : []).filter(x => x && typeof x === 'object' && !Array.isArray(x)).slice(0, CTX_MAX).map(x => ({ name: str(x.name, 60), ctx: str(x.ctx, 20), out: str(x.out, 20), note: str(x.note, 100) }));
+            return { tab: TABS.includes(r.tab) ? r.tab : 'tok', cost, ctx };
+        }
+
+        // ---------- 向量 ----------
+        function parseVector(text) {
+            const t = String(text).split(/[\s,;，[\]()]+/).filter(Boolean);
+            if (!t.length) throw new Error('請輸入向量');
+            if (t.length > 100000) throw new Error('向量太長（上限 100000 維）');
+            return t.map(x => { const n = Number(x); if (!Number.isFinite(n)) throw new Error(`「${x.slice(0, 20)}」不是有效的數字`); return n; });
+        }
+        function vectorStats(a, b) {
+            if (a.length !== b.length) throw new Error(`維度不同（A 有 ${a.length} 維、B 有 ${b.length} 維）`);
+            let dot = 0, na = 0, nb = 0, d2 = 0;
+            for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; d2 += (a[i] - b[i]) ** 2; }
+            na = Math.sqrt(na); nb = Math.sqrt(nb);
+            const cosine = na && nb ? Math.max(-1, Math.min(1, dot / (na * nb))) : null;
+            return { dim: a.length, dot, normA: na, normB: nb, euclid: Math.sqrt(d2), cosine, cosDistance: cosine === null ? null : 1 - cosine };
+        }
+        // --- /pure ---
+
+        const { store, copyWithFeedback } = Util;
+        const $ = (s) => document.querySelector(s);
+        const h = (t, p = {}, ...c) => { const e = document.createElement(t); for (const [k, v] of Object.entries(p)) { if (k.includes('-')) e.setAttribute(k, v); else e[k] = v; } e.append(...c); return e; };
+        const kv = (k, v) => h('div', { className: 'kv' }, h('span', { textContent: k }), h('b', { textContent: v }));
+        const fmt = (n) => (n === 0 ? '0' : n.toLocaleString('en-US', { maximumSignificantDigits: 6 }));
+        let opts = normalizeOpts(store.get('aihelp_opts', null));
+        let prompts = normalizePrompts(store.get('aihelp_prompts', []));
+        const saveOpts = () => store.set('aihelp_opts', opts);
+        const savePrompts = () => store.set('aihelp_prompts', prompts);
+
+        // ---------- 分頁 ----------
+        function showTab(t) {
+            TABS.forEach(k => { $('#t-' + k).hidden = k !== t; });
+            [...$('#tabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.t === t));
+            if (opts.tab !== t) { opts.tab = t; saveOpts(); }
+        }
+        $('#tabs').onclick = (e) => { if (e.target.dataset.t) showTab(e.target.dataset.t); };
+
+        // ---------- Token ----------
+        let lastTok = 0;
+        function renderTok() {
+            const e = estimateTokens($('#tokIn').value); lastTok = e.mid;
+            $('#tokOut').replaceChildren(kv('估算 token', `約 ${e.mid.toLocaleString()}（範圍 ${e.low.toLocaleString()}–${e.high.toLocaleString()}）`), kv('字元數', e.chars.toLocaleString()), kv('中日韓字元', e.cjk.toLocaleString()), kv('其他字元', e.other.toLocaleString()), kv('英數單字', e.words.toLocaleString()));
+        }
+        $('#tokIn').oninput = renderTok;
+        $('#tokToCost').onclick = () => { $('#c-inTok').value = lastTok; $('#c-inTok').oninput(); $('#ctxUse').value = lastTok; renderCtx(); showTab('cost'); };
+
+        // ---------- 費用 ----------
+        function renderCost() {
+            const c = calcCost(Object.fromEntries(COST_KEYS.map(k => [k, $('#c-' + k).value]))), u = ' ' + ($('#c-unit').value.trim() || '');
+            $('#costOut').replaceChildren(kv('每次費用', fmt(c.perCall) + u), kv('每月費用', fmt(c.month) + u), kv('每月 token 總量', fmt(c.monthTokens)), ...(c.perCall === 0 ? [h('p', { className: 'small', textContent: '填入 token 數與單價後會顯示費用。' })] : []));
+        }
+        for (const k of [...COST_KEYS, 'unit']) { const el = $('#c-' + k); el.value = opts.cost[k]; el.oninput = () => { opts.cost[k] = el.value.slice(0, k === 'unit' ? 12 : 20); saveOpts(); renderCost(); }; }
+
+        // ---------- 上下文長度 ----------
+        function renderCtx() {
+            const use = num($('#ctxUse').value);
+            $('#ctxRows').replaceChildren(...(opts.ctx.length ? opts.ctx.map((r, i) => {
+                const inp = (key, ph, type = 'text') => h('input', { type, placeholder: ph, value: r[key], ariaLabel: ph, maxLength: key === 'note' ? 100 : key === 'name' ? 60 : 20, oninput: (e) => { r[key] = e.target.value; saveOpts(); if (key === 'ctx') pct.textContent = pctText(r); } });
+                const pctText = (x) => (use && num(x.ctx) ? `已用約 ${(use / num(x.ctx) * 100).toFixed(1)}%${use > num(x.ctx) ? '（超過）' : ''}` : '');
+                const pct = h('span', { className: 'small', textContent: pctText(r) });
+                return h('div', { className: 'crow' }, inp('name', '模型名稱'), inp('ctx', '上下文 token 數'), inp('out', '最大輸出 token'), inp('note', '備註（資料來源 / 日期）'), pct, h('button', { className: 'sm', textContent: '刪除', onclick: () => { if (confirm(`刪除「${r.name || '這一列'}」？無法復原。`)) { opts.ctx = opts.ctx.filter(x => x !== r); saveOpts(); renderCtx(); } } }));
+            }) : [h('p', { className: 'small', textContent: '尚未新增任何模型。請自行到官方文件查最新數值後填入。' })]));
+        }
+        $('#ctxUse').oninput = renderCtx;
+        $('#ctxAdd').onclick = () => { if (opts.ctx.length >= CTX_MAX) { $('#ctxMsg').textContent = `最多 ${CTX_MAX} 列，請先刪除不用的。`; return; } $('#ctxMsg').textContent = ''; opts.ctx.push({ name: '', ctx: '', out: '', note: '' }); saveOpts(); renderCtx(); };
+        $('#ctxClear').onclick = () => { if (opts.ctx.length && confirm(`清空這張表（${opts.ctx.length} 列）？無法復原。`)) { opts.ctx = []; saveOpts(); renderCtx(); } };
+
+        // ---------- Function Schema ----------
+        let fnParams = [{ name: 'city', type: 'string', desc: '城市名稱', required: true, enumText: '' }];
+        function renderFn() {
+            $('#fnRows').replaceChildren(...fnParams.map(p => h('div', { className: 'crow' },
+                h('input', { value: p.name, placeholder: '參數名', ariaLabel: '參數名', autocapitalize: 'off', oninput: (e) => { p.name = e.target.value; updFn(); } }),
+                h('select', { ariaLabel: '型別', onchange: (e) => { p.type = e.target.value; updFn(); } }, ...FN_TYPES.map(([v, l]) => h('option', { value: v, textContent: l, selected: v === p.type }))),
+                h('input', { value: p.desc, placeholder: '說明', ariaLabel: '說明', oninput: (e) => { p.desc = e.target.value; updFn(); } }),
+                h('input', { value: p.enumText, placeholder: '可選值（逗號分隔，可留空）', ariaLabel: '可選值', oninput: (e) => { p.enumText = e.target.value; updFn(); } }),
+                h('label', { className: 'chk' }, h('input', { type: 'checkbox', checked: p.required, onchange: (e) => { p.required = e.target.checked; updFn(); } }), '必填'),
+                h('button', { className: 'sm', textContent: '刪除', onclick: () => { fnParams = fnParams.filter(x => x !== p); renderFn(); } }))));
+            updFn();
+        }
+        function updFn() {
+            const r = buildSchema({ name: $('#fnName').value.trim(), desc: $('#fnDesc').value.trim(), params: fnParams, style: $('#fnStyle').value });
+            $('#fnOut').value = r.json; $('#fnErr').textContent = r.errors.join('；');
+        }
+        $('#fnAdd').onclick = () => { if (fnParams.length >= FN_PARAM_MAX) { $('#fnErr').textContent = `參數最多 ${FN_PARAM_MAX} 個`; return; } fnParams.push({ name: '', type: 'string', desc: '', required: false, enumText: '' }); renderFn(); };
+        for (const s of ['#fnName', '#fnDesc', '#fnStyle']) $(s).oninput = $(s).onchange = updFn;
+        $('#fnCopy').onclick = () => { if ($('#fnOut').value) copyWithFeedback($('#fnCopy'), $('#fnOut').value, () => $('#fnOut').select()); };
+
+        // ---------- Prompt 範本庫 ----------
+        let cur = null, catFilter = '', varVals = {};
+        const body = () => $('#pBody').value;
+        function renderPromptList() {
+            const cats = [...new Set(prompts.map(p => p.cat).filter(Boolean))].sort();
+            if (catFilter && !cats.includes(catFilter)) catFilter = '';
+            $('#pFilter').replaceChildren(h('option', { value: '', textContent: '全部分類' }), ...cats.map(c => h('option', { value: c, textContent: c, selected: c === catFilter })));
+            $('#pCats').replaceChildren(...cats.map(c => h('option', { value: c })));
+            $('#pCount').textContent = `（${prompts.length} / ${PROMPT_MAX}）`;
+            const list = prompts.filter(p => !catFilter || p.cat === catFilter);
+            $('#pList').replaceChildren(...(list.length ? list.map(p => h('button', { className: 'sm', textContent: p.title + (p.cat ? ' · ' + p.cat : ''), 'aria-pressed': String(p.id === cur), onclick: () => loadPrompt(p) })) : [h('span', { className: 'small', textContent: '還沒有範本，寫好內容後按「儲存」。' })]));
+        }
+        $('#pStart').replaceChildren(...STARTERS.map(s => h('button', { className: 'sm', textContent: s.title, onclick: () => { cur = null; setEditor(s); } })));
+        function setEditor(p) { $('#pTitle').value = p.title; $('#pCat').value = p.cat; $('#pBody').value = p.body; $('#pMsg').textContent = ''; varVals = {}; renderPromptList(); refreshPrompt(); }
+        function loadPrompt(p) { cur = p.id; setEditor(p); }
+        function refreshPrompt() {
+            $('#pLen').textContent = `${body().length.toLocaleString()} / ${BODY_MAX.toLocaleString()} 字`;
+            $('#pCheck').replaceChildren(...checkStructure(body()).map(c => h('div', { className: 'kv' }, h('span', { textContent: c.label }), h('b', { className: c.ok ? 'ok' : 'err', textContent: c.ok ? '有' : '看不到：' + c.hint }))));
+            const vars = extractVars(body());
+            $('#pVars').replaceChildren(...(vars.length ? vars.map(v => h('div', {}, h('label', { className: 'f', textContent: v }), h('input', { value: varVals[v] || '', style: 'width:100%', ariaLabel: '變數 ' + v, oninput: (e) => { varVals[v] = e.target.value; showFilled(); } }))) : [h('p', { className: 'small', textContent: '內容裡沒有 {{變數}}。' })]));
+            showFilled();
+        }
+        function showFilled() { $('#pOut').value = fillVars(body(), Object.fromEntries(Object.entries(varVals).filter(([k, v]) => v !== '' && extractVars(body()).includes(k)))); }
+        $('#pBody').oninput = refreshPrompt;
+        $('#pFilter').onchange = () => { catFilter = $('#pFilter').value; renderPromptList(); };
+        $('#pSave').onclick = () => {
+            const title = $('#pTitle').value.trim() || '未命名', cat = $('#pCat').value.trim().slice(0, 30), b = body();
+            if (!b.trim()) { $('#pMsg').textContent = '內容是空的。'; return; }
+            if (b.length > BODY_MAX) { $('#pMsg').textContent = `單份最多 ${BODY_MAX} 字。`; return; }
+            const ex = prompts.find(p => p.id === cur);
+            if (ex) Object.assign(ex, { title, cat, body: b, ts: Date.now() });
+            else { if (prompts.length >= PROMPT_MAX) { $('#pMsg').textContent = `範本已達 ${PROMPT_MAX} 份上限，請先刪除不用的。`; return; } cur = newId(); prompts.push({ id: cur, title, cat, body: b, ts: Date.now() }); }
+            savePrompts(); renderPromptList(); $('#pMsg').textContent = ''; $('#pMsg').className = 'ok'; $('#pMsg').textContent = '已儲存。'; setTimeout(() => { if ($('#pMsg').textContent === '已儲存。') { $('#pMsg').textContent = ''; $('#pMsg').className = 'err'; } }, 1500);
+        };
+        $('#pNew').onclick = () => { cur = null; setEditor({ title: '', cat: '', body: '' }); };
+        $('#pDel').onclick = () => {
+            const ex = prompts.find(p => p.id === cur); if (!ex) { $('#pMsg').textContent = '這份還沒儲存，沒有可刪的範本。'; return; }
+            if (!confirm(`刪除範本「${ex.title}」？無法復原。`)) return;
+            prompts = prompts.filter(p => p.id !== ex.id); savePrompts(); cur = null; setEditor({ title: '', cat: '', body: '' });
+        };
+        $('#pClear').onclick = () => { if (prompts.length && confirm(`清除全部 ${prompts.length} 份 Prompt 範本？無法復原。`)) { prompts = []; savePrompts(); cur = null; setEditor({ title: '', cat: '', body: '' }); } };
+        $('#pCopy').onclick = () => { if ($('#pOut').value) copyWithFeedback($('#pCopy'), $('#pOut').value, () => $('#pOut').select()); };
+        $('#pBatch').onclick = () => {
+            $('#pBatchMsg').textContent = ''; $('#pBatchOut').value = '';
+            try {
+                const r = batchFill(body(), $('#pCsv').value);
+                $('#pBatchOut').value = r.outputs.join('\n\n==========\n\n');
+                $('#pBatchMsg').textContent = `產生 ${r.outputs.length} 份。` + (r.missing.length ? `CSV 缺少欄位：${r.missing.join('、')}（保留 {{ }} 原樣）。` : '') + (r.truncated ? '超過 200 列，只處理前 200 列。' : '');
+            } catch (e) { $('#pBatchMsg').textContent = e.message; }
+        };
+        $('#pBatchCopy').onclick = () => { if ($('#pBatchOut').value) copyWithFeedback($('#pBatchCopy'), $('#pBatchOut').value, () => $('#pBatchOut').select()); };
+
+        // ---------- 向量 ----------
+        function renderVec() {
+            $('#vErr').textContent = ''; $('#vOut').replaceChildren();
+            if (!$('#vA').value.trim() && !$('#vB').value.trim()) return;
+            try {
+                const s = vectorStats(parseVector($('#vA').value), parseVector($('#vB').value)), f = (n) => (n === null ? '無法計算（有零向量）' : fmt(n));
+                $('#vOut').replaceChildren(kv('維度', String(s.dim)), kv('餘弦相似度', f(s.cosine)), kv('餘弦距離', f(s.cosDistance)), kv('歐氏距離', f(s.euclid)), kv('內積', f(s.dot)), kv('|A|', f(s.normA)), kv('|B|', f(s.normB)));
+            } catch (e) { $('#vErr').textContent = e.message; }
+        }
+        $('#vA').oninput = $('#vB').oninput = renderVec;
+        $('#vEg').onclick = () => { $('#vA').value = '1, 2, 3'; $('#vB').value = '2, 4, 6.5'; renderVec(); };
+
+        // ---------- 資料管理 ----------
+        $('#optClear').onclick = () => {
+            if (!confirm('清除上次分頁、費用輸入與上下文表？Prompt 範本不受影響，無法復原。')) return;
+            opts = normalizeOpts(null); saveOpts();
+            for (const k of [...COST_KEYS, 'unit']) $('#c-' + k).value = opts.cost[k];
+            renderCost(); renderCtx(); showTab('tok');
+        };
+
+        $('#pMsg').className = 'err';
+        renderTok(); renderCost(); renderCtx(); renderFn(); renderPromptList(); refreshPrompt();
+        showTab(opts.tab);
+    </script>
+</body>
+
+</html>

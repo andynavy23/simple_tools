@@ -174,8 +174,14 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>SQL 指令產生器</h1>
-        <p class="sub">用表單組出 SQL（MySQL / PostgreSQL / SQLite / SQL Server），全部在本機產生，不連線資料庫。</p>
+        <p class="sub">用表單組出 SQL（MySQL / PostgreSQL / SQLite / SQL Server），也能把貼上的 SQL 重新排版，全部在本機處理，不連線資料庫。</p>
 
+        <div class="tabs" id="modeTabs">
+            <button data-m="gen" aria-pressed="true">產生 SQL</button>
+            <button data-m="fmt" aria-pressed="false">格式化 SQL</button>
+        </div>
+
+        <div id="genPane">
         <div class="card">
             <div class="row">
                 <div style="flex:1 1 160px"><label for="dialect">資料庫方言</label>
@@ -218,6 +224,26 @@
             <div id="out"></div>
             <button class="primary" id="copyAll" hidden>複製全部</button>
         </div>
+        </div>
+
+        <div id="fmtPane" hidden>
+            <div class="card">
+                <label for="fIn">貼上要排版的 SQL</label>
+                <textarea id="fIn" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="select a,b from t where x=1 and y in (select id from u) order by a" maxlength="300000" style="min-height:160px"></textarea>
+                <div class="row" style="margin-top:10px">
+                    <label style="flex:1 1 120px">關鍵字<select id="fKw" style="width:100%"><option value="upper">大寫</option><option value="lower">小寫</option><option value="keep">保持原樣</option></select></label>
+                    <label style="flex:1 1 120px">逗號位置<select id="fComma" style="width:100%"><option value="last">行尾</option><option value="first">行首</option></select></label>
+                    <label style="flex:1 1 120px">縮排<select id="fIndent" style="width:100%"><option value="4">4 空白</option><option value="2">2 空白</option><option value="tab">Tab</option></select></label>
+                </div>
+                <div class="chk" style="margin:10px 0"><label><input type="checkbox" id="fBs"> 字串用反斜線跳脫（MySQL 風格）</label></div>
+                <button class="primary" id="fGo">格式化</button>
+            </div>
+            <div class="card" id="fOutCard" hidden>
+                <div class="note" id="fStatus" role="status"></div>
+                <pre class="code" id="fOut"></pre>
+                <button class="primary" id="fCopy" hidden>複製</button>
+            </div>
+        </div>
     </div>
 
     <template id="help">
@@ -236,8 +262,22 @@
         <li>SELECT 可設欄位（含別名與 COUNT / SUM / AVG / MIN / MAX）、最多 4 個 JOIN、GROUP BY / HAVING、排序、limit / offset。</li>
         <li>下方切換「純 SQL」「參數化」「Node.js」「Python」，按「複製」。也可先套用「快速範本」再修改。</li>
         </ol>
+        <h3>格式化 SQL</h3>
+        <ol>
+        <li>上方切到「格式化 SQL」，貼上一段（可含多個以分號分隔的）SQL。</li>
+        <li>選關鍵字大小寫、逗號放行尾或行首、縮排（4 空白 / 2 空白 / Tab）。MySQL 的字串若用反斜線跳脫（<kbd>'it\'s'</kbd>）要勾選對應選項。</li>
+        <li>按「格式化」：子句（SELECT / FROM / WHERE / GROUP BY …）、JOIN、AND / OR、CASE、子查詢與括號會換行縮排，按「複製」帶走。</li>
+        </ol>
         <h3>範例</h3>
-        <div class="eg">方言 PostgreSQL、表 users、條件 age 大於等於 18（數字）、排序 id、limit 10
+        <div class="eg">貼上 select a,b from t where x=1 and y=2 order by a
+        → SELECT
+        →     a,
+        →     b
+        → FROM t
+        → WHERE x = 1
+        →     AND y = 2
+        → ORDER BY a
+        方言 PostgreSQL、表 users、條件 age 大於等於 18（數字）、排序 id、limit 10
         → SELECT *
         → FROM "users"
         → WHERE "age" >= 18
@@ -251,6 +291,7 @@
         <li>名稱一律加引號並跳脫；名稱不能含控制字元。欄位有錯時不會產生指令。</li>
         <li>INSERT 的空白儲存格：字串欄位視為空字串，其他型別視為 NULL。「在清單中」用逗號或換行分隔。</li>
         <li>版本：視窗函式（每組最新一筆）需 MySQL 8+ / SQLite 3.25+；SQLite RIGHT / FULL JOIN 需 3.39+；MySQL 不支援 FULL JOIN；SQL Server 的 OFFSET 分頁必須有 ORDER BY。</li>
+        <li>格式化只改空白與關鍵字大小寫：字串、註解、引號識別字原封不動，識別字（表名、欄位名）大小寫不動；排版後會自動比對前後的 token 序列，不一致就不輸出。沒結尾的字串 / 註解會報錯；單獨的 <kbd>#</kbd> 要後面接空白才算註解（MySQL 風格）。不做自動換行折行，也不會檢查 SQL 語法對不對。上限 30 萬字元。貼上的 SQL 不會儲存。</li>
         <li>只記住「上次的方言、操作與輸出格式」（本機 sqlq_opts，壞資料會回到預設）；表名、條件與值不會儲存，重新整理就清空。用右上角備份即可管理這一個鍵。</li>
         </ul>
     </template>
@@ -850,6 +891,233 @@
             return {};
         }
         const TEMPLATES = [['paging', '分頁查詢'], ['dupes', '找出重複資料'], ['latest', '每組最新一筆（視窗函式）'], ['recent', '最近 N 天'], ['missing', '欄位為空（NULL 或空字串）'], ['fuzzy', '模糊搜尋（包含）'], ['upsert', 'Upsert（有就更新、沒有就新增）']];
+
+        // ---------- SQL 格式化與美化（自寫 tokenizer；只改空白與關鍵字大小寫，不改語意）----------
+        const SQLF_KW = new Set('select from where group by having order limit offset union all intersect except distinct insert into values update set delete create alter drop table view join inner left right full outer cross natural on using and or not in is null like ilike between exists case when then else end as asc desc with returning fetch primary foreign key references unique constraint true false if default add column index check do nothing top'.split(' '));
+        const SQLF_FN = new Set('count sum avg min max coalesce nullif cast concat replace left right substring substr trim upper lower length round floor ceil ceiling abs now row_number rank dense_rank lag lead extract date_trunc ifnull isnull convert greatest least over if'.split(' '));
+        const SQLF_OPS = ['<=>', '->>', '->', '#>>', '#>', '!~*', '<>', '<=', '>=', '!=', '||', '&&', '::', '<<', '>>', '!~', '~*', '=>', ':='];
+        const SQLF_MAX = 300000;
+        // 切成 token：{ type: word / num / str / qid / param / op / punct / lcom / bcom, text, nl }；nl = 前面（與上一個 token 之間）有換行。
+        // 字串、引號識別字、註解、$$ 字串都是單一 token，所以裡面的內容絕不會被動到。壞輸入（沒結尾的字串 / 註解）丟出錯誤
+        function sqlTokens(src, o = {}) {
+            const t = [], n = src.length; let i = 0, nl = false;
+            const push = (type, text) => { t.push({ type, text, nl }); nl = false; };
+            const identLike = () => { const p = t[t.length - 1]; return !!p && (p.type === 'qid' || p.text === ')' || p.text === ']' || (p.type === 'word' && !SQLF_KW.has(p.text.toLowerCase()))); };
+            const scanQuoted = (q, from, bs) => {
+                let j = from + 1;
+                for (; j < n; j++) {
+                    const c = src[j];
+                    if (bs && c === '\\') { j++; continue; }
+                    if (c === q) { if (src[j + 1] === q) { j++; continue; } return j + 1; }
+                }
+                throw new Error(q === "'" ? '字串沒有結尾（缺少右邊的單引號）' : `引號識別字沒有結尾（缺少 ${q}）`);
+            };
+            while (i < n) {
+                const c = src[i];
+                if (c === '\n') { nl = true; i++; continue; }
+                if (/\s/.test(c)) { i++; continue; }
+                if ((c === '-' && src[i + 1] === '-') || (c === '#' && (i + 1 >= n || /\s/.test(src[i + 1])))) {
+                    let j = src.indexOf('\n', i); if (j < 0) j = n;
+                    push('lcom', src.slice(i, j).trimEnd()); i = j; continue;
+                }
+                if (c === '/' && src[i + 1] === '*') {
+                    const j = src.indexOf('*/', i + 2);
+                    if (j < 0) throw new Error('區塊註解沒有結尾（缺少 */）');
+                    push('bcom', src.slice(i, j + 2)); i = j + 2; continue;
+                }
+                if (c === "'") { const j = scanQuoted("'", i, !!o.bsEscape); push('str', src.slice(i, j)); i = j; continue; }
+                if (c === '"' || c === '`') { const j = scanQuoted(c, i, false); push('qid', src.slice(i, j)); i = j; continue; }
+                if (c === '$') {
+                    const m = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/.exec(src.slice(i, i + 80));
+                    if (m) { const j = src.indexOf(m[0], i + m[0].length); if (j < 0) throw new Error(`${m[0]} 字串沒有結尾`); push('str', src.slice(i, j + m[0].length)); i = j + m[0].length; continue; }
+                    const d = /^\$\d+/.exec(src.slice(i, i + 20));
+                    if (d) { push('param', d[0]); i += d[0].length; continue; }
+                }
+                if (c === '[') {
+                    const m = !identLike() ? /^\[((?:[^\]\n\[,]|\]\])+)\]/.exec(src.slice(i, i + 300)) : null;
+                    if (m) { push('qid', m[0]); i += m[0].length; continue; }
+                }
+                if (/\d/.test(c) || (c === '.' && /\d/.test(src[i + 1] || '') && !identLike())) {
+                    const num = /^(?:0[xX][0-9a-fA-F]+|\d+\.?\d*(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?)/.exec(src.slice(i, i + 80));
+                    if (num && /[\p{L}_]/u.test(src[i + num[0].length] || '')) { const wd = num[0] + /^[\p{L}\p{N}_$]*/u.exec(src.slice(i + num[0].length, i + num[0].length + 200))[0]; push('word', wd); i += wd.length; continue; }
+                    if (num) { push('num', num[0]); i += num[0].length; continue; }
+                }
+                const w = /^[\p{L}_][\p{L}\p{N}_$]*/u.exec(src.slice(i, i + 200));
+                if (w) {
+                    const word = w[0];
+                    if (/^[eEnNbBxX]$/.test(word) && src[i + 1] === "'") { const j = scanQuoted("'", i + 1, /^[eE]$/.test(word) || !!o.bsEscape); push('str', src.slice(i, j)); i = j; continue; }
+                    push('word', word); i += word.length; continue;
+                }
+                let m;
+                if ((m = /^@@?[\p{L}\p{N}_$]+/u.exec(src.slice(i, i + 200))) || (c === ':' && src[i + 1] !== ':' && (!t.length || t[t.length - 1].text !== ':') && (m = /^:[\p{L}_][\p{L}\p{N}_]*/u.exec(src.slice(i, i + 200))))) { push('param', m[0]); i += m[0].length; continue; }
+                if (c === '?') { push('param', '?'); i++; continue; }
+                const op = SQLF_OPS.find(x => src.startsWith(x, i));
+                if (op) { push('op', op); i += op.length; continue; }
+                if ('(),;.[]'.includes(c)) { push('punct', c); i++; continue; }
+                push('op', c); i++;
+            }
+            return t;
+        }
+        // 語意指紋：忽略空白與大小寫（只有 word 轉小寫，字串 / 識別字 / 註解逐字比對）
+        const sqlSig = (src, o) => sqlTokens(src, o).map(k => (k.type === 'word' ? k.text.toLowerCase() : k.text));
+        const sqlSame = (a, b, o) => { const x = sqlSig(a, o), y = sqlSig(b, o); return x.length === y.length && x.every((v, i) => v === y[i]); };
+
+        // 排版。o.kw：'upper' | 'lower' | 'keep'；o.comma：'last' | 'first'；o.indent：2 | 4 | 'tab'；o.bsEscape：字串內反斜線跳脫（MySQL）
+        function sqlFormat(src, o = {}) {
+            src = String(src);
+            if (src.length > SQLF_MAX) throw new Error(`SQL 太長（上限 ${SQLF_MAX} 字元）`);
+            const T = sqlTokens(src, o);
+            const kwCase = o.kw || 'upper', first = o.comma === 'first', unit = o.indent === 'tab' ? '\t' : ' '.repeat(+o.indent === 2 ? 2 : 4);
+            const lines = [];
+            let cur = '', empty = true, lvl = 0;
+            const nl = (level) => { if (!empty) lines.push(cur.trimEnd()); lvl = level; cur = unit.repeat(level); empty = true; };
+            const frames = [{ kind: 'top', base: 0, clause: '' }];
+            const top = () => frames[frames.length - 1];
+            let last = null, comLast = false, pendingNL = false, stmtEnd = false, brk = false, holdTo = -1, afterTable = false;
+            T.forEach((k) => { k.lw = k.type === 'word' ? k.text.toLowerCase() : ''; });
+            const sig = (i) => { for (; i < T.length; i++) if (T[i].type !== 'lcom' && T[i].type !== 'bcom') return T[i]; return null; };
+            const matchParen = (i) => { let d = 0; for (let j = i; j < T.length; j++) { if (T[j].text === '(' && T[j].type === 'punct') d++; else if (T[j].text === ')' && T[j].type === 'punct' && --d === 0) return j; } return i; };
+            const callish = (a) => a.type === 'qid' || a.text === ']' || (a.type === 'word' && (!a.isKw || a.isFn));
+            const space = (a, b) => {
+                if (!a) return false;
+                if (a.type === 'op' && b.type === 'op') return true;
+                if ((a.type === 'num' && b.text === '.') || (a.text === '.' && /^\.?\d/.test(b.text))) return true;   // 否則 5 . 會黏成 5.、. 5 會黏成 .5
+                if (b.type === 'punct' && (b.text === ',' || b.text === ';' || b.text === ')' || b.text === '.' || b.text === ']')) return false;
+                if (a.type === 'punct' && (a.text === '(' || a.text === '.' || a.text === '[')) return false;
+                if (b.text === '::' || a.text === '::') return false;
+                if (b.type === 'punct' && b.text === '(') return afterTable || !callish(a);
+                if (b.type === 'punct' && b.text === '[') return !(callish(a) || a.text === ')');
+                if (a.unary) return false;
+                return true;
+            };
+            const put = (tk, text, forceSpace) => {
+                if (empty) { cur += text; empty = false; }
+                else cur += (forceSpace || comLast || space(last, tk) ? ' ' : '') + text;
+                if (tk.type !== 'lcom' && tk.type !== 'bcom') { last = tk; comLast = false; } else comLast = true;
+            };
+            const resolveBrk = () => { if (brk) { brk = false; nl(top().base + 1); } };
+            // 偵測子句關鍵字（只在最外層或子查詢內有效）；回傳 { n: 用掉幾個 token, k: 'list' | 'c' | 'join' | 'logic', name }
+            const clauseAt = (i, f) => {
+                const w = (j) => T[i + j] && T[i + j].type === 'word' ? T[i + j].lw : '';
+                const w0 = w(0), prev = last;
+                if (!w0 || (prev && prev.text === '.') || (T[i + 1] && T[i + 1].text === '.' && T[i + 1].type === 'punct')) return null;
+                const start = !prev || prev.text === ';' || prev.subOpen;
+                switch (w0) {
+                    case 'select': return { n: 1, k: 'list', name: 'select' };
+                    case 'from': return prev && prev.lw === 'distinct' ? null : { n: 1, k: 'c', name: 'from' };
+                    case 'where': case 'having': case 'limit': case 'offset': case 'returning': case 'fetch': case 'window': case 'qualify': return { n: 1, k: 'c', name: w0 };
+                    case 'group': case 'order': return w(1) === 'by' ? { n: 2, k: 'c', name: w0 } : null;
+                    case 'union': case 'intersect': case 'except': return { n: ['all', 'distinct'].includes(w(1)) ? 2 : 1, k: 'c', name: w0 };
+                    case 'values': return f.clause === 'insert' ? { n: 1, k: 'list', name: 'values' } : null;
+                    case 'set': return f.clause === 'update' ? { n: 1, k: 'list', name: 'set' } : null;
+                    case 'insert': return start ? { n: w(1) === 'into' ? 2 : 1, k: 'c', name: 'insert' } : null;
+                    case 'replace': return start && w(1) === 'into' ? { n: 2, k: 'c', name: 'insert' } : null;
+                    case 'update': return start ? { n: 1, k: 'c', name: 'update' } : null;
+                    case 'delete': return start ? { n: w(1) === 'from' ? 2 : 1, k: 'c', name: 'delete' } : null;
+                    case 'with': return start ? { n: 1, k: 'c', name: 'with' } : null;
+                    case 'on':
+                        if (w(1) === 'conflict') return { n: 2, k: 'c', name: 'on' };
+                        if (w(1) === 'duplicate' && w(2) === 'key' && w(3) === 'update') return { n: 4, k: 'c', name: 'on' };
+                        return null;
+                    case 'straight_join': return { n: 1, k: 'c', name: 'join' };
+                    case 'join': case 'left': case 'right': case 'full': case 'inner': case 'cross': case 'natural': case 'outer': {
+                        let j = 0; const J = ['left', 'right', 'full', 'inner', 'cross', 'natural', 'outer'];
+                        while (J.includes(w(j))) j++;
+                        if (w(j) === 'join' || (w(j) === 'apply' && ['cross', 'outer'].includes(w0))) return { n: j + 1, k: 'c', name: 'join' };
+                        return null;
+                    }
+                    case 'and': case 'or': return ['where', 'having', 'join', 'qualify'].includes(f.clause) && !(w0 === 'and' && f.between) ? { n: 1, k: 'logic' } : null;
+                }
+                return null;
+            };
+            for (let i = 0; i < T.length; i++) {
+                const tk = T[i];
+                if (stmtEnd) {
+                    if ((tk.type === 'lcom' || tk.type === 'bcom') && !tk.nl) { /* 分號後同一行的註解 */ }
+                    else { nl(0); if (lines.length && lines[lines.length - 1] !== '') lines.push(''); frames.length = 0; frames.push({ kind: 'top', base: 0, clause: '' }); stmtEnd = false; last = null; brk = false; afterTable = false; pendingNL = false; }
+                }
+                if (tk.type === 'lcom' || tk.type === 'bcom') {
+                    resolveBrk();
+                    if (pendingNL) { nl(lvl); pendingNL = false; }
+                    if (tk.nl && !empty) nl(lvl);
+                    put(tk, tk.text, !empty);
+                    if (tk.type === 'lcom' || (tk.nl && T[i + 1] && T[i + 1].nl)) pendingNL = true;
+                    continue;
+                }
+                if (pendingNL) { nl(lvl); pendingNL = false; }
+                const f = top(), lw = tk.lw;
+                const nxt = T[i + 1], nextParen = !!nxt && nxt.type === 'punct' && nxt.text === '(';
+                const dotted = (last && last.text === '.') || (nxt && nxt.type === 'punct' && nxt.text === '.');
+                tk.isFn = lw !== '' && !dotted && SQLF_FN.has(lw) && nextParen;
+                tk.isKw = lw !== '' && !dotted && (SQLF_KW.has(lw) || tk.isFn);
+                const kwText = (text) => kwCase === 'upper' ? text.toUpperCase() : kwCase === 'lower' ? text.toLowerCase() : text;
+                // 左括號
+                if (tk.type === 'punct' && tk.text === '(') {
+                    if (!(i <= holdTo)) resolveBrk();
+                    const s = sig(i + 1), isSub = !!s && s.type === 'word' && (s.lw === 'select' || s.lw === 'with');
+                    const isList = !isSub && f.kind === 'top' && f.create && f.sawTable && !f.listed;
+                    put(tk, '(');
+                    if (isSub) { tk.subOpen = true; frames.push({ kind: 'sub', base: lvl + 1, openLvl: lvl, clause: '' }); }
+                    else if (isList) { f.listed = true; frames.push({ kind: 'list', base: lvl + 1, openLvl: lvl, clause: '' }); nl(lvl + 1); }
+                    else frames.push({ kind: 'paren', base: f.base, clause: '' });
+                    afterTable = false; continue;
+                }
+                // 右括號
+                if (tk.type === 'punct' && tk.text === ')') {
+                    while (frames.length > 1 && top().kind === 'case') frames.pop();
+                    if (frames.length > 1) { const fr = frames.pop(); if (fr.kind === 'sub' || fr.kind === 'list') nl(fr.openLvl); }
+                    put(tk, ')'); afterTable = false; brk = false; continue;
+                }
+                if (tk.type === 'punct' && tk.text === ';') { put(tk, ';'); stmtEnd = true; afterTable = false; continue; }
+                if (tk.type === 'punct' && tk.text === ',') {
+                    if ((f.kind === 'top' || f.kind === 'sub') && ['select', 'set', 'values', 'with'].includes(f.clause)) {
+                        const L = f.clause === 'with' ? f.base : f.base + 1;
+                        if (first) { nl(L); put(tk, ','); } else { put(tk, ','); nl(L); }
+                    } else if (f.kind === 'list') { if (first) { nl(f.base); put(tk, ','); } else { put(tk, ','); nl(f.base); } }
+                    else put(tk, ',');
+                    afterTable = false; continue;
+                }
+                if (tk.type === 'word') {
+                    if (f.kind === 'top' || f.kind === 'sub') {
+                        const c = i <= holdTo ? null : clauseAt(i, f);
+                        if (c) {
+                            if (c.k === 'logic') { brk = false; nl(f.base + 1); put(tk, kwText(tk.text)); afterTable = false; continue; }
+                            brk = false; nl(f.base);
+                            for (let j = 0; j < c.n; j++) { const x = T[i + j]; x.isKw = true; put(x, kwText(x.text), j > 0); }
+                            i += c.n - 1; f.clause = c.name; f.between = false; const into = T[i].lw === 'into';
+                            if (c.k === 'list') brk = true;
+                            afterTable = into; continue;
+                        }
+                    }
+                    if (!(i <= holdTo) && !(brk && ['distinct', 'all', 'top', 'percent'].includes(lw))) resolveBrk();
+                    if (brk && lw === 'top') { holdTo = nxt && nxt.type === 'punct' && nxt.text === '(' ? matchParen(i + 1) : i + 1; }
+                    if (brk && lw === 'distinct' && nxt && nxt.lw === 'on') { const p2 = sig(i + 2); if (p2 && p2.text === '(') holdTo = matchParen(T.indexOf(p2)); }
+                    if (lw === 'case' && tk.isKw) { put(tk, kwText(tk.text)); frames.push({ kind: 'case', base: f.base, caseLvl: lvl + 1 }); continue; }
+                    if ((lw === 'when' || lw === 'else') && f.kind === 'case') { nl(f.caseLvl); put(tk, kwText(tk.text)); continue; }
+                    if (lw === 'end' && f.kind === 'case') { frames.pop(); nl(f.caseLvl - 1); put(tk, kwText(tk.text)); continue; }
+                    if (lw === 'between' && !dotted) f.between = true;
+                    else if (lw === 'and' && f.between) f.between = false;
+                    if (lw === 'create' && !last) f.create = true;
+                    if (lw === 'table' && f.create) f.sawTable = true;
+                    const text = tk.isKw || tk.isFn ? kwText(tk.text) : tk.text;
+                    put(tk, text);
+                    if (['into', 'table', 'view'].includes(lw) && !dotted) afterTable = true;
+                    continue;
+                }
+                // 其他：數字、字串、識別字、參數、運算子
+                if (!(i <= holdTo)) resolveBrk();
+                if (tk.type === 'op' && (tk.text === '-' || tk.text === '+')) {
+                    const p = last;
+                    tk.unary = !p || (p.type === 'op' && !p.unary) || p.text === '(' || p.text === ',' || p.text === '[' || (p.type === 'word' && p.isKw && !p.isFn && !['null', 'true', 'false', 'end'].includes(p.lw));
+                }
+                put(tk, tk.text);
+                if (tk.type === 'op' && tk.text === '#') pendingNL = true;   // 單獨的 # 後面不能接空白（會變成註解），所以換行
+                if (!(tk.type === 'qid' || (tk.type === 'punct' && tk.text === '.'))) afterTable = false;
+            }
+            nl(0);
+            while (lines.length && lines[lines.length - 1] === '') lines.pop();
+            return lines.length ? lines.join('\n') + '\n' : '';
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -966,6 +1234,27 @@
         $('#tbl').oninput = () => { S.table = $('#tbl').value; update(); };
         $('#tplGo').onclick = () => { const keep = { table: S.table, d: S.d }; S = { ...defaultState(), ...template($('#tpl').value, { n: $('#tplN').value, page: $('#tplP').value }), ...keep }; msg(''); persist(); build(); };
         $('#copyAll').onclick = () => copyWithFeedback($('#copyAll'), parts.length === 1 ? parts[0].text : parts.map(p => `${p.label}\n${p.text}`).join('\n\n'));
+
+        // ---------- 格式化 SQL ----------
+        let fText = '';
+        $('#modeTabs').onclick = (e) => {
+            const m = e.target.dataset.m; if (!m) return;
+            $('#genPane').hidden = m !== 'gen'; $('#fmtPane').hidden = m !== 'fmt';
+            [...$('#modeTabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.m === m));
+        };
+        $('#fGo').onclick = () => {
+            const src = $('#fIn').value, st = $('#fStatus'), out = $('#fOut');
+            $('#fOutCard').hidden = false; fText = ''; out.textContent = ''; $('#fCopy').hidden = true; st.className = 'note';
+            if (!src.trim()) { st.textContent = '請先貼上 SQL'; return; }
+            const o = { kw: $('#fKw').value, comma: $('#fComma').value, indent: $('#fIndent').value, bsEscape: $('#fBs').checked };
+            try {
+                const res = sqlFormat(src, o);
+                if (!sqlSame(src, res, o)) { st.textContent = '✗ 排版後的內容與原文不一致，已放棄（請回報這段 SQL）'; return; }
+                fText = res; out.textContent = res; $('#fCopy').hidden = false;
+                st.textContent = '✓ 已排版；已驗證排版前後的 token 序列（忽略空白與大小寫）完全一致，語意沒有改變';
+            } catch (e) { st.textContent = '✗ ' + e.message; }
+        };
+        $('#fCopy').onclick = () => copyWithFeedback($('#fCopy'), fText);
 
         { const o = loadOpts(store.get('sqlq_opts', null)); S.op = o.op; S.d = o.d; fmt = o.fmt; }
         markFmt(); build();

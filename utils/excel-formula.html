@@ -50,6 +50,42 @@
             line-height: 1.5;
         }
 
+        .sk {
+            padding: 10px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .sk>b {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .sk .kk {
+            display: flex;
+            gap: 6px 14px;
+            flex-wrap: wrap;
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        .sk .kk span {
+            overflow-wrap: anywhere;
+        }
+
+        .sk kbd {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            background: var(--fill);
+            border-radius: 6px;
+            padding: 1px 6px;
+            color: var(--text);
+        }
+
+        .sk small {
+            display: block;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
         .tip {
             color: var(--muted);
             font-size: 14px;
@@ -179,6 +215,13 @@
         <h1>Excel 公式速查</h1>
         <p class="sub">79 個常用函式，每個都有範例資料與算好的結果。全部離線，不會上傳任何資料。</p>
 
+        <div class="chips" id="pgTabs" role="group" aria-label="分頁">
+            <button type="button" data-p="fn" aria-pressed="true">函式</button>
+            <button type="button" data-p="keys" aria-pressed="false">快捷鍵</button>
+        </div>
+
+        <div id="pgFn">
+
         <div class="card">
             <h2>我想做…</h2>
             <div class="chips" id="goals"></div>
@@ -193,6 +236,22 @@
             <div class="chips" id="cats" role="group" aria-label="分類"></div>
             <div class="muted" id="count" style="margin-bottom:8px"></div>
             <div id="list"></div>
+        </div>
+        </div>
+
+        <div id="pgKeys" hidden>
+            <div class="card">
+                <h2>Excel 快捷鍵（Windows / macOS）</h2>
+                <input type="search" id="kq" placeholder="搜尋用途或按鍵，例如 填滿、ctrl+d、選取整欄" aria-label="搜尋快捷鍵" autocomplete="off">
+                <div class="chips" id="kcats" role="group" aria-label="快捷鍵分類"></div>
+                <div class="muted" id="kcount" style="margin-bottom:8px"></div>
+                <div id="klist"></div>
+                <p class="tip">筆電的 F 鍵常需要加按 Fn；macOS 的 Ctrl 是 Control 鍵、Cmd 是 ⌘。部分組合鍵可能被作業系統、輸入法或瀏覽器佔用。標「—」的是這裡不確定而不列出的項目。</p>
+            </div>
+            <div class="card">
+                <h2>與 Google 試算表的差異</h2>
+                <ul class="errs" id="gsdiff"></ul>
+            </div>
         </div>
     </div>
 
@@ -213,6 +272,8 @@
         <li>點開任一函式：看語法、白話說明、範例資料表、公式與結果、常見錯誤、Google 試算表差異與版本需求。</li>
         <li>按範例公式旁的「複製公式」，貼到自己的儲存格再改成自己的範圍。</li>
         </ol>
+        <h3>快捷鍵分頁</h3>
+        <p>頁面上方切到「快捷鍵」：列出 Windows 與 macOS 的常用 Excel 快捷鍵（選取、移動、編輯、格式、公式與資料），可用搜尋框輸入用途（例如「填滿」）或按鍵（例如 <kbd>ctrl+d</kbd>）過濾，也可用分類按鈕縮小範圍。下方簡述與 Google 試算表的差異。</p>
         <h3>範例</h3>
         <div class="eg">在「我想做…」選「查表比對」→「要找的值在表格最左欄，回傳右邊某一欄」→ 推薦 VLOOKUP 與 XLOOKUP。
 點 VLOOKUP，範例資料表是編號 / 品名 / 單價，公式 =VLOOKUP("B03",A2:C5,3,FALSE) → 結果 350。
@@ -223,6 +284,7 @@
         <li>臺灣的國定假日與補班日請自己列成清單，丟給 NETWORKDAYS / WORKDAY 的「假日範圍」。</li>
         <li>標示「Excel 2021 以上」的新函式（XLOOKUP、FILTER、UNIQUE、SORT、SEQUENCE、LET）在 Excel 2019 以前會出現 #NAME?；Google 試算表的差異都寫在各函式裡。</li>
         <li>本頁的版本與 Google 試算表差異整理自一般公開說明，微軟與 Google 日後可能調整，重要檔案請以實際軟體為準。</li>
+        <li>快捷鍵會因 Excel 版本、鍵盤配置、輸入法與作業系統設定而有差異；Mac 筆電的 F 鍵、PageUp / PageDown、Home / End 常要加按 Fn。這裡標「—」的 Mac 項目是不確定而不列出的，請以實際軟體的說明為準。</li>
         <li>這個頁面不儲存任何資料，也不連線。</li>
         </ul>
     </template>
@@ -606,6 +668,74 @@
         }
         // 範例的顯示文字（純量 → 字串；溢出的二維結果 → 字串二維陣列）
         const exShow = (r) => isArr(r) ? r.map(row => row.map(toStr)) : toStr(r);
+
+        // ---- 快捷鍵（Windows / macOS Excel）----
+        // win / mac：按鍵寫法；mac 為空字串 = 不確定所以不列出。note：補充說明
+        const KEY_CATS = { select: '選取', nav: '移動與導覽', edit: '編輯與輸入', fmt: '格式', formula: '公式與資料' };
+        const KEYS = [
+            { cat: 'select', desc: '選取整欄', win: 'Ctrl+Space', mac: 'Ctrl+Space', note: 'macOS 的 Ctrl+Space 可能被「切換輸入法」佔用，需到系統設定調整' },
+            { cat: 'select', desc: '選取整列', win: 'Shift+Space', mac: 'Shift+Space' },
+            { cat: 'select', desc: '選取整張工作表（在資料區內先按一次是選取目前資料範圍）', win: 'Ctrl+A', mac: 'Cmd+A' },
+            { cat: 'select', desc: '延伸選取到資料邊緣（連續資料的最後一格）', win: 'Ctrl+Shift+方向鍵', mac: 'Cmd+Shift+方向鍵', kw: '選取到底 選整欄資料' },
+            { cat: 'select', desc: '一格一格擴大選取範圍', win: 'Shift+方向鍵', mac: 'Shift+方向鍵' },
+            { cat: 'select', desc: '不連續多選（點選額外的儲存格或範圍）', win: 'Ctrl+點選', mac: 'Cmd+點選' },
+            { cat: 'select', desc: '選取到工作表開頭（A1）', win: 'Ctrl+Shift+Home', mac: '', kw: '選到最上面' },
+            { cat: 'select', desc: '選取目前資料範圍（連續資料區塊）', win: 'Ctrl+Shift+*', mac: '' },
+            { cat: 'nav', desc: '跳到資料區邊緣', win: 'Ctrl+方向鍵', mac: 'Cmd+方向鍵', kw: '跳到最後一列 跳到底' },
+            { cat: 'nav', desc: '回到 A1（工作表開頭）', win: 'Ctrl+Home', mac: 'Ctrl+Home', note: 'Mac 筆電通常要加 Fn（Fn+Ctrl+←）', kw: '最上面' },
+            { cat: 'nav', desc: '跳到最後使用的儲存格', win: 'Ctrl+End', mac: 'Ctrl+End', note: 'Mac 筆電通常要加 Fn（Fn+Ctrl+→）' },
+            { cat: 'nav', desc: '切換到下一張 / 上一張工作表', win: 'Ctrl+PageDown / Ctrl+PageUp', mac: 'Ctrl+PageDown / Ctrl+PageUp', note: 'Mac 筆電的 PageDown 是 Fn+↓', kw: '換工作表 分頁' },
+            { cat: 'nav', desc: '到指定儲存格（定位）', win: 'Ctrl+G 或 F5', mac: 'Ctrl+G', kw: '跳到 goto' },
+            { cat: 'nav', desc: '往右 / 往左一格', win: 'Tab / Shift+Tab', mac: 'Tab / Shift+Tab' },
+            { cat: 'nav', desc: '往下 / 往上一格（輸入完成）', win: 'Enter / Shift+Enter', mac: 'Return / Shift+Return' },
+            { cat: 'edit', desc: '編輯目前儲存格（游標進入儲存格）', win: 'F2', mac: 'Ctrl+U', note: 'Mac 新版也可用 F2（可能要加 Fn）' },
+            { cat: 'edit', desc: '在儲存格內換行', win: 'Alt+Enter', mac: 'Ctrl+Option+Return', kw: '強制換行 儲存格內換行' },
+            { cat: 'edit', desc: '復原', win: 'Ctrl+Z', mac: 'Cmd+Z' },
+            { cat: 'edit', desc: '取消復原（重做）', win: 'Ctrl+Y', mac: 'Cmd+Y', kw: '重做 redo' },
+            { cat: 'edit', desc: '複製 / 剪下 / 貼上', win: 'Ctrl+C / Ctrl+X / Ctrl+V', mac: 'Cmd+C / Cmd+X / Cmd+V' },
+            { cat: 'edit', desc: '選擇性貼上視窗（只貼值、格式、公式…）', win: 'Ctrl+Alt+V', mac: 'Ctrl+Cmd+V', note: '視窗開啟後按 V 再按 Enter = 只貼值', kw: '只貼值 貼上值 paste special' },
+            { cat: 'edit', desc: '向下填滿（複製上方儲存格 / 公式到選取範圍）', win: 'Ctrl+D', mac: 'Ctrl+D', kw: '往下填滿 fill down' },
+            { cat: 'edit', desc: '向右填滿', win: 'Ctrl+R', mac: 'Ctrl+R', kw: 'fill right' },
+            { cat: 'edit', desc: '同一內容填入所有選取的儲存格', win: 'Ctrl+Enter', mac: 'Ctrl+Return', note: '輸入內容後不按 Enter，改按這個' },
+            { cat: 'edit', desc: '插入今天日期', win: 'Ctrl+;', mac: 'Ctrl+;', kw: '今天 日期' },
+            { cat: 'edit', desc: '插入目前時間', win: 'Ctrl+Shift+:', mac: 'Cmd+;', kw: '現在 時間' },
+            { cat: 'edit', desc: '尋找', win: 'Ctrl+F', mac: 'Cmd+F' },
+            { cat: 'edit', desc: '取代', win: 'Ctrl+H', mac: 'Ctrl+H', kw: 'replace' },
+            { cat: 'edit', desc: '插入儲存格 / 列 / 欄', win: 'Ctrl+Shift++', mac: 'Ctrl+Shift+=', kw: '新增列 插入列' },
+            { cat: 'edit', desc: '刪除儲存格 / 列 / 欄', win: 'Ctrl+-', mac: 'Ctrl+-', kw: '刪除列' },
+            { cat: 'edit', desc: '儲存檔案', win: 'Ctrl+S', mac: 'Cmd+S' },
+            { cat: 'fmt', desc: '開啟「儲存格格式」視窗', win: 'Ctrl+1', mac: 'Cmd+1' },
+            { cat: 'fmt', desc: '粗體 / 斜體 / 底線', win: 'Ctrl+B / Ctrl+I / Ctrl+U', mac: 'Cmd+B / Cmd+I / Cmd+U' },
+            { cat: 'fmt', desc: '套用貨幣格式', win: 'Ctrl+Shift+4', mac: 'Ctrl+Shift+4', kw: '金額' },
+            { cat: 'fmt', desc: '套用百分比格式', win: 'Ctrl+Shift+5', mac: 'Ctrl+Shift+5' },
+            { cat: 'fmt', desc: '套用千分位的數字格式', win: 'Ctrl+Shift+1', mac: 'Ctrl+Shift+1' },
+            { cat: 'fmt', desc: '加外框', win: 'Ctrl+Shift+&', mac: 'Cmd+Option+0', kw: '框線 邊框' },
+            { cat: 'fmt', desc: '隱藏列', win: 'Ctrl+9', mac: 'Ctrl+9' },
+            { cat: 'fmt', desc: '隱藏欄', win: 'Ctrl+0', mac: 'Ctrl+0', note: 'Windows 的 Ctrl+0 有時被輸入法或顯示卡軟體佔用' },
+            { cat: 'formula', desc: '切換相對 / 絕對參照（$A$1）', win: 'F4', mac: 'Cmd+T', note: 'Mac 新版也可用 F4（可能要加 Fn）；在公式編輯中游標停在參照上按', kw: '錢字號 鎖定 絕對位址' },
+            { cat: 'formula', desc: '自動加總', win: 'Alt+=', mac: 'Cmd+Shift+T', kw: 'sum 加總' },
+            { cat: 'formula', desc: '顯示 / 隱藏公式本身（不是結果）', win: 'Ctrl+`', mac: 'Ctrl+`', kw: '顯示公式' },
+            { cat: 'formula', desc: '插入函式視窗', win: 'Shift+F3', mac: 'Shift+F3', note: '筆電通常要加 Fn' },
+            { cat: 'formula', desc: '重新計算所有公式', win: 'F9', mac: 'F9', note: '筆電通常要加 Fn' },
+            { cat: 'formula', desc: '展開 / 收合公式列', win: 'Ctrl+Shift+U', mac: 'Ctrl+Shift+U' },
+            { cat: 'formula', desc: '開 / 關篩選', win: 'Ctrl+Shift+L', mac: 'Cmd+Shift+F', kw: 'filter 自動篩選' },
+            { cat: 'formula', desc: '把範圍轉成表格', win: 'Ctrl+T', mac: 'Ctrl+T', kw: 'table' },
+            { cat: 'formula', desc: '傳統陣列公式（Excel 2019 以前）', win: 'Ctrl+Shift+Enter', mac: '', note: 'Excel 2021 以上的動態陣列公式不需要這個' }
+        ];
+        // 與 Google 試算表的差異（簡述）
+        const GS_DIFF = [
+            '大多數通用快捷鍵相同：複製 / 剪下 / 貼上 / 復原、Ctrl+B/I/U、Ctrl+F / Ctrl+H、Ctrl+D 向下填滿、Ctrl+R 向右填滿、選取整欄（Ctrl+Space）與整列（Shift+Space）、插入今天日期（Ctrl+;）。',
+            '只貼值：Google 試算表直接按 Ctrl+Shift+V（Mac 是 Cmd+Shift+V）；Excel 通常要走「選擇性貼上」視窗。',
+            '篩選：Google 試算表是 Ctrl+Shift+K（Mac 是 Cmd+Shift+K），Excel 是 Ctrl+Shift+L。',
+            '顯示快捷鍵說明：Google 試算表按 Ctrl+/（Mac 是 Cmd+/）。',
+            'Google 試算表在瀏覽器裡執行，Ctrl+T、Ctrl+W、Ctrl+N 等會被瀏覽器攔截；Google 試算表沒有「儲存」快捷鍵的需求，因為會自動儲存。',
+            '兩者都可用 F2 編輯儲存格、F4 切換絕對 / 相對參照，但細節（尤其 Mac 與瀏覽器）可能不同，以實際軟體為準。'
+        ];
+        // 搜尋：每個詞都要出現在「用途 / 按鍵 / 說明 / 關鍵字」中（不分大小寫，command 視為 cmd）
+        function searchKeys(q, cat = '') {
+            const toks = String(q ?? '').toLowerCase().replace(/command|⌘/g, 'cmd').split(/\s+/).filter(Boolean);
+            return KEYS.filter(k => (!cat || k.cat === cat) && toks.every(t => `${k.desc} ${k.win} ${k.mac} ${k.note || ''} ${k.kw || ''} ${KEY_CATS[k.cat]}`.toLowerCase().includes(t)));
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -652,6 +782,28 @@
         }
         $('#goals').replaceChildren(...GUIDE.map(g => { const b = el('button', { type: 'button', textContent: g.label, onclick() { goal = g.id; renderGuide(); } }); b.dataset.g = g.id; return b; }));
         renderGuide(); renderList();
+        // 快捷鍵分頁
+        let kcat = '';
+        const keyCaps = (txt) => txt.split(/ (?:或|\/) /).map(x => el('kbd', { textContent: x.trim() }));
+        function renderKeys() {
+            const rows = searchKeys($('#kq').value, kcat);
+            $('#kcount').textContent = `${rows.length} 個快捷鍵`;
+            $('#klist').replaceChildren(...(rows.length ? rows.map(k => el('div', { className: 'sk' }, [
+                el('b', { textContent: k.desc }),
+                el('div', { className: 'kk' }, [el('span', {}, ['Windows：', ...keyCaps(k.win)]), el('span', {}, ['macOS：', ...(k.mac ? keyCaps(k.mac) : ['—'])])]),
+                ...(k.note ? [el('small', { textContent: k.note })] : [])])) : [el('div', { className: 'empty', textContent: '找不到符合的快捷鍵，換個關鍵字試試。' })]));
+            $('#kcats').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.c === kcat)));
+        }
+        $('#kcats').replaceChildren(...[['', '全部'], ...Object.entries(KEY_CATS)].map(([k, v]) => { const b = el('button', { type: 'button', textContent: v, onclick() { kcat = k; renderKeys(); } }); b.dataset.c = k; return b; }));
+        $('#kq').oninput = renderKeys;
+        $('#gsdiff').replaceChildren(...GS_DIFF.map(t => el('li', { textContent: t })));
+        $('#pgTabs').onclick = (e) => {
+            const p = e.target.dataset && e.target.dataset.p; if (!p) return;
+            $('#pgFn').hidden = p !== 'fn'; $('#pgKeys').hidden = p !== 'keys';
+            $('#pgTabs').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.p === p)));
+        };
+        renderKeys();
+
     </script>
 </body>
 

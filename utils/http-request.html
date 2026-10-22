@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="HTTP 請求轉換與測試：貼 curl 或 Postman 轉成 fetch、axios、Python requests、Go、.http；用 fetch 發送請求看狀態、標頭、內容與耗時；WebSocket 客戶端。全部在瀏覽器內執行。">
+    <meta property="og:title" content="HTTP 請求轉換與測試" />
+    <meta property="og:description" content="curl 轉各語言程式碼、請求測試（附 CORS 解說）、WebSocket 客戶端。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/http-request.html" />
+    <meta name="st-keys" content="httpreq_opts">
+    <title>HTTP 請求轉換與測試</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 720px;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .tabs button {
+            flex: 1 1 auto;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>input,
+        .row>select {
+            flex: 1 1 140px;
+            min-width: 0;
+        }
+
+        .row>input.url {
+            flex: 3 1 220px;
+        }
+
+        textarea {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            min-height: 110px;
+            resize: vertical;
+        }
+
+        .code {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 14px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin: 8px 0;
+            overflow: auto;
+            max-width: 100%;
+            max-height: 420px;
+            white-space: pre;
+        }
+
+        .code.wrap-l {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        .chk {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 400;
+            margin: 6px 0;
+            min-height: 44px;
+        }
+
+        .box {
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            margin: 10px 0;
+            overflow-wrap: anywhere;
+        }
+
+        .box.bad {
+            border-color: var(--bad);
+        }
+
+        .box ul {
+            margin: 6px 0;
+            padding-left: 20px;
+        }
+
+        .stat-line {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            font-variant-numeric: tabular-nums;
+            margin: 6px 0;
+        }
+
+        .stat-line b.ok {
+            color: var(--ok);
+        }
+
+        .stat-line b.bad {
+            color: var(--bad);
+        }
+
+        #logBox {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 13px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 8px 10px;
+            height: 320px;
+            overflow: auto;
+        }
+
+        #logBox div {
+            padding: 2px 0;
+            overflow-wrap: anywhere;
+            white-space: pre-wrap;
+        }
+
+        #logBox .out {
+            color: var(--blue);
+        }
+
+        #logBox .sys {
+            color: var(--muted);
+        }
+
+        #logBox .err {
+            color: var(--bad);
+        }
+
+        .hl {
+            display: flex;
+            gap: 8px;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>HTTP 請求轉換與測試</h1>
+        <p class="sub">curl 轉各語言、發送請求、WebSocket 客戶端。</p>
+
+        <div class="tabs" id="tabs">
+            <button data-t="a" aria-pressed="true">curl 轉換</button>
+            <button data-t="b" aria-pressed="false">請求測試</button>
+            <button data-t="c" aria-pressed="false">WebSocket</button>
+        </div>
+
+        <section id="pa">
+            <div class="card">
+                <div class="tabs" id="srcTabs">
+                    <button class="sm" data-s="curl" aria-pressed="true">貼 curl</button>
+                    <button class="sm" data-s="postman" aria-pressed="false">Postman JSON</button>
+                    <button class="sm" data-s="form" aria-pressed="false">用表單</button>
+                </div>
+                <div id="srcText">
+                    <textarea id="src" spellcheck="false" autocomplete="off" aria-label="來源" style="min-height:150px"></textarea>
+                    <div class="row" style="margin-top:8px"><button class="sm" id="sample">範例</button><button class="sm" id="srcClear">清空</button></div>
+                </div>
+                <div id="srcForm" hidden>
+                    <div class="row">
+                        <select id="fMethod" aria-label="方法" style="flex:0 0 110px"></select>
+                        <input id="fUrl" class="url" type="text" inputmode="url" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="https://api.example.com/items" aria-label="網址">
+                    </div>
+                    <label for="fHeaders">標頭（每行一個 <code>名稱: 值</code>）</label>
+                    <textarea id="fHeaders" spellcheck="false" autocomplete="off" placeholder="Content-Type: application/json&#10;Authorization: Bearer xxx"></textarea>
+                    <label for="fBody">本體（Body）</label>
+                    <textarea id="fBody" spellcheck="false" autocomplete="off" placeholder='{"name":"demo"}'></textarea>
+                </div>
+                <div id="aMsg"></div>
+            </div>
+            <div class="card">
+                <h2>輸出</h2>
+                <div class="tabs" id="langTabs"></div>
+                <div id="aOut"></div>
+                <div class="row"><button class="primary" id="copyA" disabled>複製</button><button id="toTest" disabled>帶到「請求測試」</button></div>
+            </div>
+        </section>
+
+        <section id="pb" hidden>
+            <div class="card">
+                <div class="row">
+                    <select id="bMethod" aria-label="方法" style="flex:0 0 110px"></select>
+                    <input id="bUrl" class="url" type="text" inputmode="url" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="http://localhost:3000/api" aria-label="網址">
+                </div>
+                <label for="bHeaders">標頭（每行 <code>名稱: 值</code>，預設不帶任何標頭）</label>
+                <textarea id="bHeaders" spellcheck="false" autocomplete="off" style="min-height:80px"></textarea>
+                <label for="bBody">本體（GET / HEAD 不會送出）</label>
+                <textarea id="bBody" spellcheck="false" autocomplete="off" style="min-height:80px"></textarea>
+                <label class="chk"><input type="checkbox" id="bNoCors"> no-cors（只能確認請求有送出，看不到回應內容）</label>
+                <div class="row"><button class="primary" id="send">送出</button><button id="cancel" disabled>取消</button></div>
+                <p class="note">不帶 Cookie 與任何憑證（credentials: omit）。逾時 30 秒。受瀏覽器 CORS 限制，詳見右上角「？」說明。</p>
+            </div>
+            <div class="card" id="bRes" hidden></div>
+        </section>
+
+        <section id="pc" hidden>
+            <div class="card">
+                <div class="row">
+                    <input id="wsUrl" class="url" type="text" inputmode="url" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="wss://echo.websocket.org 或 ws://localhost:8080" aria-label="WebSocket 網址">
+                    <button class="primary" id="wsGo">連線</button>
+                </div>
+                <div id="wsMsg"></div>
+                <label for="wsText">要送的訊息</label>
+                <textarea id="wsText" spellcheck="false" autocomplete="off" style="min-height:70px"></textarea>
+                <div class="row" style="margin-top:8px"><button id="wsSend" disabled>送出</button></div>
+            </div>
+            <div class="card">
+                <div class="hl"><h2 style="margin:0">記錄 <span class="muted" id="wsCount"></span></h2><button class="sm" id="wsClear">清除記錄</button></div>
+                <div id="logBox" role="log" aria-live="polite"></div>
+            </div>
+        </section>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>三個跟 HTTP 請求有關的小工具：把 curl 指令轉成程式碼、直接在瀏覽器送請求看結果、連 WebSocket 收發訊息。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>瀏覽器開發者工具「Copy as cURL」複製了一條指令，想改成 fetch、axios、Python 或 Go。</li>
+        <li>文件給的是 curl 範例，想放進 VS Code REST Client 的 <kbd>.http</kbd> 檔，或把 Postman 的單一請求轉成 curl。</li>
+        <li>想快速打一下自己本機的 API，或確認某個 API 允許瀏覽器跨網域呼叫。</li>
+        <li>要測 WebSocket 伺服器收不收得到、回什麼。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li><b>curl 轉換</b>：選「貼 curl」貼上指令（支援引號、<kbd>\</kbd> 續行、<kbd>$'...'</kbd>、<kbd>-H -d --data-raw --data-urlencode -X -u -F -G -I -b -A --json --compressed -k -L</kbd>）；或選「Postman JSON」貼 v2.1 的單一 request（整份 collection 會取第一個請求）；或「用表單」自己填。下方切換 fetch / axios / Python / Go / curl / .http。</li>
+        <li>不認得的旗標（例如 <kbd>-o</kbd>、<kbd>--retry</kbd>）會列在上方提示，不會默默消失。</li>
+        <li><b>請求測試</b>：填方法、網址、標頭、本體後按「送出」，看狀態碼、回應標頭、內容與耗時。「curl 轉換」頁的「帶到請求測試」可直接帶入。</li>
+        <li><b>WebSocket</b>：輸入 <kbd>ws://</kbd> 或 <kbd>wss://</kbd> 網址按「連線」，連上後可送文字訊息；中斷時會顯示關閉碼與白話意義。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">curl -X POST 'https://api.example.com/items' -H 'Content-Type: application/json' -d '{"name":"demo"}'
+→ fetch("https://api.example.com/items", { method: "POST", headers: {…}, body: … })</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li><b>CORS 限制</b>：瀏覽器只允許網頁呼叫「回應了 Access-Control-Allow-Origin」的網址。自己本機的 API（需加 CORS 標頭）和公開的開放 API 通常可以；多數需要登入的商業 API 不行，會顯示 Failed to fetch。這不是本工具的問題，要測那類 API 請用 curl 或 Postman。</li>
+        <li>瀏覽器不允許設定 Cookie、Host、Origin、User-Agent 等標頭，填了也不會送出（會提示）。</li>
+        <li>用 https 開啟的頁面不能連 <kbd>http://</kbd> 或 <kbd>ws://</kbd>（本機 localhost 除外）。</li>
+        <li>curl 的 <kbd>-d @檔案</kbd>、<kbd>-F k=@檔案</kbd> 無法讀取檔案內容，只保留檔名。<kbd>-k</kbd>（略過憑證）在瀏覽器 fetch 無法做到。</li>
+        <li>curl 轉換只在本機進行，不會送出任何東西。請求測試會直接連你填的網址，別對不信任的網址送 token。</li>
+        <li>WebSocket 記錄最多 500 則，滿了之後新訊息不再記錄（連線不受影響），按「清除記錄」即可繼續。</li>
+        <li>只會記住上次選的分頁與語言（<kbd>httpreq_opts</kbd>）；網址、標頭、本體（可能含 token）一律不儲存，重新整理就清空。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, copyWithFeedback } = Util;
+
+        // --- pure ---
+        const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+        const LANGS = { fetch: 'fetch', axios: 'axios', python: 'Python', go: 'Go', curl: 'curl', http: '.http' };
+        const TABS = ['a', 'b', 'c'], SRCS = ['curl', 'postman', 'form'];
+        const MAX_LOG = 500;
+        const FORBIDDEN = new Set(['accept-charset', 'accept-encoding', 'access-control-request-headers', 'access-control-request-method', 'connection', 'content-length', 'cookie', 'cookie2', 'date', 'dnt', 'expect', 'host', 'keep-alive', 'origin', 'referer', 'set-cookie', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'user-agent', 'via']);
+
+        function loadOpts(o) {
+            o = o && typeof o === 'object' ? o : {};
+            return {
+                tab: TABS.includes(o.tab) ? o.tab : 'a', src: SRCS.includes(o.src) ? o.src : 'curl',
+                lang: Object.keys(LANGS).includes(o.lang) ? o.lang : 'fetch', method: METHODS.includes(o.method) ? o.method : 'GET',
+            };
+        }
+        // 瀏覽器不會送出的標頭（forbidden header name；user-agent 在部分瀏覽器可設，但不保證，一併提示）
+        function forbiddenHeaders(headers) {
+            const out = [];
+            for (const [n] of headers) { const l = n.toLowerCase(); if ((FORBIDDEN.has(l) || l.startsWith('proxy-') || l.startsWith('sec-')) && !out.includes(n)) out.push(n); }
+            return out;
+        }
+        const hasHeader = (hs, name) => hs.some(h => h[0].toLowerCase() === name.toLowerCase());
+        // 每行「名稱: 值」；# 開頭為註解；名稱不合法或缺冒號的行放 bad
+        function parseHeaderLines(text) {
+            const headers = [], bad = [];
+            for (const raw of String(text ?? '').split(/\r?\n/)) {
+                const line = raw.trim(); if (!line || line.startsWith('#')) continue;
+                const i = line.indexOf(':'), name = i > 0 ? line.slice(0, i).trim() : '';
+                if (!name || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) { bad.push(line); continue; }
+                headers.push([name, line.slice(i + 1).trim()]);
+            }
+            return { headers, bad };
+        }
+
+        // ---- curl 解析 ----
+        function shellSplit(s) {
+            s = String(s ?? ''); const out = []; let cur = '', has = false, i = 0; const n = s.length;
+            const push = () => { if (has) out.push(cur); cur = ''; has = false; };
+            while (i < n) {
+                const c = s[i];
+                if (c === "'") { const j = s.indexOf("'", i + 1), e = j < 0 ? n : j; cur += s.slice(i + 1, e); has = true; i = e + 1; }
+                else if (c === '$' && s[i + 1] === "'") {
+                    i += 2; has = true;
+                    while (i < n && s[i] !== "'") {
+                        if (s[i] === '\\' && i + 1 < n) {
+                            const d = s[i + 1]; i += 2;
+                            if (d === 'n') cur += '\n'; else if (d === 'r') cur += '\r'; else if (d === 't') cur += '\t';
+                            else if (d === 'x' || d === 'u' || d === 'U') {
+                                const m = new RegExp('^[0-9a-fA-F]{1,' + (d === 'x' ? 2 : d === 'u' ? 4 : 8) + '}').exec(s.slice(i));
+                                if (m) { cur += String.fromCodePoint(parseInt(m[0], 16)); i += m[0].length; } else cur += d;
+                            } else if (/[0-7]/.test(d)) { const m = /^[0-7]{0,2}/.exec(s.slice(i))[0]; cur += String.fromCharCode(parseInt(d + m, 8)); i += m.length; }
+                            else cur += d;
+                        } else cur += s[i++];
+                    }
+                    i++;
+                }
+                else if (c === '"') {
+                    i++; has = true;
+                    while (i < n && s[i] !== '"') {
+                        if (s[i] === '\\' && i + 1 < n && '$`"\\\n'.includes(s[i + 1])) { if (s[i + 1] !== '\n') cur += s[i + 1]; i += 2; }
+                        else cur += s[i++];
+                    }
+                    i++;
+                }
+                else if (/\s/.test(c)) { push(); i++; }
+                else if ((c === '\\' || c === '^') && (s[i + 1] === '\n' || (s[i + 1] === '\r' && s[i + 2] === '\n'))) { i += s[i + 1] === '\r' ? 3 : 2; }
+                else if (c === '\\' && i + 1 < n) { cur += s[i + 1]; has = true; i += 2; }
+                else { cur += c; has = true; i++; }
+            }
+            push(); return out;
+        }
+        const SHORT = { X: 'request', H: 'header', d: 'data', F: 'form', u: 'user', A: 'user-agent', e: 'referer', b: 'cookie', o: 'output', m: 'max-time', x: 'proxy', w: 'write-out', T: 'upload-file', k: 'insecure', L: 'location', I: 'head', G: 'get', s: 'silent', S: 'show-error', v: 'verbose', i: 'include', f: 'fail', N: 'no-buffer', g: 'globoff', O: 'remote-name', '#': 'progress-bar', 4: 'ipv4', 6: 'ipv6', 0: 'http1.0', 1: 'tlsv1', 2: 'sslv2', 3: 'sslv3' };
+        const WITH_ARG = new Set(['request', 'header', 'data', 'data-raw', 'data-binary', 'data-ascii', 'data-urlencode', 'form', 'form-string', 'user', 'user-agent', 'referer', 'cookie', 'url', 'output', 'max-time', 'proxy', 'write-out', 'upload-file', 'connect-timeout', 'retry', 'cacert', 'cert', 'key', 'resolve', 'json']);
+        const NOOP = new Set(['silent', 'show-error', 'verbose', 'include', 'fail', 'no-buffer', 'globoff', 'progress-bar', 'ipv4', 'ipv6', 'http1.0', 'http1.1', 'http2', 'tlsv1', 'sslv2', 'sslv3', 'no-keepalive', 'fail-with-body', 'location-trusted']);
+        function parseCurl(text) {
+            const t = shellSplit(String(text ?? '').replace(/^\s*\$\s+/, ''));
+            if (!t.length) return { error: '請貼上 curl 指令' };
+            if (!/^curl(\.exe)?$/i.test(t[0])) return { error: '指令要以 curl 開頭' };
+            const r = { method: '', url: '', headers: [], body: null, form: [], auth: null, flags: {}, unknown: [], ignored: [], notes: [] };
+            const data = [], urls = []; let explicitUrl = '', json = false;
+            const enc = encodeURIComponent;
+            const apply = (name, val, tok) => {
+                switch (name) {
+                    case 'request': r.method = val.toUpperCase(); break;
+                    case 'header': { const i = val.indexOf(':'); if (i > 0) r.headers.push([val.slice(0, i).trim(), val.slice(i + 1).trim()]); else r.unknown.push(tok + ' ' + val); break; }
+                    case 'data': case 'data-binary': case 'data-ascii': if (val.startsWith('@')) r.notes.push(`-d ${val}：無法讀取檔案，已保留原文字`); data.push(val); break;
+                    case 'data-raw': data.push(val); break;
+                    case 'data-urlencode': { const i = val.indexOf('='); if (i < 0 && /^[^=]*@/.test(val) && !val.startsWith('@')) { r.notes.push(`--data-urlencode ${val}：無法讀取檔案`); data.push(val); } else data.push(i < 0 ? enc(val) : (i ? val.slice(0, i) + '=' : '') + enc(val.slice(i + 1))); break; }
+                    case 'json': data.push(val); json = true; break;
+                    case 'form': case 'form-string': {
+                        const i = val.indexOf('='); if (i <= 0) { r.unknown.push(tok + ' ' + val); break; }
+                        let v = val.slice(i + 1), file = false;
+                        if (name === 'form' && v.startsWith('@')) { file = true; v = v.slice(1).split(';')[0]; r.notes.push(`-F ${val.slice(0, i)}=@${v}：無法讀取檔案，只保留檔名`); }
+                        r.form.push({ k: val.slice(0, i), v, file }); break;
+                    }
+                    case 'user': { const i = val.indexOf(':'); r.auth = i < 0 ? { user: val, pass: '' } : { user: val.slice(0, i), pass: val.slice(i + 1) }; if (i < 0) r.notes.push('-u 沒有給密碼，curl 會互動詢問'); break; }
+                    case 'user-agent': r.headers.push(['User-Agent', val]); break;
+                    case 'referer': r.headers.push(['Referer', val]); break;
+                    case 'cookie': if (val.includes('=')) r.headers.push(['Cookie', val]); else r.unknown.push(tok + ' ' + val); break;
+                    case 'url': explicitUrl = val; break;
+                    case 'insecure': case 'location': case 'compressed': case 'head': case 'get': r.flags[name] = true; break;
+                    default:
+                        if (NOOP.has(name)) r.ignored.push(tok); else r.unknown.push(WITH_ARG.has(name) ? tok + ' ' + val : tok);
+                }
+            };
+            for (let i = 1; i < t.length; i++) {
+                const a = t[i];
+                if (a === '--') { urls.push(...t.slice(i + 1)); break; }
+                if (/^--./.test(a)) {
+                    const eq = a.indexOf('='); let name = eq < 0 ? a.slice(2) : a.slice(2, eq), val = eq < 0 ? undefined : a.slice(eq + 1);
+                    if (name === 'data-urlencode' || WITH_ARG.has(name)) { if (val === undefined) val = t[++i] ?? ''; apply(name, val, '--' + name); }
+                    else apply(name, '', '--' + name);
+                } else if (/^-./.test(a)) {
+                    for (let j = 1; j < a.length; j++) {
+                        const name = SHORT[a[j]];
+                        if (!name) { r.unknown.push('-' + a[j]); continue; }
+                        if (WITH_ARG.has(name)) { const rest = a.slice(j + 1); apply(name, rest || (t[++i] ?? ''), '-' + a[j]); break; }
+                        apply(name, '', '-' + a[j]);
+                    }
+                } else urls.push(a);
+            }
+            let url = explicitUrl;
+            if (!url) { const k = urls.findIndex(u => /^[a-z][a-z0-9+.-]*:\/\//i.test(u)); url = urls.splice(k < 0 ? 0 : k, 1)[0] || ''; }
+            r.unknown.push(...urls.filter(u => u !== url).map(u => '多餘的參數 ' + u));
+            if (!url) return { ...r, error: '找不到網址' };
+            if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) url = 'http://' + url;
+            r.url = url;
+            if (data.length) r.body = data.join('&');
+            if (json) { if (!hasHeader(r.headers, 'Content-Type')) r.headers.push(['Content-Type', 'application/json']); if (!hasHeader(r.headers, 'Accept')) r.headers.push(['Accept', 'application/json']); }
+            if (r.flags.get && r.body != null) { r.url += (r.url.includes('?') ? '&' : '?') + r.body; r.body = null; }
+            if (r.body != null && r.form.length) { r.notes.push('同時有 -d 與 -F，curl 會報錯；已保留 -F'); r.body = null; }
+            if (!r.method) r.method = r.flags.head ? 'HEAD' : (r.body != null || r.form.length) ? 'POST' : 'GET';
+            delete r.flags.head; delete r.flags.get;
+            return r;
+        }
+
+        // ---- Postman v2.1 單一 request ----
+        function fromPostman(input) {
+            let o = input;
+            if (typeof o === 'string') { try { o = JSON.parse(o); } catch { return { error: 'JSON 格式有誤' }; } }
+            if (!o || typeof o !== 'object') return { error: '要貼 Postman 的 request JSON' };
+            const first = (items) => { for (const it of Array.isArray(items) ? items : []) { if (it && it.request) return it.request; const r = it && first(it.item); if (r) return r; } };
+            let q = o.request ?? (o.method || o.url ? o : first(o.item));
+            if (!q) return { error: '找不到 request（要貼單一 request，或含 item 的 collection）' };
+            if (typeof q === 'string') q = { method: 'GET', url: q };
+            const r = { method: String(q.method || 'GET').toUpperCase(), url: '', headers: [], body: null, form: [], auth: null, flags: {}, unknown: [], ignored: [], notes: [] };
+            let u = q.url;
+            if (u && typeof u === 'object') {
+                u = u.raw ?? `${u.protocol || 'https'}://${[].concat(u.host || []).join('.')}${u.port ? ':' + u.port : ''}/${[].concat(u.path || []).join('/')}` + ((u.query || []).filter(x => !x.disabled).length ? '?' + u.query.filter(x => !x.disabled).map(x => `${x.key}=${x.value ?? ''}`).join('&') : '');
+            }
+            r.url = String(u || ''); if (!r.url) return { error: '沒有網址' };
+            if (r.url.includes('{{')) r.notes.push('網址或內容含 Postman 變數 {{…}}，請先替換成實際值');
+            for (const h of q.header || []) if (h && !h.disabled && h.key) r.headers.push([String(h.key), String(h.value ?? '')]);
+            const b = q.body;
+            if (b && b.mode === 'raw') { r.body = String(b.raw ?? ''); if (b.options && b.options.raw && b.options.raw.language === 'json' && !hasHeader(r.headers, 'Content-Type')) r.headers.push(['Content-Type', 'application/json']); }
+            else if (b && b.mode === 'urlencoded') { r.body = (b.urlencoded || []).filter(x => !x.disabled).map(x => `${encodeURIComponent(x.key)}=${encodeURIComponent(x.value ?? '')}`).join('&'); }
+            else if (b && b.mode === 'formdata') { for (const x of (b.formdata || [])) if (!x.disabled) r.form.push(x.type === 'file' ? { k: x.key, v: String(x.src ?? ''), file: true } : { k: x.key, v: String(x.value ?? ''), file: false }); }
+            else if (b && b.mode) r.notes.push(`不支援 body 類型 ${b.mode}，已略過`);
+            const a = q.auth, get = (k) => ((a && a[a.type]) || []).find(x => x.key === k)?.value ?? '';
+            if (a && a.type === 'basic') r.auth = { user: String(get('username')), pass: String(get('password')) };
+            else if (a && a.type === 'bearer') r.headers.push(['Authorization', 'Bearer ' + get('token')]);
+            else if (a && a.type === 'apikey' && get('in') !== 'query') r.headers.push([String(get('key')), String(get('value'))]);
+            else if (a && a.type && a.type !== 'noauth') r.notes.push(`不支援驗證類型 ${a.type}，已略過`);
+            return r;
+        }
+
+        // ---- 輸出 ----
+        const b64 = (s) => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+        function quote(s, forceDouble) {
+            s = String(s); const q = !forceDouble && s.includes('"') && !s.includes("'") ? "'" : '"'; let o = '';
+            for (const ch of s) {
+                const c = ch.codePointAt(0);
+                if (ch === '\\') o += '\\\\'; else if (ch === q) o += '\\' + q; else if (ch === '\n') o += '\\n'; else if (ch === '\r') o += '\\r'; else if (ch === '\t') o += '\\t';
+                else if (c < 32 || c === 0x7f || c === 0x2028 || c === 0x2029) o += '\\u' + c.toString(16).padStart(4, '0'); else o += ch;
+            }
+            return q + o + q;
+        }
+        const goQ = (s) => (s.includes('"') && !s.includes('`') && !/[\r\x00-\x08\x0b-\x1f\x7f]/.test(s)) ? '`' + s + '`' : quote(s, true);
+        const shQ = (s) => "'" + String(s).replace(/'/g, "'\\''") + "'";
+        // 送出時實際會有的標頭：curl -d 沒指定 Content-Type 會用 form-urlencoded；multipart 由函式庫產生（拿掉 Content-Type）
+        function effHeaders(m) {
+            let h = m.headers.map(x => [x[0], x[1]]);
+            if (m.form.length) h = h.filter(x => x[0].toLowerCase() !== 'content-type');
+            else if (m.body != null && !hasHeader(h, 'Content-Type')) h.push(['Content-Type', 'application/x-www-form-urlencoded']);
+            return h;
+        }
+        function mergeHeaders(h) {
+            const out = [], seen = {};
+            for (const [k, v] of h) { const l = k.toLowerCase(); if (seen[l] !== undefined) out[seen[l]][1] += (l === 'cookie' ? '; ' : ', ') + v; else { seen[l] = out.length; out.push([k, v]); } }
+            return out;
+        }
+        const withAuth = (m, h) => m.auth ? [...h, ['Authorization', 'Basic ' + b64(m.auth.user + ':' + m.auth.pass)]] : h;
+        function toFetch(m) {
+            const h = mergeHeaders(withAuth(m, effHeaders(m))), o = [];
+            let pre = '';
+            if (m.form.length) pre = 'const form = new FormData();\n' + m.form.map(f => f.file ? `form.append(${quote(f.k)}, fileInput.files[0]); // 原指令：@${f.v}` : `form.append(${quote(f.k)}, ${quote(f.v)});`).join('\n') + '\n\n';
+            if (m.method !== 'GET') o.push(`  method: ${quote(m.method)},`);
+            if (h.length) o.push('  headers: {\n' + h.map(([k, v]) => `    ${quote(k)}: ${quote(v)},`).join('\n') + '\n  },');
+            if (m.form.length) o.push('  body: form,'); else if (m.body != null) o.push(`  body: ${quote(m.body)},`);
+            return `${pre}const res = await fetch(${quote(m.url)}${o.length ? ', {\n' + o.join('\n') + '\n}' : ''});\nconsole.log(res.status, await res.text());`;
+        }
+        function toAxios(m) {
+            const h = mergeHeaders(effHeaders(m));
+            const pre = m.form.length ? 'const form = new FormData();\n' + m.form.map(f => f.file ? `form.append(${quote(f.k)}, fileInput.files[0]); // 原指令：@${f.v}` : `form.append(${quote(f.k)}, ${quote(f.v)});`).join('\n') + '\n\n' : '';
+            const o = [`  method: ${quote(m.method.toLowerCase())},`, `  url: ${quote(m.url)},`];
+            if (h.length) o.push('  headers: {\n' + h.map(([k, v]) => `    ${quote(k)}: ${quote(v)},`).join('\n') + '\n  },');
+            if (m.form.length) o.push('  data: form,'); else if (m.body != null) o.push(`  data: ${quote(m.body)},`);
+            if (m.auth) o.push(`  auth: { username: ${quote(m.auth.user)}, password: ${quote(m.auth.pass)} },`);
+            return `import axios from 'axios';\n\n${pre}const res = await axios({\n${o.join('\n')}\n});\nconsole.log(res.status, res.data);`;
+        }
+        function toPython(m) {
+            const h = mergeHeaders(effHeaders(m)), std = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'].includes(m.method);
+            const a = std ? [quote(m.url)] : [quote(m.method), quote(m.url)];
+            if (h.length) a.push('headers={\n' + h.map(([k, v]) => `        ${quote(k)}: ${quote(v)},`).join('\n') + '\n    }');
+            if (m.form.length) a.push('files=[\n' + m.form.map(f => `        (${quote(f.k)}, ${f.file ? `open(${quote(f.v)}, "rb")` : `(None, ${quote(f.v)})`}),`).join('\n') + '\n    ]');
+            else if (m.body != null) a.push('data=' + quote(m.body) + (/[^\x00-\x7f]/.test(m.body) ? '.encode("utf-8")' : ''));
+            if (m.auth) a.push(`auth=(${quote(m.auth.user)}, ${quote(m.auth.pass)})`);
+            if (m.flags.insecure) a.push('verify=False');
+            return `import requests\n\nresponse = requests.${std ? m.method.toLowerCase() : 'request'}(\n    ${a.join(',\n    ')},\n)\nprint(response.status_code)\nprint(response.text)`;
+        }
+        function toGo(m) {
+            const im = new Set(['fmt', 'io', 'net/http']); let body = 'nil', pre = '';
+            const h = mergeHeaders(effHeaders(m));
+            if (m.form.length) {
+                im.add('bytes'); im.add('mime/multipart');
+                pre = '\tvar buf bytes.Buffer\n\tw := multipart.NewWriter(&buf)\n';
+                for (const f of m.form) {
+                    if (!f.file) pre += `\tw.WriteField(${goQ(f.k)}, ${goQ(f.v)})\n`;
+                    else { im.add('os'); im.add('path/filepath'); pre += `\t{\n\t\tf, err := os.Open(${goQ(f.v)})\n\t\tif err != nil {\n\t\t\tpanic(err)\n\t\t}\n\t\tdefer f.Close()\n\t\tpart, _ := w.CreateFormFile(${goQ(f.k)}, filepath.Base(${goQ(f.v)}))\n\t\tio.Copy(part, f)\n\t}\n`; }
+                }
+                pre += '\tw.Close()\n\n'; body = '&buf';
+            } else if (m.body != null) { im.add('strings'); body = `strings.NewReader(${goQ(m.body)})`; }
+            let s = `\treq, err := http.NewRequest(${goQ(m.method)}, ${goQ(m.url)}, ${body})\n\tif err != nil {\n\t\tpanic(err)\n\t}\n`;
+            for (const [k, v] of h) s += `\treq.Header.Set(${goQ(k)}, ${goQ(v)})\n`;
+            if (m.form.length) s += '\treq.Header.Set("Content-Type", w.FormDataContentType())\n';
+            if (m.auth) s += `\treq.SetBasicAuth(${goQ(m.auth.user)}, ${goQ(m.auth.pass)})\n`;
+            let client = '\tclient := http.DefaultClient\n';
+            if (m.flags.insecure) { im.add('crypto/tls'); client = '\tclient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}\n'; }
+            return `package main\n\nimport (\n${[...im].sort().map(p => `\t"${p}"\n`).join('')})\n\nfunc main() {\n${pre}${s}${client}\tresp, err := client.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\tdata, _ := io.ReadAll(resp.Body)\n\tfmt.Println(resp.Status)\n\tfmt.Println(string(data))\n}`;
+        }
+        function toCurl(m) {
+            const p = [`curl ${shQ(m.url)}`];
+            if (m.method !== ((m.body != null || m.form.length) ? 'POST' : 'GET')) p.push(`-X ${m.method}`);
+            for (const [k, v] of m.headers) p.push(`-H ${shQ(k + ': ' + v)}`);
+            if (m.auth) p.push(`-u ${shQ(m.auth.user + ':' + m.auth.pass)}`);
+            for (const f of m.form) p.push(`-F ${shQ(f.k + '=' + (f.file ? '@' : '') + f.v)}`);
+            if (m.body != null && !m.form.length) p.push(`--data-raw ${shQ(m.body)}`);
+            const fl = m.flags || {};
+            if (fl.compressed) p.push('--compressed'); if (fl.insecure) p.push('-k'); if (fl.location) p.push('-L');
+            return p.join(' \\\n  ');
+        }
+        function toHttpFile(m) {
+            const B = '----Boundary7MA4YWxkTrZu0gW'; let h = withAuth(m, effHeaders(m));
+            if (m.form.length) h = [...h, ['Content-Type', 'multipart/form-data; boundary=' + B]];
+            const L = [`${m.method} ${m.url} HTTP/1.1`, ...h.map(([k, v]) => `${k}: ${v}`)];
+            if (m.form.length) {
+                L.push('');
+                for (const f of m.form) L.push('--' + B, `Content-Disposition: form-data; name="${f.k}"${f.file ? `; filename="${f.v.split(/[\\/]/).pop()}"` : ''}`, ...(f.file ? ['Content-Type: application/octet-stream'] : []), '', f.file ? '< ' + f.v : f.v);
+                L.push('--' + B + '--');
+            } else if (m.body != null) L.push('', m.body);
+            return L.join('\n');
+        }
+        const GEN = { fetch: toFetch, axios: toAxios, python: toPython, go: toGo, curl: toCurl, http: toHttpFile };
+        function fromForm({ method, url, headers, body }) {
+            const u = String(url ?? '').trim(); if (!u) return { error: '請填網址' };
+            const { headers: hs, bad } = parseHeaderLines(headers), b = String(body ?? '');
+            return { method: METHODS.includes(method) ? method : 'GET', url: /^[a-z][a-z0-9+.-]*:\/\//i.test(u) ? u : 'http://' + u, headers: hs, body: b === '' ? null : b, form: [], auth: null, flags: {}, unknown: [], ignored: [], notes: bad.length ? ['以下標頭行格式不對已略過：' + bad.join(' | ')] : [] };
+        }
+
+        // ---- 請求測試 ----
+        // 檢查網址；回傳 { ok, error, warn[] }
+        function checkReqUrl(url, pageProtocol) {
+            let u; try { u = new URL(String(url ?? '').trim()); } catch { return { ok: false, error: '網址格式不對（要含 http:// 或 https://）', warn: [] }; }
+            if (u.protocol !== 'http:' && u.protocol !== 'https:') return { ok: false, error: '只支援 http:// 與 https://', warn: [] };
+            const warn = [], local = /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])$/i.test(u.hostname);
+            if (pageProtocol === 'https:' && u.protocol === 'http:' && !local) warn.push('目前頁面是 https，瀏覽器會擋掉 http:// 的請求（混合內容）。');
+            if (pageProtocol === 'file:') warn.push('用檔案方式開啟時，請求的來源（Origin）是 null，伺服器要回 Access-Control-Allow-Origin: * 才讀得到。');
+            return { ok: true, warn };
+        }
+        // fetch 失敗的白話解說；c: { reason: 'timeout'|'cancel', method, hasHeaders, jsonBody, url, pageProtocol, noCors }
+        function explainFetchError(e, c = {}) {
+            const name = e && e.name;
+            if (name === 'AbortError') return [c.reason === 'timeout' ? '逾時（30 秒沒有回應），已中止。伺服器太慢、被防火牆丟掉，或網址不通。' : '已取消。'];
+            const L = ['瀏覽器只回報「Failed to fetch」，不會說明原因。常見原因，由最常見開始：'];
+            L.push('CORS 被擋：伺服器沒回 Access-Control-Allow-Origin，或不允許這個來源 / 方法 / 標頭。請用新分頁直接開這個網址：打得開 → 幾乎就是 CORS；要看確切訊息請按 F12 看 Console。');
+            const simple = ['GET', 'HEAD', 'POST'].includes(c.method) && !c.hasHeaders && !c.jsonBody;
+            if (!simple) L.push('這個請求會先送預檢（OPTIONS）：伺服器必須回應 Access-Control-Allow-Methods 與 Access-Control-Allow-Headers（含你送的標頭，例如 Content-Type、Authorization）。');
+            if (/^https:/i.test(c.pageProtocol || '') && /^http:/i.test(c.url || '')) L.push('混合內容：https 頁面不能呼叫 http:// 網址。');
+            L.push('網路問題：網域打錯（DNS）、沒網路、連線被拒（服務沒開、埠號錯）、被防火牆擋。');
+            L.push('憑證問題：https 網址若是自簽或過期憑證，需先用瀏覽器開該網址並信任，才可能成功。');
+            L.push('瀏覽器擴充套件（廣告攔截、隱私工具）也可能擋下請求。');
+            if (c.noCors) L.push('no-cors 模式下請求其實可以送出，但本來就看不到回應；出現錯誤代表是網路層的問題。');
+            return L;
+        }
+
+        // ---- WebSocket ----
+        function checkWsUrl(url, pageProtocol) {
+            let u; try { u = new URL(String(url ?? '').trim()); } catch { return { ok: false, error: '網址格式不對（例如 wss://example.com/socket）' }; }
+            if (u.protocol !== 'ws:' && u.protocol !== 'wss:') return { ok: false, error: '網址要以 ws:// 或 wss:// 開頭' };
+            if (pageProtocol === 'https:' && u.protocol === 'ws:' && !/^(localhost|127\.\d+\.\d+\.\d+|\[::1\])$/i.test(u.hostname)) return { ok: false, error: '目前頁面是 https，瀏覽器不允許連 ws://（請改用 wss://，本機 localhost 例外）' };
+            return { ok: true, url: u.href };
+        }
+        const CLOSE = { 1000: '正常關閉', 1001: '對方離開（伺服器關閉或頁面離開）', 1002: '協定錯誤', 1003: '收到不支援的資料型別', 1005: '沒有帶關閉碼', 1006: '異常中斷（沒有收到關閉訊框）：連不上、伺服器當掉、網路斷線、TLS 失敗或被防火牆 / 代理擋下', 1007: '訊息內容格式不一致（例如文字不是合法 UTF-8）', 1008: '違反伺服器政策（常見於驗證失敗、權限不足）', 1009: '訊息太大', 1010: '客戶端要求的擴充伺服器不支援', 1011: '伺服器內部錯誤', 1012: '伺服器重新啟動', 1013: '伺服器暫時過載，稍後再試', 1015: 'TLS 握手失敗' };
+        function wsCloseInfo(code) {
+            code = Number(code);
+            if (CLOSE[code]) return CLOSE[code];
+            if (code >= 4000 && code <= 4999) return '應用程式自訂的關閉碼（看該服務文件）';
+            if (code >= 3000 && code <= 3999) return '函式庫 / 框架登記的關閉碼';
+            return '未知的關閉碼';
+        }
+        // 記錄上限：滿了就拒絕新增（不丟舊的）
+        function pushLog(log, entry, max = MAX_LOG) {
+            if (log.length >= max) return { log, added: false, full: true };
+            return { log: [...log, entry], added: true, full: log.length + 1 >= max };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+        let O = loadOpts(store.get('httpreq_opts', null));
+        const persist = () => store.set('httpreq_opts', O);
+        const pressed = (box, key, val) => [...box.children].forEach(b => b.setAttribute('aria-pressed', b.dataset[key] === val));
+        for (const m of METHODS) { $('#fMethod').add(new Option(m, m)); $('#bMethod').add(new Option(m, m)); }
+        $('#fMethod').value = $('#bMethod').value = O.method;
+        $('#langTabs').replaceChildren(...Object.entries(LANGS).map(([k, v]) => { const b = h('button', 'sm', v); b.dataset.l = k; return b; }));
+
+        // ---- 分頁 ----
+        function showTab() {
+            pressed($('#tabs'), 't', O.tab);
+            ['a', 'b', 'c'].forEach(t => { $('#p' + t).hidden = t !== O.tab; });
+        }
+        $('#tabs').onclick = (e) => { const t = e.target.dataset.t; if (t) { O.tab = t; showTab(); persist(); } };
+
+        // ---- A ----
+        const SAMPLE_CURL = `curl -X POST 'https://api.example.com/items?lang=zh' \\
+  -H 'Content-Type: application/json' \\
+  -H 'Authorization: Bearer YOUR_TOKEN' \\
+  --data-raw '{"name":"小工具","tags":["a","b"]}' \\
+  --compressed`;
+        const SAMPLE_PM = JSON.stringify({ name: '新增項目', request: { method: 'POST', header: [{ key: 'Content-Type', value: 'application/json' }], body: { mode: 'raw', raw: '{"name":"demo"}', options: { raw: { language: 'json' } } }, url: { raw: 'https://api.example.com/items' } } }, null, 2);
+        let model = null;
+        function showSrc() {
+            pressed($('#srcTabs'), 's', O.src);
+            $('#srcText').hidden = O.src === 'form'; $('#srcForm').hidden = O.src !== 'form';
+            $('#src').placeholder = O.src === 'postman' ? '貼上 Postman collection v2.1 的單一 request JSON' : '貼上 curl 指令（可多行、含 \\ 續行）';
+        }
+        function compute() {
+            let r;
+            if (O.src === 'curl') r = $('#src').value.trim() ? parseCurl($('#src').value) : null;
+            else if (O.src === 'postman') r = $('#src').value.trim() ? fromPostman($('#src').value) : null;
+            else r = ($('#fUrl').value.trim() || $('#fBody').value || $('#fHeaders').value) ? fromForm({ method: $('#fMethod').value, url: $('#fUrl').value, headers: $('#fHeaders').value, body: $('#fBody').value }) : null;
+            model = r && !r.error ? r : null;
+            const msg = $('#aMsg'); msg.replaceChildren();
+            const add = (txt, items, bad) => { const b = h('div', 'box' + (bad ? ' bad' : '')); b.append(h('div', '', txt)); if (items) { const ul = h('ul'); items.forEach(i => ul.append(h('li', '', i))); b.append(ul); } msg.append(b); };
+            if (r && r.error) add(r.error, null, true);
+            if (r && !r.error) {
+                if (r.unknown.length) add('以下旗標無法轉換（未納入輸出，請自行確認是否需要）：', r.unknown);
+                if (r.ignored.length) add('已忽略（不影響請求內容）：' + r.ignored.join(' '));
+                if (r.notes.length) add('注意：', r.notes);
+            }
+            const out = $('#aOut'); out.replaceChildren();
+            pressed($('#langTabs'), 'l', O.lang);
+            if (model) { out.append(h('pre', 'code', GEN[O.lang](model))); const fb = forbiddenHeaders(model.headers); if (O.lang === 'fetch' && fb.length) out.append(h('p', 'note', '瀏覽器不會送出這些標頭：' + fb.join('、') + '（在 Node 或其他環境才有效）。')); }
+            else out.append(h('p', 'muted', '貼上內容後，這裡會顯示轉換結果'));
+            $('#copyA').disabled = $('#toTest').disabled = !model;
+        }
+        $('#srcTabs').onclick = (e) => { const s = e.target.dataset.s; if (s) { O.src = s; showSrc(); persist(); compute(); } };
+        $('#langTabs').onclick = (e) => { const l = e.target.dataset.l; if (l) { O.lang = l; persist(); compute(); } };
+        ['#src', '#fUrl', '#fHeaders', '#fBody'].forEach(s => $(s).oninput = compute); $('#fMethod').onchange = compute;
+        $('#sample').onclick = () => { if (O.src === 'form') return; $('#src').value = O.src === 'postman' ? SAMPLE_PM : SAMPLE_CURL; compute(); };
+        $('#srcClear').onclick = () => { $('#src').value = ''; compute(); };
+        $('#copyA').onclick = () => model && copyWithFeedback($('#copyA'), GEN[O.lang](model));
+        $('#toTest').onclick = () => {
+            if (!model) return;
+            $('#bMethod').value = model.method; $('#bUrl').value = model.url;
+            $('#bHeaders').value = withAuth(model, effHeaders(model)).map(([k, v]) => `${k}: ${v}`).join('\n');
+            $('#bBody').value = model.body ?? '';
+            O.tab = 'b'; showTab(); persist();
+        };
+
+        // ---- B ----
+        let ctl = null, cancelReason = '';
+        function resBox(...nodes) { const b = $('#bRes'); b.hidden = false; b.replaceChildren(...nodes); }
+        async function send() {
+            const method = $('#bMethod').value, url = $('#bUrl').value.trim(), chk = checkReqUrl(url, location.protocol);
+            if (!chk.ok) { resBox(h('div', 'box bad', chk.error)); return; }
+            const { headers, bad } = parseHeaderLines($('#bHeaders').value), notes = [...chk.warn];
+            if (bad.length) notes.push('以下標頭行格式不對，已略過：' + bad.join(' | '));
+            const fb = forbiddenHeaders(headers); if (fb.length) notes.push('瀏覽器不會送出這些標頭：' + fb.join('、'));
+            const hd = new Headers(); for (const [k, v] of headers) { try { hd.append(k, v); } catch { notes.push(`標頭 ${k} 的值不合法，已略過`); } }
+            const body = $('#bBody').value, canBody = method !== 'GET' && method !== 'HEAD';
+            if (body && !canBody) notes.push(`${method} 不能帶本體，已忽略。`);
+            const noCors = $('#bNoCors').checked;
+            ctl = new AbortController(); cancelReason = '';
+            const timer = setTimeout(() => { cancelReason = 'timeout'; ctl.abort(); }, 30000);
+            $('#send').disabled = true; $('#cancel').disabled = false;
+            const t0 = performance.now(); let tHead = 0;
+            const noteBox = () => { if (!notes.length) return []; const b = h('div', 'box'), ul = h('ul'); notes.forEach(n => ul.append(h('li', '', n))); b.append(ul); return [b]; };
+            try {
+                const res = await fetch(url, { method, headers: hd, body: canBody && body ? body : undefined, credentials: 'omit', cache: 'no-store', mode: noCors ? 'no-cors' : 'cors', signal: ctl.signal });
+                tHead = performance.now() - t0;
+                const text = res.type === 'opaque' ? '' : await res.text(), tAll = performance.now() - t0;
+                const nodes = [h('h2', '', '回應'), ...noteBox()], line = h('div', 'stat-line'), st = h('b', res.type === 'opaque' ? '' : res.ok ? 'ok' : 'bad', res.type === 'opaque' ? '不透明（no-cors）' : `${res.status} ${res.statusText}`);
+                line.append(st, h('span', '', `標頭 ${Math.round(tHead)} ms`), h('span', '', `完成 ${Math.round(tAll)} ms`), h('span', '', `${new Blob([text]).size} 位元組`), h('span', '', `類型 ${res.type}`));
+                nodes.push(line);
+                if (res.type === 'opaque') nodes.push(h('p', 'note', '請求已送出，但 no-cors 回應內容與標頭瀏覽器一律不給看。想看內容請取消勾選（伺服器需允許 CORS）。'));
+                else {
+                    const hs = []; res.headers.forEach((v, k) => hs.push(`${k}: ${v}`));
+                    nodes.push(h('h3', '', '回應標頭'), h('pre', 'code wrap-l', hs.join('\n') || '（沒有可讀取的標頭）'));
+                    if (new URL(url).origin !== location.origin) nodes.push(h('p', 'note', '跨網域時只看得到 CORS 安全清單的標頭（Content-Type、Cache-Control…）；其他需伺服器設 Access-Control-Expose-Headers。'));
+                    let shown = text; try { if (/json/i.test(res.headers.get('content-type') || '')) shown = JSON.stringify(JSON.parse(text), null, 2); } catch { /* 不是合法 JSON 就原樣顯示 */ }
+                    const big = shown.length > 200000;
+                    nodes.push(h('h3', '', '內容'), h('pre', 'code wrap-l', big ? shown.slice(0, 200000) + '\n…（太長，只顯示前 20 萬字）' : shown || '（空）'));
+                    const cb = h('button', 'sm', '複製內容'); cb.onclick = () => copyWithFeedback(cb, text); nodes.push(cb);
+                }
+                resBox(...nodes);
+            } catch (e) {
+                const lines = explainFetchError(e, { reason: cancelReason, method, hasHeaders: headers.length > 0, jsonBody: headers.some(x => x[0].toLowerCase() === 'content-type' && /json/i.test(x[1])), url, pageProtocol: location.protocol, noCors });
+                const ul = h('ul'); lines.slice(1).forEach(l => ul.append(h('li', '', l)));
+                resBox(h('h2', '', '失敗'), ...noteBox(), h('div', 'box bad', lines[0]), ...(lines.length > 1 ? [ul] : []));
+            } finally { clearTimeout(timer); ctl = null; $('#send').disabled = false; $('#cancel').disabled = true; }
+        }
+        $('#send').onclick = send;
+        $('#cancel').onclick = () => { if (ctl) { cancelReason = 'cancel'; ctl.abort(); } };
+        $('#bMethod').onchange = () => { O.method = $('#bMethod').value; persist(); };
+
+        // ---- C ----
+        let ws = null, log = [], fullShown = false;
+        const pad = (n, w = 2) => String(n).padStart(w, '0');
+        function renderLog() {
+            $('#logBox').replaceChildren(...log.map(e => { const d = new Date(e.t); return h('div', e.dir, `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)} ${e.dir === 'out' ? '↑' : e.dir === 'in' ? '↓' : '●'} ${e.text}`); }));
+            $('#wsCount').textContent = `${log.length} / ${MAX_LOG}`;
+            $('#logBox').scrollTop = $('#logBox').scrollHeight;
+        }
+        function addLog(dir, text) {
+            const r = pushLog(log, { t: Date.now(), dir, text: String(text).slice(0, 5000) });
+            log = r.log;
+            if (r.full && !fullShown) { fullShown = true; $('#wsMsg').replaceChildren(h('div', 'box bad', `記錄已達 ${MAX_LOG} 則上限，之後的訊息不再記錄（連線不受影響）。請按「清除記錄」。`)); }
+            if (r.added) renderLog();
+        }
+        function wsUi() {
+            const on = ws && ws.readyState === 1, busy = ws && ws.readyState === 0;
+            $('#wsGo').textContent = ws && ws.readyState < 2 ? '中斷' : '連線'; $('#wsGo').disabled = false;
+            $('#wsSend').disabled = !on; $('#wsUrl').disabled = !!busy || !!on;
+        }
+        function wsConnect() {
+            if (ws && ws.readyState < 2) { ws.close(1000, 'bye'); return; }
+            const c = checkWsUrl($('#wsUrl').value, location.protocol);
+            if (!c.ok) { $('#wsMsg').replaceChildren(h('div', 'box bad', c.error)); return; }
+            if (!fullShown) $('#wsMsg').replaceChildren();
+            let s; try { s = new WebSocket(c.url); } catch (e) { addLog('err', '無法建立連線：' + e.message); return; }
+            ws = s; s.binaryType = 'arraybuffer'; addLog('sys', '連線中… ' + c.url);
+            s.onopen = () => { if (ws === s) { addLog('sys', '已連線'); wsUi(); } };
+            s.onmessage = (e) => addLog('in', typeof e.data === 'string' ? e.data : `（二進位 ${e.data.byteLength} 位元組）`);
+            s.onerror = () => addLog('err', '連線錯誤（瀏覽器不提供細節，請看關閉碼）');
+            s.onclose = (e) => { addLog('sys', `已關閉 · 關閉碼 ${e.code}：${wsCloseInfo(e.code)}${e.reason ? '；原因：' + e.reason : ''}`); if (ws === s) wsUi(); };
+            wsUi();
+        }
+        $('#wsGo').onclick = wsConnect;
+        $('#wsSend').onclick = () => { const t = $('#wsText').value; if (ws && ws.readyState === 1 && t !== '') { ws.send(t); addLog('out', t); } };
+        $('#wsClear').onclick = () => { log = []; fullShown = false; $('#wsMsg').replaceChildren(); renderLog(); };
+
+        showTab(); showSrc(); compute(); renderLog(); wsUi();
+    </script>
+</body>
+
+</html>

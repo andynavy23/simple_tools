@@ -107,6 +107,106 @@
             white-space: pre-wrap;
             overflow-wrap: anywhere;
         }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        .modes {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        .modes button {
+            flex: 1 1 auto;
+        }
+
+        .card label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        .card label.chk {
+            font-weight: 400;
+            display: inline-flex;
+            margin: 0 12px 0 0;
+        }
+
+        .card textarea {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            min-height: 120px;
+        }
+
+        .chk {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin: 0 12px 0 0;
+            min-height: 44px;
+        }
+
+        .grid2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 0 12px;
+        }
+
+        .grid2 input {
+            width: 100%;
+        }
+
+        .iss {
+            border-left: 4px solid var(--line);
+            padding: 6px 10px;
+            margin: 8px 0;
+            overflow-wrap: anywhere;
+        }
+
+        .iss.bad {
+            border-left-color: var(--bad);
+        }
+
+        .iss.ok {
+            border-left-color: var(--ok);
+        }
+
+        .iss b {
+            margin-right: 6px;
+        }
+
+        .iss.bad b {
+            color: var(--bad);
+        }
+
+        .iss.ok b {
+            color: var(--ok);
+        }
+
+        .iss.info {
+            color: var(--muted);
+        }
+
+        .kv {
+            display: grid;
+            grid-template-columns: minmax(80px, 28%) 1fr;
+            gap: 4px 10px;
+            margin: 8px 0;
+        }
+
+        .kv>b,
+        .kv>span {
+            overflow-wrap: anywhere;
+        }
+
+        .kv>.d {
+            grid-column: 2;
+            color: var(--muted);
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
     </style>
 </head>
 
@@ -116,6 +216,13 @@
         <h1>HTTP 狀態碼與 Header 速查</h1>
         <p class="sub">狀態碼、Header、MIME 類型的白話速查，離線可用。</p>
 
+        <div class="modes" id="modes">
+            <button data-m="ref" aria-pressed="true">速查</button>
+            <button data-m="sec" aria-pressed="false">安全標頭</button>
+            <button data-m="cookie" aria-pressed="false">Cookie 解析</button>
+        </div>
+
+        <div id="paneRef">
         <div class="card">
             <input id="q" type="search" placeholder="搜尋：404、not found、cache、cors、json…" aria-label="搜尋" autocomplete="off" spellcheck="false" autocapitalize="off">
             <div class="seg" id="kinds"><button class="sm" data-k="" aria-pressed="true">全部</button><button class="sm" data-k="status" aria-pressed="false">狀態碼</button><button class="sm" data-k="header" aria-pressed="false">Header</button><button class="sm" data-k="mime" aria-pressed="false">MIME</button></div>
@@ -123,6 +230,53 @@
             <p class="note" id="count"></p>
         </div>
         <div class="card" id="list"></div>
+        </div>
+
+        <div id="paneSec" hidden>
+            <div class="card" id="corsCard">
+                <h2>CORS 標頭產生器</h2>
+                <label for="coOrigin">允許的來源</label>
+                <input id="coOrigin" type="text" inputmode="url" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="https://app.example.com" style="width:100%">
+                <label>允許的方法</label>
+                <div id="coMethods"></div>
+                <div class="grid2">
+                    <div><label for="coHeaders">允許的請求標頭</label><input id="coHeaders" type="text" spellcheck="false" autocomplete="off" value="Content-Type, Authorization"></div>
+                    <div><label for="coExpose">讓前端讀到的回應標頭</label><input id="coExpose" type="text" spellcheck="false" autocomplete="off" placeholder="X-Total-Count"></div>
+                    <div><label for="coAge">預檢快取秒數</label><input id="coAge" type="text" inputmode="numeric" autocomplete="off" value="86400"></div>
+                </div>
+                <label class="chk"><input type="checkbox" id="coCred"> 允許帶 Cookie / 憑證（Allow-Credentials）</label>
+                <div id="coWarn"></div>
+                <pre class="code" id="coOut"></pre>
+                <button class="sm" id="coCopy">複製</button>
+            </div>
+            <div class="card" id="cspCard">
+                <h2>CSP 標頭產生器</h2>
+                <p class="note" style="margin:0 0 6px">每個欄位填來源，用空白分隔；<kbd>self</kbd>、<kbd>none</kbd>、<kbd>unsafe-inline</kbd> 不用自己加單引號。</p>
+                <div class="grid2" id="cspFields"></div>
+                <label class="chk"><input type="checkbox" id="cspUp"> upgrade-insecure-requests（把 http 資源升級成 https）</label>
+                <div class="row"><button class="sm" id="cspPreset">套用建議起點</button><button class="sm" id="cspClear">清空</button></div>
+                <pre class="code" id="cspOut"></pre>
+                <div class="row"><button class="sm" id="cspCopy">複製標頭</button><button class="sm" id="cspMeta">複製 &lt;meta&gt; 版</button></div>
+                <p class="note">&lt;meta&gt; 版不支援 frame-ancestors、report-uri、sandbox。</p>
+            </div>
+            <div class="card">
+                <h2>檢查現有標頭</h2>
+                <label for="chkIn">貼上回應標頭（可含狀態列，一行一個）</label>
+                <textarea id="chkIn" spellcheck="false" autocomplete="off" placeholder="Access-Control-Allow-Origin: *&#10;Access-Control-Allow-Credentials: true&#10;Content-Security-Policy: default-src 'self'; script-src 'unsafe-inline'"></textarea>
+                <div class="row" style="margin-top:8px"><button class="sm" id="chkSample">範例</button><button class="sm" id="chkClear">清空</button></div>
+                <div id="chkOut"></div>
+            </div>
+        </div>
+
+        <div id="paneCookie" hidden>
+            <div class="card">
+                <h2>Cookie 解析</h2>
+                <label for="ckIn">貼上 Cookie 或 Set-Cookie（每行一個）</label>
+                <textarea id="ckIn" spellcheck="false" autocomplete="off" placeholder="Set-Cookie: sid=abc123; Path=/; HttpOnly; SameSite=Lax&#10;Cookie: sid=abc123; theme=dark"></textarea>
+                <div class="row" style="margin-top:8px"><button class="sm" id="ckSample">範例</button><button class="sm" id="ckClear">清空</button></div>
+            </div>
+            <div id="ckOut"></div>
+        </div>
     </div>
 
     <template id="help">
@@ -133,21 +287,28 @@
         <li>API 回了 <kbd>502</kbd> 或 <kbd>429</kbd>，想知道是誰的問題、怎麼查。</li>
         <li>寫後端要設 <kbd>Cache-Control</kbd>、CORS Header，需要範例值。</li>
         <li>不確定檔案該用什麼 <kbd>Content-Type</kbd>。</li>
+        <li>要設 CORS / CSP 標頭，或想檢查現有的安全標頭有沒有常見錯誤（<kbd>*</kbd> 搭配憑證、<kbd>unsafe-inline</kbd>…）。</li>
+        <li>看不懂一串 <kbd>Set-Cookie</kbd>，或 Cookie 設了卻讀不到。</li>
         </ul>
         <h3>怎麼用</h3>
         <ol>
         <li>在搜尋欄輸入狀態碼、英文名稱、中文關鍵字或 Header 名稱。</li>
         <li>用「全部 / 狀態碼 / Header / MIME」縮小範圍，再用分類下拉選單細分（例如 4xx、CORS）。</li>
         <li>點一列展開詳情，按「複製」帶走狀態碼名稱、Header 範例或 MIME 值。</li>
+        <li>上方切到「安全標頭」：用表單產生 CORS / CSP 標頭，或貼上現有標頭檢查；切到「Cookie 解析」：貼上 Cookie / Set-Cookie 拆成欄位表，附白話解說與常見問題提醒。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">搜尋 429 → Too Many Requests：請求太頻繁，看 Retry-After 等多久再試
-搜尋 cors → 列出 Access-Control-* 與 Origin 等 Header 與範例值</div>
+搜尋 cors → 列出 Access-Control-* 與 Origin 等 Header 與範例值
+安全標頭 → 貼 Access-Control-Allow-Origin: * 與 Allow-Credentials: true → 標示「瀏覽器會拒絕」
+Cookie 解析 → 貼 Set-Cookie: sid=1; SameSite=None → 提示缺少 Secure 會被拒收</div>
         <h3>小提醒</h3>
         <ul>
         <li>「排查方向」是常見情況，不是保證；實際原因仍要看伺服器 log 與回應內容。</li>
         <li>狀態碼只收錄標準（IANA 登記）的；各家服務自訂的碼（如 Cloudflare 52x）不在內。</li>
-        <li>不儲存任何資料，也不會連線。</li>
+        <li>安全標頭與 Cookie 的檢查是依常見規則判斷，不能取代正式的安全稽核；瀏覽器版本不同，細節（例如 Cookie 保存上限）可能有差異。</li>
+        <li>多個 Set-Cookie 請分行貼（逗號合併的格式無法可靠拆開）。</li>
+        <li>不儲存任何資料，也不會連線；貼上的內容只在這個頁面裡處理，重新整理就清空。</li>
         </ul>
     </template>
 
@@ -337,6 +498,200 @@
             scored.sort((a, b) => a[0] - b[0] || (!s && a[2].kind === 'status' && b[2].kind === 'status' ? a[2].key.localeCompare(b[2].key) : a[1] - b[1]));
             return scored.map(r => r[2]);
         }
+        // ---- 安全標頭：CORS / CSP 產生與檢查 ----
+        const CSP_KEYWORDS = ['self', 'none', 'unsafe-inline', 'unsafe-eval', 'unsafe-hashes', 'strict-dynamic', 'report-sample', 'wasm-unsafe-eval', 'inline-speculation-rules'];
+        const CSP_DIRS = ['default-src', 'script-src', 'style-src', 'img-src', 'connect-src', 'font-src', 'media-src', 'frame-src', 'object-src', 'base-uri', 'form-action', 'frame-ancestors'];
+        const CSP_KNOWN = new Set([...CSP_DIRS, 'script-src-elem', 'script-src-attr', 'style-src-elem', 'style-src-attr', 'worker-src', 'manifest-src', 'child-src', 'prefetch-src', 'sandbox', 'report-uri', 'report-to', 'upgrade-insecure-requests', 'block-all-mixed-content', 'require-trusted-types-for', 'trusted-types', 'plugin-types']);
+        function cspSource(tok) {
+            tok = String(tok).trim(); const l = tok.toLowerCase();
+            if (CSP_KEYWORDS.includes(l)) return `'${l}'`;
+            if (/^(nonce|sha256|sha384|sha512)-/i.test(tok)) return `'${tok}'`;
+            return tok;
+        }
+        // map: { 指令: '來源 來源' }；裸寫的 self / none / unsafe-inline 會自動加單引號
+        function buildCsp(map, { upgrade = false } = {}) {
+            const parts = [];
+            for (const d of CSP_DIRS) {
+                const s = String(map[d] ?? '').split(/[\s,]+/).map(cspSource).filter(Boolean);
+                if (s.length) parts.push(`${d} ${s.join(' ')}`);
+            }
+            if (upgrade) parts.push('upgrade-insecure-requests');
+            return parts.join('; ');
+        }
+        const ORIGIN_RE = /^https?:\/\/[^\/\s?#]+$/i;
+        function buildCors({ origin = '', methods = [], headers = '', credentials = false, maxAge = '', expose = '' } = {}) {
+            const lines = [], warns = [], o = String(origin).trim();
+            if (!o) { warns.push('請填允許的來源（例如 https://app.example.com），或 * 表示任何來源。'); return { lines, warns }; }
+            if (o !== '*' && o !== 'null' && !ORIGIN_RE.test(o)) warns.push('來源格式應為「協定://網域[:埠]」，結尾不能有 / 或路徑。');
+            if (o === 'null') warns.push('Origin: null 會讓 file:// 與沙盒 iframe 都通過，幾乎等於全開，不建議。');
+            if (o === '*' && credentials) warns.push('Allow-Origin 為 * 時不能同時允許憑證（Cookie），瀏覽器會直接拒絕。請改成指定來源。');
+            lines.push(`Access-Control-Allow-Origin: ${o}`);
+            if (o !== '*') lines.push('Vary: Origin');
+            if (methods.length) lines.push(`Access-Control-Allow-Methods: ${methods.join(', ')}`);
+            const hs = String(headers).split(/[\s,]+/).filter(Boolean);
+            if (hs.length) lines.push(`Access-Control-Allow-Headers: ${hs.join(', ')}`);
+            if (credentials) lines.push('Access-Control-Allow-Credentials: true');
+            const ma = String(maxAge).trim();
+            if (ma !== '') { if (/^\d+$/.test(ma)) lines.push(`Access-Control-Max-Age: ${ma}`); else warns.push('Max-Age 要是秒數（整數）。'); }
+            const ex = String(expose).split(/[\s,]+/).filter(Boolean); if (ex.length) lines.push(`Access-Control-Expose-Headers: ${ex.join(', ')}`);
+            return { lines, warns };
+        }
+        // 貼上的 header 區塊 → [{ name, value }]；略過狀態列與空行
+        function parseHeaderBlock(text) {
+            const out = [];
+            for (const raw of String(text ?? '').split(/\r?\n/)) {
+                const line = raw.trim(); if (!line || /^HTTP\/\d/i.test(line)) continue;
+                const i = line.indexOf(':'); if (i <= 0) continue;
+                const name = line.slice(0, i).trim(); if (/\s/.test(name)) continue;
+                out.push({ name, value: line.slice(i + 1).trim() });
+            }
+            return out;
+        }
+        function parseCsp(v) {
+            const out = [];
+            for (const part of String(v).split(';')) { const t = part.trim().split(/\s+/).filter(Boolean); if (t.length) out.push({ name: t[0].toLowerCase(), values: t.slice(1) }); }
+            return out;
+        }
+        const L = (level, msg) => ({ level, msg });
+        function checkCsp(v) {
+            const R = [], dirs = parseCsp(v), seen = new Set();
+            for (const d of dirs) { if (seen.has(d.name)) R.push(L('info', `${d.name} 重複出現，只有第一個會生效。`)); seen.add(d.name); if (!CSP_KNOWN.has(d.name)) R.push(L('warn', `未知的指令 ${d.name}（拼錯了嗎？）`)); }
+            const get = (n) => dirs.find(d => d.name === n), low = (d) => d.values.map(x => x.toLowerCase());
+            for (const d of dirs) for (const x of d.values) if (CSP_KEYWORDS.includes(x.toLowerCase())) R.push(L('bad', `${d.name} 裡的 ${x} 沒加單引號，會被當成網域名稱；應寫成 '${x.toLowerCase()}'。`));
+            const script = get('script-src') || get('default-src');
+            if (!script) R.push(L('warn', '沒有 script-src 也沒有 default-src，腳本來源完全不受限。'));
+            else {
+                const vs = low(script), name = script.name, strict = vs.includes("'strict-dynamic'") || vs.some(x => /^'(nonce-|sha(256|384|512)-)/.test(x));
+                if (vs.includes("'unsafe-inline'")) R.push(strict ? L('info', `${name} 的 'unsafe-inline' 因為同時有 nonce / hash / strict-dynamic 而被忽略（只當舊瀏覽器的後援）。`) : L('bad', `${name} 含 'unsafe-inline'：允許任何內嵌腳本，XSS 防護形同虛設。改用 nonce 或 hash。`));
+                if (vs.includes("'unsafe-eval'")) R.push(L('warn', `${name} 含 'unsafe-eval'：允許 eval() 與 new Function()，增加被注入的風險。`));
+                if (vs.includes('data:')) R.push(L('bad', `${name} 含 data:：攻擊者可用 data: URL 執行腳本。`));
+                if (vs.includes('*')) R.push(L('warn', `${name} 含 *：幾乎任何網站的腳本都能載入。`));
+                if (vs.includes('http:')) R.push(L('warn', `${name} 含 http:：允許不加密來源的腳本。`));
+                if (vs.includes('https:')) R.push(L('warn', `${name} 含 https:：任何 https 網站的腳本都允許，範圍太寬。`));
+            }
+            const st = get('style-src'); if (st && low(st).includes("'unsafe-inline'")) R.push(L('info', "style-src 含 'unsafe-inline'：樣式注入風險較低，但最好改用 nonce / hash。"));
+            const df = get('default-src');
+            if (!get('object-src') && !(df && low(df).includes("'none'"))) R.push(L('info', "建議加 object-src 'none'（停用 Flash / 外掛）。"));
+            if (!get('base-uri')) R.push(L('info', "建議加 base-uri 'self'（防止注入 <base> 改掉相對網址）。"));
+            if (!get('frame-ancestors')) R.push(L('info', "沒有 frame-ancestors：網頁可被別人嵌進 iframe（點擊劫持）；要防範請加 frame-ancestors 'self'。"));
+            return R;
+        }
+        // 貼上的回應標頭 → [{ h, level: 'bad'|'warn'|'info'|'ok', msg }]
+        function checkHeaders(text) {
+            const hs = parseHeaderBlock(text), R = [];
+            if (!hs.length) return [{ h: '', ...L('info', '沒有解析到標頭（格式：每行「名稱: 值」）。') }];
+            const all = (n) => hs.filter(x => x.name.toLowerCase() === n.toLowerCase()), one = (n) => (all(n)[0] || {}).value;
+            const add = (h, level, msg) => R.push({ h, level, msg });
+            const acao = one('Access-Control-Allow-Origin'), acac = one('Access-Control-Allow-Credentials');
+            if (all('Access-Control-Allow-Origin').length > 1) add('Access-Control-Allow-Origin', 'bad', '出現多次；瀏覽器只接受一個值，多個來源要依請求的 Origin 動態回傳其中一個。');
+            if (acao !== undefined) {
+                if (acao.includes(',') || /\s/.test(acao)) add('Access-Control-Allow-Origin', 'bad', '不能放多個來源（逗號 / 空白分隔）；要依請求的 Origin 比對白名單後回傳單一來源。');
+                else if (acao === '*' && acac !== undefined && acac.toLowerCase() === 'true') add('Access-Control-Allow-Origin', 'bad', '* 搭配 Allow-Credentials: true：瀏覽器會拒絕。請改成具體來源。');
+                else if (acao === 'null') add('Access-Control-Allow-Origin', 'warn', 'null 來源會讓 file:// 與沙盒 iframe 通過，不建議。');
+                else if (acao === '*') add('Access-Control-Allow-Origin', 'info', '* 表示任何網站都能讀取回應；公開 API 可以，帶登入狀態的資料不行。');
+                else if (!ORIGIN_RE.test(acao)) add('Access-Control-Allow-Origin', 'bad', '格式不對：應為「協定://網域[:埠]」，結尾不能有 / 或路徑。');
+                else if (!all('Vary').some(x => /\borigin\b|\*/i.test(x.value))) add('Access-Control-Allow-Origin', 'warn', '指定了單一來源但沒有 Vary: Origin；CDN / 瀏覽器快取可能把某來源的回應給別的來源。');
+            }
+            if (acac !== undefined && acac !== 'true') add('Access-Control-Allow-Credentials', 'bad', '唯一合法的值是小寫 true；不想允許就整個標頭不要送。');
+            if (acac !== undefined && acac.toLowerCase() === 'true') for (const n of ['Access-Control-Allow-Headers', 'Access-Control-Allow-Methods', 'Access-Control-Expose-Headers']) if ((one(n) || '').split(',').map(x => x.trim()).includes('*')) add(n, 'warn', '允許憑證時，* 會被當成字面文字而不是萬用字元。請逐一列出。');
+            const ma = one('Access-Control-Max-Age'); if (ma !== undefined) { if (!/^-?\d+$/.test(ma)) add('Access-Control-Max-Age', 'bad', '要是整數秒。'); else if (+ma > 7200) add('Access-Control-Max-Age', 'info', '瀏覽器有上限（Chrome 7200 秒、Firefox 86400 秒），超過的部分無效。'); }
+            const csp = one('Content-Security-Policy') ?? one('Content-Security-Policy-Report-Only');
+            if (csp !== undefined) for (const x of checkCsp(csp)) add('Content-Security-Policy', x.level, x.msg);
+            const hsts = one('Strict-Transport-Security');
+            if (hsts !== undefined) {
+                const m = /max-age=(\d+)/i.exec(hsts);
+                if (!m) add('Strict-Transport-Security', 'bad', '缺少 max-age，這個標頭不會生效。');
+                else {
+                    if (+m[1] < 15552000) add('Strict-Transport-Security', 'warn', `max-age=${m[1]} 偏短（建議至少 15552000 秒 = 180 天，正式環境常用 31536000）。`);
+                    if (!/includeSubDomains/i.test(hsts)) add('Strict-Transport-Security', 'info', '未含 includeSubDomains；所有子網域都已支援 HTTPS 時可加上。');
+                }
+            }
+            const xcto = one('X-Content-Type-Options'); if (xcto !== undefined && xcto.toLowerCase() !== 'nosniff') add('X-Content-Type-Options', 'bad', '唯一有效的值是 nosniff。');
+            const xfo = one('X-Frame-Options');
+            if (xfo !== undefined) { const v = xfo.toUpperCase(); if (/^ALLOW-FROM/.test(v)) add('X-Frame-Options', 'warn', 'ALLOW-FROM 已被所有主流瀏覽器淘汰；改用 CSP 的 frame-ancestors。'); else if (v !== 'DENY' && v !== 'SAMEORIGIN') add('X-Frame-Options', 'bad', '只接受 DENY 或 SAMEORIGIN。'); }
+            const rp = one('Referrer-Policy');
+            if (rp !== undefined) {
+                const valid = ['no-referrer', 'no-referrer-when-downgrade', 'origin', 'origin-when-cross-origin', 'same-origin', 'strict-origin', 'strict-origin-when-cross-origin', 'unsafe-url'];
+                for (const v of rp.split(',').map(x => x.trim().toLowerCase()).filter(Boolean)) { if (!valid.includes(v)) add('Referrer-Policy', 'bad', `${v} 不是合法的值。`); else if (v === 'unsafe-url' || v === 'no-referrer-when-downgrade') add('Referrer-Policy', 'warn', `${v} 會把完整網址（含查詢字串）送給其他網站；建議 strict-origin-when-cross-origin。`); }
+            }
+            for (const sc of all('Set-Cookie')) { const c = parseSetCookie(sc.value); for (const x of checkCookie(c)) if (x.level === 'bad' || x.level === 'warn') add('Set-Cookie ' + c.name, x.level, x.msg); }
+            const miss = [];
+            if (csp === undefined) miss.push('Content-Security-Policy');
+            for (const [n, label] of [['Strict-Transport-Security', 'Strict-Transport-Security'], ['X-Content-Type-Options', 'X-Content-Type-Options'], ['Referrer-Policy', 'Referrer-Policy']]) if (one(n) === undefined) miss.push(label);
+            if (xfo === undefined && !(csp && /frame-ancestors/i.test(csp))) miss.push('X-Frame-Options 或 frame-ancestors');
+            if (!R.some(x => x.level === 'bad' || x.level === 'warn')) R.unshift({ h: '', ...L('ok', '沒有發現常見的錯誤。') });
+            if (miss.length) add('', 'info', '未設定的常見安全標頭：' + miss.join('、') + '（不一定都要加，視網站而定）。');
+            return R;
+        }
+
+        // ---- Cookie ----
+        const COOKIE_HELP = {
+            Expires: '到期的絕對時間（GMT）。沒有 Expires 也沒有 Max-Age 就是「工作階段 Cookie」，關閉瀏覽器後消失。',
+            'Max-Age': '從現在起存活的秒數，優先於 Expires；0 或負數表示立即刪除。',
+            Domain: '指定後所有子網域都會帶這個 Cookie；不指定則只有設定它的那個主機（不含子網域）。開頭的點會被忽略。',
+            Path: 'Cookie 只在這個路徑底下送出；通常設 /。',
+            Secure: '只透過 HTTPS 傳送（localhost 例外）。',
+            HttpOnly: 'JavaScript 讀不到（document.cookie 看不見），可降低 XSS 偷走 session 的風險。',
+            SameSite: 'Strict：只在同站請求帶；Lax：同站加上從別站「點連結進來」的頂層導覽帶（現代瀏覽器預設）；None：跨站也帶，必須搭配 Secure。',
+            Partitioned: 'CHIPS：第三方 Cookie 依「最上層網站」分開存放，需搭配 Secure。',
+            Priority: 'Chrome 專用：空間不足時刪除的優先順序（Low / Medium / High）。',
+        };
+        function parseSetCookie(line) {
+            const s = String(line ?? '').trim().replace(/^set-cookie:\s*/i, '');
+            const parts = s.split(';'), first = parts.shift(), i = first.indexOf('=');
+            const c = { name: i < 0 ? '' : first.slice(0, i).trim(), value: i < 0 ? first.trim() : first.slice(i + 1).trim(), attrs: {}, unknown: [] };
+            const KEYS = { expires: 'Expires', 'max-age': 'Max-Age', domain: 'Domain', path: 'Path', secure: 'Secure', httponly: 'HttpOnly', samesite: 'SameSite', partitioned: 'Partitioned', priority: 'Priority' };
+            for (const p of parts) {
+                const t = p.trim(); if (!t) continue;
+                const j = t.indexOf('='), k = (j < 0 ? t : t.slice(0, j)).trim(), v = j < 0 ? '' : t.slice(j + 1).trim(), key = KEYS[k.toLowerCase()];
+                if (!key) c.unknown.push(t); else if (!(key in c.attrs)) c.attrs[key] = key === 'Secure' || key === 'HttpOnly' || key === 'Partitioned' ? true : v;
+            }
+            return c;
+        }
+        // 貼上的內容 → [{ type: 'set', name, value, attrs, unknown } | { type: 'cookie', items }]；每行一個 Set-Cookie，或一行 Cookie: a=1; b=2
+        function parseCookieInput(text) {
+            const out = [];
+            for (const raw of String(text ?? '').split(/\r?\n/)) {
+                const line = raw.trim(); if (!line) continue;
+                if (/^set-cookie:/i.test(line) || (!/^cookie:/i.test(line) && /;\s*(path|domain|expires|max-age|secure|httponly|samesite|partitioned)\b/i.test(line))) out.push({ type: 'set', ...parseSetCookie(line) });
+                else out.push({ type: 'cookie', items: line.replace(/^cookie:\s*/i, '').split(';').map(x => x.trim()).filter(Boolean).map(x => { const i = x.indexOf('='); return i < 0 ? { name: '', value: x } : { name: x.slice(0, i).trim(), value: x.slice(i + 1).trim() }; }) });
+            }
+            return out;
+        }
+        const DAY400 = 400 * 86400000;
+        function checkCookie(c, now = Date.now()) {
+            const R = [], a = c.attrs, sec = 'Secure' in a, ho = 'HttpOnly' in a, ss = 'SameSite' in a ? a.SameSite.toLowerCase() : '';
+            if (c.name === '') R.push(L('warn', '沒有名稱（沒有 =）；多數瀏覽器會把它當成「空名稱 Cookie」，不建議。'));
+            if (new TextEncoder().encode(c.name + '=' + c.value).length > 4096) R.push(L('bad', '名稱 + 值超過 4096 位元組，瀏覽器會直接丟棄。'));
+            if ('SameSite' in a && !['lax', 'strict', 'none'].includes(ss)) R.push(L('bad', `SameSite=${a.SameSite} 不是合法的值（只有 Strict / Lax / None），會被當成預設。`));
+            if (ss === 'none' && !sec) R.push(L('bad', 'SameSite=None 必須同時有 Secure，否則主流瀏覽器會拒收這個 Cookie。'));
+            if (c.name.startsWith('__Secure-') && !sec) R.push(L('bad', '__Secure- 開頭的 Cookie 必須有 Secure。'));
+            if (c.name.startsWith('__Host-') && (!sec || a.Path !== '/' || 'Domain' in a)) R.push(L('bad', '__Host- 開頭的 Cookie 必須有 Secure、Path=/，且不能有 Domain。'));
+            if ('Partitioned' in a && !sec) R.push(L('bad', 'Partitioned 必須同時有 Secure。'));
+            if (!sec) R.push(L('warn', '沒有 Secure：會在 HTTP 明文傳輸，可被網路上的人看到（localhost 開發除外）。'));
+            if (!ho) R.push(/sess|sid|token|auth|jwt|login|key/i.test(c.name) ? L('warn', '看起來是登入 / 驗證用的 Cookie，卻沒有 HttpOnly：JavaScript 可讀取，XSS 時會被偷走。') : L('info', '沒有 HttpOnly：前端 JavaScript 讀得到（若前端需要讀它就是刻意的）。'));
+            if (!('SameSite' in a)) R.push(L('info', '沒有 SameSite：現代瀏覽器當成 Lax；想跨站使用需明確寫 SameSite=None; Secure。'));
+            const has = (k) => k in a;
+            if (has('Max-Age')) {
+                if (!/^-?\d+$/.test(a['Max-Age'])) R.push(L('bad', 'Max-Age 必須是整數秒，這個值會被忽略。'));
+                else if (+a['Max-Age'] <= 0) R.push(L('info', 'Max-Age ≤ 0：這是要「刪除」Cookie 的指令。'));
+                else if (+a['Max-Age'] * 1000 > DAY400) R.push(L('info', 'Max-Age 超過 400 天，Chrome 會縮短成 400 天。'));
+            }
+            if (has('Expires')) {
+                const t = Date.parse(a.Expires);
+                if (isNaN(t)) R.push(L('bad', 'Expires 不是合法的日期（格式：Wed, 21 Oct 2026 07:28:00 GMT），會被當成工作階段 Cookie。'));
+                else if (t < now) R.push(L('info', 'Expires 已經過去：這是要「刪除」Cookie 的指令。'));
+                else if (t - now > DAY400) R.push(L('info', 'Expires 超過 400 天後，Chrome 會縮短成 400 天。'));
+            }
+            if (has('Max-Age') && has('Expires')) R.push(L('info', '同時有 Max-Age 與 Expires：以 Max-Age 為準。'));
+            if (!has('Max-Age') && !has('Expires')) R.push(L('info', '沒有到期時間：工作階段 Cookie，關閉瀏覽器就消失。'));
+            if (has('Domain')) R.push(a.Domain.startsWith('.') ? L('info', 'Domain 開頭的點會被忽略；有設 Domain 就包含所有子網域。') : L('info', '有設 Domain：所有子網域都會收到這個 Cookie；只要給原主機就不要設 Domain。'));
+            if (has('Path') && !a.Path.startsWith('/')) R.push(L('warn', 'Path 要以 / 開頭，否則會用預設路徑。'));
+            if (!has('Path')) R.push(L('info', '沒有 Path：預設是目前網址的目錄，常造成「換頁就讀不到」；通常設 Path=/。'));
+            for (const u of c.unknown) R.push(L('warn', `不認得的屬性「${u}」，會被忽略。`));
+            if (!R.some(x => x.level === 'bad' || x.level === 'warn')) R.unshift(L('ok', '沒有發現常見的錯誤。'));
+            return R;
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -363,6 +718,78 @@
         $('#q').oninput = render; $('#cat').onchange = render;
         $('#kinds').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; kind = b.dataset.k; [...$('#kinds').children].forEach(x => x.setAttribute('aria-pressed', x === b)); render(); };
         render();
+
+        // ---- 安全標頭 / Cookie ----
+        const LV = { bad: '錯誤', warn: '注意', info: '提示', ok: '正常' };
+        const issue = (level, msg, head) => { const d = el('div', 'iss ' + level); d.append(el('b', '', LV[level])); if (head) d.append(el('b', '', head)); d.append(document.createTextNode(msg)); return d; };
+        const sortLv = (a) => [...a].sort((x, y) => ['bad', 'warn', 'ok', 'info'].indexOf(x.level) - ['bad', 'warn', 'ok', 'info'].indexOf(y.level));
+        let mode = 'ref';
+        function showMode() {
+            [...$('#modes').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.m === mode));
+            $('#paneRef').hidden = mode !== 'ref'; $('#paneSec').hidden = mode !== 'sec'; $('#paneCookie').hidden = mode !== 'cookie';
+        }
+        $('#modes').onclick = (e) => { const m = e.target.dataset.m; if (m) { mode = m; showMode(); } };
+        // CORS
+        $('#coMethods').replaceChildren(...['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'].map(m => { const l = el('label', 'chk'), c = document.createElement('input'); c.type = 'checkbox'; c.value = m; c.checked = m === 'GET' || m === 'POST'; l.append(c, m); return l; }));
+        let corsText = '';
+        function updCors() {
+            const r = buildCors({ origin: $('#coOrigin').value, methods: [...$('#coMethods').querySelectorAll('input:checked')].map(x => x.value), headers: $('#coHeaders').value, credentials: $('#coCred').checked, maxAge: $('#coAge').value, expose: $('#coExpose').value });
+            corsText = r.lines.join('\n'); $('#coOut').textContent = corsText || '（填入來源後產生）';
+            $('#coWarn').replaceChildren(...r.warns.map(w => issue('bad', w)));
+        }
+        $('#corsCard').addEventListener('input', updCors); $('#corsCard').addEventListener('change', updCors);
+        $('#coCopy').onclick = () => corsText && copyWithFeedback($('#coCopy'), corsText);
+        // CSP
+        $('#cspFields').replaceChildren(...CSP_DIRS.map(d => { const w = el('div'), l = el('label', '', d), i = document.createElement('input'); i.type = 'text'; i.id = 'csp_' + d; i.spellcheck = false; i.autocomplete = 'off'; i.autocapitalize = 'off'; l.htmlFor = i.id; w.append(l, i); return w; }));
+        let cspText = '';
+        const cspMap = () => Object.fromEntries(CSP_DIRS.map(d => [d, $('#csp_' + d).value]));
+        function updCsp() { cspText = buildCsp(cspMap(), { upgrade: $('#cspUp').checked }); $('#cspOut').textContent = cspText ? 'Content-Security-Policy: ' + cspText : '（至少填一個欄位）'; }
+        $('#cspCard').addEventListener('input', updCsp);
+        $('#cspPreset').onclick = () => { CSP_DIRS.forEach(d => $('#csp_' + d).value = ''); Object.entries({ 'default-src': 'self', 'img-src': 'self data:', 'object-src': 'none', 'base-uri': 'self', 'frame-ancestors': 'self' }).forEach(([k, v]) => $('#csp_' + k).value = v); updCsp(); };
+        $('#cspClear').onclick = () => { CSP_DIRS.forEach(d => $('#csp_' + d).value = ''); $('#cspUp').checked = false; updCsp(); };
+        $('#cspCopy').onclick = () => cspText && copyWithFeedback($('#cspCopy'), 'Content-Security-Policy: ' + cspText);
+        $('#cspMeta').onclick = () => cspText && copyWithFeedback($('#cspMeta'), '<meta http-equiv="Content-Security-Policy" content="' + cspText.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '">');
+        // 檢查
+        function updChk() {
+            const v = $('#chkIn').value; if (!v.trim()) { $('#chkOut').replaceChildren(); return; }
+            $('#chkOut').replaceChildren(...sortLv(checkHeaders(v)).map(x => issue(x.level, x.msg, x.h)));
+        }
+        $('#chkIn').oninput = updChk;
+        $('#chkSample').onclick = () => { $('#chkIn').value = "HTTP/1.1 200 OK\nAccess-Control-Allow-Origin: *\nAccess-Control-Allow-Credentials: true\nContent-Security-Policy: default-src 'self'; script-src self 'unsafe-inline' https:\nStrict-Transport-Security: max-age=3600\nSet-Cookie: sid=abc; Path=/; SameSite=None"; updChk(); };
+        $('#chkClear').onclick = () => { $('#chkIn').value = ''; updChk(); };
+        // Cookie
+        function updCk() {
+            const v = $('#ckIn').value, out = $('#ckOut'); out.replaceChildren();
+            if (!v.trim()) return;
+            for (const c of parseCookieInput(v)) {
+                const card = el('div', 'card');
+                if (c.type === 'cookie') {
+                    card.append(el('h2', '', 'Cookie（請求標頭）：' + c.items.length + ' 個'));
+                    const kv = el('div', 'kv'), seen = new Set(), dup = [];
+                    for (const it of c.items) {
+                        if (seen.has(it.name)) dup.push(it.name); seen.add(it.name);
+                        let dec = it.value; try { dec = decodeURIComponent(it.value); } catch { /* 不是合法的百分比編碼就原樣 */ }
+                        kv.append(el('b', '', it.name || '（無名稱）'), el('span', '', it.value));
+                        if (dec !== it.value) kv.append(el('span', 'd', '解碼：' + dec));
+                        if (/^[\w-]+\.[\w-]+\.[\w-]*$/.test(it.value) && it.value.length > 30) kv.append(el('span', 'd', '看起來是 JWT（三段以 . 連接）；內容可被任何人解開，不要放機密。'));
+                    }
+                    card.append(kv);
+                    if (dup.length) card.append(issue('warn', '名稱重複：' + [...new Set(dup)].join('、') + '（不同 Path / Domain 的同名 Cookie 會一起送出，伺服器通常只取第一個）。'));
+                    card.append(el('p', 'note', '請求標頭只會看到名稱與值；Secure / HttpOnly / SameSite 等屬性只存在於 Set-Cookie，要看屬性請貼伺服器回應的 Set-Cookie。'));
+                } else {
+                    card.append(el('h2', '', 'Set-Cookie：' + (c.name || '（無名稱）')));
+                    const kv = el('div', 'kv');
+                    kv.append(el('b', '', '名稱'), el('span', '', c.name), el('b', '', '值'), el('span', '', c.value));
+                    for (const [k, val] of Object.entries(c.attrs)) kv.append(el('b', '', k), el('span', '', val === true ? '（有）' : val), el('span', 'd', COOKIE_HELP[k] || ''));
+                    card.append(kv, ...sortLv(checkCookie(c)).map(x => issue(x.level, x.msg)));
+                }
+                out.append(card);
+            }
+        }
+        $('#ckIn').oninput = updCk;
+        $('#ckSample').onclick = () => { $('#ckIn').value = "Set-Cookie: sid=abc123; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=3600\nSet-Cookie: pref=dark; Domain=.example.com; Expires=Wed, 21 Oct 2035 07:28:00 GMT; SameSite=None\nCookie: sid=abc123; theme=dark; name=%E4%BD%A0%E5%A5%BD"; updCk(); };
+        $('#ckClear').onclick = () => { $('#ckIn').value = ''; updCk(); };
+        updCors(); updCsp();
     </script>
 </body>
 

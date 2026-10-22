@@ -87,6 +87,24 @@
             <div class="err" id="err" role="alert"></div>
         </div>
 
+        <div class="card" id="iconCard" hidden>
+            <h2 style="margin-top:0">App 圖示 / Favicon 尺寸包</h2>
+            <p class="muted">用上面選好的圖，一次產生 16 / 32 / 48 / 180 / 192 / 512 的 PNG、maskable 圖示、favicon.ico 與 manifest 片段。</p>
+            <div class="row">
+                <label for="icMode">放進方形</label><select id="icMode"><option value="contain">完整顯示（留白）</option><option value="cover">填滿（裁切）</option></select>
+                <label for="icBg">背景色</label><input type="color" id="icBg" value="#ffffff"><label><input type="checkbox" id="icFill"> 所有圖示都填背景色</label>
+            </div>
+            <p class="muted">180（iOS）與 maskable 一律填背景色；其他預設透明。</p>
+            <div class="row"><button class="primary" id="icGo">產生圖示包</button><span class="err" id="icErr" role="alert"></span></div>
+            <div id="icOut" hidden>
+                <div id="icList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px"></div>
+                <div class="row" style="margin-top:10px"><button id="icIco">下載 favicon.ico</button><button class="primary" id="icZip">全部打包下載 ZIP</button></div>
+                <p class="muted">把檔案放到網站根目錄，貼上下面的內容：</p>
+                <pre id="icSnip" style="background:var(--fill);border-radius:10px;padding:10px 12px;font:13px/1.5 ui-monospace,monospace;white-space:pre-wrap;word-break:break-all;max-height:260px;overflow:auto"></pre>
+                <button class="sm" id="icCopy">複製片段</button>
+            </div>
+        </div>
+
         <div class="card" id="panel" hidden>
             <div class="row">
                 <label for="maxw">最大寬</label><input type="number" id="maxw" min="1" max="16384" aria-label="最大寬度">
@@ -113,6 +131,7 @@
         <li>照片太大，傳 LINE、email 或上傳網站被擋。</li>
         <li>要把 PNG 轉成較小的 JPEG 或 WebP。</li>
         <li>發佈照片前想移除 EXIF（拍攝地點等）資訊。</li>
+        <li>做網站或 PWA 的圖示：一張圖一次產生各尺寸 PNG、favicon.ico 與 manifest 片段。</li>
         </ul>
         <h3>怎麼用</h3>
         <ol>
@@ -121,6 +140,7 @@
         <li>選「格式」（JPEG / WebP / PNG），用「品質」滑桿調整（PNG 無損，不受品質影響）。</li>
         <li>下方預覽與「原始 / 處理後」大小會即時更新，看到「縮小 xx%」就是省下的比例。</li>
         <li>滿意後按「下載」；想處理別張按「換一張」。</li>
+        <li>App 圖示：選好圖片後，下方會出現「App 圖示 / Favicon 尺寸包」。選「完整顯示」或「填滿」與背景色，按「產生圖示包」，可逐張下載、下載 favicon.ico，或「全部打包下載 ZIP」；底部的 HTML 與 manifest 片段可直接複製。建議用正方形、至少 512 × 512 的圖。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">原圖 1600 × 900 的截圖，格式選 JPEG、品質 80、最大寬留 1600
@@ -130,6 +150,7 @@
         <li>輸出為 JPEG 時，透明部分會填上「透明背景填色」選的顏色。</li>
         <li>重新編碼會移除 EXIF；GIF 動圖只會取第一格。</li>
         <li>太大的圖片（超過瀏覽器記憶體上限）可能處理失敗。</li>
+        <li>圖示包的 maskable 圖示會把圖縮到 56% 並填背景色（安全區規格），Android 才不會把邊角裁掉；ZIP 不壓縮（PNG 本來就壓縮過）。圖示包只在記憶體中產生，不儲存任何資料。</li>
         </ul>
     </template>
 
@@ -168,6 +189,50 @@
         // 下載檔名：原檔名去副檔名 + 尺寸 + 新副檔名
         const outName = (name, w, h, mime) => `${(name || 'image').replace(/\.[^.]*$/, '').replace(/[\\/:*?"<>|]/g, '_')}-${w}x${h}.${EXT[mime] || 'jpg'}`;
         const sizeOk = (w, h) => w > 0 && h > 0 && w <= MAX_DIM && h <= MAX_DIM && w * h <= MAX_PIXELS;
+
+        // ---- App 圖示 / Favicon 尺寸包 ----
+        const ICON_PLAN = [16, 32, 48, 180, 192, 512].map(s => ({ name: 'icon-' + s + '.png', size: s, maskable: false })).concat([192, 512].map(s => ({ name: 'icon-maskable-' + s + '.png', size: s, maskable: true })));
+        const MASKABLE_SCALE = 0.56;    // maskable 的安全區是中央直徑 80% 的圓；方形內容的對角線要落在圓內，邊長最多約 56.5%
+        // 來源 sw × sh 放進 size × size 的方塊：contain 完整顯示（留白）、cover 填滿（裁切）；scale 是內容佔方塊的比例（maskable 用）
+        function iconRect(sw, sh, size, mode = 'contain', scale = 1) {
+            const box = size * scale, k = mode === 'cover' ? Math.max(box / sw, box / sh) : Math.min(box / sw, box / sh), dw = sw * k, dh = sh * k;
+            return { dx: (size - dw) / 2, dy: (size - dh) / 2, dw, dh };
+        }
+        const CRC_T = new Uint32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+        function crc32(bytes) { let c = 0xFFFFFFFF; for (let i = 0; i < bytes.length; i++) c = CRC_T[(c ^ bytes[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+        // files: [{ name, data: Uint8Array }] → zip（method 0 = store，不壓縮；PNG 本來就壓縮過）
+        function zipStore(files) {
+            const enc = new TextEncoder(), parts = [], cd = []; let off = 0;
+            for (const f of files) {
+                const name = enc.encode(f.name), crc = crc32(f.data), h = new DataView(new ArrayBuffer(30));
+                h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(12, 0x21, true);
+                h.setUint32(14, crc, true); h.setUint32(18, f.data.length, true); h.setUint32(22, f.data.length, true); h.setUint16(26, name.length, true);
+                const c = new DataView(new ArrayBuffer(46));
+                c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(14, 0x21, true);
+                c.setUint32(16, crc, true); c.setUint32(20, f.data.length, true); c.setUint32(24, f.data.length, true); c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+                parts.push(new Uint8Array(h.buffer), name, f.data); cd.push(new Uint8Array(c.buffer), name);
+                off += 30 + name.length + f.data.length;
+            }
+            const cdLen = cd.reduce((a, b) => a + b.length, 0), e = new DataView(new ArrayBuffer(22));
+            e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, cdLen, true); e.setUint32(16, off, true);
+            const out = new Uint8Array(off + cdLen + 22); let o = 0;
+            for (const a of [...parts, ...cd, new Uint8Array(e.buffer)]) { out.set(a, o); o += a.length; }
+            return out;
+        }
+        // ICO：每張圖直接內嵌 PNG（Vista 以後的格式，所有現代瀏覽器都支援）。images: [{ size, data }]，size ≤ 256
+        function icoBuild(images) {
+            const n = images.length, head = new DataView(new ArrayBuffer(6 + 16 * n)); head.setUint16(2, 1, true); head.setUint16(4, n, true);
+            let off = 6 + 16 * n;
+            images.forEach((im, i) => {
+                const o = 6 + 16 * i; head.setUint8(o, im.size >= 256 ? 0 : im.size); head.setUint8(o + 1, im.size >= 256 ? 0 : im.size); head.setUint16(o + 4, 1, true); head.setUint16(o + 6, 32, true); head.setUint32(o + 8, im.data.length, true); head.setUint32(o + 12, off, true);
+                off += im.data.length;
+            });
+            const out = new Uint8Array(off); out.set(new Uint8Array(head.buffer), 0); let o = 6 + 16 * n;
+            for (const im of images) { out.set(im.data, o); o += im.data.length; }
+            return out;
+        }
+        const manifestIcons = (plan = ICON_PLAN) => JSON.stringify({ icons: plan.filter(i => i.size >= 192).map(i => ({ src: '/' + i.name, sizes: i.size + 'x' + i.size, type: 'image/png', ...(i.maskable ? { purpose: 'maskable' } : {}) })) }, null, 2);
+        const headSnippet = () => ['<link rel="icon" href="/favicon.ico" sizes="48x48">', '<link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png">', '<link rel="apple-touch-icon" href="/icon-180.png">', '<link rel="manifest" href="/manifest.webmanifest">'].join('\n');
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -206,6 +271,7 @@
 
         async function process() {
             if (!src) return;
+            $('#iconCard').hidden = false;
             const my = ++token;
             const maxW = parseInt($('#maxw').value, 10) || null, maxH = parseInt($('#maxh').value, 10) || null, mime = $('#fmt').value, q = $('#q').value / 100;
             const { w, h } = fitSize(src.width, src.height, maxW, maxH, !!src.isSvg);
@@ -225,12 +291,46 @@
             $('#stats').replaceChildren(statRow('原始', `${src.width} × ${src.height}・${fmtBytes(srcFile.size)}`), statRow('處理後' + actual, `${w} × ${h}・${fmtBytes(blob.size)}`), statRow('體積', ratioText(srcFile.size, blob.size), blob.size <= srcFile.size ? 'ok' : 'bad'));
             $('#qv').textContent = $('#q').value; $('#q').disabled = mime === 'image/png'; $('#bgRow').hidden = mime !== 'image/jpeg';
         }
+        // ---------- App 圖示包 ----------
+        let icons = [];
+        async function makeIcons() {
+            if (!src) return;
+            const mode = $('#icMode').value, bg = $('#icBg').value, fillAll = $('#icFill').checked, out = [];
+            for (const it of ICON_PLAN) {
+                const cv = document.createElement('canvas'); cv.width = cv.height = it.size; const g = cv.getContext('2d');
+                if (it.maskable || fillAll || it.size === 180) { g.fillStyle = bg; g.fillRect(0, 0, it.size, it.size); }
+                const r = iconRect(src.width, src.height, it.size, mode, it.maskable ? MASKABLE_SCALE : 1);
+                g.imageSmoothingQuality = 'high'; g.save(); g.beginPath(); g.rect(0, 0, it.size, it.size); g.clip(); g.drawImage(src.isSvg ? src.img : src, r.dx, r.dy, r.dw, r.dh); g.restore();
+                const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
+                if (!blob) throw new Error('這個瀏覽器無法輸出 PNG');
+                out.push({ ...it, blob, data: new Uint8Array(await blob.arrayBuffer()) });
+            }
+            return out;
+        }
+        $('#icGo').onclick = async () => {
+            $('#icErr').textContent = '';
+            try {
+                icons = await makeIcons(); if (!icons) return;
+                $('#icList').replaceChildren(...icons.map(ic => {
+                    const d = document.createElement('div'), im = document.createElement('img'), b = document.createElement('button');
+                    d.style.cssText = 'text-align:center'; im.alt = ic.name; im.src = URL.createObjectURL(ic.blob); im.onload = () => URL.revokeObjectURL(im.src);
+                    im.style.cssText = 'width:64px;height:64px;object-fit:contain;display:block;margin:0 auto 4px;background:repeating-conic-gradient(var(--fill) 0 25%, transparent 0 50%) 0 0 / 12px 12px';
+                    b.className = 'sm'; b.textContent = ic.name; b.style.cssText = 'font-size:12px;max-width:100%'; b.onclick = () => download(ic.blob, ic.name);
+                    d.append(im, b); return d;
+                }));
+                $('#icSnip').textContent = headSnippet() + '\n\n// manifest.webmanifest\n' + manifestIcons(); $('#icOut').hidden = false;
+            } catch (e) { $('#icErr').textContent = e.message; }
+        };
+        const icoBytes = () => icoBuild(icons.filter(i => !i.maskable && i.size <= 48).map(i => ({ size: i.size, data: i.data })));
+        $('#icIco').onclick = () => { if (icons.length) download(new Blob([icoBytes()], { type: 'image/x-icon' }), 'favicon.ico'); };
+        $('#icZip').onclick = () => { if (icons.length) download(new Blob([zipStore([...icons.map(i => ({ name: i.name, data: i.data })), { name: 'favicon.ico', data: icoBytes() }, { name: 'manifest-icons.json', data: new TextEncoder().encode(manifestIcons()) }])], { type: 'application/zip' }), 'app-icons.zip'); };
+        $('#icCopy').onclick = () => Util.copyWithFeedback($('#icCopy'), $('#icSnip').textContent);
         const later = () => { clearTimeout(timer); timer = setTimeout(process, 150); };
 
         $('#file').onchange = (e) => load(e.target.files[0]);
         ['maxw', 'maxh', 'fmt', 'q', 'bg'].forEach(id => { $('#' + id).oninput = later; });
         $('#save').onclick = () => { if (result) download(result.blob, outName(srcFile.name, result.w, result.h, result.blob.type)); };
-        $('#reset').onclick = () => { $('#panel').hidden = true; $('#preview').hidden = true; $('#file').value = ''; if (src && src.close) src.close(); src = null; };
+        $('#reset').onclick = () => { $('#panel').hidden = true; $('#iconCard').hidden = true; $('#icOut').hidden = true; icons = []; $('#preview').hidden = true; $('#file').value = ''; if (src && src.close) src.close(); src = null; };
         const drop = $('#drop');
         ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
         ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); }));

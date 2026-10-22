@@ -138,6 +138,16 @@
             color: var(--muted);
         }
 
+        #h2mMsg {
+            font-size: 14px;
+            margin: 8px 0 0;
+            color: var(--muted);
+        }
+
+        #h2mMsg.err {
+            color: var(--bad);
+        }
+
         #tblMsg {
             font-size: 14px;
             margin: 8px 0 0;
@@ -289,6 +299,15 @@
                 </div>
                 <div id="tblMsg" role="status"></div>
             </details>
+            <details id="h2mBox">
+                <summary><b>HTML → Markdown</b></summary>
+                <p class="muted" style="font-size:13px;margin:6px 0 10px">貼上網頁或 email 的 HTML 原始碼，轉成 Markdown。只用瀏覽器解析文字，不會執行也不會顯示這段 HTML。</p>
+                <textarea id="h2mIn" spellcheck="false" placeholder="&lt;h1&gt;標題&lt;/h1&gt;&lt;p&gt;內容 &lt;b&gt;粗體&lt;/b&gt;&lt;/p&gt;" aria-label="HTML 原始碼"></textarea>
+                <div class="bar" style="margin-top:8px"><button id="h2mGo">轉成 Markdown</button></div>
+                <textarea id="h2mOut" readonly spellcheck="false" aria-label="轉出的 Markdown"></textarea>
+                <div class="bar" style="margin-top:8px"><button class="primary" id="h2mInsert">插入編輯區</button><button id="h2mCopy">複製</button></div>
+                <div id="h2mMsg" role="status"></div>
+            </details>
         </div>
     </div>
 
@@ -314,6 +333,13 @@
         <li>CSV：貼上 CSV 或從 Excel / Google 試算表複製的內容（Tab 分隔），按「轉成表格」填進格子。</li>
         <li>反向：在編輯區選取一個 Markdown 表格（或把游標放在表格裡），按「編輯區的表格 → CSV」；「從編輯區載入表格」則把它載回格子繼續編輯。</li>
         </ol>
+        <h3>HTML → Markdown</h3>
+        <ol>
+        <li>在「表格工具」下方展開「HTML → Markdown」，把網頁或 email 的 HTML 原始碼貼進去，按「轉成 Markdown」。</li>
+        <li>支援標題、段落、粗體 / 斜體 / 刪除線、行內程式碼與程式碼區塊（含語言）、連結、圖片、有序 / 無序 / 巢狀清單、核取方塊、引用、分隔線與表格。</li>
+        <li>下方會列出「無法完整轉換」的元素（例如 script、iframe、表單、colspan / rowspan、不安全的連結），讓你知道哪些內容被略過或只保留文字。</li>
+        <li>按「插入編輯區」放在編輯區游標處，或「複製」。</li>
+        </ol>
         <h3>範例</h3>
         <div class="eg">輸入 **重點** 與 [連結](https://example.com)
         → 預覽顯示粗體的「重點」與可點擊的「連結」
@@ -332,6 +358,7 @@
         <li>表格裡的 | 會自動跳脫成 \|，儲存格內的換行會變成空白；表格工具一次最多 500 列、50 欄，格子內容不會自動儲存（只有編輯區內容會存在本機）。</li>
         <li>你輸入的 HTML 標籤一律當文字顯示，不會被執行，所以可以放心貼別人的文字。</li>
         <li>連結只允許 http(s)、mailto 與站內相對路徑；圖片只接受 http(s) 網址。</li>
+        <li>HTML → Markdown 只用瀏覽器的解析器讀文字，不會執行腳本、不載入圖片，也不會顯示在頁面上；上限 100 萬字元；貼上的 HTML 與轉出的結果不會存檔。顏色、字級等樣式會被忽略，複雜排版（巢狀表格、合併儲存格）只能盡量轉換。</li>
         <li>內容會自動存在本機瀏覽器，下次開啟還在，不會上傳。內容太大存不下時，字數旁會提示「沒有自動儲存」，請自行複製備份。</li>
         </ul>
     </template>
@@ -532,6 +559,88 @@
         }
         // --- /pure ---
 
+        // ---------- HTML → Markdown ----------
+        // 只用 DOMParser 解析（解析出來的文件是惰性的：不執行腳本、不載入圖片，也不會插入本頁），再遞迴走訪節點。
+        // 依賴瀏覽器的 DOM，所以放在 pure 區外，由 tests/e2e/markdown-html2md.mjs 在真實瀏覽器測試。
+        const H2M_MAX = 1e6;
+        const H2M_QUIET = new Set(['meta', 'link', 'title', 'base', 'head']);
+        const H2M_DROP = new Set(['script', 'style', 'noscript', 'template', 'iframe', 'object', 'embed', 'canvas', 'video', 'audio', 'svg', 'math', 'button', 'select', 'textarea', 'option', 'datalist', 'map', 'dialog', 'frameset', 'applet']);
+        const H2M_BLOCK = new Set(['div', 'section', 'article', 'header', 'footer', 'main', 'aside', 'nav', 'figure', 'figcaption', 'details', 'summary', 'dl', 'dt', 'dd', 'address', 'center', 'form', 'fieldset', 'legend', 'body', 'html', 'hgroup', 'menu', 'li', 'tr', 'td', 'th', 'thead', 'tbody', 'tfoot', 'caption']);
+        const H2M_INLINE = new Set(['span', 'font', 'small', 'abbr', 'time', 'cite', 'label', 'q', 'bdi', 'bdo', 'data', 'wbr', 'ins', 'var', 'samp', 'dfn', 'tt', 'big', 'nobr']);
+        const H2M_LOSSY = new Set(['u', 'mark', 'sup', 'sub']);
+        // 回傳 { md, skipped: [{ tag, n, why }] }；HTML 太長丟 Error
+        function htmlToMd(html) {
+            html = String(html ?? '');
+            if (html.length > H2M_MAX) throw new Error('HTML 太長（上限 1,000,000 字元）');
+            const doc = new DOMParser().parseFromString(html, 'text/html'), skip = new Map();
+            const note = (tag, why) => { const e = skip.get(tag + why) || { tag, n: 0, why }; e.n++; skip.set(tag + why, e); };
+            const B = '\u0001', blk = (s) => B + s + B, tidy = (s) => s.split(B).map(x => x.trim()).filter(Boolean).join('\n\n');
+            const escT = (t) => t.replace(/[\\`*_\[\]<>]/g, '\\$&');
+            const run = (s, ch) => Math.max(0, ...(s.match(new RegExp(ch + '+', 'g')) || []).map(x => x.length));
+            // 連結 / 圖片網址：只放行 http(s)、mailto、tel 與相對路徑；回傳 null 表示不安全
+            const safeUrl = (u) => { u = String(u || '').replace(/[\u0000-\u001f\u007f]/g, '').trim(); if (!u) return ''; if (/^[a-z][a-z0-9+.-]*:/i.test(u.replace(/\s/g, '')) && !/^(https?|mailto|tel):/i.test(u)) return null; return u.replace(/ /g, '%20').replace(/\(/g, '%28').replace(/\)/g, '%29'); };
+            const wrap = (m, s) => { if (s.includes(B)) return s; const t = s.trim(); return t ? /^\s*/.exec(s)[0] + m + t + m + /\s*$/.exec(s)[0] : s; };
+            const kids = (n, ctx) => [...n.childNodes].map(c => walk(c, ctx)).join('');
+            const list = (n, ctx) => {
+                const ol = n.localName === 'ol', start = parseInt(n.getAttribute('start'), 10);
+                return [...n.children].filter(c => c.localName === 'li').map((li, i) => {
+                    const marker = ol ? ((Number.isFinite(start) ? start : 1) + i) + '. ' : '- ', pad = ' '.repeat(marker.length);
+                    const cb = [...li.children].find(c => c.localName === 'input' && c.type === 'checkbox');
+                    let body = tidy(kids(li, ctx)); if (!body.includes('```')) body = body.replace(/\n\n/g, '\n');
+                    return marker + (cb ? (cb.checked ? '[x] ' : '[ ] ') : '') + body.split('\n').map((l, k) => (k && l ? pad + l : l)).join('\n');
+                }).join('\n');
+            };
+            const table = (t, ctx) => {
+                const trs = [...t.querySelectorAll('tr')].filter(tr => tr.closest('table') === t);
+                const grid = trs.map(tr => [...tr.children].filter(c => /^t[dh]$/.test(c.localName)));
+                if (!grid.length || !grid[0].length) return '';
+                if (grid.some(r => r.some(c => (+c.getAttribute('colspan') || 1) > 1 || (+c.getAttribute('rowspan') || 1) > 1))) note('table', '：colspan / rowspan 不支援，已當成單一儲存格');
+                const aligns = grid[0].map(c => { const a = (c.getAttribute('align') || c.style.textAlign || '').toLowerCase(); return a === 'center' || a === 'right' ? a : ''; });
+                const cap = t.querySelector('caption');
+                try { return (cap ? blk(tidy(kids(cap, ctx))) : '') + blk(mdTableFromRows(grid.map(r => r.map(c => tidy(kids(c, ctx)))), { aligns, header: true, pad: false })); }
+                catch (e) { note('table', '：超過 500 列或 50 欄，已略過'); return ''; }
+            };
+            function walk(n, ctx = {}) {
+                if (n.nodeType === 3) return escT(n.nodeValue.replace(/\u00a0/g, ' ').replace(/\s+/g, ' '));
+                if (n.nodeType !== 1) return '';
+                const tag = n.localName, h = /^h([1-6])$/.exec(tag);
+                if (H2M_QUIET.has(tag)) return '';
+                if (H2M_DROP.has(tag)) { note(tag, '：整段略過'); return ''; }
+                if (h) return blk('#'.repeat(+h[1]) + ' ' + tidy(kids(n, ctx)).replace(/\s+/g, ' '));
+                switch (tag) {
+                    case 'p': return blk(kids(n, ctx));
+                    case 'br': return '  \n';
+                    case 'hr': return blk('---');
+                    case 'strong': case 'b': return wrap('**', kids(n, ctx));
+                    case 'em': case 'i': return wrap('*', kids(n, ctx));
+                    case 'del': case 's': case 'strike': return wrap('~~', kids(n, ctx));
+                    case 'code': case 'kbd': { const s = n.textContent.replace(/\s+/g, ' '); if (!s.trim()) return ''; const f = '`'.repeat(run(s, '`') + 1); return f + (/^`|`$/.test(s) ? ' ' + s + ' ' : s) + f; }
+                    case 'pre': { const c = n.querySelector('code') || n, s = c.textContent.replace(/\n$/, ''), lang = (String(c.className).match(/(?:lang|language)-([\w+#.-]+)/) || [])[1] || '', f = '`'.repeat(Math.max(3, run(s, '`') + 1)); return blk(f + lang + '\n' + s + '\n' + f); }
+                    case 'a': {
+                        const href = safeUrl(n.getAttribute('href')), inner = kids(n, ctx);
+                        if (href === null) { note('a', '：不安全的連結（javascript: 等），只保留文字'); return inner; }
+                        const t = inner.replace(/\u0001+/g, ' ').trim();
+                        return href && t ? /^\s*/.exec(inner)[0] + '[' + t + '](' + href + ')' + /\s*$/.exec(inner)[0] : inner;
+                    }
+                    case 'img': {
+                        const u = safeUrl(n.getAttribute('src')), alt = (n.getAttribute('alt') || '').replace(/[\[\]\s]+/g, ' ').trim();
+                        if (!u) { note('img', '：沒有網址或不支援 data: 等網址，只保留替代文字'); return alt; }
+                        return '![' + alt + '](' + u + ')';
+                    }
+                    case 'ul': case 'ol': return blk(list(n, ctx));
+                    case 'blockquote': return blk(tidy(kids(n, ctx)).split('\n').map(l => (l ? '> ' + l : '>')).join('\n'));
+                    case 'table': return table(n, ctx);
+                    case 'input': if (n.type !== 'checkbox') note('input', '：表單欄位略過'); return '';
+                }
+                if (H2M_BLOCK.has(tag)) return blk(kids(n, ctx));
+                if (H2M_INLINE.has(tag)) return kids(n, ctx);
+                if (H2M_LOSSY.has(tag)) { note(tag, '：格式不保留，只保留文字'); return kids(n, ctx); }
+                note(tag, '：不認識的標籤，只保留文字'); return kids(n, ctx);
+            }
+            const md = tidy(kids(doc.body, {}));
+            return { md: md ? md + '\n' : '', skipped: [...skip.values()] };
+        }
+
         const $ = (s) => document.querySelector(s);
         const SAMPLE = `# Markdown 預覽
 
@@ -621,6 +730,21 @@ console.log('hello');
             try { $('#tblPaste').value = mdTableToCsv(editorTable()); tmsg('✓ 已轉成 CSV', 'ok'); }
             catch (e) { tmsg('✗ ' + e.message, 'err'); }
         };
+        // ---------- HTML → Markdown（輸入與輸出都不存檔） ----------
+        const hmsg = (t, cls) => { const e = $('#h2mMsg'); e.textContent = t; e.className = cls || ''; };
+        $('#h2mGo').onclick = () => {
+            const t = $('#h2mIn').value; if (!t.trim()) { $('#h2mOut').value = ''; return hmsg('請先貼上 HTML', 'err'); }
+            try {
+                const r = htmlToMd(t); $('#h2mOut').value = r.md;
+                hmsg(r.skipped.length ? '已轉換。無法完整轉換：' + r.skipped.map(s => '<' + s.tag + '> ×' + s.n + s.why).join('；') : '已轉換，沒有無法轉換的元素。');
+            } catch (e) { $('#h2mOut').value = ''; hmsg(e.message, 'err'); }
+        };
+        $('#h2mInsert').onclick = () => {
+            const md = $('#h2mOut').value; if (!md.trim()) return hmsg('沒有可插入的內容，請先轉換', 'err');
+            const r = tblInsert(src.value, src.selectionStart, src.selectionEnd, md.trimEnd());
+            src.value = r.value; src.setSelectionRange(r.caret, r.caret); render(); hmsg('已插入編輯區');
+        };
+        $('#h2mCopy').onclick = () => Util.copyWithFeedback($('#h2mCopy'), $('#h2mOut').value, () => { });
         tblDraw();
         const tab = (pv) => { $('#two').classList.toggle('pv', pv); $('#tEdit').setAttribute('aria-pressed', !pv); $('#tPrev').setAttribute('aria-pressed', pv); };
         $('#tEdit').onclick = () => tab(false); $('#tPrev').onclick = () => tab(true);

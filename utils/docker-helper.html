@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="Docker / .env 小幫手：表單產生 docker run 與 docker-compose.yml、由 docker run 指令解析回表單；檢查 .env 的重複鍵、空值、格式與疑似密鑰。">
+    <meta name="description" content="Docker / .env 小幫手：表單產生 docker run 與 docker-compose.yml、由 docker run 指令解析回表單；檢查 .env 的重複鍵、空值、格式、命名與疑似密鑰；常用服務 compose 範本庫；依語言產生多階段 Dockerfile。">
     <meta property="og:title" content="Docker / .env 小幫手" />
     <meta property="og:description" content="docker run ⇄ compose 轉換，.env 檢查與整理，離線計算。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
@@ -21,12 +21,13 @@
 
         .tabs {
             display: flex;
+            flex-wrap: wrap;
             gap: 8px;
             margin-bottom: 14px;
         }
 
         .tabs button {
-            flex: 1;
+            flex: 1 1 140px;
         }
 
         label.f {
@@ -136,7 +137,7 @@
         <h1>Docker / .env 小幫手</h1>
         <p class="sub">表單 ⇄ docker run ⇄ compose，並檢查 .env 檔。全部在本機處理。</p>
 
-        <div class="tabs" id="tabs"><button data-t="run" aria-pressed="true">docker run / compose</button><button data-t="env" aria-pressed="false">.env 檢查</button></div>
+        <div class="tabs" id="tabs"><button data-t="run" aria-pressed="true">docker run / compose</button><button data-t="env" aria-pressed="false">.env 檢查</button><button data-t="tpl" aria-pressed="false">compose 範本庫</button><button data-t="df" aria-pressed="false">Dockerfile</button></div>
 
         <div id="pgRun">
             <div class="card">
@@ -191,6 +192,49 @@
             </div>
         </div>
 
+        <div id="pgTpl" hidden>
+            <div class="card">
+                <h2>常用服務範本</h2>
+                <label class="f" for="tplSel">服務</label>
+                <select id="tplSel"></select>
+                <div class="grid2">
+                    <div><label class="f" for="tplPort">主機埠 <small>（留空 = 範本預設）</small></label><input id="tplPort" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="5"></div>
+                    <div><label class="chk" style="margin-top:34px"><input type="checkbox" id="tplLocal" checked>只開放本機 127.0.0.1</label></div>
+                </div>
+            </div>
+            <div class="card">
+                <h2>docker-compose.yml</h2>
+                <div class="code" id="outTpl"></div>
+                <button class="sm" id="copyTpl">複製</button>
+                <h2 style="margin-top:18px">對應的 .env</h2>
+                <div class="code" id="outTplEnv"></div>
+                <button class="sm" id="copyTplEnv">複製</button>
+                <div class="warnbox" id="tplWarns"></div>
+            </div>
+        </div>
+
+        <div id="pgDf" hidden>
+            <div class="card">
+                <h2>依語言產生 Dockerfile</h2>
+                <div class="grid2">
+                    <div><label class="f" for="dfLang">語言</label>
+                        <select id="dfLang"><option value="node">Node.js</option><option value="python">Python</option><option value="go">Go</option><option value="java">Java（Maven）</option><option value="static">靜態網站（Node 建置 + nginx）</option></select></div>
+                    <div><label class="f" for="dfVer">版本 <small>（留空 = 預設）</small></label><input id="dfVer" autocomplete="off" spellcheck="false" maxlength="12"></div>
+                    <div><label class="f" for="dfPort">對外埠 <small>EXPOSE</small></label><input id="dfPort" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="5" placeholder="例如 3000"></div>
+                    <div><label class="f" for="dfCmd">啟動指令 <small>（留空 = 預設）</small></label><input id="dfCmd" autocomplete="off" spellcheck="false" maxlength="300" placeholder="例如 node dist/index.js"></div>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Dockerfile</h2>
+                <div class="code" id="outDf"></div>
+                <button class="sm" id="copyDf">複製</button>
+                <h2 style="margin-top:18px">.dockerignore</h2>
+                <div class="code" id="outDi"></div>
+                <button class="sm" id="copyDi">複製</button>
+                <div class="warnbox" id="dfWarns"></div>
+            </div>
+        </div>
+
         <div id="pgEnv" hidden>
             <div class="card">
                 <h2>貼上 .env 內容</h2>
@@ -200,6 +244,11 @@
             <div class="card">
                 <h2>檢查結果</h2>
                 <div id="issues"></div>
+            </div>
+            <div class="card">
+                <h2>命名檢查</h2>
+                <p class="note">慣例：全大寫加底線（<kbd>DB_HOST</kbd>）、同一概念用同一個前綴與後綴、前端公開前綴不放密鑰。</p>
+                <div id="naming"></div>
             </div>
             <div class="card">
                 <h2>整理與輸出</h2>
@@ -217,7 +266,7 @@
 
     <template id="help">
         <h3>這是什麼</h3>
-        <p>兩個小工具：(1) 用表單產生 <kbd>docker run</kbd> 指令與 <kbd>docker-compose.yml</kbd>，也能把現成的 docker run 指令解析回表單；(2) 檢查 .env 檔案有沒有重複鍵、空值、格式錯誤與疑似密鑰，並輸出整理版。</p>
+        <p>四個小工具：(1) 用表單產生 <kbd>docker run</kbd> 指令與 <kbd>docker-compose.yml</kbd>，也能把現成的 docker run 指令解析回表單；(2) 檢查 .env 檔案有沒有重複鍵、空值、格式錯誤、疑似密鑰與命名問題，並輸出整理版；(3) compose 範本庫：Redis、PostgreSQL、MySQL、MariaDB、MongoDB、RabbitMQ 一鍵產生 compose 與對應的 .env；(4) 依語言（Node.js、Python、Go、Java、靜態網站）產生多階段 Dockerfile 與 .dockerignore。</p>
         <h3>什麼時候用</h3>
         <ul>
         <li>網路上教學給 docker run 指令，你想改寫成 compose 長期維護。</li>
@@ -229,19 +278,25 @@
         <li>「docker run / compose」分頁：貼上指令按「解析到下方表單」，或直接填表單；下方即時產生指令與 compose。</li>
         <li>埠對映、環境變數、Volume 都是一行一個。「其他旗標」放表單沒有的旗標，會原樣保留在 docker run 輸出。</li>
         <li>解析時無法辨識的旗標會被列出並放進「其他旗標」；轉成 compose 時這些旗標會變成註解並出現在提醒中，需要手動處理。</li>
-        <li>「.env 檢查」分頁：貼上 .env，下方列出問題（錯誤、警告、提醒），可勾「依鍵名排序」，再複製整理版或 compose 的 environment 區塊（貼到服務底下、縮排對齊即可）。</li>
+        <li>「.env 檢查」分頁：貼上 .env，下方列出問題（錯誤、警告、提醒），可勾「依鍵名排序」，再複製整理版或 compose 的 environment 區塊（貼到服務底下、縮排對齊即可）。「命名檢查」會看：是否全大寫加底線、同一概念是否混用前綴（DB / DATABASE）或用字（PASSWORD / PASSWD）、<kbd>NEXT_PUBLIC_</kbd>、<kbd>VITE_</kbd> 這類前端公開前綴是否放了密鑰。</li>
+        <li>「compose 範本庫」分頁：選服務、需要時改主機埠，複製 compose 與 .env 範例。密碼欄位寫成 <kbd>${變數:?訊息}</kbd>，沒在 .env 設定就會報錯，不會用空密碼啟動；預設只綁 127.0.0.1。</li>
+        <li>「Dockerfile」分頁：選語言，可填版本、對外埠、啟動指令（留空用預設），複製 Dockerfile 與 .dockerignore。提醒區會列出該語言需要的檔案（例如 package-lock.json、requirements.txt、go.sum）。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">docker run -d --name web -p 8080:80 -e TZ=Asia/Taipei nginx:latest
 → compose：services → web → image: nginx:latest、ports: "8080:80"、environment: TZ: "Asia/Taipei"
 .env 內容：A=1、A=2、PASSWORD=abc、NOTE=hello world
-→ 重複鍵 A、疑似密鑰 PASSWORD、NOTE 含空白未加引號</div>
+→ 重複鍵 A、疑似密鑰 PASSWORD、NOTE 含空白未加引號
+.env：db_host=x、DB_PORT=1、DATABASE_USER=u、VITE_API_SECRET=abc
+→ db_host 建議大寫、DB / DATABASE 混用、VITE_ 前綴放了密鑰（會被打包進前端）
+範本庫選 PostgreSQL → services.postgres（image postgres:16、127.0.0.1:5432、healthcheck、pg_data volume）+ .env（POSTGRES_PASSWORD=change_me）</div>
         <h3>小提醒</h3>
         <ul>
         <li>--rm、-d 在 compose 沒有對應設定（用 <kbd>docker compose run --rm</kbd> / <kbd>up -d</kbd>）；compose 內的 <kbd>$</kbd> 會自動寫成 <kbd>$$</kbd> 避免被當成變數。</li>
         <li>YAML 由本頁自行輸出，字串會加引號避免 no、1.10、22:22 被誤判型別；複雜的設定（健康檢查、多服務）請自行補充。</li>
         <li>Docker 的 <kbd>--env-file</kbd> 不處理引號；整理版的引號是給 compose 與常見 dotenv 函式庫用的。</li>
         <li>疑似密鑰只是依鍵名與常見格式判斷，不代表一定是密鑰；真正的密鑰請不要提交到版本庫。</li>
+        <li>範本與 Dockerfile 只是常見起點：映像版本已固定主要版本，正式環境請自行確認；資料庫升級大版本前先備份 volume；Dockerfile 預設假設的檔案與指令（見提醒區）不符時請自行調整。<kbd>.dockerignore</kbd> 預設排除 .env，避免密鑰被打包進映像。</li>
         <li>內容不會被儲存（只記住你上次停在哪個分頁，可用右上角 💾 備份）；貼上內容有長度上限，超過會被截斷。壞掉的記憶資料會被忽略。</li>
         </ul>
     </template>
@@ -501,17 +556,105 @@
             if (!u.length) return '';
             return '    environment:\n' + u.map(e => `      ${ykey(e.key)}: ${e.value === '' ? '""' : yval(dollar(e.value))}`).join('\n');
         };
+        // ===== .env 命名檢查（只回傳新的檢查，不改動 parseEnv 的結果）=====
+        const NAME_ALIASES = [
+            ['warn', ['DB', 'DATABASE'], '前綴'], ['warn', ['PG', 'POSTGRES', 'POSTGRESQL'], '前綴'], ['warn', ['MONGO', 'MONGODB'], '前綴'], ['warn', ['SMTP', 'MAIL', 'EMAIL'], '前綴'],
+            ['info', ['PASSWORD', 'PASSWD', 'PWD', 'PASS'], '用字'], ['info', ['URL', 'URI'], '用字'], ['info', ['USER', 'USERNAME'], '用字'], ['info', ['HOST', 'HOSTNAME'], '用字'],
+        ];
+        const PUBLIC_PREFIX = /^(NEXT_PUBLIC_|VITE_|REACT_APP_|NUXT_PUBLIC_|EXPO_PUBLIC_|PUBLIC_)/;
+        function lintEnvNames(entries) {
+            const issues = [], first = new Map();
+            for (const e of entries) if (!first.has(e.key)) first.set(e.key, e);
+            const add = (e, level, code, msg) => issues.push({ line: e.line, level, code, key: e.key, msg });
+            for (const e of first.values()) {
+                const k = e.key;
+                if (!/^[A-Z][A-Z0-9_]*$/.test(k) && /^[A-Za-z_][A-Za-z0-9_.-]*$/.test(k)) add(e, 'warn', 'naming-case', `${k} 建議改成全大寫加底線（${k.toUpperCase().replace(/[^A-Z0-9_]/g, '_')}）`);
+                else if (/__|^_|_$/.test(k)) add(e, 'info', 'naming-underscore', `${k} 有開頭、結尾或連續底線，通常是打錯`);
+                const hasVal = e.value !== '' && !PLACEHOLDER.test(e.value);
+                if (PUBLIC_PREFIX.test(k) && hasVal && (SECRET_KEY.test(k) || SECRET_VAL.test(e.value))) add(e, 'warn', 'public-secret', `${k} 使用前端公開前綴，值會被打包進瀏覽器程式，任何人都看得到；密鑰請只放後端`);
+                else if (hasVal && SECRET_VAL.test(e.value) && !SECRET_KEY.test(k)) add(e, 'info', 'secret-value', `${k} 的值長得像密鑰，但鍵名看不出來；建議鍵名含 SECRET / TOKEN / KEY 等字樣，方便辨識與排除`);
+            }
+            for (const [level, group, kind] of NAME_ALIASES) {
+                const used = new Map();
+                for (const e of first.values()) for (const seg of e.key.toUpperCase().split('_')) if (group.includes(seg) && !used.has(seg)) used.set(seg, e);
+                if (used.size > 1) { const ents = [...used.values()]; add(ents[1], level, 'naming-mix', `同一概念混用不同${kind}：${[...used.keys()].join(' / ')}（${ents.map(x => x.key).join('、')}），建議統一`); }
+            }
+            issues.sort((a, b) => a.line - b.line);
+            return issues;
+        }
+
+        // ===== compose 服務範本庫 =====
+        // env 項目：[鍵, 預設值, 是否密鑰]；密鑰一律從 .env 讀、沒設定會讓 compose 報錯（${VAR:?訊息}）
+        const SVC_TPL = {
+            redis: { name: 'Redis', image: 'redis:7', ports: [6379], volume: ['redis_data', '/data'], command: ['redis-server', '--appendonly', 'yes'], health: ['CMD', 'redis-cli', 'ping'], env: [], note: 'Redis 範本沒有設密碼，請只對本機或內網開放' },
+            postgres: { name: 'PostgreSQL', image: 'postgres:16', ports: [5432], volume: ['pg_data', '/var/lib/postgresql/data'], health: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}'], env: [['POSTGRES_USER', 'app'], ['POSTGRES_PASSWORD', '', 1], ['POSTGRES_DB', 'app']] },
+            mysql: { name: 'MySQL', image: 'mysql:8.4', ports: [3306], volume: ['mysql_data', '/var/lib/mysql'], health: ['CMD-SHELL', 'mysqladmin ping -h localhost -u root -p"$${MYSQL_ROOT_PASSWORD}" --silent'], env: [['MYSQL_ROOT_PASSWORD', '', 1], ['MYSQL_DATABASE', 'app'], ['MYSQL_USER', 'app'], ['MYSQL_PASSWORD', '', 1]] },
+            mariadb: { name: 'MariaDB', image: 'mariadb:11', ports: [3306], volume: ['mariadb_data', '/var/lib/mysql'], health: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized'], env: [['MARIADB_ROOT_PASSWORD', '', 1], ['MARIADB_DATABASE', 'app'], ['MARIADB_USER', 'app'], ['MARIADB_PASSWORD', '', 1]] },
+            mongo: { name: 'MongoDB', image: 'mongo:7', ports: [27017], volume: ['mongo_data', '/data/db'], health: ['CMD-SHELL', 'mongosh --quiet --eval "db.adminCommand(\'ping\')" || exit 1'], env: [['MONGO_INITDB_ROOT_USERNAME', 'root'], ['MONGO_INITDB_ROOT_PASSWORD', '', 1]] },
+            rabbitmq: { name: 'RabbitMQ（含管理介面）', image: 'rabbitmq:3-management', ports: [5672, 15672], volume: ['rabbit_data', '/var/lib/rabbitmq'], health: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping'], env: [['RABBITMQ_DEFAULT_USER', 'app'], ['RABBITMQ_DEFAULT_PASS', '', 1]] },
+        };
+        // → { yaml, env, warnings[] }；o: { port（第一個埠的主機埠，可空）, local（只綁 127.0.0.1） }
+        function buildSvcTemplate(id, o = {}) {
+            const t = SVC_TPL[id]; if (!t) return { yaml: '', env: '', warnings: ['找不到範本'] };
+            const w = [], L = ['services:', `  ${id}:`, `    image: ${ydq(t.image)}`, '    restart: "unless-stopped"'];
+            let hp = String(o.port ?? '').trim();
+            if (hp && !(/^\d+$/.test(hp) && +hp >= 1 && +hp <= 65535)) { w.push('主機埠需為 1–65535，已改用預設'); hp = ''; }
+            L.push('    ports:');
+            t.ports.forEach((p, i) => L.push('      - ' + ydq((o.local ? '127.0.0.1:' : '') + (i === 0 && hp ? hp : p) + ':' + p)));
+            if (t.env.length) { L.push('    environment:'); for (const [k, d, sec] of t.env) L.push(`      ${k}: ` + ydq(sec ? `\${${k}:?請在 .env 設定 ${k}}` : `\${${k}:-${d}}`)); }
+            L.push('    volumes:', '      - ' + ydq(t.volume.join(':')));
+            if (t.command) L.push('    command: [' + t.command.map(ydq).join(', ') + ']');
+            L.push('    healthcheck:', '      test: [' + t.health.map(ydq).join(', ') + ']', '      interval: "10s"', '      timeout: "5s"', '      retries: 5', '', 'volumes:', `  ${t.volume[0]}:`);
+            if (!o.local) w.push('未勾選「只開放本機」時，埠會對外網卡開放；資料庫請搭配防火牆或改勾選');
+            if (t.note) w.push(t.note);
+            w.push('映像標籤已固定主要版本（' + t.image + '）；正式環境請依需求再選定版本，升級資料庫大版本前先備份 volume');
+            return { yaml: L.join('\n'), env: t.env.map(([k, d, sec]) => `${k}=${sec ? 'change_me' : d}`).join('\n'), warnings: w };
+        }
+
+        // ===== Dockerfile 產生（多階段）=====
+        const DF_DEF = { node: { v: '22', port: 3000 }, python: { v: '3.12', port: 8000 }, go: { v: '1.23', port: 8080 }, java: { v: '21', port: 8080 }, static: { v: '22', port: 80 } };
+        const DI_COMMON = ['.git', '.gitignore', '.dockerignore', 'Dockerfile*', 'docker-compose*.yml', '.env', '.env.*', '*.md', '.vscode', '.idea'];
+        const DI_LANG = { node: ['node_modules', 'npm-debug.log', 'coverage'], static: ['node_modules', 'dist', 'npm-debug.log'], python: ['__pycache__', '*.pyc', '.venv', 'venv', '.pytest_cache'], go: ['bin', '*.test', '*.out'], java: ['target', '*.class'] };
+        // o: { lang, ver, port, cmd } → { dockerfile, ignore, warnings[] }
+        function buildDockerfile(o = {}) {
+            const lang = DF_DEF[o.lang] ? o.lang : 'node', d = DF_DEF[lang], w = [];
+            let v = String(o.ver ?? '').trim(); if (v && !/^\d+(\.\d+){0,2}$/.test(v)) { w.push('版本格式應如 22 或 3.12，已改用預設 ' + d.v); v = ''; } v = v || d.v;
+            let port = String(o.port ?? '').trim(); if (port && !(/^\d+$/.test(port) && +port >= 1 && +port <= 65535)) { w.push('埠需為 1–65535，已改用預設 ' + d.port); port = ''; } port = port || String(d.port);
+            let cmd = null; if (String(o.cmd ?? '').trim()) { const t = tokenize(o.cmd); if (t.ok && t.tokens.length) cmd = t.tokens; else w.push('啟動指令無法解析（' + (t.reason || '空白') + '），已改用預設'); }
+            const arr = (a) => '[' + a.map(x => JSON.stringify(x)).join(', ') + ']';
+            const L = [];
+            switch (lang) {
+                case 'node':
+                    L.push(`FROM node:${v}-alpine AS deps`, 'WORKDIR /app', 'COPY package*.json ./', 'RUN npm ci --omit=dev', '', `FROM node:${v}-alpine AS build`, 'WORKDIR /app', 'COPY package*.json ./', 'RUN npm ci', 'COPY . .', 'RUN npm run build --if-present', '', `FROM node:${v}-alpine`, 'WORKDIR /app', 'ENV NODE_ENV=production', 'COPY --from=build /app ./', 'COPY --from=deps /app/node_modules ./node_modules', 'USER node', `EXPOSE ${port}`, `CMD ${arr(cmd || ['npm', 'start'])}`);
+                    w.push('需要 package-lock.json（npm ci）；用 yarn / pnpm 請自行改安裝指令', '建置產物留在 /app，啟動指令預設 npm start；若入口是 dist/ 內的檔案，請在上方填啟動指令'); break;
+                case 'python':
+                    L.push(`FROM python:${v}-slim AS build`, 'RUN python -m venv /opt/venv', 'COPY requirements.txt .', 'RUN /opt/venv/bin/pip install --no-cache-dir -r requirements.txt', '', `FROM python:${v}-slim`, 'ENV PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1', 'WORKDIR /app', 'COPY --from=build /opt/venv /opt/venv', 'COPY . .', 'RUN useradd --system --no-create-home app', 'USER app', `EXPOSE ${port}`, `CMD ${arr(cmd || ['python', 'app.py'])}`);
+                    w.push('需要 requirements.txt；啟動指令預設 python app.py，請改成你的入口（例如 gunicorn 或 uvicorn）'); break;
+                case 'go':
+                    L.push(`FROM golang:${v} AS build`, 'WORKDIR /src', 'COPY go.mod go.sum ./', 'RUN go mod download', 'COPY . .', 'RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/app .', '', 'FROM gcr.io/distroless/static-debian12:nonroot', 'COPY --from=build /out/app /app', `EXPOSE ${port}`, `ENTRYPOINT ${arr(cmd || ['/app'])}`);
+                    w.push('需要 go.mod 與 go.sum；main 套件在專案根目錄（否則改 go build 最後的路徑）；distroless 沒有 shell，ENTRYPOINT 必須是可執行檔路徑'); break;
+                case 'java':
+                    L.push(`FROM maven:3.9-eclipse-temurin-${v} AS build`, 'WORKDIR /src', 'COPY pom.xml .', 'RUN mvn -q dependency:go-offline', 'COPY src ./src', 'RUN mvn -q package -DskipTests', '', `FROM eclipse-temurin:${v}-jre`, 'WORKDIR /app', 'COPY --from=build /src/target/*.jar /app/app.jar', 'RUN useradd --system --no-create-home app', 'USER app', `EXPOSE ${port}`, `ENTRYPOINT ${arr(cmd || ['java', '-jar', '/app/app.jar'])}`);
+                    w.push('target/ 內只能有一個 jar（COPY 萬用字元對到多個會失敗）'); break;
+                default:
+                    L.push(`FROM node:${v}-alpine AS build`, 'WORKDIR /app', 'COPY package*.json ./', 'RUN npm ci', 'COPY . .', 'RUN npm run build', '', 'FROM nginx:alpine', 'COPY --from=build /app/dist /usr/share/nginx/html', `EXPOSE ${port}`);
+                    if (cmd) w.push('靜態網站使用 nginx 預設啟動指令，已忽略自訂啟動指令');
+                    w.push('建置產物預設在 dist/（Vite 預設）；Create React App 是 build/，請自行改 COPY 路徑；單頁應用的前端路由需另外設定 nginx try_files');
+            }
+            w.push('.dockerignore 預設排除 .env，避免密鑰被打包進映像；請用環境變數或 secret 在執行時提供');
+            return { dockerfile: L.join('\n'), ignore: [...DI_COMMON, ...DI_LANG[lang]].join('\n'), warnings: w };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
-        const KEY = 'dockerh_opts', TABS = ['run', 'env'];
+        const KEY = 'dockerh_opts', TABS = ['run', 'env', 'tpl', 'df'], PAGES = { run: '#pgRun', env: '#pgEnv', tpl: '#pgTpl', df: '#pgDf' };
         const addMsgs = (box, arr) => { box.replaceChildren(...arr.map(t => { const d = document.createElement('div'); d.textContent = t; return d; })); };
 
         // ---- 分頁（只記住上次分頁）----
         function showTab(t, save) {
             if (!TABS.includes(t)) t = 'run';
             [...$('#tabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.t === t));
-            $('#pgRun').hidden = t !== 'run'; $('#pgEnv').hidden = t !== 'env';
+            for (const k of TABS) $(PAGES[k]).hidden = k !== t;
             if (save) store.set(KEY, { tab: t });
         }
         $('#tabs').onclick = (e) => { const t = e.target.dataset.t; if (t) showTab(t, true); };
@@ -565,12 +708,41 @@
             const sort = $('#sort').checked;
             $('#outTidy').textContent = tidyEnv(r.entries, sort);
             $('#outEnvYml').textContent = envToCompose(r.entries, sort);
+            const nm = lintEnvNames(r.entries), nb = $('#naming'); nb.replaceChildren();
+            if (!r.entries.length) nb.textContent = '貼上 .env 內容後會在這裡顯示結果';
+            else if (!nm.length) { const ok = document.createElement('div'); ok.className = 'issue ok'; ok.textContent = '命名沒有問題'; nb.append(ok); }
+            for (const it of nm) {
+                const d = document.createElement('div'); d.className = 'issue';
+                const lv = document.createElement('span'); lv.className = 'lv ' + it.level; lv.textContent = LV[it.level];
+                d.append(lv, document.createTextNode(`第 ${it.line} 行：${it.msg}`)); nb.append(d);
+            }
         }
         $('#envIn').oninput = $('#sort').onchange = renderEnv;
         $('#copyTidy').onclick = () => copyWithFeedback($('#copyTidy'), $('#outTidy').textContent);
         $('#copyEnvYml').onclick = () => copyWithFeedback($('#copyEnvYml'), $('#outEnvYml').textContent);
 
-        renderRun(); renderEnv();
+        // ---- compose 範本庫 ----
+        for (const [id, t] of Object.entries(SVC_TPL)) $('#tplSel').add(new Option(t.name, id));
+        function renderTpl() {
+            const r = buildSvcTemplate($('#tplSel').value, { port: $('#tplPort').value, local: $('#tplLocal').checked });
+            $('#outTpl').textContent = r.yaml; $('#outTplEnv').textContent = r.env || '（此範本不需要環境變數）';
+            addMsgs($('#tplWarns'), r.warnings);
+        }
+        for (const k of ['tplSel', 'tplPort', 'tplLocal']) $('#' + k).oninput = $('#' + k).onchange = renderTpl;
+        $('#copyTpl').onclick = () => copyWithFeedback($('#copyTpl'), $('#outTpl').textContent);
+        $('#copyTplEnv').onclick = () => copyWithFeedback($('#copyTplEnv'), $('#outTplEnv').textContent);
+
+        // ---- Dockerfile ----
+        function renderDf() {
+            const r = buildDockerfile({ lang: $('#dfLang').value, ver: $('#dfVer').value, port: $('#dfPort').value, cmd: $('#dfCmd').value });
+            $('#outDf').textContent = r.dockerfile; $('#outDi').textContent = r.ignore;
+            addMsgs($('#dfWarns'), r.warnings);
+        }
+        for (const k of ['dfLang', 'dfVer', 'dfPort', 'dfCmd']) $('#' + k).oninput = $('#' + k).onchange = renderDf;
+        $('#copyDf').onclick = () => copyWithFeedback($('#copyDf'), $('#outDf').textContent);
+        $('#copyDi').onclick = () => copyWithFeedback($('#copyDi'), $('#outDi').textContent);
+
+        renderRun(); renderEnv(); renderTpl(); renderDf();
     </script>
 </body>
 

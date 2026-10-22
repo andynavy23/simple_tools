@@ -26,6 +26,31 @@
             flex-wrap: wrap;
         }
 
+        .envsec {
+            margin: 14px 0 4px;
+            font-size: 15px;
+            color: var(--muted);
+        }
+
+        .envrow {
+            display: flex;
+            gap: 10px;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .envrow>span {
+            flex: 0 0 38%;
+            color: var(--muted);
+        }
+
+        .envrow>b {
+            flex: 1;
+            font-weight: 600;
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
         .swatches {
             display: flex;
             gap: 6px;
@@ -268,6 +293,7 @@
                 <button data-t="ppi" aria-pressed="false">尺寸 / PPI</button>
                 <button data-t="cam" aria-pressed="false">相機</button>
                 <button data-t="mic" aria-pressed="false">麥克風</button>
+                <button data-t="env" aria-pressed="false">瀏覽器環境</button>
             </div>
 
             <div class="pane" data-t="screen">
@@ -335,6 +361,12 @@
                 <audio id="micPlay" controls hidden></audio>
             </div>
 
+            <div class="pane" data-t="env" hidden>
+                <p class="note">列出這個瀏覽器的環境與功能支援，方便回報 bug 時附上。全部在本機讀取、不會送出到網路。</p>
+                <div class="row" style="margin:10px 0"><button class="sm" id="envCopy">複製成回報文字</button><button class="sm" id="envRefresh">重新讀取</button></div>
+                <div id="envOut"></div>
+            </div>
+
             <div class="pane" data-t="mouse" hidden>
                 <div id="pad" tabindex="0">在這裡按滑鼠按鍵、雙擊、滾動滾輪<br><small>（需要實體滑鼠；觸控只會顯示座標）</small><br><small id="pos">座標：—</small></div>
                 <div class="lights" id="lights"></div>
@@ -362,6 +394,7 @@
         <li>「滑鼠」：在灰色區域按左 / 中 / 右 / 側鍵、雙擊、滾動滾輪，對應項目會亮起。</li>
         <li>「尺寸 / PPI」：填對角線吋數與解析度（或選常見解析度），也可按「填入目前這個螢幕的解析度」。</li>
         <li>「相機」：選相機與解析度，按「開啟相機」並允許權限。下方會顯示實際解析度、幀率與前 / 後鏡頭；「鏡像預覽」只影響畫面，「拍照」會存成 PNG（不鏡像），按「下載 PNG」儲存。手機可用「切換前後鏡頭」。</li>
+        <li>「瀏覽器環境」：列出 User-Agent、螢幕與視窗大小、像素比、語言、時區、網路狀態、觸控點數、色彩深度、深色 / 減少動態偏好，以及 WebGL、Web Audio、Clipboard、WebRTC 等功能支援；按「複製成回報文字」可直接貼進 bug 回報。</li>
         <li>「麥克風」：選麥克風、設定回音消除 / 噪音抑制 / 自動增益，按「開始測試」，對著麥克風說話，音量條應該跳動（紅線是峰值保持）。按「錄 5 秒回放」會錄下 5 秒並播放。</li>
         </ol>
         <h3>範例</h3>
@@ -377,6 +410,7 @@
         <li>相機被其他程式（視訊會議、錄影軟體）占用時會開不起來，請先關閉它們。切換分頁或離開頁面會自動關閉相機與麥克風（相機燈號會熄滅）。</li>
         <li>音量以 dBFS 顯示：0 是滿格，數字越小越安靜；講話通常落在 -30 到 -10。</li>
         <li>相機畫面、照片與 5 秒錄音都只存在記憶體裡，不會上傳；重新整理或離開頁面就消失，要留著請先下載。</li>
+        <li>「瀏覽器環境」只在本機讀取瀏覽器提供的資訊，不會送出到任何地方；有些欄位（例如記憶體、網路估計）只有部分瀏覽器提供，會顯示「未提供」。localStorage 檢查只讀取、不寫入任何資料。</li>
         <li>本頁只記住你上次停留的分頁（鍵 screentest_tab，可用右上角備份），不會記錄相機或麥克風資料；重新開啟頁面不會自動開相機。</li>
         </ul>
     </template>
@@ -423,7 +457,7 @@
         }
 
         // 相機 / 麥克風
-        const TABS = ['screen', 'kb', 'mouse', 'ppi', 'cam', 'mic'];
+        const TABS = ['screen', 'kb', 'mouse', 'ppi', 'cam', 'mic', 'env'];
         const validTab = (v) => TABS.includes(v) ? v : 'screen';          // 舊版 / 壞掉的備份值一律退回「螢幕壞點」
         const CAM_RES = [['QVGA 320×240', 320, 240], ['VGA 640×480', 640, 480], ['HD 1280×720', 1280, 720], ['Full HD 1920×1080', 1920, 1080], ['QHD 2560×1440', 2560, 1440], ['4K 3840×2160', 3840, 2160]];
         // 指定裝置就用 exact deviceId（不再用 facingMode）；解析度用 ideal，讓瀏覽器挑最接近的
@@ -478,6 +512,72 @@
         const fmtDb = (db) => db <= -100 ? '-∞ dBFS' : `${db.toFixed(1)} dBFS`;
         const pickAudioMime = (isSupported) => { for (const m of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']) { try { if (isSupported(m)) return m; } catch (e) { } } return ''; };
         const shotName = (d) => { const z = (n) => String(n).padStart(2, '0'); return `camera-${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}.png`; };
+
+        // ---- 瀏覽器環境資訊（只讀取，不送出任何資料）----
+        // g = { nav, screen, win, mq, probe }：nav = navigator、screen = screen、win = window（讀尺寸與各種建構子）、mq = matchMedia 函式、probe = { webgl(), storage() }
+        // 回傳 [[區段, 標籤, 值字串], ...]
+        function envInfo(g) {
+            const nav = g.nav || {}, scr = g.screen || {}, win = g.win || {}, rows = [];
+            const t = (fn, dflt = undefined) => { try { return fn(); } catch { return dflt; } };
+            const yn = (v) => v ? '支援' : '不支援';
+            const add = (sec, label, v) => rows.push([sec, label, v === undefined || v === null || v === '' ? '（未提供）' : typeof v === 'boolean' ? (v ? '是' : '否') : String(v)]);
+            const mq = (q) => t(() => g.mq ? !!g.mq(q).matches : undefined);
+            const dim = (w, h) => w === undefined || h === undefined ? undefined : `${w} × ${h}`;
+            add('瀏覽器', 'User-Agent', nav.userAgent);
+            const uad = nav.userAgentData;
+            if (uad) { add('瀏覽器', '品牌（UA-CH）', t(() => (uad.brands || []).map(b => `${b.brand} ${b.version}`).join('、'))); add('瀏覽器', '平台（UA-CH）', uad.platform); add('瀏覽器', '行動裝置（UA-CH）', uad.mobile); }
+            add('瀏覽器', 'platform', nav.platform);
+            add('瀏覽器', '語言', nav.language); add('瀏覽器', '語言偏好清單', t(() => (nav.languages || []).join('、')));
+            add('瀏覽器', '時區', t(() => g.tz || Intl.DateTimeFormat().resolvedOptions().timeZone));
+            add('瀏覽器', 'Cookie 啟用', nav.cookieEnabled);
+            add('瀏覽器', '安全環境（https / localhost）', win.isSecureContext);
+            add('瀏覽器', '以已安裝 App（standalone）開啟', mq('(display-mode: standalone)'));
+            add('螢幕與視窗', '螢幕解析度', dim(scr.width, scr.height));
+            add('螢幕與視窗', '螢幕可用區域', dim(scr.availWidth, scr.availHeight));
+            add('螢幕與視窗', '視窗內容大小', dim(win.innerWidth, win.innerHeight));
+            add('螢幕與視窗', '視窗外框大小', dim(win.outerWidth, win.outerHeight));
+            add('螢幕與視窗', '像素比（devicePixelRatio）', win.devicePixelRatio);
+            add('螢幕與視窗', '縮放比例（visualViewport）', t(() => win.visualViewport.scale));
+            add('螢幕與視窗', '色彩深度', scr.colorDepth === undefined ? undefined : `${scr.colorDepth} 位元`);
+            add('螢幕與視窗', '方向', t(() => scr.orientation.type));
+            add('網路', '連線狀態', nav.onLine === undefined ? undefined : nav.onLine ? '線上' : '離線');
+            const c = nav.connection;
+            if (c) { add('網路', '連線類型（effectiveType）', c.effectiveType); add('網路', '下行頻寬估計', c.downlink === undefined ? undefined : `${c.downlink} Mbps`); add('網路', '往返時間估計', c.rtt === undefined ? undefined : `${c.rtt} ms`); add('網路', '省流量模式', c.saveData); }
+            add('輸入', '觸控點數（maxTouchPoints）', nav.maxTouchPoints);
+            add('輸入', '主要指標是粗略的（手指）', mq('(pointer: coarse)'));
+            add('輸入', '可以 hover', mq('(hover: hover)'));
+            add('偏好', '深色模式', mq('(prefers-color-scheme: dark)'));
+            add('偏好', '減少動態效果', mq('(prefers-reduced-motion: reduce)'));
+            add('偏好', '高對比', mq('(prefers-contrast: more)'));
+            add('硬體', '邏輯處理器數', nav.hardwareConcurrency);
+            add('硬體', '記憶體估計（deviceMemory）', nav.deviceMemory === undefined ? undefined : `≥ ${nav.deviceMemory} GB`);
+            const gl = t(() => g.probe && g.probe.webgl && g.probe.webgl());
+            add('功能支援', 'WebGL', gl ? `支援（${gl.version}）` : '不支援');
+            if (gl && gl.renderer) add('功能支援', 'GPU（WebGL renderer）', gl.vendor ? `${gl.renderer}（${gl.vendor}）` : gl.renderer);
+            add('功能支援', 'WebGPU', yn(nav.gpu));
+            add('功能支援', 'Web Audio', yn(win.AudioContext || win.webkitAudioContext));
+            add('功能支援', 'Clipboard 寫入', yn(t(() => nav.clipboard && nav.clipboard.writeText)));
+            add('功能支援', 'WebRTC', yn(win.RTCPeerConnection || win.webkitRTCPeerConnection));
+            add('功能支援', '相機 / 麥克風 API（getUserMedia）', yn(t(() => nav.mediaDevices && nav.mediaDevices.getUserMedia)));
+            add('功能支援', 'WebAssembly', yn(win.WebAssembly));
+            add('功能支援', 'Service Worker', yn('serviceWorker' in nav));
+            add('功能支援', 'Notification', yn(win.Notification));
+            add('功能支援', '定位（Geolocation）', yn('geolocation' in nav));
+            add('功能支援', 'WebSocket', yn(win.WebSocket));
+            add('功能支援', 'IndexedDB', yn(win.indexedDB));
+            add('功能支援', 'localStorage 可存取', yn(t(() => g.probe && g.probe.storage && g.probe.storage(), false)));
+            add('功能支援', '分享（Web Share）', yn(nav.share));
+            add('功能支援', '震動（Vibration）', yn(nav.vibrate));
+            add('功能支援', 'Fullscreen', yn(win.document && win.document.fullscreenEnabled));
+            add('功能支援', 'ResizeObserver', yn(win.ResizeObserver));
+            return rows;
+        }
+        // 整理成可貼進 issue / 訊息的文字（nowText 由呼叫端傳入）
+        function envReport(rows, nowText = '') {
+            const out = [`瀏覽器環境資訊${nowText ? '（' + nowText + '）' : ''}`]; let sec = '';
+            for (const [s, k, v] of rows) { if (s !== sec) { sec = s; out.push('', `【${s}】`); } out.push(`${k}：${v}`); }
+            return out.join('\n');
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -678,8 +778,28 @@
         };
         window.addEventListener('pagehide', () => { stopCam(); stopMic(); });
 
+
+        // ---------- 瀏覽器環境 ----------
+        const envProbe = {
+            webgl: () => { const cv = document.createElement('canvas'); let v = 'WebGL 2', x = cv.getContext('webgl2'); if (!x) { v = 'WebGL 1'; x = cv.getContext('webgl') || cv.getContext('experimental-webgl'); } if (!x) return null; const d = x.getExtension('WEBGL_debug_renderer_info'); return { version: v, vendor: d ? x.getParameter(d.UNMASKED_VENDOR_WEBGL) : '', renderer: d ? x.getParameter(d.UNMASKED_RENDERER_WEBGL) : '' }; },
+            storage: () => localStorage.length >= 0   // 只讀取，不寫入；被封鎖時存取會丟例外 → 視為不可用
+        };
+        let envRows = [];
+        function renderEnv() {
+            envRows = envInfo({ nav: navigator, screen, win: window, mq: (q) => window.matchMedia(q), probe: envProbe });
+            const out = $('#envOut'); out.replaceChildren(); let sec = '';
+            for (const [s, k, v] of envRows) {
+                if (s !== sec) { sec = s; const h = document.createElement('h3'); h.className = 'envsec'; h.textContent = s; out.append(h); }
+                const d = document.createElement('div'); d.className = 'envrow'; const a = document.createElement('span'), b = document.createElement('b'); a.textContent = k; b.textContent = v; d.append(a, b); out.append(d);
+            }
+        }
+        $('#envRefresh').onclick = renderEnv;
+        $('#envCopy').onclick = () => { const b = $('#envCopy'), d = new Date(), z = (n) => String(n).padStart(2, '0'); Util.copyWithFeedback(b, envReport(envRows, `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`)); };
+        ['resize', 'online', 'offline'].forEach(ev => window.addEventListener(ev, () => { if (tab === 'env') renderEnv(); }));
+
         // ---------- 分頁 ----------
         function render() {
+            if (tab === 'env') renderEnv();
             if (tab !== 'cam') stopCam(); if (tab !== 'mic') stopMic();
             if (tab === 'cam' || tab === 'mic') refreshDevices();
             document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab));

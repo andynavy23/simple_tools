@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="網路與容量計算：CIDR 子網路（IPv4 / IPv6）、IPv4 進位轉換、IPv6 縮寫展開、MAC 格式互轉、下載時間與頻寬、SLA 可用度、QPS 與併發容量估算，全部在本機計算。">
+    <meta property="og:title" content="網路與容量計算" />
+    <meta property="og:description" content="CIDR、IPv6、MAC、下載時間、SLA 可用度、併發與容量估算。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/net-calc.html" />
+    <title>網路與容量計算</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 720px;
+        }
+
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>input,
+        .row>select {
+            flex: 1 1 120px;
+            min-width: 0;
+        }
+
+        .seg {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 10px 0;
+        }
+
+        .seg button {
+            flex: 1 1 auto;
+        }
+
+        .kv {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .kv th,
+        .kv td {
+            text-align: left;
+            padding: 6px 4px;
+            border-bottom: 1px solid var(--fill);
+            vertical-align: top;
+            overflow-wrap: anywhere;
+        }
+
+        .kv th {
+            color: var(--muted);
+            font-weight: 400;
+            width: 36%;
+        }
+
+        .kv td {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 14px;
+        }
+
+        .kv.txt td {
+            font-family: inherit;
+            font-size: inherit;
+        }
+
+        .wide {
+            overflow-x: auto;
+        }
+
+        .err {
+            color: var(--bad);
+            margin: 8px 0 0;
+        }
+
+        .ok {
+            color: var(--ok);
+            font-weight: 700;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>網路與容量計算</h1>
+        <p class="sub">CIDR 子網路、IP / MAC 轉換、下載時間、SLA 可用度與容量估算；全部在本機計算，不連線、不儲存。</p>
+
+        <div class="seg" id="tabs"></div>
+
+        <section class="card" id="p0">
+            <h2>CIDR 與子網路</h2>
+            <label for="cidr">IPv4 / IPv6 網段（可寫 192.168.1.10/24、10.0.0.5/255.255.255.0、2001:db8::/32）</label>
+            <input id="cidr" type="text" value="192.168.1.10/24" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="100">
+            <div id="cidrOut"></div>
+            <div class="row">
+                <div style="flex:1 1 150px"><label for="inIp">判斷這個 IP 是否在網段內</label><input id="inIp" type="text" placeholder="例如 192.168.1.200" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="60"></div>
+                <div style="flex:1 1 150px"><label for="splitP">切成更小的子網（新的前綴長度）</label><input id="splitP" type="text" inputmode="numeric" placeholder="例如 26" maxlength="3"></div>
+            </div>
+            <div id="inOut"></div>
+            <div id="splitOut"></div>
+            <label for="needH">需要幾台主機？（IPv4 最小前綴）</label>
+            <input id="needH" type="text" inputmode="numeric" placeholder="例如 500" maxlength="10">
+            <div id="needOut"></div>
+        </section>
+
+        <section class="card" id="p1" hidden>
+            <h2>IPv4 進位轉換</h2>
+            <label for="v4">IPv4（點分十進位、整數、0x 十六進位、0b 二進位 32 位元）</label>
+            <input id="v4" type="text" value="192.168.1.1" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="60">
+            <div id="v4Out"></div>
+        </section>
+
+        <section class="card" id="p2" hidden>
+            <h2>IPv6 縮寫與展開</h2>
+            <label for="v6">IPv6 位址（支援 :: 縮寫、內嵌 IPv4、%zone）</label>
+            <input id="v6" type="text" value="2001:db8:0:0:0:0:0:1" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="60">
+            <div id="v6Out"></div>
+        </section>
+
+        <section class="card" id="p3" hidden>
+            <h2>MAC 位址格式互轉</h2>
+            <label for="mac">MAC 位址（: - . 空白或無分隔皆可）</label>
+            <input id="mac" type="text" value="00:0C:29:4f:8a:01" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="40">
+            <div id="macOut"></div>
+            <p class="note">廠商（OUI）只內建十幾個常見前綴，資料不完整；查不到不代表沒有廠商。</p>
+        </section>
+
+        <section class="card" id="p4" hidden>
+            <h2>下載時間與頻寬</h2>
+            <div class="row">
+                <div style="flex:1 1 160px"><label for="dlSize">檔案大小</label>
+                    <div class="row"><input id="dlSize" type="text" inputmode="decimal" value="4.7"><select id="dlSu"></select></div>
+                </div>
+                <div style="flex:1 1 160px"><label for="dlBw">頻寬</label>
+                    <div class="row"><input id="dlBw" type="text" inputmode="decimal" value="100"><select id="dlBu"></select></div>
+                </div>
+            </div>
+            <label for="dlEff">實際可用比例 %（協定損耗、壅塞；一般可抓 85–95）</label>
+            <input id="dlEff" type="text" inputmode="decimal" value="90" maxlength="6">
+            <div id="dlOut"></div>
+        </section>
+
+        <section class="card" id="p5" hidden>
+            <h2>SLA 可用度換算</h2>
+            <label for="slaP">可用度 %</label>
+            <input id="slaP" type="text" inputmode="decimal" value="99.9" maxlength="12">
+            <div id="slaOut"></div>
+            <h2 style="margin-top:18px">串接 / 備援的整體可用度</h2>
+            <label for="slaL">各元件可用度 %（用逗號分隔）</label>
+            <input id="slaL" type="text" value="99.9, 99.95, 99.99" maxlength="200">
+            <div id="slaSer"></div>
+            <h2 style="margin-top:18px">常見等級對照</h2>
+            <div class="wide" id="slaTbl"></div>
+        </section>
+
+        <section class="card" id="p6" hidden>
+            <h2>容量與併發估算</h2>
+            <div class="row">
+                <div style="flex:1 1 140px"><label for="cQps">平均 QPS（每秒請求數）</label><input id="cQps" type="text" inputmode="decimal" value="500"></div>
+                <div style="flex:1 1 140px"><label for="cLat">平均延遲 ms</label><input id="cLat" type="text" inputmode="decimal" value="120"></div>
+                <div style="flex:1 1 140px"><label for="cPeak">尖峰倍數</label><input id="cPeak" type="text" inputmode="decimal" value="3"></div>
+                <div style="flex:1 1 140px"><label for="cCap">每台可同時處理數（0 = 不估台數）</label><input id="cCap" type="text" inputmode="decimal" value="200"></div>
+                <div style="flex:1 1 140px"><label for="cResp">平均回應大小 KB</label><input id="cResp" type="text" inputmode="decimal" value="50"></div>
+            </div>
+            <div class="row">
+                <div style="flex:1 1 140px"><label for="cRec">每日新增筆數</label><input id="cRec" type="text" inputmode="decimal" value="1000000"></div>
+                <div style="flex:1 1 140px"><label for="cBytes">每筆大小 bytes</label><input id="cBytes" type="text" inputmode="decimal" value="1024"></div>
+                <div style="flex:1 1 140px"><label for="cDays">保留天數</label><input id="cDays" type="text" inputmode="decimal" value="365"></div>
+                <div style="flex:1 1 140px"><label for="cRep">副本數</label><input id="cRep" type="text" inputmode="decimal" value="3"></div>
+            </div>
+            <div id="capOut"></div>
+        </section>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>把網管、後端與維運常算的七種東西放在一頁：CIDR 子網路（IPv4 / IPv6）、IPv4 進位轉換、IPv6 縮寫展開、MAC 格式互轉、下載時間與頻寬、SLA 可用度、QPS 與容量估算。輸入後即時顯示，全部在本機計算，不連線、不儲存任何資料。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>規劃網段、切子網、檢查某個 IP 是否落在防火牆規則的網段內。</li>
+        <li>看懂 IPv6 位址的縮寫與類型（link-local、ULA、環回…）。</li>
+        <li>估一個檔案要下載多久、100 Mbps 到底是多少 MB/s。</li>
+        <li>跟客戶談 SLA（99.9% 一年能停多久）、估算要幾台機器與多少儲存空間。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>上方選分頁，輸入框改動時結果會即時更新。</li>
+        <li>CIDR：可寫 <kbd>/24</kbd> 或遮罩 <kbd>255.255.255.0</kbd>；下方可判斷某 IP 是否屬於網段、切子網、反查主機數需要的前綴。</li>
+        <li>下載時間：Mbps 是「位元」、MB/s 是「位元組」，差 8 倍；「實際可用比例」可調協定損耗。</li>
+        <li>容量：併發數用 Little 定律 L = λ × W（QPS × 延遲秒數）。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">192.168.1.10/24 → 網段 192.168.1.0、廣播 192.168.1.255、可用主機 254（.1–.254）
+        4.7 GB ÷ 100 Mbps，可用 90% → 約 7.2 分鐘
+        99.9% → 一年可停 8 小時 45 分 36 秒
+        QPS 500 × 延遲 120ms → 平均同時 60 個請求</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>KB = 1000 位元組、KiB = 1024 位元組；硬碟廠商用前者、作業系統常顯示後者，所以同一顆碟看起來「少了一些」。</li>
+        <li>SLA 以一年 365 天、一個月 = 1/12 年計算。串接（缺一不可）為各可用度相乘，備援（任一可用即可）為 1 − 各不可用度相乘；兩者都假設元件故障互相獨立。</li>
+        <li>IPv4 /31 視為點對點（兩個位址皆可用）、/32 為單一主機。IPv6 切子網最多列出前 256 個。</li>
+        <li>MAC 廠商表只有十幾筆，僅供參考。容量估算是粗估，請預留餘裕並以實測為準。</li>
+        <li>本頁不存任何資料，沒有需要備份或清除的內容。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        const big = (n) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        const fnum = (x, d = 2) => Number.isFinite(x) ? (+x.toFixed(d)).toLocaleString('en-US', { maximumFractionDigits: d }) : '—';
+        function parseIPv4(s) {
+            const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(String(s).trim());
+            if (!m) return null;
+            let n = 0;
+            for (let i = 1; i <= 4; i++) { const v = +m[i]; if (v > 255) return null; n = n * 256 + v; }
+            return n;
+        }
+        const ipv4Str = (n) => [24, 16, 8, 0].map(s => Math.floor(n / 2 ** s) % 256).join('.');
+        // 點分、整數、0x、0b → 數字或 null
+        function parseIPv4Any(s) {
+            s = String(s).trim();
+            if (/^0x[0-9a-f]{1,8}$/i.test(s)) return parseInt(s, 16);
+            if (/^0b[01]{1,32}$/i.test(s)) return parseInt(s.slice(2), 2);
+            if (/^[01]{32}$/.test(s)) return parseInt(s, 2);
+            if (/^\d{1,10}$/.test(s)) { const n = +s; return n <= 0xffffffff ? n : null; }
+            return parseIPv4(s);
+        }
+        function parseIPv6(s) {
+            s = String(s).trim().replace(/%.*$/, '');
+            if (!/^[0-9a-fA-F:.]+$/.test(s) || !s.includes(':')) return null;
+            if (s.includes('.')) {
+                const lc = s.lastIndexOf(':'), v = parseIPv4(s.slice(lc + 1));
+                if (v === null) return null;
+                s = s.slice(0, lc + 1) + (v >>> 16).toString(16) + ':' + (v & 0xffff).toString(16);
+            }
+            const parts = s.split('::');
+            if (parts.length > 2) return null;
+            const grp = (t) => t === '' ? [] : t.split(':');
+            const a = grp(parts[0]), b = parts.length === 2 ? grp(parts[1]) : [], all = [...a, ...b];
+            if (all.some(g => !/^[0-9a-fA-F]{1,4}$/.test(g))) return null;
+            if (parts.length === 1 ? all.length !== 8 : all.length > 7) return null;
+            const full = [...a, ...Array(8 - all.length).fill('0'), ...b];
+            return full.reduce((n, g) => n * 65536n + BigInt('0x' + g), 0n);
+        }
+        function ipv6Str(n, full) {
+            const g = Array.from({ length: 8 }, (_, i) => Number((n >> BigInt((7 - i) * 16)) & 0xffffn));
+            if (full) return g.map(x => x.toString(16).padStart(4, '0')).join(':');
+            let bs = -1, bl = 0;
+            for (let i = 0; i < 8;) {
+                if (g[i]) { i++; continue; }
+                let j = i; while (j < 8 && !g[j]) j++;
+                if (j - i > bl) { bs = i; bl = j - i; }
+                i = j;
+            }
+            const h = g.map(x => x.toString(16));
+            return bl < 2 ? h.join(':') : h.slice(0, bs).join(':') + '::' + h.slice(bs + bl).join(':');
+        }
+        const parseIp = (s) => { const a = parseIPv4(s); if (a !== null) return { v: 4, n: BigInt(a) }; const b = parseIPv6(s); return b === null ? null : { v: 6, n: b }; };
+        const fmtIp = (v, n) => v === 4 ? ipv4Str(Number(n)) : ipv6Str(n);
+        // "ip/前綴" 或 "ip/遮罩"（遮罩僅 IPv4）；沒寫前綴視為單一主機
+        function parseCidr(s) {
+            const [a, p, ...r] = String(s).trim().split('/');
+            if (r.length) return null;
+            const ip = parseIp(a);
+            if (!ip) return null;
+            const bits = ip.v === 4 ? 32 : 128;
+            let prefix = bits;
+            if (p !== undefined) {
+                if (/^\d{1,3}$/.test(p)) prefix = +p;
+                else if (ip.v === 4 && parseIPv4(p) !== null) {
+                    const z = ~parseIPv4(p) >>> 0;
+                    if ((z & (z + 1)) !== 0) return null;      // 遮罩必須是連續的 1
+                    prefix = z ? Math.clz32(z) : 32;
+                } else return null;
+            }
+            return prefix > bits ? null : { v: ip.v, bits, prefix, addr: ip.n };
+        }
+        function cidrInfo(c) {
+            const bits = BigInt(c.bits), size = 1n << (bits - BigInt(c.prefix));
+            const mask = ((1n << bits) - 1n) ^ (size - 1n), net = c.addr & mask, last = net | (size - 1n);
+            let first = net, lastH = last, hosts = size;
+            if (c.v === 4) {
+                if (c.prefix <= 30) { first = net + 1n; lastH = last - 1n; hosts = size - 2n; }
+            }
+            return { net, last, size, mask, first, lastH, hosts };
+        }
+        const ipInCidr = (ip, c) => { const x = parseIp(ip); return !!x && x.v === c.v && (x.n & cidrInfo(c).mask) === cidrInfo(c).net; };
+        // 切成 newPrefix 的子網：回傳 { count, list（最多 max 個，[網段起點 BigInt]）}
+        function splitCidr(c, np, max = 256) {
+            if (!Number.isInteger(np) || np <= c.prefix || np > c.bits) return null;
+            const i = cidrInfo(c), step = 1n << BigInt(c.bits - np), count = 1n << BigInt(np - c.prefix);
+            const list = [];
+            for (let k = 0n; k < count && list.length < max; k++) list.push(i.net + k * step);
+            return { count, list, step };
+        }
+        function prefixForHosts(n) {   // IPv4：容納 n 台主機的最大前綴（n 含網路 / 廣播位址需求）
+            if (!Number.isInteger(n) || n < 1 || n > 2 ** 32 - 2) return null;
+            if (n === 1) return 32;
+            let hb = 2; while (2 ** hb - 2 < n) hb++;
+            return 32 - hb;
+        }
+        const V4_RANGES = [
+            ['0.0.0.0', 8, '本網路（0.0.0.0/8，「這台主機」）'], ['10.0.0.0', 8, '私有位址（RFC 1918）'], ['100.64.0.0', 10, '共享位址 / CGNAT（RFC 6598）'],
+            ['127.0.0.0', 8, '環回 loopback'], ['169.254.0.0', 16, '連結本地 link-local（APIPA）'], ['172.16.0.0', 12, '私有位址（RFC 1918）'],
+            ['192.0.0.0', 24, 'IETF 協定保留'], ['192.0.2.0', 24, '文件範例（TEST-NET-1）'], ['192.168.0.0', 16, '私有位址（RFC 1918）'],
+            ['198.18.0.0', 15, '效能測試用（benchmark）'], ['198.51.100.0', 24, '文件範例（TEST-NET-2）'], ['203.0.113.0', 24, '文件範例（TEST-NET-3）'],
+            ['224.0.0.0', 4, '群播 multicast'], ['255.255.255.255', 32, '受限廣播'], ['240.0.0.0', 4, '保留（未來使用）']];
+        function classifyV4(n) {
+            for (const [b, p, t] of V4_RANGES) { const h = 2 ** (32 - p); if (Math.floor(n / h) === Math.floor(parseIPv4(b) / h)) return t; }
+            return '公網位址（可路由）';
+        }
+        const in6 = (n, b, p) => (n >> BigInt(128 - p)) === (parseIPv6(b) >> BigInt(128 - p));
+        function classifyV6(n) {
+            if (n === 0n) return '未指定位址 ::';
+            if (n === 1n) return '環回 loopback ::1';
+            if (in6(n, '::ffff:0:0', 96)) return 'IPv4 對映位址（::ffff:0:0/96）';
+            if (in6(n, '64:ff9b::', 96)) return 'NAT64 轉換位址（64:ff9b::/96）';
+            if (in6(n, 'fe80::', 10)) return '連結本地 link-local（fe80::/10）';
+            if (in6(n, 'fc00::', 7)) return '唯一本地 ULA（fc00::/7，相當於私有位址）';
+            if (in6(n, 'ff00::', 8)) return '群播 multicast（ff00::/8）';
+            if (in6(n, '2001:db8::', 32)) return '文件範例（2001:db8::/32）';
+            if (in6(n, '2001::', 32)) return 'Teredo 隧道（2001::/32）';
+            if (in6(n, '2002::', 16)) return '6to4 隧道（2002::/16）';
+            if (in6(n, '2000::', 3)) return '全球單播 global unicast（2000::/3，公網）';
+            return '保留 / 未分配';
+        }
+        const ptr6 = (n) => ipv6Str(n, true).replace(/:/g, '').split('').reverse().join('.') + '.ip6.arpa';
+        // MAC
+        const OUI = {
+            '000C29': 'VMware', '005056': 'VMware', '000569': 'VMware', '080027': 'VirtualBox', '00155D': 'Microsoft Hyper-V', '525400': 'QEMU / KVM',
+            'B827EB': 'Raspberry Pi Foundation', '00000C': 'Cisco', '0242AC': 'Docker 預設網路'
+        };
+        function parseMac(s) {
+            const t = String(s).trim().replace(/[:\-.\s]/g, '');
+            if (!/^[0-9a-fA-F]{12}$/.test(t)) return null;
+            return t.match(/../g).map(x => parseInt(x, 16));
+        }
+        function macFormats(b) {
+            const h = b.map(x => x.toString(16).padStart(2, '0')), j = (sep, n) => h.join('').match(new RegExp('.{' + n + '}', 'g')).join(sep);
+            return [['冒號（Linux / 一般）', j(':', 2)], ['冒號大寫', j(':', 2).toUpperCase()], ['連字號（Windows）', j('-', 2).toUpperCase()],
+            ['點分（Cisco）', j('.', 4)], ['無分隔', h.join('')], ['無分隔大寫', h.join('').toUpperCase()]];
+        }
+        function macInfo(b) {
+            const key = b.slice(0, 3).map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+            return { multicast: !!(b[0] & 1), local: !!(b[0] & 2), oui: OUI[key] || null, broadcast: b.every(x => x === 255) };
+        }
+        // 下載時間
+        const SIZE_U = { B: 1, KB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12, KiB: 1024, MiB: 1024 ** 2, GiB: 1024 ** 3, TiB: 1024 ** 4 };
+        const BW_U = { Kbps: 1e3 / 8, Mbps: 1e6 / 8, Gbps: 1e9 / 8, 'KB/s': 1e3, 'MB/s': 1e6, 'GB/s': 1e9, 'MiB/s': 1024 ** 2 };   // 每個單位 = 多少 bytes/s
+        function calcDownload(size, su, bw, bu, eff) {
+            if (!(size > 0 && bw > 0 && eff > 0 && eff <= 100 && SIZE_U[su] && BW_U[bu])) return null;
+            const bytes = size * SIZE_U[su], ideal = bw * BW_U[bu], real = ideal * eff / 100;
+            return { bytes, ideal, real, idealSec: bytes / ideal, realSec: bytes / real };
+        }
+        function fmtDuration(sec) {
+            if (!Number.isFinite(sec) || sec < 0) return '—';
+            if (sec < 1) return (sec * 1000).toFixed(1) + ' 毫秒';
+            if (sec < 60) return sec.toFixed(1) + ' 秒';
+            let s = Math.round(sec); const d = Math.floor(s / 86400); s %= 86400;
+            const h = Math.floor(s / 3600); s %= 3600; const m = Math.floor(s / 60); s %= 60;
+            return [d && d + ' 天', (d || h) && h + ' 小時', (d || h || m) && m + ' 分', s + ' 秒'].filter(Boolean).join(' ');
+        }
+        function fmtBytes(n, bin) {
+            const k = bin ? 1024 : 1000, u = bin ? ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'] : ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+            let i = 0; while (n >= k && i < u.length - 1) { n /= k; i++; }
+            return fnum(n, i ? 2 : 0) + ' ' + u[i];
+        }
+        // SLA
+        const YEAR_S = 365 * 86400;
+        function downtime(pct) {
+            if (!(pct >= 0 && pct <= 100)) return null;
+            const f = 1 - pct / 100;
+            return { year: f * YEAR_S, month: f * YEAR_S / 12, week: f * 7 * 86400, day: f * 86400 };
+        }
+        function parsePctList(s) {
+            const a = String(s).split(/[,，\s]+/).filter(Boolean).map(Number);
+            return a.length >= 1 && a.length <= 50 && a.every(x => x >= 0 && x <= 100) ? a : null;
+        }
+        const seriesAvail = (a) => a.reduce((p, x) => p * x / 100, 1) * 100;
+        const parallelAvail = (a) => (1 - a.reduce((p, x) => p * (1 - x / 100), 1)) * 100;
+        // 容量
+        function calcCapacity(o) {
+            const v = ['qps', 'lat', 'peak', 'cap', 'resp', 'rec', 'bytes', 'days', 'rep'].map(k => o[k]);
+            if (!v.every(x => Number.isFinite(x) && x >= 0) || o.peak <= 0 || o.rep <= 0) return null;
+            const peakQps = o.qps * o.peak, conc = peakQps * o.lat / 1000, perDay = o.rec * o.bytes * o.rep;
+            return {
+                peakQps, avgConc: o.qps * o.lat / 1000, peakConc: conc, servers: o.cap > 0 ? Math.ceil(conc / o.cap) : null, reqDay: o.qps * 86400,
+                mbps: peakQps * o.resp * 1000 * 8 / 1e6, perDay, perMonth: perDay * 30, perYear: perDay * 365, total: perDay * o.days
+            };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s), { esc } = Util;
+        const kv = (rows, txt) => '<table class="kv' + (txt ? ' txt' : '') + '">' + rows.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(String(v))}</td></tr>`).join('') + '</table>';
+        const err = (m) => `<p class="err">${esc(m)}</p>`;
+        const num = (id) => { const t = $(id).value.trim().replace(/,/g, ''); return t === '' ? NaN : Number(t); };
+
+        const TABS = ['CIDR', 'IPv4 進位', 'IPv6', 'MAC', '下載時間', 'SLA', '容量'];
+        $('#tabs').innerHTML = TABS.map((t, i) => `<button class="sm" data-i="${i}" aria-pressed="${i === 0}">${t}</button>`).join('');
+        $('#tabs').onclick = (e) => {
+            const b = e.target.closest('button'); if (!b) return;
+            TABS.forEach((_, i) => { $('#p' + i).hidden = i !== +b.dataset.i; });
+            [...$('#tabs').children].forEach(x => x.setAttribute('aria-pressed', x === b));
+        };
+
+        function renderCidr() {
+            const c = parseCidr($('#cidr').value);
+            ['#inOut', '#splitOut', '#needOut'].forEach(s => $(s).innerHTML = '');
+            if (!c) { $('#cidrOut').innerHTML = err('格式不正確，例如 192.168.1.0/24 或 2001:db8::/32'); return; }
+            const i = cidrInfo(c), f = (n) => fmtIp(c.v, n);
+            const rows = [['版本', 'IPv' + c.v], ['網段', f(i.net) + '/' + c.prefix], ['前綴長度', '/' + c.prefix]];
+            if (c.v === 4) {
+                rows.push(['子網路遮罩', f(i.mask)], ['反向遮罩', f(i.size - 1n)], ['網路位址', f(i.net)], ['廣播位址', f(i.last)]);
+                rows.push(['可用主機範圍', c.prefix >= 31 ? f(i.net) + ' – ' + f(i.last) : f(i.first) + ' – ' + f(i.lastH)], ['可用主機數', big(i.hosts) + (c.prefix === 31 ? '（點對點 /31）' : '')], ['位址總數', big(i.size)]);
+                rows.push(['位址類型', classifyV4(Number(i.net))]);
+            } else {
+                rows.push(['網段起點', f(i.net)], ['網段終點', f(i.last)], ['完整展開', ipv6Str(i.net, true)], ['位址總數', big(i.size)]);
+                if (c.prefix <= 64) rows.push(['含 /64 子網數', big(1n << BigInt(64 - c.prefix))]);
+                rows.push(['位址類型', classifyV6(i.net)]);
+            }
+            $('#cidrOut').innerHTML = kv(rows);
+            const ip = $('#inIp').value.trim();
+            if (ip) { const x = parseIp(ip); $('#inOut').innerHTML = !x ? err('IP 格式不正確') : x.v !== c.v ? err('IP 版本與網段不同') : `<p class="${ipInCidr(ip, c) ? 'ok' : 'err'}">${esc(ip)} ${ipInCidr(ip, c) ? '在' : '不在'} ${esc(f(i.net) + '/' + c.prefix)} 內</p>`; }
+            const sp = $('#splitP').value.trim();
+            if (sp) {
+                const s = splitCidr(c, +sp);
+                $('#splitOut').innerHTML = !s ? err(`前綴長度需大於 /${c.prefix} 且不超過 /${c.bits}`) : `<p class="note">共 ${big(s.count)} 個 /${sp} 子網${s.count > BigInt(s.list.length) ? '，只列前 ' + s.list.length + ' 個' : ''}：</p><pre class="note" style="white-space:pre-wrap;overflow-wrap:anywhere;font-family:ui-monospace,Menlo,Consolas,monospace">${esc(s.list.map(n => f(n) + '/' + sp).join('\n'))}</pre>`;
+            }
+            const nh = $('#needH').value.trim();
+            if (nh) { const p = prefixForHosts(+nh); $('#needOut').innerHTML = p === null ? err('請輸入 1 ~ 4294967294 的整數') : `<p>${big(BigInt(nh))} 台主機 → 至少 <b>/${p}</b>（可用 ${big(p === 32 ? 1n : (1n << BigInt(32 - p)) - 2n)} 台，遮罩 ${ipv4Str(2 ** 32 - 2 ** (32 - p))}）</p>`; }
+        }
+        function renderV4() {
+            const n = parseIPv4Any($('#v4').value);
+            if (n === null) { $('#v4Out').innerHTML = err('格式不正確，例如 192.168.1.1、3232235777、0xC0A80101'); return; }
+            const b = [24, 16, 8, 0].map(s => Math.floor(n / 2 ** s) % 256);
+            $('#v4Out').innerHTML = kv([['點分十進位', ipv4Str(n)], ['整數', String(n)], ['十六進位', '0x' + n.toString(16).toUpperCase().padStart(8, '0')],
+            ['二進位', b.map(x => x.toString(2).padStart(8, '0')).join('.')], ['反向 DNS', b.slice().reverse().join('.') + '.in-addr.arpa'],
+            ['IPv4 對映 IPv6', '::ffff:' + ipv4Str(n) + '（' + ipv6Str(0xffffn << 32n | BigInt(n)) + '）'], ['位址類型', classifyV4(n)]]);
+        }
+        function renderV6() {
+            const n = parseIPv6($('#v6').value);
+            if (n === null) { $('#v6Out').innerHTML = err('格式不正確，例如 2001:db8::1 或 ::ffff:192.0.2.1'); return; }
+            $('#v6Out').innerHTML = kv([['縮寫（RFC 5952）', ipv6Str(n)], ['完整展開', ipv6Str(n, true)], ['32 位十六進位', ipv6Str(n, true).replace(/:/g, '')],
+            ['類型', classifyV6(n)], ['反向 DNS', ptr6(n)]]);
+        }
+        function renderMac() {
+            const b = parseMac($('#mac').value);
+            if (!b) { $('#macOut').innerHTML = err('需要 12 個十六進位字元，例如 00:0C:29:4F:8A:01'); return; }
+            const m = macInfo(b);
+            $('#macOut').innerHTML = kv([...macFormats(b), ['傳送類型', m.broadcast ? '廣播（全 FF）' : m.multicast ? '群播 multicast（第一位元組最低位 = 1）' : '單播 unicast'],
+            ['管理方式', m.local ? '本地管理（locally administered，常見於虛擬機、隨機 MAC）' : '全域唯一（廠商燒錄 UAA）'], ['廠商（OUI）', m.oui || '不在內建清單（清單只有十幾筆，不代表沒有廠商）']], true);
+        }
+        function renderDl() {
+            const r = calcDownload(num('#dlSize'), $('#dlSu').value, num('#dlBw'), $('#dlBu').value, num('#dlEff'));
+            if (!r) { $('#dlOut').innerHTML = err('請輸入大於 0 的大小與頻寬，比例需在 0–100 之間'); return; }
+            $('#dlOut').innerHTML = kv([['理想時間（100% 利用）', fmtDuration(r.idealSec)], ['實際時間（含損耗）', fmtDuration(r.realSec)],
+            ['理想速度', fmtBytes(r.ideal) + '/s ＝ ' + fnum(r.ideal * 8 / 1e6) + ' Mbps'], ['實際速度', fmtBytes(r.real) + '/s ＝ ' + fnum(r.real * 8 / 1e6) + ' Mbps'],
+            ['檔案大小（位元組）', big(BigInt(Math.round(r.bytes))) + ' B'], ['十進位 / 二進位', fmtBytes(r.bytes) + ' ／ ' + fmtBytes(r.bytes, true)]], true)
+                + '<p class="note">頻寬單位的 b 是位元（bit）、B 是位元組（byte），1 B = 8 b。KB = 1000 B；KiB = 1024 B。</p>';
+        }
+        const dtRows = (d) => [['每年', fmtDuration(d.year)], ['每月', fmtDuration(d.month)], ['每週', fmtDuration(d.week)], ['每天', fmtDuration(d.day)]];
+        function renderSla() {
+            const d = downtime(num('#slaP'));
+            $('#slaOut').innerHTML = d ? kv(dtRows(d).map(([k, v]) => ['可停機：' + k, v]), true) : err('請輸入 0–100 的可用度');
+            const a = parsePctList($('#slaL').value);
+            if (!a) { $('#slaSer').innerHTML = err('請輸入 1–50 個 0–100 的數字，用逗號分隔'); return; }
+            const s = seriesAvail(a), p = parallelAvail(a);
+            $('#slaSer').innerHTML = kv([['串接（缺一不可）', s.toFixed(5) + '%（年停機 ' + fmtDuration(downtime(s).year) + '）'], ['並聯備援（任一可用）', p.toFixed(7) + '%（年停機 ' + fmtDuration(downtime(p).year) + '）']], true);
+        }
+        function renderCap() {
+            const r = calcCapacity({ qps: num('#cQps'), lat: num('#cLat'), peak: num('#cPeak'), cap: num('#cCap'), resp: num('#cResp'), rec: num('#cRec'), bytes: num('#cBytes'), days: num('#cDays'), rep: num('#cRep') });
+            if (!r) { $('#capOut').innerHTML = err('每格都要是 0 以上的數字，尖峰倍數與副本數需大於 0'); return; }
+            $('#capOut').innerHTML = kv([['尖峰 QPS', fnum(r.peakQps)], ['平均併發（L = λ × W）', fnum(r.avgConc)], ['尖峰併發', fnum(r.peakConc)],
+            ['需要台數', r.servers === null ? '（未設定每台容量）' : r.servers + ' 台（未含備援）'], ['每日請求數', big(BigInt(Math.round(r.reqDay)))], ['尖峰出口頻寬', fnum(r.mbps) + ' Mbps'],
+            ['儲存成長 / 天', fmtBytes(r.perDay)], ['儲存成長 / 月（30 天）', fmtBytes(r.perMonth)], ['儲存成長 / 年', fmtBytes(r.perYear)], ['保留期總量', fmtBytes(r.total)]], true);
+        }
+
+        $('#dlSu').innerHTML = Object.keys(SIZE_U).map(u => `<option${u === 'GB' ? ' selected' : ''}>${u}</option>`).join('');
+        $('#dlBu').innerHTML = Object.keys(BW_U).map(u => `<option${u === 'Mbps' ? ' selected' : ''}>${u}</option>`).join('');
+        $('#slaTbl').innerHTML = '<table class="kv txt"><tr><th>可用度</th><th>每年</th><th>每月</th><th>每天</th></tr>' + [90, 95, 99, 99.5, 99.9, 99.95, 99.99, 99.999, 99.9999].map(p => { const d = downtime(p); return `<tr><td>${p}%</td><td>${fmtDuration(d.year)}</td><td>${fmtDuration(d.month)}</td><td>${fmtDuration(d.day)}</td></tr>`; }).join('') + '</table>';
+        const bind = (ids, fn) => { ids.forEach(i => $(i).addEventListener('input', fn)); fn(); };
+        bind(['#cidr', '#inIp', '#splitP', '#needH'], renderCidr);
+        bind(['#v4'], renderV4); bind(['#v6'], renderV6); bind(['#mac'], renderMac);
+        bind(['#dlSize', '#dlSu', '#dlBw', '#dlBu', '#dlEff'], renderDl);
+        bind(['#slaP', '#slaL'], renderSla);
+        bind(['#cQps', '#cLat', '#cPeak', '#cCap', '#cResp', '#cRec', '#cBytes', '#cDays', '#cRep'], renderCap);
+    </script>
+</body>
+
+</html>

@@ -60,6 +60,16 @@
             overflow-wrap: anywhere;
         }
 
+        details.card>summary {
+            font-weight: 700;
+            cursor: pointer;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+        }
+        #cm {
+            min-height: 130px;
+        }
         .ok {
             color: var(--ok);
         }
@@ -111,6 +121,24 @@ not-a-version</textarea>
             <input id="range" class="mono" placeholder="例如 ^1.2.3 || >=2.0.0 <3.0.0-0" aria-label="npm 範圍" spellcheck="false" autocapitalize="off" value="^1.0.0">
             <div id="rangeOut"></div>
         </div>
+
+        <details class="card" id="secBump">
+            <summary>版本號升級建議（Conventional Commits）</summary>
+            <p class="sub">貼 commit 訊息清單（每行一則），依 Conventional Commits 判斷要升 major / minor / patch，並算出下一個版本。</p>
+            <label for="cm">commit 清單</label>
+            <textarea id="cm" aria-label="commit 清單" spellcheck="false" autocapitalize="off">feat(ui): 新增深色模式
+fix: 修正匯出時的亂碼
+docs: 更新說明
+refactor!: 移除舊版設定格式
+BREAKING CHANGE: 設定檔改為 JSON</textarea>
+            <label for="cur">目前版本</label>
+            <input id="cur" class="mono" value="1.4.2" aria-label="目前版本" spellcheck="false" autocapitalize="off">
+            <label for="preid">預發行標籤（留空 = 正式版）</label>
+            <input id="preid" class="mono" placeholder="例如 beta、rc" aria-label="預發行標籤" spellcheck="false" autocapitalize="off">
+            <label for="zero">0.x 版本的規則</label>
+            <select id="zero" aria-label="0.x 規則"><option value="conv">0.x 慣例：破壞性升 minor、新功能升 patch</option><option value="strict">照一般規則（破壞性升 1.0.0）</option></select>
+            <div id="bumpOut"></div>
+        </details>
     </div>
 
     <template id="help">
@@ -135,6 +163,13 @@ not-a-version</textarea>
 ^0.0.3 → &gt;=0.0.3 &lt;0.0.4
 1.2.3 - 2.3 → &gt;=1.2.3 &lt;2.4.0
 1.4.2 → 2.0.0：major</div>
+        <h3>版本號升級建議</h3>
+        <p>頁面下方展開「版本號升級建議」，貼上 commit 訊息（每行一則），依 Conventional Commits 判斷：標題含 <kbd>!</kbd> 或有 <kbd>BREAKING CHANGE:</kbd> → major；<kbd>feat</kbd> → minor；<kbd>fix</kbd> / <kbd>perf</kbd> → patch；其他類型（docs、chore、refactor…）不觸發發版。取最高的一級，再算出下一版。</p>
+        <ul>
+        <li><b>0.x</b>：預設用常見慣例（破壞性只升 minor、新功能只升 patch），也可改成照一般規則（升 1.0.0）。</li>
+        <li><b>預發行</b>：填標籤（如 beta）會產生 <kbd>-beta.0</kbd>；目前版本已是同標籤的預發行就只遞增編號；留空而目前是預發行版則轉為正式版。預發行中不會重新判斷是否需要更高層級。</li>
+        <li>不是 Conventional 格式的行會列在「無法辨識」，不影響判斷；開頭的 <kbd>-</kbd>、<kbd>*</kbd> 與 commit hash 會自動略過。</li>
+        </ul>
         <h3>小提醒</h3>
         <ul>
         <li>預設不含預發行：2.0.0-beta.1 不符合 <kbd>^1.0.0</kbd>，也不符合 <kbd>&gt;=1.0.0</kbd>；只有範圍中有同一組 major.minor.patch 的預發行比較式（如 <kbd>^1.2.3-beta.1</kbd>）才會讓 1.2.3-beta.2 通過。</li>
@@ -259,6 +294,58 @@ not-a-version</textarea>
         // 預發行版本只有在同一組 major.minor.patch 的比較式本身帶預發行時才能通過
         const satisfies = (v, sets) => sets.some(set => set.every(c => compOk(v, c)) &&
             (!v.pre.length || set.some(c => !c.syn && c.v.pre.length && c.v.major === v.major && c.v.minor === v.minor && c.v.patch === v.patch)));
+
+        // ---- 版本號升級建議（Conventional Commits）----
+        const HEADER = /^(?:[-*]\s+)?(?:[0-9a-f]{7,40}\s+)?([A-Za-z]+)(?:\(([^)\n]*)\))?(!)?:\s*(.+)$/;
+        const BREAKING_FOOTER = /^BREAKING[ -]CHANGE\s*:\s*(.*)$/;
+        // 解析 commit 清單：回傳 { entries: [{ type, scope, breaking, subject }], ignored: [行] }
+        function parseCommits(text) {
+            const entries = [], ignored = [];
+            for (const raw of String(text ?? '').split(/\r?\n/)) {
+                const line = raw.trim();
+                if (!line) continue;
+                const f = BREAKING_FOOTER.exec(line);
+                if (f) {
+                    if (entries.length) { entries[entries.length - 1].breaking = true; }
+                    else ignored.push(line);
+                    continue;
+                }
+                const m = HEADER.exec(line);
+                if (m) entries.push({ type: m[1].toLowerCase(), scope: m[2] || '', breaking: !!m[3], subject: m[4].trim() });
+                else ignored.push(line);
+            }
+            return { entries, ignored };
+        }
+        // 'major' | 'minor' | 'patch' | null（沒有需要發版的變更）
+        function commitLevel(entries) {
+            if (entries.some(e => e.breaking)) return 'major';
+            if (entries.some(e => e.type === 'feat')) return 'minor';
+            if (entries.some(e => e.type === 'fix' || e.type === 'perf')) return 'patch';
+            return null;
+        }
+        // opts: { preid: '' | 'beta'…, zero: 'conv'（0.x 慣例：breaking 升 minor、feat 升 patch）| 'strict'（照一般規則） }
+        function nextVersion(cur, level, opts = {}) {
+            const v = parseVer(cur);
+            if (v.error) return { error: '目前版本無效：' + v.error };
+            const preid = String(opts.preid ?? '').trim();
+            if (preid && (!/^[0-9A-Za-z-]+$/.test(preid) || /^\d+$/.test(preid))) return { error: '預發行標籤只能是英數與 -，且不可全是數字（例如 beta、rc）' };
+            if (!level) return { version: null, note: '沒有 feat / fix / perf 或破壞性變更，不需要發版' };
+            const core = (x) => `${x.major}.${x.minor}.${x.patch}`;
+            if (v.pre.length) {
+                if (!preid) return { version: core(v), note: '目前是預發行版：轉為正式版（核心版號不再增加）' };
+                const last = v.pre[v.pre.length - 1];
+                const pre = v.pre[0] === preid && v.pre.length >= 2 && /^\d+$/.test(last) ? [...v.pre.slice(0, -1), String(+last + 1)] : [preid, '0'];
+                return { version: `${core(v)}-${pre.join('.')}`, note: '預發行中只遞增預發行編號，不重新判斷是否需要更高層級' };
+            }
+            let lvl = level, note = `依 ${level} 升級`;
+            if (v.major === 0 && opts.zero !== 'strict') {
+                if (level === 'major') { lvl = 'minor'; note = '0.x 慣例：破壞性變更只升 minor'; }
+                else if (level === 'minor') { lvl = 'patch'; note = '0.x 慣例：新功能只升 patch'; }
+            } else if (v.major === 0 && level === 'major') note = '照一般規則：0.x 的破壞性變更升為 1.0.0';
+            let [M, m, p] = [v.major, v.minor, v.patch];
+            if (lvl === 'major') { M++; m = 0; p = 0; } else if (lvl === 'minor') { m++; p = 0; } else p++;
+            return { version: `${M}.${m}.${p}${preid ? '-' + preid + '.0' : ''}`, note, level: lvl };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -305,6 +392,26 @@ not-a-version</textarea>
         $('#desc').onclick = () => { desc = true; $('#asc').setAttribute('aria-pressed', false); $('#desc').setAttribute('aria-pressed', true); showList(); };
         $('#copyList').onclick = () => copyWithFeedback($('#copyList'), lastSorted);
         showAB(); showList();
+        // 版本號升級建議
+        function showBump() {
+            const out = $('#bumpOut'); out.replaceChildren();
+            const { entries, ignored } = parseCommits($('#cm').value);
+            const lvl = commitLevel(entries);
+            const r = nextVersion($('#cur').value, lvl, { preid: $('#preid').value, zero: $('#zero').value });
+            if (r.error) { out.append(note(r.error, 'note bad')); return; }
+            out.append(li('建議升級', lvl ? lvl : '不需要發版', lvl ? 'ok' : 'muted'), li('下一個版本', r.version || '（維持不變）', r.version ? 'ok' : 'muted'));
+            out.append(note(r.note));
+            const groups = [['破壞性變更', e => e.breaking], ['feat 新功能', e => !e.breaking && e.type === 'feat'], ['fix / perf 修正', e => !e.breaking && (e.type === 'fix' || e.type === 'perf')], ['其他（不觸發發版）', e => !e.breaking && !['feat', 'fix', 'perf'].includes(e.type)]];
+            for (const [title, fn] of groups) {
+                const g = entries.filter(fn); if (!g.length) continue;
+                out.append(li(title, g.length + ' 則'));
+                const pre = document.createElement('div'); pre.className = 'code'; pre.textContent = g.map(e => `${e.type}${e.scope ? '(' + e.scope + ')' : ''}${e.breaking ? '!' : ''}: ${e.subject}`).join('\n'); out.append(pre);
+            }
+            if (ignored.length) { out.append(li('無法辨識的行', ignored.length + ' 行（不影響判斷）', 'muted')); const pre = document.createElement('div'); pre.className = 'code'; pre.textContent = ignored.slice(0, 50).join('\n'); out.append(pre); }
+        }
+        $('#cm').oninput = $('#cur').oninput = $('#preid').oninput = $('#zero').onchange = showBump;
+        showBump();
+
     </script>
 </body>
 

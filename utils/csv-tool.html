@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="CSV / TSV 表格工具：貼上或載入檔案，自動判斷分隔符號，表格預覽、點欄位排序、篩選，並轉成 JSON 或 Markdown 表格。全部在本機處理。">
+    <meta name="description" content="CSV / TSV 表格工具：貼上或載入檔案，自動判斷分隔符號，表格預覽、點欄位排序、篩選，並轉成 JSON 或 Markdown 表格，也能讀寫簡單的 XLSX。全部在本機處理。">
     <meta property="og:title" content="CSV / TSV 表格工具" />
     <meta property="og:description" content="CSV 預覽、排序、篩選與轉 JSON / Markdown。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
@@ -118,6 +118,7 @@
                 <label for="delim">分隔符號</label><select id="delim"><option value="auto">自動判斷</option><option value=",">逗號 ,</option><option value="&#9;">Tab</option><option value=";">分號 ;</option><option value="|">直線 |</option></select>
                 <label><input type="checkbox" id="hdr" checked> 第一列是標題</label>
             </div>
+            <div class="row"><label for="xfile">Excel（.xlsx）</label><input type="file" id="xfile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"><button class="sm" id="xsave">把目前表格下載成 XLSX</button></div>
             <div class="err" id="err" role="alert"></div>
         </div>
 
@@ -147,12 +148,14 @@
         <li>分隔符號預設自動判斷，不對就手動選；取消「第一列是標題」會自動命名欄 1、欄 2…</li>
         <li>點表頭可排序（再點一次反向），框內輸入可篩選任一欄包含的列；表格太寬時可左右滑動，第一欄固定在左側</li>
         <li>最下方選「JSON」「Markdown 表格」「TSV」，按「複製」或「下載」</li>
+        <li>Excel：按「Excel（.xlsx）」選檔，會把第一個工作表變成上方的 CSV；按「把目前表格下載成 XLSX」則把目前（已篩選、已排序）的表格存成 .xlsx</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">貼上三行：<br>姓名,部門,年資<br>小明,工程,3<br>"王, 小華",設計,5<br>會得到 2 列 × 3 欄的表格（引號內的逗號不會被切開），JSON 輸出中年資是數字 3 和 5。</div>
         <h3>小提醒</h3>
         <ul>
         <li>支援引號、雙引號跳脫與儲存格內換行</li>
+        <li>XLSX 只處理第一個工作表的文字與數字：公式讀取的是已算好的值，日期會是數字序號，格式、顏色、合併儲存格都不保留；上限 10 MB、10 萬列、500 欄。寫出時「007」、超過 15 位的數字會保持文字，其餘數字寫成數字儲存格</li>
         <li>表格最多顯示前 500 列，輸出則包含全部符合篩選的列</li>
         <li>資料不會被儲存，重新整理就清空</li>
         </ul>
@@ -160,7 +163,7 @@
 
     <script src="../shared/js/util.js"></script>
     <script>
-        const { download, parseCSV, toObjects, isNum } = Util;
+        const { download, parseCSV, toObjects, isNum, csvStringify } = Util;
 
         // --- pure ---
         // 判斷分隔符號：在前幾列中，各候選符號出現次數一致且最多者勝出
@@ -187,6 +190,125 @@
             return [`| ${header.map(esc).join(' | ')} |`, `| ${right.map(r => (r ? '---:' : '---')).join(' | ')} |`, ...rows.map(r => `| ${header.map((_, i) => esc(r[i])).join(' | ')} |`)].join('\n');
         }
         const toTSV = (header, rows) => [header, ...rows].map(r => r.map(c => String(c ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\n');
+
+        // ---- XLSX：最簡讀寫（zip 不壓縮 + sheet XML；只處理字串與數字、第一個工作表）----
+        const XLSX_MAX_BYTES = 10e6, XLSX_MAX_UNZIP = 60e6, XLSX_MAX_ROWS = 100000, XLSX_MAX_COLS = 500, XLSX_MAX_CELLS = 2e6;
+        const CRC_T = new Uint32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+        function crc32(bytes) { let c = 0xFFFFFFFF; for (let i = 0; i < bytes.length; i++) c = CRC_T[(c ^ bytes[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+        const u8 = (s) => new TextEncoder().encode(s);
+        // files: [{ name, data: Uint8Array }] → zip（method 0 = store，不壓縮）
+        function zipStore(files) {
+            const parts = [], cd = []; let off = 0;
+            for (const f of files) {
+                const name = u8(f.name), crc = crc32(f.data), h = new DataView(new ArrayBuffer(30));
+                h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true); h.setUint16(10, 0, true); h.setUint16(12, 0x21, true);
+                h.setUint32(14, crc, true); h.setUint32(18, f.data.length, true); h.setUint32(22, f.data.length, true); h.setUint16(26, name.length, true); h.setUint16(28, 0, true);
+                const c = new DataView(new ArrayBuffer(46));
+                c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(12, 0, true); c.setUint16(14, 0x21, true);
+                c.setUint32(16, crc, true); c.setUint32(20, f.data.length, true); c.setUint32(24, f.data.length, true); c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+                parts.push(new Uint8Array(h.buffer), name, f.data); cd.push(new Uint8Array(c.buffer), name);
+                off += 30 + name.length + f.data.length;
+            }
+            const cdLen = cd.reduce((a, b) => a + b.length, 0), e = new DataView(new ArrayBuffer(22));
+            e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, cdLen, true); e.setUint32(16, off, true);
+            const all = [...parts, ...cd, new Uint8Array(e.buffer)], out = new Uint8Array(off + cdLen + 22); let o = 0;
+            for (const a of all) { out.set(a, o); o += a.length; }
+            return out;
+        }
+        // 讀 zip 的中央目錄 → [{ name, method, comp, size }]；結構不對丟 Error（所有位移都檢查邊界）
+        function zipEntries(b) {
+            const bad = () => new Error('不是有效的 XLSX（ZIP 結構不正確）');
+            if (b.length < 22) throw bad();
+            const v = new DataView(b.buffer, b.byteOffset, b.length); let e = -1;
+            for (let i = b.length - 22; i >= Math.max(0, b.length - 22 - 65535); i--) if (v.getUint32(i, true) === 0x06054b50) { e = i; break; }
+            if (e < 0) throw bad();
+            const n = v.getUint16(e + 10, true); let o = v.getUint32(e + 16, true); const out = [];
+            if (n > 5000) throw new Error('ZIP 內的檔案太多');
+            for (let k = 0; k < n; k++) {
+                if (o + 46 > b.length || v.getUint32(o, true) !== 0x02014b50) throw bad();
+                const flags = v.getUint16(o + 8, true), method = v.getUint16(o + 10, true), csize = v.getUint32(o + 20, true), size = v.getUint32(o + 24, true), nl = v.getUint16(o + 28, true), xl = v.getUint16(o + 30, true), cl = v.getUint16(o + 32, true), lo = v.getUint32(o + 42, true);
+                if (o + 46 + nl > b.length || lo + 30 > b.length || v.getUint32(lo, true) !== 0x04034b50) throw bad();
+                const name = new TextDecoder().decode(b.subarray(o + 46, o + 46 + nl)), start = lo + 30 + v.getUint16(lo + 26, true) + v.getUint16(lo + 28, true);
+                if (flags & 1) throw new Error('不支援加密的 XLSX');
+                if (start + csize > b.length) throw bad();
+                out.push({ name, method, comp: b.subarray(start, start + csize), size });
+                o += 46 + nl + xl + cl;
+            }
+            return out;
+        }
+        const xmlEsc = (s) => String(s).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+        const xmlUnesc = (s) => String(s).replace(/&(#x[0-9a-f]+|#\d+|lt|gt|amp|quot|apos);/gi, (m, g) => { g = g.toLowerCase(); if (g[0] !== '#') return { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" }[g]; const c = g[1] === 'x' ? parseInt(g.slice(2), 16) : +g.slice(1); try { return String.fromCodePoint(c); } catch { return ''; } });
+        const colName = (i) => { let s = ''; for (i++; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s; return s; };
+        const colIndex = (s) => [...s].reduce((a, c) => a * 26 + c.charCodeAt(0) - 64, 0) - 1;
+        // 純十進位數字（不含前導 0、不超過 15 位）才寫成數字儲存格，其餘（電話 007、長數字）保持字串，避免失真
+        const xlsxIsNum = (s) => /^-?(0|[1-9]\d*)(\.\d+)?$/.test(s) && s.replace(/[-.]/g, '').length <= 15;
+        // rows：二維陣列（字串）→ XLSX 位元組。超過上限丟 Error
+        function xlsxWrite(rows) {
+            if (rows.length > XLSX_MAX_ROWS) throw new Error('列數太多（上限 ' + XLSX_MAX_ROWS + ' 列）');
+            const width = Math.max(0, ...rows.map(r => r.length)); if (width > XLSX_MAX_COLS) throw new Error('欄數太多（上限 ' + XLSX_MAX_COLS + ' 欄）');
+            if (rows.length * width > XLSX_MAX_CELLS) throw new Error('儲存格太多（上限 ' + XLSX_MAX_CELLS + ' 格）');
+            let sheet = '';
+            rows.forEach((r, y) => {
+                let cells = '';
+                r.forEach((v, x) => {
+                    const s = v === null || v === undefined ? '' : String(v); if (s === '') return;
+                    const ref = colName(x) + (y + 1);
+                    cells += xlsxIsNum(s) ? '<c r="' + ref + '"><v>' + s + '</v></c>' : '<c r="' + ref + '" t="inlineStr"><is><t xml:space="preserve">' + xmlEsc(s) + '</t></is></c>';
+                });
+                sheet += '<row r="' + (y + 1) + '">' + cells + '</row>';
+            });
+            const H = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n', R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships', M = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+            return zipStore([
+                { name: '[Content_Types].xml', data: u8(H + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>') },
+                { name: '_rels/.rels', data: u8(H + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + R + '/officeDocument" Target="xl/workbook.xml"/></Relationships>') },
+                { name: 'xl/workbook.xml', data: u8(H + '<workbook xmlns="' + M + '" xmlns:r="' + R + '"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>') },
+                { name: 'xl/_rels/workbook.xml.rels', data: u8(H + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + R + '/worksheet" Target="worksheets/sheet1.xml"/></Relationships>') },
+                { name: 'xl/worksheets/sheet1.xml', data: u8(H + '<worksheet xmlns="' + M + '"><sheetData>' + sheet + '</sheetData></worksheet>') },
+            ]);
+        }
+        // 讀第一個工作表 → 二維字串陣列。inflate(Uint8Array, maxOut) → Promise<Uint8Array> 由呼叫端提供（瀏覽器用 DecompressionStream，測試用 zlib）
+        async function xlsxRead(bytes, inflate) {
+            if (bytes.length > XLSX_MAX_BYTES) throw new Error('檔案太大（上限 10 MB）');
+            const ents = zipEntries(bytes), by = Object.fromEntries(ents.map(e => [e.name.replace(/^\//, ''), e]));
+            const text = async (name) => {
+                const e = by[name]; if (!e) return null;
+                if (e.size > XLSX_MAX_UNZIP) throw new Error('解壓後太大，無法讀取');
+                let d = e.method === 0 ? e.comp : e.method === 8 ? await inflate(e.comp, XLSX_MAX_UNZIP) : null;
+                if (!d) throw new Error('不支援的壓縮方式');
+                return new TextDecoder().decode(d);
+            };
+            let path = 'xl/worksheets/sheet1.xml';
+            const wb = await text('xl/workbook.xml'), rels = await text('xl/_rels/workbook.xml.rels');
+            if (wb && rels) {
+                const rid = /<sheet\b[^>]*\br:id="([^"]+)"/.exec(wb);
+                if (rid) for (const m of rels.matchAll(/<Relationship\b[^>]*>/g)) {
+                    if (new RegExp('\\bId="' + rid[1].replace(/[^\w-]/g, '') + '"').test(m[0])) { const t = /\bTarget="([^"]+)"/.exec(m[0]); if (t) path = t[1].replace(/^\//, '').startsWith('xl/') ? t[1].replace(/^\//, '') : 'xl/' + t[1].replace(/^\//, ''); }
+                }
+            }
+            if (!by[path]) { const alt = ents.map(e => e.name).filter(n => /^xl\/worksheets\/[^/]+\.xml$/.test(n)).sort()[0]; if (!alt) throw new Error('找不到工作表'); path = alt; }
+            const sstXml = await text('xl/sharedStrings.xml'), sst = [];
+            if (sstXml) for (const m of sstXml.matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g)) sst.push(xmlUnesc([...m[1].replace(/<rPh\b[\s\S]*?<\/rPh>/g, '').matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)].map(x => x[1]).join('')));
+            const sheet = await text(path), rows = []; let cells = 0, autoRow = 0;
+            for (const rm of sheet.matchAll(/<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g)) {
+                const rn = /\br="(\d+)"/.exec(rm[1]), y = rn ? +rn[1] - 1 : autoRow; autoRow = y + 1;
+                if (y >= XLSX_MAX_ROWS) throw new Error('列數太多（上限 ' + XLSX_MAX_ROWS + ' 列）');
+                let autoCol = 0; const row = rows[y] || (rows[y] = []);
+                for (const cm of (rm[2] || '').matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+                    const ref = /\br="([A-Za-z]+)\d*"/.exec(cm[1]), x = ref ? colIndex(ref[1].toUpperCase()) : autoCol; autoCol = x + 1;
+                    if (x >= XLSX_MAX_COLS) throw new Error('欄數太多（上限 ' + XLSX_MAX_COLS + ' 欄）');
+                    if (++cells > XLSX_MAX_CELLS) throw new Error('儲存格太多');
+                    const t = (/\bt="([^"]+)"/.exec(cm[1]) || [])[1], inner = cm[2] || '', v = (/<v\b[^>]*>([\s\S]*?)<\/v>/.exec(inner) || [])[1];
+                    let val = '';
+                    if (t === 'inlineStr') val = xmlUnesc([...inner.matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)].map(x => x[1]).join(''));
+                    else if (v !== undefined) val = t === 's' ? (sst[+v] ?? '') : t === 'b' ? (v.trim() === '1' ? 'TRUE' : 'FALSE') : xmlUnesc(v);
+                    while (row.length < x) row.push(''); row[x] = val;
+                }
+            }
+            const width = Math.max(0, ...Array.from(rows, r => (r ? r.length : 0)));
+            const out = Array.from(rows, r => Object.assign(new Array(width).fill(''), r || []));
+            while (out.length && out[out.length - 1].every(c => c === '')) out.pop();
+            return out;
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -225,6 +347,27 @@
         $('#src').oninput = load; $('#delim').onchange = load; $('#hdr').onchange = load; $('#filter').oninput = render;
         $('#file').onchange = async (e) => { const f = e.target.files[0]; if (!f) return; if (f.size > 5e6) { $('#err').textContent = '檔案太大（上限 5 MB）'; return; } $('#src').value = await f.text(); load(); };
         document.querySelectorAll('[data-o]').forEach(b => { b.onclick = () => { outKind = b.dataset.o; document.querySelectorAll('[data-o]').forEach(x => x.setAttribute('aria-pressed', x === b)); render(); }; });
+        // XLSX：讀取只取第一個工作表的字串與數字；寫出用目前（已篩選、已排序）的表格
+        async function inflateRaw(data, maxOut) {
+            if (typeof DecompressionStream === 'undefined') throw new Error('這個瀏覽器不支援讀取 XLSX（缺少 DecompressionStream）');
+            const rd = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader(), parts = []; let n = 0;
+            for (; ;) { const { done, value } = await rd.read(); if (done) break; n += value.length; if (n > maxOut) { rd.cancel(); throw new Error('解壓後太大，無法讀取'); } parts.push(value); }
+            const out = new Uint8Array(n); let o = 0; for (const a of parts) { out.set(a, o); o += a.length; } return out;
+        }
+        $('#xfile').onchange = async (e) => {
+            const f = e.target.files[0]; e.target.value = ''; if (!f) return; $('#err').textContent = '';
+            if (f.size > XLSX_MAX_BYTES) { $('#err').textContent = '檔案太大（XLSX 上限 10 MB）'; return; }
+            try {
+                const rows = await xlsxRead(new Uint8Array(await f.arrayBuffer()), inflateRaw);
+                if (!rows.length) { $('#err').textContent = '這個工作表是空的'; return; }
+                $('#src').value = csvStringify(rows[0], rows.slice(1)); $('#delim').value = ','; load();
+            } catch (er) { $('#err').textContent = '讀取失敗：' + er.message; }
+        };
+        $('#xsave').onclick = () => {
+            if (!header.length) { $('#err').textContent = '還沒有表格資料'; return; }
+            let rows = filterRows(body, $('#filter').value); if (sortCol >= 0) rows = sortRows(rows, sortCol, sortDir);
+            try { download(new Blob([xlsxWrite([...($('#hdr').checked ? [header] : []), ...rows])], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'table.xlsx'); $('#err').textContent = ''; } catch (er) { $('#err').textContent = er.message; }
+        };
         $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), $('#out').textContent);
         $('#save').onclick = () => download(new Blob([$('#out').textContent], { type: 'text/plain;charset=utf-8' }), 'table.' + (outKind === 'json' ? 'json' : outKind === 'md' ? 'md' : 'tsv'));
         load();

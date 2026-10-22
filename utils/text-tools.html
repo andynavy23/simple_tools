@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="純文字整理工具：去重複行、排序、刪空行、全形半形轉換、大小寫，並能產生測試用假文；另有常用符號 / emoji 符號表，全部在本機處理。">
+    <meta name="description" content="純文字整理工具：去重複行、排序、刪空行、全形半形轉換、大小寫，並能產生測試用假文；另有符號 / emoji 搜尋、Unicode 字元資訊、換行符轉換、千分位、SQL IN、陣列字面值與路徑轉換，全部在本機處理。">
     <meta name="st-keys" content="symbols_recent">
     <meta property="og:title" content="純文字整理工具" />
     <meta property="og:description" content="去重複、排序、刪空行、全半形轉換與假文產生，全部在本機處理。" />
@@ -61,12 +61,72 @@
 
         .tabs {
             display: flex;
+            flex-wrap: wrap;
             gap: 8px;
             margin-bottom: 12px;
         }
 
         .tabs button {
-            flex: 1;
+            flex: 1 1 auto;
+        }
+
+        .opts {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px 12px;
+            margin-top: 10px;
+        }
+
+        .opts label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 44px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .opts input[type="text"], .opts input[type="number"] {
+            width: 140px;
+        }
+
+        .uinfo {
+            margin-top: 12px;
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            background: var(--fill);
+        }
+
+        .uinfo h3 {
+            margin: 0 0 6px;
+            font-size: 28px;
+            line-height: 1.3;
+            overflow-wrap: anywhere;
+        }
+
+        .uinfo div {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 4px 0;
+            border-top: 1px solid var(--line);
+            font-size: 14px;
+        }
+
+        .uinfo div span:first-child {
+            color: var(--muted);
+            flex: none;
+        }
+
+        .uinfo div span:last-child {
+            text-align: right;
+            overflow-wrap: anywhere;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+
+        .out-box {
+            min-height: 120px;
         }
 
         .chips {
@@ -178,6 +238,12 @@
             <button id="tabText" aria-pressed="true">文字整理</button>
             <button id="tabSym" aria-pressed="false">符號表</button>
             <button id="tabCase" aria-pressed="false">命名風格</button>
+            <button id="tabUni" aria-pressed="false">Unicode</button>
+            <button id="tabEol" aria-pressed="false">換行符</button>
+            <button id="tabNum" aria-pressed="false">千分位</button>
+            <button id="tabSql" aria-pressed="false">SQL IN</button>
+            <button id="tabArr" aria-pressed="false">陣列</button>
+            <button id="tabPath" aria-pressed="false">路徑</button>
         </div>
 
         <div id="paneText">
@@ -249,6 +315,107 @@
                 <div class="row"><span id="caseHint">0 行</span><span><button id="caseUse">放回文字整理</button> <button class="primary" id="caseCopy">複製</button></span></div>
             </div>
         </div>
+
+        <div id="paneUni" hidden>
+            <div class="card">
+                <input id="uniIn" type="text" style="width:100%" placeholder="輸入字元，或碼位 U+4E2D、U+1F600" aria-label="字元或碼位" autocomplete="off" spellcheck="false">
+                <p class="muted" style="font-size:13px;margin:8px 0 0">可一次輸入多個字元或多個碼位（用空白分隔，最多 50 個）。名稱只內建常用字元；未收錄的只顯示碼位與區塊。</p>
+                <div id="uniOut" aria-live="polite"></div>
+            </div>
+            <div class="card">
+                <h2>反查碼位範圍</h2>
+                <input id="uniRange" type="text" style="width:100%" placeholder="U+2190-U+21FF，或區塊名稱（arrows、hiragana）" aria-label="碼位範圍或區塊名稱" autocomplete="off" spellcheck="false">
+                <p class="muted" id="uniRangeMsg" style="font-size:13px;margin:8px 0 0"></p>
+                <div class="symgrid" id="uniRangeGrid"></div>
+            </div>
+        </div>
+
+        <div id="paneEol" hidden>
+            <div class="card">
+                <p class="muted" style="font-size:13px;margin:0 0 10px">瀏覽器的文字框會把 CRLF 自動當成 LF，所以要檢查檔案請用「選擇文字檔」；貼上的文字會盡量保留原本的換行。</p>
+                <input type="file" id="eolFile" aria-label="選擇文字檔">
+                <textarea id="eolIn" placeholder="或在這裡貼上文字…" aria-label="要檢查的文字"></textarea>
+                <div class="grid" id="eolInfo" style="margin-top:12px"></div>
+                <p id="eolMsg" style="font-size:14px;margin:10px 0 0" role="status"></p>
+                <div class="btns" style="margin-top:10px">
+                    <button id="eolLF">轉成 LF</button><button id="eolCRLF">轉成 CRLF</button><button id="eolCR">轉成 CR</button>
+                    <button id="eolCopy">複製</button><button class="primary" id="eolDl">下載</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="paneNum" hidden>
+            <div class="card">
+                <textarea id="numIn" placeholder="每行一個數字，例如：&#10;1234567.891&#10;-9876543" aria-label="數字（每行一個）"></textarea>
+                <div class="opts">
+                    <select id="numMode" aria-label="動作"><option value="add">加千分位</option><option value="strip">去千分位</option></select>
+                    <select id="numSep" aria-label="千分位符號"><option value=",">千分位 ,</option><option value=".">千分位 .（小數用 ,）</option><option value=" ">千分位 空白</option><option value="'">千分位 '</option><option value="_">千分位 _</option></select>
+                    <select id="numDec" aria-label="小數位數"><option value="">小數：保留原樣</option><option value="0">小數 0 位</option><option value="1">小數 1 位</option><option value="2">小數 2 位</option><option value="3">小數 3 位</option><option value="4">小數 4 位</option><option value="6">小數 6 位</option></select>
+                    <label><input type="checkbox" id="numEuro"> 輸入是歐式（. 千分位、, 小數）</label>
+                </div>
+            </div>
+            <div class="card">
+                <h2>結果</h2>
+                <textarea id="numOut" readonly aria-label="結果"></textarea>
+                <div class="row"><span id="numHint">0 行</span><button class="primary" id="numCopy">複製</button></div>
+            </div>
+            <div class="card">
+                <h2>各語系格式預覽</h2>
+                <p class="muted" style="font-size:13px;margin:0 0 10px">以第一個數字為例，用瀏覽器內建的格式（不同瀏覽器可能略有差異）。</p>
+                <div class="grid" id="numLoc"></div>
+            </div>
+        </div>
+
+        <div id="paneSql" hidden>
+            <div class="card">
+                <textarea id="sqlIn" placeholder="每行一個值，例如：&#10;1001&#10;1002&#10;O'Brien" aria-label="值（每行一個）"></textarea>
+                <div class="opts">
+                    <input type="text" id="sqlCol" placeholder="欄位名稱（可空白）" aria-label="欄位名稱">
+                    <select id="sqlQuote" aria-label="引號"><option value="auto">數字不加引號</option><option value="always">全部加引號</option><option value="never">全部不加引號</option></select>
+                    <label><input type="checkbox" id="sqlDedupe" checked> 去除重複</label>
+                    <label><input type="checkbox" id="sqlNot"> NOT IN</label>
+                    <label><input type="checkbox" id="sqlBrk"> 每個值一行</label>
+                    <label>每組上限 <input type="number" id="sqlChunk" min="0" max="100000" value="0" inputmode="numeric" aria-label="每組上限（0 不分組）"></label>
+                </div>
+            </div>
+            <div class="card">
+                <h2>結果</h2>
+                <textarea id="sqlOut" readonly aria-label="SQL"></textarea>
+                <div class="row"><span id="sqlHint">0 筆</span><button class="primary" id="sqlCopy">複製</button></div>
+            </div>
+        </div>
+
+        <div id="paneArr" hidden>
+            <div class="card">
+                <textarea id="arrIn" placeholder="每行一個值，例如：&#10;apple&#10;banana&#10;42" aria-label="值（每行一個）"></textarea>
+                <div class="opts">
+                    <select id="arrLang" aria-label="語言"></select>
+                    <label><input type="checkbox" id="arrNum" checked> 數字不加引號</label>
+                    <label><input type="checkbox" id="arrDedupe"> 去除重複</label>
+                    <label><input type="checkbox" id="arrBrk"> 每項一行</label>
+                </div>
+            </div>
+            <div class="card">
+                <h2>結果</h2>
+                <textarea id="arrOut" readonly aria-label="陣列字面值"></textarea>
+                <div class="row"><span id="arrHint">0 筆</span><button class="primary" id="arrCopy">複製</button></div>
+            </div>
+        </div>
+
+        <div id="panePath" hidden>
+            <div class="card">
+                <textarea id="pathIn" placeholder="每行一條路徑，例如：&#10;C:\Users\me\Documents\a.txt&#10;/mnt/d/project/src" aria-label="路徑（每行一條）"></textarea>
+                <div class="opts">
+                    <select id="pathTo" aria-label="轉成"><option value="win">Windows（C:\a\b）</option><option value="winfwd">Windows 斜線（C:/a/b）</option><option value="wsl">WSL（/mnt/c/a/b）</option><option value="gitbash">Git Bash（/c/a/b）</option><option value="posix">只把 \ 換成 /</option></select>
+                    <label>WSL 發行版 <input type="text" id="pathDistro" value="Ubuntu" aria-label="WSL 發行版名稱" autocomplete="off" spellcheck="false"></label>
+                </div>
+            </div>
+            <div class="card">
+                <h2>結果</h2>
+                <textarea id="pathOut" readonly aria-label="轉換後的路徑"></textarea>
+                <div class="row"><span id="pathHint">0 行</span><button class="primary" id="pathCopy">複製</button></div>
+            </div>
+        </div>
         <div id="paneSym" hidden>
             <div class="card">
                 <input id="symQ" type="search" placeholder="搜尋符號（名稱或關鍵字，例如：箭頭、heart、貨幣）" aria-label="搜尋符號">
@@ -295,6 +462,13 @@
         <li>「假文產生」選語言、段落與每段句數，按「產生」會放進文字框。</li>
         <li>切到「符號表」分頁：點上方分類或在搜尋框輸入名稱 / 關鍵字（例如「箭頭」「heart」「貨幣」）；點符號會複製它並累積到「已選」框，最後按「複製已選」一次拿走。</li>
         <li>「最近使用」會記住你常點的符號；底部「全形 ↔ 半形對照表」可查全形字元，點一格複製全形。</li>
+        <li>「符號表」現在也收錄約 700 個常用 emoji（臉部、手與人、動物自然、食物飲料、活動物品、交通地點、標誌符號），可用中文或英文關鍵字搜尋，例如「貓」「cat」「生日」「emoji」；點一下複製。</li>
+        <li>「Unicode」分頁：輸入字元或碼位（U+4E2D）看碼位、名稱、區塊、UTF-8 / UTF-16 位元組、HTML 實體與各語言跳脫寫法；下方可輸入 U+2190-U+21FF 或區塊名稱（arrows）反查字元，點一個字看詳細資料。</li>
+        <li>「換行符」分頁：選文字檔或貼上文字，顯示 CRLF / LF / CR 各幾個，有混用會列出不同的行號；按「轉成 LF / CRLF / CR」後複製或下載。</li>
+        <li>「千分位」分頁：每行一個數字，選加 / 去千分位、符號、小數位數（四捨五入），並預覽各語系的寫法。</li>
+        <li>「SQL IN」分頁：每行一個值，產生 <kbd>欄位 IN (…)</kbd>，可選引號規則、去重、NOT IN，以及每組上限（Oracle 的 IN 最多 1000 筆，設 1000 會自動拆成 OR）。</li>
+        <li>「陣列」分頁：每行一個值，轉成 JavaScript / Python / Go / Java / SQL VALUES 的陣列寫法。</li>
+        <li>「路徑」分頁：每行一條路徑，在 Windows（C:\）、WSL（/mnt/c/）、Git Bash（/c/）與斜線寫法間互轉。</li>
         <li>切到「命名風格」分頁：每行貼一個名稱，點目標風格（camelCase、PascalCase、snake_case、kebab-case、CONSTANT_CASE、dot.case、Title Case、Sentence case），結果即時出現，按「複製」或「放回文字整理」。原本是縮寫的字（HTTP、ID）想保持大寫，勾「保留縮寫大寫」。</li>
         </ol>
         <h3>範例</h3>
@@ -312,6 +486,12 @@
         <li>閱讀時間預設以中文 400 字 / 分、英文 200 字 / 分估算，朗讀預設中文 250、英文 150；速度可在「閱讀時間與詞頻」調整（只在這次開啟有效，不會儲存），不合理的值（空白、0、負數）會改回預設，範圍限制在 10–5000。</li>
         <li>詞頻只統計單字或二字詞，不做斷詞：中文二字詞是「相鄰兩個中文字」的滑動統計，所以會出現不是詞的組合；「排除常見停用字」會略過「的、了、是」與 the、and、of 等。最多列出前 100 名。</li>
         <li>命名風格的切詞規則：底線、連字號、空白與符號都是分隔；小寫接大寫（fooBar）、連續大寫後接小寫（HTTPServer → HTTP + Server）、中英文交界都會切開；數字黏在前一個字（http2、utf8 不拆）。字中的撇號會拿掉（don't → dont），行首行尾的底線不保留。整行都是大寫（例如 MAX_VALUE）時，不把各字當縮寫。一次最多轉換 5000 行，轉換結果不會儲存。</li>
+        <li>Unicode 名稱只內建常用字元（ASCII、拉丁與希臘字母、常見標點符號、日文與 emoji 約三百個，漢字用規則產生）；沒收錄的字元只顯示碼位與區塊。反查範圍一次最多 256 個碼位，略過控制字元與未指派碼位。</li>
+        <li>換行符：只處理 CRLF / LF / CR；U+2028、U+2029 等特殊換行只會提示，不會轉換。瀏覽器文字框內的換行一律當成 LF，所以檢查整份檔案請用「選擇文字檔」（上限 5MB）。</li>
+        <li>千分位：一次最多 5000 行；不是數字的行會原樣保留並提示；小數位數用字串四捨五入（不經過浮點數）；各語系預覽用瀏覽器的 Intl，超過 15 位的整數會失去精度。</li>
+        <li>SQL IN：每行一個值，單引號會自動變成兩個；選「全部不加引號」時值會原樣放進 SQL，只適合自己信任的資料，不要拿來處理使用者輸入（有 SQL 注入風險）。最多 100000 筆。</li>
+        <li>陣列：數字只認 15 位以內的十進位數；Go / Java 要整批都是數字才會用 int / double 陣列，否則整批當字串。字串用 JSON 跳脫規則。</li>
+        <li>路徑：<kbd>/c/…</kbd>（單一字母開頭）會被當成磁碟代號；沒有磁碟代號的 POSIX 路徑轉 Windows 時，會變成 <kbd>\\wsl$\發行版\…</kbd>。這些分頁的內容都不會儲存。</li>
         <li>文字只在本機處理，不會上傳。</li>
         </ul>
     </template>
@@ -398,6 +578,20 @@
             '食物': pairs('🍎🍌🍇🍓🍉🍊🍍🥑🍞🧀🍔🍟🍕🌭🍜🍣🍙🍰🍩🍪☕🍺🍵🧋', '蘋果 apple|香蕉 banana|葡萄 grape|草莓 strawberry|西瓜 watermelon|橘子 orange|鳳梨 pineapple|酪梨 avocado|麵包 bread|起司 cheese|漢堡 burger|薯條 fries|披薩 pizza|熱狗 hotdog|拉麵 麵 noodle|壽司 sushi|飯糰 onigiri rice|蛋糕 cake|甜甜圈 donut|餅乾 cookie|咖啡 coffee|啤酒 beer|茶 tea|珍珠奶茶 bubble tea boba'.split('|')),
             '生活': pairs('🏠🚗✈🚆🚲📱💻📷🎁📚⏰💡🔑💰🛒🎵🎮⚽🌈🌙⛅🌸', '家 home|汽車 car|飛機 plane|火車 train|腳踏車 bike|手機 phone|電腦 computer|相機 camera|禮物 gift|書 book|鬧鐘 clock alarm|燈泡 idea light|鑰匙 key|錢 money|購物車 cart shopping|音樂 music|遊戲 game|足球 soccer ball|彩虹 rainbow|月亮 moon|多雲 cloud sun|櫻花 sakura'.split('|')),
         };
+        // 擴充 emoji（單一碼位；已在上面出現過的字元自動略過）。格式：「字 關鍵字…;」，名稱自動補上 emoji 方便搜尋
+        {
+            const have = new Set(Object.values(SYM_DATA).flat().map(x => x[0]));
+            const add = (g, s) => {
+                SYM_DATA[g] = s.split(';').map(x => x.trim()).filter(Boolean).map(x => { const i = x.indexOf(' '); return [x.slice(0, i), x.slice(i + 1) + ' emoji']; }).filter(([c]) => !have.has(c) && have.add(c));
+            };
+            add('臉部', '😃 大笑 happy smile;😄 開心 笑眼 happy;😆 大笑 laugh;😋 好吃 美味 yum delicious;😛 吐舌 tongue;😜 眨眼吐舌 wink tongue;🤪 瘋狂 crazy zany;😝 吐舌閉眼 tongue squint;🤑 愛錢 money mouth;🤭 摀嘴笑 偷笑 giggle;🤫 噓 安靜 shush quiet;🤨 挑眉 懷疑 skeptical eyebrow;😐 無言 面無表情 neutral;😑 無表情 expressionless;😶 無口 沉默 no mouth;😏 得意 smirk;😒 不屑 unamused;🙄 翻白眼 roll eyes;😬 尷尬 grimace awkward;😮 驚訝 open mouth wow;😯 驚訝 hushed;😲 震驚 astonished;😳 臉紅 害羞 flushed blush;😦 皺眉 frown;😧 痛苦 anguished;😨 害怕 fearful;😰 冷汗 焦慮 anxious sweat;😥 失望 sad relieved;😓 汗 cold sweat;😞 失望 disappointed;😟 擔心 worried;😠 生氣 angry mad;😩 疲憊 weary;😫 累 tired;🥱 打哈欠 yawn;😪 想睡 sleepy;😵 暈 dizzy;🤐 閉嘴 拉鍊嘴 zipper mouth;🥴 醉 woozy drunk;🤢 想吐 nauseated sick;🤮 嘔吐 vomit;🤧 打噴嚏 sneeze;😷 口罩 mask sick;🤒 發燒 thermometer fever;🤕 受傷 bandage hurt;🥵 熱 hot;🥶 冷 cold freezing;😈 小惡魔 devil smiling;👿 惡魔 angry devil;💀 骷髏 skull;👻 鬼 ghost;👽 外星人 alien;🤖 機器人 robot;💩 便便 poop;🤡 小丑 clown;😺 貓笑 cat smile;😻 貓愛心眼 cat love;🙈 非禮勿視 see no evil monkey;🙉 非禮勿聽 hear no evil;🙊 非禮勿言 speak no evil;🥲 含淚微笑 smiling tear;😌 放鬆 relieved;😔 沉思 pensive;🧐 單片眼鏡 monocle;🤓 書呆子 nerd;🤠 牛仔 cowboy;🤩 星星眼 star struck;😗 親親 kissing;😙 親親微笑 kissing smile;😚 親親閉眼 kissing closed eyes;😖 困惑 confounded;😣 忍耐 persevere;😕 困惑 confused;🙁 微皺眉 slight frown;💋 唇印 kiss mark;💤 睡覺 zzz sleeping;💢 憤怒 anger;💥 爆炸 collision boom;💫 暈眩 dizzy star;💦 汗水 水滴 sweat droplets;💨 衝刺 dash wind;💬 對話框 speech bubble;💭 思考泡泡 thought bubble');
+            add('手與人', '👆 往上指 point up;👇 往下指 point down;👈 向左指 point left;👉 向右指 point right;✋ 舉手 stop hand;🤚 手背 raised back of hand;👊 拳頭 fist punch;✊ 握拳 raised fist;🤛 左拳 left fist;🤜 右拳 right fist;🤞 交叉手指 祈求好運 crossed fingers;🤟 愛你手勢 love you gesture;🤘 搖滾 rock horns;🤙 打電話 call me;🤏 一點點 pinch;🤌 義大利手勢 pinched fingers;💅 指甲油 nail polish;🤳 自拍 selfie;🙋 舉手 raising hand;🙆 OK 手勢 ok gesture;🙅 不行 no gesture;🤷 聳肩 shrug;🤦 捂臉 facepalm;🙇 鞠躬 bow;💁 服務台 information desk;🙎 噘嘴 pouting;🙍 皺眉 frowning person;💆 按摩 massage;💇 剪髮 haircut;🚶 走路 walking;🏃 跑步 running;💃 跳舞 dancing woman;🕺 跳舞 man dancing;👶 嬰兒 baby;👦 男孩 boy;👧 女孩 girl;👨 男人 man;👩 女人 woman;👴 老爺爺 old man;👵 老奶奶 old woman;👮 警察 police;👷 工人 construction worker;💂 衛兵 guard;👸 公主 princess;🤴 王子 prince;🎅 聖誕老人 santa;👼 天使寶寶 baby angel;🧙 法師 巫師 mage wizard;🧛 吸血鬼 vampire;🧟 殭屍 zombie;🧜 美人魚 merperson;🧚 仙子 fairy;👪 家庭 family;💏 親吻 kiss couple;💑 情侶 couple heart;👀 眼睛 eyes;👂 耳朵 ear;👃 鼻子 nose;👄 嘴巴 mouth;👅 舌頭 tongue;🦷 牙齒 tooth;🧠 大腦 brain;🦴 骨頭 bone;👣 腳印 footprints;🦶 腳 foot;🦵 腿 leg;💕 兩顆心 two hearts;💖 閃亮愛心 sparkling heart;💗 跳動愛心 growing heart;💓 心跳 beating heart;💞 旋轉愛心 revolving hearts;💘 愛神之箭 cupid;💝 禮物愛心 gift heart;🧡 橙心 orange heart;🖤 黑心 black heart;🤍 白心 white heart;🤎 棕心 brown heart;💌 情書 love letter');
+            add('動物自然', '🐺 狼 wolf;🐗 野豬 boar;🐴 馬 horse;🦄 獨角獸 unicorn;🐝 蜜蜂 bee;🐛 毛毛蟲 caterpillar bug;🐌 蝸牛 snail;🐞 瓢蟲 ladybug;🐜 螞蟻 ant;🦗 蟋蟀 cricket;🦂 蠍子 scorpion;🦟 蚊子 mosquito;🐍 蛇 snake;🦎 蜥蜴 lizard;🐙 章魚 octopus;🦑 魷魚 squid;🦐 蝦 shrimp;🦞 龍蝦 lobster;🦀 螃蟹 crab;🐡 河豚 blowfish;🐠 熱帶魚 tropical fish;🐳 鯨魚 whale;🐋 鯨 whale;🦈 鯊魚 shark;🐊 鱷魚 crocodile;🐅 老虎 tiger;🐆 豹 leopard;🦓 斑馬 zebra;🦍 大猩猩 gorilla;🐘 大象 elephant;🦏 犀牛 rhino;🦛 河馬 hippo;🐪 駱駝 camel;🦒 長頸鹿 giraffe;🦘 袋鼠 kangaroo;🐃 水牛 buffalo;🐂 公牛 ox;🐄 乳牛 cow;🐎 馬 racehorse;🐖 豬 pig;🐏 公羊 ram;🐑 綿羊 sheep;🐐 山羊 goat;🦌 鹿 deer;🐕 狗 dog;🐩 貴賓狗 poodle;🐈 貓 cat;🐓 公雞 rooster;🦃 火雞 turkey;🦆 鴨子 duck;🦢 天鵝 swan;🦉 貓頭鷹 owl;🦚 孔雀 peacock;🦜 鸚鵡 parrot;🦅 老鷹 eagle;🐤 小雞 chick;🐣 孵蛋 hatching chick;🐥 小雞 baby chick;🦔 刺蝟 hedgehog;🦇 蝙蝠 bat;🐇 兔子 rabbit;🐁 老鼠 mouse;🐀 老鼠 rat;🦥 樹懶 sloth;🦦 水獺 otter;🦨 臭鼬 skunk;🐾 腳印 paw prints;🐉 龍 dragon;🐲 龍頭 dragon face;🦖 暴龍 t-rex dinosaur;🦕 長頸龍 sauropod dinosaur;🌵 仙人掌 cactus;🎄 聖誕樹 christmas tree;🌲 常綠樹 evergreen;🌳 樹 tree;🌴 棕櫚樹 palm tree;🌱 幼苗 seedling;🌿 香草 herb;🍀 四葉幸運草 clover luck;🍁 楓葉 maple leaf;🍂 落葉 fallen leaf;🍃 葉子 leaf wind;🌾 稻穗 rice plant;🌷 鬱金香 tulip;🌹 玫瑰 rose;🥀 枯萎的花 wilted flower;🌺 木槿 hibiscus;🌻 向日葵 sunflower;🌼 雛菊 blossom;💐 花束 bouquet;🍄 蘑菇 mushroom;🌰 栗子 chestnut;🐚 貝殼 shell;🌞 太陽臉 sun face;🌝 滿月臉 full moon face;🌚 新月臉 new moon face;🌑 新月 new moon;🌕 滿月 full moon;🌛 上弦月 first quarter moon;🌟 閃亮星 glowing star;🌠 流星 shooting star;🌌 銀河 milky way;🌍 地球 歐洲 非洲 earth;🌎 地球 美洲 earth;🌏 地球 亞洲 earth;🌐 地球網格 globe meridians;🌋 火山 volcano;🌊 海浪 wave;🌀 颱風 cyclone typhoon;⚡ 閃電 lightning;⭐ 星星 star;⛄ 雪人 snowman;💧 水滴 droplet;☔ 雨傘 下雨 umbrella rain');
+            add('食物飲料', '🍏 青蘋果 green apple;🍐 梨子 pear;🍑 桃子 peach;🍒 櫻桃 cherries;🍋 檸檬 lemon;🍈 哈密瓜 melon;🥭 芒果 mango;🥥 椰子 coconut;🥝 奇異果 kiwi;🍅 番茄 tomato;🍆 茄子 eggplant;🥔 馬鈴薯 potato;🥕 紅蘿蔔 carrot;🌽 玉米 corn;🥒 小黃瓜 cucumber;🥬 青菜 leafy green;🥦 花椰菜 broccoli;🧄 大蒜 garlic;🧅 洋蔥 onion;🥜 花生 peanuts;🍠 地瓜 sweet potato;🥐 可頌 croissant;🥖 法國麵包 baguette;🥨 蝴蝶餅 pretzel;🥯 貝果 bagel;🥞 鬆餅 pancakes;🧇 華夫餅 waffle;🥓 培根 bacon;🥩 牛排 steak;🍗 雞腿 poultry drumstick;🍖 肉 meat bone;🥪 三明治 sandwich;🌮 塔可 taco;🌯 捲餅 burrito;🥙 皮塔餅 stuffed flatbread;🥚 蛋 egg;🍳 煎蛋 fried egg cooking;🥘 燉鍋 paella;🍲 火鍋 stew pot;🥣 碗 bowl spoon;🥗 沙拉 salad;🍿 爆米花 popcorn;🧈 奶油 butter;🥫 罐頭 canned food;🍱 便當 bento;🍘 仙貝 rice cracker;🍚 白飯 cooked rice;🍛 咖哩飯 curry;🍝 義大利麵 spaghetti pasta;🍢 關東煮 oden;🍤 炸蝦 fried shrimp;🍥 魚板 fish cake;🥮 月餅 moon cake;🍡 糰子 dango;🥟 餃子 dumpling;🥠 幸運籤餅 fortune cookie;🥡 外帶盒 takeout;🍦 霜淇淋 soft ice cream;🍧 刨冰 shaved ice;🍨 冰淇淋 ice cream;🎂 生日蛋糕 birthday cake;🧁 杯子蛋糕 cupcake;🥧 派 pie;🍫 巧克力 chocolate;🍬 糖果 candy;🍭 棒棒糖 lollipop;🍮 布丁 custard pudding;🍯 蜂蜜 honey;🍼 奶瓶 baby bottle;🥛 牛奶 milk glass;🍶 清酒 sake;🍷 紅酒 wine;🍸 雞尾酒 cocktail;🍹 熱帶飲料 tropical drink;🍻 乾杯 啤酒 beers cheers;🥂 香檳乾杯 champagne clinking;🥃 威士忌 whisky tumbler;🥤 汽水 soft drink;🧃 果汁 juice box;🧉 馬黛茶 mate;🥢 筷子 chopsticks;🍴 刀叉 fork knife;🥄 湯匙 spoon;🧂 鹽 salt');
+            add('活動物品', '🏀 籃球 basketball;🏈 美式足球 football;⚾ 棒球 baseball;🥎 壘球 softball;🎾 網球 tennis;🏐 排球 volleyball;🏉 橄欖球 rugby;🎱 撞球 billiards;🏓 桌球 ping pong;🏸 羽毛球 badminton;🥅 球門 goal;🏒 冰球 ice hockey;⛳ 高爾夫 golf;🏹 弓箭 archery;🎣 釣魚 fishing;🥊 拳擊 boxing;🥋 武術 martial arts;🎿 滑雪 ski;🏂 單板滑雪 snowboarder;🏄 衝浪 surfer;🏊 游泳 swimmer;🚴 騎自行車 cyclist;🏆 獎盃 trophy;🥇 金牌 第一名 gold medal;🥈 銀牌 第二名 silver medal;🥉 銅牌 第三名 bronze medal;🏅 獎牌 sports medal;🎯 靶心 飛鏢 dart bullseye;🎳 保齡球 bowling;🎲 骰子 dice;🧩 拼圖 puzzle;🎰 吃角子老虎 slot machine;🎪 馬戲團 circus tent;🎭 面具 戲劇 performing arts;🎨 調色盤 art palette;🎬 場記板 電影 clapper board;🎤 麥克風 microphone;🎧 耳機 headphone;🎼 樂譜 musical score;🎹 鋼琴 piano keyboard;🥁 鼓 drum;🎷 薩克斯風 saxophone;🎸 吉他 guitar;🎺 小號 trumpet;🎻 小提琴 violin;🎈 氣球 balloon;🎊 彩球 confetti ball;🎀 蝴蝶結 ribbon;🎃 南瓜燈 萬聖節 halloween;🎆 煙火 fireworks;🎇 仙女棒 sparkler;🧨 鞭炮 firecracker;🎋 七夕 tanabata tree;🎍 門松 pine decoration;🎎 日本娃娃 dolls;🎏 鯉魚旗 carp streamer;🎐 風鈴 wind chime;🎑 賞月 moon viewing;🧧 紅包 red envelope;🎫 票券 ticket;📞 電話話筒 telephone;📟 呼叫器 pager;📠 傳真 fax;🔋 電池 battery;🔌 插頭 plug;💾 磁碟片 floppy disk;💿 光碟 cd;📀 dvd;📺 電視 television;📻 收音機 radio;🎥 攝影機 movie camera;📹 錄影機 video camera;📼 錄影帶 vhs;🔍 放大鏡 搜尋 magnifying glass search;🔎 放大鏡 magnifier right;🔬 顯微鏡 microscope;🔭 望遠鏡 telescope;📡 衛星天線 satellite antenna;🔦 手電筒 flashlight;🏮 紅燈籠 red lantern;📔 筆記本 notebook;📕 紅色書本 closed book;📖 打開的書 open book;📗 綠色書本 green book;📘 藍色書本 blue book;📙 橘色書本 orange book;📓 筆記本 notebook;📒 帳本 ledger;📃 捲頁 page curl;📜 捲軸 scroll;📄 文件 page;📰 報紙 newspaper;🔖 書籤 bookmark;💴 日圓鈔票 yen banknote;💵 美元鈔票 dollar banknote;💶 歐元鈔票 euro banknote;💷 英鎊鈔票 pound banknote;💳 信用卡 credit card;💎 鑽石 寶石 gem diamond;📧 電子郵件 email;📨 收信 incoming envelope;📩 寄信 envelope arrow;📦 包裹 package box;📫 信箱 mailbox;📪 空信箱 mailbox lowered;📮 郵筒 postbox;📝 備忘錄 筆記 memo note pencil;💼 公事包 briefcase;📁 資料夾 file folder;📂 開啟的資料夾 open folder;📅 日曆 calendar;📆 日曆 tear off calendar;📈 上升圖表 chart increasing;📉 下降圖表 chart decreasing;📊 長條圖 bar chart;📋 剪貼簿 clipboard;📌 圖釘 pushpin;📍 地點標記 location pin;📎 迴紋針 paperclip;📏 直尺 straight ruler;📐 三角尺 triangular ruler;🔒 鎖 locked;🔓 開鎖 unlocked;🔐 鎖與鑰匙 lock key;🔨 錘子 hammer;🔧 板手 wrench;🔩 螺絲螺帽 nut bolt;🧲 磁鐵 magnet;🔫 水槍 pistol;💣 炸彈 bomb;🔪 菜刀 knife;💊 藥丸 pill;💉 針筒 syringe;🧬 DNA 基因;🧪 試管 test tube;🧫 培養皿 petri dish;🧹 掃把 broom;🧺 洗衣籃 basket;🧻 衛生紙 toilet paper;🚽 馬桶 toilet;🚿 淋浴 shower;🛁 浴缸 bathtub;🧼 肥皂 soap;🧽 海綿 sponge;🚪 門 door;👑 皇冠 crown;👒 女帽 womans hat;🎩 禮帽 top hat;🎓 畢業帽 graduation cap;🧢 棒球帽 billed cap;👓 眼鏡 glasses;👔 領帶襯衫 necktie;👕 T恤 t-shirt;👖 牛仔褲 jeans;🧣 圍巾 scarf;🧤 手套 gloves;🧥 外套 coat;👗 洋裝 dress;👘 和服 kimono;👙 比基尼 bikini;👚 女上衣 womans clothes;👛 零錢包 purse;👜 手提包 handbag;🎒 書包 backpack;👞 皮鞋 mans shoe;👟 運動鞋 sneaker;👠 高跟鞋 high heel;👡 涼鞋 sandal;👢 靴子 boot;💄 口紅 lipstick;💍 戒指 ring;🔔 鈴鐺 bell;🔕 靜音鈴鐺 bell slash;🔊 喇叭 speaker loud;🔇 靜音 muted;📢 擴音器 loudspeaker;📣 大聲公 megaphone;⌚ 手錶 watch;⏳ 沙漏 hourglass flowing;⌛ 沙漏 hourglass');
+            add('交通地點', '🚀 火箭 rocket;🛸 飛碟 flying saucer;🚁 直升機 helicopter;🚂 蒸汽火車 locomotive;🚄 高鐵 bullet train;🚅 高速列車 high speed train;🚇 地鐵 捷運 metro;🚈 輕軌 light rail;🚉 車站 station;🚊 電車 tram;🚌 公車 bus;🚍 來車 oncoming bus;🚎 無軌電車 trolleybus;🚐 小巴 minibus;🚑 救護車 ambulance;🚒 消防車 fire engine;🚓 警車 police car;🚕 計程車 taxi;🚙 休旅車 suv;🚚 貨車 delivery truck;🚛 大貨車 articulated lorry;🚜 曳引機 tractor;🛵 機車 scooter;🛴 滑板車 kick scooter;🛹 滑板 skateboard;⛵ 帆船 sailboat;🚤 快艇 speedboat;🚢 輪船 ship;⚓ 船錨 anchor;⛽ 加油站 fuel pump;🚥 紅綠燈 traffic light;🚦 紅綠燈 vertical traffic light;🚧 施工 construction;🚨 警示燈 police light siren;🚏 公車站 bus stop;🛑 停止 stop sign;⛔ 禁止進入 no entry;🚫 禁止 prohibited;🚭 禁菸 no smoking;🚯 禁止亂丟垃圾 no littering;🚷 禁止行人 no pedestrians;🏡 房子 庭院 house garden;🏢 辦公大樓 office building;🏣 郵局 post office;🏥 醫院 hospital;🏦 銀行 bank;🏨 旅館 hotel;🏪 便利商店 convenience store;🏫 學校 school;🏬 百貨公司 department store;🏭 工廠 factory;🏯 日本城堡 japanese castle;🏰 城堡 castle;💒 婚禮 wedding;🗼 東京鐵塔 tokyo tower;🗽 自由女神 statue of liberty;⛪ 教堂 church;🕌 清真寺 mosque;🗻 富士山 mount fuji;🌅 日出 sunrise;🌄 山上日出 sunrise mountains;🌇 日落 sunset;🌆 黃昏城市 cityscape dusk;🌃 夜晚星空 night stars;🌉 夜晚的橋 bridge night;🎡 摩天輪 ferris wheel;🎢 雲霄飛車 roller coaster;🎠 旋轉木馬 carousel;⛲ 噴泉 fountain;⛺ 帳篷 露營 tent camping;🧭 指南針 compass;🧳 行李箱 luggage');
+            add('標誌符號', '✅ 打勾 完成 check mark;❌ 叉叉 cross mark;❎ 叉按鈕 cross mark button;❓ 紅問號 question;❔ 白問號 white question;❗ 驚嘆號 exclamation;❕ 白驚嘆號 white exclamation;⭕ 圓圈 hollow red circle;🚩 旗子 triangular flag;🏁 終點旗 chequered flag;🏴 黑旗 black flag;🔴 紅圓 red circle;🟠 橘圓 orange circle;🟡 黃圓 yellow circle;🟢 綠圓 green circle;🔵 藍圓 blue circle;🟣 紫圓 purple circle;🟤 棕圓 brown circle;⚫ 黑圓 black circle;⚪ 白圓 white circle;🟥 紅方塊 red square;🟧 橘方塊 orange square;🟨 黃方塊 yellow square;🟩 綠方塊 green square;🟦 藍方塊 blue square;🟪 紫方塊 purple square;⬛ 黑方塊 black large square;⬜ 白方塊 white large square;🔶 橘大菱形 orange diamond;🔷 藍大菱形 blue diamond;🔸 橘小菱形 small orange diamond;🔹 藍小菱形 small blue diamond;🔺 紅三角 red triangle up;🔻 紅三角 red triangle down;🔼 向上 upwards button;🔽 向下 downwards button;⏩ 快轉 fast forward;⏪ 倒轉 rewind;⏫ 快速向上 fast up;⏬ 快速向下 fast down;🔀 隨機播放 shuffle;🔁 重複播放 repeat;🔂 單曲循環 repeat one;🔄 重新整理 counterclockwise arrows;➕ 加號 plus;➖ 減號 minus;➗ 除號 divide;💲 美元符號 heavy dollar sign;🔱 三叉戟 trident;🔰 新手標誌 beginner;🆗 OK 好 ok button;🆕 NEW 新 new;🆓 FREE 免費 free;🆒 COOL 酷 cool;🆙 UP 升級 up;🆘 SOS 求救 sos;🆖 NG 不好 ng;🆔 ID 身分 id;🔞 未滿十八歲 no one under eighteen;🔤 abc 英文字母 input latin;🔠 大寫字母 uppercase;🔡 小寫字母 lowercase;🔢 數字 numbers;🔣 符號 symbols;🔝 TOP 置頂 top;🔙 BACK 返回 back;🔚 END 結束 end;🔛 ON 開啟 on;🔜 SOON 即將 soon;🈶 有 日文 not free of charge;🈚 無 日文 free of charge;🈲 禁 日文 prohibited;🈸 申 日文 application;🈹 割引 折扣 日文 discount;🈴 合 日文 passing grade;🈳 空 日文 vacancy;🈺 營業中 日文 open for business;🈵 滿 日文 no vacancy;🉐 得 日文 bargain;🉑 可 日文 acceptable;🔅 低亮度 dim;🔆 高亮度 bright;📶 訊號強度 signal strength;📳 震動 vibration mode;📴 關機 mobile phone off;🔈 小聲 speaker low;🔉 中聲 speaker medium;♈ 牡羊座 aries zodiac;♉ 金牛座 taurus zodiac;♊ 雙子座 gemini zodiac;♋ 巨蟹座 cancer zodiac;♌ 獅子座 leo zodiac;♍ 處女座 virgo zodiac;♎ 天秤座 libra zodiac;♏ 天蠍座 scorpio zodiac;♐ 射手座 sagittarius zodiac;♑ 摩羯座 capricorn zodiac;♒ 水瓶座 aquarius zodiac;♓ 雙魚座 pisces zodiac;⛎ 蛇夫座 ophiuchus zodiac;🕐 一點 one oclock clock;🕑 兩點 two oclock clock;🕒 三點 three oclock clock;🕓 四點 four oclock clock;🕔 五點 five oclock clock;🕕 六點 six oclock clock;🕖 七點 seven oclock clock;🕗 八點 eight oclock clock;🕘 九點 nine oclock clock;🕙 十點 ten oclock clock;🕚 十一點 eleven oclock clock;🕛 十二點 twelve oclock clock');
+        }
         const SYMBOLS = Object.entries(SYM_DATA).flatMap(([g, arr]) => arr.map(([c, n]) => ({ c, n, g })));
         const SYM_CATS = Object.keys(SYM_DATA);
         // 搜尋：空白分隔的關鍵字全部命中（字元 / 名稱 / 分類，不分大小寫）；cat 為空字串表示不限分類
@@ -487,6 +681,240 @@
             return { text: lines.map(l => (l.trim() ? convertCase(l, style, keepAcronym) : '')).join('\n'), truncated: all.length > maxLines };
         }
 
+        // --- pure ---
+        // ===== Unicode 字元資訊 =====
+        // 區塊表（常用區段；未列的碼位只顯示碼位）
+        const UNI_BLOCKS = [[0x0000, 0x007F, 'Basic Latin'], [0x0080, 0x00FF, 'Latin-1 Supplement'], [0x0100, 0x017F, 'Latin Extended-A'], [0x0180, 0x024F, 'Latin Extended-B'], [0x0250, 0x02AF, 'IPA Extensions'], [0x02B0, 0x02FF, 'Spacing Modifier Letters'], [0x0300, 0x036F, 'Combining Diacritical Marks'], [0x0370, 0x03FF, 'Greek and Coptic'], [0x0400, 0x04FF, 'Cyrillic'], [0x0500, 0x052F, 'Cyrillic Supplement'], [0x0530, 0x058F, 'Armenian'], [0x0590, 0x05FF, 'Hebrew'], [0x0600, 0x06FF, 'Arabic'], [0x0700, 0x074F, 'Syriac'], [0x0900, 0x097F, 'Devanagari'], [0x0E00, 0x0E7F, 'Thai'], [0x10A0, 0x10FF, 'Georgian'], [0x1100, 0x11FF, 'Hangul Jamo'], [0x1E00, 0x1EFF, 'Latin Extended Additional'], [0x1F00, 0x1FFF, 'Greek Extended'],
+            [0x2000, 0x206F, 'General Punctuation'], [0x2070, 0x209F, 'Superscripts and Subscripts'], [0x20A0, 0x20CF, 'Currency Symbols'], [0x20D0, 0x20FF, 'Combining Diacritical Marks for Symbols'], [0x2100, 0x214F, 'Letterlike Symbols'], [0x2150, 0x218F, 'Number Forms'], [0x2190, 0x21FF, 'Arrows'], [0x2200, 0x22FF, 'Mathematical Operators'], [0x2300, 0x23FF, 'Miscellaneous Technical'], [0x2400, 0x243F, 'Control Pictures'], [0x2460, 0x24FF, 'Enclosed Alphanumerics'], [0x2500, 0x257F, 'Box Drawing'], [0x2580, 0x259F, 'Block Elements'], [0x25A0, 0x25FF, 'Geometric Shapes'], [0x2600, 0x26FF, 'Miscellaneous Symbols'], [0x2700, 0x27BF, 'Dingbats'], [0x27C0, 0x27EF, 'Miscellaneous Mathematical Symbols-A'], [0x27F0, 0x27FF, 'Supplemental Arrows-A'], [0x2800, 0x28FF, 'Braille Patterns'], [0x2900, 0x297F, 'Supplemental Arrows-B'], [0x2B00, 0x2BFF, 'Miscellaneous Symbols and Arrows'],
+            [0x2E80, 0x2EFF, 'CJK Radicals Supplement'], [0x2F00, 0x2FDF, 'Kangxi Radicals'], [0x3000, 0x303F, 'CJK Symbols and Punctuation'], [0x3040, 0x309F, 'Hiragana'], [0x30A0, 0x30FF, 'Katakana'], [0x3100, 0x312F, 'Bopomofo'], [0x3130, 0x318F, 'Hangul Compatibility Jamo'], [0x3190, 0x319F, 'Kanbun'], [0x31A0, 0x31BF, 'Bopomofo Extended'], [0x31C0, 0x31EF, 'CJK Strokes'], [0x3200, 0x32FF, 'Enclosed CJK Letters and Months'], [0x3300, 0x33FF, 'CJK Compatibility'], [0x3400, 0x4DBF, 'CJK Unified Ideographs Extension A'], [0x4DC0, 0x4DFF, 'Yijing Hexagram Symbols'], [0x4E00, 0x9FFF, 'CJK Unified Ideographs'], [0xA000, 0xA48F, 'Yi Syllables'], [0xAC00, 0xD7AF, 'Hangul Syllables'],
+            [0xD800, 0xDB7F, 'High Surrogates'], [0xDB80, 0xDBFF, 'High Private Use Surrogates'], [0xDC00, 0xDFFF, 'Low Surrogates'], [0xE000, 0xF8FF, 'Private Use Area'], [0xF900, 0xFAFF, 'CJK Compatibility Ideographs'], [0xFB00, 0xFB4F, 'Alphabetic Presentation Forms'], [0xFE00, 0xFE0F, 'Variation Selectors'], [0xFE10, 0xFE1F, 'Vertical Forms'], [0xFE30, 0xFE4F, 'CJK Compatibility Forms'], [0xFE50, 0xFE6F, 'Small Form Variants'], [0xFF00, 0xFFEF, 'Halfwidth and Fullwidth Forms'], [0xFFF0, 0xFFFF, 'Specials'],
+            [0x1F100, 0x1F1FF, 'Enclosed Alphanumeric Supplement'], [0x1F200, 0x1F2FF, 'Enclosed Ideographic Supplement'], [0x1F300, 0x1F5FF, 'Miscellaneous Symbols and Pictographs'], [0x1F600, 0x1F64F, 'Emoticons'], [0x1F680, 0x1F6FF, 'Transport and Map Symbols'], [0x1F900, 0x1F9FF, 'Supplemental Symbols and Pictographs'], [0x1FA70, 0x1FAFF, 'Symbols and Pictographs Extended-A'],
+            [0x20000, 0x2A6DF, 'CJK Unified Ideographs Extension B'], [0x2A700, 0x2B73F, 'CJK Unified Ideographs Extension C'], [0x2F800, 0x2FA1F, 'CJK Compatibility Ideographs Supplement'], [0xE0000, 0xE007F, 'Tags'], [0xE0100, 0xE01EF, 'Variation Selectors Supplement'], [0xF0000, 0xFFFFF, 'Supplementary Private Use Area-A'], [0x100000, 0x10FFFF, 'Supplementary Private Use Area-B']];
+        const uniBlock = (cp) => { const b = UNI_BLOCKS.find(([s, e]) => cp >= s && cp <= e); return b ? b[2] : null; };
+        // 名稱表：只收錄常用字元（ASCII、Latin-1、希臘字母、常見標點 / 符號 / 日文 / emoji）；漢字與韓文音節用規則產生；其他回傳 null
+        const UNI_NAMES = new Map();
+        {
+            const put = (s) => { for (const x of s.split(';')) { const i = x.indexOf(' '); UNI_NAMES.set(parseInt(x.slice(0, i), 16), x.slice(i + 1)); } };
+            put('0000 NULL;0007 BELL;0008 BACKSPACE;0009 CHARACTER TABULATION;000A LINE FEED;000D CARRIAGE RETURN;001B ESCAPE;007F DELETE;0085 NEXT LINE;' +
+                '0020 SPACE;0021 EXCLAMATION MARK;0022 QUOTATION MARK;0023 NUMBER SIGN;0024 DOLLAR SIGN;0025 PERCENT SIGN;0026 AMPERSAND;0027 APOSTROPHE;0028 LEFT PARENTHESIS;0029 RIGHT PARENTHESIS;002A ASTERISK;002B PLUS SIGN;002C COMMA;002D HYPHEN-MINUS;002E FULL STOP;002F SOLIDUS;003A COLON;003B SEMICOLON;003C LESS-THAN SIGN;003D EQUALS SIGN;003E GREATER-THAN SIGN;003F QUESTION MARK;0040 COMMERCIAL AT;005B LEFT SQUARE BRACKET;005C REVERSE SOLIDUS;005D RIGHT SQUARE BRACKET;005E CIRCUMFLEX ACCENT;005F LOW LINE;0060 GRAVE ACCENT;007B LEFT CURLY BRACKET;007C VERTICAL LINE;007D RIGHT CURLY BRACKET;007E TILDE;' +
+                '00A0 NO-BREAK SPACE;00A1 INVERTED EXCLAMATION MARK;00A2 CENT SIGN;00A3 POUND SIGN;00A4 CURRENCY SIGN;00A5 YEN SIGN;00A6 BROKEN BAR;00A7 SECTION SIGN;00A8 DIAERESIS;00A9 COPYRIGHT SIGN;00AA FEMININE ORDINAL INDICATOR;00AB LEFT-POINTING DOUBLE ANGLE QUOTATION MARK;00AC NOT SIGN;00AD SOFT HYPHEN;00AE REGISTERED SIGN;00AF MACRON;00B0 DEGREE SIGN;00B1 PLUS-MINUS SIGN;00B2 SUPERSCRIPT TWO;00B3 SUPERSCRIPT THREE;00B4 ACUTE ACCENT;00B5 MICRO SIGN;00B6 PILCROW SIGN;00B7 MIDDLE DOT;00B8 CEDILLA;00B9 SUPERSCRIPT ONE;00BA MASCULINE ORDINAL INDICATOR;00BB RIGHT-POINTING DOUBLE ANGLE QUOTATION MARK;00BC VULGAR FRACTION ONE QUARTER;00BD VULGAR FRACTION ONE HALF;00BE VULGAR FRACTION THREE QUARTERS;00BF INVERTED QUESTION MARK;00D7 MULTIPLICATION SIGN;00F7 DIVISION SIGN;' +
+                '2002 EN SPACE;2003 EM SPACE;2009 THIN SPACE;200B ZERO WIDTH SPACE;200C ZERO WIDTH NON-JOINER;200D ZERO WIDTH JOINER;200E LEFT-TO-RIGHT MARK;200F RIGHT-TO-LEFT MARK;2010 HYPHEN;2013 EN DASH;2014 EM DASH;2018 LEFT SINGLE QUOTATION MARK;2019 RIGHT SINGLE QUOTATION MARK;201C LEFT DOUBLE QUOTATION MARK;201D RIGHT DOUBLE QUOTATION MARK;2020 DAGGER;2021 DOUBLE DAGGER;2022 BULLET;2026 HORIZONTAL ELLIPSIS;2030 PER MILLE SIGN;2032 PRIME;2033 DOUBLE PRIME;2039 SINGLE LEFT-POINTING ANGLE QUOTATION MARK;203A SINGLE RIGHT-POINTING ANGLE QUOTATION MARK;203B REFERENCE MARK;2060 WORD JOINER;FEFF ZERO WIDTH NO-BREAK SPACE;FFFD REPLACEMENT CHARACTER;' +
+                '20A9 WON SIGN;20AC EURO SIGN;20B9 INDIAN RUPEE SIGN;20BD RUBLE SIGN;20BF BITCOIN SIGN;2103 DEGREE CELSIUS;2109 DEGREE FAHRENHEIT;2116 NUMERO SIGN;2122 TRADE MARK SIGN;2126 OHM SIGN;212B ANGSTROM SIGN;2190 LEFTWARDS ARROW;2191 UPWARDS ARROW;2192 RIGHTWARDS ARROW;2193 DOWNWARDS ARROW;2194 LEFT RIGHT ARROW;2195 UP DOWN ARROW;21D0 LEFTWARDS DOUBLE ARROW;21D2 RIGHTWARDS DOUBLE ARROW;21D4 LEFT RIGHT DOUBLE ARROW;2200 FOR ALL;2202 PARTIAL DIFFERENTIAL;2203 THERE EXISTS;2205 EMPTY SET;2207 NABLA;2208 ELEMENT OF;2209 NOT AN ELEMENT OF;2211 N-ARY SUMMATION;2212 MINUS SIGN;221A SQUARE ROOT;221E INFINITY;2227 LOGICAL AND;2228 LOGICAL OR;2229 INTERSECTION;222A UNION;222B INTEGRAL;2234 THEREFORE;2248 ALMOST EQUAL TO;2260 NOT EQUAL TO;2261 IDENTICAL TO;2264 LESS-THAN OR EQUAL TO;2265 GREATER-THAN OR EQUAL TO;' +
+                '2500 BOX DRAWINGS LIGHT HORIZONTAL;2502 BOX DRAWINGS LIGHT VERTICAL;25A0 BLACK SQUARE;25A1 WHITE SQUARE;25B2 BLACK UP-POINTING TRIANGLE;25B3 WHITE UP-POINTING TRIANGLE;25CB WHITE CIRCLE;25CF BLACK CIRCLE;2605 BLACK STAR;2606 WHITE STAR;260E BLACK TELEPHONE;2640 FEMALE SIGN;2642 MALE SIGN;2660 BLACK SPADE SUIT;2663 BLACK CLUB SUIT;2665 BLACK HEART SUIT;2666 BLACK DIAMOND SUIT;266A EIGHTH NOTE;2713 CHECK MARK;2714 HEAVY CHECK MARK;2717 BALLOT X;2728 SPARKLES;2764 HEAVY BLACK HEART;' +
+                '3000 IDEOGRAPHIC SPACE;3001 IDEOGRAPHIC COMMA;3002 IDEOGRAPHIC FULL STOP;3008 LEFT ANGLE BRACKET;3009 RIGHT ANGLE BRACKET;300A LEFT DOUBLE ANGLE BRACKET;300B RIGHT DOUBLE ANGLE BRACKET;300C LEFT CORNER BRACKET;300D RIGHT CORNER BRACKET;300E LEFT WHITE CORNER BRACKET;300F RIGHT WHITE CORNER BRACKET;3010 LEFT BLACK LENTICULAR BRACKET;3011 RIGHT BLACK LENTICULAR BRACKET;3042 HIRAGANA LETTER A;3044 HIRAGANA LETTER I;3046 HIRAGANA LETTER U;3048 HIRAGANA LETTER E;304A HIRAGANA LETTER O;30A2 KATAKANA LETTER A;30A4 KATAKANA LETTER I;30A6 KATAKANA LETTER U;30A8 KATAKANA LETTER E;30AA KATAKANA LETTER O;30FB KATAKANA MIDDLE DOT;30FC KATAKANA-HIRAGANA PROLONGED SOUND MARK;3105 BOPOMOFO LETTER B;3106 BOPOMOFO LETTER P;3107 BOPOMOFO LETTER M;3108 BOPOMOFO LETTER F;' +
+                'FE0E VARIATION SELECTOR-15;FE0F VARIATION SELECTOR-16;FF01 FULLWIDTH EXCLAMATION MARK;FF08 FULLWIDTH LEFT PARENTHESIS;FF09 FULLWIDTH RIGHT PARENTHESIS;FF0C FULLWIDTH COMMA;FF1A FULLWIDTH COLON;FF1B FULLWIDTH SEMICOLON;FF1F FULLWIDTH QUESTION MARK;FFE5 FULLWIDTH YEN SIGN;' +
+                '1F31F GLOWING STAR;1F308 RAINBOW;1F34E RED APPLE;1F389 PARTY POPPER;1F431 CAT FACE;1F436 DOG FACE;1F44D THUMBS UP SIGN;1F44E THUMBS DOWN SIGN;1F44F CLAPPING HANDS SIGN;1F494 BROKEN HEART;1F4A9 PILE OF POO;1F4AF HUNDRED POINTS SYMBOL;1F525 FIRE;1F600 GRINNING FACE;1F601 BEAMING FACE WITH SMILING EYES;1F602 FACE WITH TEARS OF JOY;1F603 GRINNING FACE WITH BIG EYES;1F604 GRINNING FACE WITH SMILING EYES;1F609 WINKING FACE;1F60A SMILING FACE WITH SMILING EYES;1F60D SMILING FACE WITH HEART-EYES;1F60E SMILING FACE WITH SUNGLASSES;1F62D LOUDLY CRYING FACE;1F64F PERSON WITH FOLDED HANDS;1F680 ROCKET');
+            for (let i = 0; i < 26; i++) { UNI_NAMES.set(65 + i, 'LATIN CAPITAL LETTER ' + String.fromCharCode(65 + i)); UNI_NAMES.set(97 + i, 'LATIN SMALL LETTER ' + String.fromCharCode(65 + i)); }
+            'ZERO ONE TWO THREE FOUR FIVE SIX SEVEN EIGHT NINE'.split(' ').forEach((d, i) => UNI_NAMES.set(48 + i, 'DIGIT ' + d));
+            // Latin-1 字母：C0–DF（大寫，DF 是 ß）與 E0–FF（小寫），X 為 null 的位置是符號（×、÷）
+            const L1 = ['A WITH GRAVE', 'A WITH ACUTE', 'A WITH CIRCUMFLEX', 'A WITH TILDE', 'A WITH DIAERESIS', 'A WITH RING ABOVE', 'AE', 'C WITH CEDILLA', 'E WITH GRAVE', 'E WITH ACUTE', 'E WITH CIRCUMFLEX', 'E WITH DIAERESIS', 'I WITH GRAVE', 'I WITH ACUTE', 'I WITH CIRCUMFLEX', 'I WITH DIAERESIS', 'ETH', 'N WITH TILDE', 'O WITH GRAVE', 'O WITH ACUTE', 'O WITH CIRCUMFLEX', 'O WITH TILDE', 'O WITH DIAERESIS', null, 'O WITH STROKE', 'U WITH GRAVE', 'U WITH ACUTE', 'U WITH CIRCUMFLEX', 'U WITH DIAERESIS', 'Y WITH ACUTE', 'THORN'];
+            L1.forEach((n, i) => { if (n) { UNI_NAMES.set(0xC0 + i, 'LATIN CAPITAL LETTER ' + n); UNI_NAMES.set(0xE0 + i, 'LATIN SMALL LETTER ' + n); } });
+            UNI_NAMES.set(0xDF, 'LATIN SMALL LETTER SHARP S'); UNI_NAMES.set(0xFF, 'LATIN SMALL LETTER Y WITH DIAERESIS');
+            // 希臘字母（Unicode 名稱用 LAMDA）
+            const G1 = 'ALPHA BETA GAMMA DELTA EPSILON ZETA ETA THETA IOTA KAPPA LAMDA MU NU XI OMICRON PI RHO'.split(' '), G2 = 'SIGMA TAU UPSILON PHI CHI PSI OMEGA'.split(' ');
+            G1.forEach((n, i) => { UNI_NAMES.set(0x391 + i, 'GREEK CAPITAL LETTER ' + n); UNI_NAMES.set(0x3B1 + i, 'GREEK SMALL LETTER ' + n); });
+            G2.forEach((n, i) => { UNI_NAMES.set(0x3A3 + i, 'GREEK CAPITAL LETTER ' + n); UNI_NAMES.set(0x3C3 + i, 'GREEK SMALL LETTER ' + n); });
+            UNI_NAMES.set(0x3C2, 'GREEK SMALL LETTER FINAL SIGMA');
+        }
+        const hex4 = (n) => n.toString(16).toUpperCase().padStart(4, '0');
+        function uniName(cp) {
+            if (UNI_NAMES.has(cp)) return UNI_NAMES.get(cp);
+            if ((cp >= 0x3400 && cp <= 0x4DBF) || (cp >= 0x4E00 && cp <= 0x9FFF) || (cp >= 0x20000 && cp <= 0x2A6DF)) return 'CJK UNIFIED IDEOGRAPH-' + hex4(cp);
+            if (cp >= 0xF900 && cp <= 0xFAFF) return 'CJK COMPATIBILITY IDEOGRAPH-' + hex4(cp);
+            if (cp >= 0xAC00 && cp <= 0xD7A3) return 'HANGUL SYLLABLE（音節名稱未列出）';
+            if (cp >= 0xE000 && cp <= 0xF8FF) return '（私用區，沒有標準名稱）';
+            if (cp >= 0xD800 && cp <= 0xDFFF) return '（代理碼位，不是獨立字元）';
+            return null;
+        }
+        const GC_ZH = { Lu: '大寫字母', Ll: '小寫字母', Lt: '詞首大寫字母', Lm: '修飾字母', Lo: '其他字母（含漢字）', Mn: '組合記號', Mc: '組合記號（間距）', Me: '包圍記號', Nd: '十進位數字', Nl: '字母數字', No: '其他數字', Pc: '連接標點', Pd: '破折號', Ps: '開括號', Pe: '閉括號', Pi: '起始引號', Pf: '結束引號', Po: '其他標點', Sm: '數學符號', Sc: '貨幣符號', Sk: '修飾符號', So: '其他符號', Zs: '空白', Zl: '行分隔', Zp: '段分隔', Cc: '控制字元', Cf: '格式字元', Cs: '代理碼位', Co: '私用區', Cn: '未指派' };
+        const GC_RE = Object.keys(GC_ZH).map(k => [k, new RegExp('^\\p{' + k + '}$', 'u')]);
+        const uniCat = (cp) => (GC_RE.find(([, r]) => r.test(String.fromCodePoint(cp))) || ['Cn'])[0];
+        const ENT_NAMES = { 34: 'quot', 38: 'amp', 39: 'apos', 60: 'lt', 62: 'gt', 160: 'nbsp', 162: 'cent', 163: 'pound', 165: 'yen', 167: 'sect', 169: 'copy', 171: 'laquo', 174: 'reg', 176: 'deg', 177: 'plusmn', 187: 'raquo', 189: 'frac12', 215: 'times', 247: 'divide', 8211: 'ndash', 8212: 'mdash', 8216: 'lsquo', 8217: 'rsquo', 8220: 'ldquo', 8221: 'rdquo', 8226: 'bull', 8230: 'hellip', 8364: 'euro', 8482: 'trade', 8592: 'larr', 8593: 'uarr', 8594: 'rarr', 8595: 'darr', 9829: 'hearts' };
+        // 單一碼位的完整資訊；rows = [[標籤, 值]]（給畫面逐列顯示）
+        function uniInfo(cp) {
+            if (!Number.isInteger(cp) || cp < 0 || cp > 0x10FFFF) throw new Error('碼位超出範圍（U+0000 – U+10FFFF）');
+            const sur = cp >= 0xD800 && cp <= 0xDFFF, ch = sur ? '' : String.fromCodePoint(cp), hex = cp.toString(16).toUpperCase();
+            const u8 = sur ? [] : [...new TextEncoder().encode(ch)], astral = cp > 0xFFFF;
+            const units = astral ? [0xD800 + ((cp - 0x10000) >> 10), 0xDC00 + ((cp - 0x10000) & 0x3FF)] : [cp];
+            const gc = uniCat(cp), name = uniName(cp), block = uniBlock(cp), ent = ENT_NAMES[cp];
+            const rows = [
+                ['碼位', 'U+' + hex.padStart(4, '0')], ['十進位', String(cp)],
+                ['名稱', name || '（未收錄；本工具只內建常用字元的名稱，只顯示碼位與區塊）'], ['區塊', block || '（未收錄的區塊）'], ['分類', `${gc}（${GC_ZH[gc]}）`],
+                ['UTF-8', u8.map(b => hex4(b).slice(2)).join(' ') || '—'], ['UTF-16 BE', units.map(hex4).join(' ')],
+                ['UTF-16 LE（位元組）', units.map(u => hex4(u).slice(2) + ' ' + hex4(u).slice(0, 2)).join(' ')], ['UTF-32', hex.padStart(8, '0')],
+                ['HTML 實體', `&#${cp}; 　 &#x${hex};` + (ent ? ` 　 &${ent};` : '')],
+                ['JavaScript', astral ? `\\u{${hex}}` : `\\u${hex4(cp)}`], ['JSON / Java / C#', units.map(u => '\\u' + hex4(u)).join('')],
+                ['Python / Go / C', astral ? `\\U${hex.padStart(8, '0')}` : `\\u${hex4(cp)}`], ['Rust / Swift', `\\u{${hex}}`], ['CSS', `\\${hex} `],
+                ['URL 百分比編碼', u8.map(b => '%' + hex4(b).slice(2)).join('') || '—'],
+            ];
+            return { cp, ch, hex, name, block, cat: gc, rows };
+        }
+        const UNI_MAX = 50;
+        // 解析輸入：全部是「帶前綴的碼位」（U+4E2D、0x4E2D、\u4E2D、\u{1F600}、&#x4E2D;、&#20013;）就當碼位，否則逐字元
+        function parseUniQuery(text) {
+            const raw = String(text);
+            if (!raw) return { cps: [], mode: 'char', truncated: false };
+            const toks = raw.trim().split(/[\s,;]+/).filter(Boolean);
+            const codeRe = /^(?:(?:U\+|0x|\\u\{?|\\U|&#x)([0-9a-f]{1,8})\}?;?|&#(\d{1,8});?)$/i;
+            let cps, mode;
+            if (toks.length && toks.every(t => codeRe.test(t))) {
+                mode = 'code'; cps = toks.map(t => { const m = codeRe.exec(t); return m[1] ? parseInt(m[1], 16) : +m[2]; });
+                if (cps.some(c => c > 0x10FFFF)) throw new Error('碼位超出範圍（最大 U+10FFFF）');
+            } else { mode = 'char'; cps = [...raw].map(c => c.codePointAt(0)); }
+            return { cps: cps.slice(0, UNI_MAX), mode, truncated: cps.length > UNI_MAX };
+        }
+        // 反查：U+4E00-U+4E2F（或 4E00-4E2F、單一碼位）或區塊名稱（取名稱含該字的第一個區塊）；略過控制字元、未指派與代理碼位
+        function uniRange(q, max = 256) {
+            const t = String(q).trim(); let m, a, b, block = null, truncated = false;
+            if ((m = /^(?:U\+|0x)?([0-9a-f]{1,6})\s*(?:-|–|~|\.\.|to)\s*(?:U\+|0x)?([0-9a-f]{1,6})$/i.exec(t))) { a = parseInt(m[1], 16); b = parseInt(m[2], 16); }
+            else if ((m = /^(?:U\+|0x)([0-9a-f]{1,6})$/i.exec(t))) a = b = parseInt(m[1], 16);
+            else if (t) {
+                const k = t.toLowerCase(), bl = UNI_BLOCKS.find(x => x[2].toLowerCase() === k) || UNI_BLOCKS.find(x => x[2].toLowerCase().includes(k));
+                if (!bl) throw new Error('找不到這個區塊或範圍，請輸入像 U+4E00-U+4E2F 的範圍，或區塊名稱（例如 arrows、hiragana）');
+                [a, b, block] = bl;
+            } else return { from: 0, to: 0, chars: [], block: null, truncated: false };
+            if (b < a) [a, b] = [b, a];
+            if (b > 0x10FFFF) throw new Error('碼位超出範圍（最大 U+10FFFF）');
+            if (b - a + 1 > max) { if (block) { b = a + max - 1; truncated = true; } else throw new Error(`範圍太大（${b - a + 1} 個碼位，一次最多 ${max} 個）`); }
+            const chars = [];
+            for (let cp = a; cp <= b; cp++) { const ch = String.fromCodePoint(cp); if (!/^[\p{Cn}\p{Cs}\p{Cc}]$/u.test(ch)) chars.push({ cp, ch }); }
+            return { from: a, to: b, chars, block: block || uniBlock(a), truncated };
+        }
+
+        // ===== 換行符偵測與轉換 =====
+        // 統計三種換行（CRLF / LF / CR）；另外回報 U+2028、U+2029、NEL（不參與轉換）。odd = 與主要換行不同的行號（最多 10 個）
+        function eolInfo(text) {
+            const s = String(text), re = /\r\n|\r|\n|[\u2028\u2029\u0085]/g, kinds = [];
+            let m, other = 0;
+            while ((m = re.exec(s))) { const k = m[0] === '\r\n' ? 'crlf' : m[0] === '\n' ? 'lf' : m[0] === '\r' ? 'cr' : 'other'; if (k === 'other') other++; kinds.push(k); }
+            const n = { crlf: 0, lf: 0, cr: 0 };
+            for (const k of kinds) if (k !== 'other') n[k]++;
+            const present = Object.keys(n).filter(k => n[k]);
+            const dominant = present.length ? present.reduce((a, b) => (n[b] > n[a] ? b : a)) : null;
+            const odd = []; kinds.forEach((k, i) => { if (k !== 'other' && k !== dominant && odd.length < 10) odd.push(i + 1); });
+            const endsWithEol = kinds.length > 0 && /(?:\r\n|\r|\n|[\u2028\u2029\u0085])$/.test(s);
+            return { ...n, other, mixed: present.length > 1, dominant, odd, endsWithEol, lines: s === '' ? 0 : kinds.length + (endsWithEol ? 0 : 1) };
+        }
+        const EOL_CHARS = { LF: '\n', CRLF: '\r\n', CR: '\r' };
+        function eolConvert(text, to) {
+            if (!EOL_CHARS[to]) throw new Error('不支援的換行格式');
+            return String(text).replace(/\r\n|\r|\n/g, EOL_CHARS[to]);
+        }
+
+        // ===== 數字千分位 =====
+        const NUM_RE = /^[+-]?\d+(?:\.\d+)?$/;
+        // 小數位四捨五入（字串運算，不經過浮點數；round half up）。回傳 [整數部分, 小數部分]
+        function roundDigits(int, frac, d) {
+            if (frac.length <= d) return [int, frac.padEnd(d, '0')];
+            const a = (int + frac.slice(0, d)).split('');
+            if (frac[d] >= '5') { let i = a.length - 1; while (i >= 0 && a[i] === '9') a[i--] = '0'; if (i < 0) a.unshift('1'); else a[i] = String(+a[i] + 1); }
+            const s = a.join('');
+            return [s.slice(0, s.length - d), s.slice(s.length - d)];
+        }
+        // 一個數字字串（已去掉分隔符）→ 規格化：{ sign, int, frac }；非數字回傳 null
+        function numParts(raw, euro = false) {
+            let t = String(raw).trim().replace(/[\s'’_\u00A0\u202F]/g, '');
+            t = euro ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '');
+            if (!NUM_RE.test(t)) return null;
+            const sign = /^[+-]/.test(t) ? t[0] : '', [i, f = ''] = t.replace(/^[+-]/, '').split('.');
+            return { sign, int: i, frac: f };
+        }
+        // 批次：每行一個數字；mode 'add' 加千分位、'strip' 去千分位；decimals 為 null（保留原小數）或 0–10；sep 千分位符號；dec 小數點符號；euro 表示輸入是歐式（. 千分位、, 小數）
+        // 不是數字的行原樣保留並計入 bad；空行保留。最多 5000 行
+        function numFormat(text, { mode = 'add', decimals = null, sep = ',', dec = '.', euro = false } = {}) {
+            const all = String(text).split(/\r?\n/), lines = all.slice(0, 5000); let bad = 0;
+            const out = lines.map(l => {
+                if (!l.trim()) return '';
+                const p = numParts(l, euro);
+                if (!p) { bad++; return l; }
+                let { int, frac } = p;
+                if (decimals !== null) [int, frac] = roundDigits(int, frac, decimals);
+                const zero = /^0*$/.test(int + frac), sign = zero && p.sign === '-' ? '' : p.sign;
+                const g = mode === 'add' ? int.replace(/\B(?=(\d{3})+(?!\d))/g, sep) : int;
+                return sign + g + (frac ? (mode === 'add' ? dec : '.') + frac : '');
+            });
+            return { text: out.join('\n'), bad, truncated: all.length > 5000 };
+        }
+        const NUM_LOCALES = [['台灣', 'zh-TW'], ['美國', 'en-US'], ['德國', 'de-DE'], ['法國', 'fr-FR'], ['瑞士', 'de-CH'], ['印度', 'en-IN'], ['日本', 'ja-JP'], ['巴西', 'pt-BR'], ['西班牙', 'es-ES'], ['瑞典', 'sv-SE'], ['俄羅斯', 'ru-RU']];
+        // 各語系預覽（用瀏覽器的 Intl；整數超過 15 位時 Number 會失去精度）
+        function numLocales(raw, euro = false) {
+            const p = numParts(raw, euro);
+            if (!p) return [];
+            const v = Number(p.sign + p.int + (p.frac ? '.' + p.frac : ''));
+            return NUM_LOCALES.map(([name, loc]) => [name + ' ' + loc, new Intl.NumberFormat(loc, { maximumFractionDigits: 20 }).format(v)]);
+        }
+
+        // ===== SQL IN 清單 =====
+        const SQL_MAX = 100000;
+        const isPlainNum = (s) => /^-?(0|[1-9]\d*)(\.\d+)?$/.test(s);
+        // 每行一個值 → col IN (...)。quote：auto（純數字不加引號，其餘加單引號、內部單引號變兩個）/ always / never。chunk > 0 時每組最多 chunk 筆，組間用 OR（NOT IN 用 AND）
+        function sqlIn(text, { col = '', quote = 'auto', dedupe = true, brk = false, chunk = 0, not = false } = {}) {
+            let items = String(text).split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+            const total = items.length;
+            if (!total) throw new Error('沒有可用的值（每行一個，空行會略過）');
+            if (dedupe) items = [...new Set(items)];
+            if (items.length > SQL_MAX) throw new Error(`最多 ${SQL_MAX} 筆`);
+            const lit = (s) => (quote === 'never' || (quote === 'auto' && isPlainNum(s)) ? s : `'${s.replace(/'/g, "''")}'`);
+            const size = chunk > 0 ? Math.floor(chunk) : items.length, groups = [];
+            for (let i = 0; i < items.length; i += size) groups.push(items.slice(i, i + size));
+            const kw = not ? 'NOT IN' : 'IN', head = col.trim() ? col.trim() + ' ' : '';
+            const one = (g) => `${head}${kw} (${brk ? '\n  ' + g.map(lit).join(',\n  ') + '\n' : g.map(lit).join(', ')})`;
+            const sql = groups.length > 1 ? '(' + groups.map(one).join(not ? '\n AND ' : '\n OR ') + ')' : one(groups[0]);
+            return { sql, count: items.length, dup: total - items.length, groups: groups.length };
+        }
+
+        // ===== 多行文字 → 陣列字面值 =====
+        const ARR_LANGS = { js: 'JavaScript', py: 'Python', go: 'Go', java: 'Java', sql: 'SQL VALUES' };
+        const isSafeNum = (s) => /^-?(0|[1-9]\d{0,14})(\.\d{1,15})?$/.test(s);
+        // lang：js / py / go / java / sql。num：看起來是數字的值不加引號（Go / Java 要整批都是數字才用 int / double 陣列，否則整批當字串）
+        function arrayLiteral(text, lang, { num = true, dedupe = false, brk = false } = {}) {
+            if (!ARR_LANGS[lang]) throw new Error('不支援的語言');
+            let items = String(text).split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+            if (!items.length) throw new Error('沒有可用的值（每行一個，空行會略過）');
+            if (dedupe) items = [...new Set(items)];
+            if (items.length > SQL_MAX) throw new Error(`最多 ${SQL_MAX} 筆`);
+            const q = (x) => JSON.stringify(x), allNum = num && items.every(isSafeNum), allInt = allNum && items.every(x => !x.includes('.'));
+            const join = (els, open, close, trail) => (brk ? `${open}\n${els.map(e => '  ' + e).join(',\n')}${trail ? ',' : ''}\n${close}` : open + els.join(', ') + close);
+            switch (lang) {
+                case 'js': case 'py': return join(items.map(x => (num && isSafeNum(x) ? x : q(x))), '[', ']', false);
+                case 'go': return join(items.map(x => (allNum ? x : q(x))), `[]${allInt ? 'int' : allNum ? 'float64' : 'string'}{`, '}', true);
+                case 'java': return join(items.map(x => (allNum ? x : q(x))), `new ${allInt ? 'int' : allNum ? 'double' : 'String'}[]{`, '}', false);
+                default: { const v = items.map(x => `(${num && isSafeNum(x) ? x : `'${x.replace(/'/g, "''")}'`})`); return brk ? 'VALUES\n' + v.map(e => '  ' + e).join(',\n') : 'VALUES ' + v.join(', '); }
+            }
+        }
+
+        // ===== Windows / POSIX 路徑轉換 =====
+        // 解析一條路徑：Windows（C:\、C:/）、UNC（\\host\share）、\\wsl$\Distro、/mnt/c、Git Bash 的 /c/、一般 POSIX、相對路徑
+        function parsePath(line) {
+            const s = String(line).trim().replace(/^(["'])(.*)\1$/, '$2');
+            let m;
+            const split = (r) => r.split(/[\\/]+/).filter(Boolean);
+            const trail = /[\\/]$/.test(s) && s.length > 3;
+            if ((m = /^([A-Za-z]):(?:[\\/]+(.*))?$/.exec(s))) return { kind: 'drive', drive: m[1].toLowerCase(), parts: split(m[2] || ''), trail };
+            if ((m = /^[\\/]{2}wsl(?:\$|\.localhost)[\\/]+([^\\/]+)(?:[\\/]+(.*))?$/i.exec(s))) return { kind: 'wsl', distro: m[1], parts: split(m[2] || ''), trail };
+            if ((m = /^[\\/]{2}([^\\/]+)[\\/]+([^\\/]+)(?:[\\/]+(.*))?$/.exec(s))) return { kind: 'unc', host: m[1], share: m[2], parts: split(m[3] || ''), trail };
+            if ((m = /^\/mnt\/([a-z])(?:\/+(.*))?$/.exec(s)) || (m = /^\/([a-zA-Z])(?:\/+(.*))?$/.exec(s))) return { kind: 'drive', drive: m[1].toLowerCase(), parts: split(m[2] || ''), trail };
+            if (s.startsWith('/')) return { kind: 'posix', parts: split(s), trail };
+            return { kind: 'rel', parts: split(s), trail };
+        }
+        // target：win（C:\a\b）、winfwd（C:/a/b）、wsl（/mnt/c/a/b）、gitbash（/c/a/b）、posix（只把 \ 換成 /）。沒有磁碟代號的 POSIX 路徑轉 Windows 時，用 \\wsl$\<distro>\ 開頭
+        function convertPath(line, target, distro = 'Ubuntu') {
+            if (!['win', 'winfwd', 'wsl', 'gitbash', 'posix'].includes(target)) throw new Error('不支援的目標格式');
+            const p = parsePath(line);
+            if (!p.parts.length && p.kind === 'rel') return '';
+            const t = p.trail ? 1 : 0, join = (sep, a) => a.join(sep) + (t ? sep : '');
+            const win = target === 'win' || target === 'winfwd', sep = target === 'win' ? '\\' : '/';
+            if (p.kind === 'drive') {
+                if (win) return p.drive.toUpperCase() + ':' + sep + join(sep, p.parts);
+                return (target === 'wsl' ? '/mnt/' : '/') + p.drive + (p.parts.length ? '/' + join('/', p.parts) : '');
+            }
+            if (p.kind === 'unc') return win ? sep + sep + [p.host, p.share, ...p.parts].join(sep) + (t ? sep : '') : '//' + [p.host, p.share, ...p.parts].join('/') + (t ? '/' : '');
+            if (p.kind === 'wsl') return win ? sep + sep + 'wsl$' + sep + [p.distro, ...p.parts].join(sep) + (t ? sep : '') : '/' + join('/', p.parts);
+            if (p.kind === 'posix') return win ? sep + sep + 'wsl$' + sep + [distro || 'Ubuntu', ...p.parts].join(sep) + (t ? sep : '') : '/' + join('/', p.parts);
+            return join(win ? sep : '/', p.parts);       // 相對路徑
+        }
+        // --- /pure ---
+
         const $ = (s) => document.querySelector(s);
         const ta = $('#text');
         let history = [];
@@ -553,11 +981,9 @@
 
         // ===== 符號表分頁 =====
         let recent = normRecent(Util.store.get('symbols_recent', [])), cat = SYM_CATS[0];
-        function showTab(t) {
-            $('#paneText').hidden = t !== 'text'; $('#paneSym').hidden = t !== 'sym'; $('#paneCase').hidden = t !== 'case';
-            $('#tabText').setAttribute('aria-pressed', t === 'text'); $('#tabSym').setAttribute('aria-pressed', t === 'sym'); $('#tabCase').setAttribute('aria-pressed', t === 'case');
-        }
-        $('#tabText').onclick = () => showTab('text'); $('#tabSym').onclick = () => showTab('sym'); $('#tabCase').onclick = () => showTab('case');
+        const TABS = ['Text', 'Sym', 'Case', 'Uni', 'Eol', 'Num', 'Sql', 'Arr', 'Path'];
+        function showTab(t) { for (const k of TABS) { $('#pane' + k).hidden = k.toLowerCase() !== t; $('#tab' + k).setAttribute('aria-pressed', k.toLowerCase() === t); } }
+        for (const k of TABS) $('#tab' + k).onclick = () => showTab(k.toLowerCase());
 
         // ===== 命名風格分頁 =====
         let caseStyle = 'snake';
@@ -607,6 +1033,104 @@
             b.onclick = () => { $('#symPicked').value += x.f; Util.copyText(x.f); }; return b;
         }));
         symRender();
+
+        // ===== 新分頁的畫面 =====
+        const mk = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };
+        const showable = (ch) => (ch && !/^[\p{Cc}\p{Cf}\p{Z}\p{Cn}\p{Cs}]$/u.test(ch) ? ch : ch ? '␣' : '—');
+        const copyBtn = (btn, get) => { btn.onclick = () => Util.copyWithFeedback(btn, get()); };
+
+        // ----- Unicode -----
+        function uniRender() {
+            const box = $('#uniOut');
+            try {
+                const q = parseUniQuery($('#uniIn').value);
+                box.replaceChildren(...q.cps.map(cp => {
+                    const i = uniInfo(cp), d = mk('div', undefined, 'uinfo'), h = mk('h3', showable(i.ch));
+                    d.append(h, ...i.rows.map(([k, v]) => { const r = document.createElement('div'); r.append(mk('span', k), mk('span', v)); return r; }));
+                    return d;
+                }), ...(q.truncated ? [mk('p', `只顯示前 ${UNI_MAX} 個`, 'muted')] : []));
+            } catch (e) { box.replaceChildren(mk('p', e.message, 'muted')); }
+        }
+        function uniRangeRender() {
+            const msg = $('#uniRangeMsg'), grid = $('#uniRangeGrid');
+            try {
+                const r = uniRange($('#uniRange').value);
+                msg.textContent = r.chars.length ? `U+${hex4(r.from)} – U+${hex4(r.to)}　${r.block || ''}　${r.chars.length} 個字元${r.truncated ? '（區塊較大，只列前 256 個碼位；可用範圍指定其他段）' : ''}` : '';
+                grid.replaceChildren(...r.chars.map(({ cp, ch }) => {
+                    const b = mk('button', showable(ch), 'sym'); b.title = 'U+' + hex4(cp) + ' ' + (uniName(cp) || ''); b.setAttribute('aria-label', b.title);
+                    b.onclick = () => { $('#uniIn').value = ch; uniRender(); Util.copyText(ch); $('#uniIn').scrollIntoView({ block: 'center' }); };
+                    return b;
+                }));
+            } catch (e) { msg.textContent = e.message; grid.replaceChildren(); }
+        }
+        $('#uniIn').oninput = uniRender; $('#uniRange').oninput = uniRangeRender;
+
+        // ----- 換行符 -----
+        const EOL_MAX = 5 * 1024 * 1024;
+        let eolText = '', eolName = 'text.txt', eolPaste = null;
+        function eolRender() {
+            const i = eolInfo(eolText), N = (n) => n.toLocaleString('zh-TW');
+            $('#eolInfo').replaceChildren(...[['CRLF（\\r\\n）', i.crlf], ['LF（\\n）', i.lf], ['CR（\\r）', i.cr], ['行數', i.lines]].map(([k, v]) => { const d = mk('div', undefined, 'cell'); d.append(mk('small', k), mk('b', N(v))); return d; }));
+            let t = !eolText ? '' : i.mixed ? `⚠ 換行混用：主要是 ${i.dominant.toUpperCase()}，與它不同的換行出現在第 ${i.odd.join('、')} 行${i.crlf + i.lf + i.cr - (i[i.dominant] || 0) > i.odd.length ? ' 等' : ''}。` : i.dominant ? `✅ 全部都是 ${i.dominant.toUpperCase()}。` : '沒有換行。';
+            if (eolText) t += i.endsWithEol ? ' 結尾有換行。' : ' 結尾沒有換行。';
+            if (i.other) t += ` 另有 ${i.other} 個特殊換行字元（U+2028 / U+2029 / NEL），不會被轉換。`;
+            $('#eolMsg').textContent = t;
+        }
+        function eolSet(text, show = true) { eolText = text; if (show) $('#eolIn').value = text; eolRender(); }
+        $('#eolIn').addEventListener('paste', (e) => { eolPaste = e.clipboardData ? e.clipboardData.getData('text') : null; });
+        $('#eolIn').oninput = () => { const v = $('#eolIn').value; eolText = eolPaste && eolPaste.replace(/\r\n|\r/g, '\n') === v ? eolPaste : v; eolPaste = null; eolRender(); };
+        $('#eolFile').onchange = async () => {
+            const f = $('#eolFile').files[0]; if (!f) return;
+            if (f.size > EOL_MAX) { $('#eolMsg').textContent = `檔案超過 5MB 上限（${(f.size / 1048576).toFixed(1)}MB）`; return; }
+            try { eolName = f.name; eolSet(await f.text()); } catch (e) { $('#eolMsg').textContent = '讀取檔案失敗'; }
+        };
+        for (const [id, to] of [['eolLF', 'LF'], ['eolCRLF', 'CRLF'], ['eolCR', 'CR']]) $('#' + id).onclick = () => { if (eolText) eolSet(eolConvert(eolText, to), false); };
+        copyBtn($('#eolCopy'), () => eolText);
+        $('#eolDl').onclick = () => { if (!eolText) return; const i = eolName.lastIndexOf('.'); Util.download(new Blob([eolText], { type: 'text/plain;charset=utf-8' }), (i > 0 ? eolName.slice(0, i) : eolName) + '.eol' + (i > 0 ? eolName.slice(i) : '.txt')); };
+        eolRender();
+
+        // ----- 千分位 -----
+        function numRender() {
+            const euro = $('#numEuro').checked, d = $('#numDec').value, sep = $('#numSep').value;
+            const r = numFormat($('#numIn').value, { mode: $('#numMode').value, decimals: d === '' ? null : +d, sep, dec: sep === '.' ? ',' : '.', euro });
+            $('#numOut').value = r.text;
+            $('#numHint').textContent = `${r.text ? r.text.split('\n').filter(Boolean).length : 0} 行` + (r.bad ? `，${r.bad} 行不是數字（已原樣保留）` : '') + (r.truncated ? '（只處理前 5000 行）' : '');
+            const first = $('#numIn').value.split(/\r?\n/).find(l => l.trim());
+            $('#numLoc').replaceChildren(...(first ? numLocales(first, euro) : []).map(([k, v]) => { const c = mk('div', undefined, 'cell'); c.append(mk('small', k), mk('b', v)); return c; }));
+        }
+        for (const id of ['#numIn', '#numMode', '#numSep', '#numDec', '#numEuro']) $(id).oninput = $(id).onchange = numRender;
+        copyBtn($('#numCopy'), () => $('#numOut').value);
+        numRender();
+
+        // ----- SQL IN -----
+        function sqlRender() {
+            try {
+                const r = sqlIn($('#sqlIn').value, { col: $('#sqlCol').value, quote: $('#sqlQuote').value, dedupe: $('#sqlDedupe').checked, not: $('#sqlNot').checked, brk: $('#sqlBrk').checked, chunk: parseInt($('#sqlChunk').value, 10) || 0 });
+                $('#sqlOut').value = r.sql; $('#sqlHint').textContent = `${r.count} 筆` + (r.dup ? `，已去除 ${r.dup} 個重複` : '') + (r.groups > 1 ? `，分成 ${r.groups} 組` : '');
+            } catch (e) { $('#sqlOut').value = ''; $('#sqlHint').textContent = $('#sqlIn').value.trim() ? e.message : '0 筆'; }
+        }
+        for (const id of ['#sqlIn', '#sqlCol', '#sqlQuote', '#sqlDedupe', '#sqlNot', '#sqlBrk', '#sqlChunk']) $(id).oninput = $(id).onchange = sqlRender;
+        copyBtn($('#sqlCopy'), () => $('#sqlOut').value);
+
+        // ----- 陣列字面值 -----
+        $('#arrLang').replaceChildren(...Object.entries(ARR_LANGS).map(([k, v]) => new Option(v, k)));
+        function arrRender() {
+            try {
+                $('#arrOut').value = arrayLiteral($('#arrIn').value, $('#arrLang').value, { num: $('#arrNum').checked, dedupe: $('#arrDedupe').checked, brk: $('#arrBrk').checked });
+                $('#arrHint').textContent = `${$('#arrIn').value.split(/\r?\n/).filter(l => l.trim()).length} 行`;
+            } catch (e) { $('#arrOut').value = ''; $('#arrHint').textContent = $('#arrIn').value.trim() ? e.message : '0 筆'; }
+        }
+        for (const id of ['#arrIn', '#arrLang', '#arrNum', '#arrDedupe', '#arrBrk']) $(id).oninput = $(id).onchange = arrRender;
+        copyBtn($('#arrCopy'), () => $('#arrOut').value);
+
+        // ----- 路徑 -----
+        function pathRender() {
+            const to = $('#pathTo').value, dist = $('#pathDistro').value.trim() || 'Ubuntu';
+            const out = $('#pathIn').value.split(/\r?\n/).slice(0, 5000).map(l => (l.trim() ? convertPath(l, to, dist) : ''));
+            $('#pathOut').value = out.join('\n'); $('#pathHint').textContent = `${out.filter(Boolean).length} 行`;
+        }
+        for (const id of ['#pathIn', '#pathTo', '#pathDistro']) $(id).oninput = $(id).onchange = pathRender;
+        copyBtn($('#pathCopy'), () => $('#pathOut').value);
     </script>
 </body>
 

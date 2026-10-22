@@ -69,6 +69,26 @@
             color: var(--blue);
         }
 
+        #sin {
+            width: 100%;
+            min-height: 110px;
+            resize: vertical;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+
+        .srow {
+            margin: 10px 0;
+        }
+
+        .srow .sbox {
+            margin: 4px 0 6px;
+            padding: 8px 10px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            max-height: 9em;
+            overflow: auto;
+        }
+
         .err {
             color: var(--bad);
             font-size: 14px;
@@ -174,6 +194,7 @@
                 <button data-t="bit" aria-pressed="false">位元運算</button>
                 <button data-t="float" aria-pressed="false">浮點數 IEEE 754</button>
                 <button data-t="fviz" aria-pressed="false">浮點數視覺化</button>
+                <button data-t="str" aria-pressed="false">文字 ⇄ 進位</button>
             </div>
 
             <div class="pane" data-t="conv">
@@ -200,6 +221,17 @@
                 <div class="row"><input type="text" id="fin" spellcheck="false" value="0.1" aria-label="十進位小數"><span class="muted">十進位數值（可輸入 NaN、Infinity、1e-3）</span></div>
                 <div class="err" id="ferr"></div>
                 <div id="fout"></div>
+            </div>
+
+            <div class="pane" data-t="str" hidden>
+                <div class="fg">
+                    <div><label for="smode">方向</label><select id="smode"><option value="enc">文字 → 位元組</option><option value="dec">位元組 → 文字</option></select></div>
+                    <div><label for="senc">編碼</label><select id="senc"><option value="utf8">UTF-8</option><option value="utf16be">UTF-16 BE</option><option value="utf16le">UTF-16 LE</option></select></div>
+                    <div id="sbasebox" hidden><label for="sbase">位元組的進位</label><select id="sbase"><option value="16">16 進位</option><option value="2">2 進位</option><option value="8">8 進位</option><option value="10">10 進位</option></select></div>
+                </div>
+                <textarea id="sin" spellcheck="false" autocomplete="off" aria-label="輸入">Hello 你好 😀</textarea>
+                <div class="err" id="serr"></div>
+                <div id="sout"></div>
             </div>
 
             <div class="pane" data-t="fviz" hidden>
@@ -241,6 +273,12 @@
         <li>每種精度會列出分類（正規 / 次正規 / 零 / 無限大 / NaN）、指數與偏移、16 進位、實際儲存的精確十進位值，以及與你輸入的誤差。</li>
         <li>最下方「為什麼 0.1 + 0.2 ≠ 0.3」可改 x、y、z：看兩數實際儲存的值、精確的和、捨入成 float64 之後的值，以及它和 z 差多少。</li>
         </ol>
+        <h3>文字 ⇄ 進位怎麼用</h3>
+        <ol>
+        <li>在「文字 ⇄ 進位」選「文字 → 位元組」，輸入任何文字，會列出該編碼下每個位元組的二進位、八進位、十六進位、十進位，每列可一鍵複製。</li>
+        <li>編碼可選 UTF-8、UTF-16 BE（高位在前）、UTF-16 LE（低位在前）；中文在 UTF-8 通常 3 位元組、在 UTF-16 是 2 位元組，emoji 在 UTF-8 是 4 位元組、UTF-16 是 4 位元組（代理對）。</li>
+        <li>選「位元組 → 文字」並指定位元組的進位，貼上位元組（空白或逗號分隔；十六進位 / 二進位也可連續貼；容忍 0x、\x 前綴），會還原成文字；不是合法編碼時會說明原因。</li>
+        </ol>
         <h3>範例</h3>
         <div class="eg">進位轉換輸入 <b>255</b>（10 進位）：2 進位 11111111、8 進位 377、16 進位 ff、36 進位 73。<br>位元運算（16 進位、32 位元）A=F0、B=3C：AND 得 0x00000030，XOR 得 0x000000CC。<br>浮點數輸入 <b>0.1</b>：float64 的 16 進位是 0x3fb999999999999a，float32 是 0x3dcccccd。<br>浮點數視覺化輸入 <b>0.1</b>：float64 實際儲存 0.1000000000000000055511151231257827021181583404541015625，誤差 +5.55e-18；0.1 + 0.2 的精確和是 0.3000000000000000166533453693773481063544750213623046875，捨入後得 0.30000000000000004，與 0.3 的儲存值 0.299999999999999988897769753748434595763683319091796875 不同。</div>
         <h3>小提醒</h3>
@@ -251,6 +289,7 @@
         <li>視覺化的「精確十進位值」用 BigInt 逐位展開，不是四捨五入；極小的次正規數會有幾百位，過長時只顯示前段。</li>
         <li>單精度的值是先轉成 JavaScript 的 double 再捨入成 float32（跟 Math.fround 一樣），極少數情況和「直接從十進位文字捨入」的結果差 1 個單位。</li>
         <li>NaN 有很多種位元樣式（尾數可帶資訊），輸入文字 NaN 會得到標準樣式 0x7ff8…；想看其他樣式請用位元翻轉。</li>
+        <li>文字 ⇄ 進位最多處理 50000 字元；UTF-16 輸出不含 BOM；不存任何輸入。</li>
         <li>視覺化只在頁面內計算；「進位 / 位元運算」分頁的記憶（base_tab）會記住你最後停在哪個分頁。</li>
         </ul>
     </template>
@@ -384,6 +423,53 @@
             const exact = ratAdd(ratOfBits(bx, 64), ratOfBits(by, 64));
             return { x: fpExact(bx, 64), y: fpExact(by, 64), exactSum: ratStr(exact), sum: fpExact(bs, 64), sumShort: String(sum), z: fpExact(bz, 64), equal: sum === z, roundErr: ratStr(ratSub(ratOfBits(bs, 64), exact)), gap: ratStr(ratSub(ratOfBits(bs, 64), ratOfBits(bz, 64))), hexSum: floatParts(sum, 64).hex, hexZ: floatParts(z, 64).hex };
         }
+
+        // ---- 文字 ⇄ 位元組（UTF-8 / UTF-16）----
+        const STR_MAX = 50000;
+        function textToBytes(text, enc) {
+            if (enc === 'utf8') return Array.from(new TextEncoder().encode(text));
+            const out = [];
+            for (let i = 0; i < text.length; i++) {
+                const u = text.charCodeAt(i);
+                if (enc === 'utf16be') out.push(u >> 8, u & 255); else out.push(u & 255, u >> 8);
+            }
+            return out;
+        }
+        // 回傳 { text } 或 { error }
+        function bytesToText(bytes, enc) {
+            if (enc === 'utf8') {
+                try { return { text: new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(bytes)) }; }
+                catch { return { error: '這些位元組不是合法的 UTF-8' }; }
+            }
+            if (bytes.length % 2) return { error: 'UTF-16 的位元組數必須是偶數' };
+            let t = '';
+            for (let i = 0; i < bytes.length; i += 2) t += String.fromCharCode(enc === 'utf16be' ? bytes[i] * 256 + bytes[i + 1] : bytes[i + 1] * 256 + bytes[i]);
+            if (/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(t)) return { error: '有未配對的代理字元，不是合法的 UTF-16' };
+            return { text: t };
+        }
+        const BYTE_W = { 2: 8, 8: 3, 10: 3, 16: 2 };
+        function formatBytes(bytes, base, sep = ' ') {
+            return bytes.map(b => b.toString(base).toUpperCase().padStart(base === 10 ? 1 : BYTE_W[base], '0')).join(sep);
+        }
+        // 回傳 { bytes } 或 { error }。容忍空白 / 逗號分隔、0x / 0b / \x 前綴；2 與 16 進位沒分隔時自動切 8 / 2 位
+        function parseBytes(str, base) {
+            let t = String(str).trim().replace(/\\x/gi, ' ');
+            if (base === 16) t = t.replace(/(^|[\s,;])0x/gi, '$1'); else if (base === 2) t = t.replace(/(^|[\s,;])0b/gi, '$1');
+            let toks = t.split(/[\s,;]+/).filter(Boolean);
+            if (toks.length === 1 && (base === 16 || base === 2)) {
+                const w = base === 16 ? 2 : 8, x = toks[0];
+                if (x.length > w) { if (x.length % w) return { error: `連續輸入的長度必須是 ${w} 的倍數（每個位元組 ${w} 位），或用空白分隔` }; toks = x.match(new RegExp(`.{${w}}`, 'g')); }
+            }
+            const re = { 2: /^[01]+$/, 8: /^[0-7]+$/, 10: /^\d+$/, 16: /^[0-9a-fA-F]+$/ }[base];
+            const bytes = [];
+            for (const x of toks) {
+                if (!re.test(x)) return { error: `「${x.slice(0, 12)}」不是 ${base} 進位的數字` };
+                const v = parseInt(x, base);
+                if (v > 255) return { error: `「${x.slice(0, 12)}」超過一個位元組（最大 255）` };
+                bytes.push(v);
+            }
+            return { bytes };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -490,14 +576,39 @@
                 monoRow('z 實際儲存', brief(r.z)), copyRow('z 的 16 進位', r.hexZ), statRow('x + y === z', r.equal ? 'true' : 'false'), note);
         }
 
+
+        const strRow = (label, text) => {
+            const d = document.createElement('div'); d.className = 'srow';
+            const l = document.createElement('b'); l.textContent = label;
+            const p = document.createElement('div'); p.className = 'mono sbox'; p.textContent = text;
+            const b = document.createElement('button'); b.className = 'sm'; b.textContent = '複製'; b.onclick = () => copyWithFeedback(b, text);
+            d.append(l, p, b); return d;
+        };
+        function renderStr() {
+            const dec = $('#smode').value === 'dec', enc = $('#senc').value, v = $('#sin').value;
+            $('#sbasebox').hidden = !dec;
+            $('#serr').textContent = ''; $('#sout').replaceChildren();
+            if (v.length > STR_MAX) { $('#serr').textContent = `內容太長（上限 ${STR_MAX} 字元）`; return; }
+            if (!dec) {
+                const bytes = textToBytes(v, enc);
+                $('#sout').replaceChildren(statRow('字元 / 位元組', `${[...v].length} 字元 → ${bytes.length} 位元組`), ...[[2, '二進位'], [8, '八進位'], [16, '十六進位'], [10, '十進位']].map(([b, n]) => strRow(n, formatBytes(bytes, b))));
+                return;
+            }
+            const r = parseBytes(v, +$('#sbase').value);
+            if (r.error) { $('#serr').textContent = r.error; return; }
+            const t = bytesToText(r.bytes, enc);
+            if (t.error) { $('#serr').textContent = t.error; return; }
+            $('#sout').replaceChildren(statRow('位元組數', String(r.bytes.length)), strRow('文字', t.text));
+        }
+
         const render = () => {
             document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab));
             document.querySelectorAll('.pane').forEach(p => { p.hidden = p.dataset.t !== tab; });
-            ({ conv: renderConv, bit: renderBit, float: renderFloat, fviz: renderViz })[tab]();
+            ({ conv: renderConv, bit: renderBit, float: renderFloat, fviz: renderViz, str: renderStr })[tab]();
         };
         document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { tab = b.dataset.t; store.set('base_tab', tab); render(); }; });
-        document.querySelectorAll('input,select').forEach(e => { e.oninput = e.onchange = render; });
-        const saved = store.get('base_tab', 'conv'); if (['conv', 'bit', 'float', 'fviz'].includes(saved)) tab = saved;
+        document.querySelectorAll('input,select,textarea').forEach(e => { e.oninput = e.onchange = render; });
+        const saved = store.get('base_tab', 'conv'); if (['conv', 'bit', 'float', 'fviz', 'str'].includes(saved)) tab = saved;
         render();
     </script>
 </body>

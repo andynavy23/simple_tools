@@ -61,6 +61,33 @@
             margin-top: 2px;
         }
 
+        details.card>summary {
+            font-weight: 700;
+            cursor: pointer;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+        }
+        #schedIn {
+            width: 100%;
+            font-size: 16px;
+        }
+        .sblock {
+            margin: 12px 0;
+        }
+        .sblock pre {
+            margin: 4px 0 6px;
+            padding: 8px 10px;
+            background: var(--fill);
+            border-radius: 10px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .sblock .muted {
+            white-space: pre-line;
+            font-size: 14px;
+            margin: 6px 0 0;
+        }
         .mono {
             font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         }
@@ -85,6 +112,12 @@
             <h2>接下來 10 次執行</h2>
             <div id="runs"></div>
         </div>
+        <details class="card" id="secSched">
+            <summary>排程語法轉換（cron ⇄ systemd ⇄ GitHub Actions）</summary>
+            <p class="sub">貼上任一種寫法（cron、<code>OnCalendar=</code> 內容、或含 <code>cron: '…'</code> 的 workflow），自動辨識並轉成另外兩種。只處理能精確對應的子集，不能對應的會說明原因。</p>
+            <textarea id="schedIn" class="mono" rows="3" spellcheck="false" aria-label="要轉換的排程">Mon..Fri *-*-* 09:00:00</textarea>
+            <div id="schedOut"></div>
+        </details>
     </div>
 
     <template id="help">
@@ -104,6 +137,12 @@
         </ol>
         <h3>範例</h3>
         <div class="eg"><b>30 8 * * MON</b> → 每週一 08:30 執行。<br><b>*/15 9-17 * * 1-5</b> → 平日 09:00 到 17:45，每 15 分鐘一次。</div>
+        <h3>排程語法轉換</h3>
+        <p>頁面下方展開「排程語法轉換」，貼上 cron、systemd 的 <b>OnCalendar</b> 內容或 GitHub Actions 的 <b>cron: '…'</b>，會自動辨識並同時轉成三種寫法，可一鍵複製。例：<b>Mon..Fri *-*-* 09:00:00</b> → <b>0 9 * * 1-5</b>。</p>
+        <ul>
+        <li>只處理能精確對應的子集：「日」與「週」同時指定（cron 是符合任一個、systemd 是兩個都要符合）、年份、秒數、月底 ~、時區名稱等無法對應，會明確說明原因。</li>
+        <li>GitHub Actions 一律以 <b>UTC</b> 計算（台灣 = UTC+8，台灣 09:00 要寫 01:00），最短間隔 5 分鐘，可能延遲。本頁不會幫你換算時區。</li>
+        </ul>
         <h3>小提醒</h3>
         <ul>
         <li>支援 * , - / ?、月份與星期的英文縮寫（JAN、MON），以及 @daily、@hourly 等縮寫</li>
@@ -204,6 +243,109 @@
             }
             return '';
         }
+        // ---- 排程語法轉換：cron / systemd OnCalendar / GitHub Actions ----
+        const SD_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        // 連續 3 個以上收成 a..b
+        function sdList(values, pad) {
+            const out = []; let i = 0;
+            while (i < values.length) {
+                let j = i; while (j + 1 < values.length && values[j + 1] === values[j] + 1) j++;
+                if (j - i >= 2) out.push(`${pad(values[i])}..${pad(values[j])}`); else for (let k = i; k <= j; k++) out.push(pad(values[k]));
+                i = j + 1;
+            }
+            return out.join(',');
+        }
+        // cron → systemd；回傳 { text } 或 { error }
+        function cronToSystemd(expr) {
+            let c; try { c = parseCron(expr); } catch (e) { return { error: e.message }; }
+            const [min, hour, dom, month, dow] = c.fields;
+            if (!dom.star && !dow.star) return { error: '「日」與「週」同時指定：cron 是「符合任一個就執行」，systemd 是「兩個都要符合」，意思不同，無法精確對應' };
+            const p2 = (v) => String(v).padStart(2, '0');
+            const comp = (f) => f.star ? '*' : (/^(\*|\d+)\/\d+$/.test(f.text) && f.key !== 'dow') ? `${p2(f.values[0])}/${f.text.split('/')[1]}` : sdList(f.values, p2);
+            const d = dow.star ? '' : sdList(dow.values, (v) => SD_DOW[v]) + ' ';
+            return { text: `${d}*-${comp(month)}-${comp(dom)} ${comp(hour)}:${comp(min)}:00` };
+        }
+        // systemd 一個欄位 → cron 欄位文字（失敗丟 Error）
+        function sdComp(s, f) {
+            if (/~/.test(s)) throw new Error('含 ~（月底往前算）無法對應 cron');
+            const t0 = s.replace(/\.\./g, '-');
+            if (!/^[\d*,\/-]+$/.test(t0)) throw new Error(`無法解析「${s}」`);
+            const t = t0.replace(/\d+/g, (n) => String(+n));
+            parseField(t, f);
+            return t;
+        }
+        // systemd OnCalendar → cron 字串；回傳 { cron } 或 { error }
+        function systemdToCron(input) {
+            const s = String(input).trim().replace(/^OnCalendar\s*=\s*/i, '').replace(/\s+/g, ' ');
+            if (!s) return { error: '沒有內容' };
+            const kw = { minutely: '* * * * *', hourly: '0 * * * *', daily: '0 0 * * *', weekly: '0 0 * * 1', monthly: '0 0 1 * *', yearly: '0 0 1 1 *', annually: '0 0 1 1 *' };
+            if (kw[s.toLowerCase()]) return { cron: kw[s.toLowerCase()] };
+            if (/^(quarterly|semiannually)$/i.test(s)) return { error: '這個縮寫無法用單一 cron 精確對應' };
+            if (/(^| )(UTC|[A-Z][A-Za-z]+\/[A-Za-z_]+)$/.test(s)) return { error: '含時區名稱，cron 本身沒有時區欄位，請移除時區後再轉換' };
+            let dowT = '*', dateT = null, timeT = null;
+            for (const tk of s.split(' ')) {
+                if (/^[A-Za-z]/.test(tk)) {
+                    const items = tk.split(',').map(x => x.split('..').map(n => SD_DOW.findIndex(w => w.toLowerCase() === n.slice(0, 3).toLowerCase())));
+                    if (items.some(r => r.some(v => v < 0)) || tk.includes('/')) return { error: `無法解析星期「${tk}」` };
+                    if (items.some(r => r.length > 2 || (r.length === 2 && r[0] > r[1]))) return { error: `星期範圍「${tk}」無法對應（不支援跨越週日的範圍）` };
+                    dowT = items.map(r => r.join('-')).join(',');
+                } else if (tk.includes(':')) { if (timeT !== null) return { error: '時間欄位重複' }; timeT = tk; }
+                else if (tk.includes('-') && dateT === null) dateT = tk;
+                else return { error: `無法解析「${tk}」` };
+            }
+            try {
+                let mo = '*', dm = '*';
+                if (dateT !== null) {
+                    const dp = dateT.split('-');
+                    if (dp.length === 3) { if (dp[0] !== '*') return { error: '指定了年份，cron 沒有年份欄位，無法對應' }; [, mo, dm] = dp; }
+                    else if (dp.length === 2) [mo, dm] = dp; else return { error: `無法解析日期「${dateT}」` };
+                }
+                let h = '0', mi = '0';
+                if (timeT !== null) {
+                    const tp = timeT.split(':');
+                    if (tp.length < 2 || tp.length > 3) return { error: `無法解析時間「${timeT}」` };
+                    [h, mi] = tp;
+                    if (tp[2] !== undefined && !/^0+$/.test(tp[2])) return { error: '含非 0 的秒數，5 欄位 cron 最小單位是分鐘，無法對應' };
+                }
+                const f = [mi, h, dm, mo].map((x, i) => sdComp(x, FIELDS[i]));
+                if (dowT !== '*') parseField(dowT, FIELDS[4]);
+                if (dowT !== '*' && f[2] !== '*') return { error: '同時指定星期與日期：systemd 是「兩個都要符合」，cron 是「符合任一個」，無法精確對應' };
+                const cron = `${f[0]} ${f[1]} ${f[2]} ${f[3]} ${dowT}`;
+                parseCron(cron);
+                return { cron };
+            } catch (e) { return { error: e.message }; }
+        }
+        // cron → GitHub Actions：名稱轉數字、? 轉 *；回傳 { cron, yaml, warns } 或 { error }
+        function cronToGha(expr, now = new Date(2026, 0, 1)) {
+            let c; try { c = parseCron(expr); } catch (e) { return { error: e.message }; }
+            const norm = (f) => f.text.toUpperCase().replace(/\?/g, '*').replace(/[A-Z]{3}/g, (n) => String((f.names || []).indexOf(n) + (f.off || 0)));
+            const text = c.fields.map(norm).join(' ');
+            const warns = ['GitHub Actions 的排程一律以 UTC 計算（台灣時間 = UTC + 8，例如台灣 09:00 要寫成 01:00）'];
+            const runs = nextRuns(c, now, 30);
+            let gap = Infinity; for (let i = 1; i < runs.length; i++) gap = Math.min(gap, (runs[i] - runs[i - 1]) / 60000);
+            if (gap < 5) warns.push('GitHub 最短間隔 5 分鐘，更密的排程不會照設定執行');
+            warns.push('高負載時排程可能延遲數分鐘；公開儲存庫 60 天無活動會被自動停用');
+            return { cron: text, yaml: `on:\n  schedule:\n    - cron: '${text}'`, warns };
+        }
+        // 判斷輸入是哪一種並取出 cron：GitHub yaml 的 cron: '...'、cron / 巨集、或 systemd
+        function detectSchedule(input) {
+            const s = String(input).trim();
+            if (!s) return { error: '請貼上要轉換的排程' };
+            const m = /cron:\s*(['"]?)(.+?)\1\s*(?:#.*)?$/m.exec(s);
+            if (m) return { source: 'gha', cron: m[2].trim() };
+            const one = s.replace(/\s+/g, ' ');
+            if (/^@/.test(one) || (one.split(' ').length === 5 && !/:/.test(one))) return { source: 'cron', cron: one };
+            const r = systemdToCron(s);
+            return r.error ? { source: 'systemd', error: r.error } : { source: 'systemd', cron: r.cron };
+        }
+        // 全部轉換：{ source, cron, systemd:{text|error}, gha:{yaml|error, warns} } 或 { error }
+        function convertSchedule(input) {
+            const d = detectSchedule(input);
+            if (d.error) return d;
+            try { parseCron(d.cron); } catch (e) { return { source: d.source, error: e.message }; }
+            const sd = d.source === 'systemd' ? { text: String(input).trim().replace(/^OnCalendar\s*=\s*/i, '') } : cronToSystemd(d.cron);
+            return { source: d.source, cron: d.cron, systemd: sd, gha: cronToGha(d.cron) };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -227,6 +369,29 @@
         }
         $('#expr').oninput = render;
         render();
+
+        // 排程語法轉換（不存資料）
+        const SCH_NAMES = { cron: 'cron', systemd: 'systemd OnCalendar', gha: 'GitHub Actions' };
+        function schedBlock(title, text, note) {
+            const box = document.createElement('div'); box.className = 'sblock';
+            const h = document.createElement('b'); h.textContent = title;
+            const pre = document.createElement('pre'); pre.className = 'mono'; pre.textContent = text;
+            box.append(h, pre);
+            if (text) { const b = document.createElement('button'); b.type = 'button'; b.className = 'sm'; b.textContent = '複製'; b.onclick = () => Util.copyText(text).then(() => { b.textContent = '已複製'; setTimeout(() => b.textContent = '複製', 1200); }, () => { }); box.append(b); }
+            if (note) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = note; box.append(p); }
+            return box;
+        }
+        function renderSched() {
+            const out = $('#schedOut'), v = $('#schedIn').value;
+            out.replaceChildren();
+            if (!v.trim()) return;
+            const r = convertSchedule(v);
+            if (r.error) { const p = document.createElement('p'); p.className = 'err'; p.textContent = (r.source ? `看起來是 ${SCH_NAMES[r.source]}，但` : '') + r.error; out.append(p); return; }
+            out.append(schedBlock('cron（5 欄位）', r.cron), schedBlock('systemd timer（OnCalendar=）', r.systemd.text || '', r.systemd.error ? '無法轉換：' + r.systemd.error : '寫在 .timer 檔的 [Timer] 區段；以系統本機時區執行。'));
+            out.append(schedBlock('GitHub Actions（schedule）', r.gha.yaml || '', r.gha.error ? '無法轉換：' + r.gha.error : r.gha.warns.join('\n')));
+        }
+        $('#schedIn').oninput = renderSched;
+        renderSched();
     </script>
 </body>
 
