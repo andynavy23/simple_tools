@@ -130,6 +130,62 @@
             height: auto;
             display: block;
         }
+
+        .heat {
+            display: grid;
+            grid-template-columns: 2.4em repeat(31, minmax(0, 1fr));
+            gap: 2px;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        .heat i {
+            aspect-ratio: 1;
+            border-radius: 2px;
+            background: var(--fill);
+        }
+
+        .heat i.x {
+            background: none;
+        }
+
+        .heat span {
+            color: var(--muted);
+        }
+
+        .mavg {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px 8px;
+            margin-top: 8px;
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        .dbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 4px 0;
+        }
+
+        .dbar>span:first-child {
+            width: 2.4em;
+        }
+
+        .dbar>b {
+            flex: 1;
+            height: 12px;
+            background: var(--fill);
+            border-radius: 99px;
+            overflow: hidden;
+            display: block;
+        }
+
+        .dbar>b>i {
+            display: block;
+            height: 100%;
+        }
     </style>
 </head>
 
@@ -176,6 +232,19 @@
         </div>
 
         <div class="card">
+            <h2>年度回顧</h2>
+            <div class="row"><select id="ryear" aria-label="選擇年份"></select></div>
+            <div id="yrSum"></div>
+            <h2 style="margin-top:14px">每日心情熱度圖</h2>
+            <div class="heat" id="heat" role="img" aria-label="全年每日心情熱度圖"></div>
+            <div class="mavg" id="mavg"></div>
+            <h2 style="margin-top:14px">心情分布</h2>
+            <div id="dist"></div>
+            <h2 style="margin-top:14px">最常出現的標籤</h2>
+            <div id="topTags"></div>
+        </div>
+
+        <div class="card">
             <h2>搜尋與匯出</h2>
             <div class="row"><input id="q" type="search" placeholder="搜尋文字、標籤或日期" aria-label="搜尋"></div>
             <div id="results"></div>
@@ -199,6 +268,7 @@
         <li>點一個心情（😞😕😐🙂😄 對應 1～5 分），再點要勾的標籤，也能用「新增標籤」加自己的。</li>
         <li>寫下想說的話，按「儲存（覆蓋當天）」；同一天想再補充，按「追加到當天」，文字會接在後面、標籤合併。</li>
         <li>月曆點某一天可查看或修改；顏色越綠越開心、越紅越低落。</li>
+        <li>「年度回顧」選年份：看當年記錄天數、平均心情、每天一格的心情熱度圖（顏色同月曆，灰色是沒記的日子，點 / 長按格子可看日期）、每月平均、心情分布與最常出現的前 10 個標籤。只讀取現有日記，不新增資料。</li>
         <li>「搜尋與匯出」可搜文字 / 標籤 / 日期，並匯出 .txt 或 .md。</li>
         </ol>
         <h3>範例</h3>
@@ -313,6 +383,18 @@
                     : `${e.date}  ${MOODS[e.mood - 1]} ${e.mood}/5` + (t ? `  [${t}]` : '') + (e.text ? `\n${e.text}` : '') + '\n';
             }).join('\n');
         }
+        // 年度回顧：該年的筆數、平均、心情分布（1–5 各幾天）、最常出現標籤（前 10）、每月筆數與平均
+        function yearReview(list, year) {
+            const ys = String(year), es = list.filter(e => e.date.startsWith(ys + '-')), dist = [0, 0, 0, 0, 0], tc = {};
+            for (const e of es) { dist[e.mood - 1]++; for (const t of e.tags) tc[t] = (tc[t] || 0) + 1; }
+            return {
+                n: es.length, avg: mean(es.map(e => e.mood)), dist,
+                tags: Object.entries(tc).map(([tag, n]) => ({ tag, n })).sort((a, b) => b.n - a.n || (a.tag < b.tag ? -1 : 1)).slice(0, 10),
+                months: Array.from({ length: 12 }, (_, i) => { const p = `${ys}-${String(i + 1).padStart(2, '0')}-`, a = es.filter(e => e.date.startsWith(p)).map(e => e.mood); return { m: i + 1, n: a.length, avg: mean(a) }; }),
+            };
+        }
+        // 有資料的年份（新到舊），一定包含今年
+        const yearsOf = (list, today) => [...new Set([today.slice(0, 4), ...list.map(e => e.date.slice(0, 4))])].sort().reverse();
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -376,12 +458,35 @@
             const ti = tagImpact(entries);
             $('#tagStats').replaceChildren(...(ti.length ? ti.map(t => Util.statRow(`${t.tag}（${t.n} 天，平均 ${fix1(t.avg)}）`, t.delta === null ? '—' : (t.delta > 0 ? '+' : '') + t.delta.toFixed(1), t.delta > 0 ? 'ok' : t.delta < 0 ? 'bad' : '')) : [Object.assign(document.createElement('p'), { className: 'note', textContent: '還沒有標籤資料' })]));
         }
+        let ryear = today.slice(0, 4);
+        function drawReview() {
+            const ys = yearsOf(entries, today); if (!ys.includes(ryear)) ryear = ys[0];
+            $('#ryear').replaceChildren(...ys.map(y => new Option(y + ' 年', y))); $('#ryear').value = ryear;
+            const r = yearReview(entries, ryear), byDate = new Map(entries.map(e => [e.date, e.mood]));
+            $('#yrSum').replaceChildren(Util.statRow('記錄天數', `${r.n} 天`), Util.statRow('平均心情', fix1(r.avg)));
+            const hs = [];
+            for (let m = 1; m <= 12; m++) {
+                const lab = document.createElement('span'); lab.textContent = m + ' 月'; hs.push(lab);
+                for (let d = 1; d <= 31; d++) {
+                    const c = document.createElement('i');
+                    if (d > day.daysInMonth(+ryear, m)) c.className = 'x';
+                    else { const ds = day.ymd(+ryear, m, d), mood = byDate.get(ds); c.title = mood ? `${ds} ${MOODS[mood - 1]} ${mood}/5` : ds; if (mood) c.style.background = moodColor(mood); }
+                    hs.push(c);
+                }
+            }
+            $('#heat').replaceChildren(...hs);
+            $('#mavg').replaceChildren(...r.months.map(x => Object.assign(document.createElement('span'), { textContent: `${x.m} 月　${x.n ? fix1(x.avg) + `（${x.n} 天）` : '—'}` })));
+            const mx = Math.max(1, ...r.dist);
+            $('#dist').replaceChildren(...r.dist.map((c, i) => { const row = document.createElement('div'); row.className = 'dbar'; row.innerHTML = `<span>${MOODS[i]}</span><b><i style="width:${c / mx * 100}%;background:${moodColor(i + 1)}"></i></b><span>${c} 天</span>`; return row; }));
+            $('#topTags').replaceChildren(...(r.tags.length ? r.tags.map(t => Util.statRow(t.tag, `${t.n} 天`)) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '這一年沒有標籤記錄' })]));
+        }
+        $('#ryear').onchange = () => { ryear = $('#ryear').value; drawReview(); };
         function drawSearch() {
             const r = search(entries, $('#q').value);
             $('#results').innerHTML = r.slice(0, 50).map(e => `<div class="ent"><b>${e.date}</b> ${MOODS[e.mood - 1]} <small>${esc(e.tags.join('、'))}</small><br>${esc(e.text)}</div>`).join('') + (r.length > 50 ? `<p class="note">只顯示前 50 筆，共 ${r.length} 筆</p>` : '');
             $('#count').textContent = $('#q').value.trim() ? `找到 ${r.length} 筆` : '';
         }
-        function drawAll() { drawCal(); drawStats(); drawSearch(); }
+        function drawAll() { drawCal(); drawStats(); drawReview(); drawSearch(); }
 
         $('#date').onchange = () => { const p = $('#date').value; if (isDate(p)) { vy = day.parse(p).y; vm = day.parse(p).m; } loadDate(); drawStats(); };
         $('#save').onclick = () => doSave(false);
@@ -408,12 +513,12 @@
                     const to = prompt(`把「${t}」改成（最多 12 字）；若新名稱已存在，會合併成同一個標籤：`, t); if (to === null) return;
                     const r = renameTag(entries, tagList, t, to);
                     if (!r) { $('#saveNote').textContent = '新名稱需為 1–12 字，且和原名不同'; return; }
-                    tagList = r.tagList; entries = r.entries; if (curTags.has(t)) { curTags.delete(t); curTags.add(r.name); } persist(); drawForm(); drawMgr(); drawStats(); drawSearch(); drawCal();
+                    tagList = r.tagList; entries = r.entries; if (curTags.has(t)) { curTags.delete(t); curTags.add(r.name); } persist(); drawForm(); drawMgr(); drawStats(); drawReview(); drawSearch(); drawCal();
                 };
                 del.onclick = () => {
                     if (!confirm(`刪除標籤「${t}」？`)) return;
                     const fromEntries = n > 0 && confirm(`有 ${n} 天的日記用過「${t}」。\n按「確定」＝也從這些日記移除；按「取消」＝只從選項移除，舊日記保留這個標籤。`);
-                    const r = removeTag(entries, tagList, t, fromEntries); tagList = r.tagList; entries = r.entries; curTags.delete(t); persist(); drawForm(); drawMgr(); drawStats(); drawSearch(); drawCal();
+                    const r = removeTag(entries, tagList, t, fromEntries); tagList = r.tagList; entries = r.entries; curTags.delete(t); persist(); drawForm(); drawMgr(); drawStats(); drawReview(); drawSearch(); drawCal();
                 };
                 row.append(name, ren, del); return row;
             }) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '目前沒有標籤' })]));
@@ -424,7 +529,7 @@
         $('#q').oninput = drawSearch;
         const exp = (md) => { if (!entries.length) { $('#count').textContent = '沒有可匯出的資料'; return; } download(new Blob([exportText(entries, md)], { type: 'text/plain;charset=utf-8' }), `mood-journal.${md ? 'md' : 'txt'}`); };
         $('#expTxt').onclick = () => exp(false); $('#expMd').onclick = () => exp(true);
-        loadDate(); drawStats(); drawSearch();
+        loadDate(); drawStats(); drawReview(); drawSearch();
     </script>
 </body>
 

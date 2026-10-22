@@ -61,6 +61,12 @@
             </div>
             <label class="lb">數值欄（可複選）</label>
             <div class="chips" id="ycols"></div>
+            <div id="xhist" hidden><label class="lb" for="binw">直方圖組距（留空 = 自動建議）</label><input id="binw" type="number" min="0" step="any" inputmode="decimal" placeholder="自動" style="width:100%"></div>
+            <div id="xtrend" class="row" hidden>
+                <div style="flex:1 1 140px"><label class="lb" for="maN">移動平均期數（0 = 不畫）</label><input id="maN" type="number" min="0" max="50" step="1" value="3" inputmode="numeric" style="width:100%"></div>
+                <div style="flex:1 1 140px"><label class="lb" for="fcN">預測延伸期數（0 = 不預測）</label><input id="fcN" type="number" min="0" max="100" step="1" value="3" inputmode="numeric" style="width:100%"></div>
+            </div>
+            <p class="note" id="xnote" style="white-space:pre-line"></p>
             <label class="lb" for="title">圖表標題（選填）</label>
             <input id="title" maxlength="60" placeholder="例如：2025 上半年營收" style="width:100%">
             <div class="row" style="margin-top:12px">
@@ -98,6 +104,9 @@
         <li>點上方圖表類型；選「X 軸（類別）欄」與要畫的「數值欄」。圓餅 / 環圈只畫第一個選取的數值欄；散佈圖的 X 要是數字。</li>
         <li>可填標題、開關「圖例」與「數值標籤」，並從 5 組配色挑一組（其中一組為色盲友善）。</li>
         <li>按「下載 PNG」存圖，或「複製圖片」貼到別處。</li>
+        <li>想看數字的分布：選「直方圖」，用第一個數值欄分組計數，組距可自己填，留空則自動建議（Freedman–Diaconis，四分位距為 0 時用 Sturges，再取 1 / 2 / 5 的整齊數字）；組為左閉右開，最後一組含最大值，最多 200 組。</li>
+        <li>要比較各欄的分散程度：選「盒鬚圖」，每個選取的數值欄畫一個箱子（Q1–Q3、粗線是中位數），鬚線到 Q1−1.5×IQR / Q3+1.5×IQR 柵欄內最遠的資料，柵欄外的點畫成空心圓當離群值；四分位數用線性內插（同 Excel 的 QUARTILE.INC）。要依類別比較，請把各類別放成不同的欄。</li>
+        <li>要看趨勢：選「趨勢線」，用第一個數值欄畫資料線，加上最小平方法的直線（標示 R²）、N 期移動平均，並可把直線往後延伸 N 期當「預測」（虛線 + 空心圓 + 淡色底，只是把直線延長，不代表真實走勢）。x 是第幾期（從 1 起算），資料請依時間順序排好。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">貼上：
@@ -113,6 +122,7 @@ X 軸選「月份」，數值欄勾「營收」「成本」，類型選「長條
         <li>圓餅 / 環圈只畫大於 0 的數值，超過 12 個項目時把最小的合併成「其他」。</li>
         <li>圖表顏色跟隨目前的外觀（淺色 / 深色）；PNG 以目前外觀的底色輸出。</li>
         <li>只記住上次的圖表類型、配色、圖例與數值標籤開關（這個瀏覽器），<b>不會儲存你貼的資料</b>；重新整理後資料需要再貼一次。「重置圖表設定」會把記住的設定還原成預設（不影響目前貼的資料，無法復原）。</li>
+        <li>直方圖的組距、移動平均與預測期數只在目前頁面有效，不會被記住（只記住圖表類型、配色、圖例與數值標籤）；預測只是直線外推，資料少或不是直線趨勢時 R² 低、預測不可靠。盒鬚圖每個箱子至少要有 1 個數字，離群值最多畫 300 個。</li>
         <li>全部在你的瀏覽器計算，不會上傳。</li>
         </ul>
     </template>
@@ -123,8 +133,8 @@ X 軸選「月份」，數值欄勾「營收」「成本」，類型選「長條
 
         // --- pure ---
         const MAX_ROWS = 5000, MAX_COLS = 12, MAX_CHARS = 2000000;
-        const TYPES = ['bar', 'stack', 'hbar', 'line', 'area', 'pie', 'donut', 'scatter'];
-        const TYPE_NAMES = { bar: '長條（群組）', stack: '長條（堆疊）', hbar: '橫條', line: '折線', area: '面積', pie: '圓餅', donut: '環圈', scatter: '散佈' };
+        const TYPES = ['bar', 'stack', 'hbar', 'line', 'area', 'pie', 'donut', 'scatter', 'hist', 'box', 'trend'];
+        const TYPE_NAMES = { bar: '長條（群組）', stack: '長條（堆疊）', hbar: '橫條', line: '折線', area: '面積', pie: '圓餅', donut: '環圈', scatter: '散佈', hist: '直方圖', box: '盒鬚圖', trend: '趨勢線' };
         const PALETTES = [
             { name: '經典', c: ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac', '#d37295', '#86bcb6'] },
             { name: '鮮明', c: ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990', '#9a6324', '#808000'] },
@@ -296,6 +306,67 @@ X 軸選「月份」，數值欄勾「營收」「成本」，類型選「長條
                 labels: r.labels === true,
             };
         }
+
+        // ---- 直方圖 / 盒鬚圖 / 趨勢線 ----
+        const HIST_MAX_BINS = 200;
+        // 分位數：線性內插（Excel QUARTILE.INC / R 預設 type 7）；sorted 要先由小到大排好
+        function quantile(sorted, q) {
+            const n = sorted.length; if (!n) return NaN;
+            const h = (n - 1) * q, lo = Math.floor(h), hi = Math.ceil(h);
+            return sorted[lo] + (sorted[hi] - sorted[lo]) * (h - lo);
+        }
+        // 建議組距：Freedman–Diaconis（2·IQR·n^(−1/3)），四分位距為 0 時改用 Sturges（組數 = ⌈log2 n⌉ + 1），再取 1 / 2 / 5 的漂亮數字；全部相同的資料回傳 1
+        function suggestBinWidth(vals) {
+            const s = vals.filter(Number.isFinite).sort((a, b) => a - b), n = s.length;
+            if (!n || s[n - 1] === s[0]) return 1;
+            const range = s[n - 1] - s[0];
+            let w = 2 * (quantile(s, 0.75) - quantile(s, 0.25)) * Math.pow(n, -1 / 3);
+            if (!(w > 0)) w = range / (Math.ceil(Math.log2(n)) + 1);
+            w = niceNum(w, true);
+            if (range / w > HIST_MAX_BINS) w = niceNum(range / HIST_MAX_BINS, false);
+            return w;
+        }
+        // 直方圖：組為左閉右開 [a, b)，最後一組為閉區間（最大值算在最後一組）；width 空 / 0 = 用建議組距；組數超過 200 丟錯誤
+        function histogram(vals, width) {
+            const v = vals.filter(Number.isFinite); if (!v.length) throw new Error('沒有可用的數字');
+            const sug = suggestBinWidth(v), w = width === undefined || width === null || width === '' || Number(width) === 0 ? sug : Number(width);
+            if (!(w > 0) || !isFinite(w)) throw new Error('組距必須是大於 0 的數字');
+            let min = Infinity, max = -Infinity; for (const x of v) { if (x < min) min = x; if (x > max) max = x; }
+            const start = +(Math.floor(min / w + 1e-9) * w).toFixed(10), nb = Math.max(1, Math.ceil((max - start) / w - 1e-9));
+            if (nb > HIST_MAX_BINS) throw new Error(`組距太小：資料範圍需要 ${nb} 組，上限 ${HIST_MAX_BINS} 組（建議組距 ${fmtNum(sug, 4)}）`);
+            const counts = new Array(nb).fill(0);
+            for (const x of v) counts[Math.min(nb - 1, Math.max(0, Math.floor((x - start) / w + 1e-9)))]++;
+            return { start, width: w, nb, counts, suggested: sug, n: v.length, min, max };
+        }
+        // 盒鬚圖統計：Q1 / 中位數 / Q3 用線性內插；鬚線伸到柵欄（Q1 − 1.5×IQR、Q3 + 1.5×IQR）內最遠的資料點；柵欄外的點是離群值
+        function boxStats(vals) {
+            const s = vals.filter(Number.isFinite).sort((a, b) => a - b); if (!s.length) return null;
+            const q1 = quantile(s, 0.25), median = quantile(s, 0.5), q3 = quantile(s, 0.75), iqr = q3 - q1, lf = q1 - 1.5 * iqr, uf = q3 + 1.5 * iqr;
+            const inside = s.filter(v => v >= lf && v <= uf);
+            return { n: s.length, min: s[0], max: s[s.length - 1], q1, median, q3, iqr, lo: inside.length ? inside[0] : q1, hi: inside.length ? inside[inside.length - 1] : q3, outliers: s.filter(v => v < lf || v > uf) };
+        }
+        // 最小平方法直線 y = intercept + slope·x；成對的有限數字不到 2 筆或 x 全部相同回傳 null；r2 = 1 − 殘差平方和 / 總平方和（y 全相同時為 1）
+        function linReg(xs, ys) {
+            const p = []; xs.forEach((x, i) => { if (Number.isFinite(x) && Number.isFinite(ys[i])) p.push([x, ys[i]]); });
+            const n = p.length; if (n < 2) return null;
+            const mx = p.reduce((a, q) => a + q[0], 0) / n, my = p.reduce((a, q) => a + q[1], 0) / n;
+            let sxx = 0, sxy = 0, syy = 0; for (const [x, y] of p) { sxx += (x - mx) ** 2; sxy += (x - mx) * (y - my); syy += (y - my) ** 2; }
+            if (sxx === 0) return null;
+            const slope = sxy / sxx, intercept = my - slope * mx; let res = 0; for (const [x, y] of p) res += (y - (intercept + slope * x)) ** 2;
+            return { slope, intercept, r2: syy === 0 ? 1 : Math.min(1, Math.max(0, 1 - res / syy)), n };
+        }
+        // 移動平均（往回取 k 期，含當期）：前 k−1 期、或視窗內有空值的位置為 null
+        function movingAvg(vals, k) {
+            k = Math.max(1, Math.trunc(k) || 1);
+            return vals.map((_, i) => { if (i < k - 1) return null; let s = 0; for (let j = 0; j < k; j++) { const v = vals[i - j]; if (v === null || v === undefined || !Number.isFinite(v)) return null; s += v; } return s / k; });
+        }
+        // 趨勢模型：x = 第幾期（1 起算）。ma 夾在 0..min(n, 50)、ahead 夾在 0..100。fit = 每期的迴歸值；fc = 往後延伸的預測 [{ i, v }]（i 是從 0 起算的期數位置）
+        function trendModel(vals, ma = 0, ahead = 0) {
+            const n = vals.length; ma = Math.min(Math.max(Math.trunc(ma) || 0, 0), Math.min(n, 50)); ahead = Math.min(Math.max(Math.trunc(ahead) || 0, 0), 100);
+            const reg = linReg(vals.map((_, i) => i + 1), vals.map(v => (v === null ? NaN : v))), f = (x) => reg.intercept + reg.slope * x;
+            return { reg, ma, ahead, fit: reg ? vals.map((_, i) => f(i + 1)) : null, avg: ma > 0 ? movingAvg(vals, ma) : null, fc: reg ? Array.from({ length: ahead }, (_, k) => ({ i: n + k, v: f(n + k + 1) })) : [] };
+        }
+        const trendItems = (m, o) => { const s = m.series[0], t = trendModel(s.vals, o.ma, o.fc); return [s.name, t.reg ? `趨勢線（R² = ${t.reg.r2.toFixed(3)}）` : '趨勢線（資料點不足）', ...(t.ma ? [`${t.ma} 期移動平均`] : [])]; };
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -329,9 +400,9 @@ X 軸選「月份」，數值欄勾「營收」「成本」，類型選「長條
             let y = 10;
             if (o.title) { txt(fit(o.title, W - 24, F(16, '600')), W / 2, y, 'center', 'top', C.text, F(16, '600')); y += 26; }
             const ps = pie ? pieSlices(m.cats, m.series[0] ? m.series[0].vals : []) : null;
-            const items = pie ? ps.slices.map(s => s.label) : m.series.map(s => s.name);
+            const items = pie ? ps.slices.map(s => s.label) : t === 'trend' && m.series.length ? trendItems(m, o) : t === 'hist' ? m.series.slice(0, 1).map(s => s.name) : m.series.map(s => s.name);
             if (!items.length || (!pie && !valueDomain(m, t)) || (pie && !ps.slices.length)) return empty('沒有可畫的數字資料');
-            if (o.legend && (pie || items.length > 1)) {
+            if (o.legend && t !== 'box' && (pie || items.length > 1)) {
                 g.font = F(12); const lines = [[]], ws = [0];
                 for (let i = 0; i < items.length; i++) {
                     const lab = fit(items[i], W - 60), w = 16 + g.measureText(lab).width + 14, L = lines[lines.length - 1];
@@ -362,6 +433,7 @@ X 軸選「月份」，數值欄勾「營收」「成本」，類型選「長條
                 return;
             }
             const dom = valueDomain(m, t);
+            if (t === 'hist' || t === 'box' || t === 'trend') return ({ hist: drawHist, box: drawBox, trend: drawTrend })[t]({ g, W, H, y, o, C, col, F, txt, fit, grid, empty }, m);
             if (t === 'hbar') {
                 const T = niceTicks(dom[0], dom[1], W < 420 ? 4 : 6);
                 g.font = F(12); const cw = Math.min(W * 0.35, Math.max(...m.cats.map(c => g.measureText(c).width), 20));
@@ -445,14 +517,81 @@ X 軸選「月份」，數值欄勾「營收」「成本」，類型選「長條
             });
         }
 
+
+        // ===== 直方圖 / 盒鬚圖 / 趨勢線 繪圖（X：drawChart 內的畫筆與版面參數）=====
+        function drawHist(X, m) {
+            const { g, W, H, y, o, col, txt, grid, F, C, empty } = X; let h;
+            try { h = histogram(m.series[0].vals.filter(v => v !== null), o.binw); } catch (e) { return empty(e.message); }
+            const T = niceTicks(0, Math.max(...h.counts), H < 340 ? 4 : 6); g.font = F(12);
+            const lw = Math.max(...T.ticks.map(v => g.measureText(fmtNum(v, T.dec)).width)), x0 = Math.ceil(lw) + 16, x1 = W - 14, y0 = y + 8, y1 = H - 30, ys = linear(T.min, T.max, y1, y0), ex = (i) => +(h.start + i * h.width).toFixed(10), xs = linear(h.start, ex(h.nb), x0 + 4, x1 - 4);
+            for (const v of T.ticks) { grid(x0, ys(v), x1, ys(v)); txt(fmtNum(v, T.dec), x0 - 6, ys(v), 'right', 'middle'); }
+            h.counts.forEach((c, i) => {
+                const a = xs(ex(i)), b = xs(ex(i + 1)); g.fillStyle = col(0); g.fillRect(a, ys(c), Math.max(b - a - 1, 0.8), Math.max(y1 - ys(c), 0));
+                if (o.labels && h.nb <= 40 && c) txt(String(c), (a + b) / 2, ys(c) - 3, 'center', 'bottom', C.text, F(11));
+            });
+            g.font = F(12); let mw = 0; for (let i = 0; i <= h.nb; i++) mw = Math.max(mw, g.measureText(fmtNum(ex(i), 4)).width);
+            const st = thinStep(mw, (x1 - x0 - 8) / h.nb); for (let i = 0; i <= h.nb; i += st) txt(fmtNum(ex(i), 4), xs(ex(i)), y1 + 8, 'center', 'top');
+            grid(x0, y1, x1, y1);
+        }
+        function drawBox(X, m) {
+            const { g, W, H, y, o, col, txt, grid, F, C, fit, empty } = X, S = m.series.map(s => ({ name: s.name, st: boxStats(s.vals.filter(v => v !== null)) })).filter(s => s.st);
+            if (!S.length) return empty('沒有可畫的數字資料');
+            let lo = Infinity, hi = -Infinity; for (const s of S) { lo = Math.min(lo, s.st.min); hi = Math.max(hi, s.st.max); }
+            const T = niceTicks(lo, hi, H < 340 ? 4 : 6); g.font = F(12);
+            const lw = Math.max(...T.ticks.map(v => g.measureText(fmtNum(v, T.dec)).width)), x0 = Math.ceil(lw) + 16, x1 = W - 14, y0 = y + 8, y1 = H - 30, ys = linear(T.min, T.max, y1, y0), B = bandScale(S.length, x0, x1, 0.4), bw = Math.min(B.bw, 90);
+            for (const v of T.ticks) { grid(x0, ys(v), x1, ys(v)); txt(fmtNum(v, T.dec), x0 - 6, ys(v), 'right', 'middle'); }
+            S.forEach((s, j) => {
+                const cx = B.center(j), q = s.st, c = col(j), cap = bw / 4; g.strokeStyle = c; g.lineWidth = 2;
+                g.beginPath(); g.moveTo(cx, ys(q.lo)); g.lineTo(cx, ys(q.q1)); g.moveTo(cx, ys(q.q3)); g.lineTo(cx, ys(q.hi)); g.moveTo(cx - cap, ys(q.lo)); g.lineTo(cx + cap, ys(q.lo)); g.moveTo(cx - cap, ys(q.hi)); g.lineTo(cx + cap, ys(q.hi)); g.stroke();
+                const bt = ys(q.q3), bh = Math.max(ys(q.q1) - bt, 1); g.globalAlpha = 0.3; g.fillStyle = c; g.fillRect(cx - bw / 2, bt, bw, bh); g.globalAlpha = 1; g.strokeRect(cx - bw / 2, bt, bw, bh);
+                g.lineWidth = 3; g.beginPath(); g.moveTo(cx - bw / 2, ys(q.median)); g.lineTo(cx + bw / 2, ys(q.median)); g.stroke(); g.lineWidth = 1.5;
+                for (const v of q.outliers.slice(0, 300)) { g.beginPath(); g.arc(cx, ys(v), 3, 0, Math.PI * 2); g.stroke(); }
+                if (o.labels) txt(fmtNum(q.median), cx + bw / 2 + 4, ys(q.median), 'left', 'middle', C.text, F(11));
+                txt(fit(s.name, Math.max(B.step - 4, 24)), cx, y1 + 8, 'center', 'top');
+            });
+            grid(x0, y1, x1, y1);
+        }
+        function drawTrend(X, m) {
+            const { g, W, H, y, o, col, txt, grid, F, C, fit } = X, s = m.series[0], n = s.vals.length, tm = trendModel(s.vals, o.ma, o.fc), N = n + tm.fc.length;
+            const all = s.vals.filter(v => v !== null); if (tm.fit) all.push(...tm.fit); for (const f of tm.fc) all.push(f.v); if (tm.avg) for (const v of tm.avg) if (v !== null) all.push(v);
+            const T = niceTicks(Math.min(...all), Math.max(...all), H < 340 ? 4 : 6); g.font = F(12);
+            const lw = Math.max(...T.ticks.map(v => g.measureText(fmtNum(v, T.dec)).width)), x0 = Math.ceil(lw) + 16, x1 = W - 14, y0 = y + 8, y1 = H - 30, ys = linear(T.min, T.max, y1, y0);
+            const px = N > 1 ? (i) => x0 + 12 + i * (x1 - x0 - 24) / (N - 1) : () => (x0 + x1) / 2, labels = [...m.cats, ...tm.fc.map((_, k) => `預測${k + 1}`)];
+            for (const v of T.ticks) { grid(x0, ys(v), x1, ys(v)); txt(fmtNum(v, T.dec), x0 - 6, ys(v), 'right', 'middle'); }
+            if (tm.fc.length) { g.save(); g.globalAlpha = 0.08; g.fillStyle = C.muted; g.fillRect(px(n - 1), y0, x1 - px(n - 1), y1 - y0); g.restore(); txt('預測', (px(n - 1) + x1) / 2, y0 + 2, 'center', 'top', C.muted, F(12, '600')); }
+            g.font = F(12); let mw = 0; for (let i = 0; i < N && i < 400; i++) mw = Math.max(mw, Math.min(g.measureText(labels[i]).width, 90));
+            const st = thinStep(mw, N > 1 ? (x1 - x0 - 24) / (N - 1) : x1 - x0);
+            for (let i = 0; i < N; i += st) txt(fit(labels[i], 90), px(i), y1 + 8, 'center', 'top');
+            const path = (pts) => { g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]))); g.stroke(); };
+            g.lineJoin = 'round';
+            if (tm.fit) { g.strokeStyle = col(1); g.lineWidth = 2; g.setLineDash([6, 4]); path([[px(0), ys(tm.fit[0])], [px(n - 1), ys(tm.fit[n - 1])]]); g.setLineDash([]); }
+            if (tm.avg) { g.strokeStyle = col(2); g.lineWidth = 2; let seg = []; tm.avg.forEach((v, i) => { if (v === null) { if (seg.length > 1) path(seg); seg = []; } else seg.push([px(i), ys(v)]); }); if (seg.length > 1) path(seg); }
+            let seg = []; g.strokeStyle = col(0); g.lineWidth = 2;
+            s.vals.forEach((v, i) => { if (v === null) { if (seg.length > 1) path(seg); seg = []; } else seg.push([px(i), ys(v)]); }); if (seg.length > 1) path(seg);
+            s.vals.forEach((v, i) => { if (v !== null && n <= 60) { g.beginPath(); g.arc(px(i), ys(v), 3, 0, Math.PI * 2); g.fillStyle = col(0); g.fill(); } });
+            if (tm.fc.length) {
+                g.strokeStyle = col(1); g.lineWidth = 2; g.setLineDash([2, 4]); path([[px(n - 1), ys(tm.fit[n - 1])], ...tm.fc.map(f => [px(f.i), ys(f.v)])]); g.setLineDash([]);
+                tm.fc.forEach((f, k) => { g.beginPath(); g.arc(px(f.i), ys(f.v), 3.5, 0, Math.PI * 2); g.fillStyle = C.bg; g.fill(); g.stroke(); if (o.labels && tm.fc.length <= 12) txt(fmtNum(f.v), px(f.i), ys(f.v) - 7, 'center', 'bottom', C.text, F(11)); });
+            }
+            grid(x0, y1, x1, y1);
+        }
         // ===== 介面 =====
         let raf = 0;
         function render() { cancelAnimationFrame(raf); raf = requestAnimationFrame(doRender); }
         function currentModel() { return buildModel(info, { type: opts.type, xcol: sel.xcol, ycols: sel.ycols }); }
+        const xo = () => ({ binw: $('#binw').value, ma: Number($('#maN').value), fc: Number($('#fcN').value) });
+        // 直方圖 / 盒鬚圖 / 趨勢線 下方的說明文字（組距、四分位法、迴歸式與 R²）
+        function xInfo(m) {
+            const t = opts.type, s0 = m.series[0];
+            if (t === 'hist') { if (!s0) return ''; try { const h = histogram(s0.vals.filter(v => v !== null), $('#binw').value); return `${s0.name}：${h.n} 筆，組距 ${fmtNum(h.width, 4)}（建議 ${fmtNum(h.suggested, 4)}），共 ${h.nb} 組；每組為左閉右開，最後一組含最大值。`; } catch (e) { return e.message; } }
+            if (t === 'box') return m.series.length ? m.series.map(s => { const q = boxStats(s.vals.filter(v => v !== null)); return q ? `${s.name}：Q1 ${fmtNum(q.q1)}、中位數 ${fmtNum(q.median)}、Q3 ${fmtNum(q.q3)}，離群值 ${q.outliers.length} 個` : `${s.name}：沒有數字`; }).join('\n') + '\n四分位數用線性內插（同 Excel QUARTILE.INC）；離群值是小於 Q1−1.5×IQR 或大於 Q3+1.5×IQR 的點（空心圓），鬚線畫到柵欄內最遠的資料。' : '';
+            if (t === 'trend') { if (!s0) return ''; const o = xo(), tm = trendModel(s0.vals, o.ma, o.fc); return tm.reg ? `${s0.name}：y = ${fmtNum(tm.reg.slope, 4)}·x + ${fmtNum(tm.reg.intercept, 4)}（x 為第幾期，從 1 起算），R² = ${tm.reg.r2.toFixed(3)}${tm.ma ? `；${tm.ma} 期移動平均` : ''}${tm.ahead ? `；虛線與空心圓是往後延伸 ${tm.ahead} 期的預測，只是把直線延長，不代表真實走勢` : ''}` : '資料點不足（至少要有 2 筆數字）或 x 全部相同，無法畫趨勢線。'; }
+            return '';
+        }
         function doRender() {
             const cv = $('#cv'), W = Math.max(240, Math.floor($('#cvwrap').clientWidth)), m = currentModel(), H = chartSize(W, m, opts);
             cv.style.width = W + 'px'; cv.style.height = H + 'px';
-            drawChart(cv, W, H, Math.min(window.devicePixelRatio || 1, 3), m, { ...opts, title: $('#title').value.trim() }, theme());
+            drawChart(cv, W, H, Math.min(window.devicePixelRatio || 1, 3), m, { ...opts, title: $('#title').value.trim(), ...xo() }, theme());
             const w = [];
             if (parseInfo.error) w.push(parseInfo.error);
             if (parseInfo.truncRows) w.push('資料超過 5000 列，只使用前 5000 列。');
@@ -461,12 +600,15 @@ X 軸選「月份」，數值欄勾「營收」「成本」，類型選「長條
             if ((opts.type === 'pie' || opts.type === 'donut') && m.series.length > 1) w.push('圓餅 / 環圈只畫第一個選取的數值欄。');
             if (opts.type === 'scatter' && m.xFallback && info.rows.length) w.push('X 欄不是數字，散佈圖改用列序號當 X。');
             if (info.rows.length && !m.series.length) w.push('請至少選一個數值欄。');
+            if (['hist', 'trend'].includes(opts.type) && m.series.length > 1) w.push('直方圖 / 趨勢線只畫第一個選取的數值欄。');
             if (m.cats.length > 60 && ['bar', 'stack'].includes(opts.type)) w.push('資料筆數多，長條會很細；建議改用折線、面積或散佈圖。');
             $('#warn').textContent = w.join(' ');
+            $('#xnote').textContent = xInfo(m);
             $('#cv').setAttribute('aria-label', '圖表預覽：' + (opts.title || TYPE_NAMES[opts.type]) + '，' + m.cats.length + ' 筆資料');
         }
         function renderControls() {
             for (const b of $('#types').children) b.setAttribute('aria-pressed', b.dataset.t === opts.type);
+            $('#xhist').hidden = opts.type !== 'hist'; $('#xtrend').hidden = opts.type !== 'trend';
             $('#legend').checked = opts.legend; $('#labels').checked = opts.labels; $('#pal').value = opts.palette;
             $('#sw').replaceChildren(...PALETTES[opts.palette].c.slice(0, 6).map(c => { const i = document.createElement('i'); i.style.background = c; return i; }));
         }
@@ -506,7 +648,7 @@ X 軸選「月份」，數值欄勾「營收」「成本」，類型選「長條
         $('#legend').onchange = () => { opts.legend = $('#legend').checked; save(); render(); };
         $('#labels').onchange = () => { opts.labels = $('#labels').checked; save(); render(); };
         $('#xcol').onchange = () => { sel.xcol = +$('#xcol').value; sel.ycols = sel.ycols.filter(j => j !== sel.xcol); renderCols(); render(); };
-        $('#title').oninput = render;
+        $('#title').oninput = $('#binw').oninput = $('#maN').oninput = $('#fcN').oninput = render;
         $('#data').oninput = () => { reparse(); };
         $('#hdr').onchange = () => { hdrTouched = true; reparse(); };
         $('#sample').onclick = () => { $('#data').value = '月份,營收,成本,毛利率\n1月,120,80,33.3%\n2月,150,95,36.7%\n3月,170,110,35.3%\n4月,160,100,37.5%\n5月,210,130,38.1%\n6月,240,150,37.5%'; hdrTouched = false; reparse(); };
@@ -519,7 +661,7 @@ X 軸選「月份」，數值欄勾「營收」「成本」，類型選「長條
         function pngBlob() {
             return new Promise((res) => {
                 const m = currentModel(), W = Math.max(240, Math.floor($('#cvwrap').clientWidth)), H = chartSize(W, m, opts), cv = document.createElement('canvas');
-                drawChart(cv, W, H, W < 500 ? 3 : 2, m, { ...opts, title: $('#title').value.trim() }, theme());
+                drawChart(cv, W, H, W < 500 ? 3 : 2, m, { ...opts, title: $('#title').value.trim(), ...xo() }, theme());
                 cv.toBlob(res, 'image/png');
             });
         }

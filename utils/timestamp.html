@@ -49,10 +49,11 @@
             display: flex;
             gap: 8px;
             margin-bottom: 14px;
+            flex-wrap: wrap;
         }
 
         .tabs button {
-            flex: 1;
+            flex: 1 1 auto;
         }
 
         .row textarea {
@@ -130,7 +131,7 @@
         <h1>時間戳轉換</h1>
         <p class="sub">Unix 時間戳（秒 / 毫秒）與日期互轉，全部在本機計算。</p>
 
-        <div class="tabs" id="tabs"><button data-t="ts" aria-pressed="true">時間戳</button><button data-t="oid" aria-pressed="false">ID（ObjectId / UUID / ULID…）</button><button data-t="batch" aria-pressed="false">批次轉換</button></div>
+        <div class="tabs" id="tabs"><button data-t="ts" aria-pressed="true">時間戳</button><button data-t="oid" aria-pressed="false">ID（ObjectId / UUID / ULID…）</button><button data-t="batch" aria-pressed="false">批次轉換</button><button data-t="intl" aria-pressed="false">Intl 格式預覽</button></div>
 
         <div class="card">
             <label for="tz">顯示時區</label>
@@ -161,11 +162,33 @@
         <div id="pgBatch" hidden>
             <div class="card">
                 <h2>批次轉換</h2>
-                <p class="note">每行一筆：Unix 時間戳（秒 / 毫秒自動判斷）或日期（2026-10-22 08:30:00、2026/10/22、2026-10-22T08:30:00Z、…+08:00），互轉並標出無法辨識的列。沒寫時區的日期以上方「顯示時區」解讀。</p>
+                <p class="note">每行一筆：Unix 時間戳（秒 / 毫秒自動判斷）或日期（2026-10-22 08:30:00、2026/10/22、2026-10-22T08:30:00Z、…+08:00、民國 113/05/20、民國113年5月20日、2024年5月20日），互轉並標出無法辨識的列。沒寫時區的日期以上方「顯示時區」解讀。</p>
                 <div class="row"><textarea id="bIn" rows="6" spellcheck="false" placeholder="1700000000&#10;1700000000123&#10;2026-10-22 08:30:00&#10;2026-10-22T00:30:00Z" aria-label="多行時間戳或日期"></textarea></div>
                 <p class="note" id="bNote"></p>
+                <label class="chk" style="font-weight:400"><input type="checkbox" id="bRoc" style="width:auto;margin-right:6px">多輸出一欄「民國年」</label>
                 <div class="chips"><button class="sm" id="bCopy" hidden>複製成 TSV</button></div>
                 <div class="tbl" id="bOut"></div>
+            </div>
+        </div>
+
+        <div id="pgIntl" hidden>
+            <div class="card">
+                <h2>Intl 格式預覽</h2>
+                <p class="note">同一個時間，用瀏覽器內建的 Intl.DateTimeFormat 在各語系 / 樣式 / 時區的輸出；可直接複製到程式裡比對。時間以上方「顯示時區」解讀。</p>
+                <div class="row"><input id="iDt" type="datetime-local" step="1" aria-label="日期時間"><button id="iNow">帶入現在</button></div>
+                <div class="row" style="margin-top:8px">
+                    <select id="iDs" aria-label="dateStyle"></select><select id="iTs" aria-label="timeStyle"></select><select id="iLoc" aria-label="語系"></select>
+                </div>
+                <p class="note" id="iNote"></p>
+                <h3>各語系（時區：顯示時區）</h3>
+                <div id="iLocOut"></div>
+                <div class="chips"><button class="sm" id="iLocCopy">複製成 TSV</button></div>
+                <h3>各時區（語系：上方選的）</h3>
+                <div id="iZoneOut"></div>
+                <div class="chips"><button class="sm" id="iZoneCopy">複製成 TSV</button></div>
+                <h3>dateStyle × timeStyle 全部組合</h3>
+                <div id="iMatrixOut"></div>
+                <div class="chips"><button class="sm" id="iMatrixCopy">複製成 TSV</button></div>
             </div>
         </div>
 
@@ -214,6 +237,18 @@
         <li>切到「批次轉換」，貼上多行時間戳或日期（每行一筆；從試算表貼上含 Tab 時只取第一欄）。</li>
         <li>時間戳自動判斷秒 / 毫秒；日期支援 <kbd>2026-10-22</kbd>、<kbd>2026/10/22 08:30:00</kbd>、<kbd>2026-10-22T00:30:00Z</kbd>、<kbd>…+08:00</kbd>、毫秒小數。沒寫時區的日期以上方「顯示時區」解讀。</li>
         <li>每列同時給出秒、毫秒、顯示時區時間、UTC、ISO 8601；無法辨識的列用紅字標出原因。按「複製成 TSV」可直接貼回試算表。</li>
+        </ol>
+        <h3>批次轉換的民國年與中文日期</h3>
+        <ul>
+        <li>可辨識 <kbd>113/05/20</kbd>、<kbd>113-5-20</kbd>、<kbd>民國113年5月20日</kbd>、<kbd>2024年5月20日</kbd>，後面可接 <kbd>08:30[:00]</kbd>；沒寫時區一律以上方「顯示時區」解讀。</li>
+        <li>勾選「多輸出一欄民國年」會多一欄（例如民國113年05月20日 08:30:00，1911 年以前為「民國前」），也會一起複製進 TSV。</li>
+        <li>五月二十日這類中文數字日期不處理，會標示「無法辨識」；2 位數以下的年份（例如 5/20）必須寫「民國」才當民國年。</li>
+        </ul>
+        <h3>Intl 格式預覽怎麼用</h3>
+        <ol>
+        <li>切到「Intl 格式預覽」，選日期時間（空白 = 開啟時的現在，可按「帶入現在」更新），再選 dateStyle / timeStyle（full、long、medium、short，可選「無」）與語系。</li>
+        <li>上方表是各語系的輸出，中間是各時區（含 UTC 位移）的輸出，下方是同一語系所有樣式組合；每張表都能複製成 TSV。</li>
+        <li>輸出由瀏覽器內建的 ICU 資料決定，不同瀏覽器 / 版本可能略有差異，不一定與伺服器端或其他語言的結果相同。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">輸入 1700000000
@@ -365,10 +400,26 @@ ULID 01ARZ3NDEKTSV4RRFFQ69G5FAV
 
         // ---- 批次轉換 ----
         const BATCH_MAX = 2000;
+        // 民國年 / 中文日期：113/05/20、民國113年5月20日、2024年5月20日 [HH:mm[:ss]] → 轉成西元 YYYY-M-D 交給下面的解析；不是這類格式回傳 null
+        function normCnDate(t) {
+            const m = /^(民國\s*)?(\d{1,4})\s*(年|[-/.])\s*(\d{1,2})\s*(?:月|[-/.])\s*(\d{1,2})\s*日?(?:[T\s]+(\d{1,2}:\d{2}(?::\d{2})?))?$/.exec(t);
+            if (!m) return null;
+            const [, pre, ys, sep, mo, d, tm] = m, y = +ys, roc = ys.length <= 3;
+            if (roc ? (!pre && ys.length < 2) || y < 1 : pre || sep !== '年') return null;     // 4 位數西元年只接受「2024年5月20日」；其他寫法交給原本的 YYYY-MM-DD 解析
+            return { kind: roc ? '民國年日期' : '中文日期', s: `${roc ? y + 1911 : y}-${mo}-${d}${tm ? ' ' + tm : ''}` };
+        }
+        // 民國年輸出：民國113年05月20日 08:30:00（1911 年以前為「民國前」）
+        function rocText(ms, tz) {
+            const p = zoneParts(ms, tz), r = p.year - 1911;
+            return `${r > 0 ? `民國${r}年` : `民國前${1 - r}年`}${P2(p.month)}月${P2(p.day)}日 ${P2(p.hour)}:${P2(p.minute)}:${P2(p.second)}`;
+        }
         // 解析一行：時間戳（秒 / 毫秒）或日期字串。回傳 { ok, kind, ms } 或 { ok: false, reason }
         function parseTimeLine(line, tz) {
             const t = String(line ?? '').trim();
             if (!t) return { ok: false, reason: '空白' };
+            const cn = /^[+-]?\d+(\.\d+)?$/.test(t) ? null : normCnDate(t);
+            if (cn) { const r = parseTimeLine(cn.s, tz); return r.ok ? { ...r, kind: cn.kind } : r; }
+            if (/[年月日]/.test(t) && /[一二三四五六七八九十〇零]/.test(t)) return { ok: false, reason: '中文數字日期不處理（請改用阿拉伯數字，如 2024年5月20日）' };
             if (/^[+-]?\d+(\.\d+)?$/.test(t)) {
                 const n = Number(t), ms = toMs(n);
                 if (!Number.isFinite(new Date(ms).getTime())) return { ok: false, reason: '數字超出可表示的日期範圍' };
@@ -391,21 +442,43 @@ ULID 01ARZ3NDEKTSV4RRFFQ69G5FAV
             return { ok: true, kind: m[8] ? '日期（含時區）' : '日期（顯示時區）', ms };
         }
         // 每行一筆；含 Tab 只取第一欄（從試算表貼上）。回傳 { rows, over }
-        function batchRows(text, tz) {
+        function batchRows(text, tz) {   // 每列另附 roc（民國年文字），畫面 / TSV 勾選「加上民國年」才輸出
             const all = String(text ?? '').split(/\r?\n/).map(x => x.split('\t')[0].trim()).filter(Boolean);
             const rows = all.slice(0, BATCH_MAX).map(src => {
                 const r = parseTimeLine(src, tz);
                 if (!r.ok) return { src, ok: false, reason: r.reason };
-                return { src, ok: true, kind: r.kind, ms: r.ms, sec: String(Math.floor(r.ms / 1000)), msText: String(r.ms), local: `${fmtInZone(r.ms, tz)}（${fmtOffset(zoneOffsetMin(r.ms, tz))}）`, utc: fmtInZone(r.ms, 'UTC'), iso: new Date(r.ms).toISOString() };
+                return { src, ok: true, kind: r.kind, ms: r.ms, sec: String(Math.floor(r.ms / 1000)), msText: String(r.ms), local: `${fmtInZone(r.ms, tz)}（${fmtOffset(zoneOffsetMin(r.ms, tz))}）`, utc: fmtInZone(r.ms, 'UTC'), iso: new Date(r.ms).toISOString(), roc: rocText(r.ms, tz) };
             });
             return { rows, over: Math.max(0, all.length - BATCH_MAX) };
         }
         const BATCH_HEAD = ['輸入', '判斷', '秒', '毫秒', '顯示時區', 'UTC', 'ISO 8601'];
         const tsvCell = (x) => String(x).replace(/[\t\r\n]+/g, ' ');
-        function batchTsv(rows, tz) {
-            const head = [...BATCH_HEAD]; head[4] = tz;
-            return [head, ...rows.map(r => r.ok ? [r.src, r.kind, r.sec, r.msText, r.local, r.utc, r.iso] : [r.src, '無法辨識：' + r.reason])].map(r => r.map(tsvCell).join('\t')).join('\n');
+        const batchCells = (r, roc) => [r.src, r.kind, r.sec, r.msText, r.local, r.utc, r.iso, ...(roc ? [r.roc] : [])];
+        function batchTsv(rows, tz, roc = false) {
+            const head = [...BATCH_HEAD, ...(roc ? ['民國年'] : [])]; head[4] = tz;
+            return [head, ...rows.map(r => r.ok ? batchCells(r, roc) : [r.src, '無法辨識：' + r.reason])].map(r => r.map(tsvCell).join('\t')).join('\n');
         }
+
+        // ---- Intl 格式預覽 ----
+        const INTL_LOCALES = ['zh-TW', 'zh-CN', 'zh-HK', 'ja-JP', 'ko-KR', 'en-US', 'en-GB', 'de-DE', 'fr-FR', 'es-ES', 'it-IT', 'pt-BR', 'ru-RU', 'ar-EG', 'hi-IN', 'th-TH'];
+        const INTL_STYLES = ['full', 'long', 'medium', 'short'];
+        // dateStyle / timeStyle：full long medium short 或 none（不顯示）；兩者都 none 回傳提示字串
+        function intlFmt(ms, locale, tz, dateStyle, timeStyle) {
+            const o = { timeZone: tz };
+            if (INTL_STYLES.includes(dateStyle)) o.dateStyle = dateStyle;
+            if (INTL_STYLES.includes(timeStyle)) o.timeStyle = timeStyle;
+            if (!o.dateStyle && !o.timeStyle) return '（日期與時間都選了「無」）';
+            try { return new Intl.DateTimeFormat(locale, o).format(new Date(ms)); } catch (e) { return '（不支援：' + e.message + '）'; }
+        }
+        const intlLocaleRows = (ms, tz, ds, ts, locales = INTL_LOCALES) => locales.map(l => [l, intlFmt(ms, l, tz, ds, ts)]);
+        const intlZoneRows = (ms, locale, zones, ds, ts) => zones.map(z => [z, `${intlFmt(ms, locale, z, ds, ts)}（${fmtOffset(zoneOffsetMin(ms, z))}）`]);
+        // 同語系、同時區：dateStyle × timeStyle 全部組合（含單獨日期 / 單獨時間）
+        function intlMatrix(ms, locale, tz) {
+            const none = ['none', ...INTL_STYLES], out = [];
+            for (const d of none) for (const t of none) if (d !== 'none' || t !== 'none') out.push([`dateStyle=${d}, timeStyle=${t}`, intlFmt(ms, locale, tz, d, t)]);
+            return out;
+        }
+        const intlTsv = (rows) => rows.map(r => r.map(tsvCell).join('\t')).join('\n');
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -495,32 +568,52 @@ ULID 01ARZ3NDEKTSV4RRFFQ69G5FAV
 
         let bRows = [];
         function showBatch() {
-            const tz = $('#tz').value, { rows, over } = batchRows($('#bIn').value, tz), out = $('#bOut');
+            const tz = $('#tz').value, { rows, over } = batchRows($('#bIn').value, tz), out = $('#bOut'), roc = $('#bRoc').checked;
             bRows = rows; out.replaceChildren(); $('#bCopy').hidden = !rows.length;
             const bad = rows.filter(r => !r.ok).length;
             $('#bNote').textContent = rows.length ? `共 ${rows.length} 筆，可辨識 ${rows.length - bad} 筆${bad ? `，無法辨識 ${bad} 筆（紅字）` : ''}${over ? `；超過 ${BATCH_MAX} 筆，其餘 ${over} 筆已略過` : ''}` : '';
             if (!rows.length) return;
             const tb = document.createElement('table'), hd = tb.createTHead().insertRow();
-            BATCH_HEAD.forEach((h, i) => { const th = document.createElement('th'); th.textContent = i === 4 ? tz : h; hd.append(th); });
+            [...BATCH_HEAD, ...(roc ? ['民國年'] : [])].forEach((h, i) => { const th = document.createElement('th'); th.textContent = i === 4 ? tz : h; hd.append(th); });
             const body = tb.createTBody();
             for (const r of rows) {
                 const tr = body.insertRow();
-                if (r.ok) [r.src, r.kind, r.sec, r.msText, r.local, r.utc, r.iso].forEach(v => { tr.insertCell().textContent = v; });
-                else { tr.className = 'bad'; tr.insertCell().textContent = r.src; const c = tr.insertCell(); c.colSpan = 6; c.textContent = '無法辨識：' + r.reason; }
+                if (r.ok) batchCells(r, roc).forEach(v => { tr.insertCell().textContent = v; });
+                else { tr.className = 'bad'; tr.insertCell().textContent = r.src; const c = tr.insertCell(); c.colSpan = roc ? 7 : 6; c.textContent = '無法辨識：' + r.reason; }
             }
             out.append(tb);
         }
-        $('#bIn').oninput = showBatch;
-        $('#bCopy').onclick = () => copyWithFeedback($('#bCopy'), batchTsv(bRows, $('#tz').value));
+        $('#bIn').oninput = showBatch; $('#bRoc').onchange = showBatch;
+        $('#bCopy').onclick = () => copyWithFeedback($('#bCopy'), batchTsv(bRows, $('#tz').value, $('#bRoc').checked));
+
+        // Intl 格式預覽
+        const STYLE_OPTS = (name) => [new Option(name + '：無', 'none'), ...INTL_STYLES.map(x => new Option(name + '：' + x, x))];
+        $('#iDs').replaceChildren(...STYLE_OPTS('dateStyle')); $('#iTs').replaceChildren(...STYLE_OPTS('timeStyle'));
+        $('#iDs').value = 'long'; $('#iTs').value = 'medium';
+        $('#iLoc').replaceChildren(...INTL_LOCALES.map(l => new Option(l, l)));
+        let iRows = { loc: [], zone: [], mat: [] }, iNowMs = Date.now();
+        const iTable = (box, rows) => { const tb = document.createElement('table'), w = document.createElement('div'); w.className = 'tbl'; for (const [k, v] of rows) { const tr = tb.insertRow(); tr.insertCell().textContent = k; const c = tr.insertCell(); c.style.whiteSpace = 'normal'; c.textContent = v; } w.append(tb); box.replaceChildren(w); };
+        function showIntl() {
+            const tz = $('#tz').value, ds = $('#iDs').value, ts = $('#iTs').value, loc = $('#iLoc').value;
+            let ms = iNowMs;
+            if ($('#iDt').value) { ms = parseInZone($('#iDt').value, tz); if (!Number.isFinite(ms)) { $('#iNote').textContent = '日期格式不對'; return; } }
+            $('#iNote').textContent = `${new Date(ms).toISOString()}（時間戳 ${Math.floor(ms / 1000)}）`;
+            iRows = { loc: intlLocaleRows(ms, tz, ds, ts), zone: intlZoneRows(ms, loc, ZONES, ds, ts), mat: intlMatrix(ms, loc, tz) };
+            iTable($('#iLocOut'), iRows.loc); iTable($('#iZoneOut'), iRows.zone); iTable($('#iMatrixOut'), iRows.mat);
+        }
+        ['iDt', 'iDs', 'iTs', 'iLoc'].forEach(id => { $('#' + id).oninput = showIntl; });
+        $('#iNow').onclick = () => { $('#iDt').value = ''; iNowMs = Date.now(); showIntl(); };
+        [['iLocCopy', 'loc'], ['iZoneCopy', 'zone'], ['iMatrixCopy', 'mat']].forEach(([id, k]) => { $('#' + id).onclick = () => copyWithFeedback($('#' + id), intlTsv(iRows[k])); });
+        showIntl();
         $('#tabs').onclick = (e) => {
             const t = e.target.dataset.t; if (!t) return; tab = t;
             [...$('#tabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab));
-            $('#pgTs').hidden = tab !== 'ts'; $('#pgOid').hidden = tab !== 'oid'; $('#pgBatch').hidden = tab !== 'batch';
+            $('#pgTs').hidden = tab !== 'ts'; $('#pgOid').hidden = tab !== 'oid'; $('#pgBatch').hidden = tab !== 'batch'; $('#pgIntl').hidden = tab !== 'intl';
         };
         function tick() { const n = Date.now(); $('#nowS').textContent = Math.floor(n / 1000); $('#nowMs').textContent = n; }
 
         $('#ts').oninput = showTs; $('#dt').oninput = showDt;
-        $('#tz').onchange = () => { store.set('ts_tz', $('#tz').value); showTs(); showDt(); showOid(); showBatch(); o2dRefresh(); };
+        $('#tz').onchange = () => { store.set('ts_tz', $('#tz').value); showTs(); showDt(); showOid(); showBatch(); showIntl(); o2dRefresh(); };
         $('#useNow').onclick = () => { $('#ts').value = Math.floor(Date.now() / 1000); showTs(); };
         $('#copyS').onclick = () => copyWithFeedback($('#copyS'), String(Math.floor(Date.now() / 1000)));
         $('#copyMs').onclick = () => copyWithFeedback($('#copyMs'), String(Date.now()));

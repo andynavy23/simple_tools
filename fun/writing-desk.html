@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="寫作工作台：專注寫作（無退格、計時、字數目標）、隨機題目與角色、名言佳句、標語公式、小說設定筆記、劇本排版與列印，資料只存在你的瀏覽器。">
+    <meta property="og:title" content="寫作工作台" />
+    <meta property="og:description" content="專注寫作、靈感抽題、設定筆記與劇本排版。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/writing-desk.html" />
+    <meta name="st-keys" content="wdesk_draft,wdesk_notes,wdesk_opts">
+    <title>寫作工作台</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 760px;
+        }
+
+        textarea {
+            min-height: 200px;
+            resize: vertical;
+            font-family: inherit;
+            line-height: 1.7;
+        }
+
+        .tabs,
+        .opts,
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .tabs {
+            margin-bottom: 12px;
+        }
+
+        .tabs button {
+            flex: 1 1 auto;
+        }
+
+        .opts {
+            align-items: center;
+            gap: 8px 12px;
+            margin-top: 10px;
+        }
+
+        .opts label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 44px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .opts input[type="number"] {
+            width: 90px;
+        }
+
+        .row {
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .big {
+            font-size: 19px;
+            line-height: 1.7;
+            padding: 12px 14px;
+            border-radius: var(--radius-sm);
+            background: var(--fill);
+            margin: 10px 0;
+            white-space: pre-wrap;
+        }
+
+        .bar {
+            height: 8px;
+            border-radius: 4px;
+            background: var(--fill);
+            overflow: hidden;
+            margin: 8px 0;
+        }
+
+        .bar i {
+            display: block;
+            height: 100%;
+            width: 0;
+            background: var(--blue);
+            transition: width .2s;
+        }
+
+        .fbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #fEnd {
+            display: none;
+        }
+
+        #editorBox.full {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            background: var(--bg);
+            background-image: var(--bg-image);
+            display: flex;
+            flex-direction: column;
+            padding: max(56px, calc(env(safe-area-inset-top) + 48px)) 14px calc(12px + env(safe-area-inset-bottom));
+        }
+
+        #editorBox.full #fEnd {
+            display: inline-block;
+        }
+
+        #editorBox.full textarea {
+            flex: 1;
+            min-height: 0;
+            font-size: 18px;
+        }
+
+        .kv {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .kv:last-child {
+            border-bottom: 0;
+        }
+
+        .kv small {
+            color: var(--muted);
+            flex: none;
+            width: 3em;
+        }
+
+        .kv span {
+            flex: 1;
+        }
+
+        .note {
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            background: var(--fill);
+            margin-top: 10px;
+        }
+
+        .note h3 {
+            margin: 0 0 4px;
+            font-size: 16px;
+        }
+
+        .note p {
+            margin: 4px 0;
+            white-space: pre-wrap;
+            font-size: 14px;
+        }
+
+        .note .tg {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .note.done h3 {
+            text-decoration: line-through;
+            color: var(--muted);
+        }
+
+        .slg {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .slg span {
+            flex: 1;
+        }
+
+        .msg {
+            color: var(--bad);
+            font-size: 14px;
+            min-height: 1.4em;
+            margin: 6px 0 0;
+        }
+
+        /* 劇本預覽：左側留白依標準劇本格式（角色置中偏右、對白縮排、轉場靠右） */
+        #scriptOut {
+            font-family: "Courier New", Courier, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", monospace;
+            font-size: 15px;
+            line-height: 1.7;
+            background: var(--card);
+            border: var(--card-border);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            min-height: 120px;
+        }
+
+        #scriptOut>div {
+            margin: 0 0 12px;
+            white-space: pre-wrap;
+        }
+
+        .sc-scene {
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-top: 18px !important;
+        }
+
+        .sc-character {
+            margin: 14px 0 0 !important;
+            padding-left: 36%;
+            text-transform: uppercase;
+        }
+
+        .sc-paren {
+            padding-left: 30%;
+            margin: 0 !important;
+        }
+
+        .sc-dialogue {
+            padding-left: 18%;
+            padding-right: 12%;
+        }
+
+        .sc-transition {
+            text-align: right;
+            text-transform: uppercase;
+        }
+
+        @media print {
+            body.print-script {
+                background: #fff !important;
+                color: #000 !important;
+            }
+
+            body.print-script .wrap>*:not(#paneScript),
+            body.print-script #paneScript>.noprint,
+            .st-bar,
+            .st-panel,
+            .st-toast {
+                display: none !important;
+            }
+
+            body.print-script #scriptOut {
+                background: #fff !important;
+                color: #000 !important;
+                border: 0;
+                padding: 0;
+                font-size: 12pt;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>寫作工作台</h1>
+        <p class="sub">專注寫作、找靈感、記設定、排劇本。草稿與筆記只存在這個瀏覽器，不會上傳。</p>
+
+        <div class="tabs" role="tablist">
+            <button id="tabWrite" aria-pressed="true">專注寫作</button>
+            <button id="tabIdea" aria-pressed="false">靈感</button>
+            <button id="tabNotes" aria-pressed="false">設定筆記</button>
+            <button id="tabScript" aria-pressed="false">劇本排版</button>
+        </div>
+
+        <!-- ===== 專注寫作 ===== -->
+        <div id="paneWrite">
+            <div class="card">
+                <div class="opts" style="margin-top:0">
+                    <label><input type="checkbox" id="optNoBack"> 無退格模式</label>
+                    <label>字數目標 <input type="number" id="optGoal" min="0" max="1000000" inputmode="numeric"></label>
+                    <label>計時（分鐘，0 不計） <input type="number" id="optMins" min="0" max="600" inputmode="numeric"></label>
+                </div>
+                <p class="note" style="margin-top:10px">無退格模式：不能刪除、不能復原，只能一直往前寫，適合先把初稿寫出來。</p>
+                <button class="primary" id="fStart" style="margin-top:10px">進入專注模式</button>
+            </div>
+            <div class="card" id="editorBox">
+                <div class="fbar"><span id="fStat">0 字</span><span id="fTime"></span><button id="fEnd">結束專注</button></div>
+                <div class="bar" aria-hidden="true"><i id="fBar"></i></div>
+                <textarea id="draft" placeholder="在這裡開始寫…" aria-label="草稿" maxlength="200000"></textarea>
+                <p class="msg" id="dMsg"></p>
+                <div class="row noprint">
+                    <span class="muted" id="dInfo"></span>
+                    <span class="opts" style="margin:0">
+                        <button class="sm" id="dTxt">匯出 .txt</button>
+                        <button class="sm" id="dMd">匯出 .md</button>
+                        <button class="sm" id="dCopy">複製</button>
+                        <button class="sm" id="dClear">清除草稿</button>
+                    </span>
+                </div>
+            </div>
+            <p class="muted" id="fSum"></p>
+        </div>
+
+        <!-- ===== 靈感 ===== -->
+        <div id="paneIdea" hidden>
+            <div class="card">
+                <h2>寫作題目</h2>
+                <div class="opts" style="margin-top:0">
+                    <select id="pCat" aria-label="題目分類"></select>
+                    <input type="text" id="pSeed" placeholder="種子（選填，同種子同題）" aria-label="種子" autocomplete="off" style="flex:1 1 160px">
+                    <button class="primary" id="pDraw">抽題</button>
+                </div>
+                <div class="big" id="pOut">按「抽題」開始</div>
+                <button class="sm" id="pCopy">複製題目</button>
+            </div>
+
+            <div class="card">
+                <h2>角色設定</h2>
+                <div id="cList"></div>
+                <div class="row"><span class="muted">按 🔒 鎖定欄位，重抽時不會變</span><span class="opts" style="margin:0"><button class="sm" id="cCopy">複製</button><button class="primary" id="cRoll">重抽未鎖定</button></span></div>
+            </div>
+
+            <div class="card">
+                <h2>名言佳句</h2>
+                <p class="muted" style="margin:0 0 4px;font-size:13px">每日一句</p>
+                <div class="big" id="qDaily"></div>
+                <button class="sm" id="qDailyCopy">複製</button>
+                <hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
+                <div class="opts" style="margin-top:0"><select id="qCat" aria-label="名言分類"></select><button class="primary" id="qNext">換一句</button></div>
+                <div class="big" id="qOut"></div>
+                <button class="sm" id="qCopy">複製</button>
+                <p class="note">出處以原典、詩文或廣為流傳的說法為準；沒有可靠出處的俗語標「佚名」。</p>
+            </div>
+
+            <div class="card">
+                <h2>標語公式</h2>
+                <div class="opts" style="margin-top:0">
+                    <input type="text" id="sKw" placeholder="關鍵字，例如：咖啡" aria-label="關鍵字" maxlength="20" autocomplete="off" style="flex:1 1 160px">
+                    <select id="sFm" aria-label="公式"></select>
+                    <button class="primary" id="sGo">產生</button>
+                </div>
+                <div id="sOut"></div>
+            </div>
+        </div>
+
+        <!-- ===== 設定筆記 ===== -->
+        <div id="paneNotes" hidden>
+            <div class="card">
+                <h2 id="nFormTitle">新增筆記</h2>
+                <div class="opts" style="margin-top:0">
+                    <select id="nType" aria-label="類型"></select>
+                    <input type="text" id="nTitle" placeholder="標題（人名、地名、事件…）" aria-label="標題" maxlength="100" autocomplete="off" style="flex:1 1 180px">
+                </div>
+                <textarea id="nBody" placeholder="內容" aria-label="內容" maxlength="20000" style="margin-top:10px;min-height:120px"></textarea>
+                <div class="opts"><input type="text" id="nTags" placeholder="標籤（用逗號或空白分隔）" aria-label="標籤" autocomplete="off" style="flex:1 1 200px"></div>
+                <div class="row"><span class="msg" id="nMsg"></span><span class="opts" style="margin:0"><button id="nCancel" hidden>取消編輯</button><button class="primary" id="nSave">新增</button></span></div>
+            </div>
+            <div class="card">
+                <div class="opts" style="margin-top:0">
+                    <input type="search" id="nQ" placeholder="搜尋標題、內容、標籤" aria-label="搜尋筆記" style="flex:1 1 180px">
+                    <select id="nFType" aria-label="類型篩選"></select>
+                    <select id="nFTag" aria-label="標籤篩選"></select>
+                </div>
+                <div class="row"><span class="muted" id="nInfo"></span><button class="sm" id="nClear">清除全部筆記</button></div>
+                <div id="nList"></div>
+            </div>
+        </div>
+
+        <!-- ===== 劇本排版 ===== -->
+        <div id="paneScript" hidden>
+            <div class="card noprint">
+                <textarea id="scriptIn" placeholder="# 內 咖啡店 - 夜&#10;小明坐在角落，盯著手機。&#10;&#10;@小明&#10;（低聲）她還沒回。&#10;&#10;> 切至：" aria-label="劇本標記" style="min-height:220px"></textarea>
+                <div class="row"><span class="muted" id="scStat"></span><span class="opts" style="margin:0"><button class="sm" id="scSample">範例</button><button class="sm" id="scCopy">複製排版文字</button><button class="sm" id="scTxt">匯出 .txt</button><button class="primary" id="scPrint">列印 / 存成 PDF</button></span></div>
+                <p class="note">標記：<kbd>#</kbd> 場景標題、<kbd>@</kbd> 角色（下面接對白，括號開頭為舞台提示）、<kbd>&gt;</kbd> 轉場，其他行是動作描述；空行分段。</p>
+            </div>
+            <div id="scriptOut" aria-label="劇本預覽"></div>
+        </div>
+
+        <div class="card noprint" style="margin-top:16px">
+            <div class="row" style="margin-top:0"><span class="muted">草稿、筆記與設定都只存在這個瀏覽器。</span><button class="sm" id="wipe">清除全部資料</button></div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>把寫作會用到的東西放在一頁：專注寫作、找靈感（題目、角色、名言、標語）、小說設定筆記、劇本排版。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>想不受干擾地寫初稿，或給自己一個字數 / 時間目標。</li>
+        <li>卡住時抽一個題目或角色；需要一句名言、一組標語靈感。</li>
+        <li>寫小說時記人物、地點、時間線與伏筆，隨時搜尋。</li>
+        <li>寫短劇 / 影片腳本，要整理成標準劇本格式並列印。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>「專注寫作」：直接在框裡寫，內容自動存成草稿。可設字數目標（上方進度條）、計時（分鐘，0 = 不計時）與「無退格模式」（不能刪除與復原）。按「進入專注模式」會把編輯區放大成全螢幕，按「結束專注」回來並顯示這次寫了多少字、花了多久。寫完用「匯出 .txt / .md」下載或「複製」。</li>
+        <li>「靈感」：選分類按「抽題」；填種子則同種子永遠抽到同一題。角色設定按 🔒 鎖住滿意的欄位，再按「重抽未鎖定」。名言可看每日一句或選分類換一句，每則都能複製。標語公式輸入關鍵字、選公式，產生幾組範例，點「複製」帶走。</li>
+        <li>「設定筆記」：選類型（人物 / 地點 / 時間線 / 伏筆）、寫標題與內容、加標籤後按「新增」。清單可用搜尋、類型與標籤篩選；每張筆記可編輯、刪除，伏筆可標記「已回收」。</li>
+        <li>「劇本排版」：用簡單標記寫，下方即時預覽成劇本格式；「列印 / 存成 PDF」只會印出劇本。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg"># 內 咖啡店 - 夜
+        小明坐在角落，盯著手機。
+
+        @小明
+        （低聲）她還沒回。
+
+        &gt; 切至：
+
+        → 場景標題粗體，「小明」置中，括號是舞台提示，轉場靠右。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>草稿（含劇本）每個最多 200,000 字，到上限就不能再多寫；筆記最多 500 筆、每筆內容最多 20,000 字，滿了會拒絕新增並提示，請先刪除一些。標題最多 100 字、標籤每筆最多 10 個。</li>
+        <li>刪除：每張筆記有「刪除」（會先確認）；「清除草稿」只清草稿；「清除全部筆記」清空筆記；頁面最下方「清除全部資料」會一次清掉草稿、劇本、筆記與設定，且無法復原。</li>
+        <li>資料只存在這個瀏覽器，不會上傳；換瀏覽器或清除網站資料會消失，重要的請匯出。也可用右上角「💾」備份整份資料。備份壞掉或被改過時，會自動略過不合格的內容。</li>
+        <li>字數：中文每字算 1，英文以單字計；進度條用整份草稿的字數。無退格模式下，若手機鍵盤的刪除鍵沒反應是正常的。</li>
+        <li>名言只收有把握出處的；詩文與典籍標原作，翻譯的外國名言為意譯，引用時請再查證原文。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, rnd, seeded, download, day } = Util;
+
+        // --- pure ---
+        const MAX_DRAFT = 200000, MAX_NOTES = 500, MAX_BODY = 20000, MAX_TITLE = 100, MAX_TAGS = 10, MAX_TAG = 20;
+        const NOTE_TYPES = ['人物', '地點', '時間線', '伏筆'];
+        const TABS = ['write', 'idea', 'notes', 'script'];
+        const rand01 = () => rnd(0x100000000) / 0x100000000;
+
+        // 字數：中日韓字各算 1，英文 / 數字以單字計
+        const CJK_RE = /[㐀-䶿一-鿿豈-﫿぀-ヿ가-힯]/g;
+        const WORD_RE = /[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*/g;
+        function countText(t) {
+            t = String(t);
+            const cjk = (t.match(CJK_RE) || []).length, words = (t.match(WORD_RE) || []).length;
+            return { cjk, words, total: cjk + words, chars: t.replace(/\s/g, '').length };
+        }
+
+        // 草稿 / 設定：載入時驗證（備份還原、手動改壞都不會讓頁面壞掉）
+        function normDraft(raw) {
+            const o = typeof raw === 'string' ? { text: raw } : (raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {});
+            return { text: typeof o.text === 'string' ? o.text.slice(0, MAX_DRAFT) : '', script: typeof o.script === 'string' ? o.script.slice(0, MAX_DRAFT) : '', at: Number.isFinite(o.at) ? o.at : 0 };
+        }
+        const clampInt = (v, lo, hi, d) => { v = Math.round(Number(v)); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
+        function normOpts(raw) {
+            const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+            return { noBack: o.noBack === true, goal: clampInt(o.goal, 0, 1000000, 500), mins: clampInt(o.mins, 0, 600, 0), tab: TABS.includes(o.tab) ? o.tab : 'write' };
+        }
+
+        // 題目、角色、名言、標語（rand 是回傳 [0,1) 的函式；傳 seeded(種子) 就能重現）
+        const PROMPTS = {
+            '開頭': ['以「那天早上，門鈴響了三聲」開頭，寫一個故事。', '寫一個在天亮前十分鐘發生的場景。', '主角收到一封十年前寄出的信。', '從一句道歉開始寫起，但沒人知道為什麼道歉。', '寫一個人第一次踏進陌生城市的車站。', '以一個壞消息開頭，但讀者會覺得很溫暖。', '主角醒來，發現全世界的時鐘都停在同一刻。', '寫一場以「我本來不想來的」為第一句的聚會。'],
+            '衝突': ['兩個老朋友為了一件小事決裂，寫出真正的原因。', '主角必須在誠實與保護別人之間選擇。', '寫一個明知道會輸、還是要上場的人。', '兩位繼承人爭奪一間快要倒的老店。', '主角發現自己最信任的人隱瞞了一件事。', '寫一場沒有人說得出口的爭吵。', '主角的目標達成了，卻失去了更重要的東西。', '一個承諾被打破了，寫雙方各自的版本。'],
+            '角色': ['寫一個永遠遲到的人，為什麼他不想準時。', '寫一位退休的魔術師，他最後一次表演。', '寫一個說謊成性、卻從不騙家人的角色。', '寫一位在深夜便利商店打工的哲學系學生。', '寫一個記得所有人生日、卻沒人記得他的人。', '寫一位怕水的救生員。', '寫一個把所有東西都編號的收藏家。', '寫一位每天寫信給自己的老人。'],
+            '場景': ['一間凌晨三點仍亮著燈的洗衣店。', '颱風夜被困在山中小屋的五個人。', '即將拆除的老戲院最後一場放映。', '空無一人的夜班捷運車廂。', '雨停後的菜市場，攤商正在收拾。', '搬家前一晚，空蕩蕩的房間。', '機場過夜的旅客與一台壞掉的廣播。', '海邊小鎮冬天的民宿。'],
+            '對話': ['寫一段只有問句、沒有任何回答的對話。', '兩個人在電梯裡討論一個不能說出口的祕密。', '寫一場表面談天氣、實際在分手的對話。', '一個孩子問了大人一個無法回答的問題。', '兩個陌生人在等待室，意外發現共同認識的人。', '寫一通打錯的電話，後來聊了一整夜。', '用對話寫出兩人其實很愛對方，但誰都不說。', '寫一段老師與學生角色互換的對話。'],
+            '腦洞': ['如果每個人一生只能說一萬句話，會發生什麼事？', '如果夢境可以被借走，會出現什麼市場？', '如果影子有自己的意志，一天會做什麼？', '如果每個人頭上有一個倒數計時，只顯示「下次說謊的時間」。', '寫一個賣「一天的好運」的商人。', '如果記憶可以像書一樣被借閱，圖書館員的日常。', '如果城市裡所有的路燈都有感情。', '一座只在下雨時才出現的小鎮。'],
+            '日常': ['寫一次你覺得最平凡、卻永遠記得的早餐。', '寫一個人在等公車的五分鐘。', '寫一次搬家整理舊物時的發現。', '寫一個被忽略的小小善意。', '寫一次迷路，最後意外找到的地方。', '寫一個舊習慣，如何悄悄消失了。', '寫雨天窗邊的一杯熱飲。', '寫一次久違的電話。'],
+        };
+        const CHAR_FIELDS = {
+            '背景': ['出身小鎮雜貨店', '在孤兒院長大', '曾是前途看好的運動員', '在大家族裡排行最小', '多次搬家、沒有故鄉', '曾在國外生活十年', '父母是教師，從小被期待', '做過許多份短工', '經歷過一場大病', '曾經創業失敗', '在船上工作過', '靠獎學金讀完大學', '從小與祖父母同住', '曾是樂團的鼓手', '剛從長期的職場退下', '在醫院裡長大'],
+            '個性': ['固執但守信用', '愛說笑卻很怕寂寞', '沉默寡言、觀察入微', '熱心過頭、愛管閒事', '謹慎、凡事先想最壞的情況', '浪漫、容易相信別人', '好勝、不肯認輸', '溫和、不擅長拒絕', '嘴硬心軟', '樂觀得近乎天真', '敏感、情緒起伏大', '冷靜、但有一點潔癖', '好奇心旺盛、三分鐘熱度', '體貼、總把自己放最後', '愛面子', '老派、重禮數'],
+            '動機': ['想找到失散多年的家人', '想證明自己不是失敗者', '想保護身邊唯一的朋友', '想完成一個過世的人沒完成的事', '想離開這個地方', '想還清一筆很久以前的債', '想得到某個人的認可', '想守住一間快倒的店', '想知道當年真正發生了什麼', '想重新開始', '想贏得一場比賽', '想把一個祕密永遠藏好', '想讓所有人都過得好', '想獲得自由', '想為過去的錯道歉', '想成為自己崇拜的人'],
+            '缺點': ['無法開口說「對不起」', '總是把事情拖到最後一刻', '過度自責', '不信任任何人', '太在意別人怎麼看', '愛說謊來避免衝突', '衝動、做決定很快後悔', '什麼都想一個人扛', '嫉妒心強', '容易被情緒帶著走', '貪心、捨不得放手', '無法原諒別人（包括自己）', '過度完美主義', '對金錢缺乏安全感', '愛翻舊帳', '無法拒絕別人的請求'],
+        };
+        const QUOTES = [
+            // [分類, 出處, 句子]
+            ['學習', '孔子《論語》', '學而時習之，不亦說乎？'], ['學習', '孔子《論語》', '學而不思則罔，思而不學則殆。'], ['學習', '孔子《論語》', '三人行，必有我師焉。'], ['學習', '孔子《論語》', '知之為知之，不知為不知，是知也。'], ['學習', '孔子《論語》', '溫故而知新，可以為師矣。'], ['學習', '孔子《論語》', '敏而好學，不恥下問。'], ['學習', '孔子《論語》', '見賢思齊焉，見不賢而內自省也。'],
+            ['學習', '荀子《勸學》', '不積跬步，無以至千里；不積小流，無以成江海。'], ['學習', '荀子《勸學》', '學不可以已。'], ['學習', '荀子《勸學》', '青，取之於藍，而青於藍。'], ['學習', '荀子《勸學》', '鍥而不舍，金石可鏤。'],
+            ['學習', '《禮記·學記》', '玉不琢，不成器；人不學，不知道。'], ['學習', '《禮記·學記》', '學然後知不足，教然後知困。'], ['學習', '陸游《冬夜讀書示子聿》', '紙上得來終覺淺，絕知此事要躬行。'], ['學習', '朱熹《觀書有感》', '問渠那得清如許？為有源頭活水來。'], ['學習', '杜甫《奉贈韋左丞丈二十二韻》', '讀書破萬卷，下筆如有神。'], ['學習', '韓愈《進學解》', '業精於勤，荒於嬉；行成於思，毀於隨。'], ['學習', '蘇軾《稼說送張琥》', '博觀而約取，厚積而薄發。'], ['學習', '王陽明《傳習錄》', '知是行之始，行是知之成。'],
+            ['學習', '培根', '知識就是力量。'], ['學習', '牛頓', '如果我看得比別人更遠，那是因為我站在巨人的肩膀上。'], ['學習', '愛因斯坦', '想像力比知識更重要。'], ['學習', '巴斯德', '在觀察的領域中，機遇只偏愛那些有準備的頭腦。'], ['學習', '莊子《養生主》', '吾生也有涯，而知也無涯。'], ['學習', '《禮記·中庸》', '博學之，審問之，慎思之，明辨之，篤行之。'],
+            ['人生', '孔子《論語》', '逝者如斯夫，不舍晝夜。'], ['人生', '孔子《論語》', '己所不欲，勿施於人。'], ['人生', '孔子《論語》', '君子坦蕩蕩，小人長戚戚。'], ['人生', '孔子《論語》', '知者不惑，仁者不憂，勇者不懼。'], ['人生', '孔子《論語》', '三十而立，四十而不惑，五十而知天命。'], ['人生', '孔子《論語》', '人無遠慮，必有近憂。'],
+            ['人生', '老子《道德經》', '上善若水。'], ['人生', '老子《道德經》', '知人者智，自知者明。'], ['人生', '老子《道德經》', '知足者富。'], ['人生', '老子《道德經》', '禍兮福之所倚，福兮禍之所伏。'], ['人生', '莊子《山木》', '君子之交淡如水，小人之交甘若醴。'],
+            ['人生', '蘇軾《水調歌頭》', '人有悲歡離合，月有陰晴圓缺，此事古難全。'], ['人生', '蘇軾《定風波》', '回首向來蕭瑟處，歸去，也無風雨也無晴。'], ['人生', '蘇軾《定風波》', '竹杖芒鞋輕勝馬，誰怕？一蓑煙雨任平生。'], ['人生', '王勃《送杜少府之任蜀州》', '海內存知己，天涯若比鄰。'], ['人生', '劉禹錫《酬樂天揚州初逢席上見贈》', '沉舟側畔千帆過，病樹前頭萬木春。'], ['人生', '陶淵明《雜詩》', '盛年不重來，一日難再晨。及時當勉勵，歲月不待人。'], ['人生', '辛棄疾《青玉案》', '眾裡尋他千百度，驀然回首，那人卻在，燈火闌珊處。'], ['人生', '屈原《離騷》', '路漫漫其修遠兮，吾將上下而求索。'],
+            ['人生', '莎士比亞《皆大歡喜》', '世界是一座舞台，所有的男男女女不過是演員。'], ['人生', '莎士比亞《暴風雨》', '凡是過去，皆為序章。'], ['人生', '狄更斯《雙城記》', '這是最好的時代，也是最壞的時代。'], ['人生', '托爾斯泰《安娜·卡列尼娜》', '幸福的家庭都是相似的，不幸的家庭各有各的不幸。'], ['人生', '聖修伯里《小王子》', '真正重要的東西，用眼睛是看不見的。'], ['人生', '卡繆《薛西弗斯的神話》', '我們必須想像薛西弗斯是幸福的。'], ['人生', '梭羅《湖濱散記》', '大多數人都過著安靜而絕望的生活。'],
+            ['人生', '蘇格拉底', '未經審視的人生不值得活。'], ['人生', '賈伯斯', '你的時間有限，所以不要浪費時間去過別人的生活。'], ['人生', '笛卡兒', '我思故我在。'], ['人生', '愛因斯坦', '生活就像騎腳踏車，想保持平衡就得往前走。'], ['人生', '海倫·凱勒', '雖然世界充滿苦難，但苦難總是能被克服。'],
+            ['勵志', '老子《道德經》', '千里之行，始於足下。'], ['勵志', '老子《道德經》', '天下難事，必作於易；天下大事，必作於細。'], ['勵志', '老子《道德經》', '合抱之木，生於毫末；九層之臺，起於累土。'], ['勵志', '孟子《告子下》', '生於憂患，死於安樂。'], ['勵志', '孟子《滕文公下》', '富貴不能淫，貧賤不能移，威武不能屈。'], ['勵志', '孟子《告子下》', '天將降大任於是人也，必先苦其心志，勞其筋骨。'], ['勵志', '孟子《公孫丑下》', '天時不如地利，地利不如人和。'],
+            ['勵志', '李白《行路難》', '長風破浪會有時，直掛雲帆濟滄海。'], ['勵志', '李白《將進酒》', '天生我材必有用，千金散盡還復來。'], ['勵志', '杜甫《望嶽》', '會當凌絕頂，一覽眾山小。'], ['勵志', '王之渙《登鸛雀樓》', '欲窮千里目，更上一層樓。'], ['勵志', '諸葛亮《誡子書》', '非淡泊無以明志，非寧靜無以致遠。'], ['勵志', '諸葛亮《後出師表》', '鞠躬盡瘁，死而後已。'], ['勵志', '范仲淹《岳陽樓記》', '先天下之憂而憂，後天下之樂而樂。'], ['勵志', '曹操《龜雖壽》', '老驥伏櫪，志在千里。'], ['勵志', '蘇軾《晁錯論》', '古之立大事者，不惟有超世之才，亦必有堅忍不拔之志。'],
+            ['勵志', '《後漢書》', '有志者事竟成。'], ['勵志', '《尚書·大禹謨》', '滿招損，謙受益。'], ['勵志', '《易經》', '天行健，君子以自強不息。'], ['勵志', '《易經·繫辭》', '窮則變，變則通，通則久。'], ['勵志', '《禮記·中庸》', '凡事豫則立，不豫則廢。'], ['勵志', '梁啟超《少年中國說》', '少年智則國智，少年富則國富，少年強則國強。'],
+            ['勵志', '魯迅《故鄉》', '其實地上本沒有路，走的人多了，也便成了路。'], ['勵志', '魯迅《紀念劉和珍君》', '不在沉默中爆發，就在沉默中滅亡。'], ['勵志', '胡適', '怕什麼真理無窮，進一寸有一寸的歡喜。'], ['勵志', '尼采《偶像的黃昏》', '那些殺不死我的，會使我更強大。'], ['勵志', '愛迪生', '天才是百分之一的靈感，加上百分之九十九的汗水。'], ['勵志', '羅斯福', '我們唯一需要恐懼的，就是恐懼本身。'], ['勵志', '馬丁·路德·金恩', '我有一個夢。'], ['勵志', '丘吉爾', '我所能奉獻的，只有熱血、辛勞、眼淚和汗水。'], ['勵志', '海明威《老人與海》', '人不是為失敗而生的，你可以把他毀滅，但不能打敗他。'], ['勵志', '賈伯斯', '求知若飢，虛心若愚。'],
+            ['勵志', '佚名', '失敗為成功之母。'], ['勵志', '佚名', '活到老，學到老。'], ['勵志', '佚名', '一寸光陰一寸金，寸金難買寸光陰。'], ['勵志', '佚名', '書到用時方恨少，事非經過不知難。'],
+            ['寫作', '孔子《論語》', '辭達而已矣。'], ['寫作', '《左傳》', '言之無文，行而不遠。'], ['寫作', '曹丕《典論·論文》', '文章者，經國之大業，不朽之盛事。'], ['寫作', '劉勰《文心雕龍》', '操千曲而後曉聲，觀千劍而後識器。'], ['寫作', '劉勰《文心雕龍》', '夫綴文者情動而辭發。'], ['寫作', '陸游《文章》', '文章本天成，妙手偶得之。'], ['寫作', '杜甫《江上值水如海勢聊短述》', '為人性僻耽佳句，語不驚人死不休。'], ['寫作', '韓愈《答李翊書》', '惟陳言之務去。'], ['寫作', '白居易《與元九書》', '文章合為時而著，歌詩合為事而作。'],
+            ['寫作', '蘇軾《答謝民師書》', '行雲流水，初無定質，但常行於所當行，常止於不可不止。'], ['寫作', '蘇軾《文與可畫篔簹谷偃竹記》', '故畫竹必先得成竹於胸中。'], ['寫作', '王國維《人間詞話》', '詞以境界為最上。'], ['寫作', '史蒂芬·金《寫作這回事》', '如果你想成為作家，首要之事就是：多讀，多寫。'], ['寫作', '瓊·蒂蒂安《我為何寫作》', '我寫作，完全是為了弄清楚自己在想什麼。'], ['寫作', '馬克·吐溫', '幾乎正確的字和正確的字之間，差別就像螢火蟲和閃電。'], ['寫作', '莎士比亞《哈姆雷特》', '簡潔是機智的靈魂。'], ['寫作', '佚名', '好文章是改出來的。'],
+            ['智慧', '孔子《論語》', '工欲善其事，必先利其器。'], ['智慧', '孔子《論語》', '君子和而不同，小人同而不和。'], ['智慧', '孔子《論語》', '不患人之不己知，患不知人也。'], ['智慧', '《論語·公冶長》', '季文子三思而後行。'], ['智慧', '老子《道德經》', '大器晚成。'], ['智慧', '老子《道德經》', '柔弱勝剛強。'], ['智慧', '老子《道德經》', '道可道，非常道。'], ['智慧', '孫子《謀攻》', '知己知彼，百戰不殆。'], ['智慧', '孫子《謀攻》', '不戰而屈人之兵，善之善者也。'], ['智慧', '孫子《軍爭》', '其疾如風，其徐如林，侵掠如火，不動如山。'],
+            ['智慧', '亞里斯多德《政治學》', '人是天生的政治動物。'], ['智慧', '帕斯卡《思想錄》', '人是一根會思考的蘆葦。'], ['智慧', '《大學》', '物有本末，事有終始，知所先後，則近道矣。'], ['智慧', '《易經》', '君子以厚德載物。'], ['智慧', '王國維《人間詞話》', '一切景語皆情語。'],
+        ].map(([cat, by, text]) => ({ cat, by, text }));
+        const QUOTE_CATS = [...new Set(QUOTES.map(q => q.cat))];
+        const FORMULAS = {
+            '行動呼籲': ['想要{kw}？現在就開始。', '{kw}，從今天做起。', '別再等了，{kw}就是現在。', '一起{kw}，讓改變發生。', '立刻體驗{kw}。'],
+            '好處承諾': ['{kw}，讓生活更簡單。', '有了{kw}，每一天都不一樣。', '把{kw}變成你的日常。', '{kw}，一次到位。', '{kw}，為你省下更多時間。'],
+            '對比': ['別人只是{kw}，我們讓你愛上{kw}。', '不只是{kw}，更是一種生活態度。', '少一點煩惱，多一點{kw}。', '{kw}，簡單才是高級。', '昨天的{kw}，不等於明天的{kw}。'],
+            '疑問': ['你有多久沒好好{kw}了？', '{kw}，為什麼不是現在？', '{kw}，還有什麼好猶豫的？', '誰說{kw}一定很難？', '{kw}，你準備好了嗎？'],
+            '情感': ['因為{kw}，生活才有溫度。', '{kw}，是一種說不出口的喜歡。', '把心意，交給{kw}。', '{kw}，陪你走過每個日常。', '一念{kw}，一生難忘。'],
+            '數字': ['3 分鐘，愛上{kw}。', '1 個理由，選擇{kw}。', '99% 的人，都離不開{kw}。', '每天 10 分鐘，{kw}變成習慣。', '從 0 到 1，從{kw}開始。'],
+        };
+        const FORMULA_ALL = Object.values(FORMULAS).flat();
+
+        const pickFrom = (arr, rand = rand01) => arr[Math.floor(rand() * arr.length)];
+        const shuffledBy = (arr, rand = rand01) => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+        // 抽題：cat 為空字串代表全部分類
+        function pickPrompt(cat, rand = rand01) {
+            const pool = cat && PROMPTS[cat] ? PROMPTS[cat].map(t => ({ cat, text: t })) : Object.entries(PROMPTS).flatMap(([c, a]) => a.map(t => ({ cat: c, text: t })));
+            return pickFrom(pool, rand);
+        }
+        // 角色：locked 的欄位保留 prev 的值；其餘重抽，且盡量與上一次不同
+        function genCharacter(rand = rand01, prev = {}, locked = {}) {
+            const out = {};
+            for (const [f, arr] of Object.entries(CHAR_FIELDS)) {
+                if (locked[f] && typeof prev[f] === 'string' && prev[f]) { out[f] = prev[f]; continue; }
+                const pool = arr.filter(x => x !== prev[f]);
+                out[f] = pickFrom(pool.length ? pool : arr, rand);
+            }
+            return out;
+        }
+        const pickQuote = (cat, rand = rand01) => pickFrom(cat ? QUOTES.filter(q => q.cat === cat) : QUOTES, rand);
+        const quoteOfDay = (dateStr) => QUOTES[seeded('wdesk-' + dateStr).int(QUOTES.length)];
+        const quoteText = (q) => `「${q.text}」—— ${q.by}`;
+        function genSlogans(kw, formula, rand = rand01, n = 5) {
+            kw = String(kw).trim().slice(0, 20);
+            if (!kw) return [];
+            const pool = FORMULAS[formula] || FORMULA_ALL;
+            return shuffledBy(pool, rand).slice(0, n).map(t => t.replace(/\{kw\}/g, kw));
+        }
+
+        // 設定筆記：標籤 / 單筆驗證 / 清單驗證 / 新增（滿了拒絕）/ 刪除（用 id）/ 搜尋
+        const parseTags = (s) => [...new Set(String(s).split(/[,，、;；\s]+/).map(t => t.replace(/^[#＃]/, '').trim().slice(0, MAX_TAG)).filter(Boolean))].slice(0, MAX_TAGS);
+        function normNote(n) {
+            if (!n || typeof n !== 'object' || typeof n.id !== 'string' || !n.id) return null;
+            return {
+                id: n.id.slice(0, 40), type: NOTE_TYPES.includes(n.type) ? n.type : '人物',
+                title: typeof n.title === 'string' ? n.title.slice(0, MAX_TITLE) : '', body: typeof n.body === 'string' ? n.body.slice(0, MAX_BODY) : '',
+                tags: Array.isArray(n.tags) ? parseTags(n.tags.filter(x => typeof x === 'string').join(',')) : [], done: n.done === true, at: Number.isFinite(n.at) ? n.at : 0,
+            };
+        }
+        function normNotes(raw) {
+            const seen = new Set(), out = [];
+            for (const x of Array.isArray(raw) ? raw : []) { const n = normNote(x); if (n && !seen.has(n.id)) { seen.add(n.id); out.push(n); } }
+            return out.slice(0, MAX_NOTES);
+        }
+        function addNote(list, note) {
+            if (list.length >= MAX_NOTES) return { ok: false, error: `最多 ${MAX_NOTES} 筆，請先刪除一些`, list };
+            const n = normNote(note);
+            if (!n) return { ok: false, error: '資料不完整', list };
+            if (!n.title.trim() && !n.body.trim()) return { ok: false, error: '標題或內容至少要寫一項', list };
+            if (typeof note.body === 'string' && note.body.length > MAX_BODY) return { ok: false, error: `內容最多 ${MAX_BODY} 字`, list };
+            return { ok: true, list: [n, ...list] };
+        }
+        const removeNote = (list, id) => list.filter(n => n.id !== id);
+        function filterNotes(list, { q = '', type = '', tag = '' } = {}) {
+            q = q.trim().toLowerCase();
+            return list.filter(n => (!type || n.type === type) && (!tag || n.tags.includes(tag)) && (!q || (n.title + '\n' + n.body + '\n' + n.tags.join(' ')).toLowerCase().includes(q))).sort((a, b) => b.at - a.at);
+        }
+
+        // 劇本：# 場景、@ 角色（接對白，括號開頭為舞台提示）、> 轉場，其餘是動作；空行分段
+        function parseScript(text) {
+            const out = []; let mode = null, blank = true;
+            const push = (type, line) => { const last = out[out.length - 1]; if (!blank && last && last.type === type && (type === 'action' || type === 'dialogue')) last.text += '\n' + line; else out.push({ type, text: line }); blank = false; };
+            const dlg = (line) => push(/^[（(].*[）)]$/.test(line) ? 'paren' : 'dialogue', line);
+            for (const raw of String(text).split(/\r?\n/)) {
+                const line = raw.trim();
+                if (!line) { mode = null; blank = true; continue; }
+                let m;
+                if ((m = line.match(/^#\s*(.+)$/))) { push('scene', m[1]); mode = null; }
+                else if ((m = line.match(/^>\s*(.+)$/))) { push('transition', m[1]); mode = null; }
+                else if ((m = line.match(/^@\s*([^:：]+?)\s*(?:[:：]\s*(.*))?$/))) { blank = true; push('character', m[1]); mode = 'dialog'; if (m[2]) dlg(m[2]); }
+                else if (mode === 'dialog') dlg(line);
+                else push('action', line);
+            }
+            return out;
+        }
+        function scriptStats(tokens) {
+            const chars = new Map();
+            let last = null;
+            for (const t of tokens) { if (t.type === 'character') { last = t.text; chars.set(last, chars.get(last) || 0); } else if (t.type === 'dialogue' && last) chars.set(last, chars.get(last) + 1); }
+            return { scenes: tokens.filter(t => t.type === 'scene').length, dialogues: tokens.filter(t => t.type === 'dialogue').length, characters: [...chars.keys()], words: countText(tokens.map(t => t.text).join('\n')).total };
+        }
+        // 純文字排版（複製 / 匯出 .txt 用）：以空格縮排
+        function scriptPlain(tokens) {
+            const pad = (n, s) => s.split('\n').map(l => ' '.repeat(n) + l).join('\n');
+            return tokens.map(t => ({ scene: () => t.text.toUpperCase(), action: () => t.text, character: () => pad(20, t.text.toUpperCase()), paren: () => pad(15, t.text), dialogue: () => pad(10, t.text), transition: () => pad(40, t.text.toUpperCase()) }[t.type]())).join('\n\n');
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const mk = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };
+        const copyBtn = (btn, get) => { btn.onclick = () => Util.copyWithFeedback(btn, get()); };
+        const KEYS = ['wdesk_draft', 'wdesk_notes', 'wdesk_opts'];
+        let draft = normDraft(store.get('wdesk_draft', null)), notes = normNotes(store.get('wdesk_notes', [])), opts = normOpts(store.get('wdesk_opts', null));
+        let dirty = false;
+        const saveDraft = () => { dirty = false; draft.at = Date.now(); store.set('wdesk_draft', draft); };
+        const saveNotes = () => store.set('wdesk_notes', notes);
+        const saveOpts = () => store.set('wdesk_opts', opts);
+        let saveT = 0;
+        const later = () => { dirty = true; clearTimeout(saveT); saveT = setTimeout(saveDraft, 400); };
+
+        // ----- 分頁 -----
+        function showTab(t) { for (const k of TABS) { $('#pane' + k[0].toUpperCase() + k.slice(1)).hidden = k !== t; $('#tab' + k[0].toUpperCase() + k.slice(1)).setAttribute('aria-pressed', k === t); } if (opts.tab !== t) { opts.tab = t; saveOpts(); } }
+        for (const k of TABS) $('#tab' + k[0].toUpperCase() + k.slice(1)).onclick = () => showTab(k);
+
+        // ----- 專注寫作 -----
+        const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+        let sess = null;
+        function stat() {
+            const c = countText($('#draft').value).total, g = opts.goal;
+            $('#fStat').textContent = g ? `${c} / ${g} 字` : `${c} 字`;
+            $('#fBar').style.width = (g ? Math.min(100, c / g * 100) : 0) + '%';
+            const len = $('#draft').value.length;
+            $('#dMsg').textContent = len >= MAX_DRAFT ? `已達草稿上限 ${MAX_DRAFT} 字，無法再增加（可先匯出，再清除部分內容）` : '';
+            $('#dInfo').textContent = draft.at ? '已自動儲存' : '';
+        }
+        function tick() {
+            const el = Math.floor((Date.now() - sess.start) / 1000), left = opts.mins * 60 - el;
+            $('#fTime').textContent = opts.mins ? (left > 0 ? '剩 ' + fmtTime(left) : '時間到！') : '已專注 ' + fmtTime(el);
+            if (opts.mins && left <= 0 && !sess.done) { sess.done = true; Util.beep(2); }
+        }
+        function startFocus() {
+            if (sess) return;
+            sess = { start: Date.now(), base: countText($('#draft').value).total, done: false }; sess.timer = setInterval(tick, 1000); tick();
+            $('#editorBox').classList.add('full'); $('#fStart').disabled = true; $('#draft').focus();
+        }
+        function endFocus() {
+            if (!sess) return;
+            clearInterval(sess.timer);
+            const el = Math.floor((Date.now() - sess.start) / 1000), n = countText($('#draft').value).total - sess.base;
+            $('#fSum').textContent = `上次專注：用時 ${fmtTime(el)}，${n >= 0 ? '多寫了 ' + n : '減少了 ' + -n} 字。`;
+            sess = null; $('#editorBox').classList.remove('full'); $('#fStart').disabled = false; $('#fTime').textContent = '';
+        }
+        $('#fStart').onclick = startFocus; $('#fEnd').onclick = endFocus;
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sess) endFocus(); });
+        $('#draft').value = draft.text;
+        $('#draft').oninput = () => { draft.text = $('#draft').value; later(); stat(); };
+        // 無退格：不能刪除 / 復原 / 覆蓋選取範圍（桌機 keydown 與手機 beforeinput 都擋）
+        $('#draft').addEventListener('beforeinput', (e) => { if (opts.noBack && (/^(delete|history)/.test(e.inputType) || e.inputType === 'insertFromDrop' || ($('#draft').selectionStart !== $('#draft').selectionEnd))) e.preventDefault(); });
+        $('#draft').addEventListener('keydown', (e) => { if (opts.noBack && (e.key === 'Backspace' || e.key === 'Delete' || ((e.ctrlKey || e.metaKey) && /^[zyx]$/i.test(e.key)))) e.preventDefault(); });
+        $('#draft').addEventListener('cut', (e) => { if (opts.noBack) e.preventDefault(); });
+        $('#optNoBack').checked = opts.noBack; $('#optGoal').value = opts.goal; $('#optMins').value = opts.mins;
+        $('#optNoBack').onchange = () => { opts.noBack = $('#optNoBack').checked; saveOpts(); };
+        $('#optGoal').oninput = () => { opts.goal = clampInt($('#optGoal').value, 0, 1000000, 0); saveOpts(); stat(); };
+        $('#optMins').oninput = () => { opts.mins = clampInt($('#optMins').value, 0, 600, 0); saveOpts(); };
+        const fileName = (ext) => `writing-${day.today().replace(/-/g, '')}.${ext}`;
+        $('#dTxt').onclick = () => { if (draft.text) download(new Blob([draft.text], { type: 'text/plain;charset=utf-8' }), fileName('txt')); };
+        $('#dMd').onclick = () => { if (draft.text) download(new Blob([draft.text], { type: 'text/markdown;charset=utf-8' }), fileName('md')); };
+        copyBtn($('#dCopy'), () => $('#draft').value);
+        $('#dClear').onclick = () => { if (draft.text && confirm('清除整份草稿？無法復原（建議先匯出）。')) { draft.text = ''; $('#draft').value = ''; saveDraft(); stat(); } };
+        stat();
+
+        // ----- 靈感 -----
+        const optsOf = (sel, list, all) => sel.replaceChildren(...(all ? [new Option(all, '')] : []), ...list.map(x => new Option(x, x)));
+        optsOf($('#pCat'), Object.keys(PROMPTS), '全部分類'); optsOf($('#qCat'), QUOTE_CATS, '全部分類'); optsOf($('#sFm'), Object.keys(FORMULAS), '全部公式');
+        const rng = (seed) => (seed.trim() ? seeded(seed.trim()) : rand01);
+        let curPrompt = '';
+        $('#pDraw').onclick = () => { const p = pickPrompt($('#pCat').value, rng($('#pSeed').value)); curPrompt = `【${p.cat}】${p.text}`; $('#pOut').textContent = curPrompt; };
+        copyBtn($('#pCopy'), () => curPrompt);
+
+        let chars = genCharacter(), locked = {};
+        function charRender() {
+            $('#cList').replaceChildren(...Object.keys(CHAR_FIELDS).map(f => {
+                const d = mk('div', undefined, 'kv'), b = mk('button', locked[f] ? '🔒' : '🔓', 'sm'); b.setAttribute('aria-pressed', !!locked[f]); b.setAttribute('aria-label', '鎖定' + f);
+                b.onclick = () => { locked[f] = !locked[f]; charRender(); };
+                d.append(mk('small', f), mk('span', chars[f]), b); return d;
+            }));
+        }
+        $('#cRoll').onclick = () => { chars = genCharacter(rand01, chars, locked); charRender(); };
+        copyBtn($('#cCopy'), () => Object.entries(chars).map(([k, v]) => `${k}：${v}`).join('\n'));
+        charRender();
+
+        const daily = quoteOfDay(day.today());
+        $('#qDaily').textContent = quoteText(daily); copyBtn($('#qDailyCopy'), () => quoteText(daily));
+        let curQuote = pickQuote('');
+        const qShow = () => { $('#qOut').textContent = quoteText(curQuote); };
+        $('#qNext').onclick = () => { curQuote = pickQuote($('#qCat').value); qShow(); };
+        copyBtn($('#qCopy'), () => quoteText(curQuote)); qShow();
+
+        $('#sGo').onclick = () => {
+            const list = genSlogans($('#sKw').value, $('#sFm').value);
+            $('#sOut').replaceChildren(...(list.length ? list.map(s => { const d = mk('div', undefined, 'slg'), b = mk('button', '複製', 'sm'); copyBtn(b, () => s); d.append(mk('span', s), b); return d; }) : [mk('p', '請先輸入關鍵字', 'muted')]));
+        };
+
+        // ----- 設定筆記 -----
+        let editing = null;
+        optsOf($('#nType'), NOTE_TYPES); optsOf($('#nFType'), NOTE_TYPES, '全部類型');
+        function noteForm(n) { $('#nType').value = n ? n.type : NOTE_TYPES[0]; $('#nTitle').value = n ? n.title : ''; $('#nBody').value = n ? n.body : ''; $('#nTags').value = n ? n.tags.join(' ') : ''; $('#nSave').textContent = n ? '儲存' : '新增'; $('#nFormTitle').textContent = n ? '編輯筆記' : '新增筆記'; $('#nCancel').hidden = !n; $('#nMsg').textContent = ''; editing = n ? n.id : null; }
+        function notesRender() {
+            const allTags = [...new Set(notes.flatMap(n => n.tags))].sort(), cur = $('#nFTag').value;
+            optsOf($('#nFTag'), allTags, '全部標籤'); $('#nFTag').value = allTags.includes(cur) ? cur : '';
+            const list = filterNotes(notes, { q: $('#nQ').value, type: $('#nFType').value, tag: $('#nFTag').value });
+            $('#nInfo').textContent = `${notes.length} / ${MAX_NOTES} 筆` + (list.length !== notes.length ? `，符合 ${list.length} 筆` : '');
+            $('#nList').replaceChildren(...list.map(n => {
+                const d = mk('div', undefined, 'note' + (n.done ? ' done' : '')), h = mk('h3', `【${n.type}】${n.title || '（無標題）'}`);
+                const btns = mk('div', undefined, 'opts'); btns.style.marginTop = '6px';
+                const b = (t, fn) => { const x = mk('button', t, 'sm'); x.onclick = fn; return x; };
+                if (n.type === '伏筆') btns.append(b(n.done ? '改回未回收' : '標記已回收', () => { n.done = !n.done; saveNotes(); notesRender(); }));
+                btns.append(b('編輯', () => { noteForm(n); $('#nTitle').focus(); scrollTo({ top: 0, behavior: 'smooth' }); }), b('刪除', () => { if (confirm(`刪除「${n.title || '（無標題）'}」？無法復原。`)) { notes = removeNote(notes, n.id); if (editing === n.id) noteForm(null); saveNotes(); notesRender(); } }));
+                d.append(h, ...(n.body ? [mk('p', n.body)] : []), ...(n.tags.length ? [mk('div', n.tags.map(t => '#' + t).join(' '), 'tg')] : []), btns); return d;
+            }), ...(list.length ? [] : [mk('p', notes.length ? '沒有符合的筆記' : '還沒有筆記', 'muted')]));
+        }
+        $('#nSave').onclick = () => {
+            const f = { type: $('#nType').value, title: $('#nTitle').value, body: $('#nBody').value, tags: parseTags($('#nTags').value), done: false, at: Date.now() };
+            if (editing) {
+                const i = notes.findIndex(n => n.id === editing); if (i < 0) { noteForm(null); return; }
+                const n = normNote({ ...notes[i], ...f, id: editing });
+                if (!n.title.trim() && !n.body.trim()) { $('#nMsg').textContent = '標題或內容至少要寫一項'; return; }
+                notes[i] = n;
+            } else {
+                const r = addNote(notes, { ...f, id: Date.now().toString(36) + rnd(1e6).toString(36) });
+                if (!r.ok) { $('#nMsg').textContent = r.error; return; }
+                notes = r.list;
+            }
+            saveNotes(); noteForm(null); notesRender();
+        };
+        $('#nCancel').onclick = () => noteForm(null);
+        for (const id of ['#nQ', '#nFType', '#nFTag']) $(id).oninput = $(id).onchange = notesRender;
+        $('#nClear').onclick = () => { if (notes.length && confirm(`刪除全部 ${notes.length} 筆筆記？無法復原。`)) { notes = []; noteForm(null); saveNotes(); notesRender(); } };
+        noteForm(null); notesRender();
+
+        // ----- 劇本排版 -----
+        const SAMPLE = '# 內 咖啡店 - 夜\n雨聲敲著玻璃。小明坐在角落，盯著手機。\n\n@小明\n（低聲）她還沒回。\n\n@店員\n要不要再來一杯？\n\n@小明\n不用了，我在等人。\n\n> 切至：\n\n# 外 街道 - 夜\n小明撐著傘走進雨裡。';
+        let scTokens = [];
+        function scRender() {
+            const v = $('#scriptIn').value;
+            scTokens = parseScript(v);
+            $('#scriptOut').replaceChildren(...scTokens.map(t => mk('div', t.text, 'sc-' + t.type)));
+            const s = scriptStats(scTokens);
+            $('#scStat').textContent = scTokens.length ? `${s.scenes} 場景、${s.dialogues} 段對白、${s.characters.length} 個角色${s.characters.length ? '（' + s.characters.join('、') + '）' : ''}` : '';
+            if (v.length >= MAX_DRAFT) $('#scStat').textContent += `　已達上限 ${MAX_DRAFT} 字`;
+        }
+        $('#scriptIn').maxLength = MAX_DRAFT; $('#scriptIn').value = draft.script; $('#scriptIn').oninput = () => { draft.script = $('#scriptIn').value; later(); scRender(); };
+        $('#scSample').onclick = () => { if (!$('#scriptIn').value.trim() || confirm('用範例取代目前的劇本內容？無法復原。')) { $('#scriptIn').value = SAMPLE; draft.script = SAMPLE; later(); scRender(); } };
+        copyBtn($('#scCopy'), () => scriptPlain(scTokens));
+        $('#scTxt').onclick = () => { if (scTokens.length) download(new Blob([scriptPlain(scTokens)], { type: 'text/plain;charset=utf-8' }), fileName('txt').replace('writing-', 'script-')); };
+        $('#scPrint').onclick = () => { if (!scTokens.length) return; document.body.classList.add('print-script'); window.print(); };
+        window.addEventListener('afterprint', () => document.body.classList.remove('print-script'));
+        scRender();
+
+        // ----- 清除全部 -----
+        $('#wipe').onclick = () => {
+            if (!confirm('清除寫作工作台的全部資料（草稿、劇本、筆記、設定）？無法復原，頁面會重新載入、進行中的專注會結束。')) return;
+            clearTimeout(saveT); window.removeEventListener('pagehide', flush);
+            for (const k of KEYS) { try { localStorage.removeItem(k); } catch (e) { window.Chrome && Chrome.storageFailed && Chrome.storageFailed(); } }
+            location.reload();
+        };
+        const flush = () => { clearTimeout(saveT); if (dirty) saveDraft(); };
+        window.addEventListener('pagehide', flush);
+        showTab(opts.tab);
+    </script>
+</body>
+
+</html>

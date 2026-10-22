@@ -198,7 +198,7 @@
 
         <div id="calView" hidden></div>
         <div id="lists"></div>
-        <div class="row" style="justify-content:center"><button class="sm" id="clearDone">清除已完成</button></div>
+        <div class="row" style="justify-content:center"><button class="sm" id="clearDone">清除已完成</button><button class="sm" id="expMd">匯出 Markdown</button><button class="sm" id="expIcs">匯出 .ics</button></div>
     </div>
 
 
@@ -226,6 +226,7 @@
         <ul>
         <li>每項最多 100 字；到期日可不填，沒有到期日的待辦只會在「清單」的「沒有日期」裡，不會出現在月曆。</li>
         <li>番茄數來自番茄鐘自己的資料（這頁只讀取、不修改）；刪除待辦後，它的番茄統計會在下次開啟番茄鐘時自動清掉；想清空全部統計請到番茄鐘按「清除待辦番茄統計」。</li>
+        <li>匯出：「匯出 Markdown」下載勾選清單（依分組，已完成為 [x]）；「匯出 .ics」只輸出「有到期日、未完成」的待辦，每項一個全天事件（用事件而非 VTODO，因為多數行事曆會忽略 VTODO），再次匯入同一份檔案會依固定 ID 更新而不是重複。匯出只讀取目前清單，不新增任何儲存資料。</li>
         <li>清單與月曆用同一份資料，月曆不另外儲存東西，也記不住你上次看哪個視圖。</li>
         <li>資料只存在這個瀏覽器，不會上傳，也不會主動通知你；資料壞掉的項目載入時會被略過。</li>
         </ul>
@@ -233,7 +234,7 @@
 
     <script src="../shared/js/util.js"></script>
     <script>
-        const { rnd, store, day } = Util;
+        const { rnd, store, day, download } = Util;
 
         // --- pure ---
         // 分組：逾期、今天、明天、之後、沒有日期；已完成的放在最後一組。組內保持清單原本的順序（可手動調整）
@@ -284,6 +285,30 @@
             return { lead, days: Array.from({ length: nd }, (_, k) => { const d = `${ym}-${String(k + 1).padStart(2, '0')}`, r = by[d] || { n: 0, done: 0 }; return { d, n: r.n, done: r.done, late: r.n > 0 && d < today }; }) };
         }
         const shiftYm = (ym, n) => { const [y, m] = ym.split('-').map(Number), t = y * 12 + m - 1 + n; return `${Math.floor(t / 12)}-${String(t % 12 + 1).padStart(2, '0')}`; };
+        // 匯出：Markdown 勾選清單；ICS 只含「有到期日、未完成」的待辦，每項一個全天事件（行事曆匯入最通用；VTODO 多數行事曆會忽略）
+        function todoMd(list, today, between) {
+            const out = ['# 待辦清單', ''];
+            for (const g of group(list, today, between)) {
+                out.push(`## ${g.label}`, '');
+                for (const i of g.items) out.push(`- [${i.done ? 'x' : ' '}] ${i.t}${i.due ? `（${i.due}）` : ''}`);
+                out.push('');
+            }
+            return out.join('\n');
+        }
+        const icsEsc = (s) => String(s).replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,');
+        function icsFold(line) {   // 每行 ≤ 75 octets，以字元為單位切，不拆多位元組字元；續行以空白開頭
+            const out = []; let cur = '', n = 0;
+            for (const ch of line) { const b = new TextEncoder().encode(ch).length; if (n + b > 75) { out.push(cur); cur = ' '; n = 1; } cur += ch; n += b; }
+            return [...out, cur].join('\r\n');
+        }
+        function todoIcs(list, now) {
+            const d8 = (d) => d.replace(/-/g, ''), stamp = now.toISOString().replace(/[-:]|\.\d+/g, '');
+            const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//simple_tools//Todo//ZH-TW', 'CALSCALE:GREGORIAN'];
+            for (const i of list.filter(x => !x.done && x.due).sort((a, b) => a.due.localeCompare(b.due)))
+                L.push('BEGIN:VEVENT', `UID:${i.id.replace(/[^\w-]/g, '')}@simple-tools-todo`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${d8(i.due)}`, `DTEND;VALUE=DATE:${d8(day.shift(i.due, 1))}`, `SUMMARY:${icsEsc(i.t)}`, 'END:VEVENT');
+            L.push('END:VCALENDAR');
+            return L.map(icsFold).join('\r\n') + '\r\n';
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -388,6 +413,9 @@
         $('#add').onclick = add;
         $('#text').onkeydown = (e) => { if (e.key === 'Enter' && !e.isComposing) add(); };
         $('#clearDone').onclick = () => { if (!confirm(`清除 ${items.filter(i => i.done).length} 項已完成的待辦？無法復原。`)) return; items = items.filter(i => !i.done); save(); render(); };
+        const exp = (name, type, body) => download(new Blob([body], { type: type + ';charset=utf-8' }), name);
+        $('#expMd').onclick = () => { if (!items.length) { $('#sub').textContent = '⚠ 沒有可匯出的待辦'; return; } exp('todo.md', 'text/markdown', todoMd(items, today(), day.between)); };
+        $('#expIcs').onclick = () => { if (!items.some(i => !i.done && i.due)) { $('#sub').textContent = '⚠ 沒有「有到期日且未完成」的待辦可匯出'; return; } exp('todo.ics', 'text/calendar', todoIcs(items, new Date())); };
         render();
     </script>
 </body>

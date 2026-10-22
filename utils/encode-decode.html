@@ -194,6 +194,26 @@
             <input id="hidIn" style="width:100%" spellcheck="false" placeholder="例如 5d41402abc4b2a76b9719d911017c592" aria-label="雜湊字串">
             <div id="hidRes" style="margin-top:10px" role="status"></div>
         </div>
+
+        <div class="card" id="ckCard">
+            <h2>校驗碼計算</h2>
+            <p class="muted" style="font-size:13px;margin:0 0 10px">文字或檔案的 CRC-32、CRC-16（CCITT-FALSE、Modbus）、Adler-32；以及 Luhn、ISBN、EAN / UPC 條碼的檢查碼驗證與產生。全部在本機計算。</p>
+            <label for="ckIn">文字</label>
+            <textarea id="ckIn" spellcheck="false" style="min-height:80px" placeholder="例如 123456789"></textarea>
+            <label style="display:flex;align-items:center;gap:8px;font-weight:400;min-height:44px;margin:4px 0 0"><input type="checkbox" id="ckHex"> 輸入是十六進位位元組（例如 01 03 00 00 00 0A）</label>
+            <div class="btns"><button class="primary" id="ckGo">計算文字</button></div>
+            <label for="ckFile">或選擇檔案（上限 200 MB）</label>
+            <input type="file" id="ckFile" aria-label="選擇要計算校驗碼的檔案">
+            <div class="btns"><button class="primary" id="ckFileGo">計算檔案</button></div>
+            <div id="ckSum" role="status" style="word-break:break-all"></div>
+            <h2 style="margin-top:16px">號碼檢查碼</h2>
+            <label for="ckKind">種類</label>
+            <select id="ckKind"><option value="luhn">Luhn（信用卡、IMEI 等）</option><option value="isbn">ISBN-10 / ISBN-13</option><option value="gtin">EAN / UPC 條碼</option></select>
+            <label for="ckNum" style="margin-top:10px">號碼</label>
+            <input id="ckNum" style="width:100%" spellcheck="false" inputmode="text" placeholder="可含空白或連字號" aria-label="要驗證或補檢查碼的號碼">
+            <div class="btns"><button class="primary" id="ckVerify">驗證</button><button id="ckCalc">補檢查碼</button><button id="ckConv">ISBN-10 ⇄ 13</button></div>
+            <div id="ckRes" role="status" style="word-break:break-all"></div>
+        </div>
     </div>
 
     <template id="help">
@@ -217,6 +237,7 @@
         <li>「HTML 實體查表」：搜尋後點一格複製；下方文字框可把 &amp;copy; 轉成 &amp;#169;，或反過來。「Base58Check」：貼十六進位按「編碼」加檢查碼，貼位址按「解碼並驗證」。</li>
         <li>「圖片 / 檔案 → Base64 data URI」：選檔案取得 data URI，圖片會顯示預覽。「雜湊類型辨識」：貼上雜湊看可能的演算法。</li>
         <li>「檔案雜湊與比對」：選檔案與演算法按「計算」，把官方的值貼進「預期值」，會顯示 ✅ 一致或 ❌ 不一致</li>
+        <li>「校驗碼計算」：上半部算文字或檔案的 CRC-32、CRC-16（CCITT-FALSE、Modbus）、Adler-32，四種同時列出十六進位與十進位；文字可勾「十六進位位元組」直接算通訊報文。下半部選 Luhn / ISBN / EAN-UPC，貼號碼按「驗證」檢查，或按「補檢查碼」補上最後一位；ISBN 可按「ISBN-10 ⇄ 13」互轉。信用卡的發卡組織辨識與測試卡號請到「號碼驗證與測試資料」。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">Base64 輸入「你好」按「編碼」得到 <b>5L2g5aW9</b>，按「解碼」會還原。<br>SHA-256 輸入 <b>abc</b>，結果以 <b>ba7816bf</b> 開頭。<br>字元檢視貼上「а」（西里爾字母），會標示「長得像拉丁字母 a，但其實是 Cyrillic」，碼位 U+0430。</div>
@@ -228,6 +249,7 @@
         <li>凱薩密碼的位移可設 1–25</li>
         <li>雜湊類型辨識只是依長度與格式推測（例如 32 字元十六進位可能是 MD5、NTLM 等），不保證正確，也不能還原；data URI 上限 5 MB（檔案不會上傳）；Base58Check 只處理十六進位內容，Base58 一次最多 4096 位元組；實體查表只收錄常用的約 150 個具名實體。這幾項都不儲存任何資料。</li>
         <li>字元檢視只在本機分析、不儲存；一次最多列出前 500 個字，總覽統計仍涵蓋全部。易混淆字元只內建一小張常見對照表，沒標出不代表安全。移除零寬字元時，emoji 組合序列內的連字會保留。</li>
+        <li>校驗碼只能發現傳輸或輸入錯誤，不是安全機制：CRC / Adler 可以被刻意偽造，要防竄改請用上面的 SHA 雜湊。CRC-16 有很多變體，這裡只做 CCITT-FALSE（多項式 0x1021、初值 FFFF，"123456789" 得 29B1）與 Modbus（0xA001 反射、初值 FFFF，得 4B37）。檔案上限 200 MB、分塊讀取；Luhn / ISBN / 條碼只檢查數學上的檢查碼，不代表號碼真的存在。ISBN-13 以 979 開頭的書沒有 ISBN-10。這一塊不儲存任何資料。</li>
         </ul>
     </template>
 
@@ -564,6 +586,84 @@
             const out = text.normalize(form), before = [...text].length, after = [...out].length;
             return { out, before, after, diff: after - before };
         }
+
+        // ---------- 校驗碼計算：CRC-32 / CRC-16（CCITT-FALSE、Modbus）/ Adler-32，可分塊餵入（檔案用）；Luhn / ISBN / EAN-UPC ----------
+        const CK_FILE_MAX = 200 * 1024 * 1024, CK_CHUNK = 4 * 1024 * 1024;
+        const CK_CRC32 = new Uint32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+        const CK_CCITT = new Uint16Array(256).map((_, n) => { let c = n << 8; for (let k = 0; k < 8; k++) c = c & 0x8000 ? ((c << 1) ^ 0x1021) & 0xFFFF : (c << 1) & 0xFFFF; return c; });
+        const CK_MODBUS = new Uint16Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xA001 : c >>> 1; return c; });
+        const ckNew = () => ({ crc: 0xFFFFFFFF, ccitt: 0xFFFF, modbus: 0xFFFF, a: 1, b: 0 });
+        function ckFeed(st, u8) {
+            let c = st.crc, t = st.ccitt, m = st.modbus, a = st.a, b = st.b;
+            for (let i = 0; i < u8.length;) {
+                const end = Math.min(u8.length, i + 5552);   // Adler-32 每 5552 位元組才取一次餘數
+                for (; i < end; i++) { const x = u8[i]; c = CK_CRC32[(c ^ x) & 255] ^ (c >>> 8); t = ((t << 8) & 0xFFFF) ^ CK_CCITT[((t >>> 8) ^ x) & 255]; m = (m >>> 8) ^ CK_MODBUS[(m ^ x) & 255]; a += x; b += a; }
+                a %= 65521; b %= 65521;
+            }
+            st.crc = c; st.ccitt = t; st.modbus = m; st.a = a; st.b = b; return st;
+        }
+        function ckDone(st) {
+            const f = (name, v, w) => ({ name, hex: v.toString(16).toUpperCase().padStart(w, '0'), dec: v });
+            return [f('CRC-32', (st.crc ^ 0xFFFFFFFF) >>> 0, 8), f('CRC-16/CCITT-FALSE', st.ccitt, 4), f('CRC-16/MODBUS', st.modbus, 4), f('Adler-32', ((st.b << 16) | st.a) >>> 0, 8)];
+        }
+        const ckAll = (u8) => ckDone(ckFeed(ckNew(), u8));
+        // Modbus 的 CRC 在報文裡低位元組在前：回傳「低位在前」的兩個位元組十六進位
+        const ckSwap16 = (hex4) => hex4.slice(2) + hex4.slice(0, 2);
+
+        const digitsOnly = (s) => String(s ?? '').replace(/[\s-]/g, '');
+        // Luhn：從最右邊的檢查碼算起，每隔一位加倍
+        function luhnValid(s) { if (!/^\d{2,}$/.test(s)) return false; let t = 0, alt = false; for (let i = s.length - 1; i >= 0; i--) { let d = +s[i]; if (alt) { d *= 2; if (d > 9) d -= 9; } t += d; alt = !alt; } return t % 10 === 0; }
+        const luhnCheckDigit = (body) => { if (!/^\d+$/.test(body)) throw new Error('只能是數字'); let t = 0, alt = true; for (let i = body.length - 1; i >= 0; i--) { let d = +body[i]; if (alt) { d *= 2; if (d > 9) d -= 9; } t += d; alt = !alt; } return (10 - t % 10) % 10; };
+        // EAN / UPC / GTIN：不含檢查碼的本體，由右往左權重 3、1、3、1…
+        const gtinCheckDigit = (body) => { if (!/^\d+$/.test(body)) throw new Error('只能是數字'); let t = 0; for (let i = body.length - 1, w = 3; i >= 0; i--, w = 4 - w) t += +body[i] * w; return (10 - t % 10) % 10; };
+        const gtinValid = (s) => [8, 12, 13, 14].includes(s.length) && /^\d+$/.test(s) && gtinCheckDigit(s.slice(0, -1)) === +s.slice(-1);
+        // ISBN-10：權重 10..2（第 10 位是檢查碼，可為 X = 10），總和 % 11 == 0；ISBN-13 與 EAN-13 相同
+        const isbn10Check = (b9) => { if (!/^\d{9}$/.test(b9)) throw new Error('ISBN-10 本體要 9 位數字'); const t = [...b9].reduce((a, c, i) => a + +c * (10 - i), 0), r = (11 - t % 11) % 11; return r === 10 ? 'X' : String(r); };
+        const isbn10Valid = (s) => /^\d{9}[\dXx]$/.test(s) && isbn10Check(s.slice(0, 9)) === s[9].toUpperCase();
+        const isbn13Valid = (s) => /^97[89]\d{10}$/.test(s) && gtinValid(s);
+        const isbn10to13 = (s) => { if (!isbn10Valid(s)) throw new Error('不是有效的 ISBN-10'); const b = '978' + s.slice(0, 9); return b + gtinCheckDigit(b); };
+        const isbn13to10 = (s) => { if (!isbn13Valid(s)) throw new Error('不是有效的 ISBN-13'); if (!s.startsWith('978')) throw new Error('979 開頭的 ISBN-13 沒有對應的 ISBN-10'); const b = s.slice(3, 12); return b + isbn10Check(b); };
+        const GTIN_NAME = { 8: 'EAN-8', 12: 'UPC-A', 13: 'EAN-13', 14: 'GTIN-14' };
+        // 統一入口：kind = luhn / isbn / gtin；action = verify（驗證完整號碼）/ calc（補檢查碼）/ convert（ISBN-10 ⇄ 13）。回傳 { ok, lines }
+        function checkDigits(kind, raw, action) {
+            const s = digitsOnly(raw).toUpperCase(), L = [], bad = (m) => ({ ok: false, lines: [m] });
+            if (!s) return bad('請輸入號碼');
+            if (s.length > 64) return bad('號碼太長（上限 64 字元）');
+            try {
+                if (kind === 'luhn') {
+                    if (!/^\d+$/.test(s)) return bad('Luhn 只能是數字（空白與連字號會自動略過）');
+                    if (action === 'calc') { const d = luhnCheckDigit(s); return { ok: true, lines: [`檢查碼：${d}`, `完整號碼：${s}${d}`] }; }
+                    if (s.length < 2) return bad('至少要 2 位數字');
+                    const v = luhnValid(s); return { ok: v, lines: [v ? '✅ 通過 Luhn 校驗' : `❌ 未通過；正確的檢查碼應該是 ${luhnCheckDigit(s.slice(0, -1))}`] };
+                }
+                if (kind === 'gtin') {
+                    if (!/^\d+$/.test(s)) return bad('條碼只能是數字');
+                    if (action === 'calc') {
+                        if (![7, 11, 12, 13].includes(s.length)) return bad('補檢查碼需要 7（EAN-8）、11（UPC-A）、12（EAN-13）或 13（GTIN-14）位數字');
+                        const d = gtinCheckDigit(s); return { ok: true, lines: [`檢查碼：${d}`, `完整號碼：${s}${d}（${GTIN_NAME[s.length + 1]}）`] };
+                    }
+                    if (!GTIN_NAME[s.length]) return bad('驗證需要 8（EAN-8）、12（UPC-A）、13（EAN-13）或 14（GTIN-14）位數字');
+                    const v = gtinValid(s); return { ok: v, lines: [`${GTIN_NAME[s.length]}：` + (v ? '✅ 檢查碼正確' : `❌ 檢查碼錯誤；應該是 ${gtinCheckDigit(s.slice(0, -1))}`)] };
+                }
+                if (kind === 'isbn') {
+                    if (!/^\d+X?$/.test(s)) return bad('ISBN 只能是數字（ISBN-10 最後一位可為 X）');
+                    if (action === 'calc') {
+                        if (s.length === 9) { const d = isbn10Check(s); return { ok: true, lines: [`ISBN-10 檢查碼：${d}`, `完整號碼：${s}${d}`] }; }
+                        if (s.length === 12) { const d = gtinCheckDigit(s); return { ok: true, lines: [`ISBN-13 檢查碼：${d}`, `完整號碼：${s}${d}`] }; }
+                        return bad('補檢查碼需要 9 位（ISBN-10 本體）或 12 位（ISBN-13 本體）數字');
+                    }
+                    if (action === 'convert') {
+                        if (s.length === 10) return { ok: true, lines: [`ISBN-13：${isbn10to13(s)}`] };
+                        if (s.length === 13) return { ok: true, lines: [`ISBN-10：${isbn13to10(s)}`] };
+                        return bad('互轉需要 10 位（ISBN-10）或 13 位（ISBN-13）');
+                    }
+                    if (s.length === 10) { const v = isbn10Valid(s); return { ok: v, lines: [v ? `✅ 有效的 ISBN-10（對應 ISBN-13：${isbn10to13(s)}）` : `❌ ISBN-10 檢查碼錯誤；應該是 ${isbn10Check(s.slice(0, 9))}`] }; }
+                    if (s.length === 13) { const v = isbn13Valid(s); return { ok: v, lines: [v ? '✅ 有效的 ISBN-13' : /^97[89]/.test(s) ? `❌ ISBN-13 檢查碼錯誤；應該是 ${gtinCheckDigit(s.slice(0, 12))}` : '❌ ISBN-13 必須以 978 或 979 開頭'] }; }
+                    return bad('ISBN 需要 10 或 13 位');
+                }
+            } catch (e) { return bad(e.message); }
+            return bad('未知的種類');
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -691,6 +791,37 @@
             box.replaceChildren(...(r.length ? [line(`長度 ${v.length} 字元，可能是：`, 'muted'), ...r.map(x => line('・' + x.name + (x.note ? `（${x.note}）` : '')))] : [line('看不出是常見的雜湊格式', 'muted')]), line('以上只是依長度與格式的推測，不保證正確。', 'muted'));
         };
 
+
+        // ---------- 校驗碼計算 ----------
+        function ckShow(list, extra) {
+            const rows = list.map(x => Object.assign(document.createElement('div'), { textContent: `${x.name}：${x.hex}（十進位 ${x.dec}）` }));
+            if (extra) rows.push(Object.assign(document.createElement('div'), { className: 'muted', textContent: extra }));
+            $('#ckSum').replaceChildren(...rows);
+        }
+        const ckErr = (t) => $('#ckSum').replaceChildren(Object.assign(document.createElement('div'), { textContent: t, style: 'color:var(--bad)' }));
+        $('#ckGo').onclick = () => {
+            try {
+                const v = $('#ckIn').value, bytes = $('#ckHex').checked ? parseHex(v) : utf8.encode(v);
+                const r = ckAll(bytes); ckShow(r, `${bytes.length} 位元組${$('#ckHex').checked ? '' : '（UTF-8）'}；Modbus 報文中 CRC-16 低位元組在前：${ckSwap16(r[2].hex)}`);
+            } catch (e) { ckErr('處理失敗：' + e.message); }
+        };
+        let ckBusy = false;
+        $('#ckFileGo').onclick = async () => {
+            const f = $('#ckFile').files[0];
+            if (!f) return ckErr('請先選擇檔案');
+            if (f.size > CK_FILE_MAX) return ckErr('檔案超過 200 MB 上限');
+            if (ckBusy) return; ckBusy = true; $('#ckFileGo').disabled = true;
+            try {
+                const st = ckNew();
+                for (let o = 0; o < f.size; o += CK_CHUNK) {
+                    ckFeed(st, new Uint8Array(await f.slice(o, o + CK_CHUNK).arrayBuffer()));
+                    $('#ckSum').textContent = `計算中… ${Math.min(100, Math.floor((o + CK_CHUNK) / f.size * 100))}%`;
+                }
+                ckShow(ckDone(st), `${f.name}（${f.size.toLocaleString()} 位元組）`);
+            } catch (e) { ckErr('讀取失敗：' + e.message); } finally { ckBusy = false; $('#ckFileGo').disabled = false; }
+        };
+        const ckRun = (action) => { const r = checkDigits($('#ckKind').value, $('#ckNum').value, action); $('#ckRes').replaceChildren(...r.lines.map(t => Object.assign(document.createElement('div'), { textContent: t, style: r.ok ? '' : 'color:var(--bad)' }))); };
+        $('#ckVerify').onclick = () => ckRun('verify'); $('#ckCalc').onclick = () => ckRun('calc'); $('#ckConv').onclick = () => { $('#ckKind').value = 'isbn'; ckRun('convert'); };
         syncButtons();
         $('#enc').onclick = () => run('enc');
         $('#dec').onclick = () => run('dec');

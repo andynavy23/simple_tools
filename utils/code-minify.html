@@ -31,6 +31,14 @@
         .svgPrev { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
         .svgPrev figure { margin: 0; text-align: center; color: var(--muted); font-size: 13px; }
         .svgPrev img { width: 100%; height: 150px; object-fit: contain; border-radius: var(--radius-sm); background: repeating-conic-gradient(var(--fill) 0 25%, transparent 0 50%) 0 0 / 16px 16px; }
+        details.card > summary { font-weight: 700; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+        #pCv { width: 100%; aspect-ratio: 1; max-height: 70vh; max-height: 70dvh; display: block; border-radius: var(--radius-sm); background: var(--fill); touch-action: none; cursor: grab; }
+        #pCv.scroll { touch-action: auto; cursor: default; }
+        #pList { margin: 10px 0 0; padding-left: 28px; font-size: 14px; line-height: 1.6; max-height: 260px; overflow: auto; }
+        #pList li { overflow-wrap: anywhere; cursor: pointer; }
+        #pList li.on { background: var(--fill); }
+        #pD { min-height: 90px; }
+        #pErr { color: var(--bad); margin: 6px 0 0; }
     </style>
 </head>
 
@@ -75,6 +83,24 @@
         </div>
     </div>
 
+    <div class="wrap" style="padding-top:0">
+        <details class="card" id="pathBox">
+            <summary>SVG path 視覺化</summary>
+            <label class="lb" for="pD" style="margin-top:0">path 的 d 屬性</label>
+            <textarea id="pD" class="code" spellcheck="false" placeholder="例如 M 10 80 C 40 10, 65 10, 95 80 S 150 150, 180 80"></textarea>
+            <div class="row" style="margin-top:8px">
+                <button id="pSample" class="sm">載入範例</button>
+                <button id="pFit" class="sm">重新置中</button>
+                <button id="pMode" class="sm" aria-pressed="false">手勢：拖曳端點</button>
+                <button id="pCopy" class="sm">複製 d</button>
+            </div>
+            <p id="pErr" role="alert"></p>
+            <canvas id="pCv" aria-label="path 預覽，實心圓是端點、空心方塊是控制點"></canvas>
+            <p class="muted" id="pHint">拖曳實心圓（端點）或空心方塊（控制點）會即時改寫上面的 d（改寫後一律是絕對座標大寫指令）。手機上拖曳預覽時頁面不會捲動；要捲動請按「手勢」切換成「捲動頁面」。</p>
+            <ol id="pList"></ol>
+        </details>
+    </div>
+
     <template id="help">
         <h3>這是什麼</h3>
         <p>把 HTML、CSS、JavaScript、JSON 的程式碼壓小（去掉註解與多餘空白），或把擠成一團的程式碼排整齊。壓縮刻意做得保守：<b>只去註解與空白，不改變數名稱、不重寫程式</b>，所以結果的行為和原本一樣。</p>
@@ -93,6 +119,7 @@
         <li>下方「驗證」會自動檢查結果有沒有被改壞（見下方說明）。</li>
         <li>按「複製結果」或「下載」；「結果放回輸入」可以接著做下一步（例如壓縮後再美化）。</li>
         <li>SVG：選「SVG」，貼上程式碼，下方會並排預覽「原始 / 處理後」；「優化」會移除註解、metadata、編輯器專用屬性、預設值與沒用到的 id，並把路徑數字四捨五入到「小數位數」；可複製 data URI 或 CSS background。</li>
+        <li>SVG path 視覺化：頁面下方展開「SVG path 視覺化」，貼上 path 的 d 屬性（支援 M L H V C S Q T A Z，大小寫皆可）。會逐條列出每個指令的意思、在畫布上畫出路徑並標出端點（實心圓）與控制點（空心方塊）；拖曳它們會即時改寫 d。按「手勢」可在「拖曳端點」與「捲動頁面」之間切換（手機上拖曳預覽會鎖住該區的捲動）。</li>
         <li>CSS ⇄ SCSS：選「CSS ⇄ SCSS」，「展平」把巢狀規則攤開（&amp; 換成父選擇器，@media 往外冒泡），「巢狀化」把連續、開頭相同的規則收成巢狀。</li>
         </ol>
         <h3>範例</h3>
@@ -114,6 +141,7 @@ a{color:red}.box>p{margin:0 auto;width:calc(100% - 10px)}
         <li><b>驗證</b>：JS 用瀏覽器 <code>new Function</code> 檢查壓縮前後都能編譯（ES module 的 import / export 無法編譯，會改只比對 token）並比對 token 序列；CSS 比對規則數、選擇器數與宣告數；HTML 比對標籤與屬性序列和文字內容；JSON 比對解析後的內容。</li>
         <li><b>SVG 優化</b>：預覽用 <code>&lt;img&gt;</code> 載入 data URI，SVG 裡的腳本不會執行、也不會載入外部資源，內容也不會被插進頁面。圖形不改寫：只移除多餘內容、壓縮路徑（弧線的旗標會正確處理）與數字、縮短色碼；預設值屬性只在整份文件都沒有其他設定、也沒有 style / script 時才移除。小數位數太少會讓細節變粗，請看預覽。保留 title / desc（無障礙用）。驗證只比對繪圖元素數量。</li>
         <li><b>CSS ⇄ SCSS</b> 只處理巢狀規則與 &amp; 選擇器（含 &amp;-suffix、&amp;:hover、@media 冒泡）。變數（$x）、mixin、@include、@if / @each、函式與運算<b>不會被計算</b>，只原樣保留；<code>//</code> 行註解在轉成 CSS 時會被移除。巢狀化只收連續的規則、不改變規則先後順序，逗號選擇器與 @keyframes 不處理。驗證比對所有宣告的內容與數量。</li>
+        <li><b>SVG path 視覺化</b>：d 上限 20000 字元、2000 條指令，超過或格式錯誤會顯示原因（錯誤前已解析的部分仍會畫出）；拖曳端點後 d 會改寫成「絕對座標、每條指令都寫出字母、小數 2 位」，H / V 被拖到斜向位置時會改成 L；平滑曲線（S / T）的第一個控制點是由上一段反射出來的，不能直接拖（畫成虛線方塊）。弧線只能拖終點，半徑與旗標請直接改文字。內容只在本機處理。</li>
         <li>單檔上限 1MB；不會儲存或上傳你貼的內容。</li>
         </ul>
     </template>
@@ -723,6 +751,114 @@ a{color:red}.box>p{margin:0 auto;width:calc(100% - 10px)}
         function cssToScss(src) { return printNodes(nestNodes(parseNested(src))); }
         // 驗證用：所有宣告文字排序後比對（展平 / 巢狀化都不該增減或改寫宣告）
         function declBag(src) { const o = []; (function w(ns) { for (const n of ns) { if (n.type === 'decl' || n.type === 'atstmt') o.push(n.text); else if (n.body) w(n.body); } })(parseNested(src)); return o.sort(); }
+
+        // ===== SVG path 視覺化：解析 → 絕對座標 → 版面（端點 / 控制點）→ 說明 / 拖曳改寫 =====
+        const PATH_SIG = { m: 2, l: 2, h: 1, v: 1, c: 6, s: 4, q: 4, t: 2, a: 7, z: 0 }, PATH_MAX_D = 20000, PATH_MAX_SEG = 2000;
+        // 回傳 { cmds: [{ c, a }], error }：隱含重複的指令拆成多條（M 後面多出來的座標對視為 L）；出錯時 cmds 是出錯前已解析的部分
+        function parsePathD(d) {
+            d = String(d ?? ''); const cmds = [];
+            if (d.length > PATH_MAX_D) return { cmds, error: `路徑太長（上限 ${PATH_MAX_D} 字元）` };
+            const n = d.length, numRe = /[\s,]*([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)/y, flagRe = /[\s,]*([01])/y; let i = 0;
+            const skip = () => { while (i < n && /[\s,]/.test(d[i])) i++; };
+            for (; ;) {
+                skip(); if (i >= n) break;
+                const c = d[i], k = PATH_SIG[c.toLowerCase()];
+                if (k === undefined) return { cmds, error: `第 ${i + 1} 個字元「${c}」不是路徑指令` };
+                if (!cmds.length && c.toLowerCase() !== 'm') return { cmds, error: '路徑必須以 M 或 m 開頭' };
+                i++;
+                if (k === 0) { cmds.push({ c, a: [] }); continue; }
+                let cc = c;
+                for (let first = true; ; first = false) {
+                    skip();
+                    if (i >= n || /[a-zA-Z]/.test(d[i])) { if (first) return { cmds, error: `指令 ${c} 後面缺少座標` }; break; }
+                    const a = [];
+                    for (let j = 0; j < k; j++) {
+                        const re = k === 7 && (j === 3 || j === 4) ? flagRe : numRe; re.lastIndex = i;
+                        const m = re.exec(d); if (!m) return { cmds, error: `指令 ${c} 的參數不足或不是數字（第 ${i + 1} 個字元附近）` };
+                        i = re.lastIndex; a.push(+m[1]);
+                    }
+                    cmds.push({ c: cc, a });
+                    if (cmds.length > PATH_MAX_SEG) return { cmds, error: `指令太多（上限 ${PATH_MAX_SEG} 條）` };
+                    if (cc === 'M') cc = 'L'; else if (cc === 'm') cc = 'l';
+                }
+            }
+            return { cmds, error: null };
+        }
+        // 相對指令換成絕對座標：[{ c: 大寫字母, p: 絕對參數, rel }]
+        function absolutize(cmds) {
+            let cx = 0, cy = 0, sx = 0, sy = 0; const segs = [];
+            for (const { c, a } of cmds) {
+                const U = c.toUpperCase(), rel = c !== U, ox = rel ? cx : 0, oy = rel ? cy : 0; let p;
+                if (U === 'H') { p = [a[0] + ox]; cx = p[0]; }
+                else if (U === 'V') { p = [a[0] + oy]; cy = p[0]; }
+                else if (U === 'A') { p = [a[0], a[1], a[2], a[3], a[4], a[5] + ox, a[6] + oy]; cx = p[5]; cy = p[6]; }
+                else if (U === 'Z') { p = []; cx = sx; cy = sy; }
+                else { p = a.map((v, i) => v + (i % 2 ? oy : ox)); cx = p[p.length - 2]; cy = p[p.length - 1]; if (U === 'M') { sx = cx; sy = cy; } }
+                segs.push({ c: U, p, rel });
+            }
+            return segs;
+        }
+        // 每條指令的起點 / 終點、端點與控制點（kind: end / ctrl / ictrl=由上一段反射出的隱含控制點；idx=p 裡 x 的位置，-1 不能拖）與控制線
+        function layoutPath(segs) {
+            let cx = 0, cy = 0, sx = 0, sy = 0, last = null; const out = [];
+            for (const s of segs) {
+                const p = s.p, from = [cx, cy], pts = [], lines = [], add = (kind, x, y, idx) => pts.push({ kind, x, y, idx }); let end = from, nl = null;
+                switch (s.c) {
+                    case 'M': end = [p[0], p[1]]; sx = end[0]; sy = end[1]; add('end', end[0], end[1], 0); break;
+                    case 'L': end = [p[0], p[1]]; add('end', end[0], end[1], 0); break;
+                    case 'H': end = [p[0], cy]; add('end', end[0], end[1], 0); break;
+                    case 'V': end = [cx, p[0]]; add('end', end[0], end[1], 0); break;
+                    case 'C': end = [p[4], p[5]]; add('ctrl', p[0], p[1], 0); add('ctrl', p[2], p[3], 2); add('end', p[4], p[5], 4); lines.push([cx, cy, p[0], p[1]], [p[2], p[3], p[4], p[5]]); nl = { t: 'C', x: p[2], y: p[3] }; break;
+                    case 'S': { const ic = last && last.t === 'C' ? [2 * cx - last.x, 2 * cy - last.y] : [cx, cy]; end = [p[2], p[3]]; add('ictrl', ic[0], ic[1], -1); add('ctrl', p[0], p[1], 0); add('end', p[2], p[3], 2); lines.push([cx, cy, ic[0], ic[1]], [p[0], p[1], p[2], p[3]]); nl = { t: 'C', x: p[0], y: p[1] }; break; }
+                    case 'Q': end = [p[2], p[3]]; add('ctrl', p[0], p[1], 0); add('end', p[2], p[3], 2); lines.push([cx, cy, p[0], p[1]], [p[0], p[1], p[2], p[3]]); nl = { t: 'Q', x: p[0], y: p[1] }; break;
+                    case 'T': { const ic = last && last.t === 'Q' ? [2 * cx - last.x, 2 * cy - last.y] : [cx, cy]; end = [p[0], p[1]]; add('ictrl', ic[0], ic[1], -1); add('end', p[0], p[1], 0); lines.push([cx, cy, ic[0], ic[1]], [ic[0], ic[1], p[0], p[1]]); nl = { t: 'Q', x: ic[0], y: ic[1] }; break; }
+                    case 'A': end = [p[5], p[6]]; add('end', p[5], p[6], 5); break;
+                    case 'Z': end = [sx, sy]; break;
+                }
+                cx = end[0]; cy = end[1]; last = nl; out.push({ c: s.c, p, from, end, pts, lines });
+            }
+            return out;
+        }
+        const pf = (v, prec = 2) => { const t = String(Number(Number(v).toFixed(prec))); return t === '-0' ? '0' : t; };
+        const segsToD = (segs, prec = 2) => segs.map(s => s.c + s.p.map(v => pf(v, prec)).join(' ')).join(' ');
+        // 拖曳：移動第 si 條指令裡位置 idx 的點；H / V 只有一個座標，被拖到任意位置時改成 L
+        function setPoint(segs, si, idx, x, y) {
+            const out = segs.map(s => ({ ...s, p: s.p.slice() })), s = out[si];
+            if (!s || idx < 0) return out;
+            if (s.c === 'H' || s.c === 'V') { out[si] = { c: 'L', p: [x, y], rel: false }; return out; }
+            if (idx + 1 >= s.p.length) return out;
+            s.p[idx] = x; s.p[idx + 1] = y; s.rel = false; return out;
+        }
+        const pxy = (a) => `(${pf(a[0])}, ${pf(a[1])})`;
+        const PATH_NAMES = { M: '移動到', L: '直線到', H: '水平線到', V: '垂直線到', C: '三次貝茲曲線', S: '平滑三次貝茲曲線', Q: '二次貝茲曲線', T: '平滑二次貝茲曲線', A: '橢圓弧', Z: '閉合路徑' };
+        function describeSeg(cmd, lay) {
+            const U = lay.c, p = lay.p, rel = cmd.c !== U, pre = rel ? `相對（以目前點 ${pxy(lay.from)} 為原點）` : '';
+            const body = {
+                M: () => `${PATH_NAMES.M} ${pxy(lay.end)}，開始新的子路徑`, L: () => `${PATH_NAMES.L} ${pxy(lay.end)}`, H: () => `${PATH_NAMES.H} x=${pf(p[0])}`, V: () => `${PATH_NAMES.V} y=${pf(p[0])}`,
+                C: () => `${PATH_NAMES.C}：控制點 1 ${pxy([p[0], p[1]])}、控制點 2 ${pxy([p[2], p[3]])}、終點 ${pxy(lay.end)}`,
+                S: () => `${PATH_NAMES.S}：控制點 1 由上一段反射 ${pxy([lay.pts[0].x, lay.pts[0].y])}、控制點 2 ${pxy([p[0], p[1]])}、終點 ${pxy(lay.end)}`,
+                Q: () => `${PATH_NAMES.Q}：控制點 ${pxy([p[0], p[1]])}、終點 ${pxy(lay.end)}`,
+                T: () => `${PATH_NAMES.T}：控制點由上一段反射 ${pxy([lay.pts[0].x, lay.pts[0].y])}、終點 ${pxy(lay.end)}`,
+                A: () => `${PATH_NAMES.A}：半徑 ${pf(p[0])} × ${pf(p[1])}、旋轉 ${pf(p[2])}°、${p[3] ? '大弧' : '小弧'}、${p[4] ? '順時針' : '逆時針'}、終點 ${pxy(lay.end)}`,
+                Z: () => `${PATH_NAMES.Z}，回到子路徑起點 ${pxy(lay.end)}`,
+            }[U]();
+            return (pre ? pre + '，' : '') + body + (rel ? `（絕對座標，原寫法 ${cmd.c}${cmd.a.map(v => pf(v, 4)).join(' ')}）` : '');
+        }
+        // 檢視範圍：涵蓋所有端點與控制點，四周留 pad；回傳 { s, ox, oy }（螢幕 = 座標 × s + o）
+        function fitView(lays, w, h, pad = 24) {
+            let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+            for (const l of lays) for (const q of [{ x: l.from[0], y: l.from[1] }, ...l.pts]) { x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x); y1 = Math.max(y1, q.y); }
+            if (!Number.isFinite(x0)) return { s: 1, ox: pad, oy: pad };
+            const bw = Math.max(x1 - x0, 1e-6), bh = Math.max(y1 - y0, 1e-6), s = Math.max(Math.min((w - 2 * pad) / bw, (h - 2 * pad) / bh), 1e-6);
+            return { s, ox: (w - bw * s) / 2 - x0 * s, oy: (h - bh * s) / 2 - y0 * s };
+        }
+        const toScreen = (v, x, y) => [x * v.s + v.ox, y * v.s + v.oy], toWorld = (v, sx, sy) => [(sx - v.ox) / v.s, (sy - v.oy) / v.s];
+        // 點擊命中：回傳最近的可拖曳點 { si, idx } 或 null；半徑 r 用螢幕像素
+        function hitTest(lays, v, sx, sy, r) {
+            let best = null, bd = r * r;
+            lays.forEach((l, si) => l.pts.forEach(q => { if (q.idx < 0) return; const [px, py] = toScreen(v, q.x, q.y), d = (px - sx) ** 2 + (py - sy) ** 2; if (d <= bd) { bd = d; best = { si, idx: q.idx }; } }));
+            return best;
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -768,6 +904,59 @@ a{color:red}.box>p{margin:0 auto;width:calc(100% - 10px)}
         $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), $('#dst').value, () => $('#dst').select());
         $('#dl').onclick = () => { if (!lastOut) return; download(new Blob([lastOut], { type: lang === 'svg' ? 'image/svg+xml' : 'text/plain;charset=utf-8' }), lang === 'scss' ? (mode === 'nest' ? 'nested.scss' : 'flat.css') : (mode === 'minify' ? 'min.' : 'pretty.') + ({ html: 'html', css: 'css', js: 'js', json: 'json', svg: 'svg' })[lang]); };
         renderBtns();
+
+        // ---- SVG path 視覺化（畫面）----
+        const pv = { cmds: [], segs: [], lays: [], view: null, drag: null, sel: -1 };
+        const css = (n, d) => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || d;
+        function pDraw() {
+            const cv = $('#pCv'), r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1, w = Math.round(r.width), h = Math.round(r.height);
+            if (!w || !h) return;
+            if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+            const ctx = cv.getContext('2d'), text = css('--text', '#222'), blue = css('--blue', '#0071e3'), muted = css('--muted', '#888');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+            if (!pv.lays.length) return;
+            if (!pv.view) pv.view = fitView(pv.lays, w, h);
+            const v = pv.view;
+            ctx.save(); ctx.setTransform(dpr * v.s, 0, 0, dpr * v.s, dpr * v.ox, dpr * v.oy);
+            ctx.lineWidth = 2 / v.s; ctx.strokeStyle = text;
+            try { ctx.stroke(new Path2D(segsToD(pv.segs, 6))); } catch { /* 空路徑 */ }
+            ctx.restore();
+            ctx.lineWidth = 1; ctx.strokeStyle = muted; ctx.setLineDash([4, 3]);
+            for (const l of pv.lays) for (const [a, b, c, d] of l.lines) { const p = toScreen(v, a, b), q = toScreen(v, c, d); ctx.beginPath(); ctx.moveTo(...p); ctx.lineTo(...q); ctx.stroke(); }
+            ctx.setLineDash([]); ctx.font = '12px sans-serif'; ctx.textBaseline = 'bottom';
+            pv.lays.forEach((l, si) => l.pts.forEach(q => {
+                const [x, y] = toScreen(v, q.x, q.y), on = si === pv.sel;
+                ctx.beginPath();
+                if (q.kind === 'end') { ctx.arc(x, y, on ? 8 : 6, 0, 6.2832); ctx.fillStyle = blue; ctx.fill(); ctx.fillStyle = text; ctx.fillText(String(si + 1), x + 8, y - 4); }
+                else { ctx.rect(x - 5, y - 5, 10, 10); ctx.strokeStyle = q.kind === 'ictrl' ? muted : blue; if (q.kind === 'ictrl') ctx.setLineDash([2, 2]); ctx.stroke(); ctx.setLineDash([]); }
+            }));
+        }
+        function pList() {
+            $('#pList').replaceChildren(...pv.lays.map((l, i) => { const li = document.createElement('li'); li.textContent = pv.cmds[i].c + ' ' + pv.cmds[i].a.map(x => pf(x, 4)).join(' ') + ' → ' + describeSeg(pv.cmds[i], l); li.className = i === pv.sel ? 'on' : ''; li.onclick = () => { pv.sel = i; pList(); pDraw(); }; return li; }));
+        }
+        function pRefresh(refit) {
+            const r = parsePathD($('#pD').value);
+            pv.cmds = r.cmds; pv.segs = absolutize(r.cmds); pv.lays = layoutPath(pv.segs); if (refit) pv.view = null; if (pv.sel >= pv.lays.length) pv.sel = -1;
+            $('#pErr').textContent = r.error || ''; pList(); pDraw();
+        }
+        $('#pD').oninput = () => pRefresh(true);
+        $('#pSample').onclick = () => { $('#pD').value = 'M 20 80 C 40 10, 65 10, 95 80 S 150 150, 180 80 Q 200 20 220 80 t 40 0 a 20 20 0 0 1 40 0 L 300 120 H 20 Z'; pRefresh(true); };
+        $('#pFit').onclick = () => pRefresh(true);
+        $('#pCopy').onclick = () => Util.copyWithFeedback($('#pCopy'), $('#pD').value, () => $('#pD').select());
+        $('#pMode').onclick = () => { const b = $('#pMode'), scroll = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', scroll); b.textContent = scroll ? '手勢：捲動頁面' : '手勢：拖曳端點'; $('#pCv').classList.toggle('scroll', scroll); };
+        $('#pathBox').ontoggle = pDraw; addEventListener('resize', pDraw);
+        const cvPos = (e) => { const r = $('#pCv').getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+        $('#pCv').onpointerdown = (e) => {
+            if ($('#pCv').classList.contains('scroll') || !pv.view) return;
+            const [sx, sy] = cvPos(e), hit = hitTest(pv.lays, pv.view, sx, sy, e.pointerType === 'mouse' ? 12 : 22);
+            if (!hit) return; pv.drag = hit; pv.sel = hit.si; $('#pCv').setPointerCapture(e.pointerId); e.preventDefault(); pList(); pDraw();
+        };
+        $('#pCv').onpointermove = (e) => {
+            if (!pv.drag) return;
+            const [wx, wy] = toWorld(pv.view, ...cvPos(e)); pv.segs = setPoint(pv.segs, pv.drag.si, pv.drag.idx, wx, wy);
+            $('#pD').value = segsToD(pv.segs); pRefresh(false);
+        };
+        $('#pCv').onpointerup = $('#pCv').onpointercancel = () => { pv.drag = null; };
     </script>
 </body>
 

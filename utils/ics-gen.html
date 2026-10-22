@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="行事曆活動 ICS 產生：填標題、時間、重複規則與提醒，一次建立多個活動，下載 .ics 匯入 Google / Apple / Outlook 行事曆，完全離線。">
+    <meta property="og:title" content="行事曆活動 ICS 產生" />
+    <meta property="og:description" content="活動、重複規則、提醒 → 標準 .ics 檔，可匯入各種行事曆。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/ics-gen.html" />
+    <meta name="st-keys" content="icsgen_opts">
+    <title>行事曆活動 ICS 產生</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 720px;
+        }
+
+        .card+.card {
+            margin-top: 14px;
+        }
+
+        h2 {
+            margin: 0 0 8px;
+        }
+
+        label.f {
+            display: block;
+            color: var(--muted);
+            font-size: 13px;
+            margin: 10px 0 3px;
+        }
+
+        .f+input,
+        .f+select,
+        .f+textarea,
+        .grow>div>input,
+        .grow>div>select {
+            width: 100%;
+        }
+
+        .grow {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .grow>div {
+            flex: 1 1 140px;
+            min-width: 0;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .chk {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 44px;
+            padding-right: 6px;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            border: 1px solid var(--line);
+            border-radius: 99px;
+            padding: 0 4px 0 12px;
+            font-size: 14px;
+        }
+
+        .chip button {
+            min-width: 44px;
+            min-height: 44px;
+            border: 0;
+            background: none;
+        }
+
+        .ev {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            border-bottom: 1px solid var(--line);
+            padding: 4px 0;
+        }
+
+        .ev>span {
+            flex: 1;
+            min-width: 0;
+            word-break: break-word;
+        }
+
+        .ev button {
+            min-width: 44px;
+            min-height: 44px;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        .warn {
+            color: var(--bad);
+            font-size: 14px;
+            margin: 8px 0 0;
+        }
+
+        textarea#out {
+            width: 100%;
+            min-height: 160px;
+            font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            word-break: break-all;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>行事曆活動 ICS 產生</h1>
+        <p class="sub">填活動 → 加入清單（可多個）→ 下載 .ics，匯入 Google / Apple / Outlook 行事曆。</p>
+
+        <div class="card">
+            <h2>時間表示法</h2>
+            <div class="grow">
+                <div><label class="f" for="mode">時間格式</label>
+                    <select id="mode">
+                        <option value="tzid">指定時區（TZID）</option>
+                        <option value="utc">轉成 UTC</option>
+                        <option value="float">浮動時間（不帶時區）</option>
+                    </select></div>
+                <div><label class="f" for="tz">輸入時間所在時區（IANA 名稱）</label>
+                    <input id="tz" type="text" spellcheck="false" autocapitalize="off" placeholder="Asia/Taipei"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>活動</h2>
+            <label class="f" for="title">標題（必填）</label><input id="title" type="text" maxlength="100" style="width:100%">
+            <div class="grow">
+                <div><label class="f" for="loc">地點</label><input id="loc" type="text" maxlength="200"></div>
+                <div><label class="f" for="url">連結 URL</label><input id="url" type="url" maxlength="500" placeholder="https://"></div>
+            </div>
+            <label class="f" for="desc">說明</label><textarea id="desc" rows="2" maxlength="2000" style="width:100%"></textarea>
+            <label class="chk"><input type="checkbox" id="allday"> 全天活動</label>
+            <div class="grow">
+                <div><label class="f" for="sd">開始日期</label><input id="sd" type="date"></div>
+                <div id="stBox"><label class="f" for="st">開始時間</label><input id="st" type="time" value="09:00"></div>
+            </div>
+            <div class="grow">
+                <div><label class="f" for="ed">結束日期</label><input id="ed" type="date"></div>
+                <div id="etBox"><label class="f" for="et">結束時間</label><input id="et" type="time" value="10:00"></div>
+            </div>
+
+            <label class="f" for="freq">重複</label>
+            <div class="grow">
+                <div><select id="freq">
+                        <option value="">不重複</option>
+                        <option value="DAILY">每日</option>
+                        <option value="WEEKLY">每週</option>
+                        <option value="MONTHLY">每月</option>
+                        <option value="YEARLY">每年</option>
+                    </select></div>
+                <div id="intBox"><input id="interval" type="number" inputmode="numeric" min="1" max="99" value="1" aria-label="間隔（每幾個週期）"></div>
+            </div>
+            <div id="wdBox" class="row" style="margin-top:0"></div>
+            <div id="endBox">
+                <div class="grow">
+                    <div><label class="f" for="rend">結束方式</label>
+                        <select id="rend">
+                            <option value="never">一直重複</option>
+                            <option value="count">重複次數</option>
+                            <option value="until">到某一天</option>
+                        </select></div>
+                    <div id="cntBox"><label class="f" for="count">次數（1–999）</label><input id="count" type="number" inputmode="numeric" min="1" max="999" value="10"></div>
+                    <div id="untBox"><label class="f" for="until">最後一天</label><input id="until" type="date"></div>
+                </div>
+            </div>
+
+            <label class="f" for="alm">提醒（開始前幾分鐘，最多 5 個）</label>
+            <div class="grow">
+                <div><input id="alm" type="number" inputmode="numeric" min="0" max="40320" value="15" aria-label="提醒分鐘數"></div>
+                <div><button type="button" id="almAdd">＋ 加入提醒</button></div>
+            </div>
+            <div id="almList" class="row"></div>
+
+            <div class="row"><button class="primary" id="add" type="button">加入清單</button></div>
+            <p class="warn" id="err" role="alert"></p>
+        </div>
+
+        <div class="card">
+            <h2>清單與輸出 <small class="muted" id="cnt"></small></h2>
+            <div id="evList"></div>
+            <textarea id="out" readonly aria-label="ICS 內容" placeholder="加入活動後，這裡會出現 .ics 內容"></textarea>
+            <div class="row">
+                <button class="primary" id="dl" type="button">下載 .ics</button>
+                <button id="cp" type="button">複製文字</button>
+                <button class="sm" id="reset" type="button">重置選項</button>
+            </div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>產生標準 .ics 行事曆檔（RFC 5545）。可設定地點、說明、連結、全天、重複規則與多個提醒，一次建立多個活動。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>要把課表、會議、固定聚會一次匯入手機或電腦的行事曆。</li>
+        <li>寄一個 .ics 附件給別人，對方點開就能加入行事曆。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>先選「時間格式」：指定時區（預設，用你填的 IANA 時區名稱，如 Asia/Taipei）、轉成 UTC（相容性最高），或浮動時間（不帶時區，匯入後依行事曆所在時區顯示）。</li>
+        <li>填標題與開始 / 結束；全天活動只需日期，結束日期是「最後一天」，檔案內會自動換成隔日。</li>
+        <li>需要重複就選每日 / 每週（可勾星期）/ 每月 / 每年，並選一直重複、次數或最後一天。</li>
+        <li>輸入提醒分鐘數按「加入提醒」（可多個，例如 15 與 1440）。</li>
+        <li>按「加入清單」；重複步驟加更多活動，最後「下載 .ics」或「複製文字」。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">標題「週會」，每週一、三 10:00–11:00，重複 12 次，提醒 15 分鐘前 → 匯入後出現 12 週的週會，每次前 15 分鐘跳通知。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>活動內容不會被儲存，重新整理就清空；只記住上次的時間格式、時區與提醒（存在瀏覽器，可用「重置選項」清除）。每次最多 200 個活動，欄位有長度上限。</li>
+        <li>「指定時區」不附 VTIMEZONE 定義，Google / Apple 行事曆能認得 IANA 名稱，部分舊版 Outlook 不行，遇到時改選「轉成 UTC」。UTC 與浮動時間遇到夏令時間的重複活動，可能在換季後差一小時。</li>
+        <li>每月 / 每年重複若起始日是 29–31 日，沒有該日的月份行事曆會略過。</li>
+        <li>每個活動都有唯一 ID（UID）；重新整理頁面後再產生同一活動，ID 會不同，匯入會變成新活動而不是覆蓋舊的。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, day } = Util;
+
+        // --- pure ---
+        const MAX_EVENTS = 200, MAX_ALARMS = 5, WDS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+        const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && day.shift(s, 0) === s;
+        const isTime = (s) => typeof s === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+        const isTz = (tz) => { try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return typeof tz === 'string' && /^[A-Za-z0-9_+\-\/]+$/.test(tz); } catch { return false; } };
+        const utf8len = (s) => new TextEncoder().encode(s).length;
+        // 每行最多 75 octets（CRLF 不計）；續行以一個空白開頭（也算 1 octet）；以字元為單位切，不會拆開多位元組字元
+        function fold(line) {
+            const out = []; let cur = '', n = 0;
+            for (const ch of line) {
+                const b = utf8len(ch);
+                if (n + b > 75) { out.push(cur); cur = ' '; n = 1; }
+                cur += ch; n += b;
+            }
+            out.push(cur);
+            return out.join('\r\n');
+        }
+        // TEXT 值跳脫：反斜線、分號、逗號、換行；其他控制字元移除
+        const icsEsc = (s) => String(s).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r\n|\r|\n/g, '\\n');
+        const d8 = (d) => d.replace(/-/g, '');
+        const localStr = (d, t) => `${d8(d)}T${t.replace(/:/g, '')}${t.length === 5 ? '00' : ''}`;
+        const utcStr = (ms) => new Date(ms).toISOString().replace(/[-:]|\.\d+/g, '');
+        function tzOffset(ms, tz) {
+            const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }).formatToParts(new Date(ms)).map(x => [x.type, x.value]));
+            return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(ms / 1000) * 1000;
+        }
+        // 指定時區的當地時間 → UTC 字串（兩次逼近，處理夏令時間）
+        function toUtc(d, t, tz) {
+            const [y, m, dd] = d.split('-').map(Number), [h, mi, s = 0] = t.split(':').map(Number), g = Date.UTC(y, m - 1, dd, h, mi, s);
+            return utcStr(g - tzOffset(g - tzOffset(g, tz), tz));
+        }
+        function dtProp(name, d, t, o) {
+            return o.mode === 'utc' ? `${name}:${toUtc(d, t, o.tz)}` : o.mode === 'tzid' ? `${name};TZID=${o.tz}:${localStr(d, t)}` : `${name}:${localStr(d, t)}`;
+        }
+        const trigger = (m) => m === 0 ? 'PT0S' : m % 1440 === 0 ? `-P${m / 1440}D` : m % 60 === 0 ? `-PT${m / 60}H` : `-PT${m}M`;
+        function rrule(ev, o) {
+            const r = ev.rep; if (!r || !r.freq) return null;
+            const p = [`FREQ=${r.freq}`];
+            if (r.interval > 1) p.push(`INTERVAL=${r.interval}`);
+            if (r.freq === 'WEEKLY') p.push('BYDAY=' + (r.byday.length ? WDS.filter(w => r.byday.includes(w)) : [WDS[(new Date(ev.sd + 'T00:00:00Z').getUTCDay() + 6) % 7]]).join(','));
+            if (r.end === 'count') p.push(`COUNT=${r.count}`);
+            else if (r.end === 'until') p.push('UNTIL=' + (ev.allDay ? d8(r.until) : o.mode === 'float' ? `${d8(r.until)}T235959` : toUtc(r.until, '23:59:59', o.tz)));
+            return 'RRULE:' + p.join(';');
+        }
+        // 驗證；回傳錯誤文字，沒問題回傳 ''
+        function validateEvent(ev) {
+            if (!ev || typeof ev.title !== 'string' || !ev.title.trim()) return '請填標題';
+            if (!isDate(ev.sd) || !isDate(ev.ed)) return '請選開始與結束日期';
+            if (!ev.allDay && (!isTime(ev.st) || !isTime(ev.et))) return '請填開始與結束時間';
+            if (ev.ed < ev.sd || (!ev.allDay && ev.ed === ev.sd && ev.et < ev.st)) return '結束不能早於開始';
+            if (ev.url && !(/^[a-z][a-z0-9+.\-]*:[^\s\x00-\x1f]+$/i.test(ev.url))) return '連結格式不正確（需含 https:// 之類的開頭）';
+            const r = ev.rep;
+            if (r && r.freq) {
+                if (!['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(r.freq)) return '重複規則不正確';
+                if (!(Number.isInteger(r.interval) && r.interval >= 1 && r.interval <= 99)) return '間隔需為 1–99';
+                if (r.end === 'count' && !(Number.isInteger(r.count) && r.count >= 1 && r.count <= 999)) return '次數需為 1–999';
+                if (r.end === 'until' && (!isDate(r.until) || r.until < ev.sd)) return '最後一天不能早於開始日期';
+            }
+            if ((ev.alarms || []).length > MAX_ALARMS) return `提醒最多 ${MAX_ALARMS} 個`;
+            return '';
+        }
+        // 產生一個 VEVENT 的內容行（尚未折行）
+        function buildEvent(ev, o, uid, stamp) {
+            const L = ['BEGIN:VEVENT', `UID:${uid}`, `DTSTAMP:${stamp}`];
+            if (ev.allDay) L.push(`DTSTART;VALUE=DATE:${d8(ev.sd)}`, `DTEND;VALUE=DATE:${d8(day.shift(ev.ed, 1))}`);   // 全天活動：DTEND 為隔日
+            else L.push(dtProp('DTSTART', ev.sd, ev.st, o), dtProp('DTEND', ev.ed, ev.et, o));
+            L.push(`SUMMARY:${icsEsc(ev.title.trim())}`);
+            if (ev.loc) L.push(`LOCATION:${icsEsc(ev.loc)}`);
+            if (ev.desc) L.push(`DESCRIPTION:${icsEsc(ev.desc)}`);
+            if (ev.url) L.push(`URL:${ev.url}`);
+            const rr = rrule(ev, o); if (rr) L.push(rr);
+            for (const m of ev.alarms || []) L.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsEsc(ev.title.trim())}`, `TRIGGER:${trigger(m)}`, 'END:VALARM');
+            L.push('END:VEVENT');
+            return L;
+        }
+        function buildCalendar(events, o, now, uidOf) {
+            const stamp = utcStr(now.getTime()), L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//simple_tools//ICS Generator//ZH-TW', 'CALSCALE:GREGORIAN'];
+            events.forEach((ev, i) => L.push(...buildEvent(ev, o, uidOf(i), stamp)));
+            L.push('END:VCALENDAR');
+            return L.map(fold).join('\r\n') + '\r\n';
+        }
+        // 上次選項：驗證並補預設
+        function cleanOpts(raw, defTz) {
+            const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+            const alarms = Array.isArray(r.alarms) ? [...new Set(r.alarms.filter(m => Number.isInteger(m) && m >= 0 && m <= 40320))].slice(0, MAX_ALARMS) : [];
+            return { mode: ['tzid', 'utc', 'float'].includes(r.mode) ? r.mode : 'tzid', tz: isTz(r.tz) ? r.tz : defTz, alarms, allDay: r.allDay === true };
+        }
+        const alarmLabel = (m) => m === 0 ? '開始時' : m % 1440 === 0 ? `${m / 1440} 天前` : m % 60 === 0 ? `${m / 60} 小時前` : `${m} 分鐘前`;
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const defTz = (() => { try { const z = Intl.DateTimeFormat().resolvedOptions().timeZone; return isTz(z) ? z : 'UTC'; } catch { return 'UTC'; } })();
+        let opts = cleanOpts(store.get('icsgen_opts', null), defTz), alarms = [...opts.alarms], events = [];
+
+        $('#wdBox').replaceChildren(...WDS.map((w, i) => { const l = document.createElement('label'); l.className = 'chk'; l.innerHTML = `<input type="checkbox" value="${w}"> 週${'一二三四五六日'[i]}`; return l; }));
+        const saveOpts = () => { opts = { mode: $('#mode').value, tz: isTz($('#tz').value.trim()) ? $('#tz').value.trim() : opts.tz, alarms, allDay: $('#allday').checked }; store.set('icsgen_opts', opts); };
+
+        function sync() {
+            const allDay = $('#allday').checked, f = $('#freq').value, e = $('#rend').value;
+            $('#stBox').hidden = $('#etBox').hidden = allDay;
+            $('#intBox').hidden = $('#wdBox').hidden = $('#endBox').hidden = !f; $('#wdBox').hidden = f !== 'WEEKLY';
+            $('#cntBox').hidden = e !== 'count'; $('#untBox').hidden = e !== 'until';
+            $('#tz').disabled = $('#mode').value === 'float';
+        }
+        function drawAlarms() {
+            $('#almList').replaceChildren(...alarms.map((m, i) => {
+                const c = document.createElement('span'); c.className = 'chip'; c.append(alarmLabel(m));
+                const b = document.createElement('button'); b.type = 'button'; b.textContent = '✕'; b.setAttribute('aria-label', '移除提醒 ' + alarmLabel(m));
+                b.onclick = () => { alarms.splice(i, 1); drawAlarms(); saveOpts(); }; c.append(b); return c;
+            }));
+        }
+        function readEvent() {
+            const f = $('#freq').value;
+            return {
+                title: $('#title').value, loc: $('#loc').value.trim(), desc: $('#desc').value.trim(), url: $('#url').value.trim(), allDay: $('#allday').checked,
+                sd: $('#sd').value, st: $('#st').value, ed: $('#ed').value, et: $('#et').value, alarms: [...alarms],
+                rep: f ? { freq: f, interval: Math.round(Number($('#interval').value)), byday: [...document.querySelectorAll('#wdBox input:checked')].map(x => x.value), end: $('#rend').value, count: Math.round(Number($('#count').value)), until: $('#until').value } : null,
+            };
+        }
+        const cur = () => ({ mode: $('#mode').value, tz: isTz($('#tz').value.trim()) ? $('#tz').value.trim() : opts.tz });
+        const uidBase = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join('');
+        let uids = [];
+        function draw() {
+            while (uids.length < events.length) uids.push(uidBase());
+            uids.length = events.length;
+            $('#cnt').textContent = events.length ? `${events.length} 個活動` : '';
+            $('#evList').replaceChildren(...events.map((ev, i) => {
+                const d = document.createElement('div'); d.className = 'ev';
+                const s = document.createElement('span'); s.textContent = `${ev.title.trim()}　${ev.sd}${ev.allDay ? '（全天）' : ' ' + ev.st}${ev.rep ? '・重複' : ''}`;
+                const b = document.createElement('button'); b.type = 'button'; b.textContent = '✕'; b.setAttribute('aria-label', '移除 ' + ev.title); b.onclick = () => { events.splice(i, 1); uids.splice(i, 1); draw(); };
+                d.append(s, b); return d;
+            }));
+            $('#out').value = events.length ? buildCalendar(events, cur(), new Date(), (i) => `${uids[i]}-${i}@simple-tools`) : '';
+            $('#dl').disabled = $('#cp').disabled = !events.length;
+        }
+        $('#add').onclick = () => {
+            const ev = readEvent(), err = events.length >= MAX_EVENTS ? `最多 ${MAX_EVENTS} 個活動` : validateEvent(ev);
+            $('#err').textContent = err; if (err) return;
+            events.push(ev); $('#title').value = $('#loc').value = $('#desc').value = $('#url').value = ''; draw(); saveOpts();
+        };
+        $('#almAdd').onclick = () => {
+            const m = Math.round(Number($('#alm').value));
+            if (!Number.isFinite(m) || m < 0 || m > 40320) { $('#err').textContent = '提醒需為 0–40320 分鐘'; return; }
+            if (alarms.length >= MAX_ALARMS) { $('#err').textContent = `提醒最多 ${MAX_ALARMS} 個`; return; }
+            $('#err').textContent = ''; if (!alarms.includes(m)) alarms.push(m); drawAlarms(); saveOpts();
+        };
+        $('#sd').onchange = () => { if (!$('#ed').value || $('#ed').value < $('#sd').value) $('#ed').value = $('#sd').value; };
+        for (const id of ['allday', 'freq', 'rend', 'mode']) $('#' + id).onchange = () => { sync(); saveOpts(); draw(); };
+        $('#tz').onchange = () => { if (!isTz($('#tz').value.trim())) { $('#err').textContent = '時區名稱不正確，例如 Asia/Taipei'; $('#tz').value = opts.tz; } else $('#err').textContent = ''; saveOpts(); draw(); };
+        $('#dl').onclick = () => Util.download(new Blob([$('#out').value], { type: 'text/calendar;charset=utf-8' }), 'events.ics');
+        $('#cp').onclick = () => Util.copyWithFeedback($('#cp'), $('#out').value);
+        $('#reset').onclick = () => {
+            if (!confirm('清除記住的時間格式、時區與提醒設定？無法復原；已加入清單的活動不受影響。')) return;
+            try { localStorage.removeItem('icsgen_opts'); } catch { }
+            opts = cleanOpts(null, defTz); alarms = []; $('#mode').value = opts.mode; $('#tz').value = opts.tz; $('#allday').checked = false; sync(); drawAlarms(); draw();
+        };
+
+        $('#mode').value = opts.mode; $('#tz').value = opts.tz; $('#allday').checked = opts.allDay;
+        $('#sd').value = $('#ed').value = $('#until').value = day.today();
+        sync(); drawAlarms(); draw();
+    </script>
+</body>
+
+</html>

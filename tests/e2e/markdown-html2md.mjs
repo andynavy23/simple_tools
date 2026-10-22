@@ -55,7 +55,7 @@ try {
     assert.match(await page.evaluate(() => document.querySelector('#h2mMsg').textContent), /無法完整轉換：<script> ×1/);
     await page.evaluate(() => document.querySelector('#h2mInsert').click());
     assert.equal(await page.evaluate(() => document.querySelector('#src').value), '開頭\n\n## 新增\n\n段 [連](https://e.com)\n\n結尾');
-    assert.match(await page.evaluate(() => document.querySelector('#preview').innerHTML), /<h2>新增<\/h2>/);
+    assert.match(await page.evaluate(() => document.querySelector('#preview').innerHTML), /<h2[^>]*>新增<\/h2>/);
     await page.evaluate(() => { document.querySelector('#h2mIn').value = '<p>ok</p>'; document.querySelector('#h2mGo').click(); });
     assert.match(await page.evaluate(() => document.querySelector('#h2mMsg').textContent), /沒有無法轉換/);
     assert.ok(await page.evaluate(() => document.scrollingElement.scrollWidth <= innerWidth + 1), '橫向溢出');

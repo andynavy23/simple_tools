@@ -145,7 +145,8 @@ function zipWalk(u8) {
             if (!g.length) continue;
             const back = await m.xlsxRead(m.xlsxWrite(g), inflate), width = Math.max(...back.map(r => r.length));
             const expect = g.map(r => Object.assign(new Array(width).fill(''), r));
-            assert.deepEqual(back.map(r => r.slice(0, C)), expect.map(r => r.slice(0, C)));
+            const trimEnd = (r) => { r = r.slice(0, C); while (r.length && r[r.length - 1] === '') r.pop(); return r; };      // XLSX 不保留列尾的空白儲存格
+            assert.deepEqual(back.map(trimEnd), expect.map(trimEnd));
         }
         // 上限與壞檔
         assert.throws(() => m.xlsxWrite(Array.from({ length: m.XLSX_MAX_ROWS + 1 }, () => ['a'])), /列數太多/);

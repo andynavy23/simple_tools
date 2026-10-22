@@ -116,7 +116,7 @@
                 <button class="primary" id="go">比對</button>
                 <label><input type="checkbox" id="ws"> 忽略行首尾空白</label>
                 <label><input type="checkbox" id="ci"> 忽略大小寫</label>
-                <label>比對單位 <select id="unit"><option value="line">逐行</option><option value="word">逐字詞（行內標示）</option><option value="json">JSON 結構（依鍵與元素）</option></select></label>
+                <label>比對單位 <select id="unit"><option value="line">逐行</option><option value="word">逐字詞（行內標示）</option><option value="json">JSON 結構（依鍵與元素）</option><option value="patch">套用 patch</option></select></label>
                 <span id="jsonOpts" class="bar" style="margin:0" hidden>
                     <label>陣列比對 <select id="arrMode"><option value="index">依索引</option><option value="key">依指定鍵</option></select></label>
                     <label id="arrKeyL" hidden>鍵名 <input type="text" id="arrKey" value="id" maxlength="100" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:7em" aria-label="用來配對陣列元素的鍵名"></label>
@@ -127,6 +127,7 @@
         <div class="card" id="result" hidden>
             <div id="sum"></div>
             <div id="out"></div>
+            <div class="bar"><button class="sm" id="pCopy" hidden>複製套用後的文字</button></div>
         </div>
     </div>
 
@@ -159,8 +160,16 @@
         <li>JSON 結構模式：路徑寫法如 <kbd>$.items[id=2].price</kbd>；依指定鍵時，沒有該鍵的元素依出現順序配對、重複的鍵值依出現順序配對（路徑尾端加 #2…）；單純的型別變更（例如 1 變 "1"）算「變更」；差異超過 5000 筆會停止並請你縮小範圍。「忽略空白 / 大小寫」在這個模式不適用。</li>
         <li>全部在本機處理，不會上傳。</li>
         </ul>
+        <h3>套用 patch</h3>
+        <ol>
+        <li>「比對單位」選「套用 patch」：左邊貼原文，右邊貼 unified diff（<kbd>git diff</kbd>、<kbd>diff -u</kbd> 的輸出），按「套用 patch」。</li>
+        <li>下方每個 hunk 一行：綠色 ✓ 是套用成功（行號對不上時會標偏移，必要時放寬最多 2 行前後文），紅色 ✗ 是套不上並說明原因與位置；套不上的 hunk 不會動到原文，其餘照常套用。結果文字可按「複製套用後的文字」。</li>
+        <li>CRLF 與 LF 混用的原文，每一行原本的換行都保留；新增的行沿用相鄰行的換行。</li>
+        <li>限制：一次只處理一個檔案（patch 含多個檔案會列出檔名請你擇一）；「新增檔案 / 刪除檔案 / 二進位」的 patch 不處理並提示；不看檔名，只看內容；patch 被編輯器改過（行數與 @@ 標頭不符）的 hunk 會標為套不上。</li>
+        </ol>
     </template>
 
+    <script src="../shared/js/util.js"></script>
     <script>
         // --- pure ---
         // 序列 diff（LCS）：a、b 是元素陣列。回傳 [{ t: '=' | '+' | '-', text }]；'=' 的 text 取自 b（保留新版的原樣）
@@ -261,14 +270,146 @@
             try { return { ok: true, diffs: diffJSON(parse(aText, '原始文字'), parse(bText, '修改後文字'), opts) }; }
             catch (e) { return { ok: false, error: e instanceof RangeError ? '巢狀太深，無法比對' : e.message }; }
         }
+        // ---------- 套用 unified diff ----------
+        // 拆行並保留每行自己的換行（'\n' 或 '\r\n'；最後一行可能沒有換行 = ''），這樣 CRLF / LF 混用的原文套用後各行換行不變
+        function splitKeepEol(t) {
+            const out = []; let i = 0;
+            while (i < t.length) {
+                const j = t.indexOf('\n', i);
+                if (j < 0) { out.push({ t: t.slice(i), e: '' }); break; }
+                const cr = j > i && t[j - 1] === '\r';
+                out.push({ t: t.slice(i, cr ? j - 1 : j), e: cr ? '\r\n' : '\n' }); i = j + 1;
+            }
+            return out;
+        }
+        // 解析 unified diff → [{ oldName, newName, isNew, isDel, binary, hunks:[{ oldStart, oldLen, newStart, newLen, head, lines:[{k:' '|'-'|'+', t, noeol?}], short }] }]
+        function parsePatch(text) {
+            const L = text.split('\n').map(l => l.endsWith('\r') ? l.slice(0, -1) : l), files = [];
+            let cur = null, i = 0;
+            const start = () => { cur = { oldName: '', newName: '', isNew: false, isDel: false, binary: false, hunks: [], minus: false }; files.push(cur); };
+            const nm = (s) => { s = s.replace(/\t.*$/, '').trim(); return /^"/.test(s) ? s.replace(/^"|"$/g, '') : s; };
+            while (i < L.length) {
+                const l = L[i];
+                if (/^diff --git /.test(l)) { start(); i++; continue; }
+                if (/^--- /.test(l) && /^\+\+\+ /.test(L[i + 1] || '')) {
+                    if (!cur || cur.hunks.length || cur.minus) start();
+                    cur.minus = true; cur.oldName = nm(l.slice(4)); cur.newName = nm(L[i + 1].slice(4));
+                    if (cur.oldName === '/dev/null') cur.isNew = true;
+                    if (cur.newName === '/dev/null') cur.isDel = true;
+                    i += 2; continue;
+                }
+                if (cur && /^new file mode/.test(l)) cur.isNew = true;
+                else if (cur && /^deleted file mode/.test(l)) cur.isDel = true;
+                else if (cur && /^(Binary files |GIT binary patch)/.test(l)) cur.binary = true;
+                const m = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(l);
+                if (m) {
+                    if (!cur) start();
+                    const h = { oldStart: +m[1], oldLen: m[2] === undefined ? 1 : +m[2], newStart: +m[3], newLen: m[4] === undefined ? 1 : +m[4], head: l.replace(/^(@@ [^@]+@@).*$/, '$1'), lines: [] };
+                    let o = 0, n = 0; i++;
+                    const mark = () => { if (h.lines.length) h.lines[h.lines.length - 1].noeol = true; };
+                    while (i < L.length && (o < h.oldLen || n < h.newLen)) {
+                        const x = L[i], c = x[0];
+                        if (c === '\\') { mark(); i++; continue; }
+                        if (x.startsWith('@@ ') || /^diff --git /.test(x)) break;
+                        if (c === ' ' || x === '') { h.lines.push({ k: ' ', t: x.slice(1) }); o++; n++; }
+                        else if (c === '-') { h.lines.push({ k: '-', t: x.slice(1) }); o++; }
+                        else if (c === '+') { h.lines.push({ k: '+', t: x.slice(1) }); n++; }
+                        else break;
+                        i++;
+                    }
+                    while (i < L.length && L[i][0] === '\\') { mark(); i++; }
+                    h.short = o !== h.oldLen || n !== h.newLen;
+                    cur.hunks.push(h); continue;
+                }
+                i++;
+            }
+            return files;
+        }
+        // 套用 patch。回傳 { ok, text, results:[{ n, head, ok, line, offset, fuzz, reason }], applied, failed } 或 { ok:false, error }
+        // 每個 hunk 先在預期行號找，找不到就往前後找（偏移不限），再依序放寬最多 maxFuzz（預設 2）行頭 / 行尾的前後文；
+        // 套不上的 hunk 標示原因，其餘照常套用。新增 / 刪除檔案、二進位 patch、同時含多個檔案不處理
+        function applyPatch(src, patchText, opts = {}) {
+            const maxFuzz = opts.fuzz ?? 2;
+            if (!patchText.trim()) return { ok: false, error: 'patch 是空的' };
+            const files = parsePatch(patchText);
+            if (!files.length) return { ok: false, error: '找不到 hunk（@@ -x,y +x,y @@）；請貼上 unified diff（git diff / diff -u 的輸出）' };
+            if (files.length > 1) return { ok: false, error: `patch 含 ${files.length} 個檔案（${files.map(f => (f.newName || f.oldName || '?').replace(/^[ab]\//, '')).slice(0, 5).join('、')}），這裡一次只能套用一個檔案；請只貼其中一個檔案的部分` };
+            const f = files[0];
+            if (f.isNew) return { ok: false, error: '這是「新增檔案」的 patch，沒有原文可套用，不處理（新增檔案的內容就是 + 開頭的那些行）' };
+            if (f.isDel) return { ok: false, error: '這是「刪除檔案」的 patch，不處理' };
+            if (f.binary) return { ok: false, error: '二進位 patch 不支援' };
+            if (!f.hunks.length) return { ok: false, error: '這份 patch 沒有 hunk（可能只有改名或權限變更）' };
+            const work = splitKeepEol(src);
+            const crlf = work.filter(x => x.e === '\r\n').length, lf = work.filter(x => x.e === '\n').length;
+            const defEol = crlf > lf ? '\r\n' : '\n';
+            let delta = 0, drift = 0, floor = 0;
+            const results = [];
+            f.hunks.forEach((h, hi) => {
+                const res = { n: hi + 1, head: h.head, ok: false };
+                results.push(res);
+                if (h.short) { res.reason = 'hunk 的行數與標頭 @@ 宣告的不符（patch 可能被截斷或被編輯器改過）'; return; }
+                const ol = h.lines.filter(x => x.k !== '+'), nl = h.lines.filter(x => x.k !== '-');
+                let lead = 0, trail = 0;
+                while (lead < h.lines.length && h.lines[lead].k === ' ') lead++;
+                while (trail < h.lines.length - lead && h.lines[h.lines.length - 1 - trail].k === ' ') trail++;
+                const base = (h.oldLen === 0 ? h.oldStart : h.oldStart - 1) + delta;
+                const center = Math.max(floor, Math.min(work.length - ol.length, base + drift));
+                const at = (arr, pos, sl, tl) => { for (let j = sl; j < arr.length - tl; j++) if (!work[pos + j] || work[pos + j].t !== arr[j].t) return false; return true; };
+                let pos = -1, fz = 0;
+                if (!ol.length) pos = Math.max(floor, Math.min(work.length, base));
+                else {
+                    let prev = '';
+                    for (let z = 0; z <= maxFuzz && pos < 0; z++) {
+                        const sl = Math.min(z, lead), tl = Math.min(z, trail), key = sl + ',' + tl;
+                        if (key === prev) continue; prev = key;
+                        const top = work.length - ol.length;
+                        for (let d = 0; d <= work.length && pos < 0; d++) {
+                            for (const p of d ? [center + d, center - d] : [center]) if (p >= floor && p <= top && at(ol, p, sl, tl)) { pos = p; fz = z; break; }
+                        }
+                    }
+                }
+                if (pos < 0) {
+                    const c = Math.max(0, Math.min(work.length, base + drift)); let j = 0;
+                    while (j < ol.length && work[c + j] && work[c + j].t === ol[j].t) j++;
+                    const clip = (s) => s.length > 50 ? s.slice(0, 50) + '…' : s;
+                    let done = 0;                          // 修改後的內容已經在原文裡 → 多半是同一份 patch 套用了兩次
+                    if (nl.length && nl.some(x => x.k === '+')) for (let p = 0; p + nl.length <= work.length && !done; p++) if (nl.every((x, k) => work[p + k].t === x.t)) done = p + 1;
+                    res.line = h.oldStart;
+                    res.reason = done ? `這個 hunk 看起來已經套用過了（修改後的內容已在原文第 ${done} 行）` : j < ol.length ? `前後文對不上：預期第 ${c + j + 1} 行是「${clip(ol[j].t)}」，但原文是「${work[c + j] ? clip(work[c + j].t) : '（檔案已結束）'}」（預期位置附近與整份原文都找不到相符的位置）` : '找不到相符的位置';
+                    return;
+                }
+                let oi = 0;
+                const made = [];
+                for (const x of h.lines) {
+                    if (x.k === ' ') made.push(work[pos + oi++]);
+                    else if (x.k === '-') oi++;
+                    else made.push({ t: x.t, e: x.noeol ? '' : null });
+                }
+                work.splice(pos, ol.length, ...made);
+                made.forEach((x, k) => {                    // 新增行的換行：沿用前一行（沒有就後一行、再沒有用整份的主要風格）
+                    if (x.e !== null) return;
+                    let e = '';
+                    for (let p = pos + k - 1; p >= 0 && !e; p--) e = work[p].e;
+                    for (let p = pos + k + 1; p < work.length && !e; p++) e = work[p].e;
+                    x.e = e || defEol;
+                });
+                res.ok = true; res.line = pos + 1; res.offset = pos - base; res.fuzz = fz;
+                drift = pos - base; delta += made.length - ol.length; floor = pos + made.length;
+            });
+            work.forEach((x, k) => { if (k < work.length - 1 && x.e === '') x.e = defEol; });   // 檔尾沒換行的那行後面又接了新行
+            const failed = results.filter(r => !r.ok).length;
+            return { ok: true, text: work.map(x => x.t + x.e).join(''), results, applied: results.length - failed, failed };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
 
         const syncUnit = () => {
-            const json = $('#unit').value === 'json';
+            const json = $('#unit').value === 'json', patch = $('#unit').value === 'patch';
             $('#jsonOpts').hidden = !json; $('#arrKeyL').hidden = !json || $('#arrMode').value !== 'key';
-            ['#ws', '#ci'].forEach(x => { $(x).closest('label').hidden = json; });
+            ['#ws', '#ci'].forEach(x => { $(x).closest('label').hidden = json || patch; });
+            $('label[for=a]').textContent = patch ? '原文' : '原始文字'; $('label[for=b]').textContent = patch ? 'patch（unified diff）' : '修改後文字';
+            $('#go').textContent = patch ? '套用 patch' : '比對'; $('#pCopy').hidden = true;
         };
         $('#unit').onchange = syncUnit; $('#arrMode').onchange = syncUnit;
         const showV = (v) => { const t = JSON.stringify(v); return t.length > 200 ? t.slice(0, 200) + '…' : t; };
@@ -290,7 +431,27 @@
             }
         }
 
+        let pText = '';
+        function runPatch() {
+            const out = $('#out'), a = $('#a').value, b = $('#b').value;
+            $('#result').hidden = false; out.replaceChildren(); pText = ''; $('#pCopy').hidden = true;
+            if (a.length + b.length > 4000000) { $('#sum').textContent = '文字太長（超過 400 萬字元），無法處理'; return; }
+            const r = applyPatch(a, b);
+            if (!r.ok) { $('#sum').textContent = '✗ ' + r.error; return; }
+            $('#sum').textContent = r.failed ? `套用 ${r.applied} 個 hunk、${r.failed} 個套不上（原文保留，其餘已套用）` : `✓ ${r.applied} 個 hunk 全部套用`;
+            const line = (cls, mark, text) => { const d = document.createElement('div'), m = document.createElement('i'), sp = document.createElement('span'); d.className = 'ln ' + cls; m.textContent = mark; sp.textContent = text; d.append(m, sp); out.append(d); };
+            for (const x of r.results) {
+                if (x.ok) line('add', '✓', `Hunk ${x.n} ${x.head} → 第 ${x.line} 行${x.offset ? `（偏移 ${x.offset > 0 ? '+' : ''}${x.offset} 行）` : ''}${x.fuzz ? `（放寬 ${x.fuzz} 行前後文）` : ''}`);
+                else line('del', '✗', `Hunk ${x.n} ${x.head}（原文第 ${x.line || '?'} 行附近）：${x.reason}`);
+            }
+            pText = r.text;
+            const pre = document.createElement('pre'); pre.className = 'ln'; pre.style.cssText = 'display:block;margin-top:10px;overflow-x:auto;white-space:pre'; pre.textContent = r.text; out.append(pre);
+            $('#pCopy').hidden = false;
+        }
+        $('#pCopy').onclick = () => Util.copyWithFeedback($('#pCopy'), pText, () => { });
+
         $('#go').onclick = () => {
+            if ($('#unit').value === 'patch') return runPatch();
             if ($('#unit').value === 'json') return runJson();
             const ws = $('#ws').checked, ci = $('#ci').checked;
             const key = (x) => { if (ws) x = x.trim(); return ci ? x.toLowerCase() : x; };

@@ -91,6 +91,52 @@
         .acts button {
             min-height: 44px;
         }
+
+        .quotes {
+            margin-top: 8px;
+        }
+
+        .quotes summary {
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .qt {
+            display: flex;
+            gap: 6px;
+            align-items: flex-start;
+            border-top: 1px solid var(--line);
+            padding: 6px 0;
+        }
+
+        .qt .qb {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .qt button {
+            min-width: 44px;
+            min-height: 44px;
+        }
+
+        .qform {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            border-top: 1px solid var(--line);
+            padding-top: 8px;
+        }
+
+        .qform input.qp {
+            width: 120px;
+        }
+
+        .qform textarea,
+        .qform input[type=text] {
+            width: 100%;
+        }
     </style>
 </head>
 
@@ -162,7 +208,8 @@
         <li>列表上每本書有進度條；在欄位輸入目前頁數，按「更新進度」。</li>
         <li>第一次更新進度會自動把「想讀」變「在讀」並記開始日；頁數到達總頁數會自動變「讀完」並記完成日。</li>
         <li>用上方分頁（全部 / 想讀 / 在讀 / 讀完 / 擱置）、搜尋框與排序找書。</li>
-        <li>按「編輯」可改評分、心得、日期等；「匯出 .md / CSV」備份成文字檔。</li>
+        <li>按「編輯」可改評分、心得（整體心得）、日期等；「匯出 .md / CSV」備份成文字檔。</li>
+        <li>每本書下方的「摘錄與備註」：展開後輸入頁碼（可不填）、摘錄內容與備註，按「加入摘錄」；可一直加多筆，每筆有 ✕ 單筆刪除。搜尋框也會找摘錄與備註（命中時自動展開）；匯出 .md 會把每本書的摘錄一起帶出（CSV 欄位不變，不含摘錄）。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">《小王子》總 120 頁，目前 30 頁 → 進度 25%
@@ -174,6 +221,7 @@
         <li>累積頁數 = 所有書「目前頁數」加總；沒填總頁數的書不會有百分比，也不會自動讀完。</li>
         <li>把「讀完」的書頁數改小，會退回「在讀」並清掉完成日。</li>
         <li>「清除全部書單」會刪掉所有書（會先確認，無法復原，建議先匯出）。</li>
+        <li>摘錄存在每本書的資料裡：刪除那本書會連帶刪除它所有摘錄；每本最多 200 筆、摘錄與備註各最多 2000 字，整體資料量太大時會拒絕新增並提示（不會默默刪舊的）；舊版資料沒有摘錄欄位，載入時自動視為 0 筆，壞掉的摘錄會被略過。</li>
         <li>最多 2000 本；資料只在本機，換機前請先用右上角備份或匯出。</li>
         </ul>
     </template>
@@ -187,12 +235,39 @@
         const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && day.shift(s, 0) === s;
         const int = (v, lo, hi) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : lo; };
         const str = (v, n) => typeof v === 'string' ? v.trim().slice(0, n) : '';
+        // 摘錄：每本書 { id, page(0=不填), text, note }；舊資料沒有 quotes 欄位 → 空陣列
+        const MAX_QUOTES = 200, MAX_QUOTE_LEN = 2000, MAX_DATA = 2000000;
+        function cleanQuotes(list) {
+            if (!Array.isArray(list)) return [];
+            const seen = new Set(), out = [];
+            for (const q of list) {
+                if (!q || typeof q !== 'object') continue;
+                const text = str(q.text, MAX_QUOTE_LEN); if (!text) continue;
+                let id = typeof q.id === 'string' ? q.id : ''; while (!id || seen.has(id)) id = newId();
+                seen.add(id); out.push({ id, page: int(q.page, 0, 99999), text, note: str(q.note, MAX_QUOTE_LEN) });
+            }
+            return out.slice(0, MAX_QUOTES);
+        }
+        // 新增一筆摘錄；回傳 { books, err }（err 非空表示被拒絕，books 不變）。整體資料超過 MAX_DATA 字元也拒絕
+        function addQuote(books, bookId, q) {
+            const b = books.find(x => x.id === bookId), text = String(q.text || '').trim(), note = String(q.note || '').trim();
+            const bad = (err) => ({ books, err });
+            if (!b) return bad('找不到這本書');
+            if (!text) return bad('請輸入摘錄內容');
+            if (text.length > MAX_QUOTE_LEN || note.length > MAX_QUOTE_LEN) return bad(`摘錄與備註各最多 ${MAX_QUOTE_LEN} 字`);
+            if (b.quotes.length >= MAX_QUOTES) return bad(`每本書最多 ${MAX_QUOTES} 筆摘錄`);
+            const next = books.map(x => x.id === bookId ? { ...x, quotes: [...x.quotes, { id: newId(), page: int(q.page, 0, 99999), text, note }] } : x);
+            if (JSON.stringify(next).length > MAX_DATA) return bad('書單資料量已太大，請先匯出備份並刪除不需要的摘錄');
+            return { books: next, err: '' };
+        }
+        const delQuote = (books, bookId, qid) => books.map(x => x.id === bookId ? { ...x, quotes: x.quotes.filter(q => q.id !== qid) } : x);
         // 驗證並補預設值；沒有書名回傳 null
         function cleanBook(b) {
             if (!b || typeof b !== 'object') return null;
             const title = str(b.title, 100); if (!title) return null;
             const total = int(b.total, 0, 99999);
             return {
+                quotes: cleanQuotes(b.quotes),
                 id: typeof b.id === 'string' ? b.id : '', title, author: str(b.author, 60), total,
                 page: int(b.page, 0, total || 99999), status: STATUS[b.status] ? b.status : 'want', rating: int(b.rating, 0, 5),
                 review: typeof b.review === 'string' ? b.review.slice(0, 2000) : '', start: isDate(b.start) ? b.start : '', finish: isDate(b.finish) ? b.finish : '',
@@ -228,7 +303,7 @@
         const progressPct = (b) => b.total > 0 ? Math.min(100, Math.round(b.page / b.total * 100)) : b.status === 'done' ? 100 : 0;
         function filterBooks(books, status, q) {
             q = String(q || '').trim().toLowerCase();
-            return books.filter(b => (status === 'all' || b.status === status) && (!q || (b.title + ' ' + b.author + ' ' + b.review).toLowerCase().includes(q)));
+            return books.filter(b => (status === 'all' || b.status === status) && (!q || (b.title + ' ' + b.author + ' ' + b.review + ' ' + b.quotes.map(x => x.text + ' ' + x.note).join(' ')).toLowerCase().includes(q)));
         }
         function sortBooks(books, key) {
             const a = [...books].reverse(); // 預設：最近加入在前
@@ -253,6 +328,10 @@
                     out.push(`- **${b.title}**` + (b.author ? ` — ${b.author}` : '') + (b.total ? `（${b.page}/${b.total} 頁，${progressPct(b)}%）` : '') + (b.rating ? ` ${stars(b.rating)}` : ''));
                     if (b.start || b.finish) out.push(`  - ${b.start ? '開始 ' + b.start : ''}${b.start && b.finish ? '，' : ''}${b.finish ? '完成 ' + b.finish : ''}`);
                     if (b.review) out.push(...b.review.split('\n').map(l => `  > ${l}`));
+                    for (const q of b.quotes) {
+                        out.push(`  - ${q.page ? 'p.' + q.page : '摘錄'}`, ...q.text.split('\n').map(l => `    > ${l}`));
+                        if (q.note) out.push(`    備註：${q.note.replace(/\n/g, ' ')}`);
+                    }
                 }
                 out.push('');
             }
@@ -285,7 +364,7 @@
             $('#title').scrollIntoView({ block: 'center' });
         }
         function readForm() {
-            const b = cleanBook({ id: editId || '', title: $('#title').value, author: $('#author').value, total: $('#total').value, page: $('#page').value, status: $('#status').value, rating: $('#rating').value, review: $('#review').value, start: $('#start').value, finish: $('#finish').value });
+            const b = cleanBook({ id: editId || '', title: $('#title').value, author: $('#author').value, total: $('#total').value, page: $('#page').value, status: $('#status').value, rating: $('#rating').value, review: $('#review').value, start: $('#start').value, finish: $('#finish').value, quotes: (books.find(x => x.id === editId) || {}).quotes });
             return b && settle(b, today);
         }
         $('#save').onclick = () => {
@@ -315,15 +394,40 @@
                 const up = document.createElement('button'); up.textContent = '更新進度'; up.onclick = () => { books = books.map(x => x.id === b.id ? applyProgress(x, inp.value, today) : x); persist(); drawAll(); };
                 const ed = document.createElement('button'); ed.textContent = '編輯'; ed.onclick = () => fillForm(b);
                 const del = document.createElement('button'); del.textContent = '刪除'; del.onclick = () => { if (!confirm(`刪除《${b.title}》？`)) return; books = books.filter(x => x.id !== b.id); if (editId === b.id) resetForm(); persist(); drawAll(); };
-                acts.append(inp, up, ed, del); d.append(acts);
+                acts.append(inp, up, ed, del); d.append(acts, quotesBox(b));
                 return d;
             }));
             $('#listNote').textContent = r.length ? '' : (books.length ? '沒有符合的書' : '還沒有書，從上方新增第一本吧');
         }
+        // 摘錄區：展開狀態只記在記憶體；搜尋命中摘錄時自動展開
+        const openQ = new Set();
+        function quotesBox(b) {
+            const q = $('#q').value.trim().toLowerCase(), det = document.createElement('details'); det.className = 'quotes';
+            det.open = openQ.has(b.id) || (!!q && b.quotes.some(x => (x.text + ' ' + x.note).toLowerCase().includes(q)));
+            const sum = document.createElement('summary'); sum.textContent = `摘錄與備註（${b.quotes.length}）`; det.append(sum);
+            for (const x of b.quotes) {
+                const r = document.createElement('div'); r.className = 'qt';
+                r.innerHTML = `<div class="qb">${x.page ? `<b>p.${x.page}</b> ` : ''}<span class="rev">${esc(x.text)}</span>${x.note ? `<div class="muted rev">備註：${esc(x.note)}</div>` : ''}</div>`;
+                const del = document.createElement('button'); del.textContent = '✕'; del.setAttribute('aria-label', '刪除這筆摘錄');
+                del.onclick = () => { if (!confirm('刪除這筆摘錄？無法復原。')) return; books = delQuote(books, b.id, x.id); persist(); openQ.add(b.id); drawAll(); };
+                r.append(del); det.append(r);
+            }
+            const f = document.createElement('div'); f.className = 'qform';
+            f.innerHTML = `<input type="number" inputmode="numeric" min="0" max="99999" placeholder="頁碼" aria-label="摘錄頁碼" class="qp"><textarea rows="2" maxlength="${MAX_QUOTE_LEN}" placeholder="摘錄的句子或段落" aria-label="摘錄內容"></textarea><input type="text" maxlength="${MAX_QUOTE_LEN}" placeholder="備註（可不填）" aria-label="摘錄備註"><button class="primary">加入摘錄</button><p class="note qn"></p>`;
+            const [pg, tx, nt] = f.querySelectorAll('input,textarea'), msg = f.querySelector('.qn');
+            f.querySelector('button').onclick = () => {
+                const r = addQuote(books, b.id, { page: pg.value, text: tx.value, note: nt.value });
+                if (r.err) { msg.textContent = r.err; return; }
+                books = r.books; persist(); openQ.add(b.id); drawAll();
+            };
+            det.append(f);
+            det.ontoggle = () => { det.open ? openQ.add(b.id) : openQ.delete(b.id); };
+            return det;
+        }
         function drawAll() { drawStats(); drawList(); }
         $('#q').oninput = drawList; $('#sort').onchange = drawList;
         const exp = (csv) => { if (!books.length) { $('#listNote').textContent = '沒有可匯出的資料'; return; } download(new Blob([csv ? '﻿' + exportCsv(books) : exportMd(books)], { type: csv ? 'text/csv;charset=utf-8' : 'text/markdown;charset=utf-8' }), `reading-list.${csv ? 'csv' : 'md'}`); };
-        $('#clearAll').onclick = () => { if (!books.length || !confirm(`清除全部 ${books.length} 本書？無法復原，建議先匯出。`)) return; books = []; editId = null; resetForm(); persist(); drawAll(); };
+        $('#clearAll').onclick = () => { if (!books.length || !confirm(`清除全部 ${books.length} 本書（含所有摘錄）？無法復原，建議先匯出。`)) return; books = []; editId = null; resetForm(); persist(); drawAll(); };
         $('#expMd').onclick = () => exp(false); $('#expCsv').onclick = () => exp(true);
         resetForm(); drawAll();
     </script>

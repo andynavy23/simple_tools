@@ -308,6 +308,15 @@
                 <div class="bar" style="margin-top:8px"><button class="primary" id="h2mInsert">插入編輯區</button><button id="h2mCopy">複製</button></div>
                 <div id="h2mMsg" role="status"></div>
             </details>
+            <details id="tocBox">
+                <summary><b>目錄與匯出獨立 HTML</b></summary>
+                <p class="muted" style="font-size:13px;margin:6px 0 10px">依編輯區的標題（#、##…）產生目錄連結；預覽裡的標題會自動加上錨點，點目錄連結會捲到對應標題。</p>
+                <div class="bar"><label>目錄收錄到 <select id="tocLv" aria-label="目錄最深層級"><option value="2">H2</option><option value="3" selected>H3</option><option value="4">H4</option><option value="6">H6（全部）</option></select></label><button id="tocGo">產生目錄</button></div>
+                <textarea id="tocOut" readonly spellcheck="false" aria-label="產生的目錄 Markdown"></textarea>
+                <div class="bar" style="margin-top:8px"><button class="primary" id="tocInsert">插入編輯區</button><button id="tocCopy">複製</button></div>
+                <div class="bar" style="margin-top:8px"><button id="expHtml">匯出獨立 .html</button></div>
+                <div id="tocMsg" role="status"></div>
+            </details>
         </div>
     </div>
 
@@ -340,6 +349,11 @@
         <li>下方會列出「無法完整轉換」的元素（例如 script、iframe、表單、colspan / rowspan、不安全的連結），讓你知道哪些內容被略過或只保留文字。</li>
         <li>按「插入編輯區」放在編輯區游標處，或「複製」。</li>
         </ol>
+        <h3>目錄與匯出獨立 HTML</h3>
+        <ol>
+        <li>展開「目錄與匯出獨立 HTML」，選要收錄到 H 幾，按「產生目錄」；按「插入編輯區」放在編輯區游標處，或「複製」。目錄是一份巢狀的連結清單，預覽裡點連結會捲到對應標題（中文標題與重複的標題都能對應，重複的會自動加 -1、-2）。程式碼區塊裡的 # 不算標題。</li>
+        <li>按「匯出獨立 .html」下載單一 .html 檔，內含樣式（跟隨淺色 / 深色），離線也能開，可直接寄人或放到網站。</li>
+        </ol>
         <h3>範例</h3>
         <div class="eg">輸入 **重點** 與 [連結](https://example.com)
         → 預覽顯示粗體的「重點」與可點擊的「連結」
@@ -356,6 +370,7 @@
         <h3>小提醒</h3>
         <ul>
         <li>表格裡的 | 會自動跳脫成 \|，儲存格內的換行會變成空白；表格工具一次最多 500 列、50 欄，格子內容不會自動儲存（只有編輯區內容會存在本機）。</li>
+        <li>匯出的 .html 與預覽用同一套轉換：你輸入的 HTML 一律當文字、連結與圖片只允許安全協定，檔案另外加了禁止腳本的設定；圖片只存網址，不會內嵌，離線開啟時看不到網路圖片。這項功能不儲存任何資料。</li>
         <li>你輸入的 HTML 標籤一律當文字顯示，不會被執行，所以可以放心貼別人的文字。</li>
         <li>連結只允許 http(s)、mailto 與站內相對路徑；圖片只接受 http(s) 網址。</li>
         <li>HTML → Markdown 只用瀏覽器的解析器讀文字，不會執行腳本、不載入圖片，也不會顯示在頁面上；上限 100 萬字元；貼上的 HTML 與轉出的結果不會存檔。顏色、字級等樣式會被忽略，複雜排版（巢狀表格、合併儲存格）只能盡量轉換。</li>
@@ -386,7 +401,13 @@
             return s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[i]}</code>`);
         }
 
-        function mdToHtml(src) {
+        // 標題錨點：used（Set）有給時，頂層標題會加 id（中文保留、重複標題自動加 -1 -2）；heads（陣列）有給時順便收集 { level, text, id }
+        const unescAll = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+        const plainText = (s) => s.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[`*~\[\]]/g, '').replace(/\s+/g, ' ').trim();
+        // GitHub 風格：小寫、只留各國文字 / 數字 / - / _、空白變 -；全被濾掉就叫 section
+        const slugBase = (text) => plainText(text).toLowerCase().replace(/[^\p{L}\p{M}\p{N}\s_-]/gu, '').replace(/\s+/g, '-') || 'section';
+        function uniqueId(base, used) { let id = base, n = 0; while (used.has(id)) id = `${base}-${++n}`; used.add(id); return id; }
+        function mdToHtml(src, used, heads) {
             const lines = esc(src.replace(/\r\n?/g, '\n').replace(/[\u0000\u0001]/g, '')).split('\n');
             const out = [];
             let i = 0;
@@ -410,7 +431,11 @@
                 }
                 // 標題
                 let m = line.match(/^(#{1,6})\s+(.*?)\s*#*\s*$/);
-                if (m) { out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`); i++; continue; }
+                if (m) {
+                    const lv = m[1].length, raw = unescAll(m[2]), id = used ? uniqueId(slugBase(raw), used) : '';
+                    if (heads) heads.push({ level: lv, text: plainText(raw), id });
+                    out.push(`<h${lv}${id ? ` id="${id}"` : ''}>${inline(m[2])}</h${lv}>`); i++; continue;
+                }
                 // 分隔線
                 if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { out.push('<hr>'); i++; continue; }
                 // 引用
@@ -467,6 +492,27 @@
         // 巢狀區塊（引用 / 子清單）用的版本：輸入已經跳脫過，直接再解析不可重複跳脫
         function mdToHtmlRaw(escaped) {
             return mdToHtml(escaped.replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&quot;/g, '"').replace(/&amp;/g, '&'));
+        }
+        // ---------- 目錄與獨立 HTML ----------
+        const headingsOf = (src) => { const heads = []; mdToHtml(src, new Set(), heads); return heads; };
+        // 目錄：依標題層級縮排的連結清單（層級跳著用也只縮排一層）；maxLevel 為最深收錄到 h 幾
+        function tocMd(src, maxLevel = 3) {
+            const stack = [], out = [];
+            for (const h of headingsOf(src)) {
+                if (h.level > maxLevel) continue;
+                while (stack.length && stack[stack.length - 1] >= h.level) stack.pop();
+                out.push(`${'  '.repeat(stack.length)}- [${h.text || h.id}](#${h.id})`);
+                stack.push(h.level);
+            }
+            return out.join('\n');
+        }
+        const STANDALONE_CSS = 'color-scheme:light dark}body{font:16px/1.7 system-ui,-apple-system,"Segoe UI","Noto Sans TC",sans-serif;max-width:780px;margin:0 auto;padding:24px 16px}h1,h2,h3,h4,h5,h6{line-height:1.3;margin:1.6em 0 .6em}h1,h2{border-bottom:1px solid #8885;padding-bottom:.3em}code{font:.9em ui-monospace,Menlo,Consolas,monospace;background:#8882;padding:.1em .35em;border-radius:4px}pre{background:#8882;padding:12px;border-radius:6px;overflow:auto}pre code{background:none;padding:0}blockquote{margin:1em 0;padding:.2em 1em;border-left:4px solid #8886;color:inherit;opacity:.85}table{border-collapse:collapse;display:block;overflow:auto}th,td{border:1px solid #8886;padding:6px 10px}th{background:#8882}img{max-width:100%}hr{border:0;border-top:1px solid #8885}a{color:#0a6cff}@media(prefers-color-scheme:dark){a{color:#6cb0ff}';
+        // 單一 .html：內容仍由 mdToHtml 產生（原始 HTML 當文字、連結 / 圖片只允許安全協定），外加 CSP 禁止任何腳本；站內 # 連結不開新分頁
+        function standaloneHtml(src) {
+            const used = new Set(), heads = [], body = mdToHtml(src, used, heads).replace(/<a href="(#[^"]*)" target="_blank" rel="noopener noreferrer">/g, '<a href="$1">');
+            const title = (heads.find(h => h.level === 1) || heads[0] || { text: '' }).text || 'Markdown 文件';
+            return `<!DOCTYPE html>\n<html lang="zh-TW">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width,initial-scale=1">\n`
+                + `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https:; style-src 'unsafe-inline'">\n<title>${esc(title)}</title>\n<style>:root{${STANDALONE_CSS}}</style>\n</head>\n<body>\n<article>\n${body}\n</article>\n</body>\n</html>\n`;
         }
         // ---------- 表格輔助 ----------
         const TBL_MAX_ROWS = 500, TBL_MAX_COLS = 50;
@@ -668,12 +714,12 @@ console.log('hello');
         src.value = typeof saved === 'string' ? saved : SAMPLE;
 
         function render() {
-            prev.innerHTML = mdToHtml(src.value);
+            prev.innerHTML = mdToHtml(src.value, new Set());
             $('#count').textContent = `${src.value.length} 字` + (Util.store.set('md_src', src.value) ? '' : '（太大，瀏覽器存不下，沒有自動儲存）');
         }
 
         src.oninput = render;
-        $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), prev.innerHTML, () => { });
+        $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), mdToHtml(src.value), () => { });
         render();
         // ---------- 表格工具（格子內容不存檔） ----------
         const tbl = { rows: [['', '', ''], ['', '', ''], ['', '', '']], aligns: ['', '', ''] };
@@ -745,6 +791,23 @@ console.log('hello');
             src.value = r.value; src.setSelectionRange(r.caret, r.caret); render(); hmsg('已插入編輯區');
         };
         $('#h2mCopy').onclick = () => Util.copyWithFeedback($('#h2mCopy'), $('#h2mOut').value, () => { });
+        // ---------- 目錄與獨立 HTML ----------
+        const omsg = (t, cls) => { const e = $('#tocMsg'); e.textContent = t; e.className = cls || ''; };
+        const tocDraw = () => { $('#tocOut').value = tocMd(src.value, +$('#tocLv').value); };
+        $('#tocBox').addEventListener('toggle', () => { if ($('#tocBox').open) tocDraw(); });
+        $('#tocLv').onchange = tocDraw; $('#tocGo').onclick = () => { tocDraw(); omsg($('#tocOut').value ? '' : '編輯區沒有標題（# 開頭的行）', 'err'); };
+        $('#tocInsert').onclick = () => {
+            tocDraw(); const md = $('#tocOut').value; if (!md) return omsg('編輯區沒有標題（# 開頭的行），沒有可插入的目錄', 'err');
+            const r = tblInsert(src.value, src.selectionStart, src.selectionEnd, md);
+            src.value = r.value; src.setSelectionRange(r.caret, r.caret); render(); omsg('已插入編輯區');
+        };
+        $('#tocCopy').onclick = () => { tocDraw(); Util.copyWithFeedback($('#tocCopy'), $('#tocOut').value, () => { }); };
+        $('#expHtml').onclick = () => { if (!src.value.trim()) return omsg('編輯區是空的', 'err'); Util.download(new Blob([standaloneHtml(src.value)], { type: 'text/html;charset=utf-8' }), 'markdown.html'); omsg('已下載 markdown.html'); };
+        // 預覽內的 # 連結（目錄）：在預覽區內捲動，不開新分頁也不改網址
+        prev.addEventListener('click', (ev) => {
+            const a = ev.target.closest && ev.target.closest('a[href^="#"]'); if (!a) return;
+            ev.preventDefault(); const id = decodeURIComponent(a.getAttribute('href').slice(1)), t = [...prev.querySelectorAll('[id]')].find(x => x.id === id); if (t) t.scrollIntoView({ block: 'start' });
+        });
         tblDraw();
         const tab = (pv) => { $('#two').classList.toggle('pv', pv); $('#tEdit').setAttribute('aria-pressed', !pv); $('#tPrev').setAttribute('aria-pressed', pv); };
         $('#tEdit').onclick = () => tab(false); $('#tPrev').onclick = () => tab(true);

@@ -179,6 +179,7 @@
         <div class="tabs" id="modeTabs">
             <button data-m="gen" aria-pressed="true">產生 SQL</button>
             <button data-m="fmt" aria-pressed="false">格式化 SQL</button>
+            <button data-m="ddl" aria-pressed="false">DDL 工具</button>
         </div>
 
         <div id="genPane">
@@ -244,6 +245,42 @@
                 <button class="primary" id="fCopy" hidden>複製</button>
             </div>
         </div>
+
+        <div id="ddlPane" hidden>
+            <div class="card">
+                <label for="dIn">貼上 CREATE TABLE（可多張，可含 CREATE INDEX、ALTER TABLE … ADD）</label>
+                <textarea id="dIn" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="CREATE TABLE users (id BIGINT PRIMARY KEY, email VARCHAR(255) NOT NULL);" maxlength="300000" style="min-height:160px"></textarea>
+                <div class="row" style="margin-top:10px">
+                    <label style="flex:1 1 160px">方言<select id="dDia" style="width:100%"><option value="auto">自動偵測</option><option value="mysql">MySQL</option><option value="pg">PostgreSQL</option><option value="sqlite">SQLite</option><option value="mssql">SQL Server</option></select></label>
+                </div>
+                <div class="row" style="margin-top:10px"><button class="primary" id="dGo">解析</button><button id="dEg">範例</button></div>
+            </div>
+            <div class="card" id="dOutCard" hidden>
+                <div class="note" id="dStatus" role="status"></div>
+                <details id="dSkip" hidden><summary id="dSkipSum"></summary><ul class="errs" id="dSkipList"></ul></details>
+                <div class="tabs" id="dTabs" hidden style="margin-top:10px">
+                    <button data-v="diag" aria-pressed="true">關聯圖</button>
+                    <button data-v="code" aria-pressed="false">轉型別</button>
+                </div>
+                <div id="dDiag" hidden>
+                    <div class="row">
+                        <label style="flex:1 1 120px">縮放<select id="dZoom" style="width:100%"><option value="fit">符合寬度</option><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option></select></label>
+                        <button id="dPng">匯出 PNG</button>
+                    </div>
+                    <div id="dScroll" style="overflow:auto;max-width:100%;margin-top:10px;border:1px solid var(--line);border-radius:var(--radius-sm)"><canvas id="dCv" role="img" aria-label="資料表關聯圖：方塊是資料表，連線是外鍵" style="display:block"></canvas></div>
+                </div>
+                <div id="dCode" hidden>
+                    <div class="row">
+                        <label style="flex:1 1 140px">語言<select id="dLang" style="width:100%"><option value="ts">TypeScript</option><option value="go">Go struct</option><option value="python">Python dataclass</option><option value="java">Java record</option></select></label>
+                        <label style="flex:1 1 140px">欄位命名<select id="dName" style="width:100%"><option value="">依語言慣例</option><option value="keep">保留原名</option><option value="camel">camelCase</option><option value="snake">snake_case</option><option value="pascal">PascalCase</option></select></label>
+                        <label style="flex:1 1 140px">可空欄位<select id="dNull" style="width:100%"><option value="type">用型別標示可空</option><option value="optional">可省略 / Optional</option><option value="ignore">都當不可空</option></select></label>
+                    </div>
+                    <div class="note" id="dWarn" style="white-space:pre-wrap"></div>
+                    <pre class="code" id="dCodeOut"></pre>
+                    <button class="primary" id="dCopy">複製</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <template id="help">
@@ -267,6 +304,12 @@
         <li>上方切到「格式化 SQL」，貼上一段（可含多個以分號分隔的）SQL。</li>
         <li>選關鍵字大小寫、逗號放行尾或行首、縮排（4 空白 / 2 空白 / Tab）。MySQL 的字串若用反斜線跳脫（<kbd>'it\'s'</kbd>）要勾選對應選項。</li>
         <li>按「格式化」：子句（SELECT / FROM / WHERE / GROUP BY …）、JOIN、AND / OR、CASE、子查詢與括號會換行縮排，按「複製」帶走。</li>
+        </ol>
+        <h3>DDL 工具（解析 CREATE TABLE）</h3>
+        <ol>
+        <li>上方切到「DDL 工具」，貼上一張或多張 <kbd>CREATE TABLE</kbd>（也認得 <kbd>CREATE INDEX</kbd> 與 <kbd>ALTER TABLE … ADD</kbd> 欄位 / 主鍵 / 唯一 / 外鍵），選方言（預設自動偵測）按「解析」。沒有範例可按「範例」。</li>
+        <li>「關聯圖」：每張表一個方塊（主鍵 PK、外鍵 FK、唯一 UQ 標在欄位右邊），外鍵用連線畫到被參照的表（圓點在外鍵欄、箭頭指向被參照的表）；被參照的表排在左邊。「縮放」可選符合寬度 / 100% / 150% / 200%，圖太寬時在圖框內左右捲動；「匯出 PNG」下載 2 倍解析度的圖。</li>
+        <li>「轉型別」：選 TypeScript、Go struct、Python dataclass、Java record，可選欄位命名（預設依語言慣例：TS / Java 用 camelCase、Python 用 snake_case、Go 用 PascalCase）與可空欄位的處理，按「複製」。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">貼上 select a,b from t where x=1 and y=2 order by a
@@ -292,6 +335,8 @@
         <li>INSERT 的空白儲存格：字串欄位視為空字串，其他型別視為 NULL。「在清單中」用逗號或換行分隔。</li>
         <li>版本：視窗函式（每組最新一筆）需 MySQL 8+ / SQLite 3.25+；SQLite RIGHT / FULL JOIN 需 3.39+；MySQL 不支援 FULL JOIN；SQL Server 的 OFFSET 分頁必須有 ORDER BY。</li>
         <li>格式化只改空白與關鍵字大小寫：字串、註解、引號識別字原封不動，識別字（表名、欄位名）大小寫不動；排版後會自動比對前後的 token 序列，不一致就不輸出。沒結尾的字串 / 註解會報錯；單獨的 <kbd>#</kbd> 要後面接空白才算註解（MySQL 風格）。不做自動換行折行，也不會檢查 SQL 語法對不對。上限 30 萬字元。貼上的 SQL 不會儲存。</li>
+        <li>DDL 工具：自寫解析器，認得常見的 MySQL / PostgreSQL / SQLite / SQL Server 語法（欄位型別、NOT NULL、DEFAULT、AUTO_INCREMENT / IDENTITY / SERIAL、PRIMARY KEY、UNIQUE、FOREIGN KEY / REFERENCES、KEY / INDEX、COMMENT）。<b>解析不了的語句或子句不會默默消失</b>，會列在結果上方的「略過或解析不了的語法」（紅色是可能影響結果的，灰色是不影響欄位與關聯的，例如 ENGINE / CHARSET、CHECK 約束、INSERT）。外鍵參照的表不在貼上的內容裡時，圖上不畫那條線並列出提醒。一次最多 100 張資料表、30 萬字元；關聯圖每張表最多畫 25 個欄位（主鍵與外鍵欄位優先，其餘寫「另有 N 欄」）。</li>
+        <li>轉型別的對應：先依方言把型別分成整數 / 大整數 / 浮點 / 十進位 / 布林 / 字串 / UUID / 日期 / 時間 / 二進位 / JSON，再對應到各語言。MySQL 的 <kbd>tinyint(1)</kbd> 和 <kbd>bit(1)</kbd> 視為布林、<kbd>int unsigned</kbd> 視為大整數；SQLite 的 <kbd>INTEGER</kbd> 是 64 位元；SQL Server 的 <kbd>timestamp</kbd> 是二進位（rowversion）。十進位在 TypeScript / Go 用字串（避免精度損失）、Python 用 <kbd>Decimal</kbd>、Java 用 <kbd>BigDecimal</kbd>；大整數在 TypeScript 用 <kbd>number</kbd>（超過 2^53 會失真）。陣列欄位（PostgreSQL 的 <kbd>text[]</kbd>）會轉成各語言的陣列 / List。不認得的型別當成 unknown / interface{} / Any / Object 並提醒。類別名稱是表名轉 PascalCase（不做單複數轉換）；欄位名稱與關鍵字衝突時尾端加底線；Go 的 tag 保留原欄位名。「可空欄位」：用型別標示 = TS <kbd>T | null</kbd>、Go 指標、Python <kbd>Optional[T]</kbd>、Java 包裝型別（不可空用基本型別）；可省略 = TS <kbd>?:</kbd>、Go 加 <kbd>omitempty</kbd>、Python 給預設 <kbd>None</kbd>（有預設值的欄位排在最後，因為 dataclass 規定）、Java <kbd>Optional&lt;T&gt;</kbd>。</li>
         <li>只記住「上次的方言、操作與輸出格式」（本機 sqlq_opts，壞資料會回到預設）；表名、條件與值不會儲存，重新整理就清空。用右上角備份即可管理這一個鍵。</li>
         </ul>
     </template>
@@ -1118,6 +1163,514 @@
             while (lines.length && lines[lines.length - 1] === '') lines.pop();
             return lines.length ? lines.join('\n') + '\n' : '';
         }
+        // ---------- DDL 工具：解析 CREATE TABLE（自寫，借用上面的 tokenizer）----------
+        // 結果 { tables: [{ name, schema, comment, columns: [{ name, type, args, unsigned, array, nullable, def, pk, unique, auto, generated, comment }],
+        //   pk: [欄位], uniques: [{ name, cols }], fks: [{ name, cols, ref: { schema, name }, refCols, onDelete, onUpdate }], indexes: [{ name, cols, unique, kind }] }],
+        //   skipped: [{ level: 'warn' | 'info', text, reason }] }。解析不了的語句 / 子句列在 skipped，不會默默消失
+        const DDL_MAX_TABLES = 100;
+        const ddlLow = (k) => k && k.type === 'word' ? k.text.toLowerCase() : '';
+        const ddlUnq = (s) => { const c = s[0]; if (c === '[') return s.slice(1, -1).replace(/\]\]/g, ']'); if (c === '`' || c === '"') return s.slice(1, -1).split(c + c).join(c); return s; };
+        const ddlIsId = (k) => !!k && (k.type === 'word' || k.type === 'qid');
+        const ddlStr = (s) => s[0] === "'" ? s.slice(1, -1).replace(/''/g, "'") : s;
+        function ddlTokText(toks) {
+            let o = '';
+            toks.forEach((k, i) => {
+                const p = toks[i - 1];
+                if (p && !(p.text === '(' || k.text === ')' || k.text === ',' || k.text === '.' || p.text === '.' || k.text === '::' || p.text === '::' || (k.text === '(' && p.type === 'word') || k.text === '[' || k.text === ']')) o += ' ';
+                o += k.text;
+            });
+            return o;
+        }
+        // 切成 token（去掉註解），並把 SQL Server 的 [id] [int] 這種「qid 後面接 [word]」合併成 qid（tokenizer 會把它當成陣列下標）
+        function ddlTokens(src) {
+            const t = sqlTokens(src).filter(k => k.type !== 'lcom' && k.type !== 'bcom'), out = [];
+            for (let i = 0; i < t.length; i++) {
+                const p = out[out.length - 1];
+                if (t[i].text === '[' && t[i].type === 'punct' && p && ddlIsId(p) && t[i + 1] && t[i + 1].type === 'word' && t[i + 2] && t[i + 2].text === ']') { out.push({ type: 'qid', text: '[' + t[i + 1].text + ']' }); i += 2; continue; }
+                out.push(t[i]);
+            }
+            return out;
+        }
+        // 從 toks[i] 是 '(' 的位置找到對應的 ')'，回傳索引（找不到 -1）
+        function ddlClose(toks, i) { let d = 0; for (let j = i; j < toks.length; j++) { if (toks[j].text === '(' && toks[j].type === 'punct') d++; else if (toks[j].text === ')' && toks[j].type === 'punct' && --d === 0) return j; } return -1; }
+        function ddlSplit(toks) {                     // 頂層逗號分隔
+            const out = [[]]; let d = 0;
+            for (const k of toks) {
+                if (k.type === 'punct' && k.text === '(') d++; else if (k.type === 'punct' && k.text === ')') d--;
+                if (k.type === 'punct' && k.text === ',' && d === 0) out.push([]); else out[out.length - 1].push(k);
+            }
+            return out.filter(x => x.length);
+        }
+        // 名稱：a.b.c → { parts, next }
+        function ddlName(toks, i) {
+            const parts = [];
+            while (ddlIsId(toks[i])) { parts.push(ddlUnq(toks[i].text)); if (toks[i + 1] && toks[i + 1].text === '.' && ddlIsId(toks[i + 2])) i += 2; else { i++; break; } }
+            return { parts, next: i };
+        }
+        const ddlRef = (parts) => ({ schema: parts.length > 1 ? parts[parts.length - 2] : '', name: parts[parts.length - 1] || '' });
+        // (a, b DESC, lower(c)) → { cols, next }
+        function ddlColList(toks, i) {
+            if (!toks[i] || toks[i].text !== '(') return { cols: [], next: i };
+            const e = ddlClose(toks, i); if (e < 0) return { cols: [], next: toks.length, bad: true };
+            const cols = ddlSplit(toks.slice(i + 1, e)).map(p => p.length > 1 && p[1].text === '(' ? ddlTokText(['asc', 'desc'].includes(ddlLow(p[p.length - 1])) ? p.slice(0, -1) : p) : ddlIsId(p[0]) ? ddlUnq(p[0].text) : ddlTokText(p));
+            return { cols, next: e + 1 };
+        }
+        const DDL_STOP = new Set(['not', 'null', 'default', 'primary', 'unique', 'references', 'check', 'constraint', 'auto_increment', 'autoincrement', 'identity', 'generated', 'collate', 'comment', 'on', 'charset', 'as', 'key', 'column_format', 'storage', 'invisible', 'visible', 'sparse', 'rowguidcol', 'filestream', 'clustered', 'nonclustered']);
+        const ddlIsStop = (toks, j) => { const w = ddlLow(toks[j]); return DDL_STOP.has(w) || (w === 'character' && ddlLow(toks[j + 1]) === 'set'); };
+        // DEFAULT / ON UPDATE 後面的運算式：單一值或函式呼叫或括號，可接 ::型別 轉型。回傳 { text, next }
+        function ddlExpr(toks, j) {
+            const s = j;
+            if (toks[j] && toks[j].type === 'op' && (toks[j].text === '-' || toks[j].text === '+')) j++;
+            if (toks[j] && toks[j].text === '(') { const e = ddlClose(toks, j); j = e < 0 ? toks.length : e + 1; }
+            else if (toks[j]) { const w = toks[j].type === 'word'; j++; if (w && toks[j] && toks[j].text === '(') { const e = ddlClose(toks, j); j = e < 0 ? toks.length : e + 1; } }
+            while (toks[j] && toks[j].text === '::') {
+                j++;
+                while (toks[j] && ddlIsId(toks[j]) && !ddlIsStop(toks, j)) j++;
+                if (toks[j] && toks[j].text === '(') { const e = ddlClose(toks, j); j = e < 0 ? toks.length : e + 1; }
+                while (toks[j] && toks[j].text === '[' && toks[j + 1] && toks[j + 1].text === ']') j += 2;
+            }
+            return { text: ddlTokText(toks.slice(s, j)), next: j };
+        }
+        // REFERENCES t [(c)] [MATCH x] [ON DELETE a] [ON UPDATE b] [DEFERRABLE …]
+        function ddlRefClause(toks, j) {
+            const n = ddlName(toks, j), r = { ref: ddlRef(n.parts), refCols: [], onDelete: '', onUpdate: '' };
+            j = n.next;
+            if (toks[j] && toks[j].text === '(') { const c = ddlColList(toks, j); r.refCols = c.cols; j = c.next; }
+            for (;;) {
+                const w = ddlLow(toks[j]);
+                if (w === 'on' && (ddlLow(toks[j + 1]) === 'delete' || ddlLow(toks[j + 1]) === 'update')) {
+                    const which = ddlLow(toks[j + 1]); let k = j + 2;
+                    const two = ['set', 'no'].includes(ddlLow(toks[k])) ? 2 : 1, act = toks.slice(k, k + two).map(x => x.text.toUpperCase()).join(' ');
+                    if (which === 'delete') r.onDelete = act; else r.onUpdate = act;
+                    k += two;
+                    j = k;
+                } else if (w === 'match') j += 2;
+                else if (w === 'deferrable') j++;
+                else if (w === 'not' && ddlLow(toks[j + 1]) === 'deferrable') j += 2;
+                else if (w === 'initially') j += 2;
+                else if (w === 'enforced') j++;
+                else break;
+            }
+            r.next = j; return r;
+        }
+        // 欄位定義 → column（無法解析的尾巴放 column.left）
+        function ddlColumn(item) {
+            const c = { name: ddlUnq(item[0].text), type: '', args: [], unsigned: false, array: false, nullable: true, def: null, pk: false, unique: false, auto: false, generated: false, comment: '', fk: null, left: [], checks: [] };
+            let j = 1; const words = [];
+            for (; j < item.length; j++) {
+                const k = item[j];
+                if (ddlIsStop(item, j)) break;
+                if (k.text === '(' && k.type === 'punct') { const e = ddlClose(item, j); if (e < 0) { j = item.length; break; } if (!c.args.length) c.args = ddlSplit(item.slice(j + 1, e)).map(p => p.length === 1 && p[0].type === 'str' ? ddlStr(p[0].text) : ddlTokText(p)); j = e; }
+                else if (k.text === '[' && item[j + 1] && item[j + 1].text === ']') { c.array = true; j++; }
+                else if (k.text === '[' && item[j + 1] && item[j + 2] && item[j + 2].text === ']') { c.array = true; j += 2; }
+                else if (ddlIsId(k) || k.text === '.') {
+                    const w = k.type === 'word' ? k.text.toLowerCase() : k.text === '.' ? '.' : ddlUnq(k.text).toLowerCase();
+                    if (w === 'unsigned') c.unsigned = true; else if (w === 'signed' || w === 'zerofill') { /* 不影響型別 */ } else if (w === 'array') c.array = true; else words.push(w);
+                } else break;
+            }
+            c.type = words.join(' ').replace(/ ?\. ?/g, '.');
+            while (j < item.length) {
+                const k = item[j], w = ddlLow(k);
+                if (w === 'constraint') { j += 2; continue; }
+                if (w === 'not' && ddlLow(item[j + 1]) === 'null') { c.nullable = false; j += 2; continue; }
+                if (w === 'not' && ddlLow(item[j + 1]) === 'for') { j += 3; continue; }
+                if (w === 'null') { c.nullable = true; j++; continue; }
+                if (w === 'default') { const e = ddlExpr(item, j + 1); c.def = e.text; j = e.next; continue; }
+                if (w === 'primary' && ddlLow(item[j + 1]) === 'key') { c.pk = true; j += 2; continue; }
+                if (w === 'key') { c.pk = true; j++; continue; }
+                if (w === 'unique') { c.unique = true; j++; if (ddlLow(item[j]) === 'key') j++; continue; }
+                if (w === 'auto_increment' || w === 'autoincrement') { c.auto = true; j++; continue; }
+                if (w === 'identity') { c.auto = true; j++; if (item[j] && item[j].text === '(') { const e = ddlClose(item, j); j = e < 0 ? item.length : e + 1; } continue; }
+                if (w === 'generated' || w === 'as') {
+                    if (w === 'generated') { j++; while (['always', 'by', 'default'].includes(ddlLow(item[j]))) j++; }
+                    if (ddlLow(item[j]) === 'as') {
+                        j++;
+                        if (ddlLow(item[j]) === 'identity') { c.auto = true; j++; if (item[j] && item[j].text === '(') { const e = ddlClose(item, j); j = e < 0 ? item.length : e + 1; } }
+                        else { c.generated = true; if (item[j] && item[j].text === '(') { const e = ddlClose(item, j); j = e < 0 ? item.length : e + 1; } if (['stored', 'virtual'].includes(ddlLow(item[j]))) j++; }
+                    } else c.left.push(w);
+                    continue;
+                }
+                if (w === 'references') { const r = ddlRefClause(item, j + 1); c.fk = { name: '', cols: [c.name], ref: r.ref, refCols: r.refCols, onDelete: r.onDelete, onUpdate: r.onUpdate }; j = r.next; continue; }
+                if (w === 'check') { const e = item[j + 1] && item[j + 1].text === '(' ? ddlClose(item, j + 1) : -1; c.checks.push(ddlTokText(item.slice(j, e < 0 ? j + 1 : e + 1))); j = e < 0 ? j + 1 : e + 1; continue; }
+                if (w === 'collate') { j += 2; continue; }
+                if (w === 'character' && ddlLow(item[j + 1]) === 'set') { j += 3; continue; }
+                if (w === 'charset') { j += 2; continue; }
+                if (w === 'comment' && item[j + 1] && item[j + 1].type === 'str') { c.comment = ddlStr(item[j + 1].text); j += 2; continue; }
+                if (w === 'on' && ddlLow(item[j + 1]) === 'update') { j = ddlExpr(item, j + 2).next; continue; }
+                if (w === 'on' && ddlLow(item[j + 1]) === 'conflict') { j += 3; continue; }
+                if (['clustered', 'nonclustered', 'asc', 'desc', 'invisible', 'visible', 'sparse', 'rowguidcol', 'filestream'].includes(w)) { j++; continue; }
+                if (w === 'storage' || w === 'column_format') { j += 2; continue; }
+                c.left.push(k.text); j++;
+            }
+            return c;
+        }
+        // 表格層級的項目：回傳 { kind: 'pk' | 'unique' | 'fk' | 'index' | 'skip' | 'col', ... }
+        function ddlTableItem(item) {
+            let k = 0, cname = '';
+            if (ddlLow(item[0]) === 'constraint' && item[1]) { cname = ddlUnq(item[1].text); k = 2; }
+            const w = ddlLow(item[k]), nx = ddlLow(item[k + 1]);
+            const idxLike = (from) => {
+                let j = from, name = '';
+                if (ddlIsId(item[j]) && ddlLow(item[j]) !== 'using') { name = ddlUnq(item[j].text); j++; }
+                while (['using', 'clustered', 'nonclustered'].includes(ddlLow(item[j]))) j += ddlLow(item[j]) === 'using' ? 2 : 1;
+                const c = ddlColList(item, j); return { name, cols: c.cols, bad: c.bad || !c.cols.length };
+            };
+            if (w === 'primary' && nx === 'key') { let j = k + 2; while (['clustered', 'nonclustered'].includes(ddlLow(item[j]))) j++; const c = ddlColList(item, j); return c.cols.length ? { kind: 'pk', name: cname, cols: c.cols } : { kind: 'skip', reason: 'PRIMARY KEY 的欄位清單解析不了' }; }
+            if (w === 'unique') { let j = k + 1; if (['key', 'index'].includes(ddlLow(item[j]))) j++; const r = idxLike(j); return r.bad ? { kind: 'skip', reason: 'UNIQUE 的欄位清單解析不了' } : { kind: 'unique', name: r.name || cname, cols: r.cols }; }
+            if (w === 'foreign' && nx === 'key') {
+                let j = k + 2, name = cname; if (ddlIsId(item[j])) { name = ddlUnq(item[j].text); j++; }
+                const c = ddlColList(item, j); j = c.next;
+                if (ddlLow(item[j]) !== 'references' || !c.cols.length) return { kind: 'skip', reason: 'FOREIGN KEY 的欄位或 REFERENCES 解析不了' };
+                const r = ddlRefClause(item, j + 1);
+                return { kind: 'fk', fk: { name, cols: c.cols, ref: r.ref, refCols: r.refCols, onDelete: r.onDelete, onUpdate: r.onUpdate } };
+            }
+            if (w === 'check') return { kind: 'skip', reason: 'CHECK 約束不解析（不影響欄位與關聯）', level: 'info' };
+            if (w === 'exclude' || w === 'like' || w === 'period') return { kind: 'skip', reason: `${w.toUpperCase()} 子句不支援` };
+            const ft = ['fulltext', 'spatial'].includes(w) && ['key', 'index'].includes(nx);
+            const named = ddlIsId(item[k + 1]) && item[k + 2] && item[k + 2].text === '(' && !(item[k + 3] && item[k + 3].type === 'num');   // KEY idx (a)；key varchar(50) 是欄位
+            if ((w === 'key' || w === 'index' || ft) && (ft || (item[k + 1] && (item[k + 1].text === '(' || named)))) {
+                const r = idxLike(k + (ft ? 2 : 1)); return r.bad ? { kind: 'skip', reason: '索引的欄位清單解析不了' } : { kind: 'index', name: r.name, cols: r.cols, unique: false, kind2: ft ? w : '' };
+            }
+            if (!ddlIsId(item[0])) return { kind: 'skip', reason: '看不懂這個項目（不是欄位定義也不是約束）' };
+            return { kind: 'col' };
+        }
+        const ddlSnip = (toks) => { const s = ddlTokText(toks); return s.length > 140 ? s.slice(0, 140) + '…' : s; };
+        function ddlParse(src) {
+            const skipped = [], tables = [];
+            if (src.length > SQLF_MAX) throw new Error(`SQL 太長（上限 ${SQLF_MAX} 字元）`);
+            let toks; try { toks = ddlTokens(src); } catch (e) { throw new Error('無法切分 SQL：' + e.message); }
+            const stmts = [[]]; let d = 0;
+            const START = new Set('create alter drop insert update delete set use comment grant truncate begin commit select'.split(' '));
+            toks.forEach((k, i) => {
+                if (k.type === 'punct' && k.text === '(') d++; else if (k.type === 'punct' && k.text === ')') d = Math.max(0, d - 1);
+                const cur = stmts[stmts.length - 1], w = ddlLow(k);
+                if (k.type === 'punct' && k.text === ';' && d === 0) stmts.push([]);
+                else if (d === 0 && w === 'go' && k.nl && (!toks[i + 1] || toks[i + 1].nl)) stmts.push([]);      // SQL Server 的批次分隔字
+                else if (d === 0 && k.nl && START.has(w) && cur.length && !(ddlLow(cur[cur.length - 1]) === 'on')) stmts.push([k]);   // 沒寫分號、換行後又出現新語句
+                else cur.push(k);
+            });
+            const later = [];
+            const find = (ref) => tables.find(t => t.name.toLowerCase() === ref.name.toLowerCase() && (!ref.schema || !t.schema || t.schema.toLowerCase() === ref.schema.toLowerCase())) || tables.find(t => t.name.toLowerCase() === ref.name.toLowerCase());
+            const skip = (st, reason, level = 'warn') => skipped.push({ level, text: ddlSnip(st), reason });
+            for (const st of stmts) {
+                if (!st.length) continue;
+                const w0 = ddlLow(st[0]);
+                if (w0 === 'go' && st.length === 1) continue;
+                if (w0 === 'create') {
+                    let i = 1;
+                    while (['or', 'replace', 'global', 'local', 'temp', 'temporary', 'unlogged', 'external', 'virtual', 'volatile'].includes(ddlLow(st[i]))) i++;
+                    if (ddlLow(st[i]) === 'table') {
+                        if (ddlLow(st[1]) === 'virtual') { skip(st, 'CREATE VIRTUAL TABLE 不支援'); continue; }
+                        i++; if (ddlLow(st[i]) === 'if' && ddlLow(st[i + 1]) === 'not' && ddlLow(st[i + 2]) === 'exists') i += 3;
+                        const n = ddlName(st, i);
+                        if (!n.parts.length) { skip(st, '找不到資料表名稱'); continue; }
+                        i = n.next;
+                        if (!st[i] || st[i].text !== '(') { skip(st, 'CREATE TABLE … AS / LIKE / PARTITION OF 這類寫法不支援（沒有欄位清單可解析）'); continue; }
+                        const e = ddlClose(st, i);
+                        if (e < 0) { skip(st, '括號沒有成對'); continue; }
+                        if (tables.length >= DDL_MAX_TABLES) throw new Error(`資料表超過 ${DDL_MAX_TABLES} 張，請分批貼上`);
+                        const t = { name: n.parts[n.parts.length - 1], schema: n.parts.length > 1 ? n.parts[n.parts.length - 2] : '', comment: '', columns: [], pk: [], uniques: [], fks: [], indexes: [] };
+                        for (const item of ddlSplit(st.slice(i + 1, e))) {
+                            const r = ddlTableItem(item);
+                            if (r.kind === 'col') {
+                                const c = ddlColumn(item);
+                                if (t.columns.some(x => x.name === c.name)) { skip(item, `欄位 ${t.name}.${c.name} 重複定義`); continue; }
+                                t.columns.push(c);
+                                if (c.fk) t.fks.push(c.fk);
+                                if (c.left.length) skip(item, `欄位 ${t.name}.${c.name} 後面有解析不了的語法：${c.left.join(' ').slice(0, 80)}`);
+                                c.checks.forEach(x => skip(item, `欄位 ${t.name}.${c.name} 的 ${x.slice(0, 60)} 不解析`, 'info'));
+                            } else if (r.kind === 'pk') t.pk = r.cols;
+                            else if (r.kind === 'unique') t.uniques.push({ name: r.name, cols: r.cols });
+                            else if (r.kind === 'fk') t.fks.push(r.fk);
+                            else if (r.kind === 'index') t.indexes.push({ name: r.name, cols: r.cols, unique: false, kind: r.kind2 });
+                            else skip(item, `${t.name}：${r.reason}`, r.level || 'warn');
+                        }
+                        const tail = st.slice(e + 1);
+                        for (let j = 0; j < tail.length; j++) if (ddlLow(tail[j]) === 'comment') { const q = tail[j + 1] && tail[j + 1].text === '=' ? j + 2 : j + 1; if (tail[q] && tail[q].type === 'str') t.comment = ddlStr(tail[q].text); }
+                        if (tail.length) skip(tail, `${t.name} 的資料表選項（ENGINE、CHARSET、分割等）不解析，不影響欄位與關聯`, 'info');
+                        tables.push(t);
+                        continue;
+                    }
+                    while (['unique', 'clustered', 'nonclustered', 'fulltext', 'spatial', 'columnstore', 'bitmap'].includes(ddlLow(st[i]))) i++;
+                    if (ddlLow(st[i]) === 'index') { later.push(st); continue; }
+                    skip(st, '不是 CREATE TABLE / CREATE INDEX，略過');
+                    continue;
+                }
+                if (w0 === 'alter' && ddlLow(st[1]) === 'table') { later.push(st); continue; }
+                skip(st, '不是 CREATE TABLE / CREATE INDEX / ALTER TABLE … ADD，略過');
+            }
+            for (const st of later) {
+                if (ddlLow(st[0]) === 'create') {
+                    let i = 1, unique = false; while (ddlLow(st[i]) !== 'index') { if (ddlLow(st[i]) === 'unique') unique = true; i++; }
+                    i++; while (['concurrently'].includes(ddlLow(st[i]))) i++;
+                    if (ddlLow(st[i]) === 'if' && ddlLow(st[i + 1]) === 'not') i += 3;
+                    let name = ''; if (ddlLow(st[i]) !== 'on') { const n = ddlName(st, i); name = n.parts[n.parts.length - 1] || ''; i = n.next; }
+                    if (ddlLow(st[i]) !== 'on') { skip(st, 'CREATE INDEX 缺少 ON'); continue; }
+                    i++; if (ddlLow(st[i]) === 'only') i++;
+                    const tn = ddlName(st, i); i = tn.next;
+                    if (ddlLow(st[i]) === 'using') i += 2;
+                    const c = ddlColList(st, i), t = find(ddlRef(tn.parts));
+                    if (!t) { skip(st, `找不到資料表 ${tn.parts.join('.')}（它的 CREATE TABLE 不在貼上的內容裡），索引略過`); continue; }
+                    if (!c.cols.length) { skip(st, 'CREATE INDEX 的欄位清單解析不了'); continue; }
+                    t.indexes.push({ name, cols: c.cols, unique, kind: '' });
+                    if (c.next < st.length) skip(st.slice(c.next), `索引 ${name || ''} 後面的 INCLUDE / WHERE / WITH 子句不解析`, 'info');
+                    continue;
+                }
+                let i = 2; while (['only', 'if', 'exists'].includes(ddlLow(st[i]))) i++;
+                const tn = ddlName(st, i); i = tn.next;
+                const t = find(ddlRef(tn.parts));
+                if (!t) { skip(st, `找不到資料表 ${tn.parts.join('.')}（它的 CREATE TABLE 不在貼上的內容裡）`); continue; }
+                for (const act of ddlSplit(st.slice(i))) {
+                    if (ddlLow(act[0]) !== 'add') { skip(act, `ALTER TABLE ${t.name}：只支援 ADD（欄位或約束），這個動作略過`); continue; }
+                    let a = act.slice(1); if (ddlLow(a[0]) === 'column') a = a.slice(1);
+                    if (ddlLow(a[0]) === 'if' && ddlLow(a[1]) === 'not') a = a.slice(3);
+                    const r = a.length ? ddlTableItem(a) : { kind: 'skip', reason: 'ADD 後面是空的' };
+                    if (r.kind === 'col') {
+                        const c = ddlColumn(a);
+                        if (t.columns.some(x => x.name === c.name)) { skip(act, `欄位 ${t.name}.${c.name} 重複定義`); continue; }
+                        t.columns.push(c); if (c.fk) t.fks.push(c.fk);
+                        if (c.left.length) skip(act, `欄位 ${t.name}.${c.name} 後面有解析不了的語法：${c.left.join(' ').slice(0, 80)}`);
+                    } else if (r.kind === 'pk') t.pk = r.cols;
+                    else if (r.kind === 'unique') t.uniques.push({ name: r.name, cols: r.cols });
+                    else if (r.kind === 'fk') t.fks.push(r.fk);
+                    else if (r.kind === 'index') t.indexes.push({ name: r.name, cols: r.cols, unique: false, kind: r.kind2 });
+                    else skip(act, `ALTER TABLE ${t.name}：${r.reason}`, r.level || 'warn');
+                }
+            }
+            // 整理：主鍵、唯一欄位、外鍵參照的欄位
+            for (const t of tables) {
+                const pkc = t.columns.filter(c => c.pk).map(c => c.name);
+                if (!t.pk.length) t.pk = pkc;
+                const byName = (n) => t.columns.find(c => c.name.toLowerCase() === String(n).toLowerCase());
+                t.pk = t.pk.map(n => (byName(n) || { name: n }).name);
+                for (const n of t.pk) { const c = byName(n); if (c) { c.pk = true; c.nullable = false; } else skipped.push({ level: 'warn', text: `PRIMARY KEY (${n})`, reason: `${t.name} 的主鍵欄位 ${n} 不在欄位清單裡` }); }
+                for (const u of t.uniques) if (u.cols.length === 1 && byName(u.cols[0])) byName(u.cols[0]).unique = true;
+                for (const f of t.fks) {
+                    f.cols = f.cols.map(n => (byName(n) || { name: n }).name);
+                    const rt = find(f.ref);
+                    if (!f.refCols.length && rt && rt.pk.length) f.refCols = rt.pk.slice();
+                    f.found = !!rt;
+                    if (!rt) skipped.push({ level: 'info', text: `${t.name}(${f.cols.join(', ')}) → ${f.ref.name}`, reason: `外鍵參照的資料表 ${f.ref.name} 不在貼上的內容裡，圖上不畫這條線` });
+                }
+            }
+            return { tables, skipped };
+        }
+        // 猜方言：反引號 / AUTO_INCREMENT → MySQL；[方括號]、IDENTITY、NVARCHAR → SQL Server；:: / SERIAL / JSONB → PostgreSQL；AUTOINCREMENT / WITHOUT ROWID → SQLite
+        function ddlDetect(src) {
+            const sc = { mysql: 0, mssql: 0, pg: 0, sqlite: 0 }, has = (re) => re.test(src);
+            if (has(/`/)) sc.mysql += 3; if (has(/\bauto_increment\b/i)) sc.mysql += 3; if (has(/\bengine\s*=/i)) sc.mysql += 3; if (has(/\bunsigned\b/i)) sc.mysql += 2; if (has(/\b(tinyint|mediumint|longtext|mediumtext)\b/i)) sc.mysql += 1; if (has(/\b(enum|unique key)\b/i)) sc.mysql += 1;
+            if (has(/\[\w[\w ]*\]\s*\.\s*\[|\[\w[\w ]*\]\s+\[?\w/)) sc.mssql += 3; if (has(/\bidentity\s*\(/i)) sc.mssql += 3; if (has(/\b(nvarchar|uniqueidentifier|datetime2|nchar|nvarchar\(max\))\b/i)) sc.mssql += 2; if (has(/^\s*go\s*$/im)) sc.mssql += 2; if (has(/\bdbo\./i)) sc.mssql += 1;
+            if (has(/::/)) sc.pg += 3; if (has(/\b(bigserial|serial|smallserial|jsonb|bytea|timestamptz)\b/i)) sc.pg += 3; if (has(/\b(character varying|with time zone|nextval|gen_random_uuid|uuid_generate)/i)) sc.pg += 2; if (has(/\bgenerated (always|by default) as identity\b/i)) sc.pg += 2;
+            if (has(/\bautoincrement\b/i)) sc.sqlite += 4; if (has(/\bwithout rowid\b/i)) sc.sqlite += 4; if (has(/\bpragma\b/i)) sc.sqlite += 3;
+            const best = Object.entries(sc).sort((a, b) => b[1] - a[1] || (a[0] === 'pg' ? -1 : 1))[0];
+            return best[1] ? best[0] : 'pg';
+        }
+
+        // ---------- DDL：型別分類（依方言）與轉型別 ----------
+        const DDL_CAT = {};
+        for (const [cat, names] of Object.entries({
+            int: 'tinyint smallint mediumint int integer int2 int4 smallserial serial serial2 serial4 year',
+            bigint: 'bigint int8 bigserial serial8',
+            float: 'float real double double.precision float4 float8 binary_float binary_double',
+            decimal: 'decimal numeric dec fixed money smallmoney number',
+            bool: 'bool boolean bit',
+            string: 'char varchar nvarchar nchar character character.varying national.character national.character.varying text tinytext mediumtext longtext ntext bpchar citext enum set name sysname xml inet cidr macaddr interval varchar2 nvarchar2 clob long.varchar string',
+            uuid: 'uuid uniqueidentifier',
+            date: 'date',
+            datetime: 'datetime datetime2 smalldatetime timestamp timestamp.with.time.zone timestamp.without.time.zone timestamptz datetimeoffset',
+            time: 'time time.with.time.zone time.without.time.zone timetz',
+            bytes: 'blob tinyblob mediumblob longblob binary varbinary bytea image rowversion raw long.raw',
+            json: 'json jsonb'
+        })) for (const n of names.split(' ')) DDL_CAT[n.replace(/\./g, ' ')] = cat;
+        // 回傳 { cat, tz, known }；cat = int / bigint / float / decimal / bool / string / uuid / date / datetime / time / bytes / json / unknown
+        function ddlCategory(col, d) {
+            const ty = col.type, a0 = col.args[0];
+            const tz = /with time zone|timestamptz|datetimeoffset|timetz/.test(ty) && !/without time zone/.test(ty);
+            let cat;
+            if (d === 'mysql') {
+                if (ty === 'tinyint' && a0 === '1') cat = 'bool';
+                else if (ty === 'bit') cat = !col.args.length || a0 === '1' ? 'bool' : 'bytes';
+                else if (ty === 'serial') cat = 'bigint';
+                else if (col.unsigned && ty === 'int') cat = 'bigint';
+            } else if (d === 'mssql') { if (ty === 'timestamp') cat = 'bytes'; }
+            else if (d === 'pg') { if (/^bit/.test(ty)) cat = 'string'; }
+            else if (d === 'sqlite') {
+                if (!ty) return { cat: 'unknown', tz: false, known: false };
+                if (!DDL_CAT[ty]) {
+                    if (/int/.test(ty)) cat = ['tinyint', 'smallint', 'mediumint', 'int2', 'int'].includes(ty) ? 'int' : 'bigint';
+                    else if (/char|clob|text/.test(ty)) cat = 'string'; else if (/blob/.test(ty)) cat = 'bytes'; else if (/real|floa|doub/.test(ty)) cat = 'float';
+                    else if (/bool/.test(ty)) cat = 'bool'; else if (/datetime|timestamp/.test(ty)) cat = 'datetime'; else if (/date/.test(ty)) cat = 'date'; else if (/dec|num/.test(ty)) cat = 'decimal'; else if (/json/.test(ty)) cat = 'json';
+                } else if (ty === 'integer') cat = 'bigint';        // SQLite 的 INTEGER 是 64 位元
+            }
+            if (!cat) cat = DDL_CAT[ty] || '';
+            if (col.unsigned && cat === 'int' && d === 'mysql') cat = 'bigint';
+            return { cat: cat || 'unknown', tz, known: !!cat };
+        }
+        // 單字切分：userID → [user, ID]、HTTPServer → [HTTP, Server]、snake_case、kebab-case
+        const ddlWords = (s) => s.match(/\p{Lu}+(?![\p{Ll}])|\p{Lu}?\p{Ll}+|\p{N}+|\p{L}+/gu) || [];
+        const DDL_CAP = (w) => w[0].toUpperCase() + w.slice(1).toLowerCase();
+        const DDL_INIT = new Set(['id', 'url', 'uri', 'uuid', 'api', 'ip', 'http', 'https', 'sql', 'json', 'html', 'xml', 'ui', 'cpu', 'tcp', 'udp']);
+        function ddlCase(s, style, go) {
+            const w = ddlWords(s);
+            if (!w.length) return s;
+            if (style === 'snake') return w.map(x => x.toLowerCase()).join('_');
+            if (style === 'camel') return w.map((x, i) => i ? DDL_CAP(x) : x.toLowerCase()).join('');
+            return w.map(x => go && DDL_INIT.has(x.toLowerCase()) ? x.toUpperCase() : DDL_CAP(x)).join('');
+        }
+        const DDL_RESERVED = {
+            ts: new Set(),
+            go: new Set('break default func interface select case defer go map struct chan else goto package switch const fallthrough if range type continue for import return var'.split(' ')),
+            python: new Set('False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield'.split(' ')),
+            java: new Set('abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while record var true false null'.split(' '))
+        };
+        function ddlIdent(name, style, lang, used) {
+            let s = style === 'keep' || !style ? name : ddlCase(name, style, lang === 'go');
+            s = s.replace(/[^\p{L}\p{N}_$]/gu, '_') || '_';
+            if (/^\p{N}/u.test(s)) s = '_' + s;
+            if (DDL_RESERVED[lang].has(s)) s += '_';
+            let r = s, n = 2; while (used.has(r)) r = s + '_' + n++;
+            used.add(r); return r;
+        }
+        const DDL_LANGS = ['ts', 'go', 'python', 'java'];
+        const DDL_DEFAULT_STYLE = { ts: 'camel', go: 'pascal', python: 'snake', java: 'camel' };
+        // 對應表：分類 → [非空型別, 依語言的 import / 備註]
+        const DDL_MAP = {
+            ts: { int: 'number', bigint: 'number', float: 'number', decimal: 'string', bool: 'boolean', string: 'string', uuid: 'string', date: 'Date', datetime: 'Date', time: 'string', bytes: 'Uint8Array', json: 'unknown', unknown: 'unknown' },
+            go: { int: 'int32', bigint: 'int64', float: 'float64', decimal: 'string', bool: 'bool', string: 'string', uuid: 'string', date: 'time.Time', datetime: 'time.Time', time: 'string', bytes: '[]byte', json: 'json.RawMessage', unknown: 'interface{}' },
+            python: { int: 'int', bigint: 'int', float: 'float', decimal: 'Decimal', bool: 'bool', string: 'str', uuid: 'UUID', date: 'date', datetime: 'datetime', time: 'time', bytes: 'bytes', json: 'Any', unknown: 'Any' },
+            java: { int: 'int', bigint: 'long', float: 'double', decimal: 'BigDecimal', bool: 'boolean', string: 'String', uuid: 'UUID', date: 'LocalDate', datetime: 'LocalDateTime', time: 'LocalTime', bytes: 'byte[]', json: 'String', unknown: 'Object' }
+        };
+        const DDL_BOX = { int: 'Integer', long: 'Long', double: 'Double', boolean: 'Boolean' };
+        // schema → { text, warnings }。opts：dialect（'mysql' | 'pg' | 'sqlite' | 'mssql'）、naming（'' = 依語言慣例 | keep | camel | snake | pascal）、nullable（'type' = 用型別標示可空 | 'optional' = 可省略 | 'ignore' = 都當不可空）
+        function ddlToCode(schema, lang, opts = {}) {
+            const d = opts.dialect || 'pg', nullMode = opts.nullable || 'type', warnings = [], imports = new Set(), blocks = [];
+            const style = opts.naming || DDL_DEFAULT_STYLE[lang], unk = new Set();
+            if (!DDL_LANGS.includes(lang)) throw new Error('不支援的語言：' + lang);
+            const typeOf = (c) => {
+                const k = ddlCategory(c, d);
+                if (!k.known) unk.add(c.type || '（沒有型別）');
+                let t = DDL_MAP[lang][k.cat];
+                if (lang === 'java' && k.tz && k.cat === 'datetime') { t = 'OffsetDateTime'; imports.add('java.time.OffsetDateTime'); }
+                else if (lang === 'java') { const im = { BigDecimal: 'java.math.BigDecimal', UUID: 'java.util.UUID', LocalDate: 'java.time.LocalDate', LocalDateTime: 'java.time.LocalDateTime', LocalTime: 'java.time.LocalTime' }[t]; if (im) imports.add(im); }
+                else if (lang === 'python') { const im = { Decimal: 'from decimal import Decimal', UUID: 'from uuid import UUID', date: 'from datetime import date', datetime: 'from datetime import datetime', time: 'from datetime import time', Any: 'from typing import Any' }[t]; if (im) imports.add(im); }
+                else if (lang === 'go') { if (t === 'time.Time') imports.add('time'); if (t === 'json.RawMessage') imports.add('encoding/json'); }
+                if (c.array) {
+                    if (lang === 'ts') t = (/ /.test(t) ? `(${t})` : t) + '[]';
+                    else if (lang === 'go') t = '[]' + t;
+                    else if (lang === 'python') t = `list[${t}]`;
+                    else { t = `List<${DDL_BOX[t] || t}>`; imports.add('java.util.List'); }
+                }
+                return { t };
+            };
+            const usedT = new Set();
+            for (const tb of schema.tables) {
+                const cls = ddlIdent(tb.name, 'pascal', lang, usedT), used = new Set();
+                const cols = tb.columns.map(c => {
+                    const ty = typeOf(c), nullable = nullMode !== 'ignore' && c.nullable;
+                    return { c, id: ddlIdent(c.name, lang === 'go' ? 'pascal' : style, lang, used), ...ty, nullable };
+                });
+                if (lang === 'ts') {
+                    const L = cols.map(x => {
+                        const doc = x.c.comment ? `  /** ${x.c.comment.replace(/\*\//g, '* /')} */\n` : '';
+                        const ty = x.nullable && nullMode === 'type' ? `${x.t} | null` : x.t;
+                        return `${doc}  ${x.id}${x.nullable && nullMode === 'optional' ? '?' : ''}: ${ty};`;
+                    });
+                    blocks.push(`export interface ${cls} {\n${L.join('\n')}\n}`);
+                } else if (lang === 'go') {
+                    const rows = cols.map(x => {
+                        const ptr = x.nullable && !x.t.startsWith('[]') && x.t !== 'json.RawMessage' && x.t !== 'interface{}';
+                        return [x.id, (ptr ? '*' : '') + x.t, '`json:"' + x.c.name + (x.nullable && nullMode === 'optional' ? ',omitempty' : '') + '" db:"' + x.c.name + '"`' + (x.c.comment ? ' // ' + x.c.comment.replace(/\s+/g, ' ') : '')];
+                    });
+                    const w0 = Math.max(0, ...rows.map(r => r[0].length)), w1 = Math.max(0, ...rows.map(r => r[1].length));
+                    blocks.push(`type ${cls} struct {\n${rows.map(r => `\t${r[0].padEnd(w0)} ${r[1].padEnd(w1)} ${r[2]}`).join('\n')}\n}`);
+                } else if (lang === 'python') {
+                    const L = cols.map(x => {
+                        const opt = x.nullable;
+                        return { req: !(opt && nullMode === 'optional'), line: `    ${x.id}: ${opt ? `Optional[${x.t}]` : x.t}${opt && nullMode === 'optional' ? ' = None' : ''}${x.c.comment ? '  # ' + x.c.comment.replace(/\s+/g, ' ') : ''}` };
+                    });
+                    if (cols.some(x => x.nullable)) imports.add('from typing import Optional');
+                    blocks.push(`@dataclass\nclass ${cls}:\n${L.length ? [...L.filter(x => x.req), ...L.filter(x => !x.req)].map(x => x.line).join('\n') : '    pass'}`);
+                } else {
+                    const L = cols.map(x => {
+                        let t = x.nullable ? (nullMode === 'optional' ? `Optional<${DDL_BOX[x.t] || x.t}>` : DDL_BOX[x.t] || x.t) : x.t;
+                        if (x.nullable && nullMode === 'optional') imports.add('java.util.Optional');
+                        return `${x.c.comment ? `        /** ${x.c.comment.replace(/\*\//g, '* /')} */\n` : ''}        ${t} ${x.id}`;
+                    });
+                    blocks.push(`public record ${cls}(\n${L.join(',\n')}\n) {}`);
+                }
+            }
+            if (unk.size) warnings.push(`有 ${unk.size} 種型別不認得，已當成 ${DDL_MAP[lang].unknown}：${[...unk].slice(0, 8).join('、')}`);
+            let head = '';
+            if (lang === 'go') { const im = [...imports].sort(); head = 'package model\n\n' + (im.length === 1 ? `import "${im[0]}"\n\n` : im.length ? `import (\n${im.map(x => `\t"${x}"`).join('\n')}\n)\n\n` : ''); }
+            else if (lang === 'python') { const im = [...imports]; const ty = im.filter(x => x.startsWith('from typing')); const names = [...new Set(ty.flatMap(x => x.replace('from typing import ', '').split(', ')))].sort(); head = ['from dataclasses import dataclass', ...im.filter(x => !x.startsWith('from typing')).sort(), ...(names.length ? ['from typing import ' + names.join(', ')] : [])].join('\n') + '\n\n\n'; }
+            else if (lang === 'java') { const im = [...imports].sort(); head = im.length ? im.map(x => `import ${x};`).join('\n') + '\n\n' : ''; }
+            return { text: head + blocks.join(lang === 'python' ? '\n\n\n' : '\n\n') + '\n', warnings };
+        }
+
+        // ---------- DDL：關聯圖排版（只算座標，不碰 canvas；measure(字串) 回傳寬度）----------
+        const DDL_G = { pad: 10, row: 20, head: 28, gx: 80, gy: 28, maxRows: 25, maxCol: 900, margin: 20 };
+        function ddlLayout(schema, measure) {
+            const G = DDL_G, T = schema.tables, n = T.length;
+            const idx = new Map(T.map((t, i) => [t.name.toLowerCase(), i]));
+            const refIdx = (f) => { const i = idx.get(f.ref.name.toLowerCase()); return i === undefined ? -1 : i; };
+            // 每個表要顯示哪些欄位：主鍵、外鍵優先，其他依序補到上限
+            const shown = T.map(t => {
+                const fkc = new Set(t.fks.flatMap(f => f.cols)), need = new Set(), all = t.columns.map((c, i) => i);
+                t.columns.forEach((c, i) => { if (c.pk || fkc.has(c.name)) need.add(i); });
+                for (const i of all) { if (need.size >= G.maxRows) break; need.add(i); }
+                return all.filter(i => need.has(i));
+            });
+            const boxes = T.map((t, i) => {
+                const fkc = new Set(t.fks.flatMap(f => f.cols)), ids = shown[i];
+                const rows = ids.map(ci => { const c = t.columns[ci]; const ty = c.type + (c.args.length ? `(${c.args.join(',')})` : '') + (c.array ? '[]' : ''); return { name: c.name, type: ty, badge: [c.pk ? 'PK' : '', fkc.has(c.name) ? 'FK' : '', c.unique && !c.pk ? 'UQ' : ''].filter(Boolean).join(' '), nullable: c.nullable, col: ci }; });
+                const more = t.columns.length - ids.length;
+                const title = (t.schema ? t.schema + '.' : '') + t.name;
+                const wName = Math.max(...rows.map(r => measure(r.name)), 0), wType = Math.max(...rows.map(r => measure(r.type)), 0), wBadge = Math.max(...rows.map(r => measure(r.badge)), 0);
+                const w = Math.ceil(Math.max(measure(title) + 2 * G.pad + 8, G.pad * 2 + wName + 14 + wType + (wBadge ? 12 + wBadge : 0), more > 0 ? measure(`… 另有 ${more} 欄`) + 2 * G.pad : 0, 120));
+                return { i, title, rows, more, w, h: G.head + rows.length * G.row + (more > 0 ? G.row : 0) + 6, wName, wType, wBadge };
+            });
+            // 層級：被參照的在左邊（level 小）
+            const level = new Array(n).fill(-1), state = new Array(n).fill(0);
+            const lv = (i) => { if (state[i] === 2) return level[i]; if (state[i] === 1) return 0; state[i] = 1; let m = -1; for (const f of T[i].fks) { const j = refIdx(f); if (j >= 0 && j !== i) m = Math.max(m, lv(j)); } level[i] = m + 1; state[i] = 2; return level[i]; };
+            for (let i = 0; i < n; i++) lv(i);
+            const deg = new Array(n).fill(0);
+            T.forEach((t, i) => t.fks.forEach(f => { const j = refIdx(f); if (j >= 0 && j !== i) { deg[i]++; deg[j]++; } }));
+            const maxL = Math.max(0, ...level), order = new Array(n).fill(0), cols = [];
+            let prevOrder = new Map();
+            for (let L = 0; L <= maxL; L++) {
+                let ids = []; for (let i = 0; i < n; i++) if (level[i] === L) ids.push(i);
+                const bary = (i) => { const ns = []; T[i].fks.forEach(f => { const j = refIdx(f); if (j >= 0 && prevOrder.has(j)) ns.push(prevOrder.get(j)); }); T.forEach((t, k) => { if (prevOrder.has(k) && t.fks.some(f => refIdx(f) === i)) ns.push(prevOrder.get(k)); }); return ns.length ? ns.reduce((a, b) => a + b, 0) / ns.length : Infinity; };
+                ids = ids.map((i, k) => ({ i, k, b: bary(i), iso: deg[i] === 0 })).sort((a, b) => (a.iso - b.iso) || (a.b - b.b) || (a.k - b.k)).map(x => x.i);
+                ids.forEach((i, k) => prevOrder.set(i, k));
+                let cur = [], hh = 0;
+                for (const i of ids) { if (cur.length && hh + boxes[i].h > G.maxCol) { cols.push(cur); cur = []; hh = 0; } cur.push(i); hh += boxes[i].h + G.gy; }
+                if (cur.length) cols.push(cur);
+            }
+            let x = G.margin, H = 0;
+            for (const col of cols) {
+                const cw = Math.max(...col.map(i => boxes[i].w));
+                let y = G.margin;
+                for (const i of col) { boxes[i].x = x; boxes[i].y = y; boxes[i].cx = x; y += boxes[i].h + G.gy; }
+                H = Math.max(H, y - G.gy);
+                x += cw + G.gx;
+            }
+            const W = Math.max(x - G.gx + G.margin, 2 * G.margin + 120), edges = [];
+            T.forEach((t, a) => t.fks.forEach(f => {
+                const b = refIdx(f); if (b < 0) return;
+                const rowOf = (bi, cn) => { const r = boxes[bi].rows.findIndex(r => r.name.toLowerCase() === String(cn || '').toLowerCase()); return r; };
+                edges.push({ a, b, ra: rowOf(a, f.cols[0]), rb: rowOf(b, f.refCols[0]), name: f.name, cols: f.cols, refCols: f.refCols });
+            }));
+            return { W: Math.ceil(W), H: Math.ceil(H + G.margin), boxes, edges, G };
+        }
+        // 邊的端點：回傳 [x1, y1, dir1, x2, y2, dir2]（dir = 往外的水平方向 ±1）
+        function ddlEdgePts(L, e) {
+            const A = L.boxes[e.a], B = L.boxes[e.b], G = L.G;
+            const ay = A.y + G.head + (e.ra >= 0 ? e.ra * G.row + G.row / 2 : -G.head / 2 + 2), by = B.y + G.head + (e.rb >= 0 ? e.rb * G.row + G.row / 2 : -G.head / 2 + 2);
+            if (e.a === e.b) return [A.x + A.w, ay, 1, A.x + A.w, ay + G.row, 1];
+            if (A.x >= B.x + B.w) return [A.x, ay, -1, B.x + B.w, by, 1];
+            if (A.x + A.w <= B.x) return [A.x + A.w, ay, 1, B.x, by, -1];
+            return [A.x + A.w, ay, 1, B.x + B.w, by, 1];
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -1239,7 +1792,8 @@
         let fText = '';
         $('#modeTabs').onclick = (e) => {
             const m = e.target.dataset.m; if (!m) return;
-            $('#genPane').hidden = m !== 'gen'; $('#fmtPane').hidden = m !== 'fmt';
+            $('#genPane').hidden = m !== 'gen'; $('#fmtPane').hidden = m !== 'fmt'; $('#ddlPane').hidden = m !== 'ddl';
+            if (m === 'ddl') dRender();
             [...$('#modeTabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.m === m));
         };
         $('#fGo').onclick = () => {
@@ -1255,6 +1809,120 @@
             } catch (e) { st.textContent = '✗ ' + e.message; }
         };
         $('#fCopy').onclick = () => copyWithFeedback($('#fCopy'), fText);
+
+        // ---------- DDL 工具（解析、關聯圖、轉型別）----------
+        const DDL_EG = `CREATE TABLE users (
+  id BIGSERIAL PRIMARY KEY,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  nickname TEXT,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+CREATE TABLE posts (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title VARCHAR(200) NOT NULL,
+  body TEXT,
+  tags TEXT[],
+  published BOOLEAN DEFAULT false
+);
+CREATE TABLE comments (
+  id BIGSERIAL PRIMARY KEY,
+  post_id BIGINT NOT NULL,
+  user_id BIGINT,
+  body TEXT NOT NULL,
+  CONSTRAINT fk_post FOREIGN KEY (post_id) REFERENCES posts (id),
+  CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users (id)
+);
+CREATE INDEX idx_posts_user ON posts (user_id);`;
+        const D_FONT = '13px ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans TC", monospace';
+        const dProbe = document.createElement('canvas').getContext('2d');
+        const dMeasure = (s) => { dProbe.font = D_FONT; return dProbe.measureText(s).width; };
+        let dSchema = null, dDialect = 'pg', dLayout = null, dCode = '';
+        // 取主題色（--card 等）；值不是顏色（例如漸層）就用後備色
+        function dColors() {
+            const cs = getComputedStyle(document.documentElement);
+            const pick = (v, fb) => { dProbe.fillStyle = fb; dProbe.fillStyle = cs.getPropertyValue(v).trim() || fb; return dProbe.fillStyle; };
+            const card = pick('--card', '#ffffff');
+            return { bg: pick('--bg', card), card, text: pick('--text', '#111111'), muted: pick('--muted', '#777777'), line: pick('--line', '#cccccc'), fill: pick('--fill', '#eeeeee'), blue: pick('--blue', '#2f6fed') };
+        }
+        function dRound(ctx, x, y, w, h, r) { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h); }
+        function dDraw(ctx, L, c) {
+            const G = L.G;
+            ctx.font = D_FONT; ctx.textBaseline = 'middle';
+            ctx.fillStyle = c.bg; ctx.fillRect(0, 0, L.W, L.H);
+            ctx.lineWidth = 1.5; ctx.strokeStyle = c.blue; ctx.fillStyle = c.blue;
+            for (const e of L.edges) {
+                const [x1, y1, d1, x2, y2, d2] = ddlEdgePts(L, e), k = Math.max(30, Math.abs(x2 - x1) / 2);
+                ctx.beginPath(); ctx.moveTo(x1, y1); ctx.bezierCurveTo(x1 + d1 * k, y1, x2 + d2 * k, y2, x2, y2); ctx.stroke();
+                ctx.beginPath(); ctx.arc(x1, y1, 3, 0, 7); ctx.fill();
+                ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 + d2 * 9, y2 - 4.5); ctx.lineTo(x2 + d2 * 9, y2 + 4.5); ctx.closePath(); ctx.fill();
+            }
+            ctx.lineWidth = 1;
+            for (const b of L.boxes) {
+                dRound(ctx, b.x, b.y, b.w, b.h, 6); ctx.fillStyle = c.card; ctx.fill(); ctx.strokeStyle = c.line; ctx.stroke();
+                ctx.save(); dRound(ctx, b.x, b.y, b.w, b.h, 6); ctx.clip(); ctx.fillStyle = c.fill; ctx.fillRect(b.x, b.y, b.w, G.head); ctx.restore();
+                ctx.fillStyle = c.text; ctx.font = 'bold ' + D_FONT; ctx.textAlign = 'left'; ctx.fillText(b.title, b.x + G.pad, b.y + G.head / 2 + 1);
+                ctx.font = D_FONT;
+                b.rows.forEach((r, i) => {
+                    const y = b.y + G.head + i * G.row + G.row / 2;
+                    ctx.fillStyle = c.text; ctx.textAlign = 'left'; ctx.fillText(r.name, b.x + G.pad, y);
+                    ctx.fillStyle = c.muted; ctx.fillText(r.type, b.x + G.pad + b.wName + 14, y);
+                    if (r.badge) { ctx.fillStyle = c.blue; ctx.textAlign = 'right'; ctx.fillText(r.badge, b.x + b.w - G.pad, y); }
+                });
+                if (b.more > 0) { ctx.fillStyle = c.muted; ctx.textAlign = 'left'; ctx.fillText(`… 另有 ${b.more} 欄`, b.x + G.pad, b.y + G.head + b.rows.length * G.row + G.row / 2); }
+            }
+        }
+        const D_MAXPX = 16e6;               // canvas 像素上限（iOS Safari 約 1600 萬），超過就降低解析度
+        function dRender() {
+            const L = dLayout; if (!L || $('#dDiag').hidden) return;
+            const cv = $('#dCv'), sel = $('#dZoom').value, avail = $('#dScroll').clientWidth || 340;
+            const z = sel === 'fit' ? Math.max(0.5, Math.min(1, avail / L.W)) : +sel;
+            let dpr = window.devicePixelRatio || 1;
+            const px = L.W * L.H * z * z * dpr * dpr; if (px > D_MAXPX) dpr *= Math.sqrt(D_MAXPX / px);
+            cv.width = Math.max(1, Math.round(L.W * z * dpr)); cv.height = Math.max(1, Math.round(L.H * z * dpr));
+            cv.style.width = L.W * z + 'px'; cv.style.height = L.H * z + 'px';
+            const ctx = cv.getContext('2d'); ctx.setTransform(z * dpr, 0, 0, z * dpr, 0, 0); dDraw(ctx, L, dColors());
+        }
+        const dCodeRender = () => {
+            if (!dSchema) return;
+            const r = ddlToCode(dSchema, $('#dLang').value, { dialect: dDialect, naming: $('#dName').value, nullable: $('#dNull').value });
+            dCode = r.text; $('#dCodeOut').textContent = r.text; $('#dWarn').textContent = r.warnings.join('\n');
+        };
+        const dView = (v) => {
+            $('#dDiag').hidden = v !== 'diag'; $('#dCode').hidden = v !== 'code';
+            [...$('#dTabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v));
+            if (v === 'diag') dRender(); else dCodeRender();
+        };
+        $('#dTabs').onclick = (e) => { if (e.target.dataset.v) dView(e.target.dataset.v); };
+        $('#dZoom').onchange = dRender; $('#dLang').onchange = $('#dName').onchange = $('#dNull').onchange = dCodeRender;
+        window.addEventListener('resize', dRender);
+        new MutationObserver(dRender).observe(document.documentElement, { attributes: true, attributeFilter: ['data-ui-style', 'data-ui-mode'] });
+        $('#dEg').onclick = () => { $('#dIn').value = DDL_EG; $('#dGo').click(); };
+        $('#dDia').onchange = () => { if (dSchema) $('#dGo').click(); };
+        $('#dPng').onclick = () => {
+            const L = dLayout; if (!L) return;
+            const s = Math.min(2, Math.sqrt(D_MAXPX / (L.W * L.H))), cv = document.createElement('canvas');
+            cv.width = Math.round(L.W * s); cv.height = Math.round(L.H * s);
+            const ctx = cv.getContext('2d'); ctx.setTransform(s, 0, 0, s, 0, 0); dDraw(ctx, L, dColors());
+            cv.toBlob((b) => { if (b) Util.download(b, 'schema.png'); }, 'image/png');
+        };
+        $('#dCopy').onclick = () => copyWithFeedback($('#dCopy'), dCode);
+        $('#dGo').onclick = () => {
+            const src = $('#dIn').value, st = $('#dStatus'), card = $('#dOutCard');
+            card.hidden = false; dSchema = null; dLayout = null; dCode = '';
+            ['#dSkip', '#dTabs', '#dDiag', '#dCode'].forEach(x => { $(x).hidden = true; });
+            if (!src.trim()) { st.textContent = '請先貼上 CREATE TABLE'; return; }
+            try { dSchema = ddlParse(src); } catch (e) { dSchema = null; st.textContent = '✗ ' + e.message; return; }
+            const sk = dSchema.skipped;
+            $('#dSkipList').replaceChildren(...sk.map(x => h('li', { style: x.level === 'info' ? 'color:var(--muted)' : '' }, `${x.reason}：${x.text}`)));
+            $('#dSkip').hidden = !sk.length; $('#dSkip').open = sk.some(x => x.level === 'warn'); $('#dSkipSum').textContent = `略過或解析不了的語法（${sk.length}）`;
+            if (!dSchema.tables.length) { dSchema = null; st.textContent = '✗ 沒有解析到任何 CREATE TABLE'; return; }
+            const auto = $('#dDia').value === 'auto'; dDialect = auto ? ddlDetect(src) : $('#dDia').value;
+            const T = dSchema.tables;
+            st.textContent = `✓ 解析到 ${T.length} 張資料表、${T.reduce((a, t) => a + t.columns.length, 0)} 個欄位、${T.reduce((a, t) => a + t.fks.length, 0)} 條外鍵；方言：${D_LABELS[dDialect]}${auto ? '（自動偵測）' : ''}`;
+            dLayout = ddlLayout(dSchema, dMeasure);
+            $('#dTabs').hidden = false; dView([...$('#dTabs').children].find(b => b.getAttribute('aria-pressed') === 'true').dataset.v);
+        };
 
         { const o = loadOpts(store.get('sqlq_opts', null)); S.op = o.op; S.d = o.d; fmt = o.fmt; }
         markFmt(); build();

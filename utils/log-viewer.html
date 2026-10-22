@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="日誌與錯誤檢視：自動辨識 nginx / syslog / Log4j / JSON Lines / Python 日誌，篩選、統計；整理各語言的 Stack trace。">
+    <meta property="og:title" content="日誌與錯誤檢視" />
+    <meta property="og:description" content="貼上或載入日誌檔，依等級、時間、關鍵字篩選；整理 Java / Python / JS / .NET / Go 的錯誤堆疊。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/log-viewer.html" />
+    <title>日誌與錯誤檢視</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 860px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .tabs button {
+            flex: 1 1 auto;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin: 8px 0;
+        }
+
+        .row>input,
+        .row>select {
+            flex: 1 1 140px;
+            min-width: 0;
+        }
+
+        textarea {
+            width: 100%;
+            box-sizing: border-box;
+            min-height: 140px;
+            resize: vertical;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+        }
+
+        .chk {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 44px;
+            margin: 0;
+        }
+
+        .ent {
+            border-bottom: 1px solid var(--line);
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 13px;
+        }
+
+        .ent>.hd {
+            display: flex;
+            gap: 8px;
+            align-items: baseline;
+            padding: 6px 2px;
+            cursor: pointer;
+            min-height: 32px;
+        }
+
+        .ent .tm {
+            color: var(--muted);
+            flex: 0 0 auto;
+            font-size: 12px;
+        }
+
+        .ent .lv {
+            flex: 0 0 auto;
+            font-weight: 700;
+            font-size: 11px;
+            padding: 1px 6px;
+            border-radius: 6px;
+            background: var(--fill);
+        }
+
+        .lv.ERROR {
+            color: var(--bad);
+            border: 1px solid var(--bad);
+        }
+
+        .lv.WARN {
+            border: 1px solid var(--text);
+        }
+
+        .lv.INFO {
+            color: var(--blue);
+        }
+
+        .lv.DEBUG {
+            color: var(--muted);
+        }
+
+        .ent .ms {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow-wrap: anywhere;
+            white-space: pre-wrap;
+        }
+
+        .ent .cnt {
+            flex: 0 0 auto;
+            background: var(--blue);
+            color: var(--on-blue);
+            border-radius: 10px;
+            padding: 0 7px;
+            font-size: 12px;
+        }
+
+        .ent.E .ms {
+            color: var(--bad);
+        }
+
+        mark {
+            background: var(--fill);
+            color: var(--text);
+            outline: 1px solid var(--blue);
+            border-radius: 2px;
+        }
+
+        pre.code {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 13px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin: 6px 0;
+            overflow-x: auto;
+            white-space: pre;
+            max-width: 100%;
+        }
+
+        .tw {
+            overflow-x: auto;
+            max-width: 100%;
+        }
+
+        table.t {
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        table.t th,
+        table.t td {
+            border: 1px solid var(--line);
+            padding: 4px 8px;
+            text-align: left;
+            max-width: 260px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        table.t th {
+            cursor: pointer;
+            background: var(--fill);
+        }
+
+        .bar {
+            display: flex;
+            height: 14px;
+            border-radius: 7px;
+            overflow: hidden;
+            background: var(--fill);
+            margin: 6px 0;
+        }
+
+        .bar i {
+            display: block;
+            height: 100%;
+        }
+
+        svg.chart {
+            width: 100%;
+            height: 80px;
+            display: block;
+        }
+
+        .alert {
+            border: 2px solid var(--bad);
+            color: var(--bad);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            margin: 8px 0;
+            font-weight: 600;
+        }
+
+        .blk {
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            padding: 8px 10px;
+            margin: 10px 0;
+        }
+
+        .blk .bh {
+            font-weight: 700;
+            overflow-wrap: anywhere;
+        }
+
+        .blk .role {
+            font-size: 12px;
+            background: var(--fill);
+            border-radius: 6px;
+            padding: 1px 6px;
+            margin-right: 6px;
+        }
+
+        .fr {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 13px;
+            padding: 2px 0 2px 8px;
+            overflow-wrap: anywhere;
+            white-space: pre-wrap;
+            border-left: 3px solid transparent;
+        }
+
+        .fr.mine {
+            border-left-color: var(--blue);
+            color: var(--blue);
+            font-weight: 700;
+        }
+
+        .fr.lib {
+            color: var(--muted);
+        }
+
+        details.lg>summary {
+            color: var(--muted);
+            cursor: pointer;
+            min-height: 32px;
+            padding: 4px 0 4px 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>日誌與錯誤檢視</h1>
+        <p class="sub">貼上或載入日誌，篩選、統計、整理錯誤堆疊；檔案只在這個瀏覽器處理，不上傳。</p>
+
+        <div class="tabs" id="tabs"></div>
+
+        <div class="card" id="srcCard">
+            <label for="src"><b>日誌內容</b>（日誌檢視與 JSON Lines 共用）</label>
+            <textarea id="src" spellcheck="false" aria-label="日誌內容" placeholder="貼上日誌文字，或載入檔案（上限 20MB，只解析前 200,000 行）"></textarea>
+            <div class="row">
+                <input type="file" id="file" aria-label="載入日誌檔案">
+                <button id="clear">清除</button>
+            </div>
+            <p class="note" id="srcInfo"></p>
+        </div>
+
+        <section id="p0">
+            <div class="card">
+                <div class="row">
+                    <select id="fmt" aria-label="日誌格式"></select>
+                    <input id="q" type="text" placeholder="關鍵字或正則" aria-label="關鍵字或正則" autocomplete="off" autocapitalize="off" spellcheck="false">
+                    <label class="chk"><input type="checkbox" id="isRe">正則</label>
+                </div>
+                <div class="row" id="lvs"></div>
+                <div class="row">
+                    <input id="tFrom" type="text" placeholder="起：2024-05-01 10:00" aria-label="起始時間" autocomplete="off" spellcheck="false">
+                    <input id="tTo" type="text" placeholder="迄：2024-05-01 11:00" aria-label="結束時間" autocomplete="off" spellcheck="false">
+                    <label class="chk"><input type="checkbox" id="fold">折疊連續重複</label>
+                </div>
+                <p class="note" id="lInfo"></p>
+                <p class="alert" id="lErr" hidden></p>
+            </div>
+            <div class="card">
+                <h2>統計</h2>
+                <div id="stat"></div>
+            </div>
+            <div class="card">
+                <h2>日誌列表</h2>
+                <div id="list"></div>
+                <button id="more" hidden>再顯示更多</button>
+            </div>
+        </section>
+
+        <section id="p1" hidden>
+            <div class="card">
+                <div class="row">
+                    <select id="jCol" aria-label="篩選欄位"></select>
+                    <select id="jOp" aria-label="篩選方式">
+                        <option value="contains">包含</option>
+                        <option value="eq">等於</option>
+                        <option value="ne">不等於</option>
+                        <option value="gt">大於</option>
+                        <option value="lt">小於</option>
+                        <option value="regex">正則</option>
+                        <option value="exists">有此欄位</option>
+                    </select>
+                    <input id="jVal" type="text" placeholder="值" aria-label="篩選值" autocomplete="off" spellcheck="false">
+                </div>
+                <p class="note" id="jInfo"></p>
+                <div class="tw"><table class="t" id="jTab"></table></div>
+                <button id="jMore" hidden>再顯示更多</button>
+            </div>
+            <div class="card" id="jBadCard" hidden>
+                <h2>無法解析的行</h2>
+                <div id="jBad"></div>
+            </div>
+        </section>
+
+        <section id="p2" hidden>
+            <div class="card">
+                <label for="stk"><b>貼上例外堆疊</b></label>
+                <textarea id="stk" spellcheck="false" aria-label="例外堆疊" placeholder="Java / Python / JavaScript / .NET / Go panic 的錯誤輸出"></textarea>
+                <div class="row">
+                    <input id="pfx" type="text" placeholder="專案前綴（逗號分隔），例如 com.mycorp, /app/src/" aria-label="專案程式碼前綴" autocomplete="off" autocapitalize="off" spellcheck="false">
+                    <label class="chk"><input type="checkbox" id="showLib">展開框架庫呼叫</label>
+                </div>
+            </div>
+            <div class="card">
+                <h2>整理結果</h2>
+                <p class="note" id="sInfo"></p>
+                <div id="sOut"></div>
+                <div id="sCopy" hidden>
+                    <h2>精簡版</h2>
+                    <pre class="code" id="sText"></pre>
+                    <button class="primary" id="sBtn">複製精簡版</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>看日誌與錯誤的工具。貼上文字或載入日誌檔，自動辨識格式並篩選、統計；也能把一大段例外堆疊整理成「錯誤鏈 + 你的程式碼行」。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>伺服器日誌太長，想只看 ERROR、某段時間、或含某個關鍵字的行。</li>
+            <li>每行一個 JSON 的結構化日誌，想當表格看並依欄位篩選排序。</li>
+            <li>貼到 Issue / 聊天室前，想把上百行堆疊縮成幾行重點。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+            <li><b>日誌檢視</b>：貼上文字或「載入檔案」。格式自動辨識（nginx / Apache combined、syslog、Java / Log4j / Logback、Python logging、每行 JSON），也可手動指定。用等級勾選、起訖時間、關鍵字或正則篩選；點一行展開原始內容與多行堆疊；勾「折疊連續重複」把相同訊息合併成 ×N。</li>
+            <li><b>JSON Lines</b>：每行一個 JSON 物件，顯示成欄位表。點欄位標題排序，用下拉選欄位與條件篩選；壞行會列出行號。</li>
+            <li><b>Stack trace 整理</b>：貼上堆疊，自動辨識 Java、Python、JavaScript（Node 與瀏覽器）、.NET、Go panic。框架庫呼叫會折疊；在「專案前綴」填你的套件名或路徑（例如 <kbd>com.mycorp</kbd>、<kbd>/app/src/</kbd>）可把專案程式碼行標藍。「精簡版」可一鍵複製。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">2024-05-01 10:00:01,123 ERROR [main] c.a.Foo - 連線失敗
+        → 等級 ERROR、時間 2024-05-01 10:00:01，其後的 at ... 行會併入這一筆
+        Caused by: java.net.ConnectException → 在 Stack trace 分頁顯示成錯誤鏈</div>
+        <h3>小提醒</h3>
+        <ul>
+            <li>檔案上限 20MB、只解析前 200,000 行（會提示）；列表一次最多顯示 500 筆，請用篩選縮小範圍。</li>
+            <li>時間一律以日誌上寫的「牆上時鐘」為準，忽略時區；起訖時間格式 <kbd>YYYY-MM-DD HH:mm</kbd>。syslog 沒有年份，以今年計。</li>
+            <li>檔案以 UTF-8 讀取；其他編碼可先用「編碼修復」工具轉換。</li>
+            <li>不存任何資料：重新整理就清空，沒有 localStorage；日誌內容不會離開你的瀏覽器。</li>
+            <li>框架庫與專案程式碼是用常見前綴推測的，結果僅供參考。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { copyWithFeedback, esc } = Util;
+
+        // --- pure ---
+        const LEVELS = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
+        const LIM = { bytes: 20 * 1024 * 1024, lines: 200000, rows: 500, cols: 60, bad: 100, stack: 300000 };
+        const MON = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+
+        function splitLines(text, max = LIM.lines) {
+            text = String(text ?? '');
+            const lines = []; let p = 0, truncated = false;
+            while (p <= text.length) {
+                if (lines.length >= max) { truncated = p < text.length; break; }
+                let e = text.indexOf('\n', p); if (e < 0) e = text.length;
+                let l = text.slice(p, e); if (l.endsWith('\r')) l = l.slice(0, -1);
+                lines.push(l); p = e + 1;
+            }
+            if (lines.length && lines[lines.length - 1] === '' && !truncated) lines.pop();
+            return { lines, truncated };
+        }
+        function normLevel(s) {
+            if (typeof s === 'number') return s <= 20 ? 'DEBUG' : s <= 30 ? 'INFO' : s <= 40 ? 'WARN' : 'ERROR';
+            s = String(s ?? '').trim().toUpperCase();
+            if (/^\d+$/.test(s)) return normLevel(+s);
+            if (/^(ERR|FATAL|SEVERE|CRIT|EMERG|ALERT|PANIC)/.test(s)) return 'ERROR';
+            if (/^WARN/.test(s)) return 'WARN';
+            if (/^(INFO|NOTICE|LOG)/.test(s)) return 'INFO';
+            if (/^(DEBUG|TRACE|VERBOSE|FINE)/.test(s)) return 'DEBUG';
+            return '';
+        }
+        const guessLevel = (s, dflt = '') => /\b(error|fail(ed|ure)?|fatal|exception|panic|denied)\b/i.test(s) ? 'ERROR' : /\bwarn(ing)?\b/i.test(s) ? 'WARN' : dflt;
+        const mk = (y, mo, d, h = 0, mi = 0, s = 0, ms = 0) => (mo < 0 || mo > 11 || d < 1 || d > 31 || h > 23 || mi > 59 || s > 59) ? null : Date.UTC(y, mo, d, h, mi, s, ms);
+        // 時間一律當作「牆上時鐘」（忽略時區）轉成 UTC 毫秒；無法辨識回傳 null
+        function parseTime(s, year = new Date().getUTCFullYear()) {
+            if (typeof s === 'number') { if (!Number.isFinite(s) || s <= 0) return null; return s < 1e11 ? Math.round(s * 1000) : s; }
+            s = String(s ?? '').trim(); if (!s) return null;
+            let m = /^(\d{4})-(\d\d)-(\d\d)(?:[T ](\d\d):(\d\d)(?::(\d\d)(?:[.,](\d+))?)?)?/.exec(s);
+            if (m) return mk(+m[1], +m[2] - 1, +m[3], +m[4] || 0, +m[5] || 0, +m[6] || 0, m[7] ? +m[7].slice(0, 3).padEnd(3, '0') : 0);
+            m = /^(\d\d?)\/([A-Za-z]{3})\/(\d{4}):(\d\d):(\d\d):(\d\d)/.exec(s);
+            if (m && m[2] in MON) return mk(+m[3], MON[m[2]], +m[1], +m[4], +m[5], +m[6]);
+            m = /^([A-Z][a-z]{2})\s+(\d\d?)\s+(\d\d):(\d\d):(\d\d)/.exec(s);
+            if (m && m[1] in MON) return mk(year, MON[m[1]], +m[2], +m[3], +m[4], +m[5]);
+            if (/^\d{9,13}(\.\d+)?$/.test(s)) return parseTime(+s);
+            return null;
+        }
+        function parseJsonLine(line) {
+            const t = line.trim();
+            if (t[0] !== '{') return null;
+            try { const o = JSON.parse(t); return o && typeof o === 'object' && !Array.isArray(o) ? o : null; } catch { return null; }
+        }
+        const pick = (o, keys) => { for (const k of keys) if (o[k] !== undefined && o[k] !== null) return o[k]; };
+        const RE_TS = '\\d{4}-\\d\\d-\\d\\d[T ]\\d\\d:\\d\\d:\\d\\d(?:[.,]\\d+)?(?:Z|[+-]\\d\\d:?\\d\\d)?';
+        const RE_COMBINED = /^(\S+) \S+ \S+ \[([^\]]+)\] "((?:[^"\\]|\\.)*)" (\d{3}) (\S+)/;
+        const RE_SYSLOG = /^(?:<\d+>)?([A-Z][a-z]{2}\s+\d\d?\s+\d\d:\d\d:\d\d)\s+(\S+)\s+([^\s:[]+)(?:\[\d+\])?:\s?(.*)$/;
+        const RE_JAVA = new RegExp('^(' + RE_TS + ')\\s+(?:\\[[^\\]]*\\]\\s+)?\\[?(TRACE|DEBUG|INFO|NOTICE|WARN(?:ING)?|ERROR|FATAL|SEVERE|CRITICAL)\\]?\\s+(.*)$', 'i');
+        const RE_PY1 = new RegExp('^(' + RE_TS + ') - (\\S+) - (DEBUG|INFO|WARNING|ERROR|CRITICAL) - (.*)$');
+        const RE_PY2 = /^(DEBUG|INFO|WARNING|ERROR|CRITICAL):([\w.\-]+):(.*)$/;
+        // 每種格式：行 → { time, level, msg } 或 null
+        const PARSERS = {
+            json(line) {
+                const o = parseJsonLine(line); if (!o) return null;
+                const m = pick(o, ['msg', 'message', 'log', 'event', 'text']);
+                return { time: parseTime(pick(o, ['time', 'timestamp', '@timestamp', 'ts', 't', 'datetime', 'date'])), level: normLevel(pick(o, ['level', 'severity', 'lvl', 'levelname'])), msg: m === undefined ? line.trim() : typeof m === 'string' ? m : JSON.stringify(m) };
+            },
+            combined(line) {
+                const m = RE_COMBINED.exec(line); if (!m) return null;
+                const st = +m[4];
+                return { time: parseTime(m[2]), level: st >= 500 ? 'ERROR' : st >= 400 ? 'WARN' : 'INFO', msg: `${m[1]} "${m[3]}" ${m[4]} ${m[5]}` };
+            },
+            java(line) {
+                const m = RE_JAVA.exec(line); if (!m) return null;
+                return { time: parseTime(m[1]), level: normLevel(m[2]), msg: m[3] };
+            },
+            python(line) {
+                let m = RE_PY1.exec(line);
+                if (m) return { time: parseTime(m[1]), level: normLevel(m[3]), msg: `${m[2]} - ${m[4]}` };
+                m = RE_PY2.exec(line);
+                return m ? { time: null, level: normLevel(m[1]), msg: `${m[2]}:${m[3]}` } : null;
+            },
+            syslog(line, year) {
+                const m = RE_SYSLOG.exec(line); if (!m) return null;
+                return { time: parseTime(m[1], year), level: guessLevel(m[4], 'INFO'), msg: `${m[2]} ${m[3]}: ${m[4]}` };
+            },
+        };
+        const FMT_ORDER = ['json', 'combined', 'java', 'python', 'syslog'];
+        const FMT_LABELS = { auto: '自動辨識', json: '每行 JSON', combined: 'nginx / Apache combined', java: 'Java / Log4j / Logback', python: 'Python logging', syslog: 'syslog', plain: '純文字' };
+        function detectFormat(lines) {
+            const sample = []; for (let i = 0; i < lines.length && sample.length < 100; i++) if (lines[i].trim()) sample.push(lines[i]);
+            if (!sample.length) return 'plain';
+            let best = 'plain', bestN = 0;
+            for (const f of FMT_ORDER) { let n = 0; for (const l of sample) if (PARSERS[f](l)) n++; if (n > bestN) { best = f; bestN = n; } }
+            return bestN >= Math.max(1, sample.length * 0.3) ? best : 'plain';
+        }
+        // 解析整份日誌 → { fmt, entries, truncated }；entry = { n 行號, time, level, msg, raw, bad }
+        function parseLog(text, { fmt = 'auto', max = LIM.lines, year = new Date().getUTCFullYear() } = {}) {
+            const { lines, truncated } = splitLines(text, max);
+            if (fmt === 'auto' || !(fmt in FMT_LABELS)) fmt = detectFormat(lines);
+            const P = PARSERS[fmt], entries = []; let cur = null;
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i]; if (!line.trim()) continue;
+                const p = P ? P(line, year) : null;
+                if (p) { cur = { n: i + 1, time: p.time, level: p.level, msg: p.msg, raw: line, bad: false }; entries.push(cur); }
+                else if (fmt === 'json') { cur = null; entries.push({ n: i + 1, time: null, level: '', msg: line, raw: line, bad: true }); }
+                else if (P && cur) cur.raw += '\n' + line;      // 多行訊息 / 堆疊併入上一筆
+                else { cur = { n: i + 1, time: fmt === 'plain' ? parseTime(line) : null, level: guessLevel(line), msg: line, raw: line, bad: false }; entries.push(cur); if (fmt !== 'plain') cur = null; }
+            }
+            return { fmt, entries, truncated };
+        }
+        function makeMatcher(q, isRe) {
+            q = String(q ?? ''); if (!q) return { fn: null };
+            if (isRe) { let re; try { re = new RegExp(q, 'i'); } catch (e) { return { err: '正規表示式錯誤：' + e.message }; } return { fn: (s) => re.test(s) }; }
+            const l = q.toLowerCase(); return { fn: (s) => s.toLowerCase().includes(l) };
+        }
+        // levels：要顯示的等級陣列（含 '?' 代表無等級）；from / to 為毫秒或 null
+        function filterEntries(entries, { levels = null, from = null, to = null, q = '', isRe = false } = {}) {
+            const m = makeMatcher(q, isRe); if (m.err) return { idx: [], err: m.err };
+            const lv = levels ? new Set(levels) : null, idx = [];
+            for (let i = 0; i < entries.length; i++) {
+                const e = entries[i];
+                if (lv && !lv.has(e.level || '?')) continue;
+                if (from !== null && (e.time === null || e.time < from)) continue;
+                if (to !== null && (e.time === null || e.time > to)) continue;
+                if (m.fn && !m.fn(e.raw)) continue;
+                idx.push(i);
+            }
+            return { idx, err: '' };
+        }
+        // 篩選後連續、等級與訊息都相同的筆數折疊成一組：[{ i 第一筆索引, count }]
+        function foldRepeats(entries, idx) {
+            const out = [];
+            for (const i of idx) {
+                const last = out[out.length - 1], e = entries[i];
+                if (last && last.key === e.level + '\0' + e.msg) last.count++;
+                else out.push({ i, count: 1, key: e.level + '\0' + e.msg });
+            }
+            return out.map(({ i, count }) => ({ i, count }));
+        }
+        const BUCKETS = [60e3, 300e3, 3600e3, 86400e3, 7 * 864e5, 30 * 864e5];
+        const BUCKET_LABEL = ['每分鐘', '每 5 分鐘', '每小時', '每天', '每週', '每月'];
+        function stats(entries) {
+            const levels = { ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0, '?': 0 };
+            let min = Infinity, max = -Infinity;
+            for (const e of entries) { levels[e.level || '?']++; if (e.time !== null) { if (e.time < min) min = e.time; if (e.time > max) max = e.time; } }
+            if (min === Infinity) return { levels, timeline: null };
+            let bi = 0; while (bi < BUCKETS.length - 1 && (max - min) / BUCKETS[bi] >= 120) bi++;
+            const b = BUCKETS[bi], start = Math.floor(min / b) * b, n = Math.floor((max - start) / b) + 1;
+            const counts = new Array(n).fill(0), errs = new Array(n).fill(0);
+            for (const e of entries) if (e.time !== null) { const k = Math.floor((e.time - start) / b); counts[k]++; if (e.level === 'ERROR') errs[k]++; }
+            return { levels, timeline: { bucket: b, label: BUCKET_LABEL[bi], start, counts, errs } };
+        }
+        // 把文字切成 [{ t, m }]（m = 是否為命中片段）供高亮
+        function highlight(s, q, isRe) {
+            s = String(s ?? ''); q = String(q ?? '');
+            if (!q) return [{ t: s, m: false }];
+            let re; try { re = new RegExp(isRe ? q : q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'); } catch { return [{ t: s, m: false }]; }
+            const out = []; let p = 0, m, guard = 0;
+            while ((m = re.exec(s)) && guard++ < 1000) {
+                if (!m[0]) { re.lastIndex++; continue; }
+                if (m.index > p) out.push({ t: s.slice(p, m.index), m: false });
+                out.push({ t: m[0], m: true }); p = m.index + m[0].length;
+            }
+            if (p < s.length) out.push({ t: s.slice(p), m: false });
+            return out.length ? out : [{ t: s, m: false }];
+        }
+
+        // ---- JSON Lines ----
+        const cellStr = (v) => v === undefined ? '' : typeof v === 'string' ? v : JSON.stringify(v);
+        function parseJsonLines(text, max = LIM.lines) {
+            const { lines, truncated } = splitLines(text, max), rows = [], bad = [], cols = [], seen = new Set();
+            let colsCut = false;
+            lines.forEach((line, i) => {
+                if (!line.trim()) return;
+                const o = parseJsonLine(line);
+                if (!o) { bad.push({ n: i + 1, line: line.slice(0, 200) }); return; }
+                rows.push({ n: i + 1, o });
+                for (const k of Object.keys(o)) if (!seen.has(k)) { if (cols.length >= LIM.cols) colsCut = true; else { seen.add(k); cols.push(k); } }
+            });
+            return { rows, cols, bad, truncated, colsCut };
+        }
+        function filterRows(rows, col, op, val) {
+            val = String(val ?? '');
+            if (!col) return rows;
+            if (op === 'exists') return rows.filter(r => col in r.o);
+            if (val === '') return rows;
+            let test;
+            if (op === 'regex') { let re; try { re = new RegExp(val, 'i'); } catch { return null; } test = (s) => re.test(s); }
+            else if (op === 'contains') { const l = val.toLowerCase(); test = (s) => s.toLowerCase().includes(l); }
+            else if (op === 'eq') test = (s) => s === val;
+            else if (op === 'ne') test = (s) => s !== val;
+            else {
+                const nv = Number(val), num = val.trim() !== '' && Number.isFinite(nv);
+                test = (s, v) => (num && typeof v === 'number') ? (op === 'gt' ? v > nv : v < nv) : (op === 'gt' ? s > val : s < val);
+            }
+            return rows.filter(r => col in r.o && test(cellStr(r.o[col]), r.o[col]));
+        }
+        function sortRows(rows, col, dir = 1) {
+            const rank = (v) => v === undefined ? 3 : typeof v === 'number' ? 0 : 1;
+            return rows.map((r, i) => [r, i]).sort((a, b) => {
+                const x = a[0].o[col], y = b[0].o[col], rx = rank(x), ry = rank(y);
+                if (rx === 3 || ry === 3) return rx === ry ? a[1] - b[1] : rx === 3 ? 1 : -1;     // 缺欄位永遠在最後
+                let c = rx !== ry ? rx - ry : rx === 0 ? x - y : cellStr(x) < cellStr(y) ? -1 : cellStr(x) > cellStr(y) ? 1 : 0;
+                return c * dir || a[1] - b[1];
+            }).map(p => p[0]);
+        }
+
+        // ---- Stack trace ----
+        const LIB = {
+            java: /^(java|javax|jdk|sun|com\.sun|jakarta|kotlin|scala|org\.springframework|org\.apache|org\.hibernate|org\.eclipse|org\.junit|io\.netty|com\.google|reactor)\./,
+            dotnet: /^(System|Microsoft|Newtonsoft)\./,
+            js: /node_modules|node:|internal\/|\(<anonymous>\)/,
+            python: /\/lib\/python|site-packages|dist-packages|<frozen |\\Lib\\/,
+            go: /^(runtime|testing|net\/http|reflect|syscall|sync|created by runtime)[./(]|\/usr\/local\/go\/|\/pkg\/mod\/|\/vendor\/|GOROOT/,
+        };
+        function detectLang(text) {
+            if (/^(panic:|fatal error:|goroutine \d+ \[)/m.test(text) || /^\t\S+\.go:\d+/m.test(text)) return 'go';
+            if (/^Traceback \(most recent call last\):/m.test(text) || /^\s+File ".*", line \d+/m.test(text)) return 'python';
+            if (/^\s*at .+\((?:[\w$]+\.(?:java|kt|scala|groovy)(?::\d+)?|Native Method|Unknown Source)\)\s*$/m.test(text)) return 'java';
+            if (/^\s*at .+:\d+:\d+\)?\s*$/m.test(text) || /^\s*[^\s@]*@\S+:\d+:\d+\s*$/m.test(text)) return 'js';
+            if (/^\s*at .+\(.*\)( in .+:line \d+)?\s*$/m.test(text) || /---> |End of inner exception/.test(text)) return 'dotnet';
+            if (/^\s*at\s/m.test(text)) return 'java';
+            return 'unknown';
+        }
+        function kindOf(lang, text, prefixes) {
+            if (prefixes.some(p => text.includes(p))) return 'mine';
+            return LIB[lang] && LIB[lang].test(lang === 'java' || lang === 'dotnet' ? text.replace(/^at\s+/, '') : text) ? 'lib' : 'app';
+        }
+        // → { lang, blocks:[{ role, head, frames:[{ text, lines, kind }], extra:[], tail, sep }], counts }
+        function parseStack(text, prefixes = [], langHint = 'auto') {
+            text = String(text ?? '').slice(0, LIM.stack);
+            const pf = (Array.isArray(prefixes) ? prefixes : String(prefixes).split(',')).map(s => s.trim()).filter(Boolean);
+            const lang = langHint === 'auto' ? detectLang(text) : langHint, lines = text.split(/\r?\n/);
+            const blocks = []; let cur = null, pendingSep = '', pendingRole = 'main';
+            const open = (role, head) => { cur = { role, head, frames: [], extra: [], tail: '', sep: pendingSep }; pendingSep = ''; blocks.push(cur); return cur; };
+            const addFrame = (txt, ls) => { if (!cur) open(pendingRole, ''); cur.frames.push({ text: txt, lines: ls, kind: kindOf(lang, txt, pf) }); };
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i], t = line.trim(); if (!t) continue;
+                if (lang === 'python') {
+                    let m;
+                    if (/^Traceback \(most recent call last\):/.test(t)) { open(pendingRole, t); pendingRole = 'main'; }
+                    else if (/^During handling of the above exception/.test(t)) { pendingSep = t; pendingRole = 'context'; }
+                    else if (/^The above exception was the direct cause/.test(t)) { pendingSep = t; pendingRole = 'cause'; }
+                    else if ((m = /^File "(.*)", line (\d+)(?:, in (.*))?$/.exec(t))) {
+                        const ls = [line]; if (i + 1 < lines.length && /^\s+\S/.test(lines[i + 1]) && !/^\s*File "/.test(lines[i + 1])) ls.push(lines[++i]);
+                        addFrame(`${m[1]}:${m[2]} ${m[3] || ''}`, ls);
+                    }
+                    else if (cur && !cur.tail && !/^\s/.test(line)) cur.tail = t;
+                    else if (cur && cur.frames.length && !cur.tail && /^\s/.test(line)) cur.frames[cur.frames.length - 1].lines.push(line);
+                    else if (cur) cur.extra.push(line);
+                    else open('main', t);
+                } else if (lang === 'go') {
+                    if (/^(panic:|fatal error:)/.test(t)) open('main', t);
+                    else if (/^goroutine \d+ \[/.test(t)) open('goroutine', t);
+                    else if (/^\t\S+\.go:\d+/.test(line) && cur && cur.frames.length) { const f = cur.frames[cur.frames.length - 1]; f.lines.push(line); f.text += ' ' + t; f.kind = kindOf(lang, f.text, pf); }
+                    else if (/^(created by |[^\s].*\)$)/.test(line) && !/^\[|^exit status/.test(t)) addFrame(t, [line]);
+                    else if (cur) cur.extra.push(line); else open('main', t);
+                } else {
+                    let m;
+                    if ((m = /^(?:at\s+(.+)|([^\s@]*@\S+:\d+:\d+))$/.exec(t)) && (m[1] || lang === 'js')) addFrame(m[1] || m[2], [line]);
+                    else if (/^\.\.\. \d+ (more|common frames omitted)/.test(t) || /^--- End of inner exception/.test(t)) { if (!cur) open('main', ''); cur.extra.push(line); }
+                    else if ((m = /^Caused by:\s*(.*)$/.exec(t))) open('cause', m[1]);
+                    else if ((m = /^Suppressed:\s*(.*)$/.exec(t))) open('suppressed', m[1]);
+                    else if (lang === 'dotnet' && t.includes(' ---> ') || /^---> /.test(t)) {
+                        const parts = t.split(' ---> ').map(s => s.replace(/^---> /, ''));
+                        parts.forEach((p, k) => open(k === 0 && !/^---> /.test(t) ? 'main' : 'cause', p));
+                    }
+                    else if (cur && !cur.frames.length) cur.head += (cur.head ? '\n' : '') + t;   // 多行訊息
+                    else open('main', t);
+                }
+            }
+            let frames = 0, lib = 0, mine = 0;
+            for (const b of blocks) for (const f of b.frames) { frames++; if (f.kind === 'lib') lib++; else if (f.kind === 'mine') mine++; }
+            return { lang, blocks, counts: { blocks: blocks.length, frames, lib, mine } };
+        }
+        // 根因所在的區塊索引：Python 是最先的（依序往後包），其他語言是最後的 Caused by
+        const rootIndex = (res) => res.blocks.length < 2 ? -1 : res.lang === 'python' ? 0 : res.blocks.length - 1;
+        // 精簡版文字：框架庫連續呼叫折疊成一行
+        function compactStack(res, { keepLib = false } = {}) {
+            const out = [];
+            for (const b of res.blocks) {
+                if (b.sep) out.push(b.sep);
+                if (b.head) out.push((b.role === 'cause' && res.lang !== 'python' ? 'Caused by: ' : b.role === 'suppressed' ? 'Suppressed: ' : '') + b.head);
+                let run = 0;
+                const flush = () => { if (run) { out.push(`    ... ${run} 個框架庫呼叫已折疊`); run = 0; } };
+                for (const f of b.frames) { if (f.kind === 'lib' && !keepLib) run++; else { flush(); out.push(...f.lines); } }
+                flush();
+                out.push(...b.extra);
+                if (b.tail) out.push(b.tail);
+            }
+            return out.join('\n');
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const h = (t, p = {}, ...c) => {
+            const e = document.createElement(t);
+            for (const [k, v] of Object.entries(p)) { if (k === 'class') e.className = v; else if (k.startsWith('on')) e[k] = v; else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v); }
+            e.append(...c); return e;
+        };
+        const hlNodes = (s, q, isRe) => highlight(s, q, isRe).map(p => p.m ? h('mark', {}, p.t) : p.t);
+        const fmtTime = (ms) => new Date(ms).toISOString().replace('T', ' ').slice(0, 19);
+
+        let src = '', fileMode = false, tab = 0, parsed = null, parsedKey = '', shown = LIM.rows, jData = null, jKey = '', jShown = 200, jSort = { col: '', dir: 1 };
+
+        // ---- 分頁 ----
+        const TABS = ['日誌檢視', 'JSON Lines', 'Stack trace 整理'];
+        $('#tabs').replaceChildren(...TABS.map((t, i) => h('button', { 'data-i': i, 'aria-pressed': i === 0 }, t)));
+        function showTab(i) {
+            tab = i;
+            [...$('#tabs').children].forEach((b, k) => b.setAttribute('aria-pressed', k === i));
+            [0, 1, 2].forEach(k => { $('#p' + k).hidden = k !== i; });
+            $('#srcCard').hidden = i === 2;
+            if (i === 0) renderLog(); else if (i === 1) renderJson(); else renderStack();
+        }
+        $('#tabs').onclick = (e) => { const b = e.target.closest('button'); if (b) showTab(+b.dataset.i); };
+
+        // ---- 來源 ----
+        const refresh = () => (tab === 0 ? renderLog : tab === 1 ? renderJson : renderStack)();
+        let timer;
+        $('#src').oninput = () => { src = $('#src').value; clearTimeout(timer); timer = setTimeout(refresh, 300); };
+        $('#file').onchange = async () => {
+            const f = $('#file').files[0]; if (!f) return;
+            if (f.size > LIM.bytes) { $('#srcInfo').textContent = `檔案 ${(f.size / 1048576).toFixed(1)}MB 超過 20MB 上限，未載入。`; $('#file').value = ''; return; }
+            $('#srcInfo').textContent = '讀取中…';
+            try { src = await f.text(); } catch { $('#srcInfo').textContent = '讀取失敗'; return; }
+            fileMode = true; $('#src').value = ''; $('#src').disabled = true; $('#src').placeholder = `已載入檔案：${f.name}（${(f.size / 1024).toFixed(0)} KB）。按「清除」可改貼文字。`;
+            $('#srcInfo').textContent = ''; $('#file').value = ''; shown = LIM.rows; refresh();
+        };
+        $('#clear').onclick = () => { src = ''; fileMode = false; $('#src').disabled = false; $('#src').value = ''; $('#src').placeholder = '貼上日誌文字，或載入檔案（上限 20MB，只解析前 200,000 行）'; $('#srcInfo').textContent = ''; shown = LIM.rows; refresh(); };
+
+        // ---- 日誌檢視 ----
+        $('#fmt').replaceChildren(...Object.entries(FMT_LABELS).map(([v, l]) => h('option', { value: v }, l)));
+        const lvSet = new Set([...LEVELS, '?']);
+        $('#lvs').replaceChildren(...[...LEVELS, '?'].map(l => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: true, 'data-l': l, onchange: (e) => { e.target.checked ? lvSet.add(l) : lvSet.delete(l); shown = LIM.rows; renderLog(); } }), l === '?' ? '無等級' : l)));
+        ['#fmt', '#q', '#isRe', '#tFrom', '#tTo', '#fold'].forEach(s => { $(s).oninput = $(s).onchange = () => { shown = LIM.rows; renderLog(); }; });
+        $('#more').onclick = () => { shown += LIM.rows; renderLog(); };
+
+        function renderLog() {
+            const key = $('#fmt').value + '|' + src.length + '|' + src.slice(0, 50);
+            if (!parsed || parsedKey !== key) { parsed = parseLog(src, { fmt: $('#fmt').value }); parsedKey = key; }
+            const E = parsed.entries;
+            $('#lInfo').textContent = !E.length ? '貼上或載入日誌後開始。' : `格式：${FMT_LABELS[parsed.fmt]}；共 ${E.length} 筆` + (parsed.truncated ? `（只解析前 ${LIM.lines.toLocaleString()} 行）` : '');
+            const q = $('#q').value, isRe = $('#isRe').checked;
+            const from = $('#tFrom').value.trim() ? parseTime($('#tFrom').value) : null, to = $('#tTo').value.trim() ? parseTime($('#tTo').value) : null;
+            let r = { idx: [], err: '' };
+            if ($('#tFrom').value.trim() && from === null || $('#tTo').value.trim() && to === null) r.err = '時間格式需為 YYYY-MM-DD HH:mm';
+            else r = filterEntries(E, { levels: lvSet.size === 5 ? null : [...lvSet], from, to: to === null ? null : to + 59999, q, isRe });
+            $('#lErr').hidden = !r.err; $('#lErr').textContent = r.err;
+            // 統計（全部筆數）
+            const st = stats(E), tot = E.length || 1;
+            const COL = { ERROR: 'var(--bad)', WARN: 'var(--text)', INFO: 'var(--blue)', DEBUG: 'var(--muted)', '?': 'var(--line)' };
+            const nodes = [h('div', { class: 'bar', role: 'img', 'aria-label': '等級分布' }, ...Object.entries(st.levels).filter(([, n]) => n).map(([l, n]) => h('i', { style: `width:${n / tot * 100}%;background:${COL[l]}`, title: `${l} ${n}` }))), h('p', { class: 'note' }, Object.entries(st.levels).filter(([, n]) => n).map(([l, n]) => `${l === '?' ? '無等級' : l} ${n}`).join('　') || '沒有資料')];
+            const tl = st.timeline;
+            if (tl) {
+                const mx = Math.max(...tl.counts, 1), n = tl.counts.length, w = 100 / n;
+                const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                svg.setAttribute('class', 'chart'); svg.setAttribute('viewBox', '0 0 100 40'); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', tl.label + '筆數');
+                tl.counts.forEach((c, k) => {
+                    if (!c) return;
+                    const rect = (v, fill) => { const e = document.createElementNS('http://www.w3.org/2000/svg', 'rect'); e.setAttribute('x', k * w); e.setAttribute('width', Math.max(w - 0.2, 0.3)); e.setAttribute('y', 40 - v / mx * 40); e.setAttribute('height', v / mx * 40); e.style.fill = fill; svg.append(e); return e; };
+                    rect(c, 'var(--blue)').append(Object.assign(document.createElementNS('http://www.w3.org/2000/svg', 'title'), { textContent: `${fmtTime(tl.start + k * tl.bucket)}：${c} 筆（ERROR ${tl.errs[k]}）` }));
+                    if (tl.errs[k]) rect(tl.errs[k], 'var(--bad)');
+                });
+                nodes.push(h('p', { class: 'note' }, `${tl.label}筆數（藍）與 ERROR（紅），最多 ${mx} 筆；${fmtTime(tl.start)} 起`), svg);
+            }
+            $('#stat').replaceChildren(...nodes);
+            // 列表
+            const groups = $('#fold').checked ? foldRepeats(E, r.idx) : r.idx.map(i => ({ i, count: 1 }));
+            const list = groups.slice(0, shown).map(({ i, count }) => {
+                const e = E[i], more = e.raw !== e.msg || e.raw.includes('\n');
+                const ent = h('div', { class: 'ent' + (e.level === 'ERROR' ? ' E' : '') });
+                const hd = h('div', { class: 'hd', role: 'button', tabindex: '0', 'aria-expanded': 'false' }, h('span', { class: 'tm' }, e.time !== null ? fmtTime(e.time) : '#' + e.n), h('span', { class: 'lv ' + (e.level || '') }, e.level || '?'), h('span', { class: 'ms' }, ...hlNodes(e.msg.slice(0, 400) + (e.msg.length > 400 ? '…' : '') + (e.raw.includes('\n') ? '  ⋯' : ''), q, isRe)), ...(count > 1 ? [h('span', { class: 'cnt' }, '×' + count)] : []));
+                const open = () => { const ex = ent.querySelector('pre'); if (ex) { ex.remove(); hd.setAttribute('aria-expanded', 'false'); } else { ent.append(h('pre', { class: 'code' }, `行 ${e.n}${e.time !== null ? '' : ''}\n` + e.raw.slice(0, 20000))); hd.setAttribute('aria-expanded', 'true'); } };
+                hd.onclick = open; hd.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); } };
+                ent.append(hd); return ent;
+            });
+            $('#list').replaceChildren(...(list.length ? list : [h('p', { class: 'note' }, E.length ? '沒有符合條件的日誌。' : '尚無資料。')]));
+            $('#more').hidden = groups.length <= shown;
+            if (r.idx.length !== E.length && E.length) $('#lInfo').textContent += `；符合 ${r.idx.length} 筆` + (groups.length > shown ? `，列表顯示前 ${shown} 組` : '');
+        }
+
+        // ---- JSON Lines ----
+        $('#jMore').onclick = () => { jShown += 200; renderJson(); };
+        ['#jCol', '#jOp', '#jVal'].forEach(s => { $(s).oninput = $(s).onchange = () => { jShown = 200; renderJson(true); }; });
+        function renderJson(keep) {
+            const key = src.length + '|' + src.slice(0, 50);
+            if (!jData || jKey !== key) { jData = parseJsonLines(src); jKey = key; jSort = { col: '', dir: 1 }; keep = false; }
+            if (!keep) { const cur = $('#jCol').value; $('#jCol').replaceChildren(...jData.cols.map(c => h('option', { value: c }, c))); if (jData.cols.includes(cur)) $('#jCol').value = cur; }
+            let rows = filterRows(jData.rows, $('#jCol').value, $('#jOp').value, $('#jVal').value);
+            const badRe = rows === null; if (badRe) rows = [];
+            if (jSort.col) rows = sortRows(rows, jSort.col, jSort.dir);
+            $('#jInfo').textContent = badRe ? '正規表示式格式錯誤' : !jData.rows.length && !jData.bad.length ? '貼上或載入每行一個 JSON 的檔案。' : `${jData.rows.length} 行有效、${jData.bad.length} 行無法解析；符合 ${rows.length} 筆` + (jData.truncated ? `（只解析前 ${LIM.lines.toLocaleString()} 行）` : '') + (jData.colsCut ? `；欄位只顯示前 ${LIM.cols} 個` : '');
+            const head = h('tr', {}, h('th', {}, '行'), ...jData.cols.map(c => h('th', { 'data-c': c, tabindex: '0' }, c + (jSort.col === c ? (jSort.dir > 0 ? ' ▲' : ' ▼') : ''))));
+            $('#jTab').replaceChildren(h('thead', {}, head), h('tbody', {}, ...rows.slice(0, jShown).map(r => h('tr', {}, h('td', {}, r.n), ...jData.cols.map(c => h('td', { title: cellStr(r.o[c]).slice(0, 500) }, cellStr(r.o[c])))))));
+            $('#jMore').hidden = rows.length <= jShown;
+            $('#jBadCard').hidden = !jData.bad.length;
+            $('#jBad').replaceChildren(...jData.bad.slice(0, LIM.bad).map(b => h('pre', { class: 'code' }, `第 ${b.n} 行：${b.line}`)), ...(jData.bad.length > LIM.bad ? [h('p', { class: 'note' }, `只列出前 ${LIM.bad} 行`)] : []));
+        }
+        $('#jTab').onclick = (e) => { const th = e.target.closest('th[data-c]'); if (!th) return; const c = th.dataset.c; jSort = jSort.col === c ? { col: c, dir: -jSort.dir } : { col: c, dir: 1 }; renderJson(true); };
+
+        // ---- Stack trace ----
+        ['#stk', '#pfx', '#showLib'].forEach(s => { $(s).oninput = $(s).onchange = renderStack; });
+        const LANG = { java: 'Java', python: 'Python', js: 'JavaScript', dotnet: '.NET', go: 'Go', unknown: '無法辨識' };
+        const ROLE = { main: '例外', cause: 'Caused by', context: '處理時又發生', suppressed: 'Suppressed', goroutine: 'goroutine' };
+        function renderStack() {
+            const text = $('#stk').value, res = parseStack(text, $('#pfx').value), keepLib = $('#showLib').checked, ri = rootIndex(res);
+            $('#sInfo').textContent = !text.trim() ? '貼上堆疊後顯示結果。' : `語言：${LANG[res.lang]}；${res.counts.blocks} 段、${res.counts.frames} 個框架（框架庫 ${res.counts.lib}、專案 ${res.counts.mine}）`;
+            $('#sOut').replaceChildren(...res.blocks.map((b, bi) => {
+                const box = h('div', { class: 'blk' });
+                if (b.sep) box.append(h('p', { class: 'note' }, b.sep));
+                box.append(h('div', { class: 'bh' }, h('span', { class: 'role' }, ROLE[b.role] || b.role), ...(bi === ri ? [h('span', { class: 'role' }, '根因')] : []), b.head || '（無訊息行）'));
+                let run = [];
+                const flush = () => { if (run.length) { box.append(h('details', { class: 'lg' }, h('summary', {}, `${run.length} 個框架庫呼叫`), ...run.map(f => h('div', { class: 'fr lib' }, f.text)))); run = []; } };
+                for (const f of b.frames) { if (f.kind === 'lib' && !keepLib) run.push(f); else { flush(); box.append(h('div', { class: 'fr ' + f.kind }, f.text)); } }
+                flush();
+                b.extra.forEach(x => box.append(h('div', { class: 'fr lib' }, x.trim())));
+                if (b.tail) box.append(h('div', { class: 'bh' }, b.tail));
+                return box;
+            }));
+            const c = res.blocks.length ? compactStack(res, { keepLib }) : '';
+            $('#sCopy').hidden = !c; $('#sText').textContent = c;
+        }
+        $('#sBtn').onclick = () => copyWithFeedback($('#sBtn'), $('#sText').textContent);
+
+        showTab(0);
+    </script>
+</body>
+
+</html>

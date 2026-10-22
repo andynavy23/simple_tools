@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="Redis 與 Elasticsearch 查詢產生器：依資料型別產生 Redis 指令（含時間複雜度與注意事項），或用表單組出 Elasticsearch DSL 與 curl。">
+    <meta property="og:title" content="Redis 與 Elasticsearch 查詢產生" />
+    <meta property="og:description" content="表單產生 Redis 指令（redis-cli / ioredis / redis-py）與 Elasticsearch 查詢 DSL、curl。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/nosql-query.html" />
+    <meta name="st-keys" content="nosqlq_opts">
+    <title>Redis 與 Elasticsearch 查詢產生</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 720px;
+        }
+
+        label {
+            font-weight: 600;
+            display: block;
+            margin: 10px 0 6px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>input,
+        .row>select {
+            flex: 1 1 140px;
+            min-width: 0;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .tabs button {
+            flex: 1 1 auto;
+        }
+
+        .crow {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .crow>* {
+            flex: 1 1 130px;
+            min-width: 0;
+        }
+
+        .crow>.del {
+            flex: 0 0 auto;
+        }
+
+        .chk {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 400;
+            margin: 0;
+            min-height: 44px;
+        }
+
+        textarea {
+            width: 100%;
+            box-sizing: border-box;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            min-height: 84px;
+            resize: vertical;
+        }
+
+        pre.code {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 14px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin: 6px 0;
+            overflow-x: auto;
+            white-space: pre;
+            max-width: 100%;
+        }
+
+        .alert {
+            border: 2px solid var(--bad);
+            color: var(--bad);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin: 10px 0;
+            font-weight: 700;
+        }
+
+        .alert.warn {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .alert.info {
+            border-color: var(--line);
+            color: var(--text);
+            font-weight: 400;
+        }
+
+        .errs {
+            color: var(--bad);
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .cx {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            background: var(--fill);
+            border-radius: 6px;
+            padding: 1px 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>Redis 與 Elasticsearch 查詢產生</h1>
+        <p class="sub">用表單組出 Redis 指令與 Elasticsearch 查詢，全部在本機產生，不連線伺服器。</p>
+
+        <div class="tabs" id="tabs"></div>
+
+        <section id="pR">
+            <div class="card">
+                <label for="rg">資料型別</label>
+                <select id="rg"></select>
+                <label for="rc">指令</label>
+                <select id="rc"></select>
+                <p class="note" id="rInfo"></p>
+            </div>
+            <div class="card" id="rForm"></div>
+        </section>
+
+        <section id="pE" hidden>
+            <div class="card">
+                <label for="eIdx">索引名稱（可留空 = 全部索引；可用 * 與逗號）</label>
+                <input id="eIdx" type="text" placeholder="例如 logs-*" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="300">
+            </div>
+            <div class="card" id="eQ"></div>
+            <div class="card" id="eS"></div>
+            <div class="card" id="eP"></div>
+            <div class="card" id="eA"></div>
+        </section>
+        <p class="note" id="msg"></p>
+
+        <div class="card">
+            <h2>輸出</h2>
+            <div class="tabs" id="fmtTabs"></div>
+            <div id="warns"></div>
+            <ul class="errs" id="errs"></ul>
+            <pre class="code" id="out"></pre>
+            <button class="primary" id="copy" hidden>複製</button>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>用表單產生 <b>Redis</b> 指令與 <b>Elasticsearch</b> 查詢。Redis 依資料型別（String / Hash / List / Set / Sorted Set / Stream / 到期與鍵管理）列出常用指令，並顯示每個指令的<b>時間複雜度</b>與注意事項，輸出 redis-cli、Node（ioredis）、Python（redis-py）寫法。Elasticsearch 用條件建構器組出 JSON DSL，並附 Kibana Dev Tools 與 curl 寫法。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>不熟 Redis 指令參數順序，或想先看這個指令會不會拖垮正式環境。</li>
+            <li>要寫 Elasticsearch 的 bool 查詢、range、聚合，不想手刻巢狀 JSON。</li>
+            <li>同一個查詢要貼在終端機、程式碼與 Kibana。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+            <li><b>Redis</b>：選資料型別與指令，填欄位。「每行一個」的欄位（多個鍵 / 成員）用換行分隔；「欄位=值」類每行一組，以第一個 <kbd>=</kbd> 分開。紅色警告代表在正式環境有風險。</li>
+            <li><b>Elasticsearch</b>：填索引名稱，用條件列選欄位、查詢類型與放進 must / filter / should / must_not 哪一組；可加排序、分頁（from/size 或 search_after）、_source 篩選與聚合。</li>
+            <li>切換輸出格式後按「複製」。欄位有錯時不會產生輸出。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">Redis：String → SET，鍵 session:1、值 abc、過期 60 秒
+        → redis-cli：SET session:1 abc EX 60
+        ES：欄位 status、term、200，放 filter；排序 @timestamp 降冪
+        → {"query":{"bool":{"filter":[{"term":{"status":200}}]}},"sort":[…]}</div>
+        <h3>小提醒</h3>
+        <ul>
+            <li><b>KEYS</b> 會掃描整個資料庫並阻塞伺服器，正式環境請改用 <b>SCAN</b>；刪除大型 Hash / List / Set 建議用 <b>UNLINK</b>（背景釋放）取代 DEL。</li>
+            <li>Elasticsearch 的 from + size 預設不能超過 10000，深分頁請用 search_after（最後一個排序鍵要唯一，建議搭配 PIT 與 _shard_doc）。terms 聚合與精確比對對 text 欄位請改用 <kbd>欄位.keyword</kbd>。</li>
+            <li>curl 範例預設 <kbd>http://localhost:9200</kbd>，有帳號時自行加 <kbd>-u 帳號:密碼</kbd>；Windows cmd 的引號規則不同，建議用 Git Bash 或改貼 Kibana。</li>
+            <li>只記住「上次的分頁、指令與輸出格式」（本機 nosqlq_opts，壞資料回到預設）；索引、鍵名與條件不會儲存，重新整理就清空。清除瀏覽器網站資料或用右上角備份即可管理這一個鍵。</li>
+            <li>產生的指令請先在測試環境確認；DSL 不含子聚合與巢狀（nested）查詢。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, copyWithFeedback } = Util;
+
+        // --- pure ---
+        const LIM = { text: 100000, key: 1000, list: 500, conds: 30, sort: 5, aggs: 10, fields: 100 };
+        const FMTS = ['cli', 'node', 'python'], EFMTS = ['dsl', 'kibana', 'curl'];
+        const GROUPS = [['string', 'String'], ['hash', 'Hash'], ['list', 'List'], ['set', 'Set'], ['zset', 'Sorted Set'], ['stream', 'Stream'], ['keys', '到期與鍵管理']];
+        // 參數：t = key 鍵名 / str 字串 / int 整數 / num 數字 / score 分數範圍 / list 每行一個 / pairs 每行 a=b / sel 下拉 / bool 勾選 / lit 固定字
+        const key = (n = 'key', l = '鍵名') => ({ n, l, t: 'key', req: 1 });
+        const str = (n, l, o = {}) => ({ n, l, t: 'str', req: 1, ...o });
+        const opt = (n, l, t, o = {}) => ({ n, l, t, ...o });
+        const list = (n, l) => ({ n, l, t: 'list', req: 1 });
+        const NXXX = [['NX', 'NX：不存在才設定'], ['XX', 'XX：已存在才設定'], ['GT', 'GT：新值較大才設定'], ['LT', 'LT：新值較小才設定']];
+        const SCAN_OPTS = (type) => [opt('cursor', '游標（從 0 開始）', 'int', { req: 1, def: '0' }), opt('match', 'MATCH 樣式', 'str', { flag: 'MATCH' }), opt('count', 'COUNT 每次約掃幾筆', 'int', { flag: 'COUNT', min: 1 }), ...(type ? [opt('type', 'TYPE 型別', 'str', { flag: 'TYPE' })] : [])];
+        const C = (g, cx, note, args, sev) => ({ g, cx, note, args, sev });
+        const CMDS = {
+            GET: C('string', 'O(1)', '', [key()]),
+            SET: C('string', 'O(1)', '沒帶 EX 會清掉這個鍵原有的到期時間；用 NX 做簡易鎖時務必加 EX，否則程式當掉會永遠鎖住。', [key(), str('value', '值', { allowEmpty: 1 }), opt('cond', '條件', 'sel', { opts: [['NX', 'NX：不存在才寫入'], ['XX', 'XX：已存在才寫入']] }), opt('ex', '過期秒數 EX', 'int', { flag: 'EX', min: 1 })]),
+            MGET: C('string', 'O(N)，N = 鍵數', '', [list('keys', '鍵名（每行一個）')]),
+            MSET: C('string', 'O(N)，N = 鍵數', '一次寫入多個鍵，不能個別設定到期時間。', [opt('pairs', '鍵=值（每行一組）', 'pairs', { req: 1 })]),
+            INCR: C('string', 'O(1)', '值必須是整數字串，否則會報錯。', [key()]),
+            INCRBY: C('string', 'O(1)', '', [key(), opt('n', '增量', 'int', { req: 1 })]),
+            APPEND: C('string', 'O(1)（均攤）', '字串上限 512MB，無限 APPEND 會讓單一鍵越來越大。', [key(), str('value', '要附加的字串')]),
+            STRLEN: C('string', 'O(1)', '', [key()]),
+            HSET: C('hash', 'O(N)，N = 欄位數', '', [key(), opt('pairs', '欄位=值（每行一組）', 'pairs', { req: 1 })]),
+            HGET: C('hash', 'O(1)', '', [key(), str('field', '欄位')]),
+            HMGET: C('hash', 'O(N)，N = 欄位數', '', [key(), list('fields', '欄位（每行一個）')]),
+            HGETALL: C('hash', 'O(N)，N = 欄位數', '大 Hash 會阻塞伺服器；欄位很多時改用 HSCAN 分批取得。', [key()], 'warn'),
+            HDEL: C('hash', 'O(N)，N = 刪除的欄位數', '', [key(), list('fields', '欄位（每行一個）')]),
+            HINCRBY: C('hash', 'O(1)', '', [key(), str('field', '欄位'), opt('n', '增量', 'int', { req: 1 })]),
+            HLEN: C('hash', 'O(1)', '', [key()]),
+            HSCAN: C('hash', '每次 O(1)，完整走完 O(N)', '游標回傳 0 代表掃完；同一欄位可能重複出現。', [key(), ...SCAN_OPTS(false)]),
+            LPUSH: C('list', 'O(N)，N = 元素數', '', [key(), list('values', '值（每行一個）')]),
+            RPUSH: C('list', 'O(N)，N = 元素數', '', [key(), list('values', '值（每行一個）')]),
+            LPOP: C('list', 'O(N)，N = 彈出數', '不給數量時彈出 1 個。', [key(), opt('count', '數量（可留空）', 'int', { min: 1 })]),
+            LRANGE: C('list', 'O(S+N)，S = 起點偏移、N = 回傳數', '範圍 0 -1 會取出整個 List，大 List 會阻塞並佔用大量頻寬，請分段取。', [key(), opt('start', '起始索引', 'int', { req: 1, def: '0' }), opt('stop', '結束索引（-1 = 最後）', 'int', { req: 1, def: '-1' })]),
+            LLEN: C('list', 'O(1)', '', [key()]),
+            LTRIM: C('list', 'O(N)，N = 被移除的元素數', '只保留指定範圍，常用來限制 List 長度。', [key(), opt('start', '起始索引', 'int', { req: 1, def: '0' }), opt('stop', '結束索引', 'int', { req: 1, def: '999' })]),
+            BLPOP: C('list', 'O(1)', '會阻塞這條連線直到有資料或逾時：不要在共用連線池或 pub/sub 連線上使用；0 = 永遠等待。', [key(), opt('timeout', '逾時秒數', 'num', { req: 1, def: '5' })], 'warn'),
+            SADD: C('set', 'O(N)，N = 成員數', '', [key(), list('members', '成員（每行一個）')]),
+            SREM: C('set', 'O(N)，N = 成員數', '', [key(), list('members', '成員（每行一個）')]),
+            SMEMBERS: C('set', 'O(N)，N = 成員數', '大 Set 會阻塞伺服器；改用 SSCAN 分批取得。', [key()], 'warn'),
+            SISMEMBER: C('set', 'O(1)', '', [key(), str('member', '成員')]),
+            SCARD: C('set', 'O(1)', '', [key()]),
+            SINTER: C('set', 'O(N*M)，N = 最小集合大小、M = 集合數', '大集合交集很慢；可用 SINTERCARD 只取數量。', [list('keys', '鍵名（每行一個）')], 'warn'),
+            SUNION: C('set', 'O(N)，N = 所有集合成員總數', '大集合的聯集會佔用大量記憶體與時間；可改用 SUNIONSTORE 存到別的鍵。', [list('keys', '鍵名（每行一個）')], 'warn'),
+            SDIFF: C('set', 'O(N)，N = 所有集合成員總數', '大集合的差集會阻塞伺服器；順序有意義：第一個鍵減去其餘。', [list('keys', '鍵名（每行一個，第一個為被減集合）')], 'warn'),
+            SSCAN: C('set', '每次 O(1)，完整走完 O(N)', '游標回傳 0 代表掃完；成員可能重複出現。', [key(), ...SCAN_OPTS(false)]),
+            ZADD: C('zset', 'O(log N) 每個成員', 'GT / LT 只在分數變大 / 變小時才更新（Redis 6.2+）。', [key(), opt('cond', '條件', 'sel', { opts: NXXX }), opt('ch', '回傳「變動」筆數 (CH)', 'bool', { flag: 'CH' }), opt('pairs', '分數=成員（每行一組）', 'pairs', { req: 1, numFirst: 1 })]),
+            ZRANGE: C('zset', 'O(log N + M)，M = 回傳數', '需要 Redis 6.2+（BYSCORE / REV 合併進 ZRANGE）。範圍 0 -1 會取出全部。', [key(), str('min', '起點（索引或分數；-inf / +inf）', { def: '0' }), str('max', '終點', { def: '-1' }), opt('byscore', '依分數 (BYSCORE)', 'bool', { flag: 'BYSCORE' }), opt('rev', '反向 (REV)', 'bool', { flag: 'REV' }), opt('withscores', '同時回傳分數', 'bool', { flag: 'WITHSCORES' })]),
+            ZREM: C('zset', 'O(M log N)，M = 成員數', '', [key(), list('members', '成員（每行一個）')]),
+            ZSCORE: C('zset', 'O(1)', '', [key(), str('member', '成員')]),
+            ZRANK: C('zset', 'O(log N)', '', [key(), str('member', '成員')]),
+            ZINCRBY: C('zset', 'O(log N)', '', [key(), opt('incr', '增量', 'num', { req: 1 }), str('member', '成員')]),
+            ZCARD: C('zset', 'O(1)', '', [key()]),
+            ZCOUNT: C('zset', 'O(log N)', '分數可用 -inf、+inf，前面加 ( 表示不含邊界。', [key(), opt('min', '最小分數', 'score', { req: 1, def: '-inf' }), opt('max', '最大分數', 'score', { req: 1, def: '+inf' })]),
+            ZREMRANGEBYSCORE: C('zset', 'O(log N + M)，M = 移除數', '會一次刪除範圍內所有成員，請先用 ZCOUNT 確認筆數。', [key(), opt('min', '最小分數', 'score', { req: 1 }), opt('max', '最大分數', 'score', { req: 1 })], 'warn'),
+            XADD: C('stream', 'O(1)；加上 MAXLEN 修剪時另計', '沒有 MAXLEN 的 Stream 會無限成長；~ 為近似修剪，效能較好。', [key(), opt('maxlen', 'MAXLEN 上限（可留空）', 'int', { flag: 'MAXLEN ~', min: 1 }), str('id', '訊息 ID（* = 自動）', { def: '*' }), opt('pairs', '欄位=值（每行一組）', 'pairs', { req: 1 })]),
+            XRANGE: C('stream', 'O(N)，N = 回傳數', '- 與 + 代表最小與最大 ID；建議一定帶 COUNT。', [key(), str('start', '起點 ID', { def: '-' }), str('end', '終點 ID', { def: '+' }), opt('count', 'COUNT', 'int', { flag: 'COUNT', min: 1 })]),
+            XREAD: C('stream', 'O(N)，N = 回傳數', 'BLOCK 會阻塞連線；ID 用 $ 代表只等新訊息。', [opt('count', 'COUNT', 'int', { flag: 'COUNT', min: 1 }), opt('block', 'BLOCK 毫秒（可留空）', 'int', { flag: 'BLOCK', min: 0 }), { t: 'lit', v: 'STREAMS' }, key(), str('id', '起始 ID', { def: '$' })]),
+            XLEN: C('stream', 'O(1)', '', [key()]),
+            'XGROUP CREATE': C('stream', 'O(1)', 'ID 用 $ 代表只處理之後的新訊息，0 代表從頭；MKSTREAM 讓不存在的 Stream 一併建立。', [key(), str('group', '群組名稱'), str('id', '起始 ID', { def: '$' }), opt('mk', '不存在就建立 (MKSTREAM)', 'bool', { flag: 'MKSTREAM' })]),
+            XREADGROUP: C('stream', 'O(M)，M = 回傳數', 'ID 用 > 代表尚未派送給任何消費者的新訊息；處理完要 XACK。', [{ t: 'lit', v: 'GROUP' }, str('group', '群組名稱'), str('consumer', '消費者名稱'), opt('count', 'COUNT', 'int', { flag: 'COUNT', min: 1 }), opt('block', 'BLOCK 毫秒（可留空）', 'int', { flag: 'BLOCK', min: 0 }), { t: 'lit', v: 'STREAMS' }, key(), str('id', '起始 ID', { def: '>' })]),
+            XACK: C('stream', 'O(1) 每個 ID', '', [key(), str('group', '群組名稱'), list('ids', '訊息 ID（每行一個）')]),
+            XTRIM: C('stream', 'O(N)，N = 被修剪的筆數', '', [key(), { t: 'lit', v: 'MAXLEN' }, opt('approx', '近似修剪 (~)', 'bool', { flag: '~' }), opt('n', '保留上限', 'int', { req: 1, min: 0 })]),
+            EXPIRE: C('keys', 'O(1)', '重新 SET 會清掉到期時間；NX / XX / GT / LT 需要 Redis 7.0+。', [key(), opt('seconds', '秒數', 'int', { req: 1, min: 0 }), opt('cond', '條件', 'sel', { opts: NXXX })]),
+            EXPIREAT: C('keys', 'O(1)', '參數是 Unix 秒（不是毫秒）。', [key(), opt('ts', 'Unix 時間（秒）', 'int', { req: 1, min: 0 })]),
+            TTL: C('keys', 'O(1)', '回傳 -1 = 沒有到期時間，-2 = 鍵不存在。', [key()]),
+            PERSIST: C('keys', 'O(1)', '移除到期時間，鍵會永久保留。', [key()]),
+            DEL: C('keys', '字串 O(1)；Hash / List / Set / ZSet O(N)', '刪除大型鍵會同步釋放記憶體並阻塞伺服器，建議改用 UNLINK（背景釋放）。', [list('keys', '鍵名（每行一個）')], 'info'),
+            UNLINK: C('keys', 'O(1) 每個鍵（實際釋放在背景執行緒）', '非阻塞版 DEL，Redis 4.0+。', [list('keys', '鍵名（每行一個）')]),
+            EXISTS: C('keys', 'O(N)，N = 鍵數', '', [list('keys', '鍵名（每行一個）')]),
+            TYPE: C('keys', 'O(1)', '', [key()]),
+            RENAME: C('keys', 'O(1)', '新鍵名若已存在會被直接覆蓋。', [key(), str('newkey', '新鍵名')], 'warn'),
+            KEYS: C('keys', 'O(N)，N = 資料庫所有鍵數', '會掃描整個資料庫並阻塞伺服器，正式環境禁止使用；請改用 SCAN。', [str('pattern', '樣式（例如 user:*）')], 'danger'),
+            SCAN: C('keys', '每次 O(1)，完整走完 O(N)', '游標回傳 0 代表掃完；同一個鍵可能出現多次，結果需自行去重。', SCAN_OPTS(true)),
+            'OBJECT ENCODING': C('keys', 'O(1)', '', [key()]),
+            'MEMORY USAGE': C('keys', 'O(N)，N = 抽樣的元素數', '', [key(), opt('samples', 'SAMPLES（可留空）', 'int', { flag: 'SAMPLES', min: 0 })]),
+            FLUSHDB: C('keys', 'O(N)，N = 資料庫鍵數', '會清空目前資料庫的所有資料，無法復原。', [opt('mode', '模式', 'sel', { opts: [['ASYNC', 'ASYNC：背景清除'], ['SYNC', 'SYNC：同步清除']] })], 'danger'),
+        };
+        const firstOf = (g) => Object.keys(CMDS).find(k => CMDS[k].g === g);
+        const ES_OPS = [['match', 'match 全文比對'], ['match_phrase', 'match_phrase 詞組'], ['term', 'term 精確'], ['terms', 'terms 多值'], ['prefix', 'prefix 前綴'], ['wildcard', 'wildcard 萬用字元'], ['gt', 'range 大於'], ['gte', 'range 大於等於'], ['lt', 'range 小於'], ['lte', 'range 小於等於'], ['exists', 'exists 欄位存在']];
+        const ES_OCC = [['must', 'must（且，計分）'], ['filter', 'filter（且，不計分）'], ['should', 'should（或）'], ['must_not', 'must_not（排除）']];
+        const AGG_TYPES = [['terms', 'terms 分組'], ['date_histogram', 'date_histogram 依時間分組'], ['avg', 'avg 平均'], ['sum', 'sum 總和'], ['min', 'min'], ['max', 'max'], ['cardinality', 'cardinality 不重複數']];
+        const INTERVALS = ['minute', 'hour', 'day', 'week', 'month', 'quarter', 'year'];
+
+        function loadOpts(raw) {
+            const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+            const cmd = typeof o.cmd === 'string' && Object.prototype.hasOwnProperty.call(CMDS, o.cmd) ? o.cmd : 'GET';
+            return { tab: o.tab === 'es' ? 'es' : 'redis', cmd, fmt: FMTS.includes(o.fmt) ? o.fmt : 'cli', efmt: EFMTS.includes(o.efmt) ? o.efmt : 'dsl' };
+        }
+
+        // ================= Redis =================
+        const INT_RE = /^-?\d+$/, SCORE_RE = /^(\(?-?\d+(\.\d+)?([eE][+-]?\d+)?|[-+]?inf)$/i;
+        const lines = (s) => String(s ?? '').split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+        // 依參數定義把表單值轉成 token 陣列：{ tokens } 或 { err }
+        function argTokens(a, raw) {
+            raw = String(raw ?? '');
+            const lab = a.l || a.n, flag = a.flag ? a.flag.split(' ') : [];
+            if (a.t === 'lit') return { tokens: [a.v] };
+            if (a.t === 'bool') return { tokens: raw === 'true' ? flag : [] };
+            if (a.t === 'sel') { const v = raw.trim(); return v ? (a.opts.some(o => o[0] === v) ? { tokens: [v] } : { err: `${lab}：選項不正確` }) : { tokens: [] }; }
+            if (raw.length > LIM.text) return { err: `${lab}：內容太長` };
+            const empty = a.t === 'list' || a.t === 'pairs' ? !lines(raw).length : a.t === 'str' && a.allowEmpty ? false : !raw.trim();
+            if (empty) return a.req ? { err: `${lab}：必填` } : { tokens: [] };
+            let v;
+            switch (a.t) {
+                case 'key': if (raw.length > LIM.key) return { err: `${lab}：最多 ${LIM.key} 字` }; v = [raw]; break;
+                case 'str': v = [raw]; break;
+                case 'int': { const s = raw.trim(); if (!INT_RE.test(s) || !Number.isSafeInteger(+s)) return { err: `${lab}：需為整數` }; if (a.min !== undefined && +s < a.min) return { err: `${lab}：不可小於 ${a.min}` }; v = [+s]; break; }
+                case 'num': { const s = raw.trim(), n = Number(s); if (!Number.isFinite(n)) return { err: `${lab}：需為數字` }; v = [n]; break; }
+                case 'score': { const s = raw.trim(); if (!SCORE_RE.test(s)) return { err: `${lab}：需為數字、-inf、+inf（前面可加 ( 表示不含）` }; v = [s]; break; }
+                case 'list': { const l = lines(raw); if (l.length > LIM.list) return { err: `${lab}：最多 ${LIM.list} 個` }; v = l; break; }
+                case 'pairs': {
+                    const l = lines(raw); if (l.length > LIM.list) return { err: `${lab}：最多 ${LIM.list} 組` };
+                    v = [];
+                    for (const [i, line] of l.entries()) {
+                        const p = line.indexOf('='); if (p < 1) return { err: `${lab}：第 ${i + 1} 行需為「名稱=值」格式` };
+                        const k = line.slice(0, p), val = line.slice(p + 1);
+                        if (a.numFirst) { const n = Number(k); if (!Number.isFinite(n) && !/^[-+]?inf$/i.test(k)) return { err: `${lab}：第 ${i + 1} 行的分數需為數字` }; if (!val) return { err: `${lab}：第 ${i + 1} 行缺少成員` }; v.push(Number.isFinite(n) ? n : k, val); }
+                        else v.push(k, val);
+                    }
+                    break;
+                }
+                default: return { err: `${lab}：未知型別` };
+            }
+            return { tokens: [...flag, ...v] };
+        }
+        // vals：{ 參數名: 字串 }（bool 為 'true'）。回傳 { ok, errs, warns, argv, meta }
+        function buildRedis(cmd, vals) {
+            const meta = Object.prototype.hasOwnProperty.call(CMDS, cmd) ? CMDS[cmd] : null;
+            if (!meta) return { ok: false, errs: ['未知的指令'], warns: [], argv: [], meta: null };
+            vals = vals && typeof vals === 'object' ? vals : {};
+            const errs = [], warns = [], argv = cmd.split(' ');
+            for (const a of meta.args) {
+                const r = argTokens(a, a.t === 'lit' ? '' : (vals[a.n] === undefined ? (a.def ?? '') : vals[a.n]));
+                if (r.err) errs.push(r.err); else argv.push(...r.tokens);
+            }
+            if (meta.sev && meta.note) warns.push({ level: meta.sev, text: meta.note });
+            if (cmd === 'SET' && vals.cond === 'NX' && !String(vals.ex ?? '').trim()) warns.push({ level: 'warn', text: 'SET NX 沒設定過期時間：若持有者當掉，鍵會永遠存在（鎖會卡死）。' });
+            if (cmd === 'LRANGE' && String(vals.start ?? '0').trim() === '0' && String(vals.stop ?? '-1').trim() === '-1') warns.push({ level: 'warn', text: 'LRANGE 0 -1 會取出整個 List，請先用 LLEN 確認長度。' });
+            if (cmd === 'XADD' && !String(vals.maxlen ?? '').trim()) warns.push({ level: 'info', text: '沒有設定 MAXLEN：這個 Stream 會無限成長。' });
+            return { ok: !errs.length, errs, warns, argv, meta };
+        }
+        // redis-cli 的雙引號跳脫（\n \r \t \\ \" 與其他控制字元 \xHH）
+        function cliQuote(s) {
+            s = String(s);
+            if (s !== '' && /^[\w.:\-/@%+=,*?[\]~()<>$]+$/.test(s)) return s;
+            let o = '"';
+            for (const ch of s) {
+                const c = ch.codePointAt(0);
+                if (ch === '\\') o += '\\\\'; else if (ch === '"') o += '\\"'; else if (ch === '\n') o += '\\n'; else if (ch === '\r') o += '\\r'; else if (ch === '\t') o += '\\t';
+                else if (c < 0x20 || c === 0x7f) o += '\\x' + c.toString(16).padStart(2, '0');
+                else o += ch;
+            }
+            return o + '"';
+        }
+        const lit = (t) => typeof t === 'number' ? String(t) : JSON.stringify(t);
+        function renderRedis(argv, fmt) {
+            if (fmt === 'node') return `const Redis = require('ioredis');\nconst redis = new Redis(); // 預設 127.0.0.1:6379\n\nconst result = await redis.${argv[0].toLowerCase()}(${argv.slice(1).map(lit).join(', ')});`;
+            if (fmt === 'python') return `import redis\nr = redis.Redis(decode_responses=True)  # 預設 localhost:6379\n\nresult = r.execute_command(${argv.map(lit).join(', ')})`;
+            return argv.map(cliQuote).join(' ');
+        }
+
+        // ================= Elasticsearch =================
+        const validIndex = (s) => {
+            s = String(s ?? '').trim(); if (!s) return '';
+            if (s.length > 300) return '索引名稱最多 300 字';
+            for (const p of s.split(',')) if (!/^[a-z0-9.*][a-z0-9_.*-]*$/.test(p) || p === '.' || p === '..') return `索引名稱「${p}」不正確（只能小寫英數與 . _ - *，不可以 _ - + 開頭）`;
+            return '';
+        };
+        const validField = (f) => !f ? '欄位不能空白' : f.length > 200 ? '欄位最多 200 字' : /[\0\r\n]/.test(f) ? '欄位含不合法字元' : f === '__proto__' ? '欄位名稱不合法' : '';
+        function esValue(text, type) {
+            const t = String(text ?? '');
+            if (t.length > LIM.text) return { err: '內容太長' };
+            if (type === 'number') { const s = t.trim(), n = Number(s); return s !== '' && Number.isFinite(n) ? { v: n } : { err: '需為數字' }; }
+            if (type === 'bool') { const s = t.trim().toLowerCase(); return s === 'true' || s === 'false' ? { v: s === 'true' } : { err: '布林請輸入 true 或 false' }; }
+            return t === '' ? { err: '值不能空白' } : { v: t };
+        }
+        const intField = (s, label, min = 0) => { const t = String(s ?? '').trim(); if (!t) return {}; return INT_RE.test(t) && Number.isSafeInteger(+t) && +t >= min ? { v: +t } : { err: `${label}需為${min > 0 ? '正' : '非負'}整數` }; };
+        function defaultEs() { return { index: '', conds: [{ field: '', op: 'match', type: 'string', value: '', occ: 'must' }], msm: '', sort: [], from: '', size: '10', after: '', srcMode: 'all', inc: '', exc: '', aggs: [], track: false }; }
+        function buildEs(S) {
+            S = S && typeof S === 'object' ? S : defaultEs();
+            const errs = [], warns = [], body = {};
+            const ie = validIndex(S.index); if (ie) errs.push(ie);
+            // --- query ---
+            const buckets = { must: [], filter: [], should: [], must_not: [] }, ranges = new Map();
+            const conds = Array.isArray(S.conds) ? S.conds : [];
+            if (conds.length > LIM.conds) errs.push(`條件最多 ${LIM.conds} 列`);
+            conds.slice(0, LIM.conds).forEach((c, i) => {
+                if (!c || typeof c !== 'object') return;
+                const field = String(c.field ?? '').trim(), lab = `條件 ${i + 1}`, op = c.op, occ = buckets[c.occ] ? c.occ : 'must';
+                if (!field && !String(c.value ?? '').trim() && op !== 'exists') return;
+                const fe = validField(field); if (fe) { errs.push(`${lab}：${fe}`); return; }
+                if (!ES_OPS.some(o => o[0] === op)) { errs.push(`${lab}：未知的查詢類型`); return; }
+                if (op === 'exists') { buckets[occ].push({ exists: { field } }); return; }
+                const type = ['string', 'number', 'bool'].includes(c.type) ? c.type : 'string';
+                if (op === 'terms') {
+                    const parts = String(c.value ?? '').split(/[,\n，]/).map(x => x.trim()).filter(Boolean);
+                    if (!parts.length) { errs.push(`${lab}：請輸入至少一個值（逗號或換行分隔）`); return; }
+                    if (parts.length > LIM.list) { errs.push(`${lab}：值最多 ${LIM.list} 個`); return; }
+                    const vs = parts.map(p => esValue(p, type)), bad = vs.find(x => x.err);
+                    if (bad) { errs.push(`${lab}：${bad.err}`); return; }
+                    buckets[occ].push({ terms: { [field]: vs.map(x => x.v) } }); return;
+                }
+                const v = esValue(c.value, type);
+                if (v.err) { errs.push(`${lab}：${v.err}`); return; }
+                if (['gt', 'gte', 'lt', 'lte'].includes(op)) {
+                    const k = occ + '|' + field;
+                    if (!ranges.has(k)) { const cl = { range: { [field]: {} } }; ranges.set(k, cl); buckets[occ].push(cl); }
+                    const rg = ranges.get(k).range[field];
+                    if (op in rg) { errs.push(`${lab}：欄位「${field}」的 ${op} 重複`); return; }
+                    rg[op] = v.v; return;
+                }
+                if (['prefix', 'wildcard'].includes(op) && typeof v.v !== 'string') { errs.push(`${lab}：${op} 的值需為字串`); return; }
+                buckets[occ].push({ [op]: { [field]: v.v } });
+            });
+            const m = String(S.msm ?? '').trim();
+            if (m) { if (!/^\d+%?$/.test(m)) errs.push('minimum_should_match 需為整數或百分比（例如 1 或 75%）'); else if (!buckets.should.length) errs.push('minimum_should_match 需要至少一個 should 條件'); }
+            const total = Object.values(buckets).reduce((n, b) => n + b.length, 0);
+            if (!total) body.query = { match_all: {} };
+            else if (total === 1 && buckets.must.length === 1) body.query = buckets.must[0];
+            else {
+                const b = {}; for (const k of ['must', 'filter', 'should', 'must_not']) if (buckets[k].length) b[k] = buckets[k];
+                if (m && /^\d+%?$/.test(m) && buckets.should.length) b.minimum_should_match = m.endsWith('%') ? m : +m;
+                else if (!m && buckets.should.length && (buckets.must.length || buckets.filter.length)) warns.push({ level: 'info', text: '同時有 must / filter 與 should：should 只影響計分，不是必須符合（要必須符合請填 minimum_should_match）。' });
+                body.query = { bool: b };
+            }
+            // --- _source ---
+            if (S.srcMode === 'none') body._source = false;
+            else if (S.srcMode === 'sel') {
+                const fl = (s) => [...new Set(String(s ?? '').split(/[,\n，]/).map(x => x.trim()).filter(Boolean))];
+                const inc = fl(S.inc), exc = fl(S.exc);
+                [...inc, ...exc].forEach(f => { const e = validField(f); if (e) errs.push(`_source 欄位「${f}」：${e}`); });
+                if (inc.length + exc.length > LIM.fields) errs.push(`_source 欄位最多 ${LIM.fields} 個`);
+                if (inc.length && !exc.length) body._source = inc; else if (inc.length || exc.length) body._source = { ...(inc.length ? { includes: inc } : {}), ...(exc.length ? { excludes: exc } : {}) };
+            }
+            // --- sort ---
+            const sort = [], seen = new Set(), sl = Array.isArray(S.sort) ? S.sort : [];
+            if (sl.length > LIM.sort) errs.push(`排序最多 ${LIM.sort} 個欄位`);
+            sl.slice(0, LIM.sort).forEach((r) => {
+                const f = String(r?.field ?? '').trim(); if (!f) return;
+                const e = validField(f); if (e) { errs.push(`排序「${f}」：${e}`); return; }
+                if (seen.has(f)) { errs.push(`排序欄位「${f}」重複`); return; }
+                seen.add(f); sort.push({ [f]: { order: r.dir === 'desc' ? 'desc' : 'asc' } });
+            });
+            if (sort.length) body.sort = sort;
+            // --- 分頁 ---
+            const fr = intField(S.from, 'from'), sz = intField(S.size, 'size');
+            if (fr.err) errs.push(fr.err); if (sz.err) errs.push(sz.err);
+            const after = String(S.after ?? '').trim();
+            if (after) {
+                let a; try { a = JSON.parse(after); } catch { a = null; }
+                if (!Array.isArray(a) || !a.length) errs.push('search_after 需為 JSON 陣列（例如 [1700000000000, "abc"]）');
+                else if (!sort.length) errs.push('使用 search_after 必須設定排序');
+                else if (a.length !== sort.length) errs.push(`search_after 的值數量（${a.length}）需與排序欄位數量（${sort.length}）相同`);
+                else body.search_after = a;
+                if (fr.v) errs.push('使用 search_after 時 from 必須是 0 或留空');
+                warns.push({ level: 'info', text: 'search_after 的最後一個排序鍵必須唯一（例如 _id 或 _shard_doc），否則可能漏資料或重複；建議搭配 PIT（point in time）。' });
+            }
+            if (fr.v !== undefined) body.from = fr.v;
+            if (sz.v !== undefined) body.size = sz.v;
+            if ((fr.v || 0) + (sz.v === undefined ? 10 : sz.v) > 10000) warns.push({ level: 'danger', text: 'from + size 超過 10000（預設 index.max_result_window）會被 Elasticsearch 拒絕：深分頁請改用 search_after。' });
+            if (S.track) body.track_total_hits = true;
+            // --- aggs ---
+            const aggs = {}, al = Array.isArray(S.aggs) ? S.aggs : [];
+            if (al.length > LIM.aggs) errs.push(`聚合最多 ${LIM.aggs} 個`);
+            al.slice(0, LIM.aggs).forEach((a, i) => {
+                if (!a || typeof a !== 'object') return;
+                const name = String(a.name ?? '').trim(), field = String(a.field ?? '').trim(), lab = `聚合 ${i + 1}`;
+                if (!name && !field) return;
+                if (!name || name.length > 100 || /[[\]>\0]/.test(name) || name === '__proto__') { errs.push(`${lab}：名稱不能空白、不能含 [ ] >`); return; }
+                if (name in aggs) { errs.push(`${lab}：名稱「${name}」重複`); return; }
+                const fe = validField(field); if (fe) { errs.push(`${lab}：${fe}`); return; }
+                if (a.type === 'terms') { const n = intField(a.size, '分組數量', 1); if (n.err) { errs.push(`${lab}：${n.err}`); return; } aggs[name] = { terms: { field, ...(n.v ? { size: n.v } : {}) } }; if (!/\.keyword$/.test(field)) warns.push({ level: 'info', text: `${lab}：terms 聚合對 text 欄位會報錯，text 欄位請改用「${field}.keyword」。` }); }
+                else if (a.type === 'date_histogram') { if (!INTERVALS.includes(a.interval)) { errs.push(`${lab}：請選時間間隔`); return; } aggs[name] = { date_histogram: { field, calendar_interval: a.interval } }; }
+                else if (['avg', 'sum', 'min', 'max', 'cardinality'].includes(a.type)) aggs[name] = { [a.type]: { field } };
+                else errs.push(`${lab}：未知的聚合類型`);
+            });
+            if (Object.keys(aggs).length) { body.aggs = aggs; if (sz.v !== 0) warns.push({ level: 'info', text: '只需要聚合結果時，把 size 設為 0 可省下回傳文件的成本。' }); }
+            const idx = String(S.index ?? '').trim();
+            return { ok: !errs.length, errs, warns, body, path: idx ? `/${idx}/_search` : '/_search' };
+        }
+        function renderEs(r, fmt) {
+            const json = JSON.stringify(r.body, null, 2);
+            if (fmt === 'kibana') return `GET ${r.path}\n${json}`;
+            if (fmt === 'curl') return `curl -X POST 'http://localhost:9200${r.path}?pretty' \\\n  -H 'Content-Type: application/json' \\\n  -d '${json.replace(/'/g, `'\\''`)}'`;
+            return json;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const h = (t, p = {}, ...c) => {
+            const e = document.createElement(t);
+            for (const [k, v] of Object.entries(p)) { if (k === 'class') e.className = v; else if (k.startsWith('on')) e[k] = v; else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v); }
+            e.append(...c); return e;
+        };
+        const btn = (t, f, cls = 'sm', label) => h('button', { type: 'button', class: cls, 'aria-label': label || t, onclick: f }, t);
+        const msg = (t) => { $('#msg').textContent = t || ''; };
+        const o0 = loadOpts(store.get('nosqlq_opts', null));
+        let tab = o0.tab, cmd = o0.cmd, fmt = o0.fmt, efmt = o0.efmt;
+        const rvals = {};                   // 指令 → { 參數: 值 }
+        let E = defaultEs(), text = '';
+        const persist = () => store.set('nosqlq_opts', { tab, cmd, fmt, efmt });
+
+        // ---- 分頁與格式 ----
+        $('#tabs').replaceChildren(h('button', { 'data-t': 'redis' }, 'Redis'), h('button', { 'data-t': 'es' }, 'Elasticsearch'));
+        $('#tabs').onclick = (e) => { const t = e.target.dataset.t; if (t) { tab = t; persist(); show(); } };
+        const FL = { cli: 'redis-cli', node: 'Node（ioredis）', python: 'Python（redis-py）', dsl: 'JSON DSL', kibana: 'Kibana Dev Tools', curl: 'curl' };
+        $('#fmtTabs').onclick = (e) => { const f = e.target.dataset.f; if (f) { if (tab === 'redis') fmt = f; else efmt = f; persist(); show(); } };
+        function show() {
+            [...$('#tabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab));
+            $('#pR').hidden = tab !== 'redis'; $('#pE').hidden = tab !== 'es';
+            const fs = tab === 'redis' ? FMTS : EFMTS, cur = tab === 'redis' ? fmt : efmt;
+            $('#fmtTabs').replaceChildren(...fs.map(f => h('button', { 'data-f': f, 'aria-pressed': f === cur }, FL[f])));
+            if (tab === 'redis') buildRForm(); else buildEForm();
+        }
+
+        // ---- Redis 表單 ----
+        $('#rg').replaceChildren(...GROUPS.map(([v, l]) => h('option', { value: v }, l)));
+        $('#rg').onchange = () => { cmd = firstOf($('#rg').value); persist(); buildRForm(); };
+        $('#rc').onchange = () => { cmd = $('#rc').value; persist(); buildRForm(); };
+        function buildRForm() {
+            const m = CMDS[cmd]; $('#rg').value = m.g;
+            $('#rc').replaceChildren(...Object.keys(CMDS).filter(k => CMDS[k].g === m.g).map(k => h('option', { value: k }, k)));
+            $('#rc').value = cmd;
+            const v = rvals[cmd] || (rvals[cmd] = {});
+            const kids = [h('h2', {}, cmd)];
+            m.args.forEach(a => {
+                if (a.t === 'lit') return;
+                const val = v[a.n] === undefined ? (a.def ?? '') : v[a.n], id = 'r_' + a.n;
+                if (a.t === 'bool') kids.push(h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: val === 'true', onchange: (e) => { v[a.n] = e.target.checked ? 'true' : ''; update(); } }), a.l));
+                else if (a.t === 'sel') { const s = h('select', { id, 'aria-label': a.l, onchange: (e) => { v[a.n] = e.target.value; update(); } }, h('option', { value: '' }, '（不使用）'), ...a.opts.map(([x, l]) => h('option', { value: x }, l))); s.value = val; kids.push(h('label', { for: id }, a.l), s); }
+                else if (a.t === 'list' || a.t === 'pairs') kids.push(h('label', { for: id }, a.l), h('textarea', { id, spellcheck: 'false', maxlength: LIM.text, oninput: (e) => { v[a.n] = e.target.value; update(); } }, val));
+                else kids.push(h('label', { for: id }, a.l + (a.req ? '' : '（選填）')), h('input', { id, type: 'text', value: val, autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', inputmode: a.t === 'int' || a.t === 'num' ? 'text' : null, maxlength: a.t === 'key' ? LIM.key : LIM.text, oninput: (e) => { v[a.n] = e.target.value; update(); } }));
+            });
+            $('#rForm').replaceChildren(...kids);
+            $('#rInfo').replaceChildren(h('span', { class: 'cx' }, '時間複雜度 ' + m.cx), ...(m.note ? [' ', m.note] : []));
+            update();
+        }
+
+        // ---- ES 表單 ----
+        const TYPES = [['string', '字串'], ['number', '數字'], ['bool', '布林']];
+        const txt = (o, k, ph, p = {}) => h('input', { type: 'text', value: o[k] ?? '', placeholder: ph, 'aria-label': ph, autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', maxlength: 2000, oninput: (e) => { o[k] = e.target.value; update(); }, ...p });
+        const sel = (o, k, opts, rebuild, label) => { const s = h('select', { 'aria-label': label || k, onchange: (e) => { o[k] = e.target.value; rebuild ? buildEForm() : update(); } }, ...opts.map(([v, l]) => h('option', { value: v }, l))); s.value = o[k]; return s; };
+        const chk = (o, k, label, rebuild) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!o[k], onchange: (e) => { o[k] = e.target.checked; rebuild ? buildEForm() : update(); } }), label);
+        const addTo = (list, item, max, what) => { if (list.length >= max) return msg(`${what}最多 ${max} 個`); msg(''); list.push(item); buildEForm(); };
+        $('#eIdx').oninput = () => { E.index = $('#eIdx').value; update(); };
+        function buildEForm() {
+            $('#eIdx').value = E.index;
+            $('#eQ').replaceChildren(h('h2', {}, '查詢條件'), ...E.conds.map((c, i) => h('div', { class: 'crow' }, txt(c, 'field', '欄位（可用 a.b.c）'), sel(c, 'op', ES_OPS, true, '查詢類型'), ...(c.op === 'exists' ? [] : [sel(c, 'type', TYPES, false, '值型別'), txt(c, 'value', c.op === 'terms' ? '多個值，逗號或換行分隔' : '值')]), sel(c, 'occ', ES_OCC, false, '放進哪一組'), btn('✕', () => { E.conds.splice(i, 1); buildEForm(); }, 'sm del', '刪除這個條件'))), btn('＋條件', () => addTo(E.conds, { field: '', op: 'match', type: 'string', value: '', occ: 'must' }, LIM.conds, '條件')), h('label', {}, 'minimum_should_match（有 should 時，可留空）'), txt(E, 'msm', '例如 1 或 75%'));
+            $('#eS').replaceChildren(h('h2', {}, '排序與欄位'), ...E.sort.map((r, i) => h('div', { class: 'crow' }, txt(r, 'field', '排序欄位（可用 _score）'), sel(r, 'dir', [['asc', '升冪'], ['desc', '降冪']], false, '方向'), btn('✕', () => { E.sort.splice(i, 1); buildEForm(); }, 'sm del', '刪除這個排序'))), btn('＋排序', () => addTo(E.sort, { field: '', dir: 'asc' }, LIM.sort, '排序')), h('label', {}, '_source（回傳哪些欄位）'), sel(E, 'srcMode', [['all', '全部'], ['none', '不回傳 (false)'], ['sel', '指定欄位']], true, '_source'), ...(E.srcMode === 'sel' ? [txt(E, 'inc', '包含欄位，逗號分隔'), txt(E, 'exc', '排除欄位，逗號分隔')] : []));
+            $('#eP').replaceChildren(h('h2', {}, '分頁'), h('div', { class: 'row' }, txt(E, 'size', 'size（每頁筆數，0 = 只要聚合）', { inputmode: 'numeric' }), txt(E, 'from', 'from（跳過筆數）', { inputmode: 'numeric' })), h('label', {}, 'search_after（深分頁，上一頁最後一筆的排序值，JSON 陣列）'), txt(E, 'after', '例如 [1700000000000, "doc-123"]'), chk(E, 'track', '精確計算總筆數 (track_total_hits)'));
+            $('#eA').replaceChildren(h('h2', {}, '聚合 aggregations'), ...E.aggs.map((a, i) => h('div', { class: 'crow' }, txt(a, 'name', '結果名稱'), sel(a, 'type', AGG_TYPES, true, '聚合類型'), txt(a, 'field', '欄位'), ...(a.type === 'terms' ? [txt(a, 'size', '分組數量（預設 10）', { inputmode: 'numeric' })] : a.type === 'date_histogram' ? [sel(a, 'interval', INTERVALS.map(x => [x, x]), false, '時間間隔')] : []), btn('✕', () => { E.aggs.splice(i, 1); buildEForm(); }, 'sm del', '刪除這個聚合'))), btn('＋聚合', () => addTo(E.aggs, { name: '', type: 'terms', field: '', size: '', interval: 'day' }, LIM.aggs, '聚合')));
+            update();
+        }
+
+        // ---- 輸出 ----
+        function update() {
+            let r;
+            if (tab === 'redis') r = buildRedis(cmd, rvals[cmd]); else r = buildEs(E);
+            $('#errs').replaceChildren(...r.errs.map(e => h('li', {}, e)));
+            $('#warns').replaceChildren(...r.warns.map(w => h('div', { class: 'alert' + (w.level === 'danger' ? '' : w.level === 'warn' ? ' warn' : ' info') }, w.text)));
+            text = r.ok ? (tab === 'redis' ? renderRedis(r.argv, fmt) : renderEs(r, efmt)) : '';
+            $('#out').textContent = text; $('#out').hidden = !text; $('#copy').hidden = !text;
+        }
+        $('#copy').onclick = () => copyWithFeedback($('#copy'), text);
+        show();
+    </script>
+</body>
+
+</html>

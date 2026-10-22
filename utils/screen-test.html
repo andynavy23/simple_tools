@@ -276,6 +276,120 @@
         .db {
             font-variant-numeric: tabular-nums;
         }
+
+        .pane textarea {
+            width: 100%;
+            font-size: 16px;
+        }
+
+        .pane .code {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 13px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 8px 10px;
+            margin: 6px 0;
+            overflow: auto;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            max-height: 240px;
+            max-width: 100%;
+        }
+
+        .clipt {
+            margin: 12px 0 2px;
+            font-size: 14px;
+            font-weight: 600;
+            overflow-wrap: anywhere;
+        }
+
+        .clipimg {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: var(--radius-sm);
+            background: var(--fill);
+        }
+
+        /* 色域對照的測試色：刻意寫死（要比較的就是這些色碼） */
+        .gm {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .gm div {
+            display: flex;
+            height: 56px;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            box-shadow: inset 0 0 0 1px var(--line);
+        }
+
+        .gm i {
+            flex: 1;
+        }
+
+        #tpad,
+        #rpad {
+            height: 240px;
+            border-radius: 16px;
+            background: var(--bg);
+            box-shadow: inset 0 0 0 2px var(--fill);
+            position: relative;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            display: grid;
+            place-items: center;
+            color: var(--muted);
+            text-align: center;
+            touch-action: none;
+        }
+
+        #tpad.scroll {
+            touch-action: pan-y;
+        }
+
+        #tpad b {
+            position: absolute;
+            width: 44px;
+            height: 44px;
+            margin: -22px 0 0 -22px;
+            border-radius: 50%;
+            background: var(--blue);
+            color: var(--on-blue);
+            display: grid;
+            place-items: center;
+            font-size: 14px;
+            opacity: .75;
+            pointer-events: none;
+        }
+
+        .devrow {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--fill);
+            border-radius: var(--radius-sm);
+        }
+
+        .devrow.cur {
+            background: var(--fill);
+            box-shadow: inset 3px 0 0 var(--blue);
+        }
+
+        .devrow>div {
+            flex: 1 1 200px;
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .devrow small {
+            color: var(--muted);
+            display: block;
+        }
     </style>
 </head>
 
@@ -294,6 +408,12 @@
                 <button data-t="cam" aria-pressed="false">相機</button>
                 <button data-t="mic" aria-pressed="false">麥克風</button>
                 <button data-t="env" aria-pressed="false">瀏覽器環境</button>
+                <button data-t="clip" aria-pressed="false">剪貼簿檢視</button>
+                <button data-t="notify" aria-pressed="false">通知測試</button>
+                <button data-t="gamut" aria-pressed="false">色域與 HDR</button>
+                <button data-t="touch" aria-pressed="false">多點觸控</button>
+                <button data-t="rate" aria-pressed="false">滑鼠輪詢率</button>
+                <button data-t="dev" aria-pressed="false">裝置尺寸速查</button>
             </div>
 
             <div class="pane" data-t="screen">
@@ -367,6 +487,51 @@
                 <div id="envOut"></div>
             </div>
 
+            <div class="pane" data-t="clip" hidden>
+                <p class="note">在下方框內貼上（Ctrl+V，手機長按 → 貼上），列出剪貼簿裡所有格式與內容。HTML 只會當文字顯示，不會執行；全部在本機處理。</p>
+                <textarea id="clipIn" rows="3" spellcheck="false" placeholder="在這裡貼上" aria-label="貼上區"></textarea>
+                <div id="clipOut"></div>
+            </div>
+
+            <div class="pane" data-t="notify" hidden>
+                <p class="note">檢查這個瀏覽器能不能顯示系統通知：申請權限後送一則測試通知。</p>
+                <div id="notifyOut"></div>
+                <div class="btns"><button class="primary" id="notifyAsk">申請通知權限</button><button id="notifySend">送測試通知</button></div>
+                <p class="note" id="notifyMsg" role="status"></p>
+                <ul class="note" id="notifyTips"></ul>
+            </div>
+
+            <div class="pane" data-t="gamut" hidden>
+                <p class="note">用 CSS 媒體查詢偵測螢幕色域與 HDR；結果是瀏覽器回報的能力，不一定等於面板實際規格。</p>
+                <div id="gamutOut"></div>
+                <h3 class="envsec">色域對照圖</h3>
+                <p class="note">每組左邊是 sRGB 最飽和色，右邊是 Display P3 的同名色（超出 sRGB 的部分）。看得出右邊明顯更鮮豔，代表螢幕與瀏覽器支援 P3；兩邊一模一樣就是只有 sRGB（或瀏覽器把色彩壓回 sRGB）。</p>
+                <div class="gm" id="gmChart"></div>
+            </div>
+
+            <div class="pane" data-t="touch" hidden>
+                <p class="note">手指（或滑鼠、手寫筆）放上方框，同時顯示每個觸控點的座標與目前 / 最大同時點數。</p>
+                <label class="chk"><input type="checkbox" id="tScroll"> 捲動頁面模式（不鎖住手指，可上下滑動頁面；此時不一定會收到多點資料）</label>
+                <div id="tpad"><span id="tHint">在這裡放上手指</span></div>
+                <p class="db"><b id="tNow">目前 0 點</b>　<span class="muted" id="tMax">最大同時 0 點</span>　<span class="muted">裝置回報 maxTouchPoints：<span id="tHw"></span></span></p>
+                <pre class="code" id="tList"></pre>
+                <div class="row"><button class="sm" id="tReset">重設最大點數</button></div>
+            </div>
+
+            <div class="pane" data-t="rate" hidden>
+                <p class="note">在方框內快速、持續地移動滑鼠（畫圓最好），估算 pointermove 事件頻率。僅供參考：瀏覽器可能把事件合併 / 降低時間精度，結果常偏低；需要精確請用廠商軟體或專用測試網站。</p>
+                <div id="rpad" tabindex="0">在這裡快速畫圓<br><small>（需要實體滑鼠；觸控不適用）</small></div>
+                <div id="rateOut"></div>
+                <div class="row" style="margin-top:10px"><button class="sm" id="rateReset">重新量測</button></div>
+            </div>
+
+            <div class="pane" data-t="dev" hidden>
+                <p class="note">常見裝置的 CSS 像素尺寸（直向）、像素比與安全區域；目前這台裝置會高亮。可複製成媒體查詢。</p>
+                <div id="devNow"></div>
+                <div id="devList"></div>
+                <p class="note">機型清單只列有把握的；瀏覽器視窗高度會扣掉網址列 / 工具列，實際可用高度比表中小。安全區域為直向的約略值（橫向另有左右安全區），請以實機的 env(safe-area-inset-*) 為準。</p>
+            </div>
+
             <div class="pane" data-t="mouse" hidden>
                 <div id="pad" tabindex="0">在這裡按滑鼠按鍵、雙擊、滾動滾輪<br><small>（需要實體滑鼠；觸控只會顯示座標）</small><br><small id="pos">座標：—</small></div>
                 <div class="lights" id="lights"></div>
@@ -395,6 +560,12 @@
         <li>「尺寸 / PPI」：填對角線吋數與解析度（或選常見解析度），也可按「填入目前這個螢幕的解析度」。</li>
         <li>「相機」：選相機與解析度，按「開啟相機」並允許權限。下方會顯示實際解析度、幀率與前 / 後鏡頭；「鏡像預覽」只影響畫面，「拍照」會存成 PNG（不鏡像），按「下載 PNG」儲存。手機可用「切換前後鏡頭」。</li>
         <li>「瀏覽器環境」：列出 User-Agent、螢幕與視窗大小、像素比、語言、時區、網路狀態、觸控點數、色彩深度、深色 / 減少動態偏好，以及 WebGL、Web Audio、Clipboard、WebRTC 等功能支援；按「複製成回報文字」可直接貼進 bug 回報。</li>
+        <li>「剪貼簿檢視」：在框內貼上（Ctrl+V，手機長按 → 貼上），列出剪貼簿所有格式（text/plain、text/html、檔案…）與內容；HTML 只當文字顯示，圖片會顯示預覽與尺寸。</li>
+        <li>「通知測試」：按「申請通知權限」並允許，再按「送測試通知」；上方顯示權限狀態。iPhone / iPad 要先「加入主畫面」並從主畫面開啟才支援；不支援時會直接說明原因。</li>
+        <li>「色域與 HDR」：列出 sRGB / P3 / Rec.2020、HDR 的偵測結果，並有對照圖：右邊色塊（P3）明顯比左邊（sRGB）鮮豔，代表螢幕支援廣色域。</li>
+        <li>「多點觸控」：手指放上方框，顯示每個觸控點座標與最大同時點數；要上下捲動頁面時勾「捲動頁面模式」，或從方框外滑動。</li>
+        <li>「滑鼠輪詢率」：在方框內快速畫圓，估算 pointermove 事件頻率（僅供參考，瀏覽器會合併事件、降低時間精度）。</li>
+        <li>「裝置尺寸速查」：常見手機 / 平板 / 筆電的 CSS 尺寸、像素比與安全區域，目前裝置會高亮，可複製成媒體查詢；只列有把握的機型。</li>
         <li>「麥克風」：選麥克風、設定回音消除 / 噪音抑制 / 自動增益，按「開始測試」，對著麥克風說話，音量條應該跳動（紅線是峰值保持）。按「錄 5 秒回放」會錄下 5 秒並播放。</li>
         </ol>
         <h3>範例</h3>
@@ -411,6 +582,7 @@
         <li>音量以 dBFS 顯示：0 是滿格，數字越小越安靜；講話通常落在 -30 到 -10。</li>
         <li>相機畫面、照片與 5 秒錄音都只存在記憶體裡，不會上傳；重新整理或離開頁面就消失，要留著請先下載。</li>
         <li>「瀏覽器環境」只在本機讀取瀏覽器提供的資訊，不會送出到任何地方；有些欄位（例如記憶體、網路估計）只有部分瀏覽器提供，會顯示「未提供」。localStorage 檢查只讀取、不寫入任何資料。</li>
+        <li>剪貼簿、通知、觸控點與輪詢率資料都只在本機顯示、不儲存、不上傳；通知權限由瀏覽器管理，要收回請到網站設定。「鍵盤」分頁最後一鍵會顯示 key / code / keyCode / 修飾鍵。</li>
         <li>本頁只記住你上次停留的分頁（鍵 screentest_tab，可用右上角備份），不會記錄相機或麥克風資料；重新開啟頁面不會自動開相機。</li>
         </ul>
     </template>
@@ -457,7 +629,7 @@
         }
 
         // 相機 / 麥克風
-        const TABS = ['screen', 'kb', 'mouse', 'ppi', 'cam', 'mic', 'env'];
+        const TABS = ['screen', 'kb', 'mouse', 'ppi', 'cam', 'mic', 'env', 'clip', 'notify', 'gamut', 'touch', 'rate', 'dev'];
         const validTab = (v) => TABS.includes(v) ? v : 'screen';          // 舊版 / 壞掉的備份值一律退回「螢幕壞點」
         const CAM_RES = [['QVGA 320×240', 320, 240], ['VGA 640×480', 640, 480], ['HD 1280×720', 1280, 720], ['Full HD 1920×1080', 1920, 1080], ['QHD 2560×1440', 2560, 1440], ['4K 3840×2160', 3840, 2160]];
         // 指定裝置就用 exact deviceId（不再用 facingMode）；解析度用 ideal，讓瀏覽器挑最接近的
@@ -578,6 +750,101 @@
             for (const [s, k, v] of rows) { if (s !== sec) { sec = s; out.push('', `【${s}】`); } out.push(`${k}：${v}`); }
             return out.join('\n');
         }
+
+        // ---- 剪貼簿檢視 ----
+        // dt = ClipboardEvent.clipboardData（或同形物件）。HTML 一律只當文字，不插入頁面
+        function clipInfo(dt, cap = 20000) {
+            const types = Array.from(dt && dt.types || []);
+            const texts = types.filter(t => t !== 'Files').map(type => { let s = ''; try { s = String(dt.getData(type) ?? ''); } catch (e) { } return { type, len: s.length, text: s.slice(0, cap), cut: s.length > cap }; });
+            const files = Array.from(dt && dt.files || []).map(f => ({ name: f.name || '（未命名）', type: f.type || '（未知類型）', size: f.size || 0 }));
+            return { types, texts, files };
+        }
+        const fmtBytes = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(2)} MB`;
+
+        // ---- 通知 ----
+        // g = { Notification, isSecureContext, ua, platform, maxTouchPoints, standalone }；回傳 { supported, permission, ios, needHome, rows, tips }
+        function notifyInfo(g) {
+            g = g || {}; const N = g.Notification, ua = String(g.ua || '');
+            const ios = /iPhone|iPad|iPod/.test(ua) || (g.platform === 'MacIntel' && g.maxTouchPoints > 1);
+            const supported = !!N, permission = supported ? String(N.permission || 'default') : 'unsupported';
+            const needHome = ios && !g.standalone;
+            const PERM = { granted: '已允許', denied: '已封鎖', default: '尚未詢問', unsupported: '不支援' };
+            const tips = [];
+            if (!supported) tips.push(ios ? 'iPhone / iPad 的 Safari 分頁不提供通知；iOS 16.4 以上需先「加入主畫面」，從主畫面圖示開啟後才能使用。' : '這個瀏覽器沒有 Notification API（例如部分內建瀏覽器 / 舊版瀏覽器）。');
+            else if (needHome) tips.push('iPhone / iPad 需先把網頁「加入主畫面」並從主畫面開啟，才能申請通知權限。');
+            if (supported && g.isSecureContext === false) tips.push('通知需要 https 網址（或 localhost）。');
+            if (permission === 'denied') tips.push('已被封鎖：請到網址列的鎖頭 / 網站設定把通知改成允許，再重新整理。');
+            if (/Android/.test(ua)) tips.push('Android Chrome 不能用 new Notification()，本頁會改走 Service Worker；若頁面沒有註冊 Service Worker（從首頁開過才會有），可能無法送出。');
+            return { supported, permission, ios, needHome, rows: [['通知 API', supported ? '支援' : '不支援'], ['權限狀態', PERM[permission] || permission], ['安全環境（https / localhost）', g.isSecureContext === false ? '否' : '是'], ['以主畫面 App 開啟', g.standalone ? '是' : '否'], ['平台', ios ? 'iOS / iPadOS' : /Android/.test(ua) ? 'Android' : '桌面 / 其他']], tips };
+        }
+
+        // ---- 色域 / HDR ----
+        // mq = (query) => boolean | undefined（undefined = 不支援該查詢）
+        function gamutInfo(mq) {
+            const q = (s) => { try { const v = mq(s); return v === undefined ? '（不支援查詢）' : v ? '是' : '否'; } catch (e) { return '（不支援查詢）'; } };
+            const yes = (s) => { try { return !!mq(s); } catch (e) { return false; } };
+            const gamut = yes('(color-gamut: rec2020)') ? 'Rec.2020（極廣）' : yes('(color-gamut: p3)') ? 'Display P3（廣色域）' : yes('(color-gamut: srgb)') ? 'sRGB（標準）' : '無法判斷';
+            return {
+                gamut, hdr: yes('(dynamic-range: high)'),
+                rows: [['最廣支援色域', gamut], ['color-gamut: srgb', q('(color-gamut: srgb)')], ['color-gamut: p3', q('(color-gamut: p3)')], ['color-gamut: rec2020', q('(color-gamut: rec2020)')], ['dynamic-range: high（HDR 顯示）', q('(dynamic-range: high)')], ['video-dynamic-range: high（HDR 影片）', q('(video-dynamic-range: high)')], ['prefers-color-scheme: dark', q('(prefers-color-scheme: dark)')], ['prefers-contrast: more', q('(prefers-contrast: more)')], ['forced-colors: active', q('(forced-colors: active)')], ['inverted-colors: inverted', q('(inverted-colors: inverted)')]],
+            };
+        }
+
+        // ---- 多點觸控 ----
+        // points: Map / 陣列 [[id, { x, y, pressure, w, h, type }]]
+        function fmtPoints(points) {
+            return Array.from(points).map(([id, p], i) => `#${i + 1}（${p.type || 'touch'} id ${id}）x ${Math.round(p.x)}, y ${Math.round(p.y)}${p.pressure ? `　壓力 ${(+p.pressure).toFixed(2)}` : ''}${p.w > 1 || p.h > 1 ? `　接觸 ${Math.round(p.w)}×${Math.round(p.h)}` : ''}`);
+        }
+
+        // ---- 滑鼠輪詢率 ----
+        const POLL_RATES = [60, 125, 250, 500, 1000, 2000, 4000, 8000];
+        // ts = 事件時間戳（毫秒，遞增）；間隔超過 50 ms 視為停頓不計。資料不足回傳 null
+        function rateStats(ts) {
+            const dts = []; for (let i = 1; i < ts.length; i++) { const d = ts[i] - ts[i - 1]; if (d > 0 && d <= 50) dts.push(d); }
+            if (dts.length < 5) return null;
+            dts.sort((a, b) => a - b);
+            const hz = (d) => 1000 / d, med = dts[Math.floor(dts.length / 2)], fast = dts[Math.floor(dts.length * 0.1)];
+            const snap = (h) => POLL_RATES.find(r => Math.abs(h - r) / r <= 0.15) || null;
+            return { n: ts.length, medianHz: Math.round(hz(med)), peakHz: Math.round(hz(fast)), nearest: snap(hz(med)), nearestPeak: snap(hz(fast)) };
+        }
+
+        // ---- 裝置尺寸速查 ----
+        // [分組, 名稱, 寬, 高（直向 CSS px）, 像素比, 安全區 上/下（直向，null = 不列）]
+        const DEVICES = [
+            ['iPhone', 'iPhone SE（第 2 / 3 代）、8', 375, 667, 2, [0, 0]],
+            ['iPhone', 'iPhone 12 mini、13 mini', 375, 812, 3, [50, 34]],
+            ['iPhone', 'iPhone 12 / 13 / 13 Pro / 14', 390, 844, 3, [47, 34]],
+            ['iPhone', 'iPhone 12 Pro Max、13 Pro Max、14 Plus', 428, 926, 3, [47, 34]],
+            ['iPhone', 'iPhone 14 Pro、15、15 Pro、16', 393, 852, 3, [59, 34]],
+            ['iPhone', 'iPhone 14 Pro Max、15 Plus、15 Pro Max、16 Plus', 430, 932, 3, [59, 34]],
+            ['iPhone', 'iPhone 16 Pro', 402, 874, 3, [62, 34]],
+            ['iPhone', 'iPhone 16 Pro Max', 440, 956, 3, [62, 34]],
+            ['Android', 'Galaxy S22 / S23 / S24', 360, 780, 3, null],
+            ['Android', '常見 Android 中階機', 360, 800, 3, null],
+            ['Android', 'Pixel 7 / 8', 412, 915, 2.625, null],
+            ['Android', 'Galaxy S20 Ultra', 412, 915, 3.5, null],
+            ['平板', 'iPad mini 6', 744, 1133, 2, null],
+            ['平板', 'iPad 10.2 吋', 810, 1080, 2, null],
+            ['平板', 'iPad Air 10.9 吋', 820, 1180, 2, null],
+            ['平板', 'iPad Pro 11 吋', 834, 1194, 2, null],
+            ['平板', 'iPad Pro 12.9 吋', 1024, 1366, 2, null],
+            ['筆電 / 桌機', 'Windows 筆電 1366×768', 1366, 768, 1, null],
+            ['筆電 / 桌機', '1920×1080（縮放 100%）', 1920, 1080, 1, null],
+            ['筆電 / 桌機', '1920×1080（縮放 125%）', 1536, 864, 1.25, null],
+            ['筆電 / 桌機', '2560×1440（縮放 100%）', 2560, 1440, 1, null],
+            ['筆電 / 桌機', 'MacBook Air 13 吋（M1，預設縮放）', 1440, 900, 2, null],
+            ['筆電 / 桌機', 'MacBook Pro 14 吋（預設縮放）', 1512, 982, 2, null],
+            ['筆電 / 桌機', 'MacBook Pro 16 吋（預設縮放）', 1728, 1117, 2, null],
+        ];
+        // 目前裝置的螢幕尺寸（CSS px，直 / 橫向皆可）與像素比 → 符合的索引
+        function matchDevices(list, w, h, dpr) {
+            const a = Math.min(w, h), b = Math.max(w, h);
+            return list.map((d, i) => Math.min(d[2], d[3]) === a && Math.max(d[2], d[3]) === b && Math.abs(d[4] - dpr) < 0.06 ? i : -1).filter(i => i >= 0);
+        }
+        // 媒體查詢：'max' → max-width；其他 → device-width / device-height / resolution（直向）
+        const deviceQuery = (d, kind) => kind === 'max' ? `@media (max-width: ${d[2]}px) { }` : `@media (device-width: ${d[2]}px) and (device-height: ${d[3]}px) and (resolution: ${d[4]}dppx) { }`;
+        // 鍵盤修飾鍵
+        const modKeys = (e) => [e.ctrlKey && 'Ctrl', e.shiftKey && 'Shift', e.altKey && 'Alt', e.metaKey && 'Meta'].filter(Boolean).join('+') || '無';
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -609,7 +876,7 @@
         const keyEl = (code) => document.querySelector(`.k[data-code="${code}"]`);
         function kbUpdate(e, down) {
             const el = keyEl(e.code);
-            if (down) { hit.add(e.code); if (el) { el.classList.add('hit', 'down'); } $('#last').textContent = `最後按下：${e.key === ' ' ? '(空白)' : e.key}　code=${e.code}　keyCode=${e.keyCode}　已測試 ${[...hit].filter(c => ALL_CODES.includes(c)).length} / ${ALL_CODES.length} 個鍵`; }
+            if (down) { hit.add(e.code); if (el) { el.classList.add('hit', 'down'); } $('#last').textContent = `最後按下：${e.key === ' ' ? '(空白)' : e.key}　code=${e.code}　keyCode=${e.keyCode}　修飾鍵=${modKeys(e)}　已測試 ${[...hit].filter(c => ALL_CODES.includes(c)).length} / ${ALL_CODES.length} 個鍵`; }
             else if (el) el.classList.remove('down');
         }
         document.addEventListener('keydown', (e) => {
@@ -797,9 +1064,115 @@
         $('#envCopy').onclick = () => { const b = $('#envCopy'), d = new Date(), z = (n) => String(n).padStart(2, '0'); Util.copyWithFeedback(b, envReport(envRows, `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`)); };
         ['resize', 'online', 'offline'].forEach(ev => window.addEventListener(ev, () => { if (tab === 'env') renderEnv(); }));
 
+        // ---------- 剪貼簿檢視 ----------
+        let clipUrls = [];
+        const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+        const envRow = (a, b) => { const d = mk('div', 'envrow'); d.append(mk('span', '', a), mk('b', '', b)); return d; };
+        $('#clipIn').addEventListener('paste', (e) => {
+            e.preventDefault();
+            clipUrls.forEach(u => URL.revokeObjectURL(u)); clipUrls = [];
+            const info = clipInfo(e.clipboardData), out = $('#clipOut'); out.replaceChildren();
+            if (!info.types.length) return out.append(mk('p', 'note', '剪貼簿是空的（或瀏覽器沒有提供內容）。'));
+            out.append(mk('p', 'note', `共 ${info.types.length} 種格式：${info.types.join('、')}`));
+            for (const t of info.texts) {
+                out.append(mk('div', 'clipt', `${t.type}（${t.len} 字元）`));
+                out.append(t.len ? mk('pre', 'code', t.text + (t.cut ? '\n…（內容過長，只顯示前 20000 字元）' : '')) : mk('p', 'note', '（空，或不是文字格式）'));
+            }
+            for (const [i, f] of info.files.entries()) {
+                out.append(mk('div', 'clipt', `檔案 ${i + 1}：${f.name}（${f.type}，${fmtBytes(f.size)}）`));
+                if (/^image\//.test(f.type)) {
+                    const u = URL.createObjectURL(e.clipboardData.files[i]), im = mk('img', 'clipimg'), cap = mk('p', 'note', '圖片預覽');
+                    clipUrls.push(u); im.alt = '貼上的圖片'; im.onload = () => { cap.textContent = `圖片尺寸 ${im.naturalWidth} × ${im.naturalHeight}`; }; im.src = u; out.append(cap, im);
+                }
+            }
+        });
+
+        // ---------- 通知 ----------
+        function renderNotify() {
+            const n = notifyInfo({ Notification: window.Notification, isSecureContext: window.isSecureContext, ua: navigator.userAgent, platform: navigator.platform, maxTouchPoints: navigator.maxTouchPoints, standalone: matchMedia('(display-mode: standalone)').matches || navigator.standalone });
+            $('#notifyOut').replaceChildren(...n.rows.map(([a, b]) => envRow(a, b)));
+            $('#notifyTips').replaceChildren(...n.tips.map(t => mk('li', '', t)));
+            $('#notifyAsk').disabled = !n.supported; $('#notifySend').disabled = !n.supported;
+        }
+        $('#notifyAsk').onclick = async () => {
+            try { const r = Notification.requestPermission(); if (r && r.then) await r; } catch (e) { $('#notifyMsg').textContent = '申請失敗：' + (e && e.message || e); }
+            renderNotify();
+        };
+        $('#notifySend').onclick = async () => {
+            const m = $('#notifyMsg'); m.textContent = '';
+            if (Notification.permission !== 'granted') { m.textContent = '尚未允許通知：請先按「申請通知權限」並選擇允許。'; return; }
+            const title = '通知測試', opts = { body: '看到這則通知，表示這個瀏覽器可以顯示系統通知。' };
+            try { new Notification(title, opts); m.textContent = '已送出，請看系統通知區。'; return; } catch (e) { }
+            try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (!reg) throw 0; await reg.showNotification(title, opts); m.textContent = '已送出（經由 Service Worker），請看系統通知區。'; }
+            catch (e) { m.textContent = '這個瀏覽器不能直接建立通知，而且沒有可用的 Service Worker；請改從首頁開啟工具箱後再試。'; }
+        };
+
+        // ---------- 色域 / HDR ----------
+        function renderGamut() {
+            const g = gamutInfo((q) => { const m = window.matchMedia(q); return m.media === 'not all' ? undefined : m.matches; });
+            $('#gamutOut').replaceChildren(...g.rows.map(([a, b]) => envRow(a, b)), envRow('結論', `${g.gamut}；${g.hdr ? '支援 HDR' : '未偵測到 HDR'}`));
+        }
+        $('#gmChart').replaceChildren(...[['紅', '255,0,0'], ['綠', '0,255,0'], ['藍', '0,0,255'], ['青', '0,255,255'], ['洋紅', '255,0,255'], ['黃', '255,255,0']].map(([n, c]) => {
+            const d = mk('div'), a = mk('i'), b = mk('i');
+            a.style.background = `rgb(${c})`; b.style.background = `color(display-p3 ${c.split(',').map(v => v / 255).join(' ')})`;
+            d.title = n; d.append(a, b); return d;
+        }));
+
+        // ---------- 多點觸控 ----------
+        const tp = new Map(); let tMax = 0; const tpad = $('#tpad');
+        function renderTouch() {
+            tMax = Math.max(tMax, tp.size);
+            tpad.querySelectorAll('b').forEach(b => b.remove());
+            [...tp.values()].forEach((p, i) => { const b = mk('b', '', i + 1); b.style.left = p.x + 'px'; b.style.top = p.y + 'px'; tpad.append(b); });
+            $('#tHint').hidden = tp.size > 0; $('#tNow').textContent = `目前 ${tp.size} 點`; $('#tMax').textContent = `最大同時 ${tMax} 點`;
+            $('#tList').textContent = tp.size ? fmtPoints(tp).join('\n') : '（沒有觸控點）';
+        }
+        const tpt = (e) => { const r = tpad.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, pressure: e.pressure, w: e.width, h: e.height, type: e.pointerType }; };
+        tpad.addEventListener('pointerdown', (e) => { tp.set(e.pointerId, tpt(e)); renderTouch(); });
+        tpad.addEventListener('pointermove', (e) => { if (tp.has(e.pointerId)) { tp.set(e.pointerId, tpt(e)); renderTouch(); } });
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => tpad.addEventListener(ev, (e) => { if (tp.delete(e.pointerId)) renderTouch(); }));
+        $('#tScroll').onchange = () => { tpad.classList.toggle('scroll', $('#tScroll').checked); tp.clear(); renderTouch(); };
+        $('#tReset').onclick = () => { tMax = 0; tp.clear(); renderTouch(); };
+        $('#tHw').textContent = navigator.maxTouchPoints ?? '（未提供）'; renderTouch();
+
+        // ---------- 滑鼠輪詢率 ----------
+        let rTs = [];
+        function renderRate() {
+            const s = rateStats(rTs), out = $('#rateOut');
+            if (!s) { out.replaceChildren(mk('p', 'note', rTs.length ? `已收到 ${rTs.length} 個事件，資料還不夠，請繼續快速移動。` : '尚未收到資料。')); return; }
+            const near = (n) => n ? `（接近 ${n} Hz）` : '';
+            out.replaceChildren(envRow('事件數', s.n), envRow('常態頻率（中位數）', `${s.medianHz} Hz${near(s.nearest)}`), envRow('快速時峰值', `${s.peakHz} Hz${near(s.nearestPeak)}`), mk('p', 'note', '若只有約 60 / 120 / 144 Hz（等於螢幕更新率），多半是瀏覽器把事件對齊到畫面更新，不代表滑鼠本身的輪詢率。'));
+        }
+        $('#rpad').addEventListener('pointermove', (e) => {
+            if (e.pointerType !== 'mouse') return;
+            const ev = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+            for (const c of (ev.length ? ev : [e])) rTs.push(c.timeStamp);
+            if (rTs.length > 3000) rTs = rTs.slice(-2000);
+            renderRate();
+        });
+        $('#rateReset').onclick = () => { rTs = []; renderRate(); };
+        renderRate();
+
+        // ---------- 裝置尺寸速查 ----------
+        function renderDev() {
+            const dpr = window.devicePixelRatio || 1, cur = matchDevices(DEVICES, screen.width, screen.height, dpr);
+            const probe = mk('div'); probe.style.cssText = 'position:fixed;visibility:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)'; document.body.append(probe);
+            const cs = getComputedStyle(probe), safe = [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].join(' / '); probe.remove();
+            $('#devNow').replaceChildren(envRow('螢幕（CSS px）', `${screen.width} × ${screen.height}`), envRow('視窗（CSS px）', `${innerWidth} × ${innerHeight}`), envRow('像素比', dpr), envRow('安全區域 上 / 右 / 下 / 左', safe), envRow('符合清單中的', cur.length ? cur.map(i => DEVICES[i][1]).join('；') : '（清單中沒有符合的機型）'));
+            const list = $('#devList'); list.replaceChildren(); let grp = '';
+            DEVICES.forEach((d, i) => {
+                if (d[0] !== grp) { grp = d[0]; list.append(mk('h3', 'envsec', grp)); }
+                const row = mk('div', 'devrow' + (cur.includes(i) ? ' cur' : '')), info = mk('div'), b1 = mk('button', 'sm', '複製 max-width'), b2 = mk('button', 'sm', '複製完整查詢');
+                info.append(mk('span', '', d[1] + (cur.includes(i) ? '（目前裝置）' : '')), mk('small', '', `${d[2]} × ${d[3]} px · ${d[4]}x${d[5] ? ` · 安全區 上 ${d[5][0]} / 下 ${d[5][1]}` : ''}`));
+                b1.onclick = () => Util.copyWithFeedback(b1, deviceQuery(d, 'max')); b2.onclick = () => Util.copyWithFeedback(b2, deviceQuery(d, 'device'));
+                row.append(info, b1, b2); list.append(row);
+            });
+        }
+
         // ---------- 分頁 ----------
         function render() {
             if (tab === 'env') renderEnv();
+            if (tab === 'notify') renderNotify(); if (tab === 'gamut') renderGamut(); if (tab === 'dev') renderDev();
             if (tab !== 'cam') stopCam(); if (tab !== 'mic') stopMic();
             if (tab === 'cam' || tab === 'mic') refreshDevices();
             document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab));

@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="摩斯與古典密碼：摩斯密碼轉換（聲音與閃光播放、練習）、英文點字、凱薩 / ROT13 / 維吉尼亞 / 柵欄密碼加解密與頻率分析、NATO 拼音字母，離線可用。">
+    <meta property="og:title" content="摩斯與古典密碼" />
+    <meta property="og:description" content="摩斯、點字、凱薩、維吉尼亞、柵欄密碼與 NATO 拼音，離線可用。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/classic-ciphers.html" />
+    <title>摩斯與古典密碼</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root { --wrap-w: 720px; }
+        label { font-weight: 600; display: block; margin: 10px 0 6px; }
+        textarea { width: 100%; min-height: 84px; }
+        .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 14px; }
+        .tabs button { padding-left: 4px; padding-right: 4px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+        .row > input, .row > select { flex: 1; min-width: 110px; }
+        .out { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 17px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--fill); border-radius: var(--radius-sm); padding: 10px 12px; min-height: 44px; margin: 8px 0; }
+        .lamp { height: 56px; border-radius: var(--radius-sm); background: var(--fill); border: 2px solid var(--line); margin: 8px 0; transition: none; }
+        .lamp.on { background: var(--ok); }
+        .bc { display: flex; flex-wrap: wrap; gap: 8px 6px; margin: 8px 0; }
+        .bc > div { text-align: center; }
+        .bc .g { display: inline-grid; grid-template: repeat(3, 12px) / repeat(2, 12px); grid-auto-flow: column; gap: 4px; padding: 4px; background: var(--fill); border-radius: var(--radius-sm); }
+        .bc .g i { border-radius: 50%; border: 1px solid var(--line); }
+        .bc .g i.on { background: var(--text); border-color: var(--text); }
+        .bc small { display: block; color: var(--muted); font-size: 12px; }
+        .brl { font-size: 30px; line-height: 1.3; overflow-wrap: anywhere; }
+        .nato { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; margin: 8px 0; }
+        .nato > div { background: var(--fill); border-radius: var(--radius-sm); padding: 6px 10px; }
+        .nato b { font-size: 16px; }
+        .nato small { display: block; color: var(--muted); }
+        .bars { display: grid; grid-template-columns: repeat(13, 1fr); gap: 4px; align-items: end; height: 90px; margin: 8px 0; }
+        .bars div { background: var(--blue); min-height: 1px; border-radius: 2px 2px 0 0; }
+        .lbl { display: grid; grid-template-columns: repeat(13, 1fr); gap: 4px; font-size: 11px; text-align: center; color: var(--muted); }
+        table.bf { width: 100%; border-collapse: collapse; font-size: 14px; }
+        table.bf td { padding: 6px 4px; border-top: 1px solid var(--fill); overflow-wrap: anywhere; vertical-align: top; }
+        table.bf td:first-child { width: 2.6em; color: var(--muted); }
+        .warn { border: 2px solid var(--bad); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 12px; background: var(--card); font-size: 14px; }
+        .ok { color: var(--ok); font-weight: 700; }
+        .bad { color: var(--bad); font-weight: 700; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>摩斯與古典密碼</h1>
+        <p class="sub">摩斯、點字、凱薩 / 維吉尼亞 / 柵欄密碼、NATO 拼音。全部在本機計算。</p>
+        <div class="tabs" id="tabs"><button data-t="morse" aria-pressed="true">摩斯</button><button data-t="braille" aria-pressed="false">點字</button><button data-t="cipher" aria-pressed="false">密碼</button><button data-t="nato" aria-pressed="false">NATO</button></div>
+
+        <div id="pg-morse">
+            <div class="card">
+                <h2>摩斯密碼</h2>
+                <label for="mIn">輸入（文字，或摩斯：· – 或 . -，字母間空白、單字間 /）</label>
+                <textarea id="mIn" spellcheck="false" autocapitalize="off">SOS HELLO</textarea>
+                <div class="row"><button id="m2c" class="primary">文字 → 摩斯</button><button id="c2m">摩斯 → 文字</button></div>
+                <div class="out" id="mOut" aria-live="polite"></div>
+                <p class="note" id="mNote"></p>
+                <div class="row"><button class="sm" id="mCopy">複製結果</button></div>
+            </div>
+            <div class="card">
+                <h2>播放（聲音與閃光）</h2>
+                <div class="warn" id="flashWarn">閃光播放含快速明暗變化，對光敏感者（癲癇等）請勿觀看，改用只聽聲音。</div>
+                <label for="wpm">速度：<span id="wpmv"></span> WPM</label>
+                <div class="row"><input id="wpm" type="range" min="5" max="30" step="1" value="12" aria-label="速度（WPM）"></div>
+                <div class="row"><label style="margin:0;font-weight:400"><input type="checkbox" id="optSnd" checked> 聲音</label><label style="margin:0;font-weight:400"><input type="checkbox" id="optFlash" checked> 閃光</label></div>
+                <div class="lamp" id="lamp" aria-hidden="true"></div>
+                <div class="row"><button class="primary" id="mPlay">▶ 播放上面的摩斯</button><button id="mStop">■ 停止</button></div>
+                <p class="note">需要點擊才會啟動聲音（瀏覽器限制）。音量固定偏小，請先把裝置音量調低。</p>
+            </div>
+            <div class="card">
+                <h2>練習：聽摩斯，猜內容</h2>
+                <div class="row"><select id="pMode" aria-label="練習內容"><option value="letter">單一字母</option><option value="digit">單一數字</option><option value="word">短單字</option></select><button id="pNew" class="primary">▶ 出題並播放</button></div>
+                <div class="row"><input id="pAns" placeholder="輸入你聽到的內容" aria-label="答案" autocomplete="off" autocapitalize="characters" spellcheck="false"><button id="pChk">檢查</button><button id="pAgain" class="sm">再聽一次</button></div>
+                <p id="pRes" class="note" aria-live="polite">按「出題並播放」開始（使用上面設定的速度）。</p>
+                <p class="note" id="pScore"></p>
+            </div>
+        </div>
+
+        <div id="pg-braille" hidden>
+            <div class="card">
+                <h2>點字（英文字母與數字）</h2>
+                <label for="bIn">輸入（文字，或貼上點字符號 ⠁⠃⠉…）</label>
+                <textarea id="bIn" spellcheck="false" autocapitalize="off">Hello 123</textarea>
+                <div class="row"><button id="b2c" class="primary">文字 → 點字</button><button id="c2b">點字 → 文字</button></div>
+                <div class="out brl" id="bOut" aria-live="polite"></div>
+                <div class="bc" id="bCells"></div>
+                <p class="note" id="bNote"></p>
+                <div class="row"><button class="sm" id="bCopy">複製結果</button></div>
+                <p class="note">點格編號：左欄由上到下 1、2、3，右欄由上到下 4、5、6。</p>
+            </div>
+        </div>
+
+        <div id="pg-cipher" hidden>
+            <div class="card">
+                <h2>古典密碼</h2>
+                <label for="cType">種類</label>
+                <select id="cType"><option value="caesar">凱薩密碼（位移）</option><option value="rot13">ROT13</option><option value="vig">維吉尼亞（金鑰字）</option><option value="rail">柵欄密碼（Rail Fence）</option></select>
+                <label for="cIn">文字</label>
+                <textarea id="cIn" spellcheck="false" autocapitalize="off">Attack at dawn</textarea>
+                <div class="row" id="cParam"><input id="cShift" type="number" inputmode="numeric" min="0" max="25" value="3" aria-label="位移量"><input id="cKey" placeholder="金鑰字（只用 A–Z）" aria-label="金鑰字" autocapitalize="characters" spellcheck="false" hidden><input id="cRails" type="number" inputmode="numeric" min="2" max="20" value="3" aria-label="柵欄數" hidden></div>
+                <div class="row"><button id="cEnc" class="primary">加密</button><button id="cDec">解密</button></div>
+                <div class="out" id="cOut" aria-live="polite"></div>
+                <p class="note" id="cNote"></p>
+                <div class="row"><button class="sm" id="cCopy">複製結果</button></div>
+            </div>
+            <div class="card">
+                <h2>破解輔助</h2>
+                <p class="note">把密文貼在上面「文字」欄再按下面按鈕。</p>
+                <div class="row"><button id="cBrute">凱薩：列出全部 25 種位移</button><button id="cFreq">字母頻率分析（維吉尼亞）</button></div>
+                <div id="aOut"></div>
+            </div>
+        </div>
+
+        <div id="pg-nato" hidden>
+            <div class="card">
+                <h2>NATO 拼音字母</h2>
+                <label for="nIn">輸入文字（英數字，其他符號略過）</label>
+                <input id="nIn" value="Taipei 101" autocomplete="off" spellcheck="false" autocapitalize="off">
+                <div class="row"><button id="nSay" class="primary">朗讀</button><button id="nCopy">複製拼讀</button></div>
+                <div class="nato" id="nOut" aria-live="polite"></div>
+                <p class="note">數字採 ICAO 標準唸法：3 = Tree、4 = Fower、5 = Fife、9 = Niner。朗讀用系統的英文語音，沒有英文語音時不一定會發聲。</p>
+            </div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>四個分頁的小工具：摩斯密碼（文字與摩斯互轉、聲音與閃光播放、聽音練習）、英文點字（字母與數字的 6 點點字）、古典密碼（凱薩、ROT13、維吉尼亞、柵欄密碼，含破解輔助）、NATO 拼音字母。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>想學摩斯、練聽力，或把訊息做成摩斯 / 閃光訊號。</li>
+        <li>解謎遊戲、密室、營隊活動的密碼題；看懂或做出一段點字。</li>
+        <li>電話 / 無線電報英文代號或訂位代碼時要逐字母拼讀。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li><b>摩斯</b>：輸入文字按「文字 → 摩斯」；反向輸入點與劃（· – 或 . -，字母間空白、單字間 /）按「摩斯 → 文字」。支援 A–Z、0–9 與 . , ? ' ! / ( ) &amp; : ; = + - _ " $ @。播放要按「▶」才會啟動聲音；速度以 WPM 表示（標準單字 PARIS 每分鐘幾次）。練習模式：按「出題並播放」，聽完輸入答案按「檢查」。</li>
+        <li><b>點字</b>：輸入文字得到點字符號與每格的點位；反向貼上點字符號得到文字。大寫字母前加大寫符號（點 6）；數字前加數符（點 3456）；數字後緊接 a–j 會加字母符號（點 56）。</li>
+        <li><b>密碼</b>：選種類、輸入文字與參數後按加密 / 解密。維吉尼亞的金鑰字只用字母，非字母原樣保留且不消耗金鑰。柵欄密碼把字元排成 Z 字形再逐列讀出。破解輔助：凱薩列出全部 25 種位移結果讓你找出通順的那個；字母頻率分析顯示字母分佈、估計維吉尼亞金鑰長度與可能的金鑰（密文越長越準，建議 150 字母以上）。</li>
+        <li><b>NATO</b>：輸入文字，逐字顯示拼讀詞，可朗讀與複製。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">SOS → ... --- ...
+Attack at dawn，凱薩位移 3 → Dwwdfn dw gdzq
+ATTACKATDAWN，維吉尼亞金鑰 LEMON → LXFOPVEFRNHR
+WEAREDISCOVEREDFLEEATONCE，3 欄柵欄 → WECRLTEERDSOEEFEAOCAIVDEN
+ABC 123 → Alfa Bravo Charlie Wun Too Tree</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>這些都是歷史上的古典密碼，<b>不具現代安全性</b>，不要拿來保護真正的機密；要加密請用 AES 之類的現代加密工具。</li>
+        <li>點字只支援英文字母、數字與少數標點（, ; : . ! ? ' -），採未縮寫的 Grade 1；注音（中文）點字與縮寫點字沒有做。</li>
+        <li>閃光播放含快速明暗變化，對光敏感者請勿使用，可只開聲音。頁面切到背景或離開時播放會自動停止。</li>
+        <li>不儲存任何資料，也不會連線。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { copyWithFeedback, speak, rnd } = Util;
+
+        // --- pure ---
+        // ===== 摩斯 =====
+        const MORSE = { A: '.-', B: '-...', C: '-.-.', D: '-..', E: '.', F: '..-.', G: '--.', H: '....', I: '..', J: '.---', K: '-.-', L: '.-..', M: '--', N: '-.', O: '---', P: '.--.', Q: '--.-', R: '.-.', S: '...', T: '-', U: '..-', V: '...-', W: '.--', X: '-..-', Y: '-.--', Z: '--..',
+            0: '-----', 1: '.----', 2: '..---', 3: '...--', 4: '....-', 5: '.....', 6: '-....', 7: '--...', 8: '---..', 9: '----.',
+            '.': '.-.-.-', ',': '--..--', '?': '..--..', "'": '.----.', '!': '-.-.--', '/': '-..-.', '(': '-.--.', ')': '-.--.-', '&': '.-...', ':': '---...', ';': '-.-.-.', '=': '-...-', '+': '.-.-.', '-': '-....-', '_': '..--.-', '"': '.-..-.', '$': '...-..-', '@': '.--.-.' };
+        const MORSE_REV = Object.fromEntries(Object.entries(MORSE).map(([k, v]) => [v, k]));
+        // 文字 → 摩斯：字母間空白、單字間 ' / '；不支援的字元略過並回報
+        function toMorse(text) {
+            const skipped = [], words = String(text).toUpperCase().split(/\s+/).filter(Boolean).map(w => [...w].map(c => {
+                if (MORSE[c]) return MORSE[c]; if (!skipped.includes(c)) skipped.push(c); return '';
+            }).filter(Boolean).join(' ')).filter(Boolean);
+            return { code: words.join(' / '), skipped };
+        }
+        // 摩斯 → 文字：接受 . - · – — − _ ；單字分隔 / 或 |；無法辨識的組合顯示 ?
+        function fromMorse(code) {
+            const s = String(code).replace(/[·•．]/g, '.').replace(/[–—−_]/g, '-');
+            return s.split(/\s*[\/|]\s*|\s{3,}/).map(w => w.trim().split(/\s+/).filter(Boolean).map(t => MORSE_REV[t] || '?').join('')).join(' ').trim();
+        }
+        // 摩斯 → 時序 [[亮?, 單位數]…]：點 1、劃 3、符號間 1、字母間 3、單字間 7
+        function morseUnits(code) {
+            const out = [];
+            const words = String(code).trim().split(/\s*\/\s*/).map(w => w.trim().split(/\s+/).filter(Boolean)).filter(w => w.length);
+            words.forEach((w, wi) => {
+                if (wi) out.push([0, 7]);
+                w.forEach((l, li) => {
+                    if (li) out.push([0, 3]);
+                    [...l].forEach((c, ci) => { if (ci) out.push([0, 1]); out.push([1, c === '-' ? 3 : 1]); });
+                });
+            });
+            return out;
+        }
+        const unitSec = (wpm) => 1.2 / wpm;                       // PARIS 標準：一個單位 = 1.2 / WPM 秒
+        const normAns = (s) => String(s).toUpperCase().replace(/\s+/g, '');
+        // ===== 點字（Grade 1 英文）=====
+        const BR_LET = { a: [1], b: [1, 2], c: [1, 4], d: [1, 4, 5], e: [1, 5], f: [1, 2, 4], g: [1, 2, 4, 5], h: [1, 2, 5], i: [2, 4], j: [2, 4, 5], k: [1, 3], l: [1, 2, 3], m: [1, 3, 4], n: [1, 3, 4, 5], o: [1, 3, 5], p: [1, 2, 3, 4], q: [1, 2, 3, 4, 5], r: [1, 2, 3, 5], s: [2, 3, 4], t: [2, 3, 4, 5], u: [1, 3, 6], v: [1, 2, 3, 6], w: [2, 4, 5, 6], x: [1, 3, 4, 6], y: [1, 3, 4, 5, 6], z: [1, 3, 5, 6] };
+        const BR_PUN = { ',': [2], ';': [2, 3], ':': [2, 5], '.': [2, 5, 6], '!': [2, 3, 5], '?': [2, 3, 6], "'": [3], '-': [3, 6] };
+        const BR_NUM = [3, 4, 5, 6], BR_CAP = [6], BR_LETSIGN = [5, 6];
+        const brCh = (dots) => String.fromCharCode(0x2800 + dots.reduce((a, d) => a | 1 << (d - 1), 0));
+        const brDots = (ch) => { const v = ch.charCodeAt(0) - 0x2800, d = []; for (let i = 0; i < 6; i++) if (v >> i & 1) d.push(i + 1); return d; };
+        const BR_KEY = (dots) => dots.join('');
+        const BR_REV = {}; for (const [k, v] of Object.entries(BR_LET)) BR_REV[BR_KEY(v)] = k; for (const [k, v] of Object.entries(BR_PUN)) BR_REV[BR_KEY(v)] = k;
+        const DIGITS = '1234567890';                              // 1–9、0 對應 a–j
+        // 文字 → 點字：回傳 { cells: [{ch, dots, label}], skipped }
+        function toBraille(text) {
+            const cells = [], skipped = []; let num = false;
+            for (const c of String(text)) {
+                if (c === ' ' || c === '\n') { cells.push({ ch: c === ' ' ? '⠀' : '\n', dots: [], label: c === ' ' ? '空白' : '' }); num = false; continue; }
+                const di = DIGITS.indexOf(c), lc = c.toLowerCase();
+                if (di >= 0) { if (!num) cells.push({ ch: brCh(BR_NUM), dots: BR_NUM, label: '數符' }); num = true; const d = BR_LET['abcdefghij'[di]]; cells.push({ ch: brCh(d), dots: d, label: c }); continue; }
+                if (BR_LET[lc]) {
+                    if (num && 'abcdefghij'.includes(lc)) cells.push({ ch: brCh(BR_LETSIGN), dots: BR_LETSIGN, label: '字母符' });
+                    num = false;
+                    if (c !== lc) cells.push({ ch: brCh(BR_CAP), dots: BR_CAP, label: '大寫符' });
+                    cells.push({ ch: brCh(BR_LET[lc]), dots: BR_LET[lc], label: c }); continue;
+                }
+                if (BR_PUN[c]) { num = false; cells.push({ ch: brCh(BR_PUN[c]), dots: BR_PUN[c], label: c }); continue; }
+                if (!skipped.includes(c)) skipped.push(c);
+            }
+            return { cells, skipped };
+        }
+        // 點字 → 文字（只認 U+2800–U+283F）
+        function fromBraille(s) {
+            let out = '', num = false, cap = false;
+            for (const c of String(s)) {
+                const cp = c.charCodeAt(0);
+                if (c === ' ' || c === '\n' || cp === 0x2800) { out += c === '\n' ? '\n' : ' '; num = false; cap = false; continue; }
+                if (cp < 0x2801 || cp > 0x283f) continue;
+                const k = BR_KEY(brDots(c));
+                if (k === BR_KEY(BR_NUM)) { num = true; continue; }
+                if (k === BR_KEY(BR_LETSIGN)) { num = false; continue; }
+                if (k === BR_KEY(BR_CAP)) { cap = true; continue; }
+                let ch = BR_REV[k];
+                if (!ch) { out += '?'; continue; }
+                if (num && 'abcdefghij'.includes(ch)) ch = DIGITS['abcdefghij'.indexOf(ch)];
+                else if (num && !'abcdefghij'.includes(ch)) num = false;
+                if (cap) { ch = ch.toUpperCase(); cap = false; }
+                out += ch;
+            }
+            return out;
+        }
+        // ===== 古典密碼 =====
+        const mod = (n, m) => ((n % m) + m) % m;
+        function caesar(text, shift) {
+            return String(text).replace(/[a-z]/gi, c => { const b = c <= 'Z' ? 65 : 97; return String.fromCharCode(b + mod(c.charCodeAt(0) - b + shift, 26)); });
+        }
+        const rot13 = (t) => caesar(t, 13);
+        const caesarBrute = (cipher) => Array.from({ length: 25 }, (_, i) => ({ shift: i + 1, text: caesar(cipher, -(i + 1)) }));
+        const cleanKey = (k) => String(k).toUpperCase().replace(/[^A-Z]/g, '');
+        // 維吉尼亞：非字母原樣保留且不消耗金鑰；金鑰無字母則原樣回傳
+        function vigenere(text, key, decrypt = false) {
+            const k = cleanKey(key); if (!k) return String(text);
+            let i = 0;
+            return String(text).replace(/[a-z]/gi, c => { const s = k.charCodeAt(i++ % k.length) - 65; return caesar(c, decrypt ? -s : s); });
+        }
+        // 柵欄密碼：Z 字形走過 rails 列，逐列讀出；保留所有字元（含空白）
+        function railPattern(n, rails) {
+            const r = Math.max(2, Math.min(rails | 0, Math.max(2, n))), p = []; let row = 0, d = 1;
+            for (let i = 0; i < n; i++) { p.push(row); if (r < 2) continue; if (row === 0) d = 1; else if (row === r - 1) d = -1; row += d; }
+            return { p, r };
+        }
+        function railEncrypt(text, rails) {
+            const a = [...String(text)], { p, r } = railPattern(a.length, rails);
+            return Array.from({ length: r }, (_, k) => a.filter((_, i) => p[i] === k).join('')).join('');
+        }
+        function railDecrypt(text, rails) {
+            const a = [...String(text)], { p, r } = railPattern(a.length, rails), idx = [];
+            for (let k = 0; k < r; k++) p.forEach((v, i) => { if (v === k) idx.push(i); });
+            const out = new Array(a.length); idx.forEach((pos, j) => { out[pos] = a[j]; });
+            return out.join('');
+        }
+        // ===== 頻率分析 =====
+        const EN_FREQ = [8.167, 1.492, 2.782, 4.253, 12.702, 2.228, 2.015, 6.094, 6.966, 0.153, 0.772, 4.025, 2.406, 6.749, 7.507, 1.929, 0.095, 5.987, 6.327, 9.056, 2.758, 0.978, 2.360, 0.150, 1.974, 0.074];
+        const lettersOf = (t) => String(t).toUpperCase().replace(/[^A-Z]/g, '');
+        function letterFreq(text) {
+            const s = lettersOf(text), c = new Array(26).fill(0); for (const ch of s) c[ch.charCodeAt(0) - 65]++;
+            return { counts: c, total: s.length };
+        }
+        function indexOfCoincidence(text) {
+            const { counts, total } = letterFreq(text); if (total < 2) return 0;
+            return counts.reduce((a, n) => a + n * (n - 1), 0) / (total * (total - 1));
+        }
+        // 各金鑰長度（1..max）的欄位平均 IC；英文 ≈ 0.066、隨機 ≈ 0.038
+        function keyLengthScores(cipher, max = 12) {
+            const s = lettersOf(cipher), out = [];
+            for (let L = 1; L <= max; L++) {
+                const cols = Array.from({ length: L }, () => ''); [...s].forEach((c, i) => { cols[i % L] += c; });
+                const ics = cols.map(indexOfCoincidence); out.push({ len: L, ic: ics.reduce((a, b) => a + b, 0) / L });
+            }
+            return out;
+        }
+        // 建議長度：最小的、IC 不低於最大值 90% 的長度
+        function bestKeyLength(scores) { const m = Math.max(...scores.map(s => s.ic)); return scores.find(s => s.ic >= m * 0.9).len; }
+        // 對每欄用卡方檢定找最像英文的位移 → 金鑰字
+        function guessKey(cipher, len) {
+            const s = lettersOf(cipher); let key = '';
+            for (let k = 0; k < len; k++) {
+                let col = ''; for (let i = k; i < s.length; i += len) col += s[i];
+                const { counts, total } = letterFreq(col); let best = 0, bv = Infinity;
+                for (let sh = 0; sh < 26; sh++) {
+                    let chi = 0; for (let j = 0; j < 26; j++) { const e = EN_FREQ[j] / 100 * total || 1e-9; chi += (counts[(j + sh) % 26] - e) ** 2 / e; }
+                    if (chi < bv) { bv = chi; best = sh; }
+                }
+                key += String.fromCharCode(65 + best);
+            }
+            return key;
+        }
+        // ===== NATO =====
+        const NATO = { A: 'Alfa', B: 'Bravo', C: 'Charlie', D: 'Delta', E: 'Echo', F: 'Foxtrot', G: 'Golf', H: 'Hotel', I: 'India', J: 'Juliett', K: 'Kilo', L: 'Lima', M: 'Mike', N: 'November', O: 'Oscar', P: 'Papa', Q: 'Quebec', R: 'Romeo', S: 'Sierra', T: 'Tango', U: 'Uniform', V: 'Victor', W: 'Whiskey', X: 'Xray', Y: 'Yankee', Z: 'Zulu',
+            0: 'Zero', 1: 'Wun', 2: 'Too', 3: 'Tree', 4: 'Fower', 5: 'Fife', 6: 'Six', 7: 'Seven', 8: 'Ait', 9: 'Niner' };
+        const natoSpell = (text) => [...String(text).toUpperCase()].filter(c => NATO[c]).map(c => ({ ch: c, word: NATO[c] }));
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+        // 分頁
+        const tabs = $('#tabs');
+        tabs.onclick = (e) => {
+            const b = e.target.closest('button'); if (!b) return;
+            [...tabs.children].forEach(x => { x.setAttribute('aria-pressed', x === b); $('#pg-' + x.dataset.t).hidden = x !== b; });
+            stopPlay();
+        };
+        // ----- 摩斯 -----
+        let lastOut = '';
+        const mDone = (out, note) => { $('#mOut').textContent = out; $('#mNote').textContent = note || ''; lastOut = out; };
+        $('#m2c').onclick = () => { const r = toMorse($('#mIn').value); mDone(r.code, r.skipped.length ? '已略過不支援的字元：' + r.skipped.join(' ') : ''); };
+        $('#c2m').onclick = () => { const t = fromMorse($('#mIn').value); mDone(t, t.includes('?') ? '? 代表無法辨識的組合。' : ''); };
+        $('#mCopy').onclick = (e) => copyWithFeedback(e.target, lastOut);
+        $('#m2c').click();
+        // 播放：AudioContext 排程 + setTimeout 切換閃光；停止時清掉
+        let actx = null, timers = [], playing = false, onEnd = null;
+        const wpmEl = $('#wpm'), showWpm = () => { $('#wpmv').textContent = wpmEl.value; };
+        wpmEl.oninput = showWpm; showWpm();
+        function stopPlay() {
+            timers.forEach(clearTimeout); timers = []; playing = false; $('#lamp').classList.remove('on');
+            if (actx) { try { actx.close(); } catch (e) { } actx = null; }
+        }
+        function play(code, done) {
+            stopPlay();
+            const ev = morseUnits(code); if (!ev.length) return;
+            const u = unitSec(+wpmEl.value), snd = $('#optSnd').checked, fl = $('#optFlash').checked;
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (snd && AC) {
+                actx = new AC(); const g = actx.createGain(); g.gain.value = 0.15; g.connect(actx.destination);
+                let t = actx.currentTime + 0.05;
+                for (const [on, n] of ev) {
+                    if (on) { const o = actx.createOscillator(); o.frequency.value = 600; const e = actx.createGain(); e.gain.setValueAtTime(0, t); e.gain.linearRampToValueAtTime(1, t + 0.005); e.gain.setValueAtTime(1, t + n * u - 0.005); e.gain.linearRampToValueAtTime(0, t + n * u); o.connect(e); e.connect(g); o.start(t); o.stop(t + n * u + 0.01); }
+                    t += n * u;
+                }
+            }
+            playing = true; let ms = 50;
+            for (const [on, n] of ev) {
+                if (on && fl) { timers.push(setTimeout(() => $('#lamp').classList.add('on'), ms)); timers.push(setTimeout(() => $('#lamp').classList.remove('on'), ms + n * u * 1000)); }
+                ms += n * u * 1000;
+            }
+            timers.push(setTimeout(() => { stopPlay(); if (done) done(); }, ms + 100));
+        }
+        $('#mPlay').onclick = () => { const t = toMorse($('#mIn').value).code; play(t.length ? t : $('#mIn').value.trim()); };
+        $('#mStop').onclick = stopPlay;
+        document.addEventListener('visibilitychange', () => { if (document.hidden) stopPlay(); });
+        addEventListener('pagehide', stopPlay);
+        // 練習
+        const WORDS = ['CAT', 'DOG', 'SUN', 'MOON', 'STAR', 'FISH', 'BOOK', 'TREE', 'RAIN', 'WIND', 'CODE', 'HELP', 'SEA', 'BIRD', 'CAKE'];
+        let q = '', right = 0, tried = 0;
+        const pick = (s) => s[rnd(s.length)];
+        function newQ() {
+            const m = $('#pMode').value; q = m === 'letter' ? pick('ABCDEFGHIJKLMNOPQRSTUVWXYZ') : m === 'digit' ? pick('0123456789') : pick(WORDS);
+            $('#pAns').value = ''; $('#pRes').textContent = '聽聽看，輸入後按「檢查」。'; $('#pRes').className = 'note'; play(toMorse(q).code);
+        }
+        $('#pNew').onclick = newQ;
+        $('#pAgain').onclick = () => { if (q) play(toMorse(q).code); };
+        $('#pChk').onclick = () => {
+            if (!q) return; const a = normAns($('#pAns').value); if (!a) return;
+            tried++; const r = $('#pRes');
+            if (a === q) { right++; r.textContent = '正確：' + q; r.className = 'ok'; } else { r.textContent = `不對，答案是 ${q}（${toMorse(q).code}）`; r.className = 'bad'; }
+            $('#pScore').textContent = `本次 ${right} / ${tried}`; q = '';
+        };
+        // ----- 點字 -----
+        let bLast = '';
+        function cellEl(c) {
+            const d = el('div'), g = el('span', 'g'); for (let i = 1; i <= 6; i++) g.append(el('i', c.dots.includes(i) ? 'on' : ''));
+            d.append(g, el('small', '', c.label)); return d;
+        }
+        $('#b2c').onclick = () => {
+            const r = toBraille($('#bIn').value); bLast = r.cells.map(c => c.ch).join('');
+            $('#bOut').textContent = bLast; $('#bCells').replaceChildren(...r.cells.filter(c => c.dots.length).map(cellEl));
+            $('#bNote').textContent = r.skipped.length ? '已略過不支援的字元：' + r.skipped.join(' ') : '';
+        };
+        $('#c2b').onclick = () => { bLast = fromBraille($('#bIn').value); $('#bOut').textContent = bLast; $('#bCells').replaceChildren(); $('#bNote').textContent = ''; };
+        $('#bCopy').onclick = (e) => copyWithFeedback(e.target, bLast);
+        $('#b2c').click();
+        // ----- 密碼 -----
+        const cType = $('#cType'); let cLast = '';
+        function params() {
+            const t = cType.value; $('#cShift').hidden = t !== 'caesar'; $('#cKey').hidden = t !== 'vig'; $('#cRails').hidden = t !== 'rail'; $('#cParam').hidden = t === 'rot13';
+        }
+        cType.onchange = params; params();
+        function runCipher(dec) {
+            const t = cType.value, s = $('#cIn').value; let o = '', note = '';
+            if (t === 'caesar') o = caesar(s, dec ? -(+$('#cShift').value || 0) : (+$('#cShift').value || 0));
+            else if (t === 'rot13') o = rot13(s);
+            else if (t === 'vig') { if (!cleanKey($('#cKey').value)) note = '請輸入至少一個字母的金鑰字。'; o = vigenere(s, $('#cKey').value, dec); }
+            else { const r = Math.min(20, Math.max(2, +$('#cRails').value || 2)); o = (dec ? railDecrypt : railEncrypt)(s, r); }
+            cLast = o; $('#cOut').textContent = o; $('#cNote').textContent = note;
+        }
+        $('#cEnc').onclick = () => runCipher(false); $('#cDec').onclick = () => runCipher(true);
+        $('#cCopy').onclick = (e) => copyWithFeedback(e.target, cLast);
+        $('#cBrute').onclick = () => {
+            const tb = el('table', 'bf'); for (const r of caesarBrute($('#cIn').value)) { const tr = el('tr'); tr.append(el('td', '', '+' + r.shift), el('td', '', r.text)); tb.append(tr); }
+            $('#aOut').replaceChildren(el('p', 'note', '每列是「把密文往回移 N 格」的結果，找出讀得通的那一列（加密時的位移量就是 N）。'), tb);
+        };
+        $('#cFreq').onclick = () => {
+            const c = $('#cIn').value, f = letterFreq(c), box = $('#aOut');
+            if (f.total < 20) { box.replaceChildren(el('p', 'note', '字母太少（至少 20 個），無法分析；建議 150 個以上。')); return; }
+            const mx = Math.max(...f.counts);
+            const mk = (from, to) => { const b = el('div', 'bars'), l = el('div', 'lbl'); for (let i = from; i < to; i++) { const d = el('div'); d.style.height = (f.counts[i] / mx * 100) + '%'; d.title = String.fromCharCode(65 + i) + '：' + f.counts[i]; b.append(d); l.append(el('span', '', String.fromCharCode(65 + i))); } return [b, l]; };
+            const sc = keyLengthScores(c, Math.min(12, Math.floor(f.total / 4))), L = bestKeyLength(sc), key = guessKey(c, L);
+            box.replaceChildren(...mk(0, 13), ...mk(13, 26),
+                el('p', 'note', `字母 ${f.total} 個，整體 IC = ${indexOfCoincidence(c).toFixed(3)}（英文單表約 0.066、維吉尼亞多表約 0.04–0.05）。`),
+                el('p', 'note', '各金鑰長度的平均 IC（越接近 0.066 越可能）：' + sc.map(s => `${s.len}→${s.ic.toFixed(3)}`).join('、')),
+                el('p', '', `建議金鑰長度 ${L}，可能的金鑰：${key}`),
+                el('p', 'note', '這是統計估計，密文太短會不準；可把金鑰填進上面維吉尼亞解密，再微調。'));
+        };
+        // ----- NATO -----
+        function natoRender() {
+            const w = natoSpell($('#nIn').value), box = $('#nOut');
+            box.replaceChildren(...w.map(x => { const d = el('div'); d.append(el('b', '', x.word), el('small', '', x.ch)); return d; }));
+        }
+        $('#nIn').oninput = natoRender; natoRender();
+        const natoText = () => natoSpell($('#nIn').value).map(x => x.word).join(' ');
+        $('#nSay').onclick = () => speak(natoText(), { lang: 'en-US', rate: 0.7 });
+        $('#nCopy').onclick = (e) => copyWithFeedback(e.target, natoText());
+    </script>
+</body>
+
+</html>

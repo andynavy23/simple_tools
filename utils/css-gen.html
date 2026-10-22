@@ -17,6 +17,7 @@
     <style>
         .tabs {
             display: flex;
+            flex-wrap: wrap;
             gap: 8px;
             margin-bottom: 14px;
         }
@@ -112,6 +113,43 @@
             min-width: 0;
         }
 
+        .stage.auto {
+            height: auto;
+            max-height: 360px;
+            overflow: auto;
+            display: block;
+            padding: 12px;
+            background: var(--fill);
+        }
+
+        #x .ts {
+            margin: 4px 0;
+            overflow-wrap: anywhere;
+        }
+
+        #x small {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        #x .fr {
+            border-bottom: 1px solid var(--line);
+            padding: 6px 0;
+            overflow-wrap: anywhere;
+        }
+
+        #x .fr .ok {
+            color: var(--ok);
+        }
+
+        #note {
+            margin: 4px 0 12px;
+            font-size: 13px;
+            line-height: 1.5;
+            white-space: pre-line;
+        }
+
         pre {
             background: var(--fill);
             border-radius: 12px;
@@ -131,10 +169,11 @@
         <p class="sub">調整參數即時預覽，複製寫好的 CSS。</p>
 
         <div class="card">
-            <div class="tabs" id="tabs"><button data-t="shadow">陰影</button><button data-t="gradient">漸層</button><button data-t="radius">圓角</button><button data-t="layout">版面</button></div>
-            <div class="stage" id="stage"><div id="box">預覽</div><div id="lay" hidden></div></div>
+            <div class="tabs" id="tabs"><button data-t="shadow">陰影</button><button data-t="gradient">漸層</button><button data-t="radius">圓角</button><button data-t="layout">版面</button><button data-t="scale">字型比例</button><button data-t="units">單位換算</button><button data-t="glass">毛玻璃/新擬態</button><button data-t="fonts">字型偵測</button></div>
+            <div class="stage" id="stage"><div id="box">預覽</div><div id="lay" hidden></div><div id="x" hidden></div></div>
             <div id="ctls"></div>
             <pre id="css"></pre>
+            <div id="note" class="sub"></div>
             <button class="primary" id="copy">複製 CSS</button>
         </div>
     </div>
@@ -155,6 +194,10 @@
         <li>拖曳拉桿或選顏色，預覽會立即更新</li>
         <li>漸層可選線性或放射；「色標 3」是選用，按「移除」即可停用</li>
         <li>「版面」分頁：選 Flexbox 或 Grid，調整項目數、間距與容器屬性（Grid 的欄 / 列可輸入 repeat(3, 1fr)、1fr 2fr、100px auto 這類值）；點預覽中的方塊（或用「選取項目」）可再設定單一項目的 flex-grow / align-self / order，或 Grid 的跨欄 / 跨列</li>
+        <li>「字型比例」：選比例（1.125–1.618）、基準字級、往上 / 往下的層級數，會列出每級的 px / rem 並輸出 CSS 變數（rem 以根字級 16px 計）</li>
+        <li>「單位換算」：輸入數值與單位，換算成 px / rem / em / pt / vw / vh；可設基準字級（rem、em 都用它）與視窗寬高</li>
+        <li>「毛玻璃/新擬態」：切換模式調整參數，預覽與 CSS 一起更新，下方有瀏覽器支援與對比提醒</li>
+        <li>「字型偵測」：輸入文字，看常見字型的預覽，並偵測是否已安裝在這台裝置</li>
         <li>確認後按「複製 CSS」，貼到你的樣式表</li>
         </ol>
         <h3>範例</h3>
@@ -164,6 +207,8 @@
         <li>圓角的單位可切換 px 或 %，四個角不同時會輸出四個值（左上、右上、右下、左下）</li>
         <li>你的設定會記在這個瀏覽器，下次開啟還在</li>
         <li>預覽方塊的底色固定，只用來看效果</li>
+        <li>字型偵測用「寬度量測法」：用該字型與三種保底字型量同一段文字，寬度不同就視為已安裝；字型與保底字型剛好等寬時會誤判成未安裝，document.fonts.check 對系統字型常常一律回傳 true，只供參考。偵測結果只代表「這台裝置」，別人的電腦不一定有</li>
+        <li>單位換算的 em 以「基準字級」當父層字級；vw / vh 以你填的視窗尺寸計。新增分頁的設定一樣記在 cssgen，壞資料會退回預設</li>
         <li>版面欄位只接受數字、字母、空白與 ( ) , . % / * + - ，不合法的值會退回預設；項目數上限 12。輸出的類別名稱 .container / .item 請自行改成你的類別</li>
         </ul>
     </template>
@@ -242,6 +287,91 @@
             const r = layoutRules(raw);
             return ['.container {', ...r.container.map(d => '  ' + d), '}', ...Object.entries(r.items).flatMap(([k, d]) => ['.item:nth-child(' + k + ') {', ...d.map(x => '  ' + x), '}'])].join('\n');
         }
+
+        // ---- 字型比例 / 單位換算 / 毛玻璃與新擬態 / 字型預覽（設定一律經 *Norm 驗證，壞資料退回預設）----
+        const num = (v, lo, hi, d) => { v = parseFloat(v); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
+        const hexOr = (v, d) => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : d);
+        const rd = (v, n) => Math.round(v * 10 ** n) / 10 ** n;
+        const obj = (o) => (o && typeof o === 'object' && !Array.isArray(o) ? o : {});
+        const RATIOS = [1.125, 1.2, 1.25, 1.333, 1.414, 1.5, 1.618];
+        function tsNorm(o) {
+            o = obj(o);
+            return { ratio: RATIOS.includes(+o.ratio) ? +o.ratio : 1.25, base: Math.round(num(o.base, 8, 40, 16)), up: Math.round(num(o.up, 1, 10, 6)), down: Math.round(num(o.down, 0, 3, 2)) };
+        }
+        // 由大到小：[{ step, px, rem }]，rem 以根字級 16px 計
+        function typeScale(o) {
+            const t = tsNorm(o), out = [];
+            for (let s = t.up; s >= -t.down; s--) { const px = rd(t.base * t.ratio ** s, 2); out.push({ step: s, px, rem: rd(px / 16, 3) }); }
+            return out;
+        }
+        const stepName = (s) => (s < 0 ? 'n' + -s : String(s));
+        const typeScaleCss = (o) => ':root {\n' + typeScale(o).map(r => `  --step-${stepName(r.step)}: ${r.rem}rem;`).join('\n') + '\n}';
+
+        const UNITS = ['px', 'rem', 'em', 'pt', 'vw', 'vh'];
+        function unitsNorm(o) {
+            o = obj(o);
+            return { v: String(o.v ?? '16').slice(0, 20), from: UNITS.includes(o.from) ? o.from : 'px', base: Math.round(num(o.base, 1, 200, 16)), vw: Math.round(num(o.vw, 100, 10000, 390)), vh: Math.round(num(o.vh, 100, 10000, 844)) };
+        }
+        // 回傳 { px, rem, em, pt, vw, vh }；輸入不是數字回傳 null（em 以「基準字級」當父層字級）
+        function convertUnits(o) {
+            const u = unitsNorm(o), v = parseFloat(u.v);
+            if (!Number.isFinite(v)) return null;
+            const f = { px: 1, rem: u.base, em: u.base, pt: 96 / 72, vw: u.vw / 100, vh: u.vh / 100 }, px = v * f[u.from], out = {};
+            for (const k of UNITS) out[k] = Number((px / f[k]).toPrecision(6));
+            return out;
+        }
+        const unitsText = (o) => { const r = convertUnits(o); return r ? UNITS.map(k => r[k] + k).join('\n') : ''; };
+
+        function glassNorm(o) {
+            o = obj(o);
+            return {
+                mode: pick(o.mode, ['glass', 'neu'], 'glass'), blur: Math.round(num(o.blur, 0, 40, 12)), alpha: rd(num(o.alpha, 0, 1, 0.25), 2), sat: Math.round(num(o.sat, 100, 300, 150)), border: rd(num(o.border, 0, 1, 0.35), 2),
+                color: hexOr(o.color, '#ffffff'), radius: Math.round(num(o.radius, 0, 60, 20)),
+                dist: Math.round(num(o.dist, 1, 30, 8)), nblur: Math.round(num(o.nblur, 0, 60, 16)), inten: Math.round(num(o.inten, 5, 40, 18)), shape: pick(o.shape, ['flat', 'convex', 'concave', 'pressed'], 'flat'), base: hexOr(o.base, '#e0e5ec'),
+            };
+        }
+        // 把顏色往白（255）或黑（0）混合 pct%
+        function hexMix(hex, target, pct) {
+            const n = parseInt(hex.slice(1), 16), p = clamp(pct, 0, 100) / 100;
+            const ch = [n >> 16, (n >> 8) & 255, n & 255].map(c => Math.round(c + (target - c) * p));
+            return '#' + ch.map(c => c.toString(16).padStart(2, '0')).join('');
+        }
+        function glassRules(raw) {
+            const g = glassNorm(raw), bf = `blur(${g.blur}px) saturate(${g.sat}%)`;
+            return [`background: ${hexToRgba(g.color, g.alpha)};`, `backdrop-filter: ${bf};`, `-webkit-backdrop-filter: ${bf};`, `border: 1px solid rgba(255, 255, 255, ${g.border});`, `border-radius: ${g.radius}px;`, 'box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);'];
+        }
+        const neuColors = (g) => ({ dark: hexMix(g.base, 0, g.inten * 1.5), light: hexMix(g.base, 255, Math.min(100, g.inten * 4)) });
+        function neuRules(raw) {
+            const g = glassNorm(raw), { dark, light } = neuColors(g), d = g.dist, b = g.nblur;
+            const bg = g.shape === 'convex' ? `linear-gradient(145deg, ${hexMix(g.base, 255, g.inten * 0.8)}, ${hexMix(g.base, 0, g.inten * 0.5)})`
+                : g.shape === 'concave' ? `linear-gradient(145deg, ${hexMix(g.base, 0, g.inten * 0.5)}, ${hexMix(g.base, 255, g.inten * 0.8)})` : g.base;
+            const ins = g.shape === 'pressed' ? 'inset ' : '';
+            return [`background: ${bg};`, `border-radius: ${g.radius}px;`, `box-shadow: ${ins}${d}px ${d}px ${b}px ${dark}, ${ins}-${d}px -${d}px ${b}px ${light};`];
+        }
+        function glassCss(raw) {
+            const g = glassNorm(raw);
+            if (g.mode === 'neu') return '.neu {\n' + neuRules(g).map(d => '  ' + d).join('\n') + '\n}';
+            return '.glass {\n' + glassRules(g).map(d => '  ' + d).join('\n') + '\n}\n\n/* 不支援 backdrop-filter 時退回較不透明的底色，文字才讀得清楚 */\n@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {\n  .glass {\n    background: ' + hexToRgba(g.color, Math.max(g.alpha, 0.85)) + ';\n  }\n}';
+        }
+        function lum(hex) { const n = parseInt(hex.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255].map(c => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }).reduce((a, c, i) => a + c * [0.2126, 0.7152, 0.0722][i], 0); }
+        const contrastRatio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+        function glassNotes(raw) {
+            const g = glassNorm(raw);
+            if (g.mode === 'glass') return ['backdrop-filter：Chrome / Edge 76+、Safari 9+（舊版需 -webkit- 前綴，已一併輸出）、Firefox 103+；不支援時會退回較不透明的底色。', '玻璃上的文字對比取決於背後的圖：背景一變就可能看不清，建議底色透明度不要太低，或在文字下方加一層半透明襯底。' + (g.alpha < 0.15 ? '目前透明度偏低，文字對比風險高。' : '')];
+            const { dark } = neuColors(g), r = contrastRatio(g.base, dark), t = contrastRatio(g.base, '#333333');
+            return [`新擬態的陰影與底色對比約 ${rd(r, 2)}:1（非文字元件建議至少 3:1），浮凸邊界對低視力使用者很難分辨；` + (r < 3 ? '目前不足，按鈕請另加邊框或色塊。' : '目前達標。'), `深灰字（#333）對底色對比 ${rd(t, 2)}:1（一般文字需 4.5:1）。`];
+        }
+
+        const FONT_LIST = ['Microsoft JhengHei', 'PingFang TC', 'Noto Sans TC', 'Noto Serif TC', 'PMingLiU', 'DFKai-SB', 'Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Consolas', 'Menlo', 'Segoe UI', 'Roboto'];
+        function fontsNorm(o) {
+            o = obj(o); const t = typeof o.text === 'string' ? o.text.slice(0, 80) : '';
+            return { text: t || '永字八法 Aa Bb 123', size: Math.round(num(o.size, 12, 72, 24)), weight: pick(String(o.weight), ['300', '400', '500', '700', '900'], '400') };
+        }
+        // 寬度量測法：用該字型加三種保底字型量同一段文字，只要有任何一個寬度和純保底不同，就代表字型存在
+        const fontInstalled = (testW, baseW) => testW.some((w, i) => Math.abs(w - baseW[i]) > 0.01);
+        const GENERIC = ['serif', 'sans-serif', 'monospace', 'system-ui'];
+        const fontStack = (names) => names.map(n => (GENERIC.includes(n) ? n : `"${n}"`)).join(', ');
+        const fontsCss = (names) => `font-family: ${fontStack([...names, 'sans-serif'])};`;
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -252,11 +382,21 @@
             radius: { tl: 24, tr: 24, br: 24, bl: 24, unit: 'px', ...S.radius },
         };
         state.layout = layoutNorm(S.layout);
-        let tab = ['shadow', 'gradient', 'radius', 'layout'].includes(S.tab) ? S.tab : 'shadow';
+        state.scale = tsNorm(S.scale); state.units = unitsNorm(S.units); state.glass = glassNorm(S.glass); state.fonts = fontsNorm(S.fonts);
+        const NORM = { scale: tsNorm, units: unitsNorm, glass: glassNorm, fonts: fontsNorm };
+        let tab = ['shadow', 'gradient', 'radius', 'layout', 'scale', 'units', 'glass', 'fonts'].includes(S.tab) ? S.tab : 'shadow';
 
         const DEFS = {
             shadow: [['x', '水平', -100, 100], ['y', '垂直', -100, 100], ['blur', '模糊', 0, 200], ['spread', '擴散', -50, 100], ['alpha', '透明度', 0, 1, 0.01], ['color', '顏色', 'color'], ['inset', '內陰影', 'check']],
             gradient: [['type', '類型', 'select', [['linear', '線性'], ['radial', '放射']]], ['angle', '角度', 0, 360], ['c1', '色標 1', 'color'], ['c2', '色標 2', 'color'], ['c3', '色標 3（選用）', 'color-opt']],
+            scale: [['ratio', '比例', 'select', RATIOS.map(r => [String(r), String(r)])], ['base', '基準字級 px', 8, 40], ['up', '往上層級', 1, 10], ['down', '往下層級', 0, 3]],
+            units: [['v', '數值', 'text'], ['from', '單位', 'select', UNITS.map(u => [u, u])], ['base', '基準字級 px', 1, 200], ['vw', '視窗寬 px', 100, 2000], ['vh', '視窗高 px', 100, 2000]],
+            glass: () => {
+                const g = state.glass, top = [['mode', '模式', 'select', [['glass', '毛玻璃'], ['neu', '新擬態']]]];
+                return g.mode === 'glass' ? [...top, ['blur', '模糊', 0, 40], ['alpha', '底色透明度', 0, 1, 0.01], ['sat', '飽和度 %', 100, 300], ['border', '邊框透明度', 0, 1, 0.01], ['color', '底色', 'color'], ['radius', '圓角', 0, 60]]
+                    : [...top, ['shape', '形狀', 'select', [['flat', '平面'], ['convex', '凸起'], ['concave', '凹陷'], ['pressed', '按下（內陰影）']]], ['dist', '陰影距離', 1, 30], ['nblur', '陰影模糊', 0, 60], ['inten', '強度 %', 5, 40], ['base', '底色', 'color'], ['radius', '圓角', 0, 60]];
+            },
+            fonts: [['text', '預覽文字', 'text'], ['size', '字級 px', 12, 72], ['weight', '字重', 'select', ['300', '400', '500', '700', '900'].map(w => [w, w])]],
             radius: [['tl', '左上', 0, 200], ['tr', '右上', 0, 200], ['br', '右下', 0, 200], ['bl', '左下', 0, 200], ['unit', '單位', 'select', [['px', 'px'], ['%', '%']]]],
         };
 
@@ -274,6 +414,10 @@
 
         function css() {
             if (tab === 'layout') return layoutCss(state.layout);
+            if (tab === 'scale') return typeScaleCss(state.scale);
+            if (tab === 'units') return unitsText(state.units);
+            if (tab === 'glass') return glassCss(state.glass);
+            if (tab === 'fonts') return fontsCss(detect().filter(r => r.ok).map(r => r.name));
             const s = state[tab];
             if (tab === 'shadow') return shadowCss(s);
             if (tab === 'gradient') return gradientCss({ type: s.type, angle: s.angle, stops: [s.c1, s.c2, s.c3].filter(Boolean).map((c, i, a) => ({ color: c, pos: Math.round(i / (a.length - 1) * 100) })) });
@@ -287,9 +431,47 @@
                 d.onclick = () => { state.layout.sel = i + 1; build(); }; return d;
             }));
         }
+        let fontCache = null;
+        function detect() {                                                    // 字型偵測結果（寬度量測法 + document.fonts.check），整頁只量一次
+            if (fontCache) return fontCache;
+            const ctx = document.createElement('canvas').getContext('2d'), probe = 'mmmmmmmmmmlli中文字體wWiI0123', bases = ['monospace', 'serif', 'sans-serif'];
+            const w = (f) => { ctx.font = '72px ' + f; return ctx.measureText(probe).width; };
+            const baseW = bases.map(w);
+            return (fontCache = FONT_LIST.map(name => ({ name, ok: fontInstalled(bases.map(b => w('"' + name + '", ' + b)), baseW), chk: (() => { try { return document.fonts.check('16px "' + name + '"'); } catch { return null; } })() })));
+        }
+        function paintExtra() {
+            const x = $('#x'), st = state[tab]; x.replaceChildren(); $('#note').textContent = '';
+            if (tab === 'scale') {
+                typeScale(st).forEach(r => { const d = document.createElement('div'), s = document.createElement('small'), t = document.createElement('div'); d.className = 'ts'; s.textContent = `step ${r.step} · ${r.px}px · ${r.rem}rem`; t.textContent = 'Aa 字級預覽'; t.style.fontSize = Math.min(r.px, 72) + 'px'; d.append(s, t); x.append(d); });
+                $('#note').textContent = '預覽字級最大只顯示到 72px；rem 以根字級 16px 計算，使用者若調整瀏覽器預設字級，整套階層會一起縮放。';
+            } else if (tab === 'units') {
+                const r = convertUnits(st);
+                if (!r) x.textContent = '請輸入數字'; else UNITS.forEach(u => x.append(Util.statRow(u, String(r[u]), u === st.from ? 'me' : '')));
+                $('#note').textContent = 'em 以基準字級當父層字級；vw / vh 以上面填的視窗尺寸計算。';
+            } else {
+                detect().forEach(r => {
+                    const d = document.createElement('div'), s = document.createElement('small'), b = document.createElement('b'), m = document.createElement('span'), t = document.createElement('div');
+                    d.className = 'fr'; b.textContent = r.name; m.className = r.ok ? 'ok' : 'no'; m.textContent = r.ok ? '已安裝（寬度法）' : '未偵測到';
+                    s.append(b, ' · ', m, ' · check: ' + (r.chk === null ? '—' : r.chk));
+                    t.textContent = st.text; t.style.cssText = `font-size:${st.size}px;font-weight:${st.weight};font-family:"${r.name}", sans-serif`; d.append(s, t); x.append(d);
+                });
+                $('#note').textContent = '偵測限制：寬度法在字型與保底字型等寬時會誤判；document.fonts.check 對系統字型常回傳 true；瀏覽器的防指紋保護（Firefox、Brave、Safari）可能隱藏字型。結果只代表這台裝置。';
+            }
+            $('#css').textContent = css();
+        }
         function paint() {
-            const box = $('#box');
-            $('#stage').classList.toggle('tall', tab === 'layout'); box.hidden = tab === 'layout'; $('#lay').hidden = tab !== 'layout';
+            const box = $('#box'), isX = ['scale', 'units', 'fonts'].includes(tab);
+            $('#stage').classList.toggle('tall', tab === 'layout'); $('#stage').classList.toggle('auto', isX); $('#stage').style.background = '';
+            box.hidden = tab === 'layout' || isX; $('#lay').hidden = tab !== 'layout'; $('#x').hidden = !isX;
+            if (isX) { paintExtra(); store.set('cssgen', { tab, ...state }); return; }
+            if (tab === 'glass') {
+                const g = state.glass; $('#css').textContent = css(); box.className = '';
+                $('#stage').style.background = g.mode === 'glass' ? 'linear-gradient(135deg,#ff7a18,#af002d 50%,#319197)' : g.base;
+                box.style.cssText = (g.mode === 'glass' ? glassRules(g) : neuRules(g)).join(' ') + (g.mode === 'glass' ? 'color:#fff;' : 'color:#333;');
+                $('#note').textContent = glassNotes(g).join('\n');
+                store.set('cssgen', { tab, ...state }); return;
+            }
+            $('#note').textContent = '';
             if (tab === 'layout') { $('#css').textContent = css(); paintLayout(); store.set('cssgen', { tab, ...state }); return; } box.style.cssText = ''; box.className = tab === 'gradient' ? 'fill' : '';
             const text = css(); $('#css').textContent = text;
             box.style.cssText = tab === 'radius' ? text + 'background:var(--accent,#0a84ff);color:#fff' : text;
@@ -300,10 +482,10 @@
         function build() {
             [...$('#tabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab));
             const isLay = tab === 'layout';
-            const getV = (key) => { const L = state.layout; return isLay && key.startsWith('i_') ? (L.items[L.sel] || {})[key.slice(2)] ?? ITEM_DEF[key.slice(2)] : state[tab][key]; };
+            const NEW = tab in NORM, getV = (key) => { const L = state.layout; return isLay && key.startsWith('i_') ? (L.items[L.sel] || {})[key.slice(2)] ?? ITEM_DEF[key.slice(2)] : state[tab][key]; };
             const setV = (key, v) => { const L = state.layout; if (isLay && key.startsWith('i_')) L.items[L.sel] = { ...L.items[L.sel], [key.slice(2)]: v }; else state[tab][key] = v; if (isLay) state.layout = layoutNorm(state.layout); };
-            $('#ctls').replaceChildren(...(isLay ? layoutDefs() : DEFS[tab]).map(([key, name, a, b, step]) => {
-                const row = document.createElement('div'); row.className = 'ctl' + (isLay ? ' lay' : '');
+            $('#ctls').replaceChildren(...(isLay ? layoutDefs() : typeof DEFS[tab] === 'function' ? DEFS[tab]() : DEFS[tab]).map(([key, name, a, b, step]) => {
+                const row = document.createElement('div'); row.className = 'ctl' + (isLay || NEW ? ' lay' : '');
                 const lab = document.createElement('label'); lab.textContent = name; lab.htmlFor = 'f_' + key;
                 let inp, val = document.createElement('b');
                 if (a === 'select') { inp = document.createElement('select'); b.forEach(([v, t]) => inp.append(new Option(t, v))); inp.value = getV(key); val = null; }
@@ -315,6 +497,7 @@
                 inp.oninput = inp.onchange = () => {
                     const prevMode = state.layout.mode, prevWrap = state.layout.wrap;
                     setV(key, inp.type === 'checkbox' ? inp.checked : inp.type === 'range' ? +inp.value : inp.value); if (val) val.textContent = inp.value;
+                    if (NEW) { state[tab] = NORM[tab](state[tab]); if (key === 'mode') return build(); }
                     if (isLay) {
                         if (state.layout.mode !== prevMode || state.layout.wrap !== prevWrap) return build();
                         $('#ctls').querySelectorAll('[id^=f_]').forEach(el => { if (el === inp) return; const v = getV(el.id.slice(2)); if (el.type === 'checkbox') el.checked = v; else if (el.type !== 'text' || el !== document.activeElement) el.value = v; if (el.nextElementSibling && el.nextElementSibling.tagName === 'B') el.nextElementSibling.textContent = v; });
