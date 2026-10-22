@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="健康數值記錄：記錄血壓、血糖與體重，看趨勢圖、平均與最高最低，標示是否在一般參考範圍（非醫療診斷），可匯出 CSV 給醫師看。資料只存在本機。">
+    <meta property="og:title" content="健康數值記錄" />
+    <meta property="og:description" content="血壓、血糖、體重記錄與趨勢，可匯出給醫師。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/health-log.html" />
+    <meta name="st-keys" content="healthlog_items">
+    <title>健康數值記錄</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        .tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        .fgrid select,
+        .fgrid input {
+            width: 100%;
+        }
+
+        .btns {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .msg {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 8px 0 0;
+            min-height: 1.2em;
+            overflow-wrap: anywhere;
+        }
+
+        .msg.bad {
+            color: var(--bad);
+        }
+
+        .notice {
+            font-size: 13px;
+            color: var(--muted);
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            margin: 0 0 16px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .stats div {
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+        }
+
+        .stats small {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .stats b {
+            font-size: 18px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .rec {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .rec .v {
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .rec small {
+            color: var(--muted);
+            display: block;
+            word-break: break-all;
+        }
+
+        .badge {
+            font-size: 12px;
+            font-weight: 700;
+            border-radius: 99px;
+            padding: 2px 10px;
+            white-space: nowrap;
+            margin-left: 6px;
+            background: var(--ok);
+            color: #fff;
+        }
+
+        .badge.out {
+            background: var(--bad);
+        }
+
+        .badge.na {
+            background: var(--fill);
+            color: var(--muted);
+        }
+
+        canvas {
+            width: 100%;
+            height: 220px;
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>健康數值記錄</h1>
+        <p class="sub">血壓、血糖、體重記下來，看趨勢、匯出給醫師。資料只存在這個瀏覽器。</p>
+        <p class="notice">本頁的「參考範圍」只是一般公開準則的對照，不是醫療診斷；數值異常或身體不適請就醫，用藥與目標值請依醫囑。</p>
+
+        <div class="tabs" id="tabs">
+            <button data-k="bp" aria-pressed="true">血壓</button>
+            <button data-k="bg" aria-pressed="false">血糖</button>
+            <button data-k="wt" aria-pressed="false">體重</button>
+        </div>
+
+        <div class="card">
+            <h2 id="formTitle">新增血壓</h2>
+            <div class="fgrid">
+                <div><label for="f_date">日期</label><input id="f_date" type="date"></div>
+                <div><label for="f_time">時間</label><input id="f_time" type="time"></div>
+                <div class="bp"><label for="f_sys">收縮壓（高壓，mmHg）</label><input id="f_sys" type="number" min="50" max="300" step="1" inputmode="numeric"></div>
+                <div class="bp"><label for="f_dia">舒張壓（低壓，mmHg）</label><input id="f_dia" type="number" min="30" max="200" step="1" inputmode="numeric"></div>
+                <div class="bp"><label for="f_hr">心率（次 / 分，可留白）</label><input id="f_hr" type="number" min="20" max="250" step="1" inputmode="numeric"></div>
+                <div class="bg" hidden><label for="f_glu">血糖（mg/dL）</label><input id="f_glu" type="number" min="20" max="800" step="1" inputmode="numeric"></div>
+                <div class="wt" hidden><label for="f_kg">體重（公斤）</label><input id="f_kg" type="number" min="2" max="500" step="0.1" inputmode="decimal"></div>
+                <div class="ctxw"><label for="f_ctx" id="ctxL">測量情境</label><select id="f_ctx"></select></div>
+                <div class="full"><label for="f_note">備註（可留白）</label><input id="f_note" type="text" maxlength="100" placeholder="例如：剛吃藥、運動後"></div>
+            </div>
+            <div class="btns"><button class="primary" id="save">新增</button></div>
+            <p class="msg" id="formMsg"></p>
+        </div>
+
+        <div class="card">
+            <div class="fgrid">
+                <div class="full"><label for="range">統計與趨勢範圍</label><select id="range"><option value="7">最近 7 天</option><option value="30" selected>最近 30 天</option><option value="90">最近 90 天</option><option value="0">全部</option></select></div>
+            </div>
+            <div class="stats" id="stats" style="margin-top:12px"></div>
+            <canvas id="cv" role="img" aria-label="趨勢圖" style="margin-top:12px"></canvas>
+            <p class="msg" id="refMsg"></p>
+        </div>
+
+        <div id="list"></div>
+
+        <div class="card">
+            <h2>資料管理</h2>
+            <p class="msg" style="margin:0 0 8px">最多 5000 筆。單筆刪除在每筆右側；這裡可匯出給醫師或全部清除。</p>
+            <div class="btns" style="margin-top:0"><button id="csv">匯出 CSV（全部）</button><button id="clearAll" style="color:var(--bad)">清除全部</button></div>
+            <p class="msg" id="dataMsg"></p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>家用健康數值記錄本：血壓（收縮 / 舒張 / 心率）、血糖（含空腹 / 餐後情境）、體重。自動畫趨勢圖、算平均與最高最低，並對照一般公開的參考範圍標示「在 / 超出」。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>每天量血壓、血糖，想看一段時間的變化。</li>
+        <li>回診前整理數據，匯出 CSV 給醫師看。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>上方切換「血壓 / 血糖 / 體重」，填日期時間與數值，選情境，按「新增」。</li>
+        <li>下方可選統計範圍（7 / 30 / 90 天、全部）；統計卡與趨勢圖會跟著變，趨勢圖上的虛線是參考界線。</li>
+        <li>每筆右側可刪除；「匯出 CSV」可用試算表開啟或列印。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">血壓 126 / 82、心率 72 → 在一般參考範圍
+        血壓 142 / 92 → 超出（偏高）
+        血糖 105 mg/dL（空腹）→ 超出（偏高）</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li><b>不是醫療診斷。</b>標示只是對照下列公開準則，個人目標值（例如糖尿病或高血壓患者）請依醫囑。</li>
+        <li>血壓以家中量測的一般成人為準：偏高 ≥ 135 / 85 mmHg（家中量測高血壓門檻，來源：ESC/ESH 2018 高血壓指引、衛福部國健署衛教），偏低 &lt; 90 / 60 mmHg（一般常用的低血壓標準）；靜止心率 60–100 次 / 分（AHA），運動後不標示。</li>
+        <li>血糖（mg/dL，來源：美國糖尿病學會 ADA 診斷標準）：空腹 70–99 在參考範圍，100 以上偏高；餐後 2 小時 &lt; 140 在參考範圍；隨機 ≥ 200 偏高；任何情境 &lt; 70 偏低。餐前、睡前不標示。單次數值偏高不等於得病，需由醫師判斷。</li>
+        <li>體重只畫趨勢，不標示範圍。</li>
+        <li>資料只存在這個瀏覽器，清除網站資料會消失；右上角「💾」可匯出備份。</li>
+        <li>最多 5000 筆，滿了要先刪除才能新增；數值有合理範圍檢查（防誤輸入）。「清除全部」會先詢問且無法復原；載入到壞掉的資料會自動略過。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { day, store, csvStringify } = Util;
+
+        // --- pure ---
+        const HL = { MAX: 5000, NOTE: 100 };
+        const KINDS = { bp: '血壓', bg: '血糖', wt: '體重' };
+        const CTX = { bp: ['一般', '晨起', '睡前', '運動後', '服藥後'], bg: ['空腹', '餐前', '餐後 2 小時', '睡前', '隨機'], wt: [''] };
+        // 參考界線（一般成人，非診斷）：血壓偏高 ≥135/85（家中；ESC/ESH 2018、國健署）、偏低 <90/60；血糖依 ADA 診斷標準；靜止心率 60–100（AHA）
+        const REF = { bpHigh: [135, 85], bpLow: [90, 60], hr: [60, 100], glu: { 空腹: [70, 99], '餐後 2 小時': [70, 139], 隨機: [70, 199] }, gluLow: 70 };
+        function validDate(s) {
+            if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+            const p = day.parse(s);
+            return p.y >= 1990 && p.y <= 2100 && p.m >= 1 && p.m <= 12 && p.d >= 1 && p.d <= day.daysInMonth(p.y, p.m);
+        }
+        const validTime = (s) => typeof s === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+        const str = (v, n) => typeof v === 'string' ? v.trim().slice(0, n) : '';
+        const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        const inR = (v, lo, hi) => Number.isFinite(v) && v >= lo && v <= hi;
+        // 數值驗證：回傳錯誤訊息或 ''（hr 可為 NaN / 空）
+        function checkValues(k, r) {
+            const n = (v) => (v === '' || v === null || v === undefined) ? NaN : Number(v);
+            if (!KINDS[k]) return '類型錯誤';
+            if (k === 'bp') {
+                const s = n(r.sys), d = n(r.dia), h = Number(r.hr), hb = r.hr === '' || r.hr == null;
+                if (!inR(s, 50, 300)) return '收縮壓請填 50–300';
+                if (!inR(d, 30, 200)) return '舒張壓請填 30–200';
+                if (s <= d) return '收縮壓應大於舒張壓，請確認有沒有填反';
+                if (!hb && h !== 0 && !inR(h, 20, 250)) return '心率請填 20–250（或留白）';
+            } else if (k === 'bg') { if (!inR(n(r.glu), 20, 800)) return '血糖請填 20–800 mg/dL'; }
+            else if (!inR(n(r.kg), 2, 500)) return '體重請填 2–500 公斤';
+            return '';
+        }
+        function normItem(r) {
+            if (!r || typeof r !== 'object' || !KINDS[r.k] || !validDate(r.date) || !validTime(r.time)) return null;
+            const k = r.k, base = { id: str(r.id, 40) || newId(), k, date: r.date, time: r.time, note: str(r.note, HL.NOTE) };
+            if (checkValues(k, r)) return null;
+            const ctx = CTX[k].includes(r.ctx) ? r.ctx : CTX[k][0];
+            if (k === 'bp') { const h = Number(r.hr); return { ...base, sys: Math.round(Number(r.sys)), dia: Math.round(Number(r.dia)), hr: r.hr !== '' && r.hr != null && inR(h, 20, 250) ? Math.round(h) : 0, ctx }; }
+            if (k === 'bg') return { ...base, glu: Math.round(Number(r.glu)), ctx };
+            return { ...base, kg: Math.round(Number(r.kg) * 10) / 10, ctx: '' };
+        }
+        function normList(raw) {
+            if (!Array.isArray(raw)) return [];
+            const seen = new Set(), out = [];
+            for (const r of raw) { const it = normItem(r); if (it && !seen.has(it.id)) { seen.add(it.id); out.push(it); if (out.length >= HL.MAX) break; } }
+            return out;
+        }
+        // 新增：滿 5000 筆拒絕；r 欄位來自輸入框（字串）
+        function addItem(list, k, r) {
+            if (!validDate(r.date)) return { list, err: '請選有效的日期（1990–2100）' };
+            if (!validTime(r.time)) return { list, err: '請填時間' };
+            if (str(r.note, 1e6).length > HL.NOTE) return { list, err: `備註最長 ${HL.NOTE} 字` };
+            const err = checkValues(k, r);
+            if (err) return { list, err };
+            if (list.length >= HL.MAX) return { list, err: `最多 ${HL.MAX} 筆，請先刪除不用的記錄` };
+            return { list: [...list, normItem({ ...r, k, id: newId() })], err: '' };
+        }
+        const removeItem = (list, id) => list.filter(x => x.id !== id);
+        // 判讀：{ s: 'ok'|'high'|'low'|'na', t: 說明 }。只對照一般參考範圍，非診斷
+        function judge(it) {
+            if (it.k === 'bp') {
+                const parts = [];
+                if (it.sys >= REF.bpHigh[0] || it.dia >= REF.bpHigh[1]) parts.push('血壓偏高');
+                else if (it.sys < REF.bpLow[0] || it.dia < REF.bpLow[1]) parts.push('血壓偏低');
+                if (it.hr && it.ctx !== '運動後') { if (it.hr > REF.hr[1]) parts.push('心率偏高'); else if (it.hr < REF.hr[0]) parts.push('心率偏低'); }
+                return parts.length ? { s: parts.some(p => p.includes('偏高')) ? 'high' : 'low', t: '超出（' + parts.join('、') + '）' } : { s: 'ok', t: '在一般參考範圍' };
+            }
+            if (it.k === 'bg') {
+                if (it.glu < REF.gluLow) return { s: 'low', t: '超出（偏低）' };
+                const r = REF.glu[it.ctx];
+                if (!r) return { s: 'na', t: '此情境不標示' };
+                return it.glu > r[1] ? { s: 'high', t: '超出（偏高）' } : { s: 'ok', t: '在一般參考範圍' };
+            }
+            return { s: 'na', t: '' };
+        }
+        const byTime = (a, b) => (a.date + a.time) < (b.date + b.time) ? -1 : (a.date + a.time) > (b.date + b.time) ? 1 : a.id < b.id ? -1 : 1;
+        // 某類型在最近 days 天內（0 = 全部；以 today 為基準，含今天）的記錄，時間由舊到新
+        function inRange(list, k, days, today) {
+            const from = days > 0 ? day.shift(today, -(days - 1)) : '';
+            return list.filter(x => x.k === k && (!from || x.date >= from)).sort(byTime);
+        }
+        const avg = (a) => a.length ? a.reduce((s, v) => s + v, 0) / a.length : null;
+        const r1 = (v) => v === null ? null : Math.round(v * 10) / 10;
+        // 統計：血壓 sys/dia/hr 的平均、最高、最低；血糖 / 體重 同理（體重另有最新與變化）
+        function statsOf(items, k) {
+            const f = (vals) => vals.length ? { avg: r1(avg(vals)), max: Math.max(...vals), min: Math.min(...vals) } : null;
+            if (k === 'bp') return { n: items.length, sys: f(items.map(x => x.sys)), dia: f(items.map(x => x.dia)), hr: f(items.filter(x => x.hr).map(x => x.hr)), out: items.filter(x => judge(x).s === 'high' || judge(x).s === 'low').length };
+            if (k === 'bg') return { n: items.length, glu: f(items.map(x => x.glu)), out: items.filter(x => ['high', 'low'].includes(judge(x).s)).length };
+            const w = f(items.map(x => x.kg));
+            return { n: items.length, kg: w, last: items.length ? items[items.length - 1].kg : null, change: items.length > 1 ? r1(items[items.length - 1].kg - items[0].kg) : null };
+        }
+        const csvGuard = (v) => { const s = String(v ?? ''); return /^[=+\-@\t\r]/.test(s) ? "'" + s : s; };
+        function toCsv(list) {
+            const rows = [...list].sort(byTime).map(x => [x.date, x.time, KINDS[x.k], x.sys ?? '', x.dia ?? '', x.hr || '', x.glu ?? '', x.kg ?? '', x.ctx, x.k === 'wt' ? '' : judge(x).t, csvGuard(x.note)]);
+            return csvStringify(['日期', '時間', '類型', '收縮壓 mmHg', '舒張壓 mmHg', '心率 次/分', '血糖 mg/dL', '體重 公斤', '情境', '對照一般參考範圍（非診斷）', '備註'], rows);
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'healthlog_items';
+        let items = normList(store.get(KEY, []));
+        let kind = 'bp', showAll = false;
+        const save = () => store.set(KEY, items);
+        const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+        const say = (id, text, bad) => { const m = $(id); m.textContent = text; m.className = 'msg' + (bad ? ' bad' : ''); };
+        const localToday = () => { const d = new Date(); return Util.day.ymd(d.getFullYear(), d.getMonth() + 1, d.getDate()); };
+        const nowTime = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+
+        function setKind(k) {
+            kind = k; showAll = false;
+            document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.k === k));
+            for (const x of ['bp', 'bg', 'wt']) document.querySelectorAll('.' + x).forEach(e => { e.hidden = x !== k; });
+            $('.ctxw').hidden = k === 'wt';
+            $('#ctxL').textContent = k === 'bg' ? '測量時機' : '測量情境';
+            $('#f_ctx').replaceChildren(...CTX[k].map(c => new Option(c, c)));
+            $('#formTitle').textContent = '新增' + KINDS[k]; say('#formMsg', '');
+            render();
+        }
+        function drawChart(list) {
+            const cv = $('#cv'); cv.hidden = !list.length;
+            if (!list.length) return;
+            const dpr = window.devicePixelRatio || 1, W = Math.max(200, Math.floor(cv.clientWidth)), H = 220;
+            cv.width = W * dpr; cv.height = H * dpr;
+            const g = cv.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, W, H);
+            const s = getComputedStyle(document.documentElement), col = (n, f) => s.getPropertyValue(n).trim() || f;
+            const text = col('--muted', '#666'), c1 = col('--blue', '#36f'), c2 = col('--bad', '#d33'), grid = col('--line', '#ddd');
+            const series = kind === 'bp' ? [{ c: c1, f: x => x.sys }, { c: c2, f: x => x.dia }] : [{ c: c1, f: x => kind === 'bg' ? x.glu : x.kg }];
+            const refs = kind === 'bp' ? [REF.bpHigh[0], REF.bpHigh[1]] : kind === 'bg' ? [100, 140] : [];
+            const all = series.flatMap(sr => list.map(sr.f)).concat(refs), lo0 = Math.min(...all), hi0 = Math.max(...all), pad = (hi0 - lo0) * 0.1 || 1, lo = lo0 - pad, hi = hi0 + pad;
+            const L = 40, R = 10, T = 10, B = 24, t = (x) => new Date(x.date + 'T' + x.time + ':00Z').getTime(), t0 = t(list[0]), t1 = t(list[list.length - 1]);
+            const X = (x) => list.length === 1 || t1 === t0 ? (L + W - R) / 2 : L + (t(x) - t0) / (t1 - t0) * (W - L - R), Y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+            g.font = '12px sans-serif'; g.lineWidth = 1; g.strokeStyle = grid; g.fillStyle = text;
+            for (let i = 0; i <= 3; i++) { const v = lo + (hi - lo) * i / 3, y = Y(v); g.beginPath(); g.moveTo(L, y); g.lineTo(W - R, y); g.stroke(); g.textAlign = 'right'; g.fillText(Math.round(v * 10) / 10, L - 4, y + 4); }
+            g.textAlign = 'left'; g.fillText(list[0].date.slice(5), L, H - 6); g.textAlign = 'right'; g.fillText(list[list.length - 1].date.slice(5), W - R, H - 6);
+            g.setLineDash([5, 4]); g.strokeStyle = text; refs.forEach(v => { const y = Y(v); g.beginPath(); g.moveTo(L, y); g.lineTo(W - R, y); g.stroke(); }); g.setLineDash([]);
+            series.forEach(sr => {
+                g.strokeStyle = g.fillStyle = sr.c; g.lineWidth = 2; g.beginPath();
+                list.forEach((x, i) => { const px = X(x), py = Y(sr.f(x)); i ? g.lineTo(px, py) : g.moveTo(px, py); }); g.stroke();
+                list.forEach(x => { g.beginPath(); g.arc(X(x), Y(sr.f(x)), 3, 0, 7); g.fill(); });
+            });
+        }
+        function render() {
+            const days = Number($('#range').value), ranged = inRange(items, kind, days, localToday()), st = statsOf(ranged, kind), box = $('#stats'); box.replaceChildren();
+            const cell = (k, v) => { const d = el('div'); d.append(el('small', '', k), el('b', '', v)); box.append(d); };
+            const tri = (o, u = '') => o ? `${o.avg}（${o.min}–${o.max}）${u}` : '—';
+            cell('筆數', st.n);
+            if (kind === 'bp') { cell('收縮壓 平均（低–高）', tri(st.sys)); cell('舒張壓 平均（低–高）', tri(st.dia)); cell('心率 平均（低–高）', tri(st.hr)); cell('超出參考範圍', st.out + ' 筆'); }
+            else if (kind === 'bg') { cell('血糖 平均（低–高）', tri(st.glu)); cell('超出參考範圍', st.out + ' 筆'); }
+            else { cell('平均（低–高）公斤', tri(st.kg)); cell('最新', st.last === null ? '—' : st.last + ' 公斤'); cell('範圍內變化', st.change === null ? '—' : (st.change > 0 ? '+' : '') + st.change + ' 公斤'); }
+            drawChart(ranged);
+            $('#refMsg').textContent = kind === 'bp' ? '虛線：偏高界線 135 / 85 mmHg（家中量測）。非醫療診斷。' : kind === 'bg' ? '虛線：100 與 140 mg/dL（空腹 / 餐後 2 小時的一般參考上限）。非醫療診斷。' : '';
+            const list = $('#list'); list.replaceChildren();
+            const mine = items.filter(x => x.k === kind).sort(byTime).reverse();
+            if (!mine.length) { list.append(el('div', 'card muted', '還沒有記錄，從上面新增第一筆吧')); return; }
+            const c = el('div', 'card');
+            (showAll ? mine : mine.slice(0, 50)).forEach(it => {
+                const r = el('div', 'rec'), l = el('div'), v = it.k === 'bp' ? `${it.sys} / ${it.dia} mmHg${it.hr ? '・' + it.hr + ' 次/分' : ''}` : it.k === 'bg' ? it.glu + ' mg/dL' : it.kg + ' 公斤', j = judge(it);
+                const top = el('div', 'v', v); if (j.t) top.append(el('span', 'badge ' + (j.s === 'ok' ? '' : j.s === 'na' ? 'na' : 'out'), j.t));
+                l.append(top, el('small', '', `${it.date} ${it.time}${it.ctx ? '・' + it.ctx : ''}${it.note ? '・' + it.note : ''}`));
+                const del = el('button', 'sm', '刪除'); del.style.color = 'var(--bad)'; del.setAttribute('aria-label', `刪除 ${it.date} ${it.time} 的記錄`);
+                del.onclick = () => { if (!confirm(`刪除 ${it.date} ${it.time} 的${KINDS[it.k]}記錄？無法復原。`)) return; items = removeItem(items, it.id); save(); render(); };
+                r.append(l, del); c.append(r);
+            });
+            if (!showAll && mine.length > 50) { const m = el('button', '', `顯示全部 ${mine.length} 筆`); m.style.marginTop = '8px'; m.onclick = () => { showAll = true; render(); }; c.append(m); }
+            list.append(c);
+        }
+
+        $('#tabs').onclick = (e) => { const b = e.target.closest('button[data-k]'); if (b) setKind(b.dataset.k); };
+        $('#range').onchange = render;
+        $('#save').onclick = () => {
+            const r = { date: $('#f_date').value, time: $('#f_time').value, sys: $('#f_sys').value, dia: $('#f_dia').value, hr: $('#f_hr').value, glu: $('#f_glu').value, kg: $('#f_kg').value, ctx: $('#f_ctx').value, note: $('#f_note').value };
+            const res = addItem(items, kind, r);
+            if (res.err) { say('#formMsg', res.err, true); return; }
+            items = res.list; save();
+            ['f_sys', 'f_dia', 'f_hr', 'f_glu', 'f_kg', 'f_note'].forEach(i => { $('#' + i).value = ''; });
+            $('#f_time').value = nowTime(); say('#formMsg', '已新增'); render();
+        };
+        addEventListener('resize', () => render());
+        new MutationObserver(() => render()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-ui-style', 'data-ui-mode'] });
+        $('#csv').onclick = () => {
+            if (!items.length) { say('#dataMsg', '還沒有記錄可以匯出'); return; }
+            Util.download(new Blob(['﻿' + toCsv(items)], { type: 'text/csv;charset=utf-8' }), `健康數值記錄_${localToday()}.csv`); say('#dataMsg', '已匯出 CSV');
+        };
+        $('#clearAll').onclick = () => {
+            if (!items.length) { say('#dataMsg', '目前沒有記錄'); return; }
+            if (!confirm(`清除全部 ${items.length} 筆記錄？無法復原。`)) return;
+            items = []; save(); say('#dataMsg', '已清除全部'); render();
+        };
+        $('#f_date').value = localToday(); $('#f_time').value = nowTime();
+        setKind('bp');
+    </script>
+</body>
+
+</html>

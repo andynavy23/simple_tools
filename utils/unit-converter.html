@@ -55,6 +55,17 @@
             <p class="note" id="note"></p>
         </div>
 
+        <div class="card" id="gold" hidden>
+            <h2>黃金價值（依純度）</h2>
+            <div class="in">
+                <select id="purity" aria-label="純度"></select>
+                <select id="gper" aria-label="價格單位"><option value="qian">每錢</option><option value="g">每公克</option></select>
+            </div>
+            <input id="gprice" type="number" inputmode="decimal" step="any" min="0" placeholder="純金單價（自行輸入，例：今日牌價）" aria-label="純金單價" style="margin-top:8px;width:100%">
+            <div id="gout" style="margin-top:8px"></div>
+            <p class="note">以上方「數值 + 單位」當作毛重，乘上純度後依你輸入的純金單價估算價值。牌價請自行查詢（銀樓、銀行黃金存摺或國際金價換算）；實際買賣另有工資、買賣價差與手續費，飾金不等於金條，僅供估算。</p>
+        </div>
+
         <div class="card" id="out"></div>
     </div>
 
@@ -69,18 +80,21 @@
         </ul>
         <h3>怎麼用</h3>
         <ol>
-        <li>點上方分類：長度、重量、面積、體積、速度、資料量、烹飪、溫度、匯率。</li>
+        <li>點上方分類：長度、重量、黃金、面積、體積、速度、資料量、烹飪、溫度、匯率。</li>
+        <li>黃金：換算錢 / 台兩 / 公克 / 台斤 / 金衡盎司（troy），並可選純度、填純金單價（每錢或每公克）估算價值。</li>
         <li>在輸入框填數值，並選右邊的單位。</li>
         <li>下方列出所有單位的結果，你選的單位會以強調色標示。</li>
         <li>烹飪類別要另外選「食材」，體積與重量才會依密度互換。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">面積、輸入 10、單位「坪」→ 33.05785124 平方公尺
-        溫度、輸入 100、單位 °C → 212 °F</div>
+        溫度、輸入 100、單位 °C → 212 °F
+        黃金、輸入 1、單位「台兩」→ 10 錢 = 37.5 公克；1 錢 × 純度 999 × 每錢 8,000 元 → 約 7,992 元（單價是假設值）</div>
         <h3>小提醒</h3>
         <ul>
         <li>烹飪換算是一般舀法的近似值，實際依品牌與緊實度而不同。</li>
         <li>匯率需要網路，會快取 6 小時；離線時顯示快取並註明；僅供參考，不是實際交易價。</li>
+        <li>黃金的換算係數是固定值（1 台兩 = 37.5 公克、1 金衡盎司 = 31.1034768 公克；注意一般「盎司」是 28.35 公克，金衡盎司才是貴金屬用的）；價值要自己輸入單價，本頁不提供即時金價，且不含工資與買賣價差。</li>
         <li>極大或極小的數字會用科學記號顯示。</li>
         </ul>
     </template>
@@ -92,6 +106,8 @@
         const CATS = {
             長度: { 公釐: 0.001, 公分: 0.01, 公尺: 1, 公里: 1000, 英寸: 0.0254, 英尺: 0.3048, 碼: 0.9144, 英里: 1609.344, 海里: 1852, 台尺: 10 / 33 },
             重量: { 公克: 0.001, 公斤: 1, 公噸: 1000, 磅: 0.45359237, 盎司: 0.028349523125, 台兩: 0.0375, 台斤: 0.6 },
+            // 黃金：1 台兩 = 37.5 g、1 錢 = 3.75 g（1 兩 = 10 錢）、1 金衡盎司 = 31.1034768 g、1 台斤 = 600 g
+            黃金: { 公克: 0.001, 錢: 0.00375, 台兩: 0.0375, 台斤: 0.6, 金衡盎司: 0.0311034768 },
             面積: { 平方公尺: 1, 平方公里: 1e6, 公頃: 1e4, 坪: 400 / 121, 甲: 9699.17, 平方英尺: 0.09290304, 英畝: 4046.8564224 },
             體積: { 毫升: 0.001, 公升: 1, 立方公尺: 1000, 美制杯: 0.2365882365, 美制品脫: 0.473176473, 美制加侖: 3.785411784, 美制液體盎司: 0.0295735295625 },
             速度: { '公尺/秒': 1, '公里/小時': 1 / 3.6, '英里/小時': 0.44704, 節: 1852 / 3600 },
@@ -110,6 +126,15 @@
         const COOK_VOL = { 毫升: 1, 茶匙: 5, 湯匙: 15, 公制杯: 250, 美制杯: 236.5882365, 美制液體盎司: 29.5735295625 };
         const COOK_MASS = { 公克: 1, 公斤: 1000, 盎司: 28.349523125, 磅: 453.59237, 台兩: 37.5 };
         const INGREDIENTS = { 水: 1, 牛奶: 1.03, 鮮奶油: 0.99, 食用油: 0.92, 蜂蜜: 1.42, 醬油: 1.15, 細鹽: 1.2, 砂糖: 0.85, 糖粉: 0.51, 黑糖: 0.9, 低筋麵粉: 0.53, 奶油: 0.96, 可可粉: 0.46, 生米: 0.85, 燕麥片: 0.37 };
+
+        // 純度：千分位成色（999、9999）或 K 數（18K = 18/24）；未知回 NaN
+        const PURITY = { '9999（千足金）': 0.9999, '999': 0.999, '916（22K）': 22 / 24, '18K': 18 / 24, '14K': 14 / 24, '10K': 10 / 24 };
+        // 黃金價值：grams 公克、purity 純度（0–1）、price 純金單價、per 'g' 每公克或 'qian' 每錢（3.75 g）
+        function goldValue(grams, purity, price, per) {
+            if (!(grams >= 0 && purity > 0 && purity <= 1 && price >= 0)) return null;
+            const pure = grams * purity, perGram = per === 'qian' ? price / 3.75 : price;
+            return { pure, pureQian: pure / 3.75, value: pure * perGram, perGram, perQian: perGram * 3.75 };
+        }
 
         function unitsOf(cat) {
             if (cat === '烹飪') return [...Object.keys(COOK_VOL), ...Object.keys(COOK_MASS)];
@@ -199,6 +224,10 @@
             const v = parseFloat($('#val').value);
             if (isNaN(v)) { out.textContent = '請輸入數字'; return; }
             const from = $('#from').value;
+            if (cat === '黃金') {
+                const g = convertAll(cat, v, from).find(r => r.unit === '公克').value, r = goldValue(g, +$('#purity').value, parseFloat($('#gprice').value), $('#gper').value), box = $('#gout');
+                box.replaceChildren(...(r ? [Util.statRow('純金重量', `${fmt(r.pure)} 公克（${fmt(r.pureQian)} 錢）`), Util.statRow('估算價值', fmt(r.value), 'me')] : [Object.assign(document.createElement('span'), { className: 'muted', textContent: '填入純金單價後顯示價值' })]));
+            }
             convertAll(cat, v, from, fx?.rates, $('#ing').value).forEach(({ unit, value }) => {
                 out.append(Util.statRow(cat === '匯率' ? `${unit} ${CURRENCIES[unit]}` : unit, fmt(value), unit === from ? 'me' : ''));
             });
@@ -207,7 +236,7 @@
         function setCat(c) {
             cat = c;
             document.querySelectorAll('#cats button').forEach(b => b.setAttribute('aria-pressed', b.textContent === c));
-            fillUnits(); $('#ing').hidden = c !== '烹飪';
+            fillUnits(); $('#ing').hidden = c !== '烹飪'; $('#gold').hidden = c !== '黃金';
             if (c === '匯率' && !fx && !fxLoading) {
                 fxLoading = true;
                 loadRates().then(r => { fx = r; fxLoading = false; if (cat === '匯率') render(); });
@@ -222,6 +251,8 @@
             b.onclick = () => setCat(c);
             $('#cats').append(b);
         });
+        $('#purity').replaceChildren(...Object.keys(PURITY).map(k => new Option(k, PURITY[k])));
+        $('#purity').onchange = $('#gper').onchange = $('#gprice').oninput = render;
         $('#ing').replaceChildren(...Object.keys(INGREDIENTS).map(k => new Option(k, k)));
         $('#ing').onchange = render;
         $('#val').oninput = render;

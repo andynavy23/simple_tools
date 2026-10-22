@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="地理與天文計算：座標格式轉換與兩點距離方位、日出日落與黃金時刻、月相與二十四節氣。全部在本機計算，只記住上次的地點。">
+    <meta property="og:title" content="地理與天文計算" />
+    <meta property="og:description" content="座標轉換、距離方位、日出日落、月相與節氣。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/geo-calc.html" />
+    <meta name="st-keys" content="geocalc_opts">
+    <title>地理與天文計算</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 680px;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        .tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        .fgrid select,
+        .fgrid input,
+        .fgrid textarea {
+            width: 100%;
+        }
+
+        .btns {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .msg {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 8px 0 0;
+            min-height: 1.2em;
+            overflow-wrap: anywhere;
+        }
+
+        .msg.bad {
+            color: var(--bad);
+        }
+
+        .li b {
+            text-align: right;
+        }
+
+        .links a {
+            color: var(--blue);
+            margin-right: 12px;
+            display: inline-block;
+            padding: 6px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-variant-numeric: tabular-nums;
+        }
+
+        td {
+            padding: 8px 4px;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        td:last-child {
+            text-align: right;
+        }
+
+        tr.now td {
+            font-weight: 700;
+        }
+
+        .big {
+            font-size: 40px;
+            line-height: 1.1;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>地理與天文計算</h1>
+        <p class="sub">座標轉換與距離方位、日出日落與黃金時刻、月相與節氣。全在本機計算。</p>
+
+        <div class="tabs" id="tabs">
+            <button data-t="coord" aria-pressed="true">座標</button>
+            <button data-t="sun" aria-pressed="false">日出日落</button>
+            <button data-t="moon" aria-pressed="false">月相與節氣</button>
+        </div>
+
+        <!-- 座標 -->
+        <section id="p-coord">
+            <div class="card">
+                <h2>點 A</h2>
+                <div class="fgrid">
+                    <div class="full"><label for="pasteA">貼上座標字串（自動解析）</label><input id="pasteA" type="text" placeholder="25.0330, 121.5654　或　25°01′58.8″N 121°33′55.4″E"></div>
+                    <div><label for="latA">緯度（十進位度）</label><input id="latA" class="la" type="number" step="any"></div>
+                    <div><label for="lngA">經度（十進位度）</label><input id="lngA" class="lo" type="number" step="any"></div>
+                </div>
+                <p class="msg" id="msgA"></p>
+                <div id="fmtA"></div>
+                <div class="links" id="linkA"></div>
+            </div>
+            <div class="card">
+                <h2>點 B（要算距離時填）</h2>
+                <div class="fgrid">
+                    <div class="full"><label for="pasteB">貼上座標字串</label><input id="pasteB" type="text" placeholder="35.6762, 139.6503"></div>
+                    <div><label for="latB">緯度</label><input id="latB" type="number" step="any"></div>
+                    <div><label for="lngB">經度</label><input id="lngB" type="number" step="any"></div>
+                </div>
+                <p class="msg" id="msgB"></p>
+                <div id="resB"></div>
+                <div class="links" id="linkB"></div>
+            </div>
+        </section>
+
+        <!-- 日出日落 -->
+        <section id="p-sun" hidden>
+            <div class="card">
+                <div class="fgrid">
+                    <div class="full"><label for="city">地點</label><select id="city"></select></div>
+                    <div><label for="latS">緯度</label><input id="latS" class="la" type="number" step="any"></div>
+                    <div><label for="lngS">經度</label><input id="lngS" class="lo" type="number" step="any"></div>
+                    <div><label for="dateS">日期</label><input id="dateS" type="date"></div>
+                    <div><label for="tz">時區</label><select id="tz"></select></div>
+                </div>
+                <div class="btns"><button id="geo">使用目前位置</button></div>
+                <p class="msg" id="msgS"></p>
+            </div>
+            <div class="card">
+                <table id="sunTable"></table>
+                <p class="note">NOAA 太陽位置公式，不含大氣折射的天氣變化與地形遮擋；一般誤差約 1–2 分鐘，高緯度更大。日出日落以太陽上緣碰到地平線計（天頂角 90.833°）。</p>
+            </div>
+        </section>
+
+        <!-- 月相與節氣 -->
+        <section id="p-moon" hidden>
+            <div class="card">
+                <div class="fgrid">
+                    <div><label for="dateM">日期（台灣時間，取當天中午）</label><input id="dateM" type="date"></div>
+                </div>
+                <p class="msg" id="msgM"></p>
+            </div>
+            <div class="card">
+                <div id="moonBox"></div>
+                <p class="note">新月 / 滿月時間用 Meeus 的月相公式（主要修正項），誤差約數小時；月齡與照亮比例是據此推算的近似值，各網站因定義不同可差 ±1 天。</p>
+            </div>
+            <div class="card">
+                <div id="termBox"></div>
+                <details style="margin-top:8px"><summary>整年二十四節氣（<span id="termYear"></span>）</summary>
+                    <table id="termTable"></table>
+                </details>
+                <p class="note">節氣以太陽黃經每 15° 計算（台灣時間），誤差約數十分鐘；時間接近午夜時，日期可能與曆書差一天。</p>
+            </div>
+            <div class="card" id="lunarCard" hidden>
+                <h2>農曆對照</h2>
+                <div class="big" id="lunar"></div>
+                <p class="note">由瀏覽器內建的農曆（Intl chinese）轉換。</p>
+            </div>
+        </section>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>三個小計算合一：座標格式與兩點距離、某地某天的日出日落、任意日期的月相與二十四節氣。全部在本機運算，不上傳；只記住你上次用的地點、時區與分頁。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>地圖給的是「25°01′58.8″N」，想換成十進位度，或反過來。</li>
+        <li>想知道兩地直線距離與方位（飛行、健行、地理課）。</li>
+        <li>拍夕陽、露營、登山，想知道日落時間與黃金時刻。</li>
+        <li>想知道今天月亮幾分滿、下次滿月、下個節氣哪天。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>「座標」：貼上座標字串（Google 地圖複製的十進位、含 N/S/E/W 的度分秒或度分都可以），自動填入並顯示三種格式；填點 B 就會算距離、方位角與中點，並產生 Google 地圖 / OpenStreetMap 連結。</li>
+        <li>「日出日落」：選台灣城市或輸入經緯度，選日期與時區；按「使用目前位置」會跳出定位授權（iPhone 需要自己按這顆鈕，失敗時會說明原因）。</li>
+        <li>「月相與節氣」：選日期，看月相、下次新月 / 滿月、下一個節氣與農曆；展開「整年二十四節氣」看全年日期。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">台北 25.0330, 121.5654 → 東京 35.6762, 139.6503
+        距離約 2,100 公里，方位角約 55°（東北東）
+        台北 6/21 日出約 05:04、日落約 18:48</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>距離是球面大圓直線距離（地球半徑 6371 km），不是路程；實際與橢球模型可差 0.5% 以內。</li>
+        <li>日出日落、月相、節氣都是公式計算的近似值，誤差見各區塊下方說明；需要精確時以中央氣象署或天文台公布為準。</li>
+        <li>極地可能整天不日落（極晝）或不日出（極夜），表格會標示。</li>
+        <li>只存上次的分頁、地點與時區（鍵 geocalc_opts）；壞掉的資料會自動忽略。這個頁面沒有累積資料，不需要清除；清除網站資料即可重置。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { day, store, esc } = Util;
+
+        // --- pure ---
+        const R_EARTH = 6371.0088;
+        const rad = (d) => d * Math.PI / 180, deg = (r) => r * 180 / Math.PI;
+        const norm360 = (x) => ((x % 360) + 360) % 360;
+        const validLL = (lat, lng) => Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+
+        // 單一座標片段（可含 N/S/E/W、度分秒）→ { v, h }；h 為半球字母或 ''
+        function parseOne(part) {
+            const hs = part.match(/[NSEW北南東西]/gi) || [];
+            if (hs.length > 1) return null;
+            const h = hs[0] ? ({ 北: 'N', 南: 'S', 東: 'E', 西: 'W' }[hs[0]] || hs[0].toUpperCase()) : '';
+            const rest = part.replace(/[NSEW北南東西]/gi, ' ').replace(/[°′″'"’”º]/g, ' ');
+            if (/[^\d\s.\-+]/.test(rest)) return null;
+            const nums = rest.match(/[-+]?\d+(?:\.\d+)?/g);
+            if (!nums || nums.length > 3 || rest.replace(/[-+]?\d+(?:\.\d+)?/g, '').trim() !== '') return null;
+            const [dd, mm = '0', ss = '0'] = nums, neg = dd.startsWith('-');
+            const D = Math.abs(Number(dd)), M = Number(mm), S = Number(ss);
+            if (nums.length > 1 && (M < 0 || M >= 60 || !Number.isInteger(D))) return null;
+            if (nums.length > 2 && (S < 0 || S >= 60 || !Number.isInteger(M))) return null;
+            let v = D + M / 60 + S / 3600;
+            if (neg || h === 'S' || h === 'W') v = -v;
+            return { v, h };
+        }
+        // 貼上的座標字串 → { lat, lng } 或 null。支援：「25.03, 121.56」「25.03N 121.56E」「N 25°1.98′ E 121°33.9′」「25°01′58.8″N, 121°33′55.4″E」
+        function parseCoord(text) {
+            const s = String(text || '').trim().replace(/[，；]/g, ',').replace(/^@/, '').replace(/^[(（]|[)）]$/g, '').trim();
+            if (!s || s.length > 100) return null;
+            let parts;
+            const letters = [...s.matchAll(/[NSEW北南東西]/gi)].map(m => m.index);
+            if (/[,;]/.test(s)) parts = s.split(/[,;]/);
+            else if (letters.length === 2) parts = letters[0] === 0 || /^[\s]*$/.test(s.slice(0, letters[0])) ? [s.slice(0, letters[1]), s.slice(letters[1])] : [s.slice(0, letters[0] + 1), s.slice(letters[0] + 1)];
+            else if (letters.length === 0 && /^\s*-?\d+(\.\d+)?\s+-?\d+(\.\d+)?\s*$/.test(s)) parts = s.trim().split(/\s+/);
+            else return null;
+            if (parts.length !== 2) return null;
+            const a = parseOne(parts[0]), b = parseOne(parts[1]);
+            if (!a || !b) return null;
+            const isLat = (x) => x.h === 'N' || x.h === 'S', isLng = (x) => x.h === 'E' || x.h === 'W';
+            let lat, lng;
+            if (isLng(a) || isLat(b)) { if (isLat(a) || isLng(b)) return null; lat = b.v; lng = a.v; }
+            else { lat = a.v; lng = b.v; }
+            return validLL(lat, lng) ? { lat, lng } : null;
+        }
+        // 度分秒（秒四捨五入到 0.01 並處理進位）
+        function splitDMS(v) {
+            const sign = v < 0 ? -1 : 1;
+            let t = Math.round(Math.abs(v) * 360000);           // 百分之一角秒
+            let d = Math.floor(t / 360000); t -= d * 360000;
+            let m = Math.floor(t / 6000); const s = (t - m * 6000) / 100;
+            return { sign, d, m, s };
+        }
+        const hemi = (v, isLat) => isLat ? (v < 0 ? 'S' : 'N') : (v < 0 ? 'W' : 'E');
+        const fmtDMS = (v, isLat) => { const { d, m, s } = splitDMS(v); return `${d}°${String(m).padStart(2, '0')}′${s.toFixed(2).padStart(5, '0')}″ ${hemi(v, isLat)}`; };
+        const fmtDM = (v, isLat) => {
+            let t = Math.round(Math.abs(v) * 60 * 10000) / 10000, d = Math.floor(t / 60); t = Math.round((t - d * 60) * 10000) / 10000;
+            return `${d}°${t.toFixed(4)}′ ${hemi(v, isLat)}`;
+        };
+        const fmtDeg = (v) => (Math.round(v * 1e6) / 1e6).toString();
+        function haversine(a, b) {
+            const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+            const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+            return 2 * R_EARTH * Math.asin(Math.min(1, Math.sqrt(h)));
+        }
+        function bearing(a, b) {
+            const p1 = rad(a.lat), p2 = rad(b.lat), dl = rad(b.lng - a.lng);
+            return norm360(deg(Math.atan2(Math.sin(dl) * Math.cos(p2), Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl))));
+        }
+        function midpoint(a, b) {
+            const p1 = rad(a.lat), p2 = rad(b.lat), dl = rad(b.lng - a.lng), bx = Math.cos(p2) * Math.cos(dl), by = Math.cos(p2) * Math.sin(dl);
+            const lat = Math.atan2(Math.sin(p1) + Math.sin(p2), Math.hypot(Math.cos(p1) + bx, by));
+            return { lat: deg(lat), lng: ((a.lng + deg(Math.atan2(by, Math.cos(p1) + bx)) + 540) % 360) - 180 };
+        }
+        const DIR16 = ['北', '北北東', '東北', '東北東', '東', '東南東', '東南', '南南東', '南', '南南西', '西南', '西南西', '西', '西北西', '西北', '北北西'];
+        const dir16 = (b) => DIR16[Math.round(norm360(b) / 22.5) % 16];
+        const googleUrl = (p) => `https://www.google.com/maps?q=${fmtDeg(p.lat)},${fmtDeg(p.lng)}`;
+        const osmUrl = (p) => `https://www.openstreetmap.org/?mlat=${fmtDeg(p.lat)}&mlon=${fmtDeg(p.lng)}#map=15/${fmtDeg(p.lat)}/${fmtDeg(p.lng)}`;
+
+        // ---- 太陽（NOAA 低精度公式）----
+        const jdOfMs = (ms) => ms / 864e5 + 2440587.5;
+        const msOfJd = (jd) => (jd - 2440587.5) * 864e5;
+        function sunPos(jd) {
+            const T = (jd - 2451545) / 36525;
+            const L0 = norm360(280.46646 + T * (36000.76983 + T * 0.0003032));
+            const M = 357.52911 + T * (35999.05029 - 0.0001537 * T);
+            const e = 0.016708634 - T * (0.000042037 + 0.0000001267 * T);
+            const sM = Math.sin(rad(M));
+            const C = sM * (1.914602 - T * (0.004817 + 0.000014 * T)) + Math.sin(rad(2 * M)) * (0.019993 - 0.000101 * T) + Math.sin(rad(3 * M)) * 0.000289;
+            const om = 125.04 - 1934.136 * T;
+            const lambda = norm360(L0 + C - 0.00569 - 0.00478 * Math.sin(rad(om)));
+            const eps = 23 + (26 + (21.448 - T * (46.815 + T * (0.00059 - T * 0.001813))) / 60) / 60 + 0.00256 * Math.cos(rad(om));
+            const decl = Math.asin(Math.sin(rad(eps)) * Math.sin(rad(lambda)));
+            const y = Math.tan(rad(eps) / 2) ** 2;
+            const eq = 4 * deg(y * Math.sin(rad(2 * L0)) - 2 * e * sM + 4 * e * y * sM * Math.cos(rad(2 * L0)) - 0.5 * y * y * Math.sin(rad(4 * L0)) - 1.25 * e * e * Math.sin(rad(2 * M)));
+            return { lambda, decl, eq };
+        }
+        // 某地某日（當地日期）的太陽事件，時間為「當地分鐘數」（0–1440，可能略超出）；null 表示該天沒有這個事件，polar 為 'day' / 'night'
+        function sunEvents(y, m, d, lat, lng, tz) {
+            const base = Date.UTC(y, m - 1, d) / 864e5 + 2440587.5, at = (min) => sunPos(base + min / 1440);
+            let noon = 720 - 4 * lng - at(720 - 4 * lng).eq;
+            noon = 720 - 4 * lng - at(noon).eq;
+            const shift = Math.floor((noon + tz * 60) / 1440) * 1440, loc = (utc) => utc + tz * 60 - shift;
+            const ev = (zen, rising) => {
+                let t = noon;
+                for (let i = 0; i < 3; i++) {
+                    const s = at(t), c = (Math.cos(rad(zen)) - Math.sin(rad(lat)) * Math.sin(s.decl)) / (Math.cos(rad(lat)) * Math.cos(s.decl));
+                    if (!(c >= -1 && c <= 1)) return null;
+                    t = 720 - 4 * (lng + (rising ? 1 : -1) * deg(Math.acos(c))) - s.eq;
+                }
+                return loc(t);
+            };
+            const decl = at(noon).decl, cz = Math.cos(rad(90.833)), c0 = (cz - Math.sin(rad(lat)) * Math.sin(decl)) / (Math.cos(rad(lat)) * Math.cos(decl));
+            const sunrise = ev(90.833, true), sunset = ev(90.833, false);
+            return {
+                civilStart: ev(96, true), sunrise, goldenAmStart: ev(94, true), goldenAmEnd: ev(84, true),
+                noon: loc(noon), goldenPmStart: ev(84, false), goldenPmEnd: ev(94, false), sunset, civilEnd: ev(96, false),
+                maxAlt: 90 - Math.abs(lat - deg(decl)), dayLen: sunrise !== null && sunset !== null ? sunset - sunrise : null,
+                polar: sunrise === null ? (c0 < -1 ? 'day' : 'night') : '',
+            };
+        }
+        const hhmm = (min) => { if (min === null || !Number.isFinite(min)) return '—'; const t = Math.round(min), dd = Math.floor(t / 1440), r = t - dd * 1440; return String(Math.floor(r / 60)).padStart(2, '0') + ':' + String(r % 60).padStart(2, '0') + (dd ? (dd > 0 ? '（+1 天）' : '（-1 天）') : ''); };
+        const hm = (min) => min === null ? '—' : `${Math.floor(min / 60)} 小時 ${Math.round(min % 60)} 分`;
+
+        // ---- 月相（Meeus《Astronomical Algorithms》ch.49 的主要修正項）----
+        const SYN = 29.530588861;
+        function phaseJD(k, full) {
+            k = full ? Math.floor(k) + 0.5 : Math.round(k);
+            const T = k / 1236.85, E = 1 - 0.002516 * T - 0.0000074 * T * T;
+            const M = rad(2.5534 + 29.1053567 * k), Mp = rad(201.5643 + 385.81693528 * k + 0.0107582 * T * T), F = rad(160.7108 + 390.67050284 * k - 0.0016118 * T * T);
+            const a = full ? [-0.40614, 0.17302, 0.01614, 0.01043, 0.00734, -0.00515, 0.00209, -0.00111, -0.00057] : [-0.4072, 0.17241, 0.01608, 0.01039, 0.00739, -0.00514, 0.00208, -0.00111, -0.00057];
+            const corr = a[0] * Math.sin(Mp) + a[1] * E * Math.sin(M) + a[2] * Math.sin(2 * Mp) + a[3] * Math.sin(2 * F) + a[4] * E * Math.sin(Mp - M) + a[5] * E * Math.sin(Mp + M) + a[6] * E * E * Math.sin(2 * M) + a[7] * Math.sin(Mp - 2 * F) + a[8] * Math.sin(Mp + 2 * F);
+            return 2451550.09766 + SYN * k + 0.00015437 * T * T + corr;
+        }
+        // jd 之前最近一次、之後最近一次的新月 / 滿月（回傳 jd）
+        function moonNeighbors(jd, full) {
+            let k = Math.floor((jd - 2451550.09766) / SYN) - 1;
+            while (phaseJD(k + 1, full) <= jd) k++;
+            return { prev: phaseJD(k, full), next: phaseJD(k + 1, full) };
+        }
+        const MOON_NAMES = ['新月', '眉月', '上弦月', '盈凸月', '滿月', '虧凸月', '下弦月', '殘月'], MOON_ICONS = ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘'];
+        function moonInfo(jd) {
+            const nm = moonNeighbors(jd, false), age = jd - nm.prev, frac = age / (nm.next - nm.prev), idx = Math.floor(frac * 8 + 0.5) % 8;
+            const nf = moonNeighbors(jd, true);
+            return { age, frac, name: MOON_NAMES[idx], icon: MOON_ICONS[idx], illum: (1 - Math.cos(2 * Math.PI * frac)) / 2, nextNew: nm.next, nextFull: nf.next };
+        }
+
+        // ---- 二十四節氣（太陽黃經每 15°；k=0 為春分）----
+        const TERMS = ['春分', '清明', '穀雨', '立夏', '小滿', '芒種', '夏至', '小暑', '大暑', '立秋', '處暑', '白露', '秋分', '寒露', '霜降', '立冬', '小雪', '大雪', '冬至', '小寒', '大寒', '立春', '雨水', '驚蟄'];
+        function termMs(year, k) {
+            const target = k * 15, ny = jdOfMs(Date.UTC(year + 1, 0, 1));
+            let jd = jdOfMs(Date.UTC(year, 2, 20, 12)) + target / 360 * 365.2422;
+            if (jd >= ny) jd -= 365.2422;
+            for (let i = 0; i < 6; i++) jd += (((target - sunPos(jd).lambda + 540) % 360) - 180) / 0.9856474;
+            return msOfJd(jd);
+        }
+        const termsOfYear = (year) => TERMS.map((name, k) => ({ name, k, ms: termMs(year, k) })).sort((a, b) => a.ms - b.ms);
+        // 該時刻之後的下一個節氣
+        function nextTerm(ms) {
+            const y = new Date(ms + 8 * 36e5).getUTCFullYear();
+            return [...termsOfYear(y), ...termsOfYear(y + 1)].find(t => t.ms > ms);
+        }
+        const twDate = (ms) => new Date(ms + 8 * 36e5).toISOString().slice(0, 10);
+        const twDateTime = (ms) => new Date(ms + 8 * 36e5).toISOString().slice(0, 16).replace('T', ' ');
+        const twNoonMs = (s) => { const p = day.parse(s); return Date.UTC(p.y, p.m - 1, p.d, 12) - 8 * 36e5; };
+        // 農曆（需瀏覽器支援 Intl chinese 曆），不支援回傳 ''
+        function lunarText(s) {
+            try {
+                const f = new Intl.DateTimeFormat('zh-TW-u-ca-chinese', { timeZone: 'Asia/Taipei', year: 'numeric', month: 'long', day: 'numeric' });
+                if (f.resolvedOptions().calendar !== 'chinese') return '';
+                const parts = Object.fromEntries(f.formatToParts(new Date(twNoonMs(s))).map(p => [p.type, p.value]));
+                const n = Number(parts.day), dn = n >= 1 && n <= 30 ? (n <= 10 ? '初' + '一二三四五六七八九十'[n - 1] : n < 20 ? '十' + '一二三四五六七八九'[n - 11] : n === 20 ? '二十' : n < 30 ? '廿' + '一二三四五六七八九'[n - 21] : '三十') : parts.day;
+                const t = (parts.yearName || parts.relatedYear || '') + '年 ' + (parts.month || '') + ' ' + dn;
+                return /[一-鿿]/.test(t) ? t.trim() : '';
+            } catch (e) { return ''; }
+        }
+
+        const CITIES = [['台北', 25.033, 121.5654], ['新北（板橋）', 25.012, 121.465], ['基隆', 25.1276, 121.7392], ['桃園', 24.9936, 121.301], ['新竹', 24.8138, 120.9675], ['宜蘭', 24.7021, 121.7378], ['台中', 24.1477, 120.6736], ['彰化', 24.0518, 120.5161], ['嘉義', 23.4801, 120.4491], ['台南', 22.9999, 120.227], ['高雄', 22.6273, 120.3014], ['花蓮', 23.9872, 121.6015], ['台東', 22.7583, 121.1444], ['馬公（澎湖）', 23.5711, 119.5793], ['金門', 24.4493, 118.3767]];
+        const TZS = [-12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 3.5, 4, 4.5, 5, 5.5, 5.75, 6, 7, 8, 9, 9.5, 10, 11, 12, 13, 14];
+        const tzLabel = (z) => 'UTC' + (z < 0 ? '-' : '+') + Math.floor(Math.abs(z)) + (Math.abs(z) % 1 ? ':' + String(Math.round(Math.abs(z) % 1 * 60)).padStart(2, '0') : '');
+        const DEF = { tab: 'coord', lat: 25.033, lng: 121.5654, tz: 8 };
+        // 載入驗證：壞資料用預設值
+        function normOpts(r) {
+            r = r && typeof r === 'object' ? r : {};
+            const lat = Number(r.lat), lng = Number(r.lng), tz = Number(r.tz);
+            return {
+                tab: ['coord', 'sun', 'moon'].includes(r.tab) ? r.tab : DEF.tab,
+                lat: r.lat !== null && r.lat !== '' && validLL(lat, 0) ? lat : DEF.lat, lng: r.lng !== null && r.lng !== '' && validLL(0, lng) ? lng : DEF.lng,
+                tz: TZS.includes(tz) && r.tz !== null && r.tz !== '' ? tz : DEF.tz,
+            };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
+        const KEY = 'geocalc_opts';
+        let opts = normOpts(store.get(KEY, null));
+        const saveOpts = () => store.set(KEY, opts);
+        const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+        const stat = (box, k, v) => { const r = el('div', 'li stat'); r.append(el('span', '', k), el('b', '', v)); box.append(r); };
+        const link = (box, label, href) => { const a = el('a', '', label); a.href = href; a.target = '_blank'; a.rel = 'noopener'; box.append(a); };
+        const num = (id) => { const v = $(id).value.trim(); return v === '' ? NaN : Number(v); };
+        const money = (v) => Math.round(v).toLocaleString('zh-TW');
+
+        // ---- 座標 ----
+        function readPt(s) { const lat = num('#lat' + s), lng = num('#lng' + s); return validLL(lat, lng) ? { lat, lng } : null; }
+        function pasteInto(s) {
+            const t = $('#paste' + s).value.trim(), m = $('#msg' + s);
+            if (!t) { m.textContent = ''; m.className = 'msg'; return; }
+            const p = parseCoord(t);
+            if (!p) { m.textContent = '看不懂這個座標格式（範例：25.0330, 121.5654）'; m.className = 'msg bad'; return; }
+            m.textContent = '已解析'; m.className = 'msg';
+            if (s === 'A') { $$('.la').forEach(x => { x.value = fmtDeg(p.lat); }); $$('.lo').forEach(x => { x.value = fmtDeg(p.lng); }); } else { $('#latB').value = fmtDeg(p.lat); $('#lngB').value = fmtDeg(p.lng); }
+            renderCoord(); renderSun();
+        }
+        function renderCoord() {
+            const A = readPt('A'), B = readPt('B');
+            for (const id of ['#fmtA', '#linkA', '#resB', '#linkB']) $(id).replaceChildren();
+            if (A) {
+                stat($('#fmtA'), '十進位度', `${fmtDeg(A.lat)}, ${fmtDeg(A.lng)}`);
+                stat($('#fmtA'), '度分秒', `${fmtDMS(A.lat, true)}, ${fmtDMS(A.lng, false)}`);
+                stat($('#fmtA'), '度分', `${fmtDM(A.lat, true)}, ${fmtDM(A.lng, false)}`);
+                link($('#linkA'), 'Google 地圖', googleUrl(A)); link($('#linkA'), 'OpenStreetMap', osmUrl(A));
+            }
+            if (A && B) {
+                const km = haversine(A, B), br = bearing(A, B), mid = midpoint(A, B);
+                stat($('#resB'), '直線距離', `${km >= 100 ? money(km) : km.toFixed(2)} km（${(km / 1.609344 >= 100 ? money(km / 1.609344) : (km / 1.609344).toFixed(2))} mi）`);
+                stat($('#resB'), 'A → B 初始方位角', `${br.toFixed(1)}°（${dir16(br)}）`);
+                stat($('#resB'), '中點', `${fmtDeg(mid.lat)}, ${fmtDeg(mid.lng)}`);
+                link($('#linkB'), 'B：Google 地圖', googleUrl(B)); link($('#linkB'), 'B：OpenStreetMap', osmUrl(B)); link($('#linkB'), '中點：Google 地圖', googleUrl(mid));
+            }
+        }
+
+        // ---- 日出日落 ----
+        function renderSun() {
+            const lat = num('#latS'), lng = num('#lngS'), ds = $('#dateS').value, tz = Number($('#tz').value), t = $('#sunTable'), m = $('#msgS');
+            t.replaceChildren();
+            if (!validLL(lat, lng) || !/^\d{4}-\d{2}-\d{2}$/.test(ds)) { m.textContent = '請填有效的經緯度（緯度 ±90、經度 ±180）與日期'; m.className = 'msg bad'; return; }
+            const p = day.parse(ds);
+            if (p.y < 1900 || p.y > 2100) { m.textContent = '日期請在 1900–2100 年之間'; m.className = 'msg bad'; return; }
+            m.textContent = ''; m.className = 'msg';
+            opts.lat = lat; opts.lng = lng; opts.tz = tz; saveOpts();
+            const e = sunEvents(p.y, p.m, p.d, lat, lng, tz);
+            const rows = [['民用曙光開始', e.civilStart], ['日出', e.sunrise], ['早晨黃金時刻', e.goldenAmStart, e.goldenAmEnd], ['日正當中', e.noon], ['傍晚黃金時刻', e.goldenPmStart, e.goldenPmEnd], ['日落', e.sunset], ['民用暮光結束', e.civilEnd]];
+            for (const [k, a, b] of rows) { const tr = el('tr'); tr.append(el('td', '', k), el('td', '', b === undefined ? hhmm(a) : (a === null ? '—' : hhmm(a) + ' – ' + hhmm(b)))); t.append(tr); }
+            const extra = [['白晝長度', e.polar === 'day' ? '極晝（整天不落）' : e.polar === 'night' ? '極夜（整天不出）' : hm(e.dayLen)], ['正午太陽高度', e.maxAlt.toFixed(1) + '°']];
+            for (const [k, v] of extra) { const tr = el('tr'); tr.append(el('td', '', k), el('td', '', v)); t.append(tr); }
+        }
+
+        // ---- 月相與節氣 ----
+        function renderMoon() {
+            const ds = $('#dateM').value, m = $('#msgM'), box = $('#moonBox'), tb = $('#termBox'), tt = $('#termTable');
+            box.replaceChildren(); tb.replaceChildren(); tt.replaceChildren();
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(ds) || day.parse(ds).y < 1900 || day.parse(ds).y > 2100) { m.textContent = '請選 1900–2100 年之間的日期'; m.className = 'msg bad'; return; }
+            m.textContent = ''; m.className = 'msg';
+            const ms = twNoonMs(ds), mi = moonInfo(jdOfMs(ms));
+            const h = el('div', 'big', mi.icon + ' ' + mi.name); box.append(h);
+            stat(box, '月齡（距上次新月）', mi.age.toFixed(1) + ' 天');
+            stat(box, '被照亮比例', Math.round(mi.illum * 100) + '%');
+            stat(box, '下次新月', twDateTime(msOfJd(mi.nextNew)));
+            stat(box, '下次滿月', twDateTime(msOfJd(mi.nextFull)));
+            const nt = nextTerm(ms), y = day.parse(ds).y, all = termsOfYear(y), cur = [...termsOfYear(y - 1), ...all].filter(x => x.ms <= ms).pop();
+            stat(tb, '目前節氣', `${cur.name}（${twDateTime(cur.ms)}）`);
+            stat(tb, '下一個節氣', `${nt.name}（${twDateTime(nt.ms)}，還有 ${Math.ceil((nt.ms - ms) / 864e5)} 天）`);
+            $('#termYear').textContent = y + ' 年';
+            for (const x of all) { const tr = el('tr', x === cur ? 'now' : ''); tr.append(el('td', '', x.name), el('td', '', twDateTime(x.ms))); tt.append(tr); }
+            const ln = lunarText(ds); $('#lunarCard').hidden = !ln; $('#lunar').textContent = ln;
+        }
+
+        // ---- 介面 ----
+        function setTab(t) {
+            opts.tab = t; saveOpts();
+            $$('#tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.t === t));
+            for (const k of ['coord', 'sun', 'moon']) $('#p-' + k).hidden = k !== t;
+        }
+        $('#tabs').onclick = (e) => { const b = e.target.closest('button[data-t]'); if (b) setTab(b.dataset.t); };
+        $$('.la').forEach(x => { x.oninput = () => { $$('.la').forEach(y => { if (y !== x) y.value = x.value; }); renderCoord(); renderSun(); }; });
+        $$('.lo').forEach(x => { x.oninput = () => { $$('.lo').forEach(y => { if (y !== x) y.value = x.value; }); renderCoord(); renderSun(); }; });
+        ['latB', 'lngB'].forEach(i => { $('#' + i).oninput = renderCoord; });
+        $('#pasteA').oninput = () => pasteInto('A'); $('#pasteB').oninput = () => pasteInto('B');
+        CITIES.forEach(([n, a, o], i) => $('#city').append(new Option(`${n}（${a}, ${o}）`, i)));
+        $('#city').append(new Option('自訂經緯度', ''));
+        $('#city').onchange = () => { const c = CITIES[Number($('#city').value)]; if (!c) return; $$('.la').forEach(x => { x.value = c[1]; }); $$('.lo').forEach(x => { x.value = c[2]; }); renderCoord(); renderSun(); };
+        TZS.forEach(z => $('#tz').append(new Option(tzLabel(z) + (z === 8 ? '（台灣）' : ''), z)));
+        $('#tz').onchange = $('#dateS').oninput = renderSun;
+        $('#dateM').oninput = renderMoon;
+        $('#geo').onclick = () => {
+            const m = $('#msgS');
+            if (!navigator.geolocation) { m.textContent = '這個瀏覽器不支援定位，請選城市或手動輸入經緯度'; m.className = 'msg bad'; return; }
+            m.textContent = '定位中…（請在跳出的視窗按「允許」）'; m.className = 'msg';
+            navigator.geolocation.getCurrentPosition(pos => {
+                $$('.la').forEach(x => { x.value = fmtDeg(pos.coords.latitude); }); $$('.lo').forEach(x => { x.value = fmtDeg(pos.coords.longitude); });
+                $('#city').value = ''; renderCoord(); renderSun(); $('#msgS').textContent = '已使用目前位置（精度約 ' + Math.round(pos.coords.accuracy) + ' 公尺）';
+            }, err => {
+                m.textContent = err.code === 1 ? '沒有定位權限：請在瀏覽器 / 系統設定允許這個網站使用位置，或改選城市' : err.code === 2 ? '目前抓不到位置（訊號不佳或定位服務關閉），請改選城市' : '定位逾時，請再按一次或改選城市';
+                m.className = 'msg bad';
+            }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
+        };
+
+        $$('.la').forEach(x => { x.value = fmtDeg(opts.lat); }); $$('.lo').forEach(x => { x.value = fmtDeg(opts.lng); });
+        $('#tz').value = opts.tz;
+        { const i = CITIES.findIndex(c => c[1] === opts.lat && c[2] === opts.lng); $('#city').value = i < 0 ? '' : i; }
+        const today = new Date(Date.now() + 8 * 36e5).toISOString().slice(0, 10);
+        $('#dateS').value = today; $('#dateM').value = today;
+        setTab(opts.tab); renderCoord(); renderSun(); renderMoon();
+    </script>
+</body>
+
+</html>

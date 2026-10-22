@@ -10,7 +10,7 @@
     <meta property="og:description" content="離線記帳，月統計與分類佔比，可匯出 CSV。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/expense-tracker.html" />
-    <meta name="st-keys" content="expenses,expense_fixed,fx_cache">
+    <meta name="st-keys" content="expenses,expense_fixed,fx_cache,expense_budget,expense_assets,expense_trips">
     <title>記帳本</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -79,6 +79,45 @@
             white-space: normal;
         }
 
+        details.card>summary {
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 17px;
+            min-height: 28px;
+        }
+
+        details.card[open]>summary {
+            margin-bottom: 10px;
+        }
+
+        .grid2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .grid2 label {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 2px;
+        }
+
+        .grid2 input,
+        .grid2 select {
+            width: 100%;
+        }
+
+        .sub2 {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 6px 0;
+        }
+
+        .over {
+            color: var(--bad);
+        }
+
         .del {
             padding: 2px 10px;
             font-size: 13px;
@@ -129,6 +168,10 @@
                 <input type="number" id="rate" min="0" step="any" placeholder="匯率" style="width:110px" aria-label="匯率：1 外幣等於多少台幣">
                 <span class="muted" id="fxNote"></span>
             </div>
+            <div class="row" id="tripRow" hidden>
+                <label class="muted" for="trip">歸入專案（只有支出）</label>
+                <select id="trip"></select>
+            </div>
             <div class="row">
                 <input type="date" id="date" aria-label="日期">
                 <input type="text" id="note" maxlength="30" placeholder="備註（選填）" aria-label="備註">
@@ -159,6 +202,50 @@
             <div id="cats"></div>
         </div>
 
+        <details class="card" id="budBox">
+            <summary>50/30/20 預算</summary>
+            <p class="sub2">依收入分成需要 50%、想要 30%、儲蓄 20%，對照目前檢視月份的實際花費。分類要算「需要」還是「想要」由你設定一次。</p>
+            <div class="grid2">
+                <div style="grid-column:1/-1"><label for="b_inc">月收入（留白 = 用該月記帳的收入）</label><input type="number" id="b_inc" min="0" step="any" inputmode="decimal" placeholder="例如 50000"></div>
+                <div><label for="b_need">需要 %</label><input type="number" id="b_need" min="0" max="100" step="1" inputmode="numeric"></div>
+                <div><label for="b_want">想要 %</label><input type="number" id="b_want" min="0" max="100" step="1" inputmode="numeric"></div>
+                <div><label for="b_save">儲蓄 %</label><input type="number" id="b_save" min="0" max="100" step="1" inputmode="numeric"></div>
+            </div>
+            <div class="sub2">分類對應</div>
+            <div class="grid2" id="b_map"></div>
+            <div id="b_res" style="margin-top:10px"></div>
+            <div class="row" style="margin-top:10px"><button class="sm" id="b_reset">重設為預設</button><span class="muted" id="b_msg"></span></div>
+        </details>
+
+        <details class="card" id="fireBox">
+            <summary>財務自由進度</summary>
+            <p class="sub2">定期記一次資產快照；被動收入 = 該月「投資」分類的收入，覆蓋率 = 被動收入 ÷ 該月支出。財務自由目標 = 近 12 個月平均月支出 × 12 × 25（4% 法則，僅供參考）。</p>
+            <div id="f_stats"></div>
+            <div class="grid2" style="margin-top:10px">
+                <div style="grid-column:1/-1"><label for="s_date">快照日期</label><input type="date" id="s_date"></div>
+                <div><label for="s_cash">現金存款</label><input type="number" id="s_cash" min="0" step="any" inputmode="decimal"></div>
+                <div><label for="s_invest">投資</label><input type="number" id="s_invest" min="0" step="any" inputmode="decimal"></div>
+                <div><label for="s_prop">不動產</label><input type="number" id="s_prop" min="0" step="any" inputmode="decimal"></div>
+                <div><label for="s_other">其他資產</label><input type="number" id="s_other" min="0" step="any" inputmode="decimal"></div>
+                <div><label for="s_debt">負債（扣除）</label><input type="number" id="s_debt" min="0" step="any" inputmode="decimal"></div>
+            </div>
+            <div class="row" style="margin-top:10px"><button class="primary" id="s_add">新增快照</button><button class="sm" id="s_more">顯示全部</button><button class="sm" id="s_clear">清除全部快照</button></div>
+            <p class="sub2" id="s_msg"></p>
+            <div id="s_list"></div>
+        </details>
+
+        <details class="card" id="tripBox">
+            <summary>旅行 / 專案預算</summary>
+            <p class="sub2">建立專案（例如「日本 10 月」）後，上方記帳可把支出歸入專案；外幣用你填的匯率換算成台幣，這裡依專案彙總。</p>
+            <div class="row">
+                <input type="text" id="t_name" maxlength="20" placeholder="專案名稱" style="width:150px" aria-label="專案名稱">
+                <input type="number" id="t_budget" min="0" step="any" placeholder="預算（台幣，可留白）" style="width:150px" aria-label="專案預算">
+                <button class="primary" id="t_add">新增專案</button>
+            </div>
+            <p class="sub2" id="t_msg"></p>
+            <div id="t_list"></div>
+        </details>
+
         <div class="card">
             <h2>本月明細</h2>
             <div id="list"></div>
@@ -176,6 +263,7 @@
         <li>旅行時用日圓、美金等外幣刷卡，回國後想看「當時」實際花多少台幣。</li>
         <li>把 Netflix、保險、房租列成清單，一眼看出每月、每年固定要付多少。</li>
         <li>想把資料帶到試算表整理，匯出 CSV。</li>
+        <li>想看收入有沒有照 50/30/20 分配、資產累積到財務自由的進度，或把一趟旅行的花費集中算。</li>
         </ul>
         <h3>怎麼用</h3>
         <ol>
@@ -184,6 +272,9 @@
         <li>如果顯示「離線無匯率，請手動輸入」，代表沒有匯率快取或超過 7 天：先到「單位換算 → 匯率」開一次（需要網路），或自己在匯率欄填。這一頁本身不連網。</li>
         <li>用「‹ ›」切換月份，看該月收入、支出與結餘，以及「支出分類」比例；外幣明細會多一行「¥1,200 ≈ NT$260（匯率 0.2167）」。</li>
         <li>固定支出：填名稱、金額（台幣）、週期與第一次扣款日，按「新增」；「把本月已到期的記入明細」會自動記成支出。</li>
+        <li>50/30/20 預算（展開「50/30/20 預算」）：月收入留白就用該月記帳的收入；調整三個比例（要加起來 100），並把每個支出分類設成「需要」或「想要」，只要設一次。下方即時對照該月實際：需要與想要超過預算標紅，儲蓄實際 = 收入 − 支出。</li>
+        <li>財務自由進度（展開「財務自由進度」）：不定期填日期與各類資產、負債，按「新增快照」；上方顯示最新淨資產、目標進度，以及被動收入覆蓋率（該月「投資」分類收入 ÷ 該月支出）。</li>
+        <li>旅行 / 專案預算（展開「旅行 / 專案預算」）：先新增專案（可設台幣預算），之後記一筆支出時用「歸入專案」選它；外幣照上面的匯率換算成台幣。專案卡片會顯示合計、預算剩餘、外幣原幣合計與分類。</li>
         <li>「匯出全部 CSV」多出幣別、外幣金額、匯率三欄（台幣明細幣別是 TWD）；「刪除一年前的紀錄」、「清除全部資料」會先確認。</li>
         </ol>
         <h3>範例</h3>
@@ -197,6 +288,8 @@
         <li>匯率只供記帳參考，不等於信用卡實際請款金額（有手續費與結算日差異）。</li>
         <li>備份會一併包含「匯率快取」這個資料；還原時若外幣資料壞掉，會保留台幣金額、丟掉外幣資訊。</li>
         <li>金額欄或備註欄按 <kbd>Enter</kbd> 可直接新增。</li>
+        <li>新增的資料也在本機：預算設定只有一組（可按「重設為預設」）；資產快照最多 600 筆，滿了要先刪舊的，可單筆刪除或「清除全部快照」；專案最多 50 個，刪除專案只拿掉專案標記、支出明細保留。有專案時匯出 CSV 會多一欄「專案」。</li>
+        <li>財務自由目標是 4% 法則的粗估（平均月支出 × 12 × 25），不是投資建議；壞掉的預算、快照、專案資料載入時會補預設或略過。</li>
         </ul>
     </template>
 
@@ -227,10 +320,12 @@
 
         // CSV（RFC 4180 引號跳脫）；開頭是 = + - @ 的文字前面補單引號，避免在試算表中被當成公式
         // fxCols = true 時多三欄：幣別 / 外幣金額 / 匯率（台幣明細的幣別是 TWD，後兩欄留空）；「金額」一律是台幣
-        function toCSV(entries, fxCols = false) {
+        // trips（選填，專案陣列）有給時多一欄「專案」（沒歸專案的留空）
+        function toCSV(entries, fxCols = false, trips = null) {
             const cell = (v) => { let s = String(v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
             const fx = (e) => (e.cur && e.fx ? [e.cur, e.fx, e.rate] : ['TWD', '', '']);
-            const rows = [['日期', '收支', '分類', '金額', '備註', ...(fxCols ? ['幣別', '外幣金額', '匯率'] : [])], ...[...entries].sort((a, b) => a.d.localeCompare(b.d)).map(e => [e.d, e.type === 'in' ? '收入' : '支出', e.cat, e.amt, e.note, ...(fxCols ? fx(e) : [])])];
+            const tn = (e) => (trips && e.trip ? (trips.find(t => t.id === e.trip) || {}).name || '' : '');
+            const rows = [['日期', '收支', '分類', '金額', '備註', ...(fxCols ? ['幣別', '外幣金額', '匯率'] : []), ...(trips ? ['專案'] : [])], ...[...entries].sort((a, b) => a.d.localeCompare(b.d)).map(e => [e.d, e.type === 'in' ? '收入' : '支出', e.cat, e.amt, e.note, ...(fxCols ? fx(e) : []), ...(trips ? [tn(e)] : [])])];
             return rows.map(r => r.map(cell).join(',')).join('\r\n');
         }
 
@@ -288,6 +383,120 @@
         }
 
         const shiftMonth = (ym, n) => { const [y, m] = ym.split('-').map(Number), t = y * 12 + m - 1 + n; return `${Math.floor(t / 12)}-${String(t % 12 + 1).padStart(2, '0')}`; };
+
+        // ---------- 共用小工具 ----------
+        const MAX_SNAPS = 600, MAX_TRIPS = 50;
+        const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        const r2 = (v) => Math.round(v * 100) / 100;
+        function validDate(s) {
+            if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+            const p = day.parse(s);
+            return p.y >= 1990 && p.y <= 2100 && p.m >= 1 && p.m <= 12 && p.d >= 1 && p.d <= day.daysInMonth(p.y, p.m);
+        }
+        const money0 = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v < 1e12;
+
+        // ---------- 50 / 30 / 20 預算 ----------
+        // 存 expense_budget = { map: { 分類: 'need' | 'want' }, pct: { need, want, save }（整數、總和 100）, income: 0（0 = 用該月實際收入）}
+        const BUCKETS = { need: '需要', want: '想要', save: '儲蓄' };
+        const DEFAULT_MAP = { 餐飲: 'need', 交通: 'need', 居住: 'need', 醫療: 'need', 教育: 'need', 購物: 'want', 娛樂: 'want', 其他: 'want' };
+        const DEFAULT_PCT = { need: 50, want: 30, save: 20 };
+        // 載入驗證：壞資料補預設（對應表逐分類補、比例不合就整組回預設）
+        function normBudget(raw) {
+            const o = raw && typeof raw === 'object' ? raw : {}, m = o.map && typeof o.map === 'object' ? o.map : {}, p = o.pct && typeof o.pct === 'object' ? o.pct : {};
+            const map = Object.fromEntries(OUT_CATS.map(c => [c, m[c] === 'need' || m[c] === 'want' ? m[c] : DEFAULT_MAP[c]]));
+            const pp = ['need', 'want', 'save'].map(k => p[k]);
+            const pct = pp.every(v => Number.isInteger(v) && v >= 0 && v <= 100) && pp.reduce((a, b) => a + b, 0) === 100 ? { need: pp[0], want: pp[1], save: pp[2] } : { ...DEFAULT_PCT };
+            const inc = Number(o.income);
+            return { map, pct, income: Number.isFinite(inc) && inc > 0 && inc < 1e12 ? r2(inc) : 0 };
+        }
+        // 依收入分配：以「分」計算，想要 / 儲蓄無條件捨去，除不盡的零頭全歸「需要」，三桶加總一定等於收入
+        function budgetPlan(income, pct) {
+            const c = Math.round(income * 100), want = Math.floor(c * pct.want / 100), save = Math.floor(c * pct.save / 100);
+            return { need: (c - want - save) / 100, want: want / 100, save: save / 100 };
+        }
+        // 對照實際：byCat = summarize 的 [[分類, 金額]]；儲蓄實際 = 收入 − 支出（結餘，可能為負）；over = 需要 / 想要超支、儲蓄不足
+        function budgetCompare(byCat, bud, income, balance) {
+            const plan = budgetPlan(income, bud.pct), act = { need: 0, want: 0 };
+            for (const [c, v] of byCat) act[bud.map[c] || DEFAULT_MAP[c] || 'want'] += v;
+            act.save = balance;
+            return ['need', 'want', 'save'].map(k => ({ key: k, label: BUCKETS[k], plan: plan[k], actual: r2(act[k]), over: k === 'save' ? act[k] < plan[k] : act[k] > plan[k] }));
+        }
+
+        // ---------- 財務自由進度 ----------
+        // 存 expense_assets = [{ id, d, a: { cash, invest, prop, other, debt } }]（資產快照；淨資產 = 資產合計 − 負債）
+        const ASSET_FIELDS = { cash: '現金存款', invest: '投資', prop: '不動產', other: '其他資產', debt: '負債（扣除）' };
+        function normSnap(r) {
+            if (!r || typeof r !== 'object' || !validDate(r.d) || !r.a || typeof r.a !== 'object') return null;
+            const a = {};
+            for (const k of Object.keys(ASSET_FIELDS)) { const v = r.a[k] === undefined || r.a[k] === null || r.a[k] === '' ? 0 : Number(r.a[k]); if (!money0(v)) return null; a[k] = r2(v); }
+            return { id: typeof r.id === 'string' && r.id && r.id.length <= 40 ? r.id : newId(), d: r.d, a };
+        }
+        function normSnaps(raw) {
+            if (!Array.isArray(raw)) return [];
+            const seen = new Set(), out = [];
+            for (const r of raw) { const s = normSnap(r); if (s && !seen.has(s.id)) { seen.add(s.id); out.push(s); if (out.length >= MAX_SNAPS) break; } }
+            return out;
+        }
+        const snapNet = (s) => r2(s.a.cash + s.a.invest + s.a.prop + s.a.other - s.a.debt);
+        // 新增快照：日期要有效、金額 0 以上、至少填一項；滿 600 筆拒絕（不默默刪舊的）
+        function addSnap(list, d, a, id = newId()) {
+            const s = normSnap({ id, d, a });
+            if (!s) return { list, err: '請選有效日期，金額填 0 以上的數字' };
+            if (!Object.values(s.a).some(v => v > 0)) return { list, err: '至少填一項金額' };
+            if (list.length >= MAX_SNAPS) return { list, err: `快照最多 ${MAX_SNAPS} 筆，請先刪除舊的` };
+            return { list: [...list, s], err: '' };
+        }
+        const removeSnap = (list, id) => list.filter(s => s.id !== id);
+        const sortSnaps = (list) => [...list].sort((a, b) => b.d.localeCompare(a.d) || (a.id < b.id ? 1 : -1));
+        // 被動收入 = 該月「投資」分類的收入；平均月支出 = 截至 ym（含）近 12 個月的支出 ÷ 有支出的月份數
+        const passiveOf = (entries, ym) => r2(entries.filter(e => e.type === 'in' && e.cat === '投資' && e.d.startsWith(ym)).reduce((a, e) => a + e.amt, 0));
+        function avgMonthlyExpense(entries, ym) {
+            const from = shiftMonth(ym, -11), months = new Set();
+            let sum = 0;
+            for (const e of entries) if (e.type === 'out') { const m = e.d.slice(0, 7); if (m >= from && m <= ym) { sum += e.amt; months.add(m); } }
+            return months.size ? r2(sum / months.size) : 0;
+        }
+        // 進度：覆蓋率 = 被動收入 ÷ 該月支出（沒支出為 null）；財務自由目標 = 平均月支出 × 12 × 25（4% 法則）；進度 = 最新淨資產 ÷ 目標
+        function fireStats(snaps, passive, monthExpense, avgExpense) {
+            const latest = sortSnaps(snaps)[0], net = latest ? snapNet(latest) : null, target = r2(avgExpense * 12 * 25);
+            return { latest: latest || null, net, target, progress: net !== null && target > 0 ? net / target : null, coverage: monthExpense > 0 ? passive / monthExpense : null };
+        }
+
+        // ---------- 旅行 / 專案預算 ----------
+        // 存 expense_trips = [{ id, name, budget（台幣，0 = 不設預算） }]；明細可帶 trip（專案 id），只有支出會歸專案
+        const dropTrip = ({ trip, ...rest }) => rest;
+        function normTrips(raw) {
+            if (!Array.isArray(raw)) return [];
+            const seen = new Set(), out = [];
+            for (const t of raw) {
+                if (!t || typeof t !== 'object' || typeof t.name !== 'string' || !t.name.trim() || typeof t.id !== 'string' || !t.id || t.id.length > 40 || seen.has(t.id)) continue;
+                const b = Number(t.budget);
+                seen.add(t.id); out.push({ id: t.id, name: t.name.trim().slice(0, 20), budget: Number.isFinite(b) && b > 0 && b < 1e12 ? r2(b) : 0 });
+                if (out.length >= MAX_TRIPS) break;
+            }
+            return out;
+        }
+        // 載入後清理：trip 欄位不是字串、或指向已不存在的專案 → 拿掉（明細本身保留）
+        const cleanTrips = (entries, trips) => { const ids = new Set(trips.map(t => t.id)); return entries.map(e => (e.trip === undefined || (typeof e.trip === 'string' && ids.has(e.trip)) ? e : dropTrip(e))); };
+        function addTrip(trips, name, budget, id = newId()) {
+            const n = String(name || '').trim(), b = budget === '' || budget == null ? 0 : Number(budget);
+            if (!n) return { trips, err: '請填專案名稱' };
+            if (n.length > 20) return { trips, err: '專案名稱最長 20 字' };
+            if (!Number.isFinite(b) || b < 0 || b >= 1e12) return { trips, err: '預算請填 0 以上的數字（0 = 不設預算）' };
+            if (trips.some(t => t.name === n)) return { trips, err: '已有同名專案' };
+            if (trips.length >= MAX_TRIPS) return { trips, err: `專案最多 ${MAX_TRIPS} 個，請先刪除不用的` };
+            return { trips: [...trips, { id, name: n, budget: r2(b) }], err: '' };
+        }
+        // 刪除專案：連帶把明細上的專案標記拿掉（明細保留，不留孤兒）
+        const removeTrip = (trips, entries, id) => ({ trips: trips.filter(t => t.id !== id), entries: entries.map(e => (e.trip === id ? dropTrip(e) : e)) });
+        // 專案彙總：台幣總支出、各外幣原幣合計、各分類、預算剩餘（無預算為 null）
+        function tripSummary(entries, trip) {
+            const list = entries.filter(e => e.type === 'out' && e.trip === trip.id), byCur = {}, byCat = {};
+            let total = 0;
+            for (const e of list) { total += e.amt; byCat[e.cat] = (byCat[e.cat] || 0) + e.amt; if (e.cur && e.fx) byCur[e.cur] = (byCur[e.cur] || 0) + e.fx; }
+            total = r2(total);
+            return { count: list.length, total, byCur: Object.entries(byCur).map(([c, v]) => [c, r2(v)]), byCat: Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([c, v]) => [c, r2(v)]), budget: trip.budget, left: trip.budget > 0 ? r2(trip.budget - total) : null };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -295,7 +504,11 @@
         const arr = (v) => (Array.isArray(v) ? v : []);
         const warn = (t) => Chrome.toast(t, 4000, 'bad');
         const put = (k, v) => Util.store.set(k, v);
-        let entries = arr(store.get('expenses', [])).filter(validEntry).map(cleanFx);
+        let trips = normTrips(store.get('expense_trips', []));
+        let entries = cleanTrips(arr(store.get('expenses', [])).filter(validEntry).map(cleanFx), trips);
+        let bud = normBudget(store.get('expense_budget', null));
+        let snaps = normSnaps(store.get('expense_assets', []));
+        let showAllSnaps = false;
         let ym = day.today().slice(0, 7);
         $('#date').value = day.today();
 
@@ -303,6 +516,11 @@
         $('#fstart').value = day.today();
         const save = () => put('expenses', entries);
         const saveFixed = () => put('expense_fixed', fixed);
+        const saveTrips = () => put('expense_trips', trips);
+        const saveBud = () => put('expense_budget', bud);
+        const saveSnaps = () => put('expense_assets', snaps);
+        const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+        const pctText = (v) => (v === null ? '—' : Math.round(v * 1000) / 10 + '%');
 
         function renderFixed() {
             const today = day.today(), total = fixed.reduce((a, f) => a + monthlyCost(f), 0);
@@ -350,6 +568,7 @@
                 const main = document.createElement('div'); main.className = 'main';
                 main.append(Object.assign(document.createElement('div'), { textContent: e.cat }), Object.assign(document.createElement('small'), { textContent: e.d.slice(5) + (e.note ? '　' + e.note : '') }));
                 if (e.cur) main.append(Object.assign(document.createElement('small'), { className: 'fxline', textContent: fmtFx(e) }));
+                if (e.trip) main.append(el('small', '', '專案：' + ((trips.find(t => t.id === e.trip) || {}).name || '')));
                 const a = Object.assign(document.createElement('b'), { className: 'amt ' + e.type, textContent: (e.type === 'in' ? '+' : '−') + money(e.amt) });
                 const x = Object.assign(document.createElement('button'), { className: 'sm del', textContent: '刪除' });
                 x.setAttribute('aria-label', '刪除 ' + e.cat + ' ' + money(e.amt));
@@ -357,7 +576,91 @@
                 r.append(main, a, x);
                 return r;
             }) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '本月沒有紀錄' })]));
+            renderBudget(); renderFire(); renderTrips();
         }
+
+        function renderBudget() {
+            const s = summarize(entries, ym), income = bud.income > 0 ? bud.income : s.income, box = $('#b_res');
+            const setv = (id, v) => { if (document.activeElement !== $(id)) $(id).value = v; }; setv('#b_inc', bud.income || ''); ['need', 'want', 'save'].forEach(k => setv('#b_' + k, bud.pct[k]));
+            if (!$('#b_map').children.length) OUT_CATS.forEach(c => {
+                const d = el('div'), l = el('label', '', c), sel = document.createElement('select');
+                sel.id = 'bm_' + c; sel.setAttribute('aria-label', c + ' 算需要還是想要'); sel.append(new Option('需要', 'need'), new Option('想要', 'want'));
+                sel.onchange = () => { bud = { ...bud, map: { ...bud.map, [c]: sel.value } }; saveBud(); renderBudget(); };
+                l.htmlFor = sel.id; d.append(l, sel); $('#b_map').append(d);
+            });
+            OUT_CATS.forEach(c => { $('#bm_' + c).value = bud.map[c]; });
+            if (!(income > 0)) { box.replaceChildren(el('p', 'muted', '這個月還沒有收入：請在上面填月收入，或先記一筆收入。')); return; }
+            box.replaceChildren(el('div', 'muted', `以 ${money(income)} 分配（${ym}）`), ...budgetCompare(s.byCat, bud, income, s.income - s.expense).map(r => {
+                const d = el('div', 'li');
+                d.append(el('span', '', `${r.label} ${bud.pct[r.key]}%`), el('b', r.over ? 'over' : '', `實際 ${money(r.actual)} / 預算 ${money(r.plan)}${r.over ? (r.key === 'save' ? '（不足 ' : '（超支 ') + money(Math.abs(r.actual - r.plan)) + '）' : ''}`));
+                return d;
+            }));
+        }
+        function onBudInput() {
+            const inc = $('#b_inc').value.trim() === '' ? 0 : Number($('#b_inc').value), p = ['need', 'want', 'save'].map(k => Number($('#b_' + k).value));
+            if (!Number.isFinite(inc) || inc < 0 || inc >= 1e12) { $('#b_msg').textContent = '月收入請填 0 以上的數字'; return; }
+            if (!p.every(v => Number.isInteger(v) && v >= 0 && v <= 100) || p.reduce((a, b) => a + b, 0) !== 100) { $('#b_msg').textContent = `三個比例要是整數且加起來 100（目前 ${p.reduce((a, b) => a + b, 0)}）`; return; }
+            bud = normBudget({ ...bud, income: inc, pct: { need: p[0], want: p[1], save: p[2] } }); saveBud(); $('#b_msg').textContent = ''; renderBudget();
+        }
+        ['b_inc', 'b_need', 'b_want', 'b_save'].forEach(i => { $('#' + i).oninput = onBudInput; });
+        $('#b_reset').onclick = () => { if (!confirm('把月收入、比例與分類對應重設為預設（50/30/20）？無法復原。')) return; bud = normBudget(null); saveBud(); $('#b_msg').textContent = ''; renderBudget(); };
+
+        function renderFire() {
+            const passive = passiveOf(entries, ym), s = summarize(entries, ym), f = fireStats(snaps, passive, s.expense, avgMonthlyExpense(entries, ym));
+            $('#f_stats').replaceChildren(
+                statRow('最新淨資產' + (f.latest ? `（${f.latest.d}）` : ''), f.net === null ? '尚無快照' : money(f.net), f.net !== null && f.net < 0 ? 'bad' : ''),
+                statRow('財務自由目標', f.target > 0 ? money(f.target) : '需要先有支出記錄'),
+                statRow('目標進度', pctText(f.progress), 'ok'),
+                statRow(`被動收入覆蓋率（${ym}）`, f.coverage === null ? '該月沒有支出' : `${pctText(f.coverage)}（被動 ${money(passive)} ÷ 支出 ${money(s.expense)}）`, f.coverage !== null && f.coverage >= 1 ? 'ok' : ''));
+            const sorted = sortSnaps(snaps), shown = showAllSnaps ? sorted : sorted.slice(0, 12);
+            $('#s_more').hidden = sorted.length <= 12; $('#s_more').textContent = showAllSnaps ? '只看最近 12 筆' : `顯示全部（${sorted.length}）`;
+            $('#s_list').replaceChildren(...(shown.length ? shown.map(sn => {
+                const r = el('div', 'li'), main = el('div'), x = el('button', 'sm', '刪除');
+                main.append(el('b', '', `${sn.d}　淨資產 ${money(snapNet(sn))}`), el('small', 'muted', Object.entries(ASSET_FIELDS).filter(([k]) => sn.a[k] > 0).map(([k, n]) => `${n.replace('（扣除）', '')} ${money(sn.a[k])}`).join('、')));
+                main.lastChild.style.display = 'block';
+                x.setAttribute('aria-label', '刪除快照 ' + sn.d);
+                x.onclick = () => { if (!confirm(`刪除 ${sn.d} 的資產快照？無法復原。`)) return; snaps = removeSnap(snaps, sn.id); saveSnaps(); renderFire(); };
+                r.append(main, x); return r;
+            }) : [el('p', 'muted', '還沒有資產快照')]));
+        }
+        $('#s_date').value = day.today();
+        $('#s_add').onclick = () => {
+            const a = Object.fromEntries(Object.keys(ASSET_FIELDS).map(k => [k, $('#s_' + k).value.trim() === '' ? 0 : Number($('#s_' + k).value)]));
+            const r = addSnap(snaps, $('#s_date').value, a);
+            if (r.err) { $('#s_msg').textContent = r.err; return; }
+            snaps = r.list; saveSnaps(); $('#s_msg').textContent = '已新增快照'; Object.keys(ASSET_FIELDS).forEach(k => { $('#s_' + k).value = ''; }); renderFire();
+        };
+        $('#s_more').onclick = () => { showAllSnaps = !showAllSnaps; renderFire(); };
+        $('#s_clear').onclick = () => {
+            if (!snaps.length) { $('#s_msg').textContent = '目前沒有快照'; return; }
+            if (!confirm(`清除全部 ${snaps.length} 筆資產快照？無法復原（記帳明細不受影響）。`)) return;
+            snaps = []; saveSnaps(); $('#s_msg').textContent = '已清除全部快照'; renderFire();
+        };
+
+        function renderTrips() {
+            const sel = $('#trip'), keep = sel.value;
+            sel.replaceChildren(new Option('不歸專案', ''), ...trips.map(t => new Option(t.name, t.id)));
+            sel.value = trips.some(t => t.id === keep) ? keep : ''; $('#tripRow').hidden = !trips.length;
+            $('#t_list').replaceChildren(...(trips.length ? trips.map(t => {
+                const sm = tripSummary(entries, t), card = el('div', 'li'), main = el('div'), x = el('button', 'sm', '刪除');
+                main.style.flex = '1'; main.append(el('b', '', t.name));
+                const line = (txt, cls) => { const d = el('small', cls || 'muted', txt); d.style.display = 'block'; main.append(d); };
+                line(`${sm.count} 筆、合計 NT$${money(sm.total)}${t.budget > 0 ? ` / 預算 ${money(t.budget)}（${sm.left >= 0 ? '剩 ' + money(sm.left) : '超支 ' + money(-sm.left)}）` : '（未設預算）'}`, sm.left !== null && sm.left < 0 ? 'over' : 'muted');
+                if (sm.byCur.length) line('外幣：' + sm.byCur.map(([c, v]) => `${CURRENCIES[c][1]}${numFmt(v, 2)}`).join('、'));
+                if (sm.byCat.length) line('分類：' + sm.byCat.map(([c, v]) => `${c} ${money(v)}`).join('、'));
+                x.setAttribute('aria-label', '刪除專案 ' + t.name);
+                x.onclick = () => {
+                    if (!confirm(`刪除專案「${t.name}」？已歸入的 ${sm.count} 筆支出會保留，只是不再屬於這個專案。無法復原。`)) return;
+                    const r = removeTrip(trips, entries, t.id); trips = r.trips; entries = r.entries; saveTrips(); save(); renderTrips(); render();
+                };
+                card.append(main, x); return card;
+            }) : [el('p', 'muted', '還沒有專案')]));
+        }
+        $('#t_add').onclick = () => {
+            const r = addTrip(trips, $('#t_name').value, $('#t_budget').value);
+            if (r.err) { $('#t_msg').textContent = r.err; return; }
+            trips = r.trips; saveTrips(); $('#t_name').value = ''; $('#t_budget').value = ''; $('#t_msg').textContent = '已新增專案'; renderTrips();
+        };
 
         // 幣別：選外幣時顯示匯率欄，預設帶 unit-converter 存的 fx_cache（不另外連網）；沒有 / 太舊就要手動輸入
         function fillCur() { $('#cur').replaceChildren(...Object.entries(CURRENCIES).map(([c, [n]]) => new Option(`${c} ${n}`, c))); }
@@ -387,6 +690,7 @@
                 Object.assign(e, { fx: e.amt, amt: twd, cur, rate });
             }
             if (!validEntry(e)) { $('#amt').focus(); return; }
+            if (e.type === 'out' && $('#trip').value && trips.some(t => t.id === $('#trip').value)) e.trip = $('#trip').value;
             if (entries.length >= MAX_ENTRIES) return warn(`明細已達 ${MAX_ENTRIES} 筆上限，請先匯出並用「刪除一年前的紀錄」清理`);
             entries.push(e); save();
             $('#amt').value = ''; $('#note').value = ''; if (cur !== 'TWD') onCur();
@@ -403,13 +707,13 @@
         $('#type').onchange = fillCats;
         $('#prev').onclick = () => { ym = shiftMonth(ym, -1); render(); };
         $('#next').onclick = () => { ym = shiftMonth(ym, 1); render(); };
-        $('#export').onclick = () => download(new Blob(['﻿' + toCSV(entries, true)], { type: 'text/csv;charset=utf-8' }), `expenses-${day.today()}.csv`);
+        $('#export').onclick = () => download(new Blob(['﻿' + toCSV(entries, true, trips.length ? trips : null)], { type: 'text/csv;charset=utf-8' }), `expenses-${day.today()}.csv`);
         $('#prune').onclick = () => {
             const cut = day.addMonths(day.today(), -12), n = entries.length - pruneBefore(entries, cut).length;
             if (!n) return warn('沒有一年前的紀錄');
             if (confirm(`刪除 ${cut} 以前的 ${n} 筆紀錄？無法復原，建議先匯出 CSV。`)) { entries = pruneBefore(entries, cut); save(); render(); }
         };
-        $('#clear').onclick = () => { if (entries.length && confirm(`確定刪除全部 ${entries.length} 筆紀錄？無法復原（固定支出清單不受影響）。`)) { entries = []; save(); render(); } };
+        $('#clear').onclick = () => { if (entries.length && confirm(`確定刪除全部 ${entries.length} 筆紀錄？無法復原（固定支出、專案、預算設定與資產快照不受影響）。`)) { entries = []; save(); render(); } };
         fillCur(); $('#cur').value = 'TWD'; fillCats(); render(); renderFixed();
     </script>
 </body>

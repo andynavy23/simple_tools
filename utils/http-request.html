@@ -170,6 +170,7 @@
             <button data-t="a" aria-pressed="true">curl 轉換</button>
             <button data-t="b" aria-pressed="false">請求測試</button>
             <button data-t="c" aria-pressed="false">WebSocket</button>
+            <button data-t="d" aria-pressed="false">GraphQL</button>
         </div>
 
         <section id="pa">
@@ -236,11 +237,40 @@
                 <div id="logBox" role="log" aria-live="polite"></div>
             </div>
         </section>
+
+        <section id="pd" hidden>
+            <div class="card">
+                <input id="gUrl" class="url" type="text" inputmode="url" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="https://api.example.com/graphql" aria-label="GraphQL 端點網址">
+                <label for="gSel">用表單組查詢（也可直接把完整查詢貼在下方的「查詢」）</label>
+                <div class="row">
+                    <select id="gType" aria-label="種類" style="flex:0 0 130px"><option value="query">query</option><option value="mutation">mutation</option></select>
+                    <input id="gName" class="url" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="操作名稱，如 GetUser" aria-label="操作名稱">
+                </div>
+                <input id="gDecl" class="url" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="變數宣告，如 $id: ID!, $n: Int = 10" aria-label="變數宣告" style="margin-top:8px">
+                <textarea id="gSel" spellcheck="false" autocomplete="off" aria-label="欄位選取" placeholder="user(id: $id) { name email }" style="min-height:70px;margin-top:8px"></textarea>
+                <div class="row" style="margin-top:8px"><button class="sm" id="gCompose">組成查詢</button><button class="sm" id="gSample">範例</button></div>
+                <label for="gQ">查詢（Query / Mutation）</label>
+                <textarea id="gQ" spellcheck="false" autocomplete="off" style="min-height:150px"></textarea>
+                <div class="row" style="margin-top:8px"><button class="sm" id="gFmt">格式化</button><button class="sm" id="gClear">清空</button></div>
+                <label for="gVars">變數（JSON 物件，可留空）</label>
+                <textarea id="gVars" spellcheck="false" autocomplete="off" placeholder='{"id": "1"}' style="min-height:70px"></textarea>
+                <label for="gHeaders">標頭（每行 <code>名稱: 值</code>；Content-Type 與 Accept 會自動補）</label>
+                <textarea id="gHeaders" spellcheck="false" autocomplete="off" style="min-height:60px"></textarea>
+                <div id="gMsg"></div>
+            </div>
+            <div class="card">
+                <h2>輸出（POST，JSON 本體）</h2>
+                <div class="tabs" id="gLangTabs"></div>
+                <div id="gOut"></div>
+                <div class="row"><button class="primary" id="gCopy" disabled>複製</button><button id="gSend" disabled>送出（到「請求測試」）</button></div>
+                <p class="note">送出不帶 Cookie 與憑證，結果顯示在「請求測試」分頁，受 CORS 限制。</p>
+            </div>
+        </section>
     </div>
 
     <template id="help">
         <h3>這是什麼</h3>
-        <p>三個跟 HTTP 請求有關的小工具：把 curl 指令轉成程式碼、直接在瀏覽器送請求看結果、連 WebSocket 收發訊息。</p>
+        <p>四個跟 HTTP 請求有關的小工具：把 curl 指令轉成程式碼、直接在瀏覽器送請求看結果、連 WebSocket 收發訊息、組 / 排版 / 檢查並送出 GraphQL 請求。</p>
         <h3>什麼時候用</h3>
         <ul>
         <li>瀏覽器開發者工具「Copy as cURL」複製了一條指令，想改成 fetch、axios、Python 或 Go。</li>
@@ -254,6 +284,7 @@
         <li>不認得的旗標（例如 <kbd>-o</kbd>、<kbd>--retry</kbd>）會列在上方提示，不會默默消失。</li>
         <li><b>請求測試</b>：填方法、網址、標頭、本體後按「送出」，看狀態碼、回應標頭、內容與耗時。「curl 轉換」頁的「帶到請求測試」可直接帶入。</li>
         <li><b>WebSocket</b>：輸入 <kbd>ws://</kbd> 或 <kbd>wss://</kbd> 網址按「連線」，連上後可送文字訊息；中斷時會顯示關閉碼與白話意義。</li>
+        <li><b>GraphQL</b>：填端點網址，用表單（種類、操作名稱、變數宣告、欄位選取）按「組成查詢」，或直接貼完整查詢；按「格式化」自動縮排（保留註解與字串、不改語意）。下方會即時檢查括號是否成對、變數有沒有宣告 / 使用、有沒有操作名稱、變數 JSON 是否合法，並輸出 POST 的 fetch / axios / Python / Go / curl / .http；「送出」會把請求帶到「請求測試」直接發送。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">curl -X POST 'https://api.example.com/items' -H 'Content-Type: application/json' -d '{"name":"demo"}'
@@ -266,6 +297,7 @@
         <li>curl 的 <kbd>-d @檔案</kbd>、<kbd>-F k=@檔案</kbd> 無法讀取檔案內容，只保留檔名。<kbd>-k</kbd>（略過憑證）在瀏覽器 fetch 無法做到。</li>
         <li>curl 轉換只在本機進行，不會送出任何東西。請求測試會直接連你填的網址，別對不信任的網址送 token。</li>
         <li>WebSocket 記錄最多 500 則，滿了之後新訊息不再記錄（連線不受影響），按「清除記錄」即可繼續。</li>
+        <li>GraphQL 請求一律是 POST + JSON 本體（<kbd>query</kbd>、<kbd>operationName</kbd>、<kbd>variables</kbd>），多數服務因此會觸發 CORS 預檢；不帶憑證，需要登入的服務請用 curl 或 Postman。檢查只看常見錯誤，不比對伺服器的 schema。</li>
         <li>只會記住上次選的分頁與語言（<kbd>httpreq_opts</kbd>）；網址、標頭、本體（可能含 token）一律不儲存，重新整理就清空。</li>
         </ul>
     </template>
@@ -277,7 +309,7 @@
         // --- pure ---
         const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
         const LANGS = { fetch: 'fetch', axios: 'axios', python: 'Python', go: 'Go', curl: 'curl', http: '.http' };
-        const TABS = ['a', 'b', 'c'], SRCS = ['curl', 'postman', 'form'];
+        const TABS = ['a', 'b', 'c', 'd'], SRCS = ['curl', 'postman', 'form'];
         const MAX_LOG = 500;
         const FORBIDDEN = new Set(['accept-charset', 'accept-encoding', 'access-control-request-headers', 'access-control-request-method', 'connection', 'content-length', 'cookie', 'cookie2', 'date', 'dnt', 'expect', 'host', 'keep-alive', 'origin', 'referer', 'set-cookie', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'user-agent', 'via']);
 
@@ -588,6 +620,168 @@
             if (log.length >= max) return { log, added: false, full: true };
             return { log: [...log, entry], added: true, full: log.length + 1 >= max };
         }
+
+        // ---- GraphQL ----
+        // 詞法：逗號保留成 ','（語意上等同空白）；註解保留；ln = 行號，nl = 前面有換行
+        function gqlTokens(src) {
+            const s = String(src ?? ''); const toks = []; let i = 0, ln = 1, nl = false, bad = null;
+            const push = (t, v) => { toks.push({ t, v, nl, ln }); nl = false; };
+            while (i < s.length) {
+                const c = s[i];
+                if (c === '\n') { ln++; nl = true; i++; continue; }
+                if (/[\s﻿]/.test(c)) { i++; continue; }
+                if (c === '#') { let j = s.indexOf('\n', i); if (j < 0) j = s.length; push('comment', s.slice(i, j).trimEnd()); i = j; continue; }
+                if (s.startsWith('"""', i)) {
+                    let j = i + 3; while (j < s.length && !s.startsWith('"""', j)) j += s.startsWith('\\"""', j) ? 4 : 1;
+                    if (j >= s.length) bad = bad || '字串沒有結尾（"""）';
+                    const end = j >= s.length ? s.length : j + 3, v = s.slice(i, end); push('str', v); ln += v.split('\n').length - 1; i = end; continue;
+                }
+                if (c === '"') {
+                    let j = i + 1; while (j < s.length && s[j] !== '"' && s[j] !== '\n') j += s[j] === '\\' ? 2 : 1;
+                    if (s[j] !== '"') { bad = bad || `第 ${ln} 行的字串沒有結尾`; push('str', s.slice(i, j)); i = j; } else { push('str', s.slice(i, j + 1)); i = j + 1; }
+                    continue;
+                }
+                let m;
+                if (s.startsWith('...', i)) { push('punct', '...'); i += 3; }
+                else if ((m = /^\$[A-Za-z_]\w*/.exec(s.slice(i, i + 200)))) { push('var', m[0]); i += m[0].length; }
+                else if ((m = /^-?\d+(\.\d+)?([eE][+-]?\d+)?/.exec(s.slice(i, i + 100)))) { push('num', m[0]); i += m[0].length; }
+                else if ((m = /^[A-Za-z_]\w*/.exec(s.slice(i, i + 200)))) { push('name', m[0]); i += m[0].length; }
+                else { push('punct', c); i++; }
+            }
+            return { toks, bad };
+        }
+        // 排版：選取集換行縮排、引數與陣列 / 物件維持單行（過長的括號引數一行一個）；選取集內的逗號會省略（GraphQL 逗號無意義）
+        function gqlFormat(src) {
+            const { toks } = gqlTokens(src); const lines = []; let cur = '', stack = [], prev = null, pp = null, forceNl = false, blankNext = false, tight = true;
+            const ind = () => '  '.repeat(stack.filter(x => x.k === '{' || (x.k === '(' && x.w)).length);
+            const startLine = () => { if (cur.trim()) lines.push(cur.trimEnd()); cur = ind(); };
+            const put = (v, sp) => { cur += (sp && cur.trim() && !tight ? ' ' : '') + v; };
+            const top = () => stack[stack.length - 1];
+            for (let i = 0; i < toks.length; i++) {
+                const T = toks[i], v = T.v, t = T.t;
+                if (t === 'comment' && !T.nl && cur.trim()) { cur += '  ' + v; forceNl = true; continue; }
+                if (blankNext) { if (cur.trim()) lines.push(cur.trimEnd()); lines.push(''); cur = ''; blankNext = false; }
+                if (forceNl) { startLine(); forceNl = false; }
+                if (t === 'comment') { startLine(); cur += v; forceNl = true; prev = pp = null; continue; }
+                const inArg = stack.some(x => x.k !== '{');
+                if (t === 'punct') {
+                    if (v === '{') {
+                        if (inArg) { put(v, true); stack.push({ k: 'o' }); tight = true; }
+                        else { put(v, true); stack.push({ k: '{' }); forceNl = true; tight = false; }
+                    } else if (v === '}') {
+                        const x = stack.pop();
+                        if (x && x.k === '{') { startLine(); put('}', false); if (!stack.length) blankNext = true; } else put('}', false);
+                        tight = false;
+                    } else if (v === '(') {
+                        let len = cur.length, d = 0;
+                        for (let j = i; j < toks.length; j++) { len += toks[j].v.length + 1; if (toks[j].v === '(') d++; if (toks[j].v === ')' && --d === 0) break; }
+                        const w = len > 80 && stack.every(x => x.k !== '(');
+                        put('(', false); stack.push({ k: '(', w }); tight = true; if (w) forceNl = true;
+                    } else if (v === ')') {
+                        const x = stack.pop(); if (x && x.w) startLine(); put(')', false); tight = false;
+                    } else if (v === '[') { put('[', true); stack.push({ k: '[' }); tight = true; }
+                    else if (v === ']') { stack.pop(); put(']', false); tight = false; }
+                    else if (v === ',') { if (inArg) { put(',', false); tight = false; } }
+                    else if (v === ':' || v === '!') { put(v, false); tight = false; }
+                    else if (v === '@') { put('@', true); tight = true; }
+                    else if (v === '...') { if (!inArg && top() && top().k === '{' && prev && !['@', ':'].includes(prev.v)) startLine(); put('...', true); tight = true; }
+                    else { put(v, true); tight = false; }
+                } else {
+                    const tp = top();
+                    if (tp && tp.k === '{' && t === 'name' && prev && ![':', '@', '...'].includes(prev.v) && !(prev.v === 'on' && pp && pp.v === '...') && cur.trim()) startLine();
+                    if (tp && tp.k === '(' && tp.w && (t === 'name' || t === 'var') && prev && ![':', '=', '@', '(', '!'].includes(prev.v)) startLine();
+                    if (prev && prev.v === '...' && v === 'on') tight = false;
+                    put(v, true); tight = false;
+                }
+                if (t !== 'punct' || v !== ',' || inArg) { pp = prev; prev = T; }
+            }
+            if (cur.trim()) lines.push(cur.trimEnd());
+            return lines.join('\n');
+        }
+        // 檢查常見錯誤；opName：要執行的操作名稱（多個操作時用）。回傳 { errors[], warns[], ops[]（操作名稱，匿名為 ''）}
+        function gqlCheck(src, varsText, opName) {
+            const { toks: all, bad } = gqlTokens(src), toks = all.filter(t => t.t !== 'comment'), errors = [], warns = [], defs = [];
+            if (!toks.length) return { errors: ['查詢是空的'], warns, ops: [] };
+            if (bad) errors.push(bad);
+            const stack = []; let def = null;
+            const PAIR = { ')': '(', ']': '[', '}': '{' };
+            const finish = () => { if (def) defs.push(def); def = null; };
+            for (let i = 0; i < toks.length; i++) {
+                const T = toks[i], v = T.v, prev = toks[i - 1];
+                if (!stack.length && !def) {
+                    if (T.t === 'name') { def = { kind: v, name: '', short: false, hdr: 0, decl: {}, used: new Set(), ln: T.ln }; continue; }
+                    if (v === '{') def = { kind: 'query', name: '', short: true, hdr: 0, decl: {}, used: new Set(), ln: T.ln };
+                    else { errors.push(`第 ${T.ln} 行：多出的「${v}」（不在任何操作內）`); continue; }
+                }
+                if (T.t === 'name' && !stack.length && prev.v !== '@' && ++def.hdr === 1) def.name = v;
+                if (T.t === 'punct') {
+                    if ('([{'.includes(v)) stack.push({ v, ln: T.ln });
+                    else if (PAIR[v]) {
+                        const o = stack.pop();
+                        if (!o) errors.push(`第 ${T.ln} 行：多出的「${v}」，沒有對應的開頭`);
+                        else if (o.v !== PAIR[v]) errors.push(`第 ${T.ln} 行：「${v}」與第 ${o.ln} 行的「${o.v}」不成對`);
+                        if (v === '}' && !stack.length) finish();
+                    }
+                } else if (T.t === 'var') {
+                    const n = v.slice(1);
+                    if (stack.length === 1 && stack[0].v === '(' && toks[i + 1] && toks[i + 1].v === ':') {
+                        let j = i + 2, d = 0, last = null, dflt = false;
+                        for (; j < toks.length; j++) {
+                            const x = toks[j]; if (x.v === '[') d++; else if (x.v === ']') d--;
+                            if (d <= 0 && (x.v === ',' || x.v === ')' || (x.t === 'var' && toks[j + 1] && toks[j + 1].v === ':'))) break;
+                            if (d === 0 && x.v === '=') dflt = true; if (x.v !== ',') last = x;
+                        }
+                        def.decl[n] = { nonNull: !!last && last.v === '!', dflt };
+                    } else def.used.add(n);
+                }
+            }
+            for (const o of stack) errors.push(`第 ${o.ln} 行的「${o.v}」沒有結尾`);
+            finish();
+            const ops = defs.filter(d => d.kind !== 'fragment'), names = ops.map(d => d.name);
+            for (const d of ops) {
+                if (!d.name) warns.push(`第 ${d.ln} 行：${d.short ? '簡寫的查詢' : d.kind}沒有操作名稱（建議命名，方便除錯、日誌與快取）`);
+                for (const u of d.used) if (!(u in d.decl)) errors.push(`${d.name || d.kind}：使用了 $${u}，但沒有在操作的括號內宣告（例如 ($${u}: ID!)）`);
+                for (const k of Object.keys(d.decl)) if (!d.used.has(k)) warns.push(`${d.name || d.kind}：宣告了 $${k}，但內容沒有用到`);
+            }
+            if (ops.length > 1) {
+                if (names.some(n => !n)) errors.push('文件有多個操作時，每個都必須有名稱');
+                const dup = names.filter((n, i) => n && names.indexOf(n) !== i); if (dup.length) errors.push('操作名稱重複：' + [...new Set(dup)].join('、'));
+                if (!opName) warns.push('文件有多個操作，送出時需指定操作名稱（operationName）');
+                else if (!names.includes(opName)) errors.push(`找不到名為 ${opName} 的操作`);
+            } else if (opName && ops.length === 1 && ops[0].name && ops[0].name !== opName) warns.push(`操作名稱欄位（${opName}）與查詢內的名稱（${ops[0].name}）不同`);
+            const target = ops.length === 1 ? ops[0] : ops.find(d => opName && d.name === opName);
+            const vt = String(varsText ?? '').trim();
+            if (vt) {
+                let o; try { o = JSON.parse(vt); } catch (e) { errors.push('變數 JSON 格式不對：' + e.message); }
+                if (o !== undefined) {
+                    if (!o || typeof o !== 'object' || Array.isArray(o)) errors.push('變數必須是 JSON 物件（{…}）');
+                    else if (target) {
+                        for (const [k, x] of Object.entries(target.decl)) if (x.nonNull && !x.dflt && !(k in o)) warns.push(`$${k} 是必填（有 !）且沒有預設值，但變數 JSON 沒有 ${k}`);
+                        for (const k of Object.keys(o)) if (!(k in target.decl)) warns.push(`變數 JSON 的 ${k} 沒有在操作中宣告`);
+                    }
+                }
+            } else if (target) for (const [k, x] of Object.entries(target.decl)) if (x.nonNull && !x.dflt) warns.push(`$${k} 是必填，但還沒填變數 JSON`);
+            return { errors, warns, ops: names };
+        }
+        // 表單 → 查詢文字：sel 若已是完整查詢（query / mutation / subscription / fragment / { 開頭）就只排版
+        function gqlCompose({ type, name, decl, sel }) {
+            sel = String(sel ?? '').trim();
+            if (/^(query|mutation|subscription|fragment)\b|^\{/.test(sel)) return gqlFormat(sel);
+            const d = String(decl ?? '').trim().replace(/^\(|\)$/g, '').trim(), n = String(name ?? '').trim();
+            return gqlFormat(`${['query', 'mutation', 'subscription'].includes(type) ? type : 'query'}${n ? ' ' + n : ''}${d ? '(' + d + ')' : ''} { ${sel} }`);
+        }
+        // → 通用請求模型（POST + JSON body：query / operationName / variables）
+        function gqlModel({ url, query, variables, opName, headers }) {
+            if (!String(query ?? '').trim()) return { error: '請填查詢' };
+            const m = fromForm({ method: 'POST', url, headers, body: '' }); if (m.error) return m;
+            const body = { query: String(query) }, on = String(opName ?? '').trim(), vt = String(variables ?? '').trim();
+            if (on) body.operationName = on;
+            if (vt) { let o; try { o = JSON.parse(vt); } catch (e) { return { error: '變數 JSON 格式不對：' + e.message }; } if (!o || typeof o !== 'object' || Array.isArray(o)) return { error: '變數必須是 JSON 物件（{…}）' }; body.variables = o; }
+            if (!hasHeader(m.headers, 'Content-Type')) m.headers.push(['Content-Type', 'application/json']);
+            if (!hasHeader(m.headers, 'Accept')) m.headers.push(['Accept', 'application/json']);
+            m.body = JSON.stringify(body);
+            return m;
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -602,7 +796,7 @@
         // ---- 分頁 ----
         function showTab() {
             pressed($('#tabs'), 't', O.tab);
-            ['a', 'b', 'c'].forEach(t => { $('#p' + t).hidden = t !== O.tab; });
+            ['a', 'b', 'c', 'd'].forEach(t => { $('#p' + t).hidden = t !== O.tab; });
         }
         $('#tabs').onclick = (e) => { const t = e.target.dataset.t; if (t) { O.tab = t; showTab(); persist(); } };
 
@@ -735,7 +929,39 @@
         $('#wsSend').onclick = () => { const t = $('#wsText').value; if (ws && ws.readyState === 1 && t !== '') { ws.send(t); addLog('out', t); } };
         $('#wsClear').onclick = () => { log = []; fullShown = false; $('#wsMsg').replaceChildren(); renderLog(); };
 
-        showTab(); showSrc(); compute(); renderLog(); wsUi();
+        // ---- D：GraphQL ----
+        const SAMPLE_GQL = { name: 'GetUser', decl: '$id: ID!', sel: 'user(id: $id) { id name posts(first: 3) { title } }', vars: '{"id": "1"}' };
+        let gModel = null;
+        $('#gLangTabs').replaceChildren(...Object.entries(LANGS).map(([k, v]) => { const b = h('button', 'sm', v); b.dataset.l = k; return b; }));
+        function gCompute() {
+            const q = $('#gQ').value, opName = $('#gName').value.trim(), msg = $('#gMsg'), out = $('#gOut');
+            msg.replaceChildren(); out.replaceChildren(); pressed($('#gLangTabs'), 'l', O.lang);
+            const add = (txt, items, bad) => { const b = h('div', 'box' + (bad ? ' bad' : '')); b.append(h('div', '', txt)); const ul = h('ul'); items.forEach(i => ul.append(h('li', '', i))); b.append(ul); msg.append(b); };
+            gModel = null;
+            if (q.trim()) {
+                const c = gqlCheck(q, $('#gVars').value, opName);
+                if (c.errors.length) add('發現問題：', c.errors, true);
+                if (c.warns.length) add('提醒：', c.warns);
+                const r = gqlModel({ url: $('#gUrl').value.trim() || 'https://example.com/graphql', query: q, variables: $('#gVars').value, opName, headers: $('#gHeaders').value });
+                if (r.error) { if (!c.errors.some(e => e.includes('JSON'))) add(r.error, [], true); } else gModel = r;
+            }
+            if (gModel) out.append(h('pre', 'code', GEN[O.lang](gModel))); else out.append(h('p', 'muted', '填好查詢後，這裡會顯示 POST 請求的程式碼'));
+            $('#gCopy').disabled = !gModel; $('#gSend').disabled = !gModel || !$('#gUrl').value.trim();
+        }
+        ['#gUrl', '#gName', '#gDecl', '#gSel', '#gQ', '#gVars', '#gHeaders'].forEach(s => $(s).oninput = gCompute); $('#gType').onchange = gCompute;
+        $('#gLangTabs').onclick = (e) => { const l = e.target.dataset.l; if (l) { O.lang = l; persist(); compute(); gCompute(); } };
+        $('#gCompose').onclick = () => { if (!$('#gSel').value.trim()) return; $('#gQ').value = gqlCompose({ type: $('#gType').value, name: $('#gName').value, decl: $('#gDecl').value, sel: $('#gSel').value }); gCompute(); };
+        $('#gFmt').onclick = () => { $('#gQ').value = gqlFormat($('#gQ').value); gCompute(); };
+        $('#gClear').onclick = () => { $('#gQ').value = ''; gCompute(); };
+        $('#gSample').onclick = () => { $('#gName').value = SAMPLE_GQL.name; $('#gDecl').value = SAMPLE_GQL.decl; $('#gSel').value = SAMPLE_GQL.sel; $('#gVars').value = SAMPLE_GQL.vars; $('#gCompose').click(); };
+        $('#gCopy').onclick = () => gModel && copyWithFeedback($('#gCopy'), GEN[O.lang](gModel));
+        $('#gSend').onclick = () => {
+            if (!gModel) return;
+            $('#bMethod').value = 'POST'; $('#bUrl').value = gModel.url; $('#bHeaders').value = gModel.headers.map(([k, v]) => `${k}: ${v}`).join('\n'); $('#bBody').value = gModel.body; $('#bNoCors').checked = false;
+            O.tab = 'b'; showTab(); persist(); send();
+        };
+
+        showTab(); showSrc(); compute(); gCompute(); renderLog(); wsUi();
     </script>
 </body>
 

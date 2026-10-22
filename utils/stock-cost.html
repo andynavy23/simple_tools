@@ -126,6 +126,8 @@
             <div id="avgres"></div>
             <p class="note">批次只在本頁暫存、不會儲存；最多 20 批，每批各自計算手續費（含最低手續費），不含賣出成本。</p>
         </div>
+
+        <div class="card" id="adv"><h2>進階試算</h2><p class="note">估算用，非投資 / 稅務建議；費率、保證金、利率皆為可修改的範例值，請以券商與官方公告為準。輸入只在本頁，不儲存。</p><div id="advBox"></div></div>
     </div>
 
     <template id="help">
@@ -143,14 +145,18 @@
         <li>填「買進價」「賣出價」「數量」並選單位（張或股）。</li>
         <li>展開「費率設定」可改手續費率、折扣、最低手續費、證交稅率、進位方式與補充保費；「還原預設」回到預設值。</li>
         <li>「損益試算」立即顯示結果；「股利試算」與「分批買進」各自獨立。</li>
+        <li>最下方「進階試算」可展開：股利與殖利率（填息、除權息參考價、配股）、攤平成本與回本價、融資融券、當沖、ETF 配息扣繳與補充保費、ETF / 基金費用比較、估值（本益比、股價淨值比、股利折現）、加密貨幣損益（買賣手續費、滑價、平均成本、損益平衡價；純計算，非投資建議，稅務請自行確認）。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">現股 買 100 元、賣 110 元、1 張，折扣 10、無條件捨去：
         買進手續費 142、賣出手續費 156、證交稅 330
         淨損益 = 10,000 − 142 − 156 − 330 = 9,372 元
         （改成四捨五入則為 143 / 157，淨損益 9,370）</div>
+        <div class="eg">進階 例：收盤 100、現金股利 3、股票股利 1（配 0.1 股）→ 除權息參考價 = (100 − 3) ÷ 1.1 = 88.18；
+        融資 100 元 1000 股、六成：融資 60,000、自備 40,000 + 手續費，維持率 166.67%，130% 追繳價 = 1.3 × 60,000 ÷ 1000 = 78 元</div>
         <h3>小提醒</h3>
         <ul>
+        <li>進階試算的規定與數字：當沖證交稅 0.15% 目前延長至 116 年 12 月 31 日；二代健保補充保費 2.11%、單次股利或利息達 2 萬元起課（單次上限 1,000 萬；主管機關曾討論改制，請自行核對）；融資成數、融券保證金、融資年利率、借券費、追繳維持率（130%）、ETF 利息扣繳率與免扣繳門檻都是「範例值，請自行確認」，以券商與官方公告為準。估值與股利折現高度依賴假設，只能當粗略參考。</li>
         <li>預設費率與稅率（手續費 0.1425%、一般股票稅 0.3%、ETF 0.1%、當沖 0.15%、補充保費 2.11%）以當時法規與券商為準，請自行確認；最低手續費依券商規定。</li>
         <li>損益平衡價是「賣出淨損益剛好不為負」的最低價，實際下單還要符合升降單位。</li>
         <li>只有偏好設定（模式、折扣、費率、最低手續費、進位）存在本機；按「還原預設」即清除。分批買進與股利欄位不存檔，沒有累積資料，也就沒有上限。</li>
@@ -201,9 +207,12 @@
         }
         // 損益平衡賣價：賣出淨損益 ≥ 0 的最小價格（二分法；淨損益只會在手續費進位處往下跳，所以收斂點必是向上穿越 0 的位置）
         function breakEven(buy, shares, o) {
-            const buyAmt = amountOf(buy, shares), invested = buyAmt + feeOf(buyAmt, o);
+            const buyAmt = amountOf(buy, shares);
+            return breakEvenCost(buyAmt + feeOf(buyAmt, o), shares, o, buy);
+        }
+        function breakEvenCost(invested, shares, o, start) {
             const net = (p) => { const a = amountOf(p, shares); return a - feeOf(a, o) - taxOf(a, o) - invested; };
-            let lo = 0, hi = Math.max(buy, 0.01);
+            let lo = 0, hi = Math.max(start || invested / shares, 0.01);
             for (let i = 0; i < 60 && net(hi) < 0; i++) hi *= 2;
             if (net(hi) < 0) return null;
             for (let i = 0; i < 80; i++) { const mid = (lo + hi) / 2; if (net(mid) >= 0) hi = mid; else lo = mid; }
@@ -225,6 +234,76 @@
                 shares += s; total += amt + feeOf(amt, o); n++;
             }
             return n ? { shares, total, avg: total / shares, count: n } : null;
+        }
+
+        // ---- 進階試算（皆為估算，費率 / 保證金 / 利率請以券商與官方公告為準） ----
+        const pos = (...a) => a.every(x => Number.isFinite(x) && x > 0);
+        const ok0 = (...a) => a.every(x => Number.isFinite(x) && x >= 0);
+        // 股利：現金殖利率、除權息參考價 =（收盤 − 現金）÷（1 + 股票股利 ÷ 面額 10）、填息所需漲幅、配股後股數與平均成本
+        function exDividend(price, cash, stock, shares, avg) {
+            if (!pos(price, shares) || !ok0(cash, stock, avg) || cash >= price) return null;
+            const ref = (price - cash) / (1 + stock / 10), newShares = shares + Math.floor(shares * stock / 10 + 1e-9);
+            const cost = (avg > 0 ? avg : price) * shares, cashGot = Math.floor(cash * shares + 1e-9);
+            return { yieldPct: cash / price * 100, ref, fillPct: (price / ref - 1) * 100, newShares, cashGot, newAvg: cost / newShares, newAvgNet: (cost - cashGot) / newShares };
+        }
+        // 攤平：原持股 + 加碼一批（含手續費）→ 新平均成本與回本價（賣出含手續費與稅）
+        function averageDown(hs, avg, price, addShares, o) {
+            if (!ok0(hs, avg) || !pos(price, addShares)) return null;
+            const amt = amountOf(price, addShares), total = hs * avg + amt + feeOf(amt, o), shares = hs + addShares;
+            return { shares, total, avg: total / shares, be: breakEvenCost(Math.round(total), shares, o), drop: hs > 0 && avg > 0 ? (1 - total / shares / avg) * 100 : 0 };
+        }
+        // 融資：自備款、利息、維持率（市值 ÷ 融資金額）與追繳價
+        function marginLong(price, shares, ratio, rate, days, call, sell, o) {
+            if (!pos(price, shares, ratio, call) || ratio >= 100 || !ok0(rate, days)) return null;
+            const amt = amountOf(price, shares), loan = Math.floor(amt * ratio / 100), fee = feeOf(amt, o), interest = Math.round(loan * rate / 100 * days / 365);
+            const r = { amt, loan, own: amt - loan + fee, fee, interest, ratioNow: amt / loan * 100, callPrice: call / 100 * loan / shares, net: null, roi: null };
+            if (Number.isFinite(sell) && sell > 0) { const sa = amountOf(sell, shares); r.net = sa - feeOf(sa, o) - taxOf(sa, o) - amt - fee - interest; r.roi = r.net / r.own * 100; }
+            return r;
+        }
+        // 融券：保證金、擔保價款、維持率與追繳價、回補損益（借券費以成交金額 × 費率）
+        function marginShort(price, shares, mPct, borrowPct, call, cover, o) {
+            if (!pos(price, shares, mPct, call) || !ok0(borrowPct)) return null;
+            const amt = amountOf(price, shares), fee = feeOf(amt, o), tax = taxOf(amt, o), borrow = roundBy(amt * borrowPct / 100, o.round);
+            const collateral = amt - fee - tax - borrow, margin = Math.round(amt * mPct / 100);
+            const r = { amt, fee, tax, borrow, collateral, margin, ratioNow: (collateral + margin) / amt * 100, callPrice: (collateral + margin) / (call / 100 * shares), net: null };
+            if (Number.isFinite(cover) && cover > 0) { const ca = amountOf(cover, shares); r.net = collateral - ca - feeOf(ca, o); }
+            return r;
+        }
+        // 當沖 vs 一般現股：同樣價量，只差證交稅率
+        function dayTradeCompare(buy, sell, shares, dayTax, o) {
+            const day = trade(buy, sell, shares, { ...o, unit: 'share', taxRate: dayTax }), normal = trade(buy, sell, shares, { ...o, unit: 'share', taxRate: 0.3 });
+            return day && { day, normal, saved: normal.tax - day.tax };
+        }
+        // ETF 配息：股利 / 利息兩種所得「各自」單次達起徵點才課補充保費（單次上限 1,000 萬）；利息部分超過免扣繳門檻才扣繳；其餘（資本利得、本金）不課
+        function etfDividend(stockPart, intPart, otherPart, o, wRate, wMin) {
+            if (!ok0(stockPart, intPart, otherPart, wRate, wMin) || stockPart + intPart + otherPart <= 0) return null;
+            const nhiOf = (x) => (x >= o.nhiMin && x > 0 ? roundBy(Math.min(x, 1e7) * o.nhiRate / 100, o.round) : 0);
+            const nhi = nhiOf(stockPart) + nhiOf(intPart), wh = intPart > wMin ? roundBy(intPart * wRate / 100, o.round) : 0, gross = stockPart + intPart + otherPart;
+            return { gross, nhi, wh, net: gross - nhi - wh };
+        }
+        // 費用率對長期報酬：一次投入，期初扣申購手續費，每年以（報酬 − 費用率）複利
+        function feeImpact(p, years, ret, a, b) {
+            const fv = (x) => { const g = 1 + (ret - x.ter) / 100; return g > 0 ? p * (1 - x.load / 100) * Math.pow(g, years) : NaN; };
+            if (!pos(p, years) || !Number.isFinite(ret) || ![a.ter, a.load, b.ter, b.load].every(x => Number.isFinite(x) && x >= 0 && x < 100)) return null;
+            const A = fv(a), B = fv(b);
+            return Number.isFinite(A + B) ? { A, B, diff: A - B } : null;
+        }
+        // 估值：本益比 / 股價淨值比合理價區間 + 股利折現（Gordon：D0×(1+g)÷(r−g)）
+        function valuation(v) {
+            const out = { pe: null, pb: null, ddm: null, curPE: null, curPB: null };
+            if (pos(v.eps)) { out.pe = [v.eps * v.peLo, v.eps * v.peHi]; if (pos(v.price)) out.curPE = v.price / v.eps; }
+            if (pos(v.bvps)) { out.pb = [v.bvps * v.pbLo, v.bvps * v.pbHi]; if (pos(v.price)) out.curPB = v.price / v.bvps; }
+            if (pos(v.d0, v.r) && Number.isFinite(v.g) && v.r > v.g) out.ddm = v.d0 * (1 + v.g / 100) / ((v.r - v.g) / 100);
+            return out;
+        }
+        // 加密貨幣：原持有 q0 單位（均價 c0，已含費）+ 加碼 q1 單位於 p1；買賣各有手續費率 fee%（買：成本 × (1+fee)；賣：收入 × (1−fee)）與不利滑價 slip%（買貴、賣便宜）。
+        // 賣出 sq 單位（0 = 全部）：損益 = 賣出淨收入 − 賣出部分的平均成本；損益平衡賣價 = 平均成本 ÷ ((1−滑價)(1−賣出費率))。回傳 null 表示輸入不合法
+        function cryptoPnl({ q0 = 0, c0 = 0, q1 = 0, p1 = 0, buyFee = 0, sellFee = 0, slip = 0, sell, sq = 0 }) {
+            if (!ok0(q0, c0, q1, p1, buyFee, sellFee, slip, sq) || !pos(sell) || buyFee >= 100 || sellFee >= 100 || slip >= 100 || q0 + q1 <= 0 || (q1 > 0 && !(p1 > 0)) || (q0 > 0 && !(c0 > 0))) return null;
+            const Q = q0 + q1, cost1 = q1 * p1 * (1 + slip / 100) * (1 + buyFee / 100), total = q0 * c0 + cost1, avg = total / Q, n = sq > 0 ? sq : Q;
+            if (n > Q + 1e-12) return null;
+            const proceeds = n * sell * (1 - slip / 100) * (1 - sellFee / 100), basis = n * avg;
+            return { qty: Q, total, avg, sold: n, proceeds, basis, pnl: proceeds - basis, roi: (proceeds - basis) / basis * 100, bePrice: avg / ((1 - slip / 100) * (1 - sellFee / 100)) };
         }
         // --- /pure ---
 
@@ -267,6 +346,7 @@
             const d = dividend(num('#dps'), num('#dshares'), num('#buy'), opts);
             $('#divres').replaceChildren(...(d ? [statRow('現金股利', `${fmt(d.cash)} 元`), statRow(`補充保費（${opts.nhiRate}%，≥ ${fmt(opts.nhiMin)} 元才課）`, `${fmt(d.nhi)} 元`), statRow('實領', `${fmt(d.net)} 元`, 'ok'), statRow('殖利率（以買進價）', d.yieldPct == null ? '—' : `${fmt(d.yieldPct, 2)}%`)] : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '請填入每股股利與持股數。' })]));
             renderBatches();
+            if (typeof refreshAdv === 'function' && $('#advBox').firstChild) refreshAdv();
         }
 
         function renderBatches() {
@@ -293,6 +373,50 @@
         $('#reset').onclick = () => { opts = { ...DEFAULTS }; save(); syncForm(); render(); };
         $('#addBatch').onclick = () => { if (batches.length >= MAX_BATCH) { $('#msg').textContent = `最多 ${MAX_BATCH} 批`; return; } batches.push({ price: NaN, qty: 1 }); renderBatches(); };
         $('#clearBatch').onclick = () => { batches = []; renderBatches(); };
+
+        // ---- 進階試算區塊（欄位定義 + 計算；只在本頁） ----
+        const R = (l, v, c) => [l, v, c], money = (n) => `${fmt(n)} 元`, sgn = (n) => `${n >= 0 ? '+' : ''}${fmt(n)} 元`, cls = (n) => (n >= 0 ? 'ok' : 'bad');
+        const px = (p) => (p == null ? '—' : `${fmt(Math.ceil(p * 100 - 1e-6) / 100, 2)} 元`);
+        const SECTIONS = [
+            { id: 'div', title: '股利與殖利率（填息、除權息參考價、配股）', f: [['price', '除息前收盤價（元）', 100], ['cash', '每股現金股利（元）', 3], ['stock', '每股股票股利（元，面額 10）', 1], ['shares', '持股數（股）', 1000], ['avg', '平均成本（元/股，0＝以收盤價）', 0]],
+                calc: (v) => { const r = exDividend(v.price, v.cash, v.stock, v.shares, v.avg); return r && [R('現金殖利率', `${fmt(r.yieldPct, 2)}%`), R('除權息參考價', `${fmt(r.ref, 2)} 元`), R('填息所需漲幅', `${fmt(r.fillPct, 2)}%`), R('現金股利合計', money(r.cashGot)), R('配股後股數', `${fmt(r.newShares)} 股`), R('配股後平均成本', `${fmt(r.newAvg, 4)} 元/股`), R('再扣掉現金股利後的成本', `${fmt(r.newAvgNet, 4)} 元/股`, 'ok')]; }, note: '填息＝股價回到除息前收盤價；配股不足一股的部分以現金補，此處略；未扣補充保費（見股利試算）。' },
+            { id: 'avg', title: '攤平成本與回本價', f: [['hs', '原持股（股）', 1000], ['avg', '原平均成本（元/股）', 100], ['price', '加碼價（元）', 80], ['add', '加碼股數', 1000]],
+                calc: (v) => { const r = averageDown(v.hs, v.avg, v.price, v.add, opts); return r && [R('總股數', `${fmt(r.shares)} 股`), R('總成本（含加碼手續費）', money(r.total)), R('新平均成本', `${fmt(r.avg, 4)} 元/股`, 'ok'), R('平均成本降幅', `${fmt(r.drop, 2)}%`), R('回本價（含賣出手續費與稅）', px(r.be), 'ok')]; }, note: '原持股成本以「平均成本 × 股數」計，不另加；手續費與稅率用上方的設定。' },
+            { id: 'long', title: '融資（利息、自備款、維持率、追繳價）', f: [['price', '買進價（元）', 100], ['shares', '股數', 1000], ['ratio', '融資成數（%，範例值）', 60], ['rate', '融資年利率（%，範例值）', 6.5], ['days', '持有天數', 30], ['call', '追繳維持率（%，範例值）', 130], ['sell', '賣出價（元，可留空）', 0]],
+                calc: (v) => { const r = marginLong(v.price, v.shares, v.ratio, v.rate, v.days, v.call, v.sell, opts); return r && [R('成交金額', money(r.amt)), R('融資金額', money(r.loan)), R('自備款（含手續費）', money(r.own)), R(`融資利息（${v.days} 天）`, money(r.interest)), R('買進時維持率', `${fmt(r.ratioNow, 2)}%`), R(`追繳價（維持率 ${v.call}%）`, `${fmt(r.callPrice, 2)} 元`, 'bad'), ...(r.net == null ? [] : [R('賣出淨損益（含利息、手續費、稅）', sgn(r.net), cls(r.net)), R('對自備款報酬率', `${fmt(r.roi, 2)}%`, cls(r.roi))])]; }, note: '維持率＝股票市值 ÷ 融資金額；跌破追繳價需補錢或被斷頭。利息以 365 天估，實際以券商計算為準。' },
+            { id: 'short', title: '融券（保證金、費用、維持率、追繳價）', f: [['price', '融券賣出價（元）', 100], ['shares', '股數', 1000], ['m', '保證金成數（%，範例值）', 90], ['b', '借券費率（%，範例值）', 0.08], ['call', '追繳維持率（%，範例值）', 130], ['cover', '回補價（元，可留空）', 0]],
+                calc: (v) => { const r = marginShort(v.price, v.shares, v.m, v.b, v.call, v.cover, opts); return r && [R('賣出金額', money(r.amt)), R('手續費 + 證交稅 + 借券費', money(r.fee + r.tax + r.borrow)), R('融券保證金', money(r.margin)), R('買進時維持率', `${fmt(r.ratioNow, 2)}%`), R(`追繳價（維持率 ${v.call}%）`, `${fmt(r.callPrice, 2)} 元`, 'bad'), ...(r.net == null ? [] : [R('回補淨損益', sgn(r.net), cls(r.net))])]; }, note: '維持率＝（擔保價款 + 保證金）÷ 融券市值；股價「上漲」才危險。未計保證金利息、擔保價款利息與除權息、強制回補等情形。' },
+            { id: 'day', title: '當沖（證交稅減半 vs 一般現股）', f: [['buy', '買進價（元）', 100], ['sell', '賣出價（元）', 101], ['shares', '股數', 1000], ['tax', '當沖證交稅率（%，現行 0.15，延長至 116/12/31）', 0.15]],
+                calc: (v) => { const r = dayTradeCompare(v.buy, v.sell, v.shares, v.tax, opts); return r && [R('當沖證交稅', money(r.day.tax)), R('同價量一般現股證交稅（0.3%）', money(r.normal.tax)), R('省下稅金', money(r.saved), 'ok'), R('當沖淨損益（含手續費折扣）', sgn(r.day.net), cls(r.day.net)), R('若不是當沖的淨損益', sgn(r.normal.net), cls(r.normal.net)), R('當沖損益平衡價', px(r.day.bePrice))]; }, note: '減半僅限「同一證券商、同日買賣同一檔現股」的當日沖銷；手續費率與折扣用上方設定。' },
+            { id: 'etf', title: 'ETF 配息（補充保費與扣繳）', f: [['s', '本次配息中的股利所得（元）', 20000], ['i', '利息所得（元）', 0], ['o', '資本利得 / 本金等不課部分（元）', 0], ['wr', '利息扣繳率（%，範例值）', 10], ['wm', '利息免扣繳門檻（元，範例值）', 20000]],
+                calc: (v) => { const r = etfDividend(v.s, v.i, v.o, opts, v.wr, v.wm); return r && [R('配息合計', money(r.gross)), R(`補充保費（${opts.nhiRate}%，單項 ≥ ${fmt(opts.nhiMin)} 元才課）`, money(r.nhi)), R('利息所得扣繳', money(r.wh)), R('實領', money(r.net), 'ok')]; }, note: '配息明細（股利 / 利息 / 資本利得）看投信公告或扣繳憑單；股利所得年底併入綜所得稅申報（可到「年度綜合所得稅概算」比較合併 / 分開計稅）。補充保費率與起徵點沿用上方「費率設定」。' },
+            { id: 'fee', title: 'ETF / 基金費用（長期影響）', f: [['p', '投入金額（元）', 1000000], ['y', '年數', 20], ['ret', '費前年報酬（%）', 6], ['ta', 'A 年費用率（經理費 + 保管費等，%）', 0.3], ['la', 'A 申購手續費（%）', 0], ['tb', 'B 年費用率（%）', 1.5], ['lb', 'B 申購手續費（%）', 1.5]],
+                calc: (v) => { const r = feeImpact(v.p, v.y, v.ret, { ter: v.ta, load: v.la }, { ter: v.tb, load: v.lb }); return r && [R('A 期末價值', money(r.A)), R('B 期末價值', money(r.B)), R('A 比 B 多', money(r.diff), cls(r.diff))]; }, note: '以（費前報酬 − 年費用率）複利、申購手續費期初一次扣；忽略配息再投資細節、稅與匯率。' },
+            { id: 'val', title: '估值（本益比、淨值比、股利折現）', f: [['price', '目前股價（元）', 100], ['eps', '每股盈餘 EPS（元）', 6], ['peLo', '合理本益比 低（範例值）', 12], ['peHi', '合理本益比 高（範例值）', 18], ['bvps', '每股淨值（元）', 50], ['pbLo', '合理淨值比 低（範例值）', 1], ['pbHi', '合理淨值比 高（範例值）', 2], ['d0', '最近一年每股股利（元）', 4], ['g', '股利年成長率（%）', 3], ['r', '要求報酬率（%）', 8]],
+                calc: (v) => { const r = valuation(v), rows = []; if (r.pe) rows.push(R('本益比法合理價', `${fmt(r.pe[0], 1)} – ${fmt(r.pe[1], 1)} 元`), R('目前本益比', r.curPE == null ? '—' : `${fmt(r.curPE, 1)} 倍`)); if (r.pb) rows.push(R('淨值比法合理價', `${fmt(r.pb[0], 1)} – ${fmt(r.pb[1], 1)} 元`), R('目前淨值比', r.curPB == null ? '—' : `${fmt(r.curPB, 2)} 倍`)); if (r.ddm != null) rows.push(R('股利折現合理價', `${fmt(r.ddm, 1)} 元`, 'ok')); return rows.length ? rows : null; }, note: '限制：EPS 取哪一期、景氣循環、一次性損益都會讓結果差很多；股利折現要求報酬率必須大於成長率，且對這兩個數字極敏感，只適合穩定配息的公司。倍數為範例值，請依產業自行調整。' },
+            { id: 'crypto', title: '加密貨幣損益（手續費、滑價、平均成本）', f: [['q0', '原持有數量', 0], ['c0', '原平均成本（每單位，已含費）', 0], ['q1', '本次買入數量', 0.5], ['p1', '本次買入價（每單位）', 100000], ['bf', '買入手續費率 %（範例值，依交易所）', 0.1], ['sf', '賣出手續費率 %（範例值，依交易所）', 0.1], ['slip', '單邊滑價 %（買貴 / 賣便宜，範例值）', 0.05], ['sell', '賣出價（每單位）', 120000], ['sq', '賣出數量（0＝全部）', 0]],
+                calc: (v) => { const r = cryptoPnl({ q0: v.q0, c0: v.c0, q1: v.q1, p1: v.p1, buyFee: v.bf, sellFee: v.sf, slip: v.slip, sell: v.sell, sq: v.sq }); return r && [R('持有數量 / 平均成本', `${fmt(r.qty, 8)} / ${fmt(r.avg, 4)}`), R('賣出數量', fmt(r.sold, 8)), R('賣出淨收入（扣滑價與手續費）', money(r.proceeds)), R('賣出部分成本', money(r.basis)), R('損益', sgn(r.pnl), cls(r.pnl)), R('報酬率', `${fmt(r.roi, 2)}%`, cls(r.roi)), R('損益平衡賣價', `${fmt(r.bePrice, 4)}`)]; }, note: '純計算工具，非投資建議；手續費率、滑價為範例值，請以交易所實際為準。各國對加密資產的稅務規定不同（可能課所得稅、財產交易稅等），本頁不計稅，請自行向稅務機關或專業人士確認。價格單位（台幣或其他計價）請自行統一。' },
+        ];
+        const advVals = {};
+        function renderAdv(sec, box) {
+            const v = {}; for (const [k, , d] of sec.f) { const x = parseFloat(advVals[sec.id + k] ?? d); v[k] = Number.isFinite(x) ? x : NaN; }
+            const rows = sec.calc(v); box.replaceChildren(...(rows ? rows.map(([l, t, c]) => statRow(l, t, c)) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '請填入有效的數字（需符合各欄位的範圍）。' })]), Object.assign(document.createElement('p'), { className: 'note', textContent: sec.note }));
+        }
+        function buildAdv() {
+            $('#advBox').replaceChildren(...SECTIONS.map(sec => {
+                const d = document.createElement('details'), sm = document.createElement('summary'), res = document.createElement('div'), form = document.createElement('div'); sm.textContent = sec.title; form.className = 'row';
+                for (const [k, label, def] of sec.f) {
+                    const w = document.createElement('div'), l = document.createElement('label'), i = document.createElement('input'); w.className = 'f'; l.textContent = label; l.htmlFor = `x_${sec.id}_${k}`;
+                    Object.assign(i, { type: 'number', id: `x_${sec.id}_${k}`, min: 0, step: 'any', value: def }); i.inputMode = 'decimal';
+                    i.oninput = () => { advVals[sec.id + k] = i.value; renderAdv(sec, res); };
+                    w.append(l, i); form.append(w);
+                }
+                d.append(sm, form, res); renderAdv(sec, res); return d;
+            }));
+        }
+        // 手續費 / 稅設定變更時，進階區塊也要重算
+        function refreshAdv() { $('#advBox').querySelectorAll('details').forEach((d, i) => renderAdv(SECTIONS[i], d.lastChild)); }
+        buildAdv();
         syncForm(); render();
     </script>
 </body>

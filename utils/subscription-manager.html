@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="訂閱服務管理：記下串流、軟體、會員的金額與週期，算每月 / 每年總花費與分類占比，列出未來 30 天扣款日，可標記很久沒用，可匯出 CSV。資料只存在本機。">
+    <meta property="og:title" content="訂閱服務管理" />
+    <meta property="og:description" content="每月每年花多少、哪天扣款、哪個很久沒用，一頁看清楚。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/subscription-manager.html" />
+    <meta name="st-keys" content="subs_items">
+    <title>訂閱服務管理</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        .fgrid select,
+        .fgrid input {
+            width: 100%;
+        }
+
+        .btns {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .msg {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 8px 0 0;
+            min-height: 1.2em;
+        }
+
+        .msg.bad {
+            color: var(--bad);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .stats div {
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+        }
+
+        .stats small {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .stats b {
+            font-size: 20px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .cat {
+            display: block;
+            padding: 6px 0;
+        }
+
+        .cat div {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .bar {
+            height: 8px;
+            border-radius: 4px;
+            background: var(--fill);
+            margin-top: 4px;
+            overflow: hidden;
+        }
+
+        .bar i {
+            display: block;
+            height: 100%;
+            background: var(--blue);
+        }
+
+        .filters {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .filters input {
+            flex: 2 1 160px;
+            min-width: 0;
+        }
+
+        .filters select {
+            flex: 1 1 110px;
+            min-width: 0;
+        }
+
+        .item h2 {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin: 0 0 6px;
+            word-break: break-all;
+        }
+
+        .chip {
+            font-size: 12px;
+            font-weight: 400;
+            color: var(--muted);
+            background: var(--fill);
+            border-radius: 99px;
+            padding: 2px 10px;
+        }
+
+        .badge {
+            font-size: 12px;
+            font-weight: 700;
+            border-radius: 99px;
+            padding: 2px 10px;
+            color: #fff;
+        }
+
+        .badge.active {
+            background: var(--ok);
+        }
+
+        .badge.paused {
+            background: var(--muted);
+            color: var(--bg);
+        }
+
+        .badge.cancelled {
+            background: var(--bad);
+        }
+
+        .badge.idle {
+            background: var(--blue);
+            color: var(--on-blue);
+        }
+
+        .meta {
+            color: var(--muted);
+            font-size: 14px;
+            margin: 2px 0;
+            word-break: break-all;
+        }
+
+        .meta b {
+            color: var(--text);
+        }
+
+        .item.cancelled,
+        .item.paused {
+            opacity: .75;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>訂閱服務管理</h1>
+        <p class="sub">串流、軟體、會員的月費年費一頁看清楚，扣款日提前知道。資料只存在這個瀏覽器。</p>
+
+        <div class="card">
+            <h2 id="formTitle">新增訂閱</h2>
+            <div class="fgrid">
+                <div class="full"><label for="f_name">服務名稱</label><input id="f_name" type="text" maxlength="40" placeholder="例如：Netflix"></div>
+                <div><label for="f_amt">金額（每期）</label><input id="f_amt" type="number" min="0" step="any" inputmode="decimal" placeholder="例如 390"></div>
+                <div><label for="f_cycle">週期</label><select id="f_cycle"></select></div>
+                <div id="daysBox" hidden><label for="f_days">自訂天數（每幾天扣一次）</label><input id="f_days" type="number" min="1" max="3650" step="1" inputmode="numeric" value="30"></div>
+                <div><label for="f_cur">幣別</label><select id="f_cur"><option value="TWD">TWD 新台幣</option><option value="OTHER">其他幣別（自填匯率）</option></select></div>
+                <div id="curBox" hidden><label for="f_cc">幣別代碼</label><input id="f_cc" type="text" maxlength="5" placeholder="例如 USD"></div>
+                <div id="rateBox" hidden><label for="f_rate">匯率（1 外幣 = ? 台幣）</label><input id="f_rate" type="number" min="0" step="any" inputmode="decimal" placeholder="例如 32"></div>
+                <div><label for="f_next">下次扣款日</label><input id="f_next" type="date"></div>
+                <div><label for="f_cat">分類</label><select id="f_cat"></select></div>
+                <div><label for="f_share">分攤人數（含自己）</label><input id="f_share" type="number" min="1" max="50" step="1" inputmode="numeric" value="1"></div>
+                <div><label for="f_status">狀態</label><select id="f_status"></select></div>
+                <div class="full"><label for="f_note">備註</label><input id="f_note" type="text" maxlength="100" placeholder="方案、帳號、取消方式…（可留白）"></div>
+            </div>
+            <p class="msg" id="fPrev"></p>
+            <div class="btns">
+                <button class="primary" id="save">新增</button>
+                <button id="cancel" hidden>取消編輯</button>
+            </div>
+            <p class="msg" id="formMsg"></p>
+        </div>
+
+        <div class="card">
+            <h2>總覽（只計使用中）</h2>
+            <div class="stats" id="stats"></div>
+            <div id="cats" style="margin-top:8px"></div>
+        </div>
+
+        <div class="card">
+            <h2>未來 30 天扣款</h2>
+            <div id="upcoming"></div>
+        </div>
+
+        <div class="card">
+            <div class="filters">
+                <input id="q" type="text" placeholder="搜尋名稱、備註…" aria-label="搜尋">
+                <select id="stFilter" aria-label="狀態篩選"></select>
+                <select id="catFilter" aria-label="分類篩選"></select>
+            </div>
+        </div>
+
+        <div id="list"></div>
+
+        <div class="card">
+            <h2>資料管理</h2>
+            <p class="msg" style="margin:0 0 8px">最多 300 筆。單筆刪除在每筆下方；這裡可以匯出或全部清除。</p>
+            <div class="btns" style="margin-top:0">
+                <button id="csv">匯出 CSV</button>
+                <button id="clearAll" style="color:var(--bad)">清除全部</button>
+            </div>
+            <p class="msg" id="dataMsg"></p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>訂閱服務的管理本：記下 Netflix、Spotify、雲端、軟體、會員等的金額與扣款週期，自動換算每月 / 每年總花費、分類占比，列出未來 30 天的扣款日，也能標記「很久沒用」提醒自己該不該取消。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>想知道所有訂閱加起來每個月、每年到底花多少。</li>
+        <li>怕年費悄悄扣款，想提前一個月知道哪天扣。</li>
+        <li>大掃除：找出很久沒用的服務，決定取消。</li>
+        <li>家庭方案多人分攤，只算自己那份。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>填服務名稱、金額、週期（每月 / 每季 / 每年 / 自訂天數）、下次扣款日、分類，按「新增」。</li>
+        <li>外幣訂閱：幣別選「其他幣別」，填代碼（如 USD）與你自己估的匯率（1 外幣 = 多少台幣），這頁不連網查匯率。</li>
+        <li>共享方案填「分攤人數」，總覽只算你自己那一份（金額 ÷ 人數）。</li>
+        <li>狀態：使用中才計入總覽與扣款提醒；暫停、已取消會保留記錄但不計算。</li>
+        <li>清單每筆可「標記很久沒用」、編輯或刪除。「匯出 CSV」下載全部記錄。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">Netflix 390 每月；Adobe 年費 7,200（每年）；家庭雲端 300 每月 4 人分攤
+        → 每月約 390 + 600 + 75 = 1,065；每年約 12,780
+        下次扣款日 1/31 的每月訂閱：2 月會在 2/28 扣，3 月仍是 3/31（月底自動進位）</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>下次扣款日過了沒更新也沒關係，會自動依週期往後推算下一次；日期以台灣時間（UTC+8）判斷。</li>
+        <li>每月金額是估算：每季 ÷ 3、每年 ÷ 12、自訂天數以 30.4375 天為一個月；實際請款（匯率、手續費、稅）可能略有出入。</li>
+        <li>資料只存在這個瀏覽器，清除網站資料會消失；右上角「💾」可匯出備份。</li>
+        <li>最多 300 筆，滿了要先刪除舊的才能新增；名稱最長 40 字、備註 100 字。</li>
+        <li>「清除全部」會刪掉所有訂閱且無法復原；載入到壞掉的資料會自動略過或補預設值。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { day, store, csvStringify } = Util;
+
+        // --- pure ---
+        const SB = { MAX: 300, NAME: 40, NOTE: 100, MAX_AMT: 1e9, MAX_DAYS: 3650, MAX_SHARE: 50 };
+        const CATS = ['影音串流', '音樂', '軟體工具', '雲端儲存', '遊戲', '學習', '健康生活', '其他'];
+        const CYCLES = { month: '每月', quarter: '每季', year: '每年', days: '自訂天數' };
+        const STATUS = { active: '使用中', paused: '暫停', cancelled: '已取消' };
+        const CYCLE_MONTHS = { month: 1, quarter: 3, year: 12 };
+
+        const twToday = (ms = Date.now()) => new Date(ms + 8 * 36e5).toISOString().slice(0, 10);
+        function validDate(s) {
+            if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+            const p = day.parse(s);
+            return p.y >= 1990 && p.y <= 2100 && p.m >= 1 && p.m <= 12 && p.d >= 1 && p.d <= day.daysInMonth(p.y, p.m);
+        }
+        const validRate = (r) => typeof r === 'number' && Number.isFinite(r) && r >= 1e-4 && r <= 1e5;
+        const r2 = (v) => Math.round(v * 100) / 100;
+        // 第 k 次扣款日（k = 0 就是 next）。月 / 季 / 年一律從 next 起算，31 號的月份遇到短月取月底、下個月又回到 31
+        const occAt = (it, k) => (it.cycle === 'days' ? day.shift(it.next, it.days * k) : day.addMonths(it.next, CYCLE_MONTHS[it.cycle] * k));
+        // 從 from（含）起的下一個扣款日；next 已經過期就自動往後推
+        function nextOccurrence(it, from) {
+            if (from <= it.next) return it.next;
+            const span = day.between(it.next, from);
+            let k = it.cycle === 'days' ? Math.floor(span / it.days) : Math.max(0, Math.floor(span / (31 * CYCLE_MONTHS[it.cycle])) - 1);
+            while (occAt(it, k) < from) k++;
+            return occAt(it, k);
+        }
+        // from ~ to（含）之間所有扣款日
+        function dueDates(it, from, to) {
+            const out = [];
+            for (let d = nextOccurrence(it, from); d <= to; d = nextOccurrence(it, day.shift(d, 1))) out.push(d);
+            return out;
+        }
+        // 每年金額（台幣、只算自己那份）：月 / 季 / 年週期 = 金額 × 12 ÷ 月數；自訂天數 = 金額 × 365 ÷ 天數
+        const yearlyOf = (it) => it.amt * it.rate / it.share * (it.cycle === 'days' ? 365 / it.days : 12 / CYCLE_MONTHS[it.cycle]);
+        const monthlyOf = (it) => yearlyOf(it) / 12;
+        const isActive = (it) => it.status === 'active';
+        // 總覽（只計使用中）：每月、每年、分類占比（每月金額大的在前）、很久沒用的使用中數量
+        function overview(items) {
+            const act = items.filter(isActive), by = {};
+            let monthly = 0;
+            for (const it of act) { const m = monthlyOf(it); monthly += m; by[it.cat] = (by[it.cat] || 0) + m; }
+            return {
+                count: act.length, monthly: r2(monthly), yearly: r2(monthly * 12), idle: act.filter(it => it.idle).length,
+                cats: Object.entries(by).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([cat, v]) => ({ cat, monthly: r2(v), pct: monthly ? Math.round(v / monthly * 100) : 0 })),
+            };
+        }
+        // 未來 N 天（含今天）的扣款清單：使用中才列；charge = 該次實際扣款（台幣、整筆），mine = 自己那份
+        function upcoming(items, today, days = 30) {
+            const to = day.shift(today, days), out = [];
+            for (const it of items.filter(isActive)) for (const d of dueDates(it, today, to)) out.push({ it, date: d, days: day.between(today, d), charge: r2(it.amt * it.rate), mine: r2(it.amt * it.rate / it.share) });
+            return out.sort((a, b) => a.date.localeCompare(b.date) || a.it.name.localeCompare(b.it.name) || (a.it.id < b.it.id ? -1 : 1));
+        }
+        // 未來 12 個月（今天起 365 天，不含一年後的同一天）實際會扣的總額（自己那份）
+        const next12 = (items, today) => r2(upcoming(items, today, 364).reduce((a, x) => a + x.mine, 0));
+
+        const str = (v, n) => typeof v === 'string' ? v.trim().slice(0, n) : '';
+        const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        // 載入驗證：缺欄位補預設；名稱 / 日期 / 金額壞掉的整筆丟掉；外幣匯率壞掉就當 TWD 以免算錯 → 整筆丟掉
+        function normItem(r) {
+            if (!r || typeof r !== 'object') return null;
+            const name = str(r.name, SB.NAME), a = Number(r.amt);
+            if (!name || !validDate(r.next) || !Number.isFinite(a) || a <= 0 || a > SB.MAX_AMT) return null;
+            const cycle = r.cycle in CYCLE_MONTHS || r.cycle === 'days' ? r.cycle : 'month';
+            const dd = Number(r.days), days = Number.isInteger(dd) && dd >= 1 && dd <= SB.MAX_DAYS ? dd : 30;
+            let cur = typeof r.cur === 'string' && /^[A-Za-z]{3,5}$/.test(r.cur.trim()) ? r.cur.trim().toUpperCase() : 'TWD', rate = 1;
+            if (cur !== 'TWD') { rate = Number(r.rate); if (!validRate(rate)) return null; }
+            const sh = Number(r.share);
+            return {
+                id: str(r.id, 40) || newId(), name, amt: r2(a), cycle, days, cur, rate, next: r.next,
+                cat: CATS.includes(r.cat) ? r.cat : '其他', share: Number.isInteger(sh) && sh >= 1 && sh <= SB.MAX_SHARE ? sh : 1,
+                status: r.status in STATUS ? r.status : 'active', idle: r.idle === true, note: str(r.note, SB.NOTE),
+            };
+        }
+        function normList(raw) {
+            if (!Array.isArray(raw)) return [];
+            const seen = new Set(), out = [];
+            for (const r of raw) {
+                const it = normItem(r);
+                if (!it || seen.has(it.id)) continue;
+                seen.add(it.id); out.push(it);
+                if (out.length >= SB.MAX) break;
+            }
+            return out;
+        }
+        // 表單檢查（欄位都是字串）：回傳錯誤訊息，沒問題回傳 ''
+        function checkForm(r) {
+            const s = (v) => String(v ?? '').trim();
+            if (!s(r.name)) return '請填服務名稱';
+            if (s(r.name).length > SB.NAME) return `名稱最長 ${SB.NAME} 字`;
+            if (s(r.note).length > SB.NOTE) return `備註最長 ${SB.NOTE} 字`;
+            const a = s(r.amt) === '' ? NaN : Number(s(r.amt));
+            if (!(Number.isFinite(a) && a > 0 && a <= SB.MAX_AMT)) return '金額請填大於 0 的數字';
+            if (!validDate(s(r.next))) return '請選擇有效的下次扣款日（1990–2100）';
+            if (s(r.cycle) === 'days') { const d = Number(s(r.days)); if (!(Number.isInteger(d) && d >= 1 && d <= SB.MAX_DAYS)) return `自訂天數請填 1 到 ${SB.MAX_DAYS} 的整數`; }
+            if (s(r.cur) !== 'TWD') {
+                if (!/^[A-Za-z]{3,5}$/.test(s(r.cc))) return '幣別代碼請填 3–5 個英文字母（例如 USD）';
+                if (!validRate(Number(s(r.rate)))) return '請填匯率（1 外幣 = 多少台幣，0.0001–100000）';
+            }
+            const sh = Number(s(r.share));
+            if (!(Number.isInteger(sh) && sh >= 1 && sh <= SB.MAX_SHARE)) return `分攤人數請填 1 到 ${SB.MAX_SHARE} 的整數`;
+            return '';
+        }
+        const fromForm = (r, id, idle = false) => normItem({ id, name: r.name, amt: String(r.amt).trim(), cycle: r.cycle, days: Number(r.days), cur: String(r.cur).trim() === 'TWD' ? 'TWD' : String(r.cc).trim(), rate: Number(r.rate), next: String(r.next).trim(), cat: r.cat, share: Number(r.share), status: r.status, idle, note: r.note });
+        // 新增：滿 300 筆拒絕（不默默刪舊的）
+        function addItem(list, r, id = newId()) {
+            const err = checkForm(r);
+            if (err) return { list, err };
+            if (list.length >= SB.MAX) return { list, err: `最多 ${SB.MAX} 筆，請先刪除不用的訂閱` };
+            return { list: [...list, fromForm(r, id)], err: '' };
+        }
+        // 修改（用 id）；「很久沒用」標記沿用原值
+        function updateItem(list, id, r) {
+            const err = checkForm(r);
+            if (err) return { list, err };
+            const old = list.find(x => x.id === id);
+            if (!old) return { list, err: '找不到這筆訂閱' };
+            return { list: list.map(x => x.id === id ? fromForm(r, id, old.idle) : x), err: '' };
+        }
+        const removeItem = (list, id) => list.filter(x => x.id !== id);
+        const toggleIdle = (list, id) => list.map(x => x.id === id ? { ...x, idle: !x.idle } : x);
+        function filterItems(items, q, status, cat) {
+            const k = String(q || '').trim().toLowerCase();
+            return items.filter(it => (!status || it.status === status) && (!cat || it.cat === cat) && (!k || [it.name, it.note, it.cat].some(v => v.toLowerCase().includes(k))));
+        }
+        // 排序：使用中在前（下次扣款近的在前）→ 暫停 → 已取消
+        function sortItems(items, today) {
+            const rank = { active: 0, paused: 1, cancelled: 2 };
+            const nx = new Map(items.map(it => [it, nextOccurrence(it, today)]));
+            return [...items].sort((a, b) => rank[a.status] - rank[b.status] || nx.get(a).localeCompare(nx.get(b)) || a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1));
+        }
+        // CSV：開頭是 = + - @ 的文字前補單引號，避免試算表當成公式
+        const csvGuard = (v) => { const s = String(v ?? ''); return /^[=+\-@\t\r]/.test(s) ? "'" + s : s; };
+        function toCsv(items, today) {
+            const rows = sortItems(items, today).map(it => [csvGuard(it.name), it.amt, it.cur, it.rate, CYCLES[it.cycle], it.cycle === 'days' ? it.days : '', nextOccurrence(it, today), it.cat, it.share, STATUS[it.status], it.idle ? '是' : '', r2(monthlyOf(it)), r2(yearlyOf(it)), csvGuard(it.note)]);
+            return csvStringify(['名稱', '每期金額', '幣別', '匯率', '週期', '自訂天數', '下次扣款日', '分類', '分攤人數', '狀態', '很久沒用', '每月(台幣,自己份)', '每年(台幣,自己份)', '備註'], rows);
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'subs_items';
+        let items = normList(store.get(KEY, []));
+        let editId = null;
+        const money = (v) => Math.round(v).toLocaleString('zh-TW');
+        const save = () => store.set(KEY, items);
+        const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+
+        Object.entries(CYCLES).forEach(([k, v]) => { $('#f_cycle').append(new Option(v, k)); });
+        CATS.forEach(c => { $('#f_cat').append(new Option(c, c)); $('#catFilter').append(new Option(c, c)); });
+        Object.entries(STATUS).forEach(([k, v]) => { $('#f_status').append(new Option(v, k)); $('#stFilter').append(new Option(v, k)); });
+        $('#catFilter').prepend(new Option('全部分類', '')); $('#stFilter').prepend(new Option('全部狀態', ''));
+        $('#catFilter').value = ''; $('#stFilter').value = '';
+
+        const readForm = () => ({ name: $('#f_name').value, amt: $('#f_amt').value, cycle: $('#f_cycle').value, days: $('#f_days').value, cur: $('#f_cur').value === 'OTHER' ? 'X' : 'TWD', cc: $('#f_cc').value, rate: $('#f_rate').value, next: $('#f_next').value, cat: $('#f_cat').value, share: $('#f_share').value, status: $('#f_status').value, note: $('#f_note').value });
+        function syncForm() {
+            const other = $('#f_cur').value === 'OTHER';
+            $('#daysBox').hidden = $('#f_cycle').value !== 'days'; $('#curBox').hidden = !other; $('#rateBox').hidden = !other;
+            const r = readForm(), a = Number(r.amt), sh = Number(r.share), rt = other ? Number(r.rate) : 1;
+            $('#fPrev').textContent = a > 0 && sh >= 1 && validRate(rt) && (r.cycle !== 'days' || Number(r.days) >= 1)
+                ? `約每月 ${money(monthlyOf({ amt: a, rate: rt, share: sh, cycle: r.cycle, days: Number(r.days) || 1 }))}、每年 ${money(yearlyOf({ amt: a, rate: rt, share: sh, cycle: r.cycle, days: Number(r.days) || 1 }))}（台幣、自己那份）` : '';
+        }
+        function resetForm() {
+            editId = null;
+            ['f_name', 'f_amt', 'f_cc', 'f_rate', 'f_note'].forEach(i => { $('#' + i).value = ''; });
+            $('#f_cycle').value = 'month'; $('#f_days').value = '30'; $('#f_cur').value = 'TWD'; $('#f_next').value = twToday(); $('#f_cat').value = CATS[0];
+            $('#f_share').value = '1'; $('#f_status').value = 'active';
+            $('#formTitle').textContent = '新增訂閱'; $('#save').textContent = '新增'; $('#cancel').hidden = true;
+            syncForm();
+        }
+        function msg(text, bad) { const m = $('#formMsg'); m.textContent = text; m.className = 'msg' + (bad ? ' bad' : ''); }
+
+        function render() {
+            const today = twToday(), ov = overview(items);
+            const sBox = $('#stats'); sBox.replaceChildren();
+            [['每月總花費', money(ov.monthly)], ['每年總花費', money(ov.yearly)], ['未來 12 個月實際扣款', money(next12(items, today))], ['使用中 / 很久沒用', `${ov.count} / ${ov.idle}`]].forEach(([k, v]) => { const d = el('div'); d.append(el('small', '', k), el('b', '', v)); sBox.append(d); });
+            $('#cats').replaceChildren(...(ov.cats.length ? ov.cats.map(c => {
+                const d = el('div', 'cat'), top = el('div'), bar = el('div', 'bar'), fill = el('i');
+                top.append(el('span', '', c.cat), el('b', '', `${money(c.monthly)} / 月（${c.pct}%）`));
+                fill.style.width = c.pct + '%'; bar.append(fill); d.append(top, bar); return d;
+            }) : [el('p', 'muted', '還沒有使用中的訂閱')]));
+            const up = upcoming(items, today, 30);
+            $('#upcoming').replaceChildren(...(up.length ? up.map(u => {
+                const r = el('div', 'li'), main = el('div');
+                main.append(el('b', '', u.it.name), el('div', 'meta', `${u.date}（${u.days === 0 ? '今天' : u.days + ' 天後'}）${u.it.share > 1 ? ' ・ 你的份 ' + money(u.mine) : ''}`));
+                r.append(main, el('b', '', money(u.charge))); return r;
+            }) : [el('p', 'muted', '未來 30 天沒有扣款')]));
+            const list = $('#list'); list.replaceChildren();
+            const shown = sortItems(filterItems(items, $('#q').value, $('#stFilter').value, $('#catFilter').value), today);
+            if (!shown.length) { list.append(el('div', 'card muted', items.length ? '沒有符合的訂閱' : '還沒有訂閱，從上面新增第一筆吧')); return; }
+            shown.forEach(it => {
+                const card = el('div', 'card item ' + it.status), h = el('h2', '', it.name);
+                h.append(el('span', 'badge ' + it.status, STATUS[it.status]), el('span', 'chip', it.cat));
+                if (it.idle) h.append(el('span', 'badge idle', '很久沒用'));
+                card.append(h);
+                const line = (label, v) => { const p = el('div', 'meta'); p.append(label + '：', el('b', '', v)); card.append(p); };
+                const cyc = it.cycle === 'days' ? `每 ${it.days} 天` : CYCLES[it.cycle];
+                line('金額', `${it.cur === 'TWD' ? '' : it.cur + ' '}${it.amt.toLocaleString('zh-TW')}（${cyc}）${it.cur === 'TWD' ? '' : ' ≈ NT$' + money(it.amt * it.rate)}${it.share > 1 ? ' ・ ' + it.share + ' 人分攤' : ''}`);
+                line('折算', `每月約 ${money(monthlyOf(it))}、每年約 ${money(yearlyOf(it))}（台幣、自己那份）`);
+                if (isActive(it)) { const nd = nextOccurrence(it, today), left = day.between(today, nd); line('下次扣款', `${nd}（${left === 0 ? '今天' : left + ' 天後'}）`); }
+                if (it.note) line('備註', it.note);
+                const b = el('div', 'btns');
+                const idle = el('button', 'sm', it.idle ? '取消「很久沒用」' : '標記很久沒用'); idle.onclick = () => { items = toggleIdle(items, it.id); save(); render(); };
+                const ed = el('button', 'sm', '編輯'); ed.onclick = () => startEdit(it.id);
+                const del = el('button', 'sm', '刪除'); del.setAttribute('aria-label', '刪除 ' + it.name); del.style.color = 'var(--bad)';
+                del.onclick = () => {
+                    if (!confirm(`刪除「${it.name}」？無法復原。`)) return;
+                    items = removeItem(items, it.id); if (editId === it.id) resetForm();
+                    save(); render();
+                };
+                b.append(idle, ed, del); card.append(b); list.append(card);
+            });
+        }
+
+        function startEdit(id) {
+            const it = items.find(x => x.id === id); if (!it) return;
+            editId = id;
+            $('#f_name').value = it.name; $('#f_amt').value = it.amt; $('#f_cycle').value = it.cycle; $('#f_days').value = it.days;
+            $('#f_cur').value = it.cur === 'TWD' ? 'TWD' : 'OTHER'; $('#f_cc').value = it.cur === 'TWD' ? '' : it.cur; $('#f_rate').value = it.cur === 'TWD' ? '' : it.rate;
+            $('#f_next').value = it.next; $('#f_cat').value = it.cat; $('#f_share').value = it.share; $('#f_status').value = it.status; $('#f_note').value = it.note;
+            $('#formTitle').textContent = '編輯訂閱'; $('#save').textContent = '儲存'; $('#cancel').hidden = false;
+            syncForm(); msg('');
+            $('#formTitle').scrollIntoView({ block: 'start' });
+        }
+
+        $('#save').onclick = () => {
+            const r = readForm(), res = editId ? updateItem(items, editId, r) : addItem(items, r);
+            if (res.err) { msg(res.err, true); return; }
+            items = res.list; save(); const was = editId; resetForm(); msg(was ? '已儲存' : '已新增'); render();
+        };
+        $('#cancel').onclick = () => { resetForm(); msg(''); };
+        ['f_amt', 'f_cycle', 'f_days', 'f_cur', 'f_rate', 'f_share'].forEach(i => { $('#' + i).oninput = syncForm; });
+        ['#q', '#stFilter', '#catFilter'].forEach(q => { $(q).oninput = render; });
+        $('#csv').onclick = () => {
+            if (!items.length) { $('#dataMsg').textContent = '還沒有訂閱可以匯出'; return; }
+            Util.download(new Blob(['﻿' + toCsv(items, twToday())], { type: 'text/csv;charset=utf-8' }), `訂閱服務_${twToday()}.csv`);
+            $('#dataMsg').textContent = '已匯出 CSV';
+        };
+        $('#clearAll').onclick = () => {
+            if (!items.length) { $('#dataMsg').textContent = '目前沒有訂閱'; return; }
+            if (!confirm(`清除全部 ${items.length} 筆訂閱？無法復原。`)) return;
+            items = []; save(); resetForm(); msg(''); $('#dataMsg').textContent = '已清除全部'; render();
+        };
+        resetForm(); render();
+    </script>
+</body>
+
+</html>

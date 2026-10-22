@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="打包清單：依行程類型、天數與季節帶入預設清單，內衣褲等數量隨天數調整；可勾選、新增、刪除、重排，存成多份清單，回家後一鍵重置勾選再用。資料只存在本機。">
+    <meta property="og:title" content="打包清單" />
+    <meta property="og:description" content="依行程與天數帶入清單，打勾不漏帶。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/packing-list.html" />
+    <meta name="st-keys" content="pack_lists">
+    <title>打包清單</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        .fgrid select,
+        .fgrid input {
+            width: 100%;
+        }
+
+        .btns {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .msg {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 8px 0 0;
+            min-height: 1.2em;
+        }
+
+        .msg.bad {
+            color: var(--bad);
+        }
+
+        .lists {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .lists button {
+            text-align: left;
+        }
+
+        .bar {
+            height: 8px;
+            border-radius: 99px;
+            background: var(--fill);
+            overflow: hidden;
+            margin: 8px 0;
+        }
+
+        .bar i {
+            display: block;
+            height: 100%;
+            background: var(--ok);
+        }
+
+        .it {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .it label {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 44px;
+            word-break: break-all;
+            cursor: pointer;
+        }
+
+        .it input[type=checkbox] {
+            width: 22px;
+            height: 22px;
+            flex: none;
+        }
+
+        .it.done label span {
+            text-decoration: line-through;
+            color: var(--muted);
+        }
+
+        .it .g {
+            font-size: 12px;
+            color: var(--muted);
+            background: var(--fill);
+            border-radius: 99px;
+            padding: 1px 8px;
+            flex: none;
+        }
+
+        .it button {
+            padding: 4px 0;
+            min-width: 36px;
+            min-height: 44px;
+        }
+
+        .add {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .add input {
+            flex: 1;
+            min-width: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>打包清單</h1>
+        <p class="sub">選行程類型、天數與季節，自動帶入清單；出門前打勾，回家後重置再用。</p>
+
+        <div class="card">
+            <h2>新增清單</h2>
+            <div class="fgrid">
+                <div class="full"><label for="n_name">清單名稱</label><input id="n_name" type="text" maxlength="30" placeholder="例如：東京五日遊"></div>
+                <div><label for="n_type">行程類型</label><select id="n_type"></select></div>
+                <div><label for="n_days">天數</label><input id="n_days" type="number" min="1" max="60" step="1" value="3" inputmode="numeric"></div>
+                <div class="full" id="seasonBox"><label for="n_season">季節 / 氣溫</label><select id="n_season"></select></div>
+                <div class="full" id="roomsBox" hidden><label for="n_rooms">房間數（搬家用；「天數」＝預留打包天數）</label><input id="n_rooms" type="number" min="1" max="20" step="1" value="3" inputmode="numeric"></div>
+            </div>
+            <div class="btns"><button class="primary" id="create">建立並帶入預設項目</button></div>
+            <p class="msg" id="newMsg"></p>
+        </div>
+
+        <div class="card" id="listsCard">
+            <h2>我的清單</h2>
+            <div class="lists" id="lists"></div>
+        </div>
+
+        <div class="card" id="detail" hidden>
+            <div class="fgrid">
+                <div class="full"><label for="d_name">清單名稱</label><input id="d_name" type="text" maxlength="30"></div>
+            </div>
+            <p class="msg" id="meta"></p>
+            <div class="bar"><i id="barFill"></i></div>
+            <p class="msg" id="prog" style="margin-top:0"></p>
+            <div id="items"></div>
+            <div class="add"><input id="newItem" type="text" maxlength="60" placeholder="新增項目（例如：充電線）" aria-label="新增項目"><button class="primary" id="addItem">新增</button></div>
+            <p class="msg" id="itemMsg"></p>
+            <div class="btns">
+                <button id="resetChecks">重置勾選</button>
+                <button id="copyList">複製成新清單</button>
+                <button id="copyText">複製文字</button>
+                <button id="dlText">下載 .txt</button>
+                <button id="delList" style="color:var(--bad)">刪除這份清單</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>資料管理</h2>
+            <p class="msg" style="margin:0 0 8px">最多 30 份清單、每份 200 項。單份清單在上方「刪除這份清單」；這裡可全部清除。</p>
+            <div class="btns" style="margin-top:0"><button id="clearAll" style="color:var(--bad)">清除全部</button></div>
+            <p class="msg" id="dataMsg"></p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>出門前的打包檢查表：依行程類型（國內旅遊 / 出國 / 露營 / 出差 / 運動賽事 / 搬家 / 入住過戶通知）、天數與季節，自動帶入常見要帶的東西，數量會隨天數調整（例如 4 天的內衣褲 5 件）。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>旅行、露營、出差、比賽前，怕漏帶東西。</li>
+        <li>常去的行程（例如每月露營）想存成固定清單，每次回家重置勾選就能再用。</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+        <li>填名稱、選類型 / 天數 / 季節，按「建立」；點上方清單按鈕可切換。</li>
+        <li>點項目打勾；每項右側的 ↑ ↓ 調整順序，✕ 刪除該項；下方輸入框可新增自己的項目。</li>
+        <li>「重置勾選」把全部打勾清掉；「複製成新清單」複製一份（勾選會清空），方便改成另一趟行程。</li>
+        <li>「複製文字」/「下載 .txt」可貼到通訊軟體分享給旅伴。</li>
+        <li>「搬家」會帶入打包用品與每房間排程（填房間數、「天數」＝預留打包天數）、水電瓦斯網路過戶、戶政與郵局、金融保險、車輛證件、社區垃圾與當日待辦；「入住 / 過戶 / 通知」只帶入上述的過戶與通知事項。這兩種不分季節。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">出國 5 天、冬季 → 護照、機票、外幣、網卡…
+        內衣褲 × 6、襪子 × 6、上衣 × 5、保暖衣 × 3、厚外套、手套</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>搬家 / 過戶清單只列「該辦理的事項」，法規期限、所需文件與費用沒有寫進去，請自行向戶政、監理、台電等單位確認；紙箱數量是粗估。</li>
+        <li>預設項目只是通用參考，請依自己的需求增刪；超過 13 天的行程，衣物數量最多帶 14 件，建議改洗衣。</li>
+        <li>資料只存在這個瀏覽器，清除網站資料會消失；右上角「💾」可匯出備份。</li>
+        <li>最多 30 份清單、每份 200 項、項目與名稱有字數上限；滿了要先刪除才能新增，不會默默刪舊的。</li>
+        <li>「刪除這份清單」與「清除全部」都會先詢問且無法復原；載入到壞掉的資料會自動略過或補預設值。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, copyText } = Util;
+
+        // --- pure ---
+        const PK = { LISTS: 30, ITEMS: 200, TEXT: 60, NAME: 30, MAX_DAYS: 60 };
+        const TYPES = ['國內旅遊', '出國', '露營', '出差', '運動賽事', '搬家', '入住 / 過戶 / 通知'];
+        const MOVES = ['搬家', '入住 / 過戶 / 通知'], MAX_ROOMS = 20;
+        const SEASONS = { mild: '春秋（約 15–25°C）', hot: '夏季（25°C 以上）', cold: '冬季（15°C 以下）' };
+        const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        const str = (v, n) => typeof v === 'string' ? v.trim().slice(0, n) : '';
+
+        // 預設清單：回傳 [{ t, g }]；數量隨天數：內衣褲 / 襪子 = 天數 + 1（最多 14 件）
+        // 搬家 / 入住：法規性項目只列「該辦理的事項」，期限與所需文件請自行向主管機關確認；rooms 影響紙箱與每房間標示
+        function moveItems(type, days, rooms) {
+            const out = [], add = (g, ...ts) => ts.forEach(t => out.push({ t: t.slice(0, PK.TEXT), g }));
+            rooms = Math.min(Math.max(Math.round(Number(rooms)) || 1, 1), MAX_ROOMS);
+            if (type === '搬家') {
+                add('打包用品', `紙箱 × ${rooms * 8}（每房間粗估 8 個）`, `膠帶 × ${rooms}`, `標籤貼紙 / 麥克筆（每房間一色）`, `氣泡紙 / 舊報紙 / 毛巾（易碎品）`, `垃圾袋 × ${rooms * 2}`, '束帶 / 繩子 / 防塵套');
+                add('打包排程', `預留打包 ${days} 天（每天約 ${Math.ceil(rooms / days)} 個房間）`, ...Array.from({ length: Math.min(rooms, 10) }, (_, i) => `房間 ${i + 1}：打包與貼標`), '最後用到的物品（盥洗、餐具）留到最後一天打包');
+            }
+            add('水電瓦斯網路', '舊居：台電 / 自來水 / 瓦斯結算與停用或過戶', '新居：申請或過戶 用電、用水、瓦斯', '網路 / 第四台 / 電話：移機或退租、新居申請', '舊居與新居電水瓦斯表度數拍照留存');
+            add('戶政與郵局', '戶政事務所：辦理遷徙登記（期限與文件請自行確認）', '身分證 / 戶口名簿地址更新（依規定辦理）', '郵局：申請住址變更 / 郵件改寄', '子女就學 / 學籍相關通知（如適用）');
+            add('金融與保險', '銀行 / 證券 / 信用卡 帳單與通訊地址', '保險公司通訊地址', '手機門號 / 電信帳單地址', '公司人事 / 學校 通訊地址更新');
+            add('車輛與證件', '汽機車行照（車籍）地址變更：向監理機關確認辦法', '駕照 / 其他證件地址：依規定確認是否需更新', '寵物登記地址更新（如適用）');
+            add('社區與垃圾', '新居社區：管理室登記、門禁卡 / 遙控器、車位', '垃圾清運時間地點與分類方式', '管理費：舊居結清、新居繳費方式', '更換新居門鎖或確認鑰匙數量', '網購 / 外送 App / 會員 收件地址更新', '通知親友與常往來單位新地址');
+            if (type === '搬家') add('當日待辦', '確認搬家公司時間、電梯與停車位', '關閉舊居水電瓦斯總開關', '清點家具家電、新居驗收拍照存證', '檢查櫃子與抽屜有無遺漏', '歸還舊居鑰匙 / 門禁卡', '貴重物品與證件隨身帶', '準備搬家人員飲水 / 紅包（視需要）');
+            return out;
+        }
+        function defaultItems(type, days, season, rooms) {
+            days = Math.min(Math.max(Math.round(Number(days)) || 1, 1), PK.MAX_DAYS);
+            if (MOVES.includes(type)) return moveItems(type, days, rooms);
+            const n = Math.min(days + 1, 14), out = [], add = (g, ...ts) => ts.forEach(t => out.push({ t: t.slice(0, PK.TEXT), g }));
+            add('證件與錢', '身分證 / 健保卡', '錢包（現金、信用卡）', '鑰匙', ...(type === '出國' ? [] : ['悠遊卡 / 一卡通']));
+            if (days <= 1) add('衣物', '備用上衣 × 1');
+            else add('衣物', `內衣褲 × ${n}`, `襪子 × ${n}`, `上衣 × ${Math.min(days, 10)}`, `褲 / 裙 × ${Math.min(Math.ceil(days / 2), 7)}`, '睡衣');
+            if (days > 7) add('衣物', '洗衣袋 / 旅行洗衣用品');
+            if (season === 'cold') add('衣物', '厚外套', '手套', '圍巾', '毛帽', `保暖衣褲 × ${Math.min(Math.ceil(n / 2), 7)}`);
+            else if (season === 'hot') add('衣物', '帽子', '太陽眼鏡', '防曬乳', '薄長袖（防曬 / 冷氣房）', '水壺');
+            else add('衣物', '薄外套');
+            add('盥洗與藥品', '牙刷牙膏', '洗面乳 / 沐浴用品', '毛巾', '常備藥', '眼鏡 / 隱形眼鏡', '衛生用品', '雨傘 / 雨衣');
+            add('電子用品', '手機與充電線', '行動電源');
+            const X = {
+                國內旅遊: [['行程', '車票 / 訂位資料', '住宿訂房確認', '相機'], ['電子用品', '耳機']],
+                出國: [['出國', '護照（效期 6 個月以上）', '簽證 / 入境表單', '機票 / 電子登機證', '外幣與海外可刷的信用卡', '網卡 / eSIM', '旅遊保險資料', '行李鎖 / 行李秤', '分裝瓶（100 ml 以下）'], ['電子用品', '萬國轉接插頭', '耳機']],
+                露營: [['露營裝備', '帳篷與地釘 / 鎚子', '睡袋', '睡墊 / 充氣床', '營燈與頭燈', '桌椅', '爐具與瓦斯', '鍋具與餐具', '冰桶 / 保冷袋', '垃圾袋', '火種 / 打火機', '驅蚊液'], ['食物', `飲用水（每人每天約 3 公升）`, '食材與調味料']],
+                出差: [['出差', '筆電與充電器', '名片', '公司證件 / 門禁卡', '簡報遙控筆 / 轉接頭', `正式服裝 × ${Math.min(days, 7)}`, '收據 / 發票收納袋'], ['電子用品', '延長線']],
+                運動賽事: [['比賽用品', '比賽服 / 備用服', '運動鞋', '號碼布 / 報到資料', `補給（能量膠 / 運動飲料）× ${days * 2}`, '運動手錶 / 耳機', '護具與貼布', '防滑 / 排汗襪 × 2', '毛巾與換洗衣物', '凡士林 / 防磨膏']],
+            }[type] || [];
+            for (const [g, ...ts] of X) add(g, ...ts);
+            return out;
+        }
+        const fresh = (t, g = '') => ({ id: newId(), t, g, c: false });
+        function normItem(r) {
+            if (!r || typeof r !== 'object') return null;
+            const t = str(r.t, PK.TEXT);
+            return t ? { id: str(r.id, 40) || newId(), t, g: str(r.g, 12), c: r.c === true } : null;
+        }
+        // 載入驗證：缺欄位補預設、超長截斷、重複 id 去除；沒有名稱的清單用預設名
+        function normLists(raw) {
+            if (!Array.isArray(raw)) return [];
+            const seen = new Set(), out = [];
+            for (const r of raw) {
+                if (!r || typeof r !== 'object') continue;
+                const id = str(r.id, 40) || newId();
+                if (seen.has(id)) continue;
+                seen.add(id);
+                const ids = new Set(), items = [];
+                for (const x of Array.isArray(r.items) ? r.items : []) { const it = normItem(x); if (it && !ids.has(it.id)) { ids.add(it.id); items.push(it); if (items.length >= PK.ITEMS) break; } }
+                const d = Math.round(Number(r.days));
+                out.push({ id, name: str(r.name, PK.NAME) || '未命名清單', type: TYPES.includes(r.type) ? r.type : TYPES[0], days: d >= 1 && d <= PK.MAX_DAYS ? d : 1, season: SEASONS[r.season] ? r.season : 'mild', items });
+                if (out.length >= PK.LISTS) break;
+            }
+            return out;
+        }
+        // 新增清單：名稱必填、滿 30 份拒絕；回傳 { lists, err, id }
+        function addList(lists, { name, type, days, season, rooms }) {
+            const nm = str(name, PK.NAME + 1);
+            if (!nm) return { lists, err: '請填清單名稱' };
+            if (nm.length > PK.NAME) return { lists, err: `名稱最長 ${PK.NAME} 字` };
+            if (!TYPES.includes(type)) return { lists, err: '請選行程類型' };
+            const d = Number(days);
+            if (!Number.isInteger(d) || d < 1 || d > PK.MAX_DAYS) return { lists, err: `天數請填 1 到 ${PK.MAX_DAYS} 的整數` };
+            if (!SEASONS[season]) return { lists, err: '請選季節' };
+            if (MOVES.includes(type) && !(Number.isInteger(Number(rooms)) && rooms >= 1 && rooms <= MAX_ROOMS)) return { lists, err: `房間數請填 1 到 ${MAX_ROOMS} 的整數` };
+            if (lists.length >= PK.LISTS) return { lists, err: `最多 ${PK.LISTS} 份清單，請先刪除不用的` };
+            const id = newId();
+            return { lists: [...lists, { id, name: nm, type, days: d, season, items: defaultItems(type, d, season, rooms).slice(0, PK.ITEMS).map(x => fresh(x.t, x.g)) }], err: '', id };
+        }
+        const mapList = (lists, id, f) => lists.map(l => l.id === id ? f(l) : l);
+        const removeList = (lists, id) => lists.filter(l => l.id !== id);
+        const renameList = (lists, id, name) => { const nm = str(name, PK.NAME); return nm ? mapList(lists, id, l => ({ ...l, name: nm })) : lists; };
+        const toggleItem = (lists, id, iid) => mapList(lists, id, l => ({ ...l, items: l.items.map(i => i.id === iid ? { ...i, c: !i.c } : i) }));
+        const resetChecks = (lists, id) => mapList(lists, id, l => ({ ...l, items: l.items.map(i => ({ ...i, c: false })) }));
+        const removeItem = (lists, id, iid) => mapList(lists, id, l => ({ ...l, items: l.items.filter(i => i.id !== iid) }));
+        // 上移（-1）/ 下移（1）：用 id 找位置
+        function moveItem(lists, id, iid, dir) {
+            return mapList(lists, id, l => {
+                const a = [...l.items], i = a.findIndex(x => x.id === iid), j = i + dir;
+                if (i < 0 || j < 0 || j >= a.length) return l;
+                [a[i], a[j]] = [a[j], a[i]];
+                return { ...l, items: a };
+            });
+        }
+        // 新增項目：空白拒絕、超長拒絕、滿 200 拒絕
+        function addItem(lists, id, text) {
+            const l = lists.find(x => x.id === id);
+            if (!l) return { lists, err: '找不到這份清單' };
+            const t = String(text ?? '').trim();
+            if (!t) return { lists, err: '請輸入項目' };
+            if (t.length > PK.TEXT) return { lists, err: `項目最長 ${PK.TEXT} 字` };
+            if (l.items.length >= PK.ITEMS) return { lists, err: `每份清單最多 ${PK.ITEMS} 項，請先刪除不用的` };
+            return { lists: mapList(lists, id, x => ({ ...x, items: [...x.items, fresh(t)] })), err: '' };
+        }
+        // 複製成新清單（勾選清空、新 id）；滿 30 份拒絕
+        function copyList(lists, id) {
+            const l = lists.find(x => x.id === id);
+            if (!l) return { lists, err: '找不到這份清單' };
+            if (lists.length >= PK.LISTS) return { lists, err: `最多 ${PK.LISTS} 份清單，請先刪除不用的` };
+            const nid = newId();
+            return { lists: [...lists, { ...l, id: nid, name: (l.name.slice(0, PK.NAME - 4) + '（複製）').slice(0, PK.NAME), items: l.items.map(i => ({ ...i, id: newId(), c: false })) }], err: '', id: nid };
+        }
+        const meta = (l) => MOVES.includes(l.type) ? `${l.type}・${l.days} 天` : `${l.type}・${l.days} 天・${SEASONS[l.season]}`;
+        const progress = (l) => ({ done: l.items.filter(i => i.c).length, total: l.items.length });
+        function toText(l) {
+            const { done, total } = progress(l);
+            return `${l.name}（${meta(l)}）${done}/${total}\n` + l.items.map(i => (i.c ? '☑ ' : '☐ ') + i.t).join('\n');
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'pack_lists';
+        let lists = normLists(store.get(KEY, []));
+        let openId = lists.length ? lists[0].id : null;
+        const save = () => store.set(KEY, lists);
+        const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+        const say = (id, text, bad) => { const m = $(id); m.textContent = text; m.className = 'msg' + (bad ? ' bad' : ''); };
+
+        TYPES.forEach(t => $('#n_type').append(new Option(t, t)));
+        $('#n_type').onchange = () => { const m = MOVES.includes($('#n_type').value); $('#seasonBox').hidden = m; $('#roomsBox').hidden = !m; };
+        Object.entries(SEASONS).forEach(([k, v]) => $('#n_season').append(new Option(v, k)));
+
+        function render() {
+            if (!lists.some(l => l.id === openId)) openId = lists.length ? lists[0].id : null;
+            const box = $('#lists'); box.replaceChildren();
+            $('#listsCard').hidden = !lists.length;
+            lists.forEach(l => {
+                const p = progress(l), b = el('button', '', `${l.name}　${p.done}/${p.total}`);
+                b.setAttribute('aria-pressed', l.id === openId); b.dataset.id = l.id;
+                b.onclick = () => { openId = l.id; render(); };
+                box.append(b);
+            });
+            const l = lists.find(x => x.id === openId);
+            $('#detail').hidden = !l;
+            if (!l) return;
+            if (document.activeElement !== $('#d_name')) $('#d_name').value = l.name;
+            const p = progress(l);
+            $('#meta').textContent = meta(l);
+            $('#barFill').style.width = (p.total ? p.done / p.total * 100 : 0) + '%';
+            $('#prog').textContent = p.total ? (p.done === p.total ? `全部帶好了（${p.total} 項）` : `已打包 ${p.done} / ${p.total} 項`) : '清單是空的，從下面新增項目';
+            const items = $('#items'); items.replaceChildren();
+            l.items.forEach((it, i) => {
+                const row = el('div', 'it' + (it.c ? ' done' : '')), lab = el('label'), ck = el('input');
+                ck.type = 'checkbox'; ck.checked = it.c; ck.onchange = () => { lists = toggleItem(lists, l.id, it.id); save(); render(); };
+                lab.append(ck, el('span', '', it.t)); row.append(lab);
+                if (it.g) row.append(el('span', 'g', it.g));
+                const mk = (txt, label, f, dis) => { const b = el('button', 'sm', txt); b.setAttribute('aria-label', label + ' ' + it.t); b.disabled = dis; b.onclick = f; row.append(b); };
+                mk('↑', '上移', () => { lists = moveItem(lists, l.id, it.id, -1); save(); render(); }, i === 0);
+                mk('↓', '下移', () => { lists = moveItem(lists, l.id, it.id, 1); save(); render(); }, i === l.items.length - 1);
+                mk('✕', '刪除', () => { lists = removeItem(lists, l.id, it.id); save(); render(); }, false);
+                items.append(row);
+            });
+        }
+
+        $('#create').onclick = () => {
+            const r = addList(lists, { name: $('#n_name').value, type: $('#n_type').value, days: $('#n_days').value.trim() === '' ? NaN : Number($('#n_days').value), season: $('#n_season').value, rooms: Number($('#n_rooms').value) });
+            if (r.err) { say('#newMsg', r.err, true); return; }
+            lists = r.lists; openId = r.id; save(); $('#n_name').value = ''; say('#newMsg', '已建立'); render();
+            $('#detail').scrollIntoView({ block: 'start' });
+        };
+        $('#d_name').onchange = () => { lists = renameList(lists, openId, $('#d_name').value); save(); render(); };
+        const doAdd = () => {
+            const r = addItem(lists, openId, $('#newItem').value);
+            if (r.err) { say('#itemMsg', r.err, true); return; }
+            lists = r.lists; save(); $('#newItem').value = ''; say('#itemMsg', ''); render();
+        };
+        $('#addItem').onclick = doAdd;
+        $('#newItem').onkeydown = (e) => { if (e.key === 'Enter') doAdd(); };
+        $('#resetChecks').onclick = () => { lists = resetChecks(lists, openId); save(); render(); say('#itemMsg', '已重置勾選'); };
+        $('#copyList').onclick = () => {
+            const r = copyList(lists, openId);
+            if (r.err) { say('#itemMsg', r.err, true); return; }
+            lists = r.lists; openId = r.id; save(); render(); say('#itemMsg', '已複製成新清單');
+        };
+        $('#copyText').onclick = async () => { const l = lists.find(x => x.id === openId); say('#itemMsg', l && await copyText(toText(l)) ? '已複製文字' : '複製失敗，請改用下載 .txt', !l); };
+        $('#dlText').onclick = () => { const l = lists.find(x => x.id === openId); if (l) Util.download(new Blob([toText(l)], { type: 'text/plain;charset=utf-8' }), `${l.name}.txt`); };
+        $('#delList').onclick = () => {
+            const l = lists.find(x => x.id === openId); if (!l) return;
+            if (!confirm(`刪除清單「${l.name}」（${l.items.length} 項）？無法復原。`)) return;
+            lists = removeList(lists, l.id); save(); render();
+        };
+        $('#clearAll').onclick = () => {
+            if (!lists.length) { say('#dataMsg', '目前沒有清單'); return; }
+            if (!confirm(`清除全部 ${lists.length} 份清單？無法復原。`)) return;
+            lists = []; save(); say('#dataMsg', '已清除全部'); render();
+        };
+        render();
+    </script>
+</body>
+
+</html>

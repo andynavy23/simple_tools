@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="人情簿：記錄收 / 送的紅包、白包與禮物，依對象彙總往來差額，查「這個人我之前包過多少」，收到後可設回禮提醒，可匯出 CSV。資料只存在本機。">
+    <meta property="og:title" content="人情簿" />
+    <meta property="og:description" content="紅包白包收送記錄，查往來、設回禮提醒。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/gift-ledger.html" />
+    <meta name="st-keys" content="giftl_items">
+    <title>人情簿</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        .fgrid select,
+        .fgrid input {
+            width: 100%;
+        }
+
+        .btns {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .msg {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 8px 0 0;
+            min-height: 1.2em;
+        }
+
+        .msg.bad {
+            color: var(--bad);
+        }
+
+        .hist {
+            font-size: 14px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            margin: 10px 0 0;
+            word-break: break-all;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .stats div {
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+        }
+
+        .stats small {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .stats b {
+            font-size: 20px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .filters {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .filters input {
+            flex: 2 1 160px;
+            min-width: 0;
+        }
+
+        .filters select {
+            flex: 1 1 100px;
+            min-width: 0;
+        }
+
+        .item h2,
+        .who h2 {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin: 0 0 6px;
+            word-break: break-all;
+        }
+
+        .chip {
+            font-size: 12px;
+            font-weight: 400;
+            color: var(--muted);
+            background: var(--fill);
+            border-radius: 99px;
+            padding: 2px 10px;
+        }
+
+        .badge {
+            font-size: 12px;
+            font-weight: 700;
+            border-radius: 99px;
+            padding: 2px 10px;
+            color: #fff;
+        }
+
+        .badge.in {
+            background: var(--ok);
+        }
+
+        .badge.out {
+            background: var(--blue);
+            color: var(--on-blue);
+        }
+
+        .badge.late {
+            background: var(--bad);
+        }
+
+        .meta {
+            color: var(--muted);
+            font-size: 14px;
+            margin: 2px 0;
+            word-break: break-all;
+        }
+
+        .meta b {
+            color: var(--text);
+        }
+
+        .pos {
+            color: var(--ok);
+        }
+
+        .neg {
+            color: var(--bad);
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>人情簿</h1>
+        <p class="sub">記下誰包過你、你包過誰，下次包多少心裡有底。資料只存在這個瀏覽器。</p>
+
+        <div class="card">
+            <h2 id="formTitle">新增一筆</h2>
+            <div class="fgrid">
+                <div><label for="f_dir">收 / 送</label><select id="f_dir"><option value="in">收到（別人給我）</option><option value="out">送出（我給別人）</option></select></div>
+                <div><label for="f_kind">形式</label><select id="f_kind"></select></div>
+                <div><label for="f_name">對象</label><input id="f_name" type="text" maxlength="30" list="nameList" placeholder="例如：王小明" autocomplete="off"></div>
+                <div><label for="f_rel">關係</label><input id="f_rel" type="text" maxlength="20" placeholder="同事、親戚…（可留白）"></div>
+                <div><label for="f_event">事由</label><select id="f_event"></select></div>
+                <div><label for="f_amt">金額（禮物填大約價值）</label><input id="f_amt" type="number" min="0" step="1" inputmode="numeric" placeholder="例如 2200"></div>
+                <div><label for="f_date">日期</label><input id="f_date" type="date"></div>
+                <div><label for="f_remind">回禮提醒日（收到才有）</label><input id="f_remind" type="date"></div>
+                <div class="full"><label for="f_note">備註</label><input id="f_note" type="text" maxlength="200" placeholder="例如：新郎同學、送了哪個禮盒（可留白）"></div>
+            </div>
+            <datalist id="nameList"></datalist>
+            <p class="hist" id="hist" hidden></p>
+            <div class="btns">
+                <button class="primary" id="save">新增</button>
+                <button id="cancel" hidden>取消編輯</button>
+            </div>
+            <p class="msg" id="formMsg"></p>
+        </div>
+
+        <div class="card" id="remBox" hidden>
+            <h2>回禮提醒</h2>
+            <div id="remList"></div>
+        </div>
+
+        <div class="card">
+            <div class="tabs">
+                <button class="sm" id="tabList" aria-pressed="true">明細</button>
+                <button class="sm" id="tabWho" aria-pressed="false">依對象彙總</button>
+            </div>
+            <div class="stats" id="stats"></div>
+        </div>
+
+        <div class="card">
+            <div class="filters">
+                <input id="q" type="text" placeholder="搜尋對象、關係、備註…" aria-label="搜尋">
+                <select id="dirFilter" aria-label="收送篩選"><option value="">收與送</option><option value="in">只看收到</option><option value="out">只看送出</option></select>
+                <select id="evFilter" aria-label="事由篩選"></select>
+            </div>
+        </div>
+
+        <div id="list"></div>
+
+        <div class="card">
+            <h2>資料管理</h2>
+            <p class="msg" style="margin:0 0 8px">最多 3000 筆。單筆刪除在每筆下方；這裡可以匯出或全部清除。這是私人資料，只存在本機，記得用右上角「💾」備份。</p>
+            <div class="btns" style="margin-top:0">
+                <button id="csv">匯出 CSV</button>
+                <button id="clearAll" style="color:var(--bad)">清除全部</button>
+            </div>
+            <p class="msg" id="dataMsg"></p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>紅包、白包、禮物的往來記錄本：記下收到或送出的對象、關係、事由、金額與日期，依對象算出收送差額，包紅包前查「這個人我之前包過多少」，收到後還能設定回禮提醒。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>要去喝喜酒、參加滿月酒，想知道對方之前包過你多少、你包過他多少。</li>
+        <li>收到紅包 / 禮物，想記得之後要回禮，到期提醒你。</li>
+        <li>年底想看今年收送多少、跟誰往來最多。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>選「收到」或「送出」，填對象、事由、金額與日期，按「新增」。禮物就選形式「禮物」，金額填大約價值，品項寫在備註。</li>
+        <li>輸入對象名字時，表單下方會即時顯示這個人過去的收送合計與最近一筆。</li>
+        <li>收到時可填「回禮提醒日」；到期（含逾期）會列在「回禮提醒」，回禮後按「已回禮」即可移除提醒。</li>
+        <li>「依對象彙總」看每個人的收到、送出與差額（正數 = 你多送出）；「明細」可搜尋、依收 / 送與事由篩選，每筆可編輯或刪除。</li>
+        <li>「匯出 CSV」下載全部記錄，Excel 可直接開啟。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">王小明 結婚 收到 2200（2024-05-01）；你之後送出 2600（2026-03-01）
+        → 彙總：收到 2,200、送出 2,600，差額 +400（你多送 400）
+        → 下次輸入「王小明」，會顯示「收 2,200 ・ 送 2,600」</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>這是私人資料，只存在這個瀏覽器，不會上傳；清除網站資料會消失，右上角「💾」可匯出備份。</li>
+        <li>最多 3000 筆，滿了要先刪除舊的才能新增；對象最長 30 字、關係 20 字、備註 200 字；金額為 0 到 10 億的整數。</li>
+        <li>對象以「完全相同的名字」彙總（前後空白會忽略），同一個人請用同一個寫法。</li>
+        <li>「清除全部」會刪掉所有記錄且無法復原；載入到壞掉的資料會自動略過或補預設值。</li>
+        <li>回禮提醒日以台灣時間（UTC+8）的今天判斷。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { day, store, csvStringify } = Util;
+
+        // --- pure ---
+        const GL = { MAX: 3000, NAME: 30, REL: 20, NOTE: 200, MAX_AMT: 1e9 };
+        const EVENTS = ['結婚', '滿月', '喪事', '生日', '其他'];
+        const KINDS = ['現金', '禮物'];
+
+        const twToday = (ms = Date.now()) => new Date(ms + 8 * 36e5).toISOString().slice(0, 10);
+        function validDate(s) {
+            if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+            const p = day.parse(s);
+            return p.y >= 1990 && p.y <= 2100 && p.m >= 1 && p.m <= 12 && p.d >= 1 && p.d <= day.daysInMonth(p.y, p.m);
+        }
+        const str = (v, n) => typeof v === 'string' ? v.trim().slice(0, n) : '';
+        const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        // 載入驗證：缺欄位補預設；沒有對象 / 日期壞掉 / 金額壞掉的整筆丟掉；回禮提醒只有「收到」才留
+        function normItem(r) {
+            if (!r || typeof r !== 'object') return null;
+            const name = str(r.name, GL.NAME), a = Number(r.amt);
+            if (!name || !validDate(r.date) || !Number.isFinite(a) || a < 0 || a > GL.MAX_AMT) return null;
+            const dir = r.dir === 'out' ? 'out' : 'in';
+            return {
+                id: str(r.id, 40) || newId(), dir, name, rel: str(r.rel, GL.REL), event: EVENTS.includes(r.event) ? r.event : '其他',
+                kind: KINDS.includes(r.kind) ? r.kind : '現金', amt: Math.round(a), date: r.date,
+                remind: dir === 'in' && validDate(r.remind) ? r.remind : '', note: str(r.note, GL.NOTE),
+            };
+        }
+        function normList(raw) {
+            if (!Array.isArray(raw)) return [];
+            const seen = new Set(), out = [];
+            for (const r of raw) {
+                const it = normItem(r);
+                if (!it || seen.has(it.id)) continue;
+                seen.add(it.id); out.push(it);
+                if (out.length >= GL.MAX) break;
+            }
+            return out;
+        }
+        // 表單檢查：回傳錯誤訊息，沒問題回傳 ''（欄位都是字串）
+        function checkForm(r) {
+            const s = (v) => String(v ?? '').trim();
+            if (!s(r.name)) return '請填對象';
+            if (s(r.name).length > GL.NAME) return `對象最長 ${GL.NAME} 字`;
+            if (s(r.rel).length > GL.REL) return `關係最長 ${GL.REL} 字`;
+            if (s(r.note).length > GL.NOTE) return `備註最長 ${GL.NOTE} 字`;
+            if (!validDate(s(r.date))) return '請選擇有效的日期（1990–2100）';
+            if (s(r.remind) !== '' && !validDate(s(r.remind))) return '回禮提醒日不是有效日期';
+            const a = s(r.amt) === '' ? NaN : Number(s(r.amt));
+            if (!(Number.isFinite(a) && a >= 0 && a <= GL.MAX_AMT)) return '金額請填 0 到 10 億的數字';
+            return '';
+        }
+        const fromForm = (r, id) => normItem({ id, dir: r.dir, name: r.name, rel: r.rel, event: r.event, kind: r.kind, amt: String(r.amt).trim(), date: String(r.date).trim(), remind: String(r.remind ?? '').trim(), note: r.note });
+        // 新增：滿 3000 筆拒絕（不默默刪舊的）
+        function addItem(list, r, id = newId()) {
+            const err = checkForm(r);
+            if (err) return { list, err };
+            if (list.length >= GL.MAX) return { list, err: `最多 ${GL.MAX} 筆，請先刪除不用的記錄` };
+            return { list: [...list, fromForm(r, id)], err: '' };
+        }
+        function updateItem(list, id, r) {
+            const err = checkForm(r);
+            if (err) return { list, err };
+            if (!list.some(x => x.id === id)) return { list, err: '找不到這筆記錄' };
+            return { list: list.map(x => x.id === id ? fromForm(r, id) : x), err: '' };
+        }
+        const removeItem = (list, id) => list.filter(x => x.id !== id);
+        // 回禮完成：清掉提醒日
+        const markReturned = (list, id) => list.map(x => x.id === id ? { ...x, remind: '' } : x);
+        // 日期新到舊
+        const byDateDesc = (a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? 1 : -1);
+        // 搜尋（對象 / 關係 / 備註 / 事由）+ 收送篩選 + 事由篩選
+        function filterItems(items, q, dir, ev) {
+            const k = String(q || '').trim().toLowerCase();
+            return items.filter(it => (!dir || it.dir === dir) && (!ev || it.event === ev) && (!k || [it.name, it.rel, it.note, it.event].some(v => v.toLowerCase().includes(k))));
+        }
+        // 統計：收到、送出、差額（送出 − 收到，正 = 你多送）
+        function totals(items) {
+            let inn = 0, out = 0, nIn = 0, nOut = 0;
+            for (const it of items) { if (it.dir === 'in') { inn += it.amt; nIn++; } else { out += it.amt; nOut++; } }
+            return { in: inn, out, nIn, nOut, diff: out - inn };
+        }
+        // 依對象彙總（名字完全相同才算同一人），最近往來的在前
+        function byPerson(items) {
+            const m = new Map();
+            for (const it of items) {
+                const p = m.get(it.name) || { name: it.name, in: 0, out: 0, nIn: 0, nOut: 0, last: '', rel: '' };
+                if (it.dir === 'in') { p.in += it.amt; p.nIn++; } else { p.out += it.amt; p.nOut++; }
+                if (it.date >= p.last) { p.last = it.date; if (it.rel) p.rel = it.rel; }
+                m.set(it.name, p);
+            }
+            return [...m.values()].map(p => ({ ...p, diff: p.out - p.in })).sort((a, b) => (a.last < b.last ? 1 : a.last > b.last ? -1 : a.name.localeCompare(b.name)));
+        }
+        // 查這個人過去的往來：回傳 null（查無）或 { ...彙總, latest: 最近一筆 }
+        function lookup(items, name) {
+            const n = String(name || '').trim();
+            if (!n) return null;
+            const mine = items.filter(it => it.name === n);
+            if (!mine.length) return null;
+            return { ...byPerson(mine)[0], latest: [...mine].sort(byDateDesc)[0] };
+        }
+        // 回禮提醒：有提醒日的「收到」，依日期由近到遠；days < 0 = 已逾期
+        function reminders(items, today) {
+            return items.filter(it => it.dir === 'in' && it.remind)
+                .map(it => ({ it, days: day.between(today, it.remind) }))
+                .sort((a, b) => a.days - b.days || (a.it.id < b.it.id ? -1 : 1));
+        }
+        // CSV：開頭是 = + - @ 的文字前補單引號，避免試算表當成公式
+        const csvGuard = (v) => { const s = String(v ?? ''); return /^[=+\-@\t\r]/.test(s) ? "'" + s : s; };
+        function toCsv(items) {
+            const rows = [...items].sort(byDateDesc).map(it => [it.date, it.dir === 'in' ? '收到' : '送出', csvGuard(it.name), csvGuard(it.rel), it.event, it.kind, it.amt, it.remind, csvGuard(it.note)]);
+            return csvStringify(['日期', '收/送', '對象', '關係', '事由', '形式', '金額', '回禮提醒日', '備註'], rows);
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'giftl_items';
+        let items = normList(store.get(KEY, []));
+        let editId = null, view = 'list';
+        const money = (v) => Math.round(v).toLocaleString('zh-TW');
+        const signed = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + money(Math.abs(v));
+        const save = () => store.set(KEY, items);
+        const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+
+        EVENTS.forEach(c => { $('#f_event').append(new Option(c, c)); });
+        KINDS.forEach(c => { $('#f_kind').append(new Option(c, c)); });
+        $('#evFilter').append(new Option('全部事由', ''));
+        EVENTS.forEach(c => { $('#evFilter').append(new Option(c, c)); });
+
+        const readForm = () => ({ dir: $('#f_dir').value, name: $('#f_name').value, rel: $('#f_rel').value, event: $('#f_event').value, kind: $('#f_kind').value, amt: $('#f_amt').value, date: $('#f_date').value, remind: $('#f_remind').value, note: $('#f_note').value });
+        function resetForm() {
+            editId = null;
+            ['f_name', 'f_rel', 'f_amt', 'f_remind', 'f_note'].forEach(i => { $('#' + i).value = ''; });
+            $('#f_dir').value = 'in'; $('#f_kind').value = KINDS[0]; $('#f_event').value = EVENTS[0]; $('#f_date').value = twToday();
+            $('#formTitle').textContent = '新增一筆'; $('#save').textContent = '新增'; $('#cancel').hidden = true;
+            syncDir(); showHist();
+        }
+        function syncDir() { $('#f_remind').disabled = $('#f_dir').value !== 'in'; if ($('#f_remind').disabled) $('#f_remind').value = ''; }
+        function msg(text, bad) { const m = $('#formMsg'); m.textContent = text; m.className = 'msg' + (bad ? ' bad' : ''); }
+        function showHist() {
+            const h = $('#hist'), r = lookup(items, $('#f_name').value);
+            h.hidden = !r;
+            if (r) h.textContent = `${r.name}${r.rel ? '（' + r.rel + '）' : ''}：收 ${money(r.in)}（${r.nIn} 次）・ 送 ${money(r.out)}（${r.nOut} 次）・ 最近 ${r.latest.date} ${r.latest.dir === 'in' ? '收到' : '送出'}${r.latest.event} ${money(r.latest.amt)}`;
+        }
+
+        function line(card, label, v) { if (!v) return; const p = el('div', 'meta'); p.append(label + '：', el('b', '', v)); card.append(p); }
+        function render() {
+            const today = twToday(), shown = filterItems(items, $('#q').value, $('#dirFilter').value, $('#evFilter').value), t = totals(shown);
+            // 名字候選
+            $('#nameList').replaceChildren(...byPerson(items).map(p => new Option(p.name)));
+            // 回禮提醒
+            const rem = reminders(items, today); $('#remBox').hidden = !rem.length;
+            $('#remList').replaceChildren(...rem.map(({ it, days }) => {
+                const d = el('div', 'li'), main = el('div'), b = el('button', 'sm', '已回禮');
+                main.append(el('b', '', `${it.name}（${it.event} ${money(it.amt)}）`), el('div', 'meta', days < 0 ? `提醒日 ${it.remind}（已逾期 ${-days} 天）` : days === 0 ? `提醒日 ${it.remind}（今天）` : `提醒日 ${it.remind}（還有 ${days} 天）`));
+                b.setAttribute('aria-label', '已回禮 ' + it.name);
+                b.onclick = () => { items = markReturned(items, it.id); save(); render(); };
+                d.append(main, b); return d;
+            }));
+            // 統計
+            const sBox = $('#stats'); sBox.replaceChildren();
+            [['收到', `${money(t.in)}（${t.nIn} 筆）`], ['送出', `${money(t.out)}（${t.nOut} 筆）`], ['差額（送出 − 收到）', signed(t.diff)], ['筆數', shown.length]].forEach(([k, v]) => { const d = el('div'); d.append(el('small', '', k), el('b', '', v)); sBox.append(d); });
+            $('#tabList').setAttribute('aria-pressed', view === 'list'); $('#tabWho').setAttribute('aria-pressed', view === 'who');
+            const list = $('#list'); list.replaceChildren();
+            if (!shown.length) { list.append(el('div', 'card muted', items.length ? '沒有符合的記錄' : '還沒有記錄，從上面新增第一筆吧')); return; }
+            if (view === 'who') {
+                byPerson(shown).forEach(p => {
+                    const card = el('div', 'card who'), h = el('h2', '', p.name);
+                    if (p.rel) h.append(el('span', 'chip', p.rel));
+                    card.append(h);
+                    line(card, '收到', `${money(p.in)}（${p.nIn} 次）`); line(card, '送出', `${money(p.out)}（${p.nOut} 次）`);
+                    const d = el('div', 'meta'); d.append('差額：', el('b', p.diff > 0 ? 'neg' : p.diff < 0 ? 'pos' : '', p.diff === 0 ? '持平' : (p.diff > 0 ? '你多送 ' : '你多收 ') + money(Math.abs(p.diff)))); card.append(d);
+                    line(card, '最近往來', p.last);
+                    const b = el('div', 'btns'), go = el('button', 'sm', '看這個人的明細'); go.onclick = () => { $('#q').value = p.name; view = 'list'; render(); };
+                    b.append(go); card.append(b); list.append(card);
+                });
+                return;
+            }
+            [...shown].sort(byDateDesc).forEach(it => {
+                const card = el('div', 'card item'), h = el('h2', '', it.name);
+                h.append(el('span', 'badge ' + it.dir, it.dir === 'in' ? '收到' : '送出'), el('span', 'chip', it.event));
+                if (it.rel) h.append(el('span', 'chip', it.rel));
+                card.append(h);
+                line(card, it.kind === '禮物' ? '禮物價值' : '金額', money(it.amt)); line(card, '日期', it.date);
+                if (it.remind) line(card, '回禮提醒', it.remind); line(card, '備註', it.note);
+                const b = el('div', 'btns');
+                const ed = el('button', 'sm', '編輯'); ed.onclick = () => startEdit(it.id);
+                const del = el('button', 'sm', '刪除'); del.setAttribute('aria-label', '刪除 ' + it.name); del.style.color = 'var(--bad)';
+                del.onclick = () => {
+                    if (!confirm(`刪除「${it.name}」這筆記錄？無法復原。`)) return;
+                    items = removeItem(items, it.id); if (editId === it.id) resetForm();
+                    save(); render();
+                };
+                b.append(ed, del); card.append(b); list.append(card);
+            });
+        }
+
+        function startEdit(id) {
+            const it = items.find(x => x.id === id); if (!it) return;
+            editId = id;
+            $('#f_dir').value = it.dir; $('#f_kind').value = it.kind; $('#f_name').value = it.name; $('#f_rel').value = it.rel; $('#f_event').value = it.event;
+            $('#f_amt').value = it.amt; $('#f_date').value = it.date; $('#f_remind').value = it.remind; $('#f_note').value = it.note;
+            $('#formTitle').textContent = '編輯記錄'; $('#save').textContent = '儲存'; $('#cancel').hidden = false;
+            syncDir(); showHist(); msg('');
+            $('#formTitle').scrollIntoView({ block: 'start' });
+        }
+
+        $('#save').onclick = () => {
+            const r = readForm(), res = editId ? updateItem(items, editId, r) : addItem(items, r);
+            if (res.err) { msg(res.err, true); return; }
+            items = res.list; save(); const was = editId; resetForm(); msg(was ? '已儲存' : '已新增'); render();
+        };
+        $('#cancel').onclick = () => { resetForm(); msg(''); };
+        $('#f_dir').onchange = syncDir;
+        $('#f_name').oninput = showHist;
+        ['#q', '#dirFilter', '#evFilter'].forEach(q => { $(q).oninput = render; });
+        $('#tabList').onclick = () => { view = 'list'; render(); };
+        $('#tabWho').onclick = () => { view = 'who'; render(); };
+        $('#csv').onclick = () => {
+            if (!items.length) { $('#dataMsg').textContent = '還沒有記錄可以匯出'; return; }
+            Util.download(new Blob(['﻿' + toCsv(items)], { type: 'text/csv;charset=utf-8' }), `人情簿_${twToday()}.csv`);
+            $('#dataMsg').textContent = '已匯出 CSV';
+        };
+        $('#clearAll').onclick = () => {
+            if (!items.length) { $('#dataMsg').textContent = '目前沒有記錄'; return; }
+            if (!confirm(`清除全部 ${items.length} 筆記錄？無法復原。`)) return;
+            items = []; save(); resetForm(); msg(''); $('#dataMsg').textContent = '已清除全部'; render();
+        };
+        resetForm(); render();
+    </script>
+</body>
+
+</html>

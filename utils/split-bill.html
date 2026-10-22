@@ -10,7 +10,7 @@
     <meta property="og:description" content="多人多筆支出，一次算出誰該付誰多少。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/split-bill.html" />
-    <meta name="st-keys" content="bill_state">
+    <meta name="st-keys" content="bill_state,bill_util">
     <title>分帳計算</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -74,6 +74,41 @@
             color: var(--bad);
         }
 
+        details.card>summary {
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 17px;
+            min-height: 28px;
+        }
+
+        details.card[open]>summary {
+            margin-bottom: 10px;
+        }
+
+        .ugrid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin: 8px 0;
+        }
+
+        .ugrid label {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 2px;
+        }
+
+        .ugrid input,
+        .ugrid select {
+            width: 100%;
+        }
+
+        .ucard {
+            border-top: 1px solid var(--fill);
+            padding: 8px 0;
+        }
+
         .del {
             background: none;
             color: var(--muted);
@@ -135,6 +170,38 @@
             <div id="result"></div>
             <button id="clear" style="margin-top:12px">全部清除</button>
         </div>
+
+        <details class="card" id="utilBox">
+            <summary>租屋水電瓦斯分攤</summary>
+            <p class="muted" style="margin:0 0 10px;font-size:13px">室友每月分帳單：電、水、瓦斯可各自選「依人數平均 / 依房間坪數 / 依用電度數」，每月記錄並累計。與上面的成員分開記。</p>
+            <div id="u_people"></div>
+            <div class="row">
+                <input id="u_pname" placeholder="室友名字" maxlength="12" aria-label="室友名字">
+                <input id="u_pping" type="number" inputmode="decimal" min="0" step="any" placeholder="房間坪數" style="max-width:110px" aria-label="房間坪數">
+                <button id="u_padd">新增室友</button>
+            </div>
+            <h2 style="margin-top:16px">新增月份</h2>
+            <div class="ugrid">
+                <div style="grid-column:1/-1"><label for="u_ym">月份</label><input id="u_ym" type="month"></div>
+                <div><label for="u_elec">電費帳單</label><input id="u_elec" type="number" inputmode="decimal" min="0" step="any" placeholder="可留白改填電價"></div>
+                <div><label for="u_elec_m">電費分法</label><select id="u_elec_m"></select></div>
+                <div><label for="u_rate">電價（元 / 度，選填）</label><input id="u_rate" type="number" inputmode="decimal" min="0" step="any" placeholder="電費留白時 = 度數 × 電價"></div>
+                <div></div>
+                <div><label for="u_water">水費帳單</label><input id="u_water" type="number" inputmode="decimal" min="0" step="any" placeholder="可留白"></div>
+                <div><label for="u_water_m">水費分法</label><select id="u_water_m"></select></div>
+                <div><label for="u_gas">瓦斯費帳單</label><input id="u_gas" type="number" inputmode="decimal" min="0" step="any" placeholder="可留白"></div>
+                <div><label for="u_gas_m">瓦斯分法</label><select id="u_gas_m"></select></div>
+            </div>
+            <div class="muted" style="font-size:13px">各室友本月用電度數（電費選「依用電度數」或填電價時要填）</div>
+            <div class="ugrid" id="u_kwh"></div>
+            <button class="primary" id="u_madd">記錄這個月</button>
+            <p class="muted" id="u_msg" style="margin:8px 0 0;font-size:13px"></p>
+            <h2 style="margin-top:16px">每月記錄</h2>
+            <div id="u_months"></div>
+            <h2 style="margin-top:16px">累計</h2>
+            <div id="u_total"></div>
+            <button id="u_clear" style="margin-top:12px;color:var(--bad)">清除水電瓦斯資料</button>
+        </details>
     </div>
 
     <template id="help">
@@ -151,9 +218,11 @@
         <li>在「新增支出」填項目、金額，選「誰先付」，勾選分攤的人，按「加入這筆支出」。</li>
         <li>下方「支出紀錄」可刪除錯誤的一筆；「結算」會列出每人可收回 / 應付，以及怎麼轉帳最省事。</li>
         <li>小費快算：填帳單金額、小費 %、人數，可勾「每人湊整數」。</li>
+        <li>租屋水電瓦斯：展開最下面的「租屋水電瓦斯分攤」，新增室友（填房間坪數才能用坪數分法），再「新增月份」：填電、水、瓦斯帳單，各自選分法；選「依用電度數」要填每人度數，電費也可留白只填電價（總額 = 總度數 × 電價）。按「記錄這個月」會存起來並加進累計；記錯就刪掉那個月重記。</li>
         </ol>
         <h3>範例</h3>
-        <div class="eg">成員：小明、小華、阿美；晚餐 900，小明先付，三人分攤
+        <div class="eg">租屋：室友 A 房 8 坪 / B 房 6 坪；電費 1,000，依坪數 → A 571.43、B 428.57（加總剛好 1,000）
+        成員：小明、小華、阿美；晚餐 900，小明先付，三人分攤
         → 小明可收回 600，小華應付 300，阿美應付 300
         → 轉帳：小華 → 小明 300、阿美 → 小明 300
         小費快算：帳單 1000、小費 10%、2 人 → 每人付 550</div>
@@ -162,6 +231,7 @@
         <li>已出現在支出紀錄的成員要先刪掉相關支出才能移除。</li>
         <li>除不盡的零頭會由前面的人多負擔 1 分。</li>
         <li>資料只存在這個瀏覽器；成員最多 30 位、支出最多 500 筆；「全部清除」會刪光成員與支出。</li>
+        <li>水電瓦斯：室友最多 10 位、月份記錄最多 60 個月（滿了拒絕新增，請先刪舊月份）；同一個月只能有一筆；已有月份記錄時不能移除室友（會改變過去的分攤），請先刪除月份。按比例分攤除不盡的分，會依「小數餘數最大者優先」每人各多 1 分，加總一定等於帳單。「清除水電瓦斯資料」只刪這一區，不影響上面的成員與支出（備份也包含 bill_util 這個資料）。</li>
         </ul>
     </template>
 
@@ -221,6 +291,116 @@
                 .map(e => ({ desc: typeof e.desc === 'string' ? e.desc.slice(0, 40) : '', payer: e.payer, amount: e.amount, shares: [...new Set(e.shares)] }));
             return { people, expenses };
         }
+        // ---------- 租屋水電瓦斯 ----------
+        // bill_util = { members: [{ id, name, ping }], months: [{ id, ym, items: { elec|water|gas: { total（分）, method } }, kwh: { 室友 id: 度數 } }] }
+        const MAX_UMEMBERS = 10, MAX_MONTHS = 60;
+        const UKINDS = { elec: '電費', water: '水費', gas: '瓦斯費' };
+        const UMETHODS = { equal: '依人數平均', ping: '依房間坪數', kwh: '依用電度數' };
+        const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        const validYm = (s) => typeof s === 'string' && /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/.test(s);
+        // 比例分攤（單位：分）：各人先取整數部分，剩下的分依「小數餘數大者優先、同分則排前面者」各多 1 分，總和一定等於 total；權重總和為 0 時改平均
+        function apportion(total, weights) {
+            const n = weights.length, W = weights.reduce((a, b) => a + b, 0), w = W > 0 ? weights : weights.map(() => 1), S = W > 0 ? W : n;
+            const q = w.map(x => total * x / S), base = q.map(x => Math.floor(x + 1e-9));
+            let rem = total - base.reduce((a, b) => a + b, 0);
+            const order = q.map((x, i) => [x - base[i], i]).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+            for (let k = 0; rem > 0 && k < order.length; k++, rem--) base[order[k][1]]++;
+            return base;
+        }
+        // 這個月每個室友各項金額與合計（分）；回傳 { 室友 id: { elec, water, gas, total } }
+        function monthShares(month, members) {
+            const out = Object.fromEntries(members.map(m => [m.id, { elec: 0, water: 0, gas: 0, total: 0 }]));
+            for (const k of Object.keys(UKINDS)) {
+                const it = month.items[k];
+                if (!it || !it.total) continue;
+                const w = members.map(m => (it.method === 'ping' ? m.ping : it.method === 'kwh' ? (month.kwh[m.id] || 0) : 1));
+                apportion(it.total, w).forEach((v, i) => { out[members[i].id][k] = v; out[members[i].id].total += v; });
+            }
+            return out;
+        }
+        // 累計：每位室友所有月份的合計（分）、整體合計
+        function cumulative(util) {
+            const per = Object.fromEntries(util.members.map(m => [m.id, 0])); let all = 0;
+            for (const mo of util.months) { const sh = monthShares(mo, util.members); for (const m of util.members) { per[m.id] += sh[m.id].total; all += sh[m.id].total; } }
+            return { per, all };
+        }
+        // 每度電實際單價（元）= 電費 ÷ 總度數；沒填度數或電費為 null
+        function elecRate(month) {
+            const kw = Object.values(month.kwh).reduce((a, b) => a + b, 0), t = month.items.elec && month.items.elec.total;
+            return kw > 0 && t ? t / 100 / kw : null;
+        }
+        // 電費留白、填了電價：總額（分）= 總度數 × 電價，四捨五入到分
+        const elecFromRate = (kwh, rate) => Math.round(Object.values(kwh).reduce((a, b) => a + b, 0) * rate * 100);
+        // 這組設定能不能算：坪數法要每人坪數 > 0、度數法要總度數 > 0；回傳錯誤訊息或 ''
+        function checkMethods(items, kwh, members) {
+            for (const k of Object.keys(UKINDS)) {
+                const it = items[k];
+                if (!it || !it.total) continue;
+                if (it.method === 'ping' && members.some(m => !(m.ping > 0))) return UKINDS[k] + '選依坪數，但有室友沒填房間坪數';
+                if (it.method === 'kwh' && !(members.reduce((a, m) => a + (kwh[m.id] || 0), 0) > 0)) return UKINDS[k] + '選依用電度數，但還沒填度數';
+            }
+            return '';
+        }
+        // 載入驗證（還原備份也會走這裡）：壞資料略過；月份只留成員內的度數；算不出來的分法降為平均；同月只留第一筆
+        function normUtil(raw) {
+            const o = raw && typeof raw === 'object' ? raw : {}, seenM = new Set(), members = [];
+            for (const m of Array.isArray(o.members) ? o.members : []) {
+                if (!m || typeof m.name !== 'string' || !m.name.trim() || m.name.length > 12 || typeof m.id !== 'string' || !m.id || m.id.length > 40 || seenM.has(m.id)) continue;
+                const pg = Number(m.ping); seenM.add(m.id);
+                members.push({ id: m.id, name: m.name.trim(), ping: Number.isFinite(pg) && pg > 0 && pg < 1e4 ? pg : 0 });
+                if (members.length >= MAX_UMEMBERS) break;
+            }
+            const months = [], seenY = new Set(), seenId = new Set();
+            for (const r of Array.isArray(o.months) ? o.months : []) {
+                if (!r || typeof r !== 'object' || !validYm(r.ym) || seenY.has(r.ym) || typeof r.id !== 'string' || !r.id || seenId.has(r.id)) continue;
+                const kwh = {};
+                if (r.kwh && typeof r.kwh === 'object') for (const m of members) { const v = Number(r.kwh[m.id]); if (Number.isFinite(v) && v > 0 && v < 1e7) kwh[m.id] = v; }
+                const items = {};
+                for (const k of Object.keys(UKINDS)) {
+                    const it = r.items && r.items[k], t = it ? Number(it.total) : 0;
+                    items[k] = { total: Number.isSafeInteger(t) && t > 0 && t < 1e11 ? t : 0, method: it && it.method in UMETHODS ? it.method : 'equal' };
+                }
+                for (const k of Object.keys(UKINDS)) if (items[k].method !== 'equal' && checkMethods({ [k]: items[k] }, kwh, members)) items[k].method = 'equal';
+                if (!Object.values(items).some(it => it.total)) continue;
+                seenY.add(r.ym); seenId.add(r.id); months.push({ id: r.id, ym: r.ym, items, kwh });
+                if (months.length >= MAX_MONTHS) break;
+            }
+            return { members, months };
+        }
+        function addMember(util, name, ping, id = uid()) {
+            const n = String(name || '').trim(), pg = ping === '' || ping == null ? 0 : Number(ping);
+            if (!n) return { util, err: '請填室友名字' };
+            if (n.length > 12) return { util, err: '名字最長 12 字' };
+            if (!Number.isFinite(pg) || pg < 0 || pg >= 1e4) return { util, err: '坪數請填 0 以上的數字（可留白）' };
+            if (util.members.some(m => m.name === n)) return { util, err: '名字重複了' };
+            if (util.members.length >= MAX_UMEMBERS) return { util, err: `室友最多 ${MAX_UMEMBERS} 位` };
+            return { util: { ...util, members: [...util.members, { id, name: n, ping: pg }] }, err: '' };
+        }
+        // 已有月份記錄時不能移除室友（會改變過去的分攤）
+        function removeMember(util, id) {
+            if (util.months.length) return { util, err: '已有月份記錄，請先刪除相關月份再移除室友' };
+            return { util: { ...util, members: util.members.filter(m => m.id !== id) }, err: '' };
+        }
+        // 新增一個月：r = { ym, items: { elec|water|gas: { total（分）, method } }, kwh: { 室友 id: 度數 } }；滿 60 個月、同月重複都拒絕
+        function addMonth(util, r, id = uid()) {
+            if (!util.members.length) return { util, err: '請先新增室友' };
+            if (!validYm(r.ym)) return { util, err: '請選擇月份' };
+            if (util.months.some(m => m.ym === r.ym)) return { util, err: '這個月已經記錄過，請先刪除再重記' };
+            if (util.months.length >= MAX_MONTHS) return { util, err: `最多記錄 ${MAX_MONTHS} 個月，請先刪除舊月份` };
+            const items = {};
+            for (const k of Object.keys(UKINDS)) {
+                const it = r.items[k] || {}, t = it.total;
+                if (!(t === 0 || (Number.isSafeInteger(t) && t > 0 && t < 1e11))) return { util, err: UKINDS[k] + '請填 0 到 10 億之間的金額' };
+                items[k] = { total: t || 0, method: it.method in UMETHODS ? it.method : 'equal' };
+            }
+            if (!Object.values(items).some(it => it.total)) return { util, err: '請至少填一項帳單金額' };
+            const kwh = {};
+            for (const m of util.members) { const v = Number(r.kwh && r.kwh[m.id]); if (Number.isFinite(v) && v > 0 && v < 1e7) kwh[m.id] = v; }
+            const err = checkMethods(items, kwh, util.members);
+            if (err) return { util, err };
+            return { util: { ...util, months: [...util.months, { id, ym: r.ym, items, kwh }] }, err: '' };
+        }
+        const removeMonth = (util, id) => ({ ...util, months: util.months.filter(m => m.id !== id) });
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -229,6 +409,8 @@
         const { store } = Util;
         let S = normBill(store.get(KEY, null));
         const save = () => store.set(KEY, S);
+        let U = normUtil(store.get('bill_util', null));
+        const saveU = () => store.set('bill_util', U);
         const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
 
         function render() {
@@ -336,7 +518,71 @@
             S = { people: [], expenses: [] };
             flash(''); save(); render();
         };
-        render();
+        // ---------- 租屋水電瓦斯 ----------
+        const kStr = (c) => (c / 100).toLocaleString('zh-TW', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        const uMsg = (t) => { $('#u_msg').textContent = t; };
+        ['elec', 'water', 'gas'].forEach(k => {
+            const sel = $('#u_' + k + '_m');
+            Object.entries(UMETHODS).forEach(([v, n]) => { if (!(k !== 'elec' && v === 'kwh')) sel.append(new Option(n, v)); });
+        });
+        $('#u_ym').value = Util.day.today().slice(0, 7);
+        function renderUtil() {
+            const box = $('#u_people'); box.replaceChildren();
+            U.members.forEach(m => {
+                const chip = el('span', m.name + (m.ping ? ` ${m.ping} 坪` : ''), 'chip'), b = el('button', '×');
+                b.setAttribute('aria-label', '移除 ' + m.name);
+                b.onclick = () => { const r = removeMember(U, m.id); if (r.err) return uMsg(r.err); U = r.util; saveU(); uMsg(''); renderUtil(); };
+                chip.append(b); box.append(chip);
+            });
+            if (!U.members.length) box.append(el('div', '還沒有室友', 'muted'));
+            const keep = Object.fromEntries([...document.querySelectorAll('#u_kwh input')].map(i => [i.dataset.id, i.value]));
+            $('#u_kwh').replaceChildren(...U.members.map(m => {
+                const d = el('div'), l = el('label', m.name + ' 度數'), i = document.createElement('input');
+                i.type = 'number'; i.min = '0'; i.step = 'any'; i.inputMode = 'decimal'; i.dataset.id = m.id; i.value = keep[m.id] || ''; i.id = 'uk_' + m.id; l.htmlFor = i.id;
+                d.append(l, i); return d;
+            }));
+            const ms = $('#u_months'); ms.replaceChildren();
+            if (!U.months.length) ms.append(el('div', '還沒有月份記錄', 'muted'));
+            [...U.months].sort((a, b) => b.ym.localeCompare(a.ym)).forEach(mo => {
+                const card = el('div', null, 'ucard'), sh = monthShares(mo, U.members), tot = Object.values(mo.items).reduce((a, it) => a + it.total, 0);
+                card.append(el('b', `${mo.ym}　共 ${kStr(tot)}`));
+                const det = Object.keys(UKINDS).filter(k => mo.items[k].total).map(k => `${UKINDS[k]} ${kStr(mo.items[k].total)}（${UMETHODS[mo.items[k].method]}）`).join('、');
+                const small = el('small', det); small.style.display = 'block'; small.className = 'muted'; card.append(small);
+                const rt = elecRate(mo); if (rt) { const r = el('small', `實際每度電 ${rt.toFixed(2)} 元`); r.className = 'muted'; r.style.display = 'block'; card.append(r); }
+                U.members.forEach(m => { const row = el('div', null, 'li'); row.append(el('span', m.name), el('b', kStr(sh[m.id].total))); card.append(row); });
+                const del = el('button', '刪除這個月', 'del'); del.setAttribute('aria-label', '刪除 ' + mo.ym);
+                del.onclick = () => { if (!confirm(`刪除 ${mo.ym} 的水電瓦斯記錄？無法復原。`)) return; U = removeMonth(U, mo.id); saveU(); renderUtil(); };
+                card.append(del); ms.append(card);
+            });
+            const cu = cumulative(U), tb = $('#u_total'); tb.replaceChildren();
+            if (!U.months.length) { tb.append(el('div', '有記錄後會在這裡累計', 'muted')); return; }
+            tb.append(el('div', `共 ${U.months.length} 個月，合計 ${kStr(cu.all)}`, 'muted'));
+            U.members.forEach(m => { const row = el('div', null, 'li'); row.append(el('span', m.name), el('b', kStr(cu.per[m.id]))); tb.append(row); });
+        }
+        $('#u_padd').onclick = () => {
+            const r = addMember(U, $('#u_pname').value, $('#u_pping').value);
+            if (r.err) return uMsg(r.err);
+            U = r.util; $('#u_pname').value = ''; $('#u_pping').value = ''; saveU(); uMsg(''); renderUtil();
+        };
+        $('#u_pname').onkeydown = (e) => { if (e.key === 'Enter') $('#u_padd').click(); };
+        $('#u_madd').onclick = () => {
+            const kwh = Object.fromEntries([...document.querySelectorAll('#u_kwh input')].map(i => [i.dataset.id, parseFloat(i.value) || 0]));
+            const cents = (id) => { const v = $(id).value.trim(); return v === '' ? 0 : toCents(v); };
+            let elec = cents('#u_elec'); const rate = parseFloat($('#u_rate').value);
+            if (!elec && rate > 0) elec = elecFromRate(kwh, rate);
+            if (Number.isNaN(elec) || Number.isNaN(cents('#u_water')) || Number.isNaN(cents('#u_gas'))) return uMsg('金額請填數字');
+            const items = { elec: { total: elec, method: $('#u_elec_m').value }, water: { total: cents('#u_water'), method: $('#u_water_m').value }, gas: { total: cents('#u_gas'), method: $('#u_gas_m').value } };
+            const r = addMonth(U, { ym: $('#u_ym').value, items, kwh });
+            if (r.err) return uMsg(r.err);
+            U = r.util; saveU(); uMsg('已記錄 ' + $('#u_ym').value);
+            ['u_elec', 'u_rate', 'u_water', 'u_gas'].forEach(i => { $('#' + i).value = ''; }); document.querySelectorAll('#u_kwh input').forEach(i => { i.value = ''; }); renderUtil();
+        };
+        $('#u_clear').onclick = () => {
+            if (!U.members.length && !U.months.length) return uMsg('目前沒有水電瓦斯資料');
+            if (!confirm(`清除全部水電瓦斯資料（${U.members.length} 位室友、${U.months.length} 個月記錄）？無法復原。上面的成員與支出不受影響。`)) return;
+            U = { members: [], months: [] }; saveU(); uMsg('已清除'); renderUtil();
+        };
+        render(); renderUtil();
     </script>
 </body>
 

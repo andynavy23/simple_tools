@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="貸款、複利與存款目標試算：月付金與逐期表、定期定額的複利成長，以及多久或每月要存多少才能達標。">
+    <meta name="description" content="貸款、複利、存款目標、債務與購屋租屋試算：月付金與逐期表、定期定額的複利成長，以及多久或每月要存多少才能達標。">
     <meta property="og:title" content="貸款 / 複利試算" />
     <meta property="og:description" content="月付金、複利成長與存款目標。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
@@ -88,6 +88,8 @@
             <button data-mode="invest" aria-pressed="false">複利成長</button>
             <button data-mode="goal" aria-pressed="false">存款目標</button>
             <button data-mode="buyrent" aria-pressed="false">買房 vs 租房</button>
+            <button data-mode="debt" aria-pressed="false">債務</button>
+            <button data-mode="house" aria-pressed="false">購屋與租屋</button>
         </div>
 
         <div class="card" id="loan">
@@ -143,6 +145,11 @@
             <p class="muted" style="font-size:13px;margin:10px 0 0">假設租房者把頭期款、買房費用，以及每月「買房支出比租金多出來的錢」都拿去投資（機會成本）。</p>
         </div>
 
+        <div class="card" id="subCard" hidden>
+            <label for="sub">試算項目</label><select id="sub" style="width:100%;margin-bottom:12px"></select>
+            <div id="subForms"></div>
+        </div>
+
         <div class="card" id="out"></div>
         <div class="card" id="brCard" hidden>
             <h2>累積總成本</h2>
@@ -157,7 +164,7 @@
 
     <template id="help">
         <h3>這是什麼</h3>
-        <p>四合一理財試算：貸款每期要繳多少、定期投入的複利成長、要存多久（或每月存多少）才能達到目標金額，以及買房和租房哪個比較划算。</p>
+        <p>六合一理財試算：貸款每期要繳多少、定期投入的複利成長、存款目標、買房 vs 租房，以及「債務」（信用卡循環、分期實質利率、雪球 / 雪崩、提前還款、轉貸、就學貸款）與「購屋與租屋」（購屋能力、租金投報率、押金與退租結算）。</p>
         <h3>什麼時候用</h3>
         <ul>
         <li>買房、買車貸款前，比較本息平均與本金平均哪種比較適合。</li>
@@ -172,6 +179,8 @@
         <li>複利成長：填起始本金、每月投入、年報酬率、年數，看每年底的本金與資產。</li>
         <li>存款目標：填目標金額、目前已有、年報酬率與通膨率，選「想知道」是要多久達標，還是每月該存多少。</li>
         <li>買房 vs 租房：填房價、頭期款、貸款利率與年限（可設寬限期）、持有年數、房價年增率、買房費用比例、每年持有成本、月租金與年漲幅，以及「不買房的投資報酬率」。看損益平衡年數、累積總成本曲線（藍線買房、綠線租房、虛線為損益平衡點）與逐年表。</li>
+        <li>債務分頁：上方「試算項目」選一項，填數字即時出結果。信用卡看只繳最低應繳要多久還完；分期看含手續費的實質年利率；雪球 / 雪崩比較還款順序與總利息；提前還款比較縮短年限或降低月付；轉貸看每月省多少、幾個月回本；就學貸款看畢業後每月要繳多少。</li>
+        <li>購屋與租屋分頁：購屋能力由月收入、現有負債與可接受負債比反推可貸金額與房價範圍；租金投報率算毛 / 淨投報率；押金與退租結算按日計租並算出押金應退多少。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">貸款 1,000,000、年利率 2.2%、20 年、本息平均
@@ -191,6 +200,7 @@
         <li>存款目標以「現在的購買力」計算；填通膨率會自動換成實質報酬。</li>
         <li>報酬率是假設值，投資實際報酬會波動。</li>
         <li>買房 vs 租房是簡化估算：未計賣屋費用、增值稅、利率調整與房價波動；「每年持有成本」固定不隨年數調整；損益平衡是指「從那之後一直」買房都不比租房貴。</li>
+        <li>債務與購屋分頁的利率、最低應繳比例、寬限期、負債比、押金月數上限等都是「範例值」，請依自己的契約與現行法規自行確認；全部為估算，非財務建議。</li>
         <li>本頁不會儲存任何資料，重新整理就回到預設值。</li>
         </ul>
     </template>
@@ -297,6 +307,137 @@
 
         // 月數 → 「N 年 M 個月」
         const fmtYM = (m) => m < 12 ? `${m} 個月` : `${Math.floor(m / 12)} 年${m % 12 ? ' ' + (m % 12) + ' 個月' : ''}`;
+
+        // ===== 債務 / 購屋與租屋（估算，非財務建議；皆為純數學，不含任何法規費率） =====
+        // 每月應繳（本息平均）；年利率為 %；n 為期數
+        const pmtOf = (P, annualPct, n) => { const r = annualPct / 1200; return n > 0 ? (r === 0 ? P / n : P * r / (1 - Math.pow(1 + r, -n))) : NaN; };
+        // 固定月付 pay 還清 bal 需要幾期（可為小數）；月付不夠付利息回傳 Infinity
+        function nperOf(bal, annualPct, pay) {
+            const r = annualPct / 1200;
+            if (bal <= 0) return 0;
+            if (!(pay > 0)) return Infinity;
+            if (r === 0) return bal / pay;
+            const x = 1 - bal * r / pay;
+            return x > 0 ? -Math.log(x) / Math.log(1 + r) : Infinity;
+        }
+        // 固定月付逐月模擬：回傳 { months, interest }；超過 maxM 或不夠付利息回傳 months = Infinity
+        function simPay(bal, annualPct, pay, maxM = 1200) {
+            const r = annualPct / 1200; let m = 0, interest = 0;
+            while (bal > 1e-6) {
+                if (++m > maxM) return { months: Infinity, interest };
+                const it = bal * r; interest += it; bal = bal + it - Math.min(pay, bal + it);
+            }
+            return { months: m, interest };
+        }
+        // 已繳 k 期後的貸款餘額（本息平均）
+        const balAfter = (P, annualPct, n, k) => { const r = annualPct / 1200, pay = pmtOf(P, annualPct, n); return r === 0 ? P - pay * k : Math.max(0, P * Math.pow(1 + r, k) - pay * (Math.pow(1 + r, k) - 1) / r); };
+
+        // 信用卡循環：每月應繳 = max(下限, 餘額 × 比例)，不超過本月應還總額；1200 期仍未還清視為永遠還不完
+        function ccRevolve(bal, aprPct, minPct, floor, maxM = 1200) {
+            const r = aprPct / 1200; let m = 0, interest = 0, firstPay = 0;
+            const firstInterest = bal * r;
+            while (bal > 1e-6) {
+                if (++m > maxM) return { never: true, months: Infinity, totalInterest: Infinity, firstPay, firstInterest };
+                const it = bal * r, pay = Math.min(bal + it, Math.max(floor, bal * minPct / 100));
+                if (m === 1) firstPay = pay;
+                interest += it; bal = bal + it - pay;
+            }
+            return { never: false, months: m, totalInterest: interest, firstPay, firstInterest };
+        }
+
+        // 分期實質利率：現金價 cash，每期付 pay、共 n 期，另付一次性手續費 upfront → 月 IRR（二分法）
+        // 回傳 { monthly, nominal（月利率×12，%）, effective（年有效利率，%）, extra（總付款 − 現金價）}
+        function installmentIRR(cash, pay, n, upfront = 0) {
+            const net = cash - upfront, extra = pay * n + upfront - cash;
+            const pv = (i) => Math.abs(i) < 1e-12 ? pay * n : pay * (1 - Math.pow(1 + i, -n)) / i;
+            let lo = -0.5, hi = 10;
+            if (!(net > 0 && pay > 0 && n >= 1)) return { monthly: NaN, nominal: NaN, effective: NaN, extra };
+            for (let k = 0; k < 200; k++) { const mid = (lo + hi) / 2; if (pv(mid) > net) lo = mid; else hi = mid; }
+            const i = (lo + hi) / 2;
+            return { monthly: i, nominal: i * 1200, effective: (Math.pow(1 + i, 12) - 1) * 100, extra };
+        }
+
+        // 債務雪球 / 雪崩：debts [{ name, bal, rate（年利率 %）, min }]；每月總預算 = 所有最低還款 + extra（還清的最低還款滾入下一筆）
+        // strategy: 'snow'（餘額小的先）| 'aval'（利率高的先）。回傳 { months, totalInterest, order: [{ name, month }], never }
+        function snowAvalanche(debts, extra, strategy, maxM = 1200) {
+            const ds = debts.filter(d => d.bal > 0).map(d => ({ ...d, b: d.bal }));
+            const budget = ds.reduce((s, d) => s + d.min, 0) + extra;
+            const prio = ds.slice().sort(strategy === 'snow' ? (a, b) => a.bal - b.bal || b.rate - a.rate : (a, b) => b.rate - a.rate || a.bal - b.bal);
+            const order = []; let m = 0, totalInterest = 0;
+            while (prio.some(d => d.b > 1e-6)) {
+                if (++m > maxM) return { months: Infinity, totalInterest: Infinity, order, never: true };
+                let left = budget;
+                for (const d of prio) if (d.b > 1e-6) { const it = d.b * d.rate / 1200; d.b += it; totalInterest += it; }
+                for (const d of prio) if (d.b > 1e-6) { const p = Math.min(d.min, d.b, left); d.b -= p; left -= p; }
+                for (const d of prio) if (d.b > 1e-6 && left > 0) { const p = Math.min(d.b, left); d.b -= p; left -= p; }
+                for (const d of prio) if (d.b <= 1e-6 && !d.done) { d.done = true; order.push({ name: d.name, month: m }); }
+            }
+            return { months: m, totalInterest, order, never: false };
+        }
+
+        // 提前還款：原貸款 P / 年利率 / 年數，已繳 k 期，一次提前還 X（違約金 feePct %，按提前還款額計）
+        // 回傳 { bal, pay, rem, baseInterest（剩餘期間利息）, penalty, shorten: { months, saved }, lower: { pay, saved } }；saved 已扣違約金
+        function prepay(P, ratePct, years, k, X, feePct = 0) {
+            const n = Math.round(years * 12), pay = pmtOf(P, ratePct, n), bal = balAfter(P, ratePct, n, k), rem = n - k;
+            const baseInterest = pay * rem - bal, nb = bal - X, penalty = X * feePct / 100;
+            const sh = simPay(nb, ratePct, pay), newPay = nb > 0 ? pmtOf(nb, ratePct, rem) : 0;
+            return { bal, pay, rem, baseInterest, penalty, shorten: { months: sh.months, saved: baseInterest - sh.interest - penalty }, lower: { pay: newPay, saved: baseInterest - (newPay * rem - nb) - penalty } };
+        }
+
+        // 房貸轉貸：舊貸款剩餘 bal、舊/新年利率、剩餘期數、新貸款期數、轉貸總費用 fees
+        // 回傳 { oldPay, newPay, saving（每月）, breakeven（回收期，月；沒省錢 null）, total（整段期間總省，含費用）}
+        function refinance(bal, oldRate, remMonths, newRate, newMonths, fees) {
+            const oldPay = pmtOf(bal, oldRate, remMonths), newPay = pmtOf(bal, newRate, newMonths), saving = oldPay - newPay;
+            return { oldPay, newPay, saving, breakeven: saving > 0 ? fees / saving : null, total: oldPay * remMonths - (newPay * newMonths + fees) };
+        }
+
+        // 就學貸款：借款總額 P、年利率、畢業後寬限 g 個月（payInt：寬限期繳利息 true / 利息併入本金 false）、之後分 years 年本息平均
+        // 在學期間免息（不計）。回傳 { graceMonthly, balAfterGrace, pay, graceInterest, totalInterest }
+        function studentLoan(P, ratePct, g, years, payInt) {
+            const r = ratePct / 1200, n = Math.round(years * 12);
+            const bal = payInt ? P : P * Math.pow(1 + r, g), graceInterest = payInt ? P * r * g : bal - P;
+            const pay = pmtOf(bal, ratePct, n);
+            return { graceMonthly: payInt ? P * r : 0, balAfterGrace: bal, pay, graceInterest, totalInterest: graceInterest + pay * n - bal };
+        }
+
+        // 購屋能力：月收入、現有每月負債還款、可接受負債比（% 月收入，含新房貸月付）、年利率、年數、頭期款
+        // 回傳 { maxPay, loan, price（貸款 + 頭期款）, ltv（貸款成數 %）}
+        function affordability(income, debt, ratioPct, ratePct, years, down) {
+            const maxPay = Math.max(0, income * ratioPct / 100 - debt), n = Math.round(years * 12), r = ratePct / 1200;
+            const loan = maxPay * (r === 0 ? n : (1 - Math.pow(1 + r, -n)) / r), price = loan + down;
+            return { maxPay, loan, price, ltv: price > 0 ? loan / price * 100 : 0 };
+        }
+
+        // 租金投報率：毛 = 年租金 / 房價；淨 = (年租金 × (1 − 空置率) × (1 − 管理費率) − 年稅費 − 年維修) / 房價
+        function rentalYield(price, rent, vacPct, mgmtPct, taxYear, maintYear) {
+            const gross = rent * 12, noi = gross * (1 - vacPct / 100) * (1 - mgmtPct / 100) - taxYear - maintYear;
+            return { grossYield: gross / price * 100, noi, netYield: noi / price * 100, payback: noi > 0 ? price / noi : null };
+        }
+
+        // 日期字串 YYYY-MM-DD → UTC 毫秒（格式或日期不存在回傳 NaN）
+        function parseD(s) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); if (!m) return NaN;
+            const t = Date.UTC(+m[1], +m[2] - 1, +m[3]), d = new Date(t);
+            return d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3] ? t : NaN;
+        }
+        // 按日計租：from 到 to（含頭尾）逐月，每月 = 月租 × 該月天數 / 當月總天數；回傳 { amount, days }
+        function prorate(rent, from, to) {
+            let t = from, amount = 0, days = 0;
+            while (t <= to) {
+                const d = new Date(t), y = d.getUTCFullYear(), mo = d.getUTCMonth(), dim = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
+                const end = Math.min(to, Date.UTC(y, mo, dim)), n = Math.round((end - t) / 864e5) + 1;
+                amount += rent * n / dim; days += n; t = end + 864e5;
+            }
+            return { amount, days };
+        }
+        // 退租結算：押金 deposit、已繳租金至 paidTo、退租日 moveOut、其他扣款 ded
+        // moveOut > paidTo：還欠 (paidTo+1 ~ moveOut) 的租金；moveOut < paidTo：多繳的 (moveOut+1 ~ paidTo) 租金退回
+        // 回傳 { owed, credit, refund（正 = 房東退你，負 = 你要補）}
+        function leaseSettle(rent, deposit, paidTo, moveOut, ded) {
+            const owed = moveOut > paidTo ? prorate(rent, paidTo + 864e5, moveOut).amount : 0;
+            const credit = moveOut < paidTo ? prorate(rent, moveOut + 864e5, paidTo).amount : 0;
+            return { owed, credit, refund: deposit + credit - owed - ded };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -319,6 +460,8 @@
             $('#goal').hidden = mode !== 'goal';
             $('#buyrent').hidden = mode !== 'buyrent';
             $('#brCard').hidden = true;
+            $('#subCard').hidden = !(mode === 'debt' || mode === 'house');
+            if (!$('#subCard').hidden) { $('#tblCard').hidden = true; renderSub(out); return; }
             if (mode === 'buyrent') { renderBuyRent(out); return; }
             if (mode === 'goal') {
                 const target = num('gtarget'), pv = num('gpv') || 0, rate = num('grate'), inf = num('ginf') || 0, val = num('gval'), byTime = $('#gask').value === 'time';
@@ -419,6 +562,108 @@
         }
         window.addEventListener('resize', drawChart);
         new MutationObserver(drawChart).observe(document.documentElement, { attributes: true });
+
+        // ===== 債務 / 購屋與租屋 分頁：用資料表產生表單；結果列用 Util.statRow =====
+        // 欄位 [id, 標籤, 預設值]：數字 = 數字欄；'YYYY-MM-DD' = 日期欄；其他字串 = 文字欄；陣列 [[值, 文字]…] = 下拉
+        // run(v) 回傳 { err } 或 { rows: [[標籤, 值, 樣式]], note }
+        const pct = (v) => v.toFixed(2) + ' %', mths = (m) => fmtYM(Math.ceil(m - 1e-9));
+        const SUBS = {
+            debt: [
+                { k: 'cc', t: '信用卡循環利息', f: [['bal', '帳單金額（循環餘額）', 50000], ['apr', '循環年利率 (%)（範例值，請自行確認）', 15], ['pct', '最低應繳 (% 餘額)（範例值，請自行確認）', 5], ['floor', '最低應繳下限（元）（範例值）', 500]],
+                  run(v) {
+                      if (!(v.bal > 0 && v.apr >= 0 && v.pct >= 0 && v.floor >= 0)) return { err: '請輸入大於 0 的餘額，利率與最低應繳不可為負' };
+                      const r = ccRevolve(v.bal, v.apr, v.pct, v.floor), fx = pmtOf(v.bal, v.apr, 36), fi = fx * 36 - v.bal;
+                      return { rows: r.never ? [['第 1 個月最低應繳', money(r.firstPay)], ['第 1 個月利息', money(r.firstInterest)], ['結果', '只繳最低應繳永遠還不完（100 年仍未還清）', 'bad']] : [['只繳最低應繳，還清需要', mths(r.months), 'big'], ['總利息', money(r.totalInterest)], ['總還款', money(v.bal + r.totalInterest)], ['第 1 個月最低應繳 / 利息', money(r.firstPay) + ' / ' + money(r.firstInterest)], ['對照：36 期固定月付', money(fx) + '（總利息 ' + money(fi) + '）']], note: '假設不再刷新消費，每月應繳 = max(下限, 餘額 × 比例)。實際最低應繳規則依發卡銀行而定。' };
+                  } },
+                { k: 'inst', t: '分期付款實質利率', f: [['cash', '現金價（一次付清的價格）', 30000], ['pay', '每期付款', 2500], ['n', '期數', 12], ['fee', '一次性手續費', 600]],
+                  run(v) {
+                      if (!(v.cash > 0 && v.pay > 0 && v.n >= 1 && v.fee >= 0)) return { err: '現金價、每期付款、期數要大於 0，手續費不可為負' };
+                      const n = Math.round(v.n), r = installmentIRR(v.cash, v.pay, n, v.fee);
+                      if (!Number.isFinite(r.nominal)) return { err: '手續費不可大於或等於現金價' };
+                      return { rows: [['實質年利率（月 IRR × 12）', pct(r.nominal), 'big'], ['年有效利率', pct(r.effective)], ['總付款比現金價多', money(r.extra)], ['總付款', money(v.pay * n + v.fee)]], note: '「零利率」分期若有手續費，實質利率不是 0。以現金價扣掉手續費為實拿金額，每期付款為現金流出，用 IRR 反推。' };
+                  } },
+                { k: 'snow', t: '債務雪球 vs 雪崩', f: [['a_n', '債務 A 名稱', '信用卡'], ['a_b', 'A 餘額', 50000], ['a_r', 'A 年利率 (%)', 15], ['a_m', 'A 最低還款', 1500], ['b_n', '債務 B 名稱', '信貸'], ['b_b', 'B 餘額', 200000], ['b_r', 'B 年利率 (%)', 8], ['b_m', 'B 最低還款', 4000], ['c_n', '債務 C 名稱', '分期'], ['c_b', 'C 餘額', 20000], ['c_r', 'C 年利率 (%)', 5], ['c_m', 'C 最低還款', 2000], ['d_n', '債務 D 名稱', '債務 D'], ['d_b', 'D 餘額（不用就留 0）', 0], ['d_r', 'D 年利率 (%)', 0], ['d_m', 'D 最低還款', 0], ['x', '每月額外預算', 5000]],
+                  run(v) {
+                      const ds = ['a', 'b', 'c', 'd'].map(p => ({ name: v[p + '_n'] || p.toUpperCase(), bal: v[p + '_b'], rate: v[p + '_r'], min: v[p + '_m'] })).filter(d => d.bal > 0);
+                      if (!ds.length) return { err: '至少要有一筆餘額大於 0 的債務' };
+                      if (ds.some(d => d.rate < 0 || d.min < 0) || v.x < 0) return { err: '利率、最低還款、額外預算不可為負' };
+                      const s = snowAvalanche(ds, v.x, 'snow'), a = snowAvalanche(ds, v.x, 'aval');
+                      if (s.never || a.never) return { rows: [['結果', '每月預算不足以還清（超過 100 年），請提高最低還款或額外預算', 'bad']] };
+                      const ord = (r) => r.order.map(o => `${o.name}（第 ${o.month} 個月）`).join(' → '), diff = s.totalInterest - a.totalInterest;
+                      return { rows: [['雪球（小額先清）：期間 / 總利息', `${mths(s.months)} / ${money(s.totalInterest)}`], ['雪球還清順序', ord(s)], ['雪崩（高利先清）：期間 / 總利息', `${mths(a.months)} / ${money(a.totalInterest)}`], ['雪崩還清順序', ord(a)], ['雪崩比雪球少付利息', money(diff), diff > 0.5 ? 'ok' : '']], note: '每月總預算 = 所有最低還款 + 額外預算，還清一筆後它的最低還款會滾入下一筆。雪崩利息通常較少；雪球先清掉小額、較有成就感。' };
+                  } },
+                { k: 'pre', t: '提前還款', f: [['P', '原貸款金額', 10000000], ['r', '年利率 (%)', 2.2], ['y', '貸款年數', 30], ['k', '已繳期數（月）', 60], ['x', '一次提前還款金額', 1000000], ['fee', '提前還款違約金 (% 還款額，依合約，0 = 無)', 0]],
+                  run(v) {
+                      if (!(v.P > 0 && v.r >= 0 && v.y >= 1 && v.k >= 0 && v.x > 0 && v.fee >= 0)) return { err: '請填入有效數字（金額與年數大於 0）' };
+                      const n = Math.round(v.y * 12), k = Math.round(v.k);
+                      if (k >= n) return { err: '已繳期數要小於總期數 ' + n };
+                      const r = prepay(v.P, v.r, v.y, k, v.x, v.fee);
+                      if (v.x >= r.bal) return { err: '提前還款金額要小於目前餘額 ' + money(r.bal) };
+                      return { rows: [['目前餘額', money(r.bal)], ['原每月應繳 / 剩餘期數', `${money(r.pay)} / ${r.rem} 期`], ['A. 月付不變、縮短年限：剩', `${mths(r.shorten.months)}（少 ${mths(r.rem - r.shorten.months)}）`], ['A 節省利息（已扣違約金）', money(r.shorten.saved), 'ok'], ['B. 年限不變、降低月付：新月付', `${money(r.lower.pay)}（每月少 ${money(r.pay - r.lower.pay)}）`], ['B 節省利息（已扣違約金）', money(r.lower.saved), 'ok']], note: '縮短年限通常省更多利息；降低月付則是現金流較寬鬆。僅適用本息平均攤還，不含寬限期。' };
+                  } },
+                { k: 'refi', t: '房貸轉貸', f: [['bal', '舊貸款剩餘本金', 8000000], ['or', '舊貸款年利率 (%)', 2.6], ['rem', '剩餘期數（月）', 240], ['nr', '新貸款年利率 (%)', 2.2], ['nm', '新貸款期數（月）', 240], ['fee', '轉貸總費用（手續費 + 代書費 + 違約金…）', 30000]],
+                  run(v) {
+                      if (!(v.bal > 0 && v.or >= 0 && v.rem >= 1 && v.nr >= 0 && v.nm >= 1 && v.fee >= 0)) return { err: '請填入有效數字（金額與期數大於 0）' };
+                      const r = refinance(v.bal, v.or, Math.round(v.rem), v.nr, Math.round(v.nm), v.fee);
+                      return { rows: [['舊月付 → 新月付', `${money(r.oldPay)} → ${money(r.newPay)}`], ['每月節省', money(r.saving), r.saving > 0 ? 'ok' : 'bad'], ['費用回收期', r.breakeven === null ? '每月沒有省錢，無法回收' : mths(r.breakeven), 'big'], ['整段期間總節省（扣費用）', money(r.total), r.total > 0 ? 'ok' : 'bad']], note: '新舊期數不同時，「總節省」比較的是總還款額，期數拉長會讓總額看起來較高。回收期 = 轉貸費用 ÷ 每月節省。' };
+                  } },
+                { k: 'stu', t: '就學貸款', f: [['P', '借款總額', 400000], ['r', '年利率 (%)（範例值，請自行確認）', 1.5], ['g', '畢業後寬限期（月）（範例值）', 12], ['y', '寬限後還款年數（範例值）', 8], ['pi', '寬限期利息', [['1', '每月繳利息'], ['0', '併入本金']]]],
+                  run(v) {
+                      if (!(v.P > 0 && v.r >= 0 && v.g >= 0 && v.y >= 1)) return { err: '借款總額與還款年數要大於 0，利率與寬限期不可為負' };
+                      const r = studentLoan(v.P, v.r, Math.round(v.g), v.y, v.pi === 1);
+                      return { rows: [['在學期間', '免息（本金不增加）'], v.pi === 1 ? ['寬限期每月利息', money(r.graceMonthly)] : ['寬限期結束時本金', money(r.balAfterGrace)], ['寬限期利息合計', money(r.graceInterest)], ['之後每月應繳', money(r.pay), 'big'], ['總利息', money(r.totalInterest)]], note: '「在學期間免息」依政策與身分而異，利率、寬限期與還款年限為範例值，請以承貸銀行與政府公告為準。' };
+                  } },
+            ],
+            house: [
+                { k: 'aff', t: '購屋能力', f: [['inc', '月收入', 80000], ['debt', '現有每月負債還款（信貸、車貸、卡費…）', 5000], ['ratio', '可接受負債比 (%)（預設約 1/3）', 33.3], ['r', '貸款年利率 (%)', 2.2], ['y', '貸款年限', 30], ['down', '頭期款（現金）', 2000000]],
+                  run(v) {
+                      if (!(v.inc > 0 && v.debt >= 0 && v.ratio > 0 && v.ratio <= 100 && v.r >= 0 && v.y >= 1 && v.down >= 0)) return { err: '請填入有效數字（負債比介於 0–100）' };
+                      const hi = affordability(v.inc, v.debt, v.ratio, v.r, v.y, v.down), lo = affordability(v.inc, v.debt, v.ratio * 0.75, v.r, v.y, v.down);
+                      return { rows: [['每月可負擔房貸', money(hi.maxPay)], ['可負擔貸款額', money(hi.loan)], ['房價範圍（保守 ~ 上限）', `${money(lo.price)} ~ ${money(hi.price)}`, 'big'], ['上限時的貸款成數', hi.ltv.toFixed(1) + ' %', hi.ltv > 80 ? 'bad' : '']], note: '負債比 = 所有每月還款（含新房貸）÷ 月收入；「月付不超過月收入 1/3」是常見的自我控管參考，銀行實際規定因行庫與政策而異。保守值 = 負債比 × 75%。貸款成數過高可能貸不到；未計購屋稅費、裝修與生活開銷。' };
+                  } },
+                { k: 'yld', t: '租金投報率與持有成本', f: [['price', '房價', 12000000], ['rent', '每月租金', 30000], ['vac', '空置率 (%)', 8], ['mg', '管理費率 (% 租金，自管填 0)', 0], ['tax', '每年稅費（房屋稅、地價稅、保險…）', 30000], ['mt', '每年維修 / 其他成本', 20000]],
+                  run(v) {
+                      if (!(v.price > 0 && v.rent >= 0 && v.vac >= 0 && v.vac <= 100 && v.mg >= 0 && v.mg <= 100 && v.tax >= 0 && v.mt >= 0)) return { err: '請填入有效數字（房價大於 0、比率介於 0–100）' };
+                      const r = rentalYield(v.price, v.rent, v.vac, v.mg, v.tax, v.mt);
+                      return { rows: [['毛投報率', pct(r.grossYield)], ['淨投報率', pct(r.netYield), 'big'], ['年淨收入', money(r.noi), r.noi > 0 ? '' : 'bad'], ['以淨收入回本年數', r.payback === null ? '沒有淨收入，無法回本' : r.payback.toFixed(1) + ' 年']], note: '不含房貸利息與房價漲跌，只看「租金扣掉持有成本」。要比較自住買或租哪個划算，請用「買房 vs 租房」分頁。' };
+                  } },
+                { k: 'lease', t: '租賃押金與退租結算', f: [['rent', '月租金', 20000], ['dep', '押金', 40000], ['paid', '租金已繳到（含當日）', '2026-03-15'], ['out', '實際退租日', '2026-03-31'], ['ded', '其他應扣款（修繕、水電…）', 0]],
+                  run(v) {
+                      if (!(v.rent > 0 && v.dep >= 0 && v.ded >= 0)) return { err: '月租金要大於 0，押金與扣款不可為負' };
+                      const a = parseD(v.paid), b = parseD(v.out);
+                      if (Number.isNaN(a) || Number.isNaN(b)) return { err: '請選擇「已繳到」與「退租日」' };
+                      const r = leaseSettle(v.rent, v.dep, a, b, v.ded), mon = v.dep / v.rent;
+                      return { rows: [['押金相當於', mon.toFixed(2) + ' 個月租金' + (mon > 2 ? '（超過 2 個月，請對照現行法規與契約）' : ''), mon > 2 ? 'bad' : ''], ['按日計租', r.owed > 0 ? '尚欠租金 ' + money(r.owed) : r.credit > 0 ? '多繳租金可退 ' + money(r.credit) : '剛好繳到退租日'], [r.refund >= 0 ? '房東應退還' : '你需補繳', money(Math.abs(r.refund)), r.refund >= 0 ? 'ok' : 'bad']], note: '住宅租賃押金上限一般認為是 2 個月租金（租賃住宅市場發展及管理條例），法規可能修訂，請自行核對現行條文與契約。按日計租以「該月實際天數」分攤；契約若約定每月以 30 天計，以契約為準。' };
+                  } },
+            ],
+        };
+        const subVals = (k) => { const v = {}; document.querySelectorAll(`#sf_${k} [data-f]`).forEach(e => { v[e.dataset.f] = e.type === 'number' || e.tagName === 'SELECT' ? parseFloat(e.value) : e.value; }); return v; };
+        const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+        function buildSubs() {
+            Object.values(SUBS).flat().forEach(s => {
+                const d = document.createElement('div'); d.className = 'fgrid'; d.id = 'sf_' + s.k; d.hidden = true;
+                s.f.forEach(([id, label, val]) => {
+                    const w = document.createElement('div'), l = document.createElement('label'); let e;
+                    if (Array.isArray(val)) { e = document.createElement('select'); e.style.width = '100%'; val.forEach(([x, t]) => e.add(new Option(t, x))); }
+                    else { e = document.createElement('input'); e.value = val; e.type = typeof val === 'number' ? 'number' : DATE_RE.test(val) ? 'date' : 'text'; if (e.type === 'number') { e.min = 0; e.step = 'any'; } }
+                    e.id = `${s.k}_${id}`; e.dataset.f = id; l.htmlFor = e.id; l.textContent = label; w.append(l, e); d.append(w);
+                });
+                $('#subForms').append(d);
+            });
+        }
+        function renderSub(out) {
+            const g = SUBS[mode], sel = $('#sub');
+            if (sel.dataset.g !== mode) { sel.dataset.g = mode; sel.replaceChildren(...g.map(s => new Option(s.t, s.k))); }
+            const s = g.find(x => x.k === sel.value);
+            document.querySelectorAll('#subForms > div').forEach(d => d.hidden = d.id !== 'sf_' + s.k);
+            const v = subVals(s.k);
+            if (Object.values(v).some(x => typeof x === 'number' && !Number.isFinite(x))) { out.textContent = '請填入所有欄位的數字'; return; }
+            const res = s.run(v);
+            if (res.err) { out.textContent = res.err; return; }
+            out.append(...res.rows.map(r => Util.statRow(r[0], r[1], r[2])));
+            const p = document.createElement('p'); p.className = 'muted'; p.style.fontSize = '13px'; p.textContent = (res.note || '') + '（估算，非財務建議）'; out.append(p);
+        }
+        buildSubs();
 
         document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
             mode = b.dataset.mode;

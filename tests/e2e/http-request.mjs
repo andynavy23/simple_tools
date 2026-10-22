@@ -4,7 +4,7 @@ import assert from 'assert';
 import { launchEdge, openPage } from './lib.mjs';
 
 const server = http.createServer((req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Access-Control-Allow-Headers', '*'); res.setHeader('Access-Control-Allow-Methods', '*');
     res.setHeader('Content-Type', 'application/json');
     let b = ''; req.on('data', d => b += d); req.on('end', () => res.end(JSON.stringify({ method: req.method, body: b, cookie: req.headers.cookie || null })));
 });
@@ -46,6 +46,21 @@ try {
     assert.equal(await page.$eval('#wsSend', e => e.disabled), true);
     await setv('#wsUrl', 'http://x'); await click('#wsGo'); assert.ok((await text('#wsMsg')).includes('ws://'));
     await click('#wsClear'); assert.equal(await text('#wsCount'), '0 / 500');
+    // GraphQL：表單組查詢、格式化、檢查、輸出、送出（帶到請求測試）
+    await click('#tabs [data-t=d]');
+    assert.equal(await page.$eval('#pd', e => e.hidden), false);
+    await click('#gSample');
+    const gq = await page.$eval('#gQ', e => e.value); assert.ok(gq.startsWith('query GetUser($id: ID!) {\n  user(id: $id) {'), gq);
+    await click('#gLangTabs [data-l=fetch]'); assert.ok((await text('#gOut')).includes('fetch(') && (await text('#gOut')).includes('operationName'), 'fetch 輸出含 operationName');
+    await setv('#gUrl', `http://127.0.0.1:${port}/graphql`);
+    assert.equal(await page.$eval('#gSend', e => e.disabled), false);
+    await setv('#gQ', 'query Q { u(id: $x) { n }'); const msg = await text('#gMsg'); assert.ok(msg.includes('$x') && msg.includes('沒有結尾'), msg);
+    await click('#gClear'); assert.equal(await page.$eval('#gCopy', e => e.disabled), true);
+    await click('#gSample'); await click('#gLangTabs [data-l=curl]'); assert.ok((await text('#gOut')).includes('curl '));
+    await click('#gSend');
+    await page.waitForFunction(() => /200/.test(document.querySelector('#bRes').textContent), { timeout: 8000 });
+    const gres = await text('#bRes'); assert.ok(gres.includes('"method": "POST"') && gres.includes('operationName'), gres);
+    assert.ok(gres.includes('"cookie": null'));
     // 只存選項，不存網址 / 標頭 / 本體
     const st = await page.evaluate(() => localStorage.getItem('httpreq_opts'));
     assert.ok(st && !/127\.0\.0\.1|hello|Cookie|example/.test(st), st);

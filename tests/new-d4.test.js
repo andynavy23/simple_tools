@@ -244,7 +244,7 @@ const mk = (o) => ({ id: o.id || o.name, name: o.name, cat: o.cat || '家電', d
     assert.strictEqual(W.checkForm(good), ''); assert.strictEqual(W.checkForm({ ...good, price: '' }), ''); assert.strictEqual(W.checkForm({ ...good, months: '0' }), '');
     for (const bad of [{ name: '  ' }, { name: 'x'.repeat(61) }, { shop: 's'.repeat(41) }, { loc: 'l'.repeat(101) }, { note: 'n'.repeat(201) }, { date: '' }, { date: '2026-02-30' }, { months: '' }, { months: '-1' }, { months: '1.5' }, { months: '601' }, { months: 'abc' }, { price: '-1' }, { price: 'abc' }, { price: '1e10' }])
         assert.ok(W.checkForm({ ...good, ...bad }), JSON.stringify(bad));
-    const a = W.addItem([], good, 'id1'); assert.strictEqual(a.err, ''); assert.deepStrictEqual(a.list[0], { id: 'id1', name: '冰箱', cat: '家電', date: '2026-01-31', price: 25000, shop: '燦坤', months: 12, loc: '抽屜', note: '' });
+    const a = W.addItem([], good, 'id1'); assert.strictEqual(a.err, ''); assert.deepStrictEqual(a.list[0], { id: 'id1', name: '冰箱', cat: '家電', date: '2026-01-31', price: 25000, shop: '燦坤', months: 12, loc: '抽屜', note: '', cons: [] });
     assert.strictEqual(W.addItem([], { ...good, price: '' }).list[0].price, 0);
     assert.ok(W.addItem([], { ...good, name: '' }).err); assert.strictEqual(W.addItem([], { ...good, name: '' }).list.length, 0);
     // 上限 500：拒絕新增，不刪舊的

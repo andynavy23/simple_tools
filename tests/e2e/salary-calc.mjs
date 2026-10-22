@@ -1,0 +1,40 @@
+// salary-calc：新增分頁（勞健保勞退 / 假勤資遣 / Offer 與薪資檢查）的畫面行為
+import assert from 'assert';
+import { launchEdge, openPage } from './lib.mjs';
+const browser = await launchEdge();
+const { page, errors } = await openPage(browser, 'utils/salary-calc.html');
+const set = (sel, v) => page.evaluate((s, x) => { const e = document.querySelector(s); e.value = x; e.dispatchEvent(new Event('input', { bubbles: true })); }, sel, v);
+const text = (sel) => page.evaluate((s) => document.querySelector(s).innerText, sel);
+const tab = (k) => page.evaluate((k) => document.querySelector(`#tabbar button[data-tab=${k}]`).click(), k);
+const noScroll = async (msg) => assert.ok(await page.evaluate(() => document.scrollingElement.scrollWidth <= innerWidth + 1), msg + ' 出現橫向捲動');
+
+assert.equal(await page.evaluate(() => document.querySelectorAll('#tabbar button').length), 4);
+await noScroll('主分頁');
+await tab('ins');
+assert.ok(await page.evaluate(() => document.querySelector('#tab-main').hidden));
+assert.ok((await text('#o-ins')).includes('1,145'));
+await set('#i-sal', '60000');
+assert.ok((await text('#o-ins')).includes('60,800'));
+await set('#i-sp-amt', '300000');
+assert.ok((await text('#o-sp')).includes('補充保費'));
+await noScroll('勞健保');
+await tab('leave');
+await set('#l-y', '10'); await set('#l-m', '0');
+assert.ok((await text('#o-al')).includes('16 日'));
+await set('#l-newy', '20');
+assert.ok((await text('#o-sv')).includes('30 日'));
+await noScroll('假勤');
+await tab('offer');
+await set('#r-pct', '10');
+assert.equal(await page.evaluate(() => document.querySelector('#r-new').value), '49500');
+await set('#r-new', '54000');
+assert.equal(await page.evaluate(() => document.querySelector('#r-pct').value), '20');
+await set('#s-labor', '1');
+assert.ok((await text('#o-sl')).includes('異常'));
+await noScroll('Offer');
+// 上次輸入存回同一個鍵
+const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('salary_calc')));
+assert.equal(saved['i-sal'], '60000');
+assert.deepEqual(errors, []);
+await browser.close();
+console.log('salary-calc OK');

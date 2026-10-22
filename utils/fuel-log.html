@@ -10,7 +10,7 @@
     <meta property="og:description" content="記錄加油，算油耗與每公里成本。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/fuel-log.html" />
-    <meta name="st-keys" content="fuel_entries">
+    <meta name="st-keys" content="fuel_entries,fuel_maint">
     <title>油耗 / 行車成本</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -90,6 +90,46 @@
             color: var(--muted);
             display: block;
         }
+
+        .row .f select {
+            width: 100%;
+        }
+
+        details.card>summary {
+            font-weight: 700;
+            font-size: 18px;
+            cursor: pointer;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+        }
+
+        .res {
+            font-size: 22px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            margin: 6px 0;
+        }
+
+        .st {
+            font-size: 12px;
+            font-weight: 700;
+            border-radius: 99px;
+            padding: 2px 10px;
+            background: var(--fill);
+            color: var(--text);
+            white-space: nowrap;
+        }
+
+        .st.overdue {
+            background: var(--bad);
+            color: #fff;
+        }
+
+        .st.soon {
+            background: var(--blue);
+            color: var(--on-blue);
+        }
     </style>
 </head>
 
@@ -124,6 +164,60 @@
             <div id="list"></div>
             <div class="row" style="margin-top:10px"><button class="sm" id="export">匯出 CSV</button><button class="sm" id="clear">清除全部</button></div>
         </div>
+
+        <details class="card" id="dTaxi">
+            <summary>計程車費率試算</summary>
+            <p class="note">預設為大台北地區 2022/4 起的費率（起程 1.25 km 85 元、每 200 m 5 元、夜間 23:00–06:00 加 20 元；延滯與春節加成依各年公告），各縣市不同，欄位都可改，請自行核對公告。</p>
+            <div class="row" id="taxiF"></div>
+            <div class="row" id="taxiI"></div>
+            <div class="row"><label><input type="checkbox" id="tNight"> 夜間加成</label><label><input type="checkbox" id="tCny"> 春節加成</label></div>
+            <div class="res" id="taxiOut"></div>
+        </details>
+
+        <details class="card" id="dPark">
+            <summary>停車費試算</summary>
+            <p class="note">按「每小時」計費（不足一小時以一小時計）；日上限以停進後每 24 小時為一段。夜間費率留空表示與日間相同；範例值請依停車場公告修改。</p>
+            <div class="row" id="parkF"></div>
+            <div class="row" id="parkI"></div>
+            <div class="res" id="parkOut"></div>
+        </details>
+
+        <details class="card" id="dTco">
+            <summary>買車 vs 租車 / 長租</summary>
+            <p class="note">預設皆為範例值，請改成你的實際數字。油耗與油價會自動帶入上方紀錄的平均；此區不儲存。</p>
+            <div class="row" id="tcoF"></div>
+            <div class="res" id="tcoOut"></div>
+            <div id="tcoDetail"></div>
+        </details>
+
+        <details class="card" id="dTax">
+            <summary>牌照稅（小客車）</summary>
+            <div class="row"><div class="f"><label for="cc">汽缸總排氣量（cc）</label><input type="number" id="cc" min="1" step="1" inputmode="numeric" value="1800"></div>
+                <div class="f"><label for="ccUse">用途</label><select id="ccUse"><option value="p">自用</option><option value="b">營業用</option></select></div></div>
+            <div class="res" id="taxOut"></div>
+            <p class="note" id="taxNote"></p>
+        </details>
+
+        <details class="card" id="dMaint">
+            <summary>保養與稅費提醒</summary>
+            <div class="row">
+                <div class="f"><label for="mKind">項目</label><select id="mKind"></select></div>
+                <div class="f"><label for="mName">備註名稱（選填）</label><input type="text" id="mName" maxlength="30"></div>
+            </div>
+            <div class="row">
+                <div class="f"><label for="mDate">上次日期</label><input type="date" id="mDate"></div>
+                <div class="f"><label for="mOdoLast">上次里程（km）</label><input type="number" id="mOdoLast" min="0" step="any" inputmode="decimal"></div>
+            </div>
+            <div class="row">
+                <div class="f"><label for="mDays">每幾天（0 = 不看日期）</label><input type="number" id="mDays" min="0" max="3650" step="1" inputmode="numeric" value="0"></div>
+                <div class="f"><label for="mKm">每幾公里（0 = 不看里程）</label><input type="number" id="mKm" min="0" max="1000000" step="1" inputmode="numeric" value="0"></div>
+            </div>
+            <div class="row"><button class="primary" id="mAdd">新增提醒</button></div>
+            <p class="note" id="mMsg"></p>
+            <div class="row"><div class="f"><label for="mOdo">目前里程（留空 = 用紀錄中最大里程）</label><input type="number" id="mOdo" min="0" step="any" inputmode="decimal"></div></div>
+            <div id="mList"></div>
+            <div class="row" style="margin-top:10px"><span class="note" id="mCount" style="flex:1"></span><button class="sm" id="mClear">清除全部提醒</button></div>
+        </details>
     </div>
 
     <template id="help">
@@ -151,6 +245,13 @@
         <ul>
         <li>油耗是「加滿到加滿」之間計算：第一次加滿只當起點，它的油量不算進去；中間沒加滿的油量併入下一次加滿。</li>
         <li>資料只存在本機瀏覽器，不會上傳，請定期匯出。最多 5,000 筆；刪掉任何一筆後，油耗會依剩下的紀錄重新計算。</li>
+        </ul>
+        <h3>其他區塊</h3>
+        <ul>
+        <li>計程車費率、停車費：輸入距離 / 時間或停車時段估算費用，費率欄位都可修改；預設為大台北地區費率，各縣市不同，請自行核對公告。這兩塊不儲存資料。</li>
+        <li>買車 vs 租車：填車價、殘值、保險、稅費、保養、貸款與租金，比較 N 年總花費；預設是範例值，油耗與油價會自動帶入上方紀錄。不儲存。</li>
+        <li>牌照稅：依排氣量查小客車全年稅額（財政部稅務入口網，頁面更新 115/04/09）；汽油車的燃料使用費隨油價收取，沒有年度稅額表。</li>
+        <li>保養與稅費提醒：記錄機油、輪胎、煞車、驗車、保險、牌照稅、燃料稅等的日期 / 里程週期，列出「已逾期」「即將到期」（30 天內或 500 km 內）；按「已完成」會把上次日期與里程更新為今天與目前里程。最多 300 筆，滿了拒絕新增；每筆可刪除、「清除全部提醒」需確認且無法復原；存在本機（鍵 fuel_maint），壞資料載入時自動略過。</li>
         </ul>
     </template>
 
@@ -188,6 +289,104 @@
         // CSV（開頭是 = + - @ 的文字補單引號，避免試算表公式注入）
         const csvCell = (v) => { let s = String(v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
         const toCSV = (entries) => ['日期,里程,公升,單價,金額,加滿', ...[...entries].sort((a, b) => a.odo - b.odo).map(e => [e.d, e.odo, e.l, e.p, Math.round(e.l * e.p * 100) / 100, e.full ? '是' : '否'].map(csvCell).join(','))].join('\r\n');
+        // 計程車（預設：大台北地區 2022/4 起；各縣市與年度不同，欄位可改，請自行核對公告）。延滯 60 秒為較新資料、未逐一核對
+        const TAXI_DEF = { base: 85, baseKm: 1.25, stepM: 200, stepFare: 5, slowSec: 60, slowFare: 5, night: 20, cny: 30 };
+        const nn = (v) => { v = Number(v); return Number.isFinite(v) && v >= 0 ? v : 0; };
+        function taxiFare(r, km, slowMin, night, cny) {
+            const base = nn(r.base), baseKm = nn(r.baseKm), stepM = nn(r.stepM) || 1, slowSec = nn(r.slowSec) || 1;
+            km = nn(km); slowMin = nn(slowMin);
+            const dist = km > baseKm ? Math.ceil((km - baseKm) * 1000 / stepM - 1e-9) * nn(r.stepFare) : 0;
+            const time = Math.floor(slowMin * 60 / slowSec + 1e-9) * nn(r.slowFare);
+            const ex = (night ? nn(r.night) : 0) + (cny ? nn(r.cny) : 0);
+            return { base, dist, time, extra: ex, fare: base + dist + time + ex };
+        }
+        // 停車費：startMin = 進場時刻（0–1439 分），durMin = 停車分鐘；先扣免費分鐘，之後每 60 分一個計費段（不足也算），夜間時段用夜間費率，日上限按每 24 小時一段
+        function parkingFee(r, startMin, durMin) {
+            const free = nn(r.freeMin), hr = nn(r.hourFee), cap = nn(r.dayCap), nf = r.nightFee === '' || r.nightFee == null ? hr : nn(r.nightFee);
+            const from = Math.floor(nn(r.nightFrom)) % 24, to = Math.floor(nn(r.nightTo)) % 24;
+            const isNight = (h) => from === to ? false : from < to ? h >= from && h < to : h >= from || h < to;
+            durMin = Math.min(nn(durMin), 43200); startMin = nn(startMin) % 1440;
+            if (durMin <= free) return 0;
+            const chunks = {};
+            for (let t = free; t < durMin; t += 60) {
+                const h = Math.floor(((startMin + t) % 1440) / 60), c = Math.floor(t / 1440);
+                chunks[c] = (chunks[c] || 0) + (isNight(h) ? nf : hr);
+            }
+            return Object.values(chunks).reduce((a, v) => a + (cap > 0 ? Math.min(cap, v) : v), 0);
+        }
+        // 貸款：N 年內付出的利息（本息均攤，最多還到貸款年數）
+        function loanInterest(P, ratePct, years, N) {
+            P = nn(P); years = nn(years); N = nn(N);
+            const n = Math.round(years * 12), r = nn(ratePct) / 1200;
+            if (!P || !n) return 0;
+            const pay = r ? P * r / (1 - Math.pow(1 + r, -n)) : P / n;
+            let bal = P, sum = 0;
+            for (let m = 0; m < Math.min(n, Math.round(N * 12)); m++) { const i = bal * r; sum += i; bal -= pay - i; }
+            return sum;
+        }
+        // N 年總持有成本：買車 = 折舊 + 利息 + 每年(保險+稅費+保養+停車) + 油錢；租車 = 月租 × 12 × N + 每年其他
+        function tco(p) {
+            const N = nn(p.years), dep = nn(p.price) * (1 - Math.min(100, nn(p.resalePct)) / 100), interest = loanInterest(p.loan, p.loanRate, p.loanYears, N);
+            const yearly = (nn(p.insurance) + nn(p.tax) + nn(p.maint) + nn(p.parking)) * N;
+            const fuel = nn(p.kmPerL) > 0 ? nn(p.kmYear) / nn(p.kmPerL) * nn(p.fuelPrice) * N : 0;
+            const buy = dep + interest + yearly + fuel, rent = nn(p.rentMonthly) * 12 * N + nn(p.rentExtra) * N;
+            return { dep, interest, yearly, fuel, buy, rent, diff: buy - rent, buyPerYear: N ? buy / N : 0, rentPerYear: N ? rent / N : 0 };
+        }
+        // 小客車使用牌照稅（財政部稅務入口網，頁面更新 115-04-09）[排氣量上限 cc, 自用, 營業用]
+        const PLATE_TAX = { asOf: '115-04-09', rows: [[500, 1620, 900], [600, 2160, 1260], [1200, 4320, 2160], [1800, 7120, 3060], [2400, 11230, 6480], [3000, 15210, 9900], [4200, 28220, 16380], [5400, 46170, 24300], [6600, 69690, 33660], [7800, 117000, 44460], [Infinity, 151200, 56700]] };
+        function plateTax(cc, biz) {
+            cc = Number(cc); if (!Number.isFinite(cc) || cc <= 0) return null;
+            const i = PLATE_TAX.rows.findIndex(r => cc <= Math.ceil(r[0]));
+            const r = PLATE_TAX.rows[i], prev = i ? PLATE_TAX.rows[i - 1][0] + 1 : 1;
+            return { tax: biz ? r[2] : r[1], range: r[0] === Infinity ? `${prev} cc 以上` : `${prev}–${r[0]} cc` };
+        }
+
+        // 保養與稅費提醒
+        const MAINT_MAX = 300, MAINT_KINDS = ['機油', '輪胎', '煞車', '驗車', '保險', '牌照稅', '燃料稅', '其他'];
+        const MAINT_HINT = { 機油: [180, 5000], 保險: [365, 0], 牌照稅: [365, 0] };
+        const twToday = (ms = Date.now()) => new Date(ms + 8 * 36e5).toISOString().slice(0, 10);
+        const validDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && Util.day.shift(s, 0) === s && +s.slice(0, 4) >= 1990 && +s.slice(0, 4) <= 2100;
+        function normMaint(r) {
+            if (!r || typeof r !== 'object' || typeof r.id !== 'string' || !r.id) return null;
+            const days = Number(r.days), km = Number(r.km), odo = r.odo === null || r.odo === '' || r.odo === undefined ? null : Number(r.odo);
+            return {
+                id: r.id.slice(0, 40), kind: MAINT_KINDS.includes(r.kind) ? r.kind : '其他', name: String(r.name ?? '').trim().slice(0, 30),
+                date: validDate(r.date) ? r.date : '', odo: Number.isFinite(odo) && odo >= 0 && odo < 1e8 ? odo : null,
+                days: Number.isInteger(days) && days >= 0 && days <= 3650 ? days : 0, km: Number.isInteger(km) && km >= 0 && km <= 1e6 ? km : 0,
+            };
+        }
+        function normMaintList(raw) {
+            if (!Array.isArray(raw)) return [];
+            const seen = new Set(), out = [];
+            for (const r of raw) { const m = normMaint(r); if (!m || seen.has(m.id)) continue; seen.add(m.id); out.push(m); if (out.length >= MAINT_MAX) break; }
+            return out;
+        }
+        // 新增檢查：至少一種週期；看日期要有上次日期，看里程要有上次里程；滿了拒絕
+        function addMaint(list, r, id) {
+            const m = normMaint({ ...r, id });
+            if (!m) return { list, err: '資料不完整' };
+            if (!m.days && !m.km) return { list, err: '請填「每幾天」或「每幾公里」至少一項' };
+            if (m.days && !m.date) return { list, err: '看日期週期要填上次日期' };
+            if (m.km && m.odo === null) return { list, err: '看里程週期要填上次里程' };
+            if (list.length >= MAINT_MAX) return { list, err: `已達 ${MAINT_MAX} 筆上限，請先刪除不用的提醒` };
+            return { list: [...list, m], err: '' };
+        }
+        const removeMaint = (list, id) => list.filter(x => x.id !== id);
+        // 狀態：overdue 已逾期 / soon 30 天或 500 km 內 / ok / none（無法判斷）。curOdo 可為 null
+        function maintStatus(m, today, curOdo) {
+            const dueDate = m.days && m.date ? Util.day.shift(m.date, m.days) : null, dayLeft = dueDate ? Util.day.between(today, dueDate) : null;
+            const dueOdo = m.km && m.odo !== null ? m.odo + m.km : null, kmLeft = dueOdo !== null && curOdo !== null && curOdo !== undefined ? dueOdo - curOdo : null;
+            let key = 'none';
+            if (dayLeft !== null || kmLeft !== null) key = (dayLeft !== null && dayLeft < 0) || (kmLeft !== null && kmLeft < 0) ? 'overdue' : (dayLeft !== null && dayLeft <= 30) || (kmLeft !== null && kmLeft <= 500) ? 'soon' : 'ok';
+            return { key, dueDate, dayLeft, dueOdo, kmLeft };
+        }
+        const MAINT_ORDER = { overdue: 0, soon: 1, ok: 2, none: 3 };
+        function sortMaint(list, today, curOdo) {
+            const s = new Map(list.map(m => [m, maintStatus(m, today, curOdo)]));
+            return [...list].sort((a, b) => MAINT_ORDER[s.get(a).key] - MAINT_ORDER[s.get(b).key] || (s.get(a).dayLeft ?? 1e9) - (s.get(b).dayLeft ?? 1e9) || a.id.localeCompare(b.id));
+        }
+        // 完成一次：上次日期改今天、里程改目前里程（有看里程且知道目前里程才改）
+        const doneMaint = (m, today, curOdo) => ({ ...m, date: today, odo: m.km && curOdo !== null && curOdo !== undefined ? curOdo : m.odo });
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -209,6 +408,7 @@
                 const del = Object.assign(document.createElement('button'), { className: 'sm', textContent: '刪除' }); del.setAttribute('aria-label', '刪除 ' + e.d + ' 的紀錄'); del.onclick = () => { entries = entries.filter(x => x.id !== e.id); save(); render(); };
                 r.append(m, del); return r;
             }) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '還沒有紀錄' })]));
+            renderTco(); renderMaint();
         }
 
         $('#add').onclick = () => {
@@ -220,6 +420,74 @@
         };
         $('#export').onclick = () => download(new Blob(['﻿' + toCSV(entries)], { type: 'text/csv;charset=utf-8' }), `fuel-${day.today()}.csv`);
         $('#clear').onclick = () => { if (entries.length && confirm(`確定刪除全部 ${entries.length} 筆紀錄？無法復原。`)) { entries = []; save(); render(); } };
+
+        // ---- 試算區塊（不儲存）----
+        const mk = (box, spec) => { $(box).replaceChildren(...spec.map(([id, label, val]) => { const d = document.createElement('div'); d.className = 'f'; const l = document.createElement('label'); l.htmlFor = id; l.textContent = label; const i = document.createElement('input'); i.type = 'number'; i.id = id; i.min = 0; i.step = 'any'; i.inputMode = 'decimal'; i.value = val; d.append(l, i); return d; })); };
+        const g = (id) => $('#' + id).value, money = (n) => Math.round(n).toLocaleString('zh-TW');
+        mk('#taxiF', [['xBase', '起跳（元）', TAXI_DEF.base], ['xBaseKm', '起跳里程（km）', TAXI_DEF.baseKm], ['xStepM', '續程每幾公尺', TAXI_DEF.stepM], ['xStepF', '每段（元）', TAXI_DEF.stepFare], ['xSlowS', '延滯每幾秒', TAXI_DEF.slowSec], ['xSlowF', '每段（元）', TAXI_DEF.slowFare], ['xNight', '夜間加成（元）', TAXI_DEF.night], ['xCny', '春節加成（元）', TAXI_DEF.cny]]);
+        mk('#taxiI', [['xKm', '本趟里程（km）', 5], ['xSlow', '延滯時間（分鐘）', 3]]);
+        function renderTaxi() {
+            const r = taxiFare({ base: g('xBase'), baseKm: g('xBaseKm'), stepM: g('xStepM'), stepFare: g('xStepF'), slowSec: g('xSlowS'), slowFare: g('xSlowF'), night: g('xNight'), cny: g('xCny') }, g('xKm'), g('xSlow'), $('#tNight').checked, $('#tCny').checked);
+            $('#taxiOut').textContent = `約 ${money(r.fare)} 元（起跳 ${money(r.base)} + 里程 ${money(r.dist)} + 延滯 ${money(r.time)} + 加成 ${money(r.extra)}）`;
+        }
+        $('#dTaxi').oninput = $('#dTaxi').onchange = renderTaxi; renderTaxi();
+
+        mk('#parkF', [['pFree', '免費（分鐘）', 30], ['pHour', '每小時（元）', 30], ['pCap', '日上限（元，0 = 無）', 300], ['pNight', '夜間每小時（元，留空同日間）', ''], ['pFrom', '夜間起（時 0–23）', 22], ['pTo', '夜間止（時 0–23）', 6]]);
+        mk('#parkI', [['pStart', '進場時刻（時 0–23）', 9], ['pDur', '停車時間（小時）', 3.5]]);
+        function renderPark() {
+            const f = parkingFee({ freeMin: g('pFree'), hourFee: g('pHour'), dayCap: g('pCap'), nightFee: g('pNight'), nightFrom: g('pFrom'), nightTo: g('pTo') }, nn(g('pStart')) * 60, nn(g('pDur')) * 60);
+            $('#parkOut').textContent = `約 ${money(f)} 元`;
+        }
+        $('#dPark').oninput = renderPark; renderPark();
+
+        mk('#tcoF', [['cYears', '持有年數', 5], ['cPrice', '買車價（元）', 800000], ['cResale', '年後殘值（% 車價）', 40], ['cIns', '保險 / 年', 25000], ['cTax', '牌照稅與燃料費 / 年', 11230], ['cMaint', '保養 / 年', 15000], ['cPark', '停車 / 年', 0], ['cKm', '每年里程（km）', 12000], ['cKmL', '油耗（km/L，空白 = 紀錄平均）', ''], ['cFuel', '油價（元/L，空白 = 最近一筆）', ''], ['cLoan', '貸款金額', 0], ['cRate', '貸款年利率（%）', 2.5], ['cLY', '貸款年數', 5], ['cRent', '租車月費（元）', 20000], ['cRentX', '租車每年其他（元）', 0]]);
+        function renderTco() {
+            const o = overall(segments(entries)), last = [...entries].sort((a, b) => b.odo - a.odo)[0];
+            $('#cKmL').placeholder = o ? fmt(o.kmPerL) : ''; $('#cFuel').placeholder = last ? fmt(last.p) : '';
+            const r = tco({ years: g('cYears'), price: g('cPrice'), resalePct: g('cResale'), insurance: g('cIns'), tax: g('cTax'), maint: g('cMaint'), parking: g('cPark'), kmYear: g('cKm'), kmPerL: g('cKmL') || (o ? o.kmPerL : 0), fuelPrice: g('cFuel') || (last ? last.p : 0), loan: g('cLoan'), loanRate: g('cRate'), loanYears: g('cLY'), rentMonthly: g('cRent'), rentExtra: g('cRentX') });
+            $('#tcoOut').textContent = r.diff > 0 ? `租車較省約 ${money(r.diff)} 元` : r.diff < 0 ? `買車較省約 ${money(-r.diff)} 元` : '兩者相同';
+            $('#tcoDetail').replaceChildren(statRow('買車總花費', `${money(r.buy)} 元（每年 ${money(r.buyPerYear)}）`), statRow('　折舊', `${money(r.dep)} 元`), statRow('　貸款利息', `${money(r.interest)} 元`), statRow('　保險稅費保養停車', `${money(r.yearly)} 元`), statRow('　油錢', `${money(r.fuel)} 元${r.fuel ? '' : '（無油耗資料）'}`), statRow('租車總花費', `${money(r.rent)} 元（每年 ${money(r.rentPerYear)}）`));
+        }
+        $('#dTco').oninput = renderTco;
+
+        function renderPlate() {
+            const t = plateTax($('#cc').value, $('#ccUse').value === 'b');
+            $('#taxOut').textContent = t ? `全年 ${money(t.tax)} 元（${t.range}）` : '請輸入排氣量';
+            $('#taxNote').textContent = `稅額表依財政部稅務入口網（頁面更新 ${PLATE_TAX.asOf}），請自行核對；汽油車另有隨油價收取的燃料使用費，不在此表；電動車依馬力換算排氣量，這裡不處理。`;
+        }
+        $('#dTax').oninput = $('#dTax').onchange = renderPlate; renderPlate();
+
+        // ---- 保養與稅費提醒 ----
+        let maint = normMaintList(store.get('fuel_maint', []));
+        const saveM = () => put('fuel_maint', maint);
+        $('#mKind').replaceChildren(...MAINT_KINDS.map(k => new Option(k, k)));
+        $('#mDate').value = twToday();
+        $('#mKind').onchange = () => { const h = MAINT_HINT[$('#mKind').value]; if (h) { $('#mDays').value = h[0]; $('#mKm').value = h[1]; } };
+        const maxOdo = () => entries.length ? Math.max(...entries.map(e => e.odo)) : null;
+        const curOdo = () => { const v = parseFloat($('#mOdo').value); return Number.isFinite(v) && v >= 0 ? v : maxOdo(); };
+        function renderMaint() {
+            const today = twToday(), co = curOdo(), list = sortMaint(maint, today, co), L = { overdue: '已逾期', soon: '即將到期', ok: '正常', none: '無法判斷' };
+            $('#mCount').textContent = `${maint.length} / ${MAINT_MAX} 筆`;
+            $('#mList').replaceChildren(...(list.length ? list.map(m => {
+                const s = maintStatus(m, today, co), r = document.createElement('div'); r.className = 'it'; const d = document.createElement('div'); d.className = 'main';
+                const t = document.createElement('span'); t.className = 'st ' + s.key; t.textContent = L[s.key];
+                const det = [s.dueDate ? `${s.dueDate}（${s.dayLeft < 0 ? '逾 ' + -s.dayLeft : '剩 ' + s.dayLeft} 天）` : '', s.dueOdo !== null ? `${fmt(s.dueOdo, 0)} km${s.kmLeft === null ? '' : s.kmLeft < 0 ? `（逾 ${fmt(-s.kmLeft, 0)} km）` : `（剩 ${fmt(s.kmLeft, 0)} km）`}` : ''].filter(Boolean).join('　');
+                d.append(document.createTextNode(m.kind + (m.name ? '・' + m.name : '') + ' '), t, Object.assign(document.createElement('small'), { textContent: '到期：' + (det || '—') }));
+                const ok = Object.assign(document.createElement('button'), { className: 'sm', textContent: '已完成' }); ok.setAttribute('aria-label', '完成 ' + m.kind);
+                ok.onclick = () => { maint = maint.map(x => x.id === m.id ? doneMaint(x, twToday(), curOdo()) : x); saveM(); renderMaint(); };
+                const del = Object.assign(document.createElement('button'), { className: 'sm', textContent: '刪除' }); del.setAttribute('aria-label', '刪除提醒 ' + m.kind);
+                del.onclick = () => { if (confirm(`刪除「${m.kind}${m.name ? '・' + m.name : ''}」提醒？無法復原。`)) { maint = removeMaint(maint, m.id); saveM(); renderMaint(); } };
+                r.append(d, ok, del); return r;
+            }) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '還沒有提醒' })]));
+        }
+        $('#mOdo').oninput = renderMaint;
+        $('#mAdd').onclick = () => {
+            const o = parseFloat($('#mOdoLast').value);
+            const r = addMaint(maint, { kind: $('#mKind').value, name: $('#mName').value, date: $('#mDate').value, odo: Number.isFinite(o) ? o : null, days: parseInt($('#mDays').value || '0', 10), km: parseInt($('#mKm').value || '0', 10) }, Date.now().toString(36) + rnd(1e6).toString(36));
+            $('#mMsg').textContent = r.err; if (r.err) return;
+            maint = r.list; saveM(); $('#mName').value = ''; renderMaint();
+        };
+        $('#mClear').onclick = () => { if (maint.length && confirm(`確定刪除全部 ${maint.length} 筆保養與稅費提醒？無法復原。`)) { maint = []; saveM(); renderMaint(); } };
         render();
     </script>
 </body>

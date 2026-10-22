@@ -85,6 +85,15 @@
         .fsel {
             width: 100%;
         }
+
+        details.card>summary {
+            font-weight: 700;
+            font-size: 18px;
+            cursor: pointer;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+        }
     </style>
 </head>
 
@@ -161,6 +170,28 @@
             <div class="btns2"><button class="sm" id="fold">刪除一年前的紀錄</button> <button class="sm" id="fall">清除全部飲食紀錄</button></div>
             <div class="muted" id="fcount" style="margin-top:6px"></div>
         </div>
+
+        <details class="card" id="metCard">
+            <summary>運動消耗熱量（MET）</summary>
+            <p class="muted" style="font-size:13px;margin:0 0 10px">消耗熱量 ≈ MET × 體重(kg) × 時間(小時)，MET 取自 Compendium of Physical Activities（2011 版）的常見值，個人差異大，僅供參考。</p>
+            <div class="fgrid">
+                <div><label for="mSel">運動</label><select id="mSel" style="width:100%"></select></div>
+                <div><label for="mMin">時間（分鐘）</label><input id="mMin" type="number" min="1" max="1440" step="1" inputmode="numeric" value="30"></div>
+                <div><label for="mKg">體重 (kg，預設用上方體重)</label><input id="mKg" type="number" min="10" max="400" step="any" inputmode="decimal"></div>
+            </div>
+            <div class="res" id="mOut" style="font-size:22px;font-weight:700;margin:8px 0"></div>
+            <div class="muted" id="mNote"></div>
+        </details>
+
+        <details class="card" id="pregCard">
+            <summary>孕期週數與預產期</summary>
+            <p class="muted" style="font-size:13px;margin:0 0 10px">非醫療建議：預產期只是估算，實際以醫師的超音波評估與產檢為準。</p>
+            <div class="fgrid">
+                <div><label for="pLmp">末次月經第一天</label><input id="pLmp" type="date"></div>
+                <div><label for="pCyc">平均週期天數（28 = 標準）</label><input id="pCyc" type="number" min="21" max="45" step="1" inputmode="numeric" value="28"></div>
+            </div>
+            <div id="pOut"></div>
+        </details>
     </div>
 
     <template id="help">
@@ -194,6 +225,11 @@
         <li>資料只存在本機瀏覽器，不會上傳。體重紀錄最多保留最近 1,000 天；清單只列最近 8 筆，要全部重來請按「清除全部體重紀錄」。</li>
         <li>飲食熱量表是約 170 種臺灣常見食物的「一般估計值」，不同店家差異大，不是醫療建議；實際以包裝標示為準。</li>
         <li>飲食紀錄最多 5,000 筆、自訂食物最多 50 個，滿了會拒絕新增並提示。可刪單筆、清除某天、刪一年前的、或清除全部；刪除自訂食物不影響已記錄的項目（會保留當時的名稱與熱量）。</li>
+        </ul>
+        <h3>運動消耗熱量與孕期週數</h3>
+        <ul>
+        <li>運動消耗熱量（MET）：選運動、填時間（體重預設用上方體重），以「MET × 體重 × 小時」估算；MET 值取自 Compendium of Physical Activities（2011 版）的常見值，只列確定的項目，個人差異大，僅供參考。不儲存資料。</li>
+        <li>孕期週數與預產期：選「末次月經第一天」，用 Naegele 法（加 9 個月再加 7 天）估預產期並算目前週數與孕期階段；週期不是 28 天可調整。非醫療建議，實際以醫師評估為準；日期以台灣時間（UTC+8）判斷今天。不儲存資料，月經日期不會被記住。</li>
         </ul>
     </template>
 
@@ -357,6 +393,31 @@
             if (!(tdee > 0)) return null;
             return { remain: Math.round(tdee - total), over: total > tdee, pct: Math.min(100, Math.round(total / tdee * 100)) };
         }
+
+        // ---------- 運動消耗熱量（MET，Compendium of Physical Activities 2011；取常見值，個人差異大）----------
+        const METS = [['步行（約 5 km/h）', 3.5], ['快走（約 6.4 km/h）', 5.0], ['爬樓梯（快速）', 8.8], ['登山健行', 6.0], ['慢跑', 7.0], ['跑步 8 km/h', 8.3], ['跑步 10 km/h', 9.8], ['騎自行車（休閒，< 16 km/h）', 4.0], ['騎自行車（16–19 km/h）', 6.8], ['游泳（自由式，慢）', 5.8], ['游泳（自由式，快）', 9.8], ['跳繩', 11.8], ['瑜珈（哈達）', 2.5], ['重量訓練（一般）', 3.5], ['有氧舞蹈', 7.3], ['羽球（休閒）', 4.5], ['桌球', 4.0], ['籃球（比賽）', 8.0], ['網球（單打）', 8.0], ['足球（休閒）', 7.0]];
+        // 熱量 = MET × 體重 × 小時；輸入不合理回傳 null
+        function metKcal(met, kg, min) {
+            met = Number(met); kg = Number(kg); min = Number(min);
+            if (!(met > 0 && kg >= 10 && kg <= 400 && min > 0 && min <= 1440)) return null;
+            return met * kg * min / 60;
+        }
+
+        // ---------- 孕期週數與預產期（Naegele：末次月經 + 9 個月 + 7 天；週期不是 28 天則加減差額）----------
+        const twToday = (ms = Date.now()) => new Date(ms + 8 * 36e5).toISOString().slice(0, 10);
+        const dueDate = (lmp, cycle = 28) => day.shift(day.addMonths(lmp, 9), 7 + Math.round(cycle - 28));
+        // 目前週數：{ weeks, days, total }；末次月經在未來回傳 null
+        function gestAge(lmp, today) {
+            const total = day.between(lmp, today); if (total < 0) return null;
+            return { weeks: Math.floor(total / 7), days: total % 7, total };
+        }
+        function trimester(weeks) { return weeks < 14 ? 1 : weeks < 28 ? 2 : 3; }
+        // 足月分類（37 週前早產、37–38 週早期足月、39–40 週足月、41 週晚期、42 週以上過期）
+        function termLabel(weeks) { return weeks < 37 ? '未滿 37 週' : weeks < 39 ? '早期足月' : weeks < 41 ? '足月' : weeks < 42 ? '晚期足月' : '已超過 42 週'; }
+        const TRI_TIPS = { 1: '第一孕期（到第 13 週 6 天）：確認懷孕後建議儘早到醫療院所做第一次產檢，並詢問葉酸與用藥、菸酒等注意事項。', 2: '第二孕期（第 14–27 週）：胎動多半在這段時間開始感覺到，依醫師安排做產檢與篩檢。', 3: '第三孕期（第 28 週起）：留意胎動與醫師交代的警訊症狀，準備待產包與生產計畫；有異常出血、破水、規律宮縮等請立即就醫。' };
+        // 里程碑週數與日期
+        // 週期不是 28 天時，週數與里程碑日期也一併以「調整後的末次月經」計算
+        const preg = (lmp, today, cycle = 28) => { const adj = day.shift(lmp, Math.round(cycle - 28)), due = dueDate(lmp, cycle); return { due, g: gestAge(adj, today), left: day.between(today, due), marks: [12, 20, 28, 37, 40].map(w => [w, day.shift(adj, w * 7)]) }; };
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -499,6 +560,25 @@
         $('#fold').onclick = () => { const next = removeOlderThanYear(flog, Util.day.today()), n = flog.length - next.length; if (!n) { $('#fcount').textContent = '沒有一年前的紀錄'; return; } if (confirm(`確定刪除一年前的 ${n} 筆飲食紀錄？無法復原。`)) { flog = next; put('food_log', flog); renderFood(); } };
         $('#fall').onclick = () => { if (flog.length && confirm(`確定刪除全部 ${flog.length} 筆飲食紀錄？無法復原（自訂食物不受影響）。`)) { flog = []; put('food_log', flog); renderFood(); } };
         renderPicker(); renderFood();
+
+        // ---- 運動消耗熱量與孕期（不儲存）----
+        $('#mSel').replaceChildren(...METS.map((m, i) => new Option(`${m[0]}（MET ${m[1]}）`, i)));
+        function renderMet() {
+            const m = METS[$('#mSel').value], kg = parseFloat($('#mKg').value) || num('w'), k = metKcal(m[1], kg, $('#mMin').value);
+            $('#mOut').textContent = k === null ? '請輸入有效的體重與時間' : `約 ${nf(k)} 大卡`;
+            $('#mNote').textContent = k === null ? '' : `${m[1]} MET × ${nf(kg, 1)} kg × ${nf(parseFloat($('#mMin').value) / 60, 2)} 小時。約等於 ${nf(k / 7700 * 1000, 0)} g 體脂（粗估 7,700 大卡 ≈ 1 kg）。`;
+        }
+        $('#metCard').addEventListener('input', renderMet); $('#w').addEventListener('input', renderMet); renderMet();
+        function renderPreg() {
+            const out = $('#pOut'), lmp = $('#pLmp').value, cyc = parseFloat($('#pCyc').value) || 28;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(lmp) || day.shift(lmp, 0) !== lmp || cyc < 21 || cyc > 45) { out.textContent = '請選擇末次月經第一天（週期 21–45 天）'; return; }
+            const today = twToday(), p = preg(lmp, today, cyc);
+            if (!p.g) { out.textContent = '末次月經日期在未來，請重新選擇'; return; }
+            const rows = [['預產期', p.due], ['目前週數', `${p.g.weeks} 週 ${p.g.days} 天`], [p.left >= 0 ? '距離預產期' : '已超過預產期', `${Math.abs(p.left)} 天`], ['足月分類', termLabel(p.g.weeks)], ...p.marks.map(([w, d]) => [`第 ${w} 週`, d])];
+            out.replaceChildren(...rows.map(([a, b]) => { const r = document.createElement('div'); r.className = 'li'; r.innerHTML = `<span>${a}</span><b>${Util.esc(b)}</b>`; return r; }));
+            const t = document.createElement('p'); t.className = 'muted'; t.textContent = p.g.weeks > 45 ? '日期與目前相差太多，請確認末次月經日期。' : TRI_TIPS[trimester(p.g.weeks)]; out.append(t);
+        }
+        $('#pregCard').addEventListener('input', renderPreg); renderPreg();
     </script>
 </body>
 

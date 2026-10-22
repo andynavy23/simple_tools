@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="報價單 / 請款單 / 收據產生器：填品項、數量、單價，自動算小計、稅額、總計與中文大寫金額，A4 列印或匯出 CSV。">
+    <meta property="og:title" content="報價單與請款單" />
+    <meta property="og:description" content="品項、稅額、大寫金額，一鍵列印 A4 報價單 / 請款單 / 收據。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/quote-gen.html" />
+    <meta name="st-keys" content="quote_opts">
+    <title>報價單與請款單</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 720px;
+        }
+
+        .fgrid>div {
+            min-width: 0;
+        }
+
+        .fgrid .full {
+            grid-column: 1 / -1;
+        }
+
+        .fgrid input,
+        .fgrid select,
+        .fgrid textarea {
+            width: 100%;
+        }
+
+        .types {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .types button {
+            flex: 1;
+            padding-left: 8px;
+            padding-right: 8px;
+        }
+
+        .item {
+            border-top: 1px solid var(--line);
+            padding: 10px 0;
+        }
+
+        .item:first-child {
+            border-top: 0;
+        }
+
+        .item .fgrid {
+            grid-template-columns: 2fr 1fr 2fr;
+            margin-bottom: 8px;
+        }
+
+        .item .nm {
+            grid-column: 1 / -1;
+        }
+
+        .item .bar {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .item .bar b {
+            flex: 1;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .acts {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .acts .primary {
+            flex: 1 1 140px;
+        }
+
+        .msg {
+            color: var(--bad);
+            font-size: 13px;
+            margin: 8px 0 0;
+            min-height: 1em;
+        }
+
+        /* 預覽 / 列印的文件（紙張感：螢幕用主題色、列印強制黑字白底） */
+        #doc {
+            background: var(--card);
+            border: var(--card-border);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        #doc h2 {
+            text-align: center;
+            letter-spacing: .3em;
+            margin: 0 0 12px;
+        }
+
+        #doc table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        #doc th,
+        #doc td {
+            border-bottom: 1px solid var(--line);
+            padding: 6px 4px;
+            text-align: left;
+            vertical-align: top;
+            overflow-wrap: anywhere;
+        }
+
+        #doc .n {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #doc tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+
+        #doc thead {
+            display: table-header-group;
+        }
+
+        #doc .meta {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px 16px;
+            margin-bottom: 12px;
+        }
+
+        #doc .meta .full {
+            grid-column: 1 / -1;
+        }
+
+        #doc .tot {
+            margin: 10px 0 0 auto;
+            width: min(100%, 280px);
+            break-inside: avoid;
+        }
+
+        #doc .tot div {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 2px 0;
+        }
+
+        #doc .tot .g {
+            font-weight: 700;
+            border-top: 2px solid var(--text);
+            margin-top: 4px;
+            padding-top: 4px;
+        }
+
+        #doc .up {
+            margin-top: 10px;
+            font-weight: 700;
+            break-inside: avoid;
+        }
+
+        #doc .note {
+            white-space: pre-wrap;
+        }
+
+        #doc .sign {
+            display: flex;
+            gap: 24px;
+            margin-top: 36px;
+            break-inside: avoid;
+        }
+
+        #doc .sign div {
+            flex: 1;
+            border-top: 1px solid var(--text);
+            padding-top: 4px;
+            text-align: center;
+        }
+
+        .pre {
+            white-space: pre-wrap;
+        }
+
+        @media print {
+            @page {
+                size: A4;
+                margin: 15mm;
+            }
+
+            body {
+                background: #fff !important;
+                background-image: none !important;
+                color: #000 !important;
+                padding: 0;
+            }
+
+            body>*:not(.wrap) {
+                display: none !important;
+            }
+
+            .wrap {
+                max-width: none;
+                padding: 0;
+            }
+
+            .wrap>*:not(#doc) {
+                display: none !important;
+            }
+
+            #doc {
+                background: #fff;
+                border: 0;
+                box-shadow: none;
+                padding: 0;
+                margin: 0;
+                color: #000;
+                font-size: 12pt;
+            }
+
+            #doc *,
+            #doc th,
+            #doc td {
+                color: #000 !important;
+                border-color: #000 !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>報價單與請款單</h1>
+        <p class="sub">填好抬頭與品項，下方即時預覽，可直接列印成 A4 或存成 PDF。只記住賣方抬頭與稅率設定，品項與金額不會被儲存。</p>
+
+        <div class="card">
+            <div class="types" id="types"></div>
+            <div class="fgrid">
+                <div class="full"><label for="seller" id="lSeller">賣方（公司 / 統編 / 聯絡方式）</label><textarea id="seller" rows="2" maxlength="200"></textarea></div>
+                <div class="full"><label for="buyer" id="lBuyer">買方</label><input id="buyer" maxlength="100"></div>
+                <div><label for="no" id="lNo">單號</label><input id="no" maxlength="40"></div>
+                <div><label for="date" id="lDate">日期</label><input id="date" type="date"></div>
+                <div id="wValid" class="full"><label for="valid" id="lValid">有效期限</label><input id="valid" maxlength="40" placeholder="例如：2026-12-31 或 收到後 30 天"></div>
+                <div class="full"><label for="note">備註（匯款帳號、付款條件…）</label><textarea id="note" rows="3" maxlength="500"></textarea></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>品項</h2>
+            <div id="items"></div>
+            <div class="acts" style="margin-top:8px"><button id="add" class="primary">新增品項</button></div>
+            <p class="msg" id="msg"></p>
+        </div>
+
+        <div class="card">
+            <h2>稅額與折扣</h2>
+            <div class="fgrid">
+                <div><label for="taxMode">金額計算</label><select id="taxMode"><option value="excl">未稅，另加營業稅</option><option value="incl">單價已含稅</option><option value="none">免稅 / 不計稅</option></select></div>
+                <div><label for="rate">稅率（%）</label><input id="rate" type="number" min="0" max="100" step="any" inputmode="decimal"></div>
+                <div><label for="disc">折扣</label><input id="disc" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div>
+                <div><label for="discKind">折扣單位</label><select id="discKind"><option value="amt">元</option><option value="pct">%</option></select></div>
+            </div>
+            <div class="acts" style="margin-top:12px">
+                <button id="print" class="primary">列印 / 存成 PDF</button>
+                <button id="csv">匯出 CSV</button>
+                <button id="clear">清除全部內容</button>
+            </div>
+        </div>
+
+        <div id="doc"></div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>報價單、請款單、收據三種文件的產生器：填抬頭與品項，自動算小計、折扣、稅額、總計與中文大寫金額，可列印成 A4 或匯出 CSV。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>接案或小生意要快速出一張報價或請款文件。</li>
+        <li>客戶要求附大寫金額與稅額明細。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>先選「報價單 / 請款單 / 收據」，欄位名稱會跟著改（收據沒有有效期限）。</li>
+        <li>填賣方、買方、單號、日期；賣方抬頭與稅率設定下次會自動帶入。</li>
+        <li>在「品項」新增品名、數量、單位、單價；可用 ↑ ↓ 調整順序，✕ 刪除（最多 200 列）。</li>
+        <li>選稅額計算方式（未稅另加 / 已含稅 / 免稅）、稅率與折扣（元或 %）。</li>
+        <li>按「列印 / 存成 PDF」（印表機選 A4，品項列不會被分頁切斷），或「匯出 CSV」。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">網站設計 1 式 × 30,000；維護費 3 月 × 2,000；未稅另加 5%
+        → 小計 36,000、營業稅 1,800、總計 37,800
+        大寫：新台幣 參萬柒仟捌佰元整</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>只儲存賣方、備註、文件類型、稅額方式、稅率、折扣單位（鍵 quote_opts）；品項、金額、買方都不會存，重新整理就清空，所以沒有成長問題。</li>
+        <li>「清除全部內容」會清空所有欄位與已記住的設定，無法復原，會先確認；壞資料或舊版資料載入時會忽略並用預設值；存不下時會顯示共用的儲存失敗提示。</li>
+        <li>營業稅額四捨五入到整數元；大寫金額最大支援到 999 兆元。</li>
+        <li>列印時只會印出預覽的文件，頁首頁尾（網址、日期）可在瀏覽器列印選項中取消。</li>
+        <li>本工具只是排版與計算，不是正式發票或統一發票；稅務請以財政部規定為準。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        const MAX_ITEMS = 200;
+        const TYPES = {
+            '報價單': { seller: '報價公司', buyer: '客戶', no: '報價單號', date: '報價日期', valid: '有效期限', tot: '總計', sign: ['報價人簽章', '客戶確認簽章'] },
+            '請款單': { seller: '請款公司', buyer: '請款對象', no: '請款單號', date: '請款日期', valid: '付款期限', tot: '應付總額', sign: ['請款人簽章', '核准簽章'] },
+            '收據': { seller: '收款人', buyer: '茲收到（付款人）', no: '收據編號', date: '收款日期', valid: null, tot: '實收金額', sign: ['收款人簽章', '經手人'] },
+        };
+        const toCents = (x) => { const n = Math.round(+(+x).toFixed(6) * 100); return Number.isSafeInteger(n) ? n : 0; };
+        const lineCents = (qty, price) => { const q = +qty, p = +price; return isFinite(q) && isFinite(p) && q >= 0 && p >= 0 ? Math.round(+(q * p).toFixed(6) * 100) : 0; };
+        const fmt = (c) => (c / 100).toLocaleString('zh-TW', { minimumFractionDigits: c % 100 ? 2 : 0, maximumFractionDigits: 2 });
+        // 全部以「分」整數運算。稅額四捨五入到整數元（營業稅申報習慣）；incl 時未稅 = 含稅 ÷ (1+稅率) 取整元，稅 = 差額
+        function quoteTotals(items, o) {
+            const sub = items.reduce((s, it) => s + lineCents(it.qty, it.price), 0), r = Math.max(0, +o.rate || 0) / 100;
+            const disc = o.discKind === 'pct' ? Math.round(sub * Math.min(Math.max(+o.disc || 0, 0), 100) / 100) : Math.min(toCents(Math.max(+o.disc || 0, 0)), sub);
+            const base = sub - disc;
+            if (o.taxMode === 'excl') { const tax = Math.round(+(base * r / 100).toFixed(6)) * 100; return { sub, disc, net: base, tax, total: base + tax }; }
+            if (o.taxMode === 'incl') { const net = Math.round(+(base / (1 + r) / 100).toFixed(6)) * 100; return { sub, disc, net, tax: base - net, total: base }; }
+            return { sub, disc, net: base, tax: 0, total: base };
+        }
+        // 金額（分）→ 中文大寫，例如 1234500 → 新台幣 壹萬貳仟參佰肆拾伍元整；超出範圍回傳空字串
+        function chineseUpper(cents) {
+            if (!Number.isSafeInteger(cents) || cents < 0 || cents >= 1e17) return '';
+            const D = '零壹貳參肆伍陸柒捌玖', U = ['仟', '佰', '拾', ''], S = ['', '萬', '億', '兆'];
+            const g4 = (g) => { let s = '', z = false; [1000, 100, 10, 1].forEach((u, i) => { const d = Math.floor(g / u) % 10; if (!d) { if (s) z = true; } else { if (z) { s += '零'; z = false; } s += D[d] + U[i]; } }); return s; };
+            const yuan = Math.floor(cents / 100), jiao = Math.floor(cents % 100 / 10), fen = cents % 10;
+            let out = '', y = yuan;
+            const gs = []; while (y > 0) { gs.push(y % 10000); y = Math.floor(y / 10000); }
+            for (let i = gs.length - 1; i >= 0; i--) { if (!gs[i]) continue; if (out && gs[i] < 1000) out += '零'; out += g4(gs[i]) + S[i]; }
+            if (!out) out = '零';
+            out += '元';
+            if (!jiao && !fen) return '新台幣 ' + out + '整';
+            if (jiao) out += D[jiao] + '角'; else out += '零';
+            if (fen) out += D[fen] + '分';
+            return '新台幣 ' + out;
+        }
+        // 防 CSV 公式注入：以 = + - @ 開頭的文字前面加單引號
+        const csvSafe = (s) => /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+        function quoteCsv(items, o) {
+            const t = quoteTotals(items, o), num = (c) => c / 100, rows = items.map(it => [csvSafe(String(it.name || '')), it.qty, csvSafe(String(it.unit || '')), it.price, num(lineCents(it.qty, it.price))]);
+            rows.push(['', '', '', '小計', num(t.sub)]);
+            if (t.disc) rows.push(['', '', '', '折扣', -num(t.disc)]);
+            if (o.taxMode !== 'none') rows.push(['', '', '', '未稅金額', num(t.net)], ['', '', '', '營業稅', num(t.tax)]);
+            rows.push(['', '', '', '總計', num(t.total)]);
+            return { header: ['品名', '數量', '單位', '單價', '金額'], rows };
+        }
+        // 上下移動（回傳新陣列，超出範圍原樣返回）
+        const moveItem = (arr, i, d) => { const j = i + d; if (i < 0 || i >= arr.length || j < 0 || j >= arr.length) return arr.slice(); const a = arr.slice(); [a[i], a[j]] = [a[j], a[i]]; return a; };
+        // 還原：只收已知欄位並截斷；壞資料回預設
+        function normQuoteOpts(raw) {
+            const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}, str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+            const rate = +o.rate;
+            return { type: Object.hasOwn(TYPES, o.type) ? o.type : '報價單', seller: str(o.seller, 200), note: str(o.note, 500), taxMode: ['excl', 'incl', 'none'].includes(o.taxMode) ? o.taxMode : 'excl', rate: isFinite(rate) && rate >= 0 && rate <= 100 && o.rate !== null && o.rate !== '' ? rate : 5, discKind: o.discKind === 'pct' ? 'pct' : 'amt' };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s), KEY = 'quote_opts', { store } = Util;
+        const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
+        const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+        let type = '報價單', items = [{ name: '', qty: '1', unit: '式', price: '' }];
+
+        const o0 = normQuoteOpts(store.get(KEY, null));
+        type = o0.type; $('#seller').value = o0.seller; $('#note').value = o0.note; $('#taxMode').value = o0.taxMode; $('#rate').value = o0.rate; $('#discKind').value = o0.discKind; $('#date').value = today();
+        $('#types').replaceChildren(...Object.keys(TYPES).map(t => { const b = el('button', t, 'sm'); b.dataset.t = t; return b; }));
+        $('#types').onclick = (e) => { const b = e.target.closest('button'); if (b) { type = b.dataset.t; renderDoc(); save(); } };
+
+        const opts = () => ({ taxMode: $('#taxMode').value, rate: $('#rate').value, disc: $('#disc').value, discKind: $('#discKind').value });
+        function save() { store.set(KEY, { type, seller: $('#seller').value, note: $('#note').value, taxMode: $('#taxMode').value, rate: $('#rate').value === '' ? 5 : +$('#rate').value, discKind: $('#discKind').value }); }
+
+        function renderItems() {
+            const box = $('#items');
+            box.replaceChildren(...items.map((it, i) => {
+                const row = el('div', null, 'item'), g = el('div', null, 'fgrid');
+                const field = (key, label, attrs, cls) => {
+                    const d = el('div', null, cls), l = el('label', label), inp = el('input');
+                    inp.id = `i${key}${i}`; l.htmlFor = inp.id; Object.assign(inp, attrs); inp.value = it[key];
+                    inp.oninput = () => { it[key] = inp.value; renderDoc(); rowAmt(i); };
+                    d.append(l, inp); return d;
+                };
+                g.append(field('name', '品名', { maxLength: 100 }, 'nm'), field('qty', '數量', { type: 'number', min: 0, step: 'any', inputMode: 'decimal' }), field('unit', '單位', { maxLength: 8 }), field('price', '單價', { type: 'number', min: 0, step: 'any', inputMode: 'decimal' }));
+                const bar = el('div', null, 'bar'), mk = (t, label, fn, dis) => { const b = el('button', t, 'sm'); b.setAttribute('aria-label', label); b.disabled = dis; b.onclick = fn; return b; };
+                const amt = el('b', fmt(lineCents(it.qty, it.price))); amt.id = 'amt' + i;
+                bar.append(mk('↑', '上移', () => { items = moveItem(items, i, -1); renderItems(); renderDoc(); }, i === 0), mk('↓', '下移', () => { items = moveItem(items, i, 1); renderItems(); renderDoc(); }, i === items.length - 1), amt, mk('✕', '刪除這列', () => { items.splice(i, 1); renderItems(); renderDoc(); }, false));
+                row.append(g, bar); return row;
+            }));
+        }
+        const rowAmt = (i) => { const e = $('#amt' + i); if (e) e.textContent = fmt(lineCents(items[i].qty, items[i].price)); };
+
+        function renderDoc() {
+            const T = TYPES[type], t = quoteTotals(items, opts()), d = $('#doc');
+            [...$('#types').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.t === type));
+            $('#lSeller').textContent = T.seller + '（公司 / 統編 / 聯絡方式）'; $('#lBuyer').textContent = T.buyer; $('#lNo').textContent = T.no; $('#lDate').textContent = T.date;
+            $('#wValid').hidden = !T.valid; if (T.valid) $('#lValid').textContent = T.valid;
+            const meta = el('div', null, 'meta'), kv = (k, v, full) => { const x = el('div', null, full ? 'full pre' : 'pre'); x.append(el('b', k + '：'), v || ''); meta.append(x); };
+            kv(T.seller, $('#seller').value, true); kv(T.buyer, $('#buyer').value, true); kv(T.no, $('#no').value); kv(T.date, $('#date').value);
+            if (T.valid) kv(T.valid, $('#valid').value, true);
+            const tbl = el('table'), cg = el('colgroup'); [8, 42, 18, 16, 16].forEach(w => { const c = el('col'); c.style.width = w + '%'; cg.append(c); });
+            const hd = el('thead'), hr = el('tr'); ['#', '品名', '數量', '單價', '金額'].forEach((h, k) => hr.append(el('th', h, k > 1 ? 'n' : ''))); hd.append(hr);
+            const bd = el('tbody');
+            items.forEach((it, i) => { const r = el('tr'); r.append(el('td', i + 1), el('td', it.name), el('td', (it.qty === '' ? '' : it.qty) + (it.unit ? ' ' + it.unit : ''), 'n'), el('td', it.price === '' ? '' : fmt(toCents(it.price)), 'n'), el('td', fmt(lineCents(it.qty, it.price)), 'n')); bd.append(r); });
+            tbl.append(cg, hd, bd);
+            const tot = el('div', null, 'tot'), row = (k, v, cls) => { const r = el('div', null, cls); r.append(el('span', k), el('span', v)); tot.append(r); };
+            row('小計', fmt(t.sub)); if (t.disc) row('折扣', '-' + fmt(t.disc));
+            if ($('#taxMode').value !== 'none') { row($('#taxMode').value === 'incl' ? '未稅金額' : '折扣後金額', fmt(t.net)); row(`營業稅（${+$('#rate').value || 0}%${$('#taxMode').value === 'incl' ? '，內含' : ''}）`, fmt(t.tax)); }
+            row(T.tot, fmt(t.total), 'g');
+            const up = el('div', chineseUpper(t.total) || '金額過大無法轉換', 'up'), note = el('div', $('#note').value ? '備註：\n' + $('#note').value : '', 'note');
+            note.style.marginTop = '10px';
+            const sign = el('div', null, 'sign'); T.sign.forEach(s => sign.append(el('div', s)));
+            d.replaceChildren(el('h2', type === '收據' ? '收　據' : type), meta, tbl, tot, up, note, sign);
+        }
+
+        $('#add').onclick = () => {
+            if (items.length >= MAX_ITEMS) { $('#msg').textContent = `品項最多 ${MAX_ITEMS} 列，請先刪除不需要的`; return; }
+            $('#msg').textContent = ''; items.push({ name: '', qty: '1', unit: '', price: '' }); renderItems(); renderDoc();
+            document.getElementById('iname' + (items.length - 1)).focus();
+        };
+        for (const id of ['seller', 'buyer', 'no', 'date', 'valid', 'note', 'taxMode', 'rate', 'disc', 'discKind']) { $('#' + id).addEventListener('input', () => { renderDoc(); save(); }); $('#' + id).addEventListener('change', () => { renderDoc(); save(); }); }
+        $('#print').onclick = () => print();
+        $('#csv').onclick = () => {
+            const c = quoteCsv(items, opts());
+            Util.download(new Blob(['﻿' + Util.csvStringify(c.header, c.rows)], { type: 'text/csv;charset=utf-8' }), `${type}_${$('#no').value.replace(/[\\/:*?"<>|]/g, '_') || today()}.csv`);
+        };
+        $('#clear').onclick = () => {
+            if (!confirm('確定要清除所有欄位、品項與已記住的設定嗎？頁面會重新載入，無法復原。')) return;
+            try { localStorage.removeItem(KEY); } catch (e) { /* 無法清除也照常重新載入 */ }
+            location.reload();
+        };
+        renderItems(); renderDoc();
+    </script>
+</body>
+
+</html>

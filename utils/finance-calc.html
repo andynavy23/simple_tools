@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="理財規劃計算：時間價值（PV / FV / PMT / 期數 / 利率）、72 法則、NPV、CAGR、IRR / XIRR、儲蓄險實質報酬、定期定額、通膨購買力、FIRE 4% 提領、緊急預備金、債券殖利率與現金流預測。估算工具，非投資建議。">
+    <meta name="st-keys" content="fincalc_cf,fincalc_opts">
+    <meta property="og:title" content="理財規劃計算" />
+    <meta property="og:description" content="時間價值、報酬率、退休規劃、債券與現金流預測。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/finance-calc.html" />
+    <title>理財規劃計算</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 680px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .tabs button {
+            flex: 1 1 auto;
+        }
+
+        .fgrid .wide {
+            grid-column: 1 / -1;
+        }
+
+        .fgrid select,
+        .fgrid textarea {
+            width: 100%;
+        }
+
+        .fgrid textarea {
+            min-height: 96px;
+            resize: vertical;
+        }
+
+        .out {
+            margin-top: 12px;
+        }
+
+        canvas {
+            width: 100%;
+            aspect-ratio: 16/10;
+            display: block;
+            margin-top: 12px;
+        }
+
+        .lg {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            font-size: 13px;
+            color: var(--muted);
+            margin-top: 8px;
+        }
+
+        .lg i {
+            display: inline-block;
+            width: 14px;
+            height: 4px;
+            border-radius: 2px;
+            vertical-align: middle;
+            margin-right: 4px;
+        }
+
+        .disc {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 0 0 12px;
+        }
+
+        .li .grow {
+            flex: 1;
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>理財規劃計算</h1>
+        <p class="sub">估算工具、非投資建議；所有報酬率都是假設值，不代表未來實際結果。</p>
+
+        <div class="tabs" id="tabs" role="group" aria-label="功能分頁"></div>
+        <div id="cards"></div>
+
+        <div id="t_cf" hidden>
+            <div class="card">
+                <h2>現金流預測</h2>
+                <div class="fgrid">
+                    <div><label for="cf_open">目前餘額（元）</label><input id="cf_open" type="number" step="any" value="0"></div>
+                    <div><label for="cf_months">預測月數</label><select id="cf_months"><option>12</option><option>18</option><option>24</option><option>36</option></select></div>
+                </div>
+                <div class="out" id="cf_out"></div>
+                <canvas id="cf_cv" role="img" aria-label="未來每月餘額曲線，低於 0 的月份以紅點標示"></canvas>
+                <div class="lg"><span><i style="background:var(--blue)"></i>月底餘額</span><span><i style="background:var(--bad)"></i>現金缺口</span></div>
+                <p class="note">草稿會存在這台裝置，項目上限 100 筆；每月項目從「起月」到「迄月」每月都算一次，一次性項目只算在「起月」。</p>
+            </div>
+            <div class="card">
+                <h2>收支項目</h2>
+                <div class="fgrid">
+                    <div><label for="cf_name">名稱</label><input id="cf_name" type="text" maxlength="30" placeholder="例：薪水、房租"></div>
+                    <div><label for="cf_kind">類型</label><select id="cf_kind"><option value="m">每月固定</option><option value="o">一次性</option></select></div>
+                    <div><label for="cf_dir">方向</label><select id="cf_dir"><option value="1">收入</option><option value="-1">支出</option></select></div>
+                    <div><label for="cf_amt">金額（元）</label><input id="cf_amt" type="number" min="0" step="any" inputmode="decimal"></div>
+                    <div><label for="cf_from">起月（第幾個月）</label><input id="cf_from" type="number" min="1" max="36" step="1" inputmode="numeric" value="1"></div>
+                    <div><label for="cf_to">迄月（0＝到最後）</label><input id="cf_to" type="number" min="0" max="36" step="1" inputmode="numeric" value="0"></div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+                    <button class="primary" id="cf_add">加入項目</button>
+                    <button id="cf_clear">清除全部項目</button>
+                </div>
+                <p class="note" id="cf_msg" role="status"></p>
+                <div id="cf_list"></div>
+            </div>
+        </div>
+
+        <p class="disc" style="margin-top:8px">貸款、房貸、買房 vs 租房請用 <a href="loan-calculator.html">貸款 / 複利試算</a>。
+            <button class="sm" id="wipe">清除本頁儲存資料</button></p>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>投資、報酬、儲蓄與退休面向的理財試算：時間價值（PV / FV / PMT / 期數 / 利率求一）、72 法則、NPV、CAGR、IRR / XIRR、儲蓄險實質報酬、年繳月繳隱含利率、外幣定存損益、定期定額、通膨購買力、FIRE 提領模擬、緊急預備金、債券殖利率與價格，以及未來 12–36 個月的現金流預測。</p>
+        <p>貸款、房貸攤還、複利成長、存款目標與買房 vs 租房請用 <a href="loan-calculator.html">貸款 / 複利試算</a>（本頁不重複）。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>想知道一筆投資或儲蓄險「實質年化報酬」到底多少、有沒有贏過定存。</li>
+            <li>規劃退休、FIRE：資產夠不夠撐、4% 提領能撐幾年。</li>
+            <li>想看未來幾個月會不會出現現金缺口。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+            <li>上方選分頁：時間價值 / 報酬率 / 儲蓄與退休 / 債券 / 現金流 / 存款與卡片。</li>
+            <li>存款與卡片：定存比較每行一組方案「名稱,單利|複利|機動,年利率%,年數」（機動用 / 分隔逐年利率），可選填提前解約月數與打折比例；信用卡比較先填每月各類消費，再每行一張卡「名稱,年費,免年費年消費門檻,每月回饋上限,一般%,海外%,網購%,加油%,餐飲%」，依年淨回饋（回饋 − 年費）排名。</li>
+            <li>每張卡片改任何欄位就即時重算；預設值只是範例，請換成自己的數字。</li>
+            <li>時間價值：「求哪一個」選要算的項目，其餘填入；利率與期數單位要一致（月利率配月數）。金額一律「同方向為正」，例如存入 PV 與每期 PMT，期末拿到 FV；要表示提領，PMT 填負數。</li>
+            <li>IRR / XIRR：每行一筆。IRR 只填金額（第 0 期起，每期間隔相同）；XIRR 每行「日期 金額」（YYYY-MM-DD，投入為負、收回為正）。金額不要加千分位逗號。</li>
+            <li>現金流：加入每月固定或一次性的收支，看餘額曲線與缺口月份。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">100,000 元、年利率 5%、10 年、不再加碼：FV ≈ 162,889 元
+IRR：-1000、300、400、500 → 約 8.9%
+XIRR 範例（-10000 / 2750 / 4250 / 3250 / 2750，2008-01-01 起）→ 約 37.3%
+FIRE：資產 1,000 萬、提領 4%、無通膨無報酬 → 恰好撐 25 年
+本金 100 萬、單利 1.6% 2 年 → 1,032,000；複利 1.6% 2 年 → 1,032,256</div>
+        <h3>小提醒</h3>
+        <ul>
+            <li>所有報酬率、通膨率、匯率都是假設值；預設的 2% 通膨、4% 提領率等為範例值，請自行確認。本頁不含稅、手續費（外幣定存可自填手續費）。</li>
+            <li>IRR 若現金流正負號變換多次可能有多個解，頁面會提示，此時請改看 NPV。</li>
+            <li>債券假設：付息日當天買入（無應計利息）、持有到期、不考慮稅費、違約與提前贖回；年數 × 每年付息次數須為整數。</li>
+            <li>本機資料只有兩種：現金流預測草稿（fincalc_cf，項目上限 100 筆，滿了會拒絕新增並提示；金額限制在 ±10 億內）與上次選的分頁（fincalc_opts）。單筆刪除按項目旁的「刪除」；「清除全部項目」清空草稿；頁底「清除本頁儲存資料」會兩項都清掉（頁面會重新載入）。壞掉或被改過的資料載入時會自動修正或捨棄，也可用右上角「💾」備份。</li>
+            <li>存款與信用卡比較的利率、回饋規則全部是你輸入的假設值（預設是虛構範例，不代表任何銀行），本頁不內建銀行牌告或卡片方案；信用卡比較不計活動條件、點數折價與最低消費門檻；提前解約為簡化估算。</li>
+            <li>其他分頁的輸入不存檔，重新整理就回到預設值。</li>
+            <li>結果僅供估算參考，不構成投資建議。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, statRow } = Util;
+
+        // --- pure ---
+        const MAX_ITEMS = 100, MAX_AMT = 1e9, MAX_OPEN = 1e10;
+        const TABS = [['tv', '時間價值'], ['ret', '報酬率'], ['sav', '儲蓄與退休'], ['bond', '債券'], ['cf', '現金流'], ['cmp', '存款與卡片']];
+
+        // 年金因子 ((1+r)^n - 1) / r，r = 0 時為 n
+        const ann = (r, n) => (r === 0 ? n : Math.expm1(n * Math.log1p(r)) / r);
+        const grow = (r, n) => Math.exp(n * Math.log1p(r));
+
+        // 找 f(r)=0 的所有根：在 ln(1+r) ∈ [-4.6, 4.6]（約 -99% ~ 9900%）等距掃描變號處，再用二分法逼近。回傳由小到大的利率陣列
+        function roots(f) {
+            const out = [], N = 1840, lo = -4.6, step = 9.2 / N, at = (i) => { const v = f(Math.expm1(lo + i * step)); return Number.isFinite(v) ? v : NaN; };
+            let fa = at(0);
+            for (let i = 0; i < N; i++) {
+                const fb = at(i + 1);
+                if (fa === 0) out.push(Math.expm1(lo + i * step));
+                else if (fa * fb < 0) {
+                    let a = lo + i * step, b = a + step, va = fa;
+                    for (let k = 0; k < 70; k++) { const m = (a + b) / 2, vm = f(Math.expm1(m)); if (va * vm <= 0) b = m; else { a = m; va = vm; } }
+                    out.push(Math.expm1((a + b) / 2));
+                }
+                fa = fb;
+            }
+            if (fa === 0) out.push(Math.expm1(lo + N * step));
+            return out;
+        }
+
+        // 時間價值：pv·(1+r)^n + pmt·k·((1+r)^n-1)/r = fv，k = 期初付款 1+r、期末 1。which ∈ fv/pv/pmt/n/rate；r 為小數；無解回傳 null
+        function tvSolve(which, p) {
+            const { rate: r = 0, n = 0, pmt = 0, pv = 0, fv = 0, type = 0 } = p, k = type ? 1 + r : 1;
+            let v = null;
+            if (which === 'rate') {
+                if (!(n > 0)) return null;
+                const rs = roots((x) => pv * grow(x, n) + pmt * (type ? 1 + x : 1) * ann(x, n) - fv);
+                return rs.length ? rs.reduce((a, b) => (Math.abs(b) < Math.abs(a) ? b : a)) : null;
+            }
+            if (!(r > -1)) return null;
+            const g = grow(r, n), a = ann(r, n);
+            if (which === 'fv') v = pv * g + pmt * k * a;
+            else if (which === 'pv') v = (fv - pmt * k * a) / g;
+            else if (which === 'pmt') v = a * k === 0 ? null : (fv - pv * g) / (k * a);
+            else if (which === 'n') {
+                if (r === 0) v = pmt === 0 ? null : (fv - pv) / pmt;
+                else { const ratio = (fv * r + pmt * k) / (pv * r + pmt * k); v = ratio > 0 ? Math.log(ratio) / Math.log1p(r) : null; }
+            }
+            return Number.isFinite(v) ? v : null;
+        }
+        // 72 法則：年數 ≈ 72 / 利率%；精確翻倍年數 ln2 / ln(1+r)；反推 n 年翻倍所需年利率
+        const rule72 = (ratePct) => (ratePct > 0 ? { approx: 72 / ratePct, exact: Math.LN2 / Math.log1p(ratePct / 100) } : null);
+        const rateToDouble = (years) => (years > 0 ? Math.pow(2, 1 / years) - 1 : null);
+        const npv = (rate, flows) => flows.reduce((s, v, t) => s + v / Math.pow(1 + rate, t), 0);
+        const cagr = (b, e, y) => (b > 0 && e >= 0 && y > 0 ? Math.pow(e / b, 1 / y) - 1 : null);
+
+        // IRR：flows[t] 為第 t 期；回傳所有解（必須同時有流入與流出）
+        function irr(flows) {
+            if (!flows.some(v => v > 0) || !flows.some(v => v < 0)) return [];
+            return roots((r) => flows.reduce((s, v, t) => s + v * Math.pow(1 + r, -t), 0));
+        }
+        // XIRR：rows = [{t: UTC 毫秒, v}]，以第一筆為基準、實際天數 / 365（同 Excel）
+        function xirr(rows) {
+            if (!rows.some(x => x.v > 0) || !rows.some(x => x.v < 0)) return [];
+            const t0 = rows[0].t;
+            return roots((r) => rows.reduce((s, x) => s + x.v * Math.pow(1 + r, -(x.t - t0) / 864e5 / 365), 0));
+        }
+        // 解析數字清單（空白 / 逗號 / 分號 / 換行分隔）；任何一項不是數字回傳 null；上限 600 項
+        function parseList(str) {
+            const t = String(str).split(/[\s,，;；]+/).filter(Boolean);
+            if (!t.length || t.length > 600) return null;
+            const a = t.map(Number);
+            return a.every(Number.isFinite) ? a : null;
+        }
+        // 解析「日期 金額」每行一筆；回傳 {rows} 或 {err}
+        function parseDated(str) {
+            const lines = String(str).split(/\n/).map(s => s.trim()).filter(Boolean), rows = [];
+            if (lines.length > 600) return { err: '最多 600 行' };
+            for (let i = 0; i < lines.length; i++) {
+                const m = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})[\s,，]+(-?\d+(?:\.\d+)?)$/.exec(lines[i]);
+                const t = m ? Date.UTC(+m[1], m[2] - 1, +m[3]) : NaN, d = new Date(t);
+                if (!m || !(d.getUTCMonth() === m[2] - 1 && d.getUTCDate() === +m[3])) return { err: `第 ${i + 1} 行格式不對（需「YYYY-MM-DD 金額」）` };
+                rows.push({ t, v: +m[4] });
+            }
+            return rows.length >= 2 ? { rows } : { err: '至少需要兩行' };
+        }
+        // 解析「第幾年底, 領回金額」每行一筆
+        function parsePay(str) {
+            const out = [];
+            for (const l of String(str).split(/\n/).map(s => s.trim()).filter(Boolean)) {
+                const m = /^(\d{1,3})[\s,，]+(\d+(?:\.\d+)?)$/.exec(l);
+                if (!m || +m[1] < 1 || out.length >= 100) return null;
+                out.push({ y: +m[1], amt: +m[2] });
+            }
+            return out.length ? out : null;
+        }
+        // 儲蓄險：每年年初繳保費（第 0…payYears-1 期），領回發生在第 y 年底（第 y 期）
+        function policyFlows(premium, payYears, payouts) {
+            const len = Math.max(payYears, ...payouts.map(p => p.y)) + 1, f = new Array(len).fill(0);
+            for (let t = 0; t < payYears; t++) f[t] -= premium;
+            for (const p of payouts) f[p.y] += p.amt;
+            return f;
+        }
+        // 分期繳費隱含利率：年繳 A 對照每期繳 m、一年 k 期（期初繳）；回傳 {period, nominal, effective}
+        function installmentRate(A, m, k) {
+            const j = tvSolve('rate', { n: k, pv: A, pmt: -m, fv: 0, type: 1 });
+            return j == null ? null : { period: j, nominal: j * k, effective: Math.pow(1 + j, k) - 1 };
+        }
+        // 外幣定存（單利、到期領回）：匯率為台幣 / 外幣，fee 為台幣手續費合計
+        function fxDeposit({ principal, buy, sell, ratePct, days, fee = 0, twdPct = 0 }) {
+            if (!(principal > 0 && buy > 0 && sell > 0 && days > 0 && ratePct >= 0 && fee >= 0)) return null;
+            const f0 = principal / buy, f1 = f0 * (1 + ratePct / 100 * days / 365), back = f1 * sell - fee, pnl = back - principal;
+            return { f0, f1, back, pnl, annual: back > 0 ? Math.pow(back / principal, 365 / days) - 1 : -1, breakEven: (principal + fee) / f1, twdInterest: principal * twdPct / 100 * days / 365 };
+        }
+        // 定期定額（月底投入、月複利 = 年報酬 / 12）；回傳每年底的 {y, invested, value}
+        function dca(monthly, retPct, years, initial = 0) {
+            const r = retPct / 1200, out = [{ y: 0, invested: initial, value: initial }];
+            let v = initial;
+            for (let m = 1; m <= years * 12; m++) { v = v * (1 + r) + monthly; if (m % 12 === 0) out.push({ y: m / 12, invested: initial + monthly * m, value: v }); }
+            return out;
+        }
+        const inflFuture = (amt, pct, years) => amt * Math.pow(1 + pct / 100, years);   // 今天的 amt 元，years 年後要多少錢才等值
+        const inflPast = (amt, pct, years) => amt / Math.pow(1 + pct / 100, years);     // years 年後的 amt 元，換算成今天的購買力
+        // FIRE：首年提領 = 資產 × 提領率，之後每年隨通膨調整；年初提領、年底長報酬。series[y] 為第 y 年底資產；depletedYear 為第一個提領不足的年份
+        function fire(assets, wPct, infPct, retPct, years) {
+            if (!(assets > 0 && wPct > 0 && years >= 1)) return null;
+            const w1 = assets * wPct / 100, series = [assets];
+            let bal = assets, depletedYear = null;
+            for (let y = 1; y <= years; y++) {
+                bal -= w1 * Math.pow(1 + infPct / 100, y - 1);
+                if (bal < -1e-9) { depletedYear = y; series.push(0); break; }
+                bal = Math.max(0, bal) * (1 + retPct / 100); series.push(bal);
+            }
+            return { w1, series, depletedYear };
+        }
+        const EMG = { stable: [3, '收入穩定（公務員、大企業正職）'], normal: [6, '一般上班族'], unstable: [9, '收入波動（業績獎金、接案）'], risky: [12, '收入很不穩定（自營、淡旺季明顯）'] };
+        const emergency = (monthly, kind, hasDeps) => (monthly > 0 && EMG[kind] ? { months: EMG[kind][0] + (hasDeps ? 1 : 0), amount: monthly * (EMG[kind][0] + (hasDeps ? 1 : 0)) } : null);
+
+        // 債券：付息日買入；n = 年數 × 每年付息次數須為整數；殖利率為年化（按付息頻率複利，即債券等值殖利率）
+        function bondPrice(face, cpnPct, ytmPct, years, freq) {
+            const n = years * freq;
+            if (!(face > 0 && cpnPct >= 0 && freq >= 1 && n >= 1 && Math.abs(n - Math.round(n)) < 1e-9) || !(ytmPct > -100 * freq)) return null;
+            const c = face * cpnPct / 100 / freq, y = ytmPct / 100 / freq, N = Math.round(n);
+            return y === 0 ? c * N + face : c * (1 - Math.pow(1 + y, -N)) / y + face * Math.pow(1 + y, -N);
+        }
+        function bondYield(face, cpnPct, price, years, freq) {
+            if (!(price > 0) || bondPrice(face, cpnPct, 0, years, freq) == null) return null;
+            const rs = roots((y) => bondPrice(face, cpnPct, y * freq * 100, years, freq) - price);
+            return rs.length ? rs[0] * freq * 100 : null;
+        }
+
+        // 現金流：items = [{id, name, kind:'m'|'o', amt(有正負), from, to}]；回傳每月底餘額（bal[0] = 期初）與缺口月份
+        function forecast(open, items, months) {
+            const bal = [open], gaps = [];
+            for (let m = 1; m <= months; m++) {
+                let d = 0;
+                for (const it of items) if (it.kind === 'o' ? it.from === m : it.from <= m && (!it.to || m <= it.to)) d += it.amt;
+                bal.push(bal[m - 1] + d);
+                if (bal[m] < 0) gaps.push(m);
+            }
+            const body = bal.slice(1), min = Math.min(...body);
+            return { bal, gaps, min, minMonth: body.indexOf(min) + 1 };
+        }
+        // 定存到期本利和：kind s 單利 / c 複利（年複利）/ f 機動（rates 逐年；最後不滿一年的部分按單利）；p 本金、years 年數
+        function depositValue(p, kind, rates, years) {
+            if (!(p > 0 && years > 0 && rates.length && rates.every(r => Number.isFinite(r) && r > -100))) return null;
+            if (kind === 's') return p * (1 + rates[0] / 100 * years);
+            if (kind === 'c') return p * Math.pow(1 + rates[0] / 100, years);
+            let v = p;
+            for (let i = 0; i < Math.ceil(years - 1e-9); i++) v *= 1 + rates[Math.min(i, rates.length - 1)] / 100 * Math.min(1, years - i);
+            return v;
+        }
+        // 提前解約（簡化）：實存期間按「牌告利率 × 打折%」單利計息
+        const depositEarly = (p, ratePct, months, discPct) => p * (1 + ratePct / 100 * months / 12 * discPct / 100);
+        const DKIND = { 單利: 's', 複利: 'c', 機動: 'f' };
+        // 每行「名稱,類型(單利/複利/機動),年利率%(機動用 / 分隔逐年),年數」，最多 10 組；回傳 {plans} 或 {err}
+        function parseDeposits(str) {
+            const lines = String(str).split(/\n/).map(s => s.trim()).filter(Boolean), plans = [];
+            if (!lines.length || lines.length > 10) return { err: '請填 1–10 組方案' };
+            for (let i = 0; i < lines.length; i++) {
+                const c = lines[i].split(/[,，\t]/).map(s => s.trim()), kind = DKIND[c[1]], rates = (c[2] || '').split('/').map(x => x.trim() === '' ? NaN : Number(x)), years = Number(c[3]);
+                if (c.length !== 4 || !c[0] || !kind || !rates.every(r => Number.isFinite(r) && r > -100) || !(years > 0 && years <= 50)) return { err: `第 ${i + 1} 行格式不對（需「名稱,單利|複利|機動,年利率%,年數」）` };
+                plans.push({ name: c[0].slice(0, 20), kind, rates, years });
+            }
+            return { plans };
+        }
+        // 各方案到期結果並依本利和由高到低排序；earlyM > 0 時同時算提前解約
+        function compareDeposits(p, plans, earlyM, discPct) {
+            return plans.map(x => {
+                const v = depositValue(p, x.kind, x.rates, x.years);
+                return v == null ? null : { ...x, value: v, interest: v - p, annual: Math.pow(v / p, 1 / x.years) - 1, early: earlyM > 0 ? depositEarly(p, x.rates[0], earlyM, discPct) : null };
+            }).filter(Boolean).sort((a, b) => b.value - a.value);
+        }
+        // 信用卡：每行「名稱,年費,免年費年消費門檻(0=無),每月回饋上限(0=無),一般%,海外%,網購%,加油%,餐飲%」（回饋率可少填，缺的視為 0），最多 10 張
+        function parseCards(str) {
+            const lines = String(str).split(/\n/).map(s => s.trim()).filter(Boolean), cards = [];
+            if (!lines.length || lines.length > 10) return { err: '請填 1–10 張卡' };
+            for (let i = 0; i < lines.length; i++) {
+                const c = lines[i].split(/[,，\t]/).map(s => s.trim()), n = c.slice(1).map(x => x === '' ? NaN : Number(x));
+                if (c.length < 5 || c.length > 9 || !c[0] || !n.every(x => Number.isFinite(x) && x >= 0 && x <= 1e9) || n.slice(3).some(x => x > 100)) return { err: `第 ${i + 1} 行格式不對（需「名稱,年費,免年費門檻,每月上限,一般%,海外%,網購%,加油%,餐飲%」）` };
+                cards.push({ name: c[0].slice(0, 20), fee: n[0], waive: n[1], cap: n[2], rates: [0, 1, 2, 3, 4].map(k => n[3 + k] || 0) });
+            }
+            return { cards };
+        }
+        // spends 為每月五類消費；回饋 = Σ消費×回饋率，受每月上限；年消費達免年費門檻則免年費；依年淨回饋由高到低排序
+        function compareCards(spends, cards) {
+            const total = spends.reduce((a, b) => a + b, 0);
+            return cards.map(cd => {
+                const raw = spends.reduce((s, v, i) => s + v * cd.rates[i] / 100, 0), month = cd.cap > 0 ? Math.min(raw, cd.cap) : raw;
+                const waived = cd.fee > 0 && cd.waive > 0 && total * 12 >= cd.waive, fee = waived ? 0 : cd.fee, year = month * 12;
+                return { ...cd, month, year, waived, feePaid: fee, net: year - fee, rate: total > 0 ? year / (total * 12) : 0, capped: cd.cap > 0 && raw > cd.cap };
+            }).sort((a, b) => b.net - a.net);
+        }
+        const inRange = (v, a, b) => typeof v === 'number' && Number.isFinite(v) && v >= a && v <= b;
+        // 載入驗證：壞資料補預設、截斷到上限
+        function cleanCf(raw) {
+            const r = raw && typeof raw === 'object' ? raw : {}, seen = new Set(), items = [];
+            for (const x of Array.isArray(r.items) ? r.items : []) {
+                if (items.length >= MAX_ITEMS || !x || typeof x !== 'object') continue;
+                if (!inRange(x.amt, -MAX_AMT, MAX_AMT) || x.amt === 0 || !Number.isInteger(x.from) || !inRange(x.from, 1, 36) || !Number.isInteger(x.id) || seen.has(x.id)) continue;
+                const to = Number.isInteger(x.to) && inRange(x.to, x.from, 36) ? x.to : 0;
+                seen.add(x.id);
+                items.push({ id: x.id, name: typeof x.name === 'string' ? x.name.slice(0, 30) : '', kind: x.kind === 'o' ? 'o' : 'm', amt: x.amt, from: x.from, to: x.kind === 'o' ? 0 : to });
+            }
+            return { open: inRange(r.open, -MAX_OPEN, MAX_OPEN) ? r.open : 0, months: [12, 18, 24, 36].includes(r.months) ? r.months : 12, items };
+        }
+        const cleanOpts = (raw) => ({ tab: raw && TABS.some(t => t[0] === raw.tab) ? raw.tab : 'tv' });
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const fmt = (n, d = 0) => n.toLocaleString('zh-TW', { minimumFractionDigits: d, maximumFractionDigits: d });
+        const pct = (x, d = 2) => `${fmt(x * 100, d)}%`;
+        const sgn = (n, d = 0) => `${n >= 0 ? '+' : ''}${fmt(n, d)}`;
+        const yn = (f) => ({ rows: f });
+
+        const irrRows = (rs) => !rs.length ? [['IRR', '無解（需同時有流入與流出）']] : rs.length === 1 ? [['IRR（年報酬率 / 每期報酬率）', pct(rs[0], 3), 'ok']] : [['IRR（多個解）', rs.map(r => pct(r)).join('、'), 'bad'], ['提醒', '現金流正負號多次變換，IRR 不可靠，請改看 NPV']];
+
+        // 卡片定義：f 欄位 [id, 標籤, 預設, 型別（省略＝數字；neg＝可負數；ta＝多行；sel＝選單，o 為選項）]；run(v) 回傳 {rows, err, note, chart}
+        const SEL = (o) => ({ t: 'sel', o });
+        const CARDS = [
+            {
+                tab: 'tv', id: 'tvm', title: '時間價值（PV / FV / PMT / 期數 / 利率）',
+                f: [['which', '求哪一個', 'fv', SEL([['fv', '終值 FV'], ['pv', '現值 PV'], ['pmt', '每期金額 PMT'], ['n', '期數 n'], ['rate', '每期利率']])], ['type', '付款時點', '0', SEL([['0', '期末付款'], ['1', '期初付款']])],
+                ['rate', '每期利率 %', 5, 'neg'], ['n', '期數', 10, 'neg'], ['pv', '現值 PV（現在投入）', 100000, 'neg'], ['pmt', '每期金額 PMT', 0, 'neg'], ['fv', '終值 FV（期末拿到）', 0, 'neg']],
+                note: '金額同方向為正（存入、期末拿到）；提領的 PMT 填負數。被選為「求」的欄位會被忽略。利率與期數單位要一致。',
+                run(v) {
+                    const p = { rate: v.rate / 100, n: v.n, pv: v.pv || 0, pmt: v.pmt || 0, fv: v.fv || 0, type: +v.type };
+                    for (const k of ['rate', 'n']) if (k !== v.which && !Number.isFinite(v[k])) return { err: '請填入利率與期數' };
+                    const x = tvSolve(v.which, p);
+                    if (x == null) return { err: '此組條件無解（檢查正負號與數值）' };
+                    const q = { ...p, [v.which]: x }, inv = q.pv + q.pmt * q.n;
+                    const main = v.which === 'rate' ? ['每期利率', `${fmt(x * 100, 4)}%`] : v.which === 'n' ? ['期數', fmt(x, 2)] : [{ fv: '終值 FV', pv: '現值 PV', pmt: '每期金額 PMT' }[v.which], fmt(x, 2)];
+                    return yn([[...main, 'ok'], ['總投入（PV + PMT × n）', fmt(inv, 2)], ['終值 − 總投入', sgn(q.fv - inv, 2)]]);
+                },
+            },
+            {
+                tab: 'tv', id: 'r72', title: '72 法則與翻倍時間',
+                f: [['rate', '年利率 %', 6], ['yrs', '想幾年翻倍（選填）', 12]],
+                run(v) {
+                    const r = rule72(v.rate), rows = [];
+                    if (r) rows.push(['72 法則估算', `${fmt(r.approx, 2)} 年`], ['精確（ln2 / ln(1+r)）', `${fmt(r.exact, 2)} 年`, 'ok'], ['誤差', `${sgn(r.approx - r.exact, 2)} 年`]);
+                    const q = rateToDouble(v.yrs);
+                    if (q != null) rows.push([`${fmt(v.yrs, 2)} 年翻倍所需年利率`, pct(q), 'ok']);
+                    return rows.length ? yn(rows) : { err: '請填入大於 0 的利率或年數' };
+                },
+            },
+            {
+                tab: 'tv', id: 'npv', title: 'NPV 折現評估',
+                f: [['rate', '折現率 % / 期', 5], ['cf', '每期現金流（第 0 期＝現在，空白分隔）', '-1000 300 400 500', 'ta']],
+                note: '投入為負、收回為正；每期間隔要相同、與折現率單位一致。NPV > 0 代表報酬高於折現率。',
+                run(v) {
+                    const fl = parseList(v.cf);
+                    if (!fl || !Number.isFinite(v.rate) || v.rate <= -100) return { err: '請填入折現率與數字現金流（用空白或逗號分隔，不要加千分位）' };
+                    const x = npv(v.rate / 100, fl);
+                    return yn([['NPV', fmt(x, 2), x >= 0 ? 'ok' : 'bad'], ['判斷', x >= 0 ? '高於折現率，值得（以此假設）' : '低於折現率，不划算']]);
+                },
+            },
+            {
+                tab: 'ret', id: 'cagr', title: 'CAGR 年化成長率',
+                f: [['b', '起始值', 100000], ['e', '結束值', 180000], ['y', '年數', 5]],
+                run(v) { const c = cagr(v.b, v.e, v.y); return c == null ? { err: '起始值與年數需大於 0，結束值不可為負' } : yn([['CAGR', pct(c, 3), c >= 0 ? 'ok' : 'bad'], ['總報酬', pct(v.e / v.b - 1)]]); },
+            },
+            {
+                tab: 'ret', id: 'irr', title: 'IRR 內部報酬率（等間隔現金流）',
+                f: [['cf', '每期現金流（第 0 期起）', '-1000 300 400 500', 'ta']],
+                note: '每期間隔相同，IRR 即「每期」報酬率；月現金流需自行 ×12 換算（或改用 XIRR）。用掃描 + 二分法求解，可找出多個解。',
+                run(v) { const fl = parseList(v.cf); return fl ? yn(irrRows(irr(fl))) : { err: '請填入數字現金流（用空白或逗號分隔，不要加千分位）' }; },
+            },
+            {
+                tab: 'ret', id: 'xirr', title: 'XIRR（含日期的不規則現金流）',
+                f: [['cf', '每行「日期 金額」', '2008-01-01 -10000\n2008-03-01 2750\n2008-10-30 4250\n2009-02-15 3250\n2009-04-01 2750', 'ta']],
+                note: '實際天數 ÷ 365，與 Excel XIRR 同。第一筆為基準日。',
+                run(v) { const p = parseDated(v.cf); return p.err ? { err: p.err } : yn(irrRows(xirr(p.rows))); },
+            },
+            {
+                tab: 'ret', id: 'policy', title: '儲蓄險 / 保單實質年化報酬率',
+                f: [['prem', '每年保費', 100000], ['py', '繳費年數', 6], ['dep', '拿來比較的定存利率 %', 1.6], ['pay', '領回：每行「第幾年底 金額」（範例值）', '10 620000\n15 100000\n20 800000', 'ta']],
+                note: '假設保費在每年年初繳、領回在該年年底；實際請以保單繳費日與領回日為準。定存利率為範例值，請自行確認。',
+                run(v) {
+                    const po = parsePay(v.pay);
+                    if (!po || !(v.prem > 0) || !(v.py >= 1) || !Number.isInteger(v.py) || v.py > 100) return { err: '請填入保費、繳費年數（整數）與領回（每行「年 金額」）' };
+                    const fl = policyFlows(v.prem, v.py, po), rs = irr(fl), tot = v.prem * v.py, back = po.reduce((s, p) => s + p.amt, 0);
+                    const rows = [['總保費', fmt(tot)], ['總領回', fmt(back)], ['淨收益', sgn(back - tot), back >= tot ? 'ok' : 'bad'], ...irrRows(rs)];
+                    if (Number.isFinite(v.dep) && v.dep > -100) { const x = npv(v.dep / 100, fl); rows.push([`以定存 ${v.dep}% 折現的 NPV`, sgn(x), x >= 0 ? 'ok' : 'bad'], ['對照定存', x >= 0 ? '贏過定存' : '輸給定存（折現後）']); }
+                    let c = 0; const be = fl.findIndex(x => (c += x) >= 0);
+                    rows.push(['累計回本', be < 0 ? '領回總額未超過保費' : `第 ${be} 年底`]);
+                    return yn(rows);
+                },
+            },
+            {
+                tab: 'ret', id: 'inst', title: '保險年繳 / 月繳隱含利率',
+                f: [['a', '年繳保費（年初一次繳）', 12000], ['m', '分期每期保費', 1050], ['k', '每年期數', '12', SEL([['12', '月繳（12 期）'], ['4', '季繳（4 期）'], ['2', '半年繳（2 期）']])]],
+                note: '分期付款等於向保險公司「借」一部分年繳保費，這裡算出隱含的借款利率（每期期初付款）。',
+                run(v) {
+                    if (!(v.a > 0 && v.m > 0)) return { err: '請填入年繳與每期保費' };
+                    const r = installmentRate(v.a, v.m, +v.k);
+                    return r ? yn([['每期利率', pct(r.period, 3)], ['名目年利率', pct(r.nominal, 2), 'ok'], ['實質年利率（複利）', pct(r.effective, 2), 'ok'], ['分期多付', `${fmt(v.m * +v.k - v.a, 2)} 元`]]) : { err: '算不出利率（分期總額不可能這麼低）' };
+                },
+            },
+            {
+                tab: 'ret', id: 'fx', title: '外幣定存匯率損益',
+                f: [['p', '本金（台幣）', 300000], ['buy', '買入時匯率（台幣 / 外幣，銀行賣出價）', 31.5], ['sell', '換回時匯率（銀行買入價）', 30.8], ['r', '外幣定存年利率 %', 4.5], ['d', '期間（天）', 180], ['fee', '手續費合計（台幣）', 0], ['tr', '同期台幣定存年利率 %（比較用）', 1.6]],
+                note: '單利、到期一次領回；不含外幣利息扣稅。匯率請用銀行實際成交價（買入外幣用賣出價、換回用買入價），匯差已含在內。',
+                run(v) {
+                    const x = fxDeposit({ principal: v.p, buy: v.buy, sell: v.sell, ratePct: v.r, days: v.d, fee: v.fee || 0, twdPct: v.tr || 0 });
+                    if (!x) return { err: '請填入本金、匯率（>0）、利率與期間' };
+                    return yn([['換得外幣', fmt(x.f0, 2)], ['到期外幣本利和', fmt(x.f1, 2)], ['換回台幣', fmt(x.back)], ['損益', `${sgn(x.pnl)} 元`, x.pnl >= 0 ? 'ok' : 'bad'], ['年化報酬率', pct(x.annual), x.pnl >= 0 ? 'ok' : 'bad'], ['損益平衡換回匯率', fmt(x.breakEven, 4)], ['同期台幣定存利息', `${fmt(x.twdInterest)} 元`]]);
+                },
+            },
+            {
+                tab: 'sav', id: 'dca', title: '定期定額成長',
+                f: [['m', '每月投入', 10000], ['r', '年化報酬率 %（假設值）', 6], ['y', '年數', 20], ['p0', '起始本金', 0]],
+                note: '月底投入、月複利（年報酬 ÷ 12）；不含稅與手續費。複利成長表另見貸款 / 複利試算。',
+                run(v) {
+                    if (!(v.y >= 1 && v.y <= 80 && Number.isInteger(v.y) && v.m >= 0 && v.r > -100)) return { err: '年數需為 1–80 的整數、每月投入不可為負' };
+                    const s = dca(v.m, v.r, v.y, v.p0 || 0), l = s[s.length - 1];
+                    return { rows: [['累計投入本金', fmt(l.invested)], ['期末本利和', fmt(l.value), 'ok'], ['投資收益', sgn(l.value - l.invested), l.value >= l.invested ? 'ok' : 'bad']], chart: { x: s.map(a => a.y), s: [{ n: '投入本金', c: '--muted', d: s.map(a => a.invested) }, { n: '本利和', c: '--blue', d: s.map(a => a.value) }] } };
+                },
+            },
+            {
+                tab: 'sav', id: 'infl', title: '通膨與購買力',
+                f: [['a', '金額', 1000000], ['i', '年通膨率 %（範例值）', 2], ['y', '年數', 20]],
+                note: '通膨率請自行輸入：長期平均值不是保證。台灣近年 CPI 年增率可到主計總處查詢。',
+                run(v) {
+                    if (!(v.a >= 0 && v.y >= 0 && v.i > -100)) return { err: '請填入金額、通膨率與年數' };
+                    return yn([[`今天的 ${fmt(v.a)} 元，${fmt(v.y)} 年後要`, `${fmt(inflFuture(v.a, v.i, v.y))} 元才等值`, 'ok'], [`${fmt(v.y)} 年後的 ${fmt(v.a)} 元，相當於今天`, `${fmt(inflPast(v.a, v.i, v.y))} 元`, 'ok'], [`${fmt(v.y)} 年前的 ${fmt(v.a)} 元（如舊薪水），相當於今天`, `${fmt(inflFuture(v.a, v.i, v.y))} 元`]]);
+                },
+            },
+            {
+                tab: 'sav', id: 'fire', title: 'FIRE / 退休提領模擬',
+                f: [['a', '退休時資產', 10000000], ['w', '首年提領率 %', 4], ['i', '通膨率 %（提領額每年調升）', 2], ['r', '資產年報酬率 %（假設值）', 5], ['y', '模擬年數（最多 60）', 40], ['e', '年支出（選填，反推所需資產）', 400000]],
+                note: '年初提領、年底長報酬；首年提領 = 資產 × 提領率，之後逐年隨通膨增加。4% 法則源自美國歷史資料，不保證適用台灣。',
+                run(v) {
+                    const yrs = Math.min(60, Math.floor(v.y)), f = fire(v.a, v.w, v.i || 0, v.r || 0, yrs);
+                    if (!f) return { err: '請填入資產、提領率與年數' };
+                    const rows = [['首年提領', `${fmt(f.w1)} 元（每月約 ${fmt(f.w1 / 12)}）`], f.depletedYear ? ['結果', `第 ${f.depletedYear} 年資產耗盡（完整提領 ${f.depletedYear - 1} 年）`, 'bad'] : ['結果', `${yrs} 年內撐得住，期末剩 ${fmt(f.series[f.series.length - 1])} 元`, 'ok']];
+                    if (v.e > 0) rows.push([`年支出 ${fmt(v.e)} 元需資產（÷ 提領率）`, `${fmt(v.e / (v.w / 100))} 元`]);
+                    return { rows, chart: { x: f.series.map((_, i) => i), s: [{ n: '各年底資產', c: '--blue', d: f.series }] } };
+                },
+            },
+            {
+                tab: 'sav', id: 'emg', title: '緊急預備金',
+                f: [['m', '每月必要支出', 40000], ['k', '收入穩定度', 'normal', SEL(Object.entries(EMG).map(([k, x]) => [k, x[1]]))], ['d', '有人要扶養？', '0', SEL([['0', '沒有'], ['1', '有（家人 / 房貸壓力）']])]],
+                note: '以一般常見的「3–12 個月」經驗法則加減，不是規定；以「必要支出」而非總花費計算。',
+                run(v) { const x = emergency(v.m, v.k, v.d === '1'); return x ? yn([['建議預備', `${x.months} 個月`], ['建議金額', `${fmt(x.amount)} 元`, 'ok']]) : { err: '請填入每月必要支出' }; },
+            },
+            {
+                tab: 'bond', id: 'bond', title: '債券價格與殖利率',
+                f: [['which', '求哪一個', 'price', SEL([['price', '由殖利率算價格'], ['ytm', '由價格算殖利率']])], ['face', '面額', 100000], ['c', '票面利率 %', 2], ['y', '剩餘年數', 10], ['q', '每年付息次數', '2', SEL([['1', '1（年付）'], ['2', '2（半年付）'], ['4', '4（季付）'], ['12', '12（月付）']])], ['ytm', '到期殖利率 %（年）', 3], ['p', '價格（買進成本）', 95000]],
+                note: '假設：付息日買入（無應計利息）、持有到期領回面額、不含稅費與違約風險；年數 × 付息次數須為整數；殖利率為年化名目（按付息頻率複利）。',
+                run(v) {
+                    const q = +v.q;
+                    if (v.which === 'price') {
+                        const p = bondPrice(v.face, v.c, v.ytm, v.y, q);
+                        return p == null ? { err: '請填入面額、票面利率、殖利率，且年數 × 付息次數為整數' } : yn([['價格', fmt(p, 2), 'ok'], ['相對面額', `${sgn(p / v.face * 100 - 100, 2)}%（${p > v.face + 1e-9 ? '溢價' : p < v.face - 1e-9 ? '折價' : '平價'}）`], ['當期殖利率（年息 ÷ 價格）', pct(v.face * v.c / 100 / p, 3)]]);
+                    }
+                    const y = bondYield(v.face, v.c, v.p, v.y, q);
+                    return y == null ? { err: '算不出殖利率（檢查價格與年數 × 付息次數是否為整數）' } : yn([['到期殖利率（年）', `${fmt(y, 3)}%`, 'ok'], ['相對面額', `${sgn(v.p / v.face * 100 - 100, 2)}%`], ['當期殖利率（年息 ÷ 價格）', pct(v.face * v.c / 100 / v.p, 3)]]);
+                },
+            },
+            {
+                tab: 'cmp', id: 'dep', title: '存款利率比較（單利 / 複利 / 機動）',
+                f: [['p', '本金（元）', 1000000], ['em', '提前解約月數（0＝不算）', 0], ['ed', '提前解約利率打折 %（範例值，依銀行規定）', 80],
+                ['plans', '每行「名稱,單利|複利|機動,年利率%,年數」；機動用 / 分隔逐年利率（範例值）', 'A 銀行,單利,1.6,2\nB 銀行,複利,1.55,2\nC 銀行,機動,1.5/1.7,2', 'ta']],
+                note: '複利＝每年利息併入本金；機動＝逐年各自的利率（不足年數沿用最後一個）。提前解約僅簡化為「實存期間 × 首年利率 × 打折%」，實際折算方式依各銀行；利率皆為你輸入的假設值，請自行確認；不含利息所得稅。',
+                run(v) {
+                    const q = parseDeposits(v.plans);
+                    if (q.err) return { err: q.err };
+                    if (!(v.p > 0)) return { err: '請填入本金' };
+                    const em = v.em > 0 ? v.em : 0, rs = compareDeposits(v.p, q.plans, em, Number.isFinite(v.ed) ? v.ed : 100);
+                    return yn(rs.flatMap((x, i) => [[`#${i + 1} ${x.name}（${Object.keys(DKIND).find(k => DKIND[k] === x.kind)} ${x.years} 年）`, `${fmt(x.value)} 元（利息 ${fmt(x.interest)}，年化 ${pct(x.annual)}）`, i ? '' : 'ok'], ...(x.early == null ? [] : [[`　${x.name} 提前解約（第 ${em} 個月）`, `${fmt(x.early)} 元（利息 ${fmt(x.early - v.p)}）`]])]));
+                },
+            },
+            {
+                tab: 'cmp', id: 'cc', title: '信用卡回饋比較（規則自行輸入）',
+                f: [['g', '每月一般消費（元）', 20000], ['a', '每月海外消費', 5000], ['w', '每月網購', 8000], ['o', '每月加油', 2000], ['d', '每月餐飲', 6000],
+                ['cards', '每行「名稱,年費,免年費年消費門檻,每月回饋上限,一般%,海外%,網購%,加油%,餐飲%」（0＝無門檻 / 無上限；以下為虛構範例）', '範例甲卡,1800,100000,500,1,3,2,1,1\n範例乙卡,0,0,0,0.5,0.5,0.5,0.5,0.5', 'ta']],
+                note: '本頁不內建任何銀行的回饋數字，請依各卡最新公告自行輸入。簡化：回饋 = 各類消費 × 回饋率，合計受「每月回饋上限」限制；年費達「免年費年消費門檻」就免；不計點數兌換折價、活動條件、最低消費門檻與回饋入帳時點。',
+                run(v) {
+                    const q = parseCards(v.cards), sp = [v.g, v.a, v.w, v.o, v.d].map(x => (Number.isFinite(x) ? x : 0));
+                    if (q.err) return { err: q.err };
+                    if (sp.some(x => x < 0 || x > 1e9) || !sp.some(x => x > 0)) return { err: '請填入每月消費（不可為負）' };
+                    return yn(compareCards(sp, q.cards).map((x, i) => [`#${i + 1} ${x.name}`, `淨 ${sgn(x.net)} 元／年（回饋 ${fmt(x.year)}，年費 ${x.waived ? '免' : fmt(x.feePaid)}；實質 ${pct(x.rate)}${x.capped ? '，已達月上限' : ''}）`, i ? (x.net < 0 ? 'bad' : '') : 'ok']));
+                },
+            },
+        ];
+
+        let opts = cleanOpts(store.get('fincalc_opts', null)), cf = cleanCf(store.get('fincalc_cf', null)), seq = cf.items.reduce((m, x) => Math.max(m, x.id), 0);
+
+        // 折線圖（canvas）：顏色一律讀主題變數
+        function draw(cv, ch, dots) {
+            const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+            if (!w) return;
+            cv.width = w * dpr; cv.height = h * dpr;
+            const c = cv.getContext('2d'), css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim() || '#888';
+            const all = ch.s.flatMap(s => s.d), lo = Math.min(0, ...all), hi = Math.max(0, ...all) || 1, L = 56 * dpr, R = 8 * dpr, T = 8 * dpr, B = 22 * dpr, n = ch.x.length;
+            const X = (i) => L + (n > 1 ? i / (n - 1) : 0) * (cv.width - L - R), Y = (v) => T + (1 - (v - lo) / (hi - lo || 1)) * (cv.height - T - B);
+            const short = (v) => (Math.abs(v) >= 1e8 ? `${fmt(v / 1e8, 1)}億` : Math.abs(v) >= 1e4 ? `${fmt(v / 1e4, 0)}萬` : fmt(v));
+            c.font = `${11 * dpr}px sans-serif`; c.fillStyle = css('--muted'); c.strokeStyle = css('--line'); c.lineWidth = dpr;
+            for (let i = 0; i <= 4; i++) { const v = lo + (hi - lo) * i / 4, y = Y(v); c.beginPath(); c.moveTo(L, y); c.lineTo(cv.width - R, y); c.stroke(); c.textAlign = 'right'; c.fillText(short(v), L - 4 * dpr, y + 4 * dpr); }
+            c.textAlign = 'center';
+            const ticks = Math.min(n - 1, 6) || 1;
+            for (let k = 0; k <= ticks; k++) { const i = Math.round(k * (n - 1) / ticks); c.fillText(ch.x[i], X(i), cv.height - 6 * dpr); }
+            for (const s of ch.s) {
+                c.strokeStyle = css(s.c); c.lineWidth = 2.5 * dpr; c.beginPath();
+                s.d.forEach((v, i) => (i ? c.lineTo(X(i), Y(v)) : c.moveTo(X(i), Y(v)))); c.stroke();
+                if (dots) { c.fillStyle = css('--bad'); s.d.forEach((v, i) => { if (v < 0) { c.beginPath(); c.arc(X(i), Y(v), 3.5 * dpr, 0, 7); c.fill(); } }); }
+            }
+        }
+        const legend = (el, ch) => el.replaceChildren(...ch.s.map(s => { const sp = document.createElement('span'), i = document.createElement('i'); i.style.background = `var(${s.c})`; sp.append(i, s.n); return sp; }));
+
+        // ---------- 計算卡片 ----------
+        const el = (tag, props, ...kids) => {
+            const { ariaLabel, ariaPressed, ...p } = props || {}, e = Object.assign(document.createElement(tag), p);
+            if (ariaLabel) e.setAttribute('aria-label', ariaLabel);
+            if (ariaPressed) e.setAttribute('aria-pressed', ariaPressed);
+            e.append(...kids); return e;
+        };
+        function field(cd, [id, label, def, t]) {
+            const fid = `${cd.id}_${id}`, box = el('div'), lab = el('label', { htmlFor: fid, textContent: label });
+            let inp;
+            if (t && t.t === 'sel') inp = el('select', { id: fid }, ...t.o.map(([v, l]) => el('option', { value: v, textContent: l })));
+            else if (t === 'ta') { inp = el('textarea', { id: fid, rows: 5, spellcheck: false }); box.className = 'wide'; }
+            else { inp = el('input', { id: fid, type: 'number', step: 'any' }); if (t !== 'neg') inp.inputMode = 'decimal'; }
+            inp.value = def; inp.dataset.k = id;
+            box.append(lab, inp); return box;
+        }
+        function runCard(card) {
+            const cd = CARDS.find(x => x.id === card.dataset.c), v = {};
+            for (const [id, , , t] of cd.f) { const e = card.querySelector(`[data-k="${id}"]`); v[id] = t === 'ta' || (t && t.t === 'sel') ? e.value : parseFloat(e.value); }
+            const r = cd.run(v), out = card.querySelector('.out'), cv = card.querySelector('canvas'), lg = card.querySelector('.lg');
+            out.replaceChildren(...(r.err ? [el('p', { className: 'bad', textContent: r.err })] : r.rows.map(([l, x, c]) => statRow(l, x, c))));
+            const show = !!(r.chart && !r.err);
+            cv.hidden = lg.hidden = !show;
+            if (show) { legend(lg, r.chart); cv._chart = r.chart; draw(cv, r.chart); }
+        }
+        function buildCards() {
+            $('#cards').replaceChildren(...CARDS.map(cd => {
+                const card = el('div', { className: 'card' }, el('h2', { textContent: cd.title }), el('div', { className: 'fgrid' }, ...cd.f.map(f => field(cd, f))), el('div', { className: 'out', role: 'status' }), el('canvas', { hidden: true, role: 'img', ariaLabel: cd.title + '曲線圖' }), el('div', { className: 'lg', hidden: true }));
+                if (cd.note) card.append(el('p', { className: 'note', textContent: cd.note }));
+                card.dataset.c = cd.id; card.dataset.tab = cd.tab;
+                return card;
+            }));
+        }
+        function showTab(t) {
+            opts = { tab: t }; store.set('fincalc_opts', opts);
+            $('#tabs').replaceChildren(...TABS.map(([k, l]) => el('button', { textContent: l, onclick: () => showTab(k), ariaPressed: String(k === t) })));
+            $('#t_cf').hidden = t !== 'cf';
+            for (const c of document.querySelectorAll('#cards .card')) { c.hidden = c.dataset.tab !== t; if (!c.hidden) runCard(c); }
+            if (t === 'cf') renderCf();
+        }
+
+        // ---------- 現金流 ----------
+        const saveCf = () => store.set('fincalc_cf', cf);
+        function renderCf() {
+            const f = forecast(cf.open, cf.items, cf.months), out = $('#cf_out');
+            out.replaceChildren(statRow('最低餘額', `${fmt(f.min)} 元（第 ${f.minMonth} 個月）`, f.min < 0 ? 'bad' : 'ok'), statRow('期末餘額', `${fmt(f.bal[cf.months])} 元`, f.bal[cf.months] < 0 ? 'bad' : 'ok'),
+                statRow('現金缺口月份', f.gaps.length ? f.gaps.map(m => `第 ${m} 月`).join('、') : '無', f.gaps.length ? 'bad' : 'ok'));
+            const ch = { x: f.bal.map((_, i) => i), s: [{ n: '月底餘額', c: '--blue', d: f.bal }] };
+            draw($('#cf_cv'), ch, true);
+            $('#cf_list').replaceChildren(...(cf.items.length ? cf.items.map(it => {
+                const row = el('div', { className: 'li' }), del = el('button', { className: 'sm', textContent: '刪除', ariaLabel: `刪除 ${it.name || '項目'}`, onclick: () => { cf.items = cf.items.filter(x => x.id !== it.id); saveCf(); renderCf(); } });
+                row.append(el('span', { className: 'grow', textContent: `${it.name || '（未命名）'}　${it.kind === 'o' ? `第 ${it.from} 月一次` : `第 ${it.from}–${it.to || '最後'} 月每月`}　${sgn(it.amt)}` }), del);
+                return row;
+            }) : [el('p', { className: 'muted', textContent: `尚無項目（上限 ${MAX_ITEMS} 筆）。` })]));
+        }
+        $('#cf_open').oninput = () => { const v = parseFloat($('#cf_open').value); cf.open = inRange(v, -MAX_OPEN, MAX_OPEN) ? v : 0; saveCf(); renderCf(); };
+        $('#cf_months').onchange = () => { cf.months = +$('#cf_months').value; saveCf(); renderCf(); };
+        $('#cf_add').onclick = () => {
+            const msg = (s) => { $('#cf_msg').textContent = s; }, amt = parseFloat($('#cf_amt').value), from = parseInt($('#cf_from').value, 10), to = parseInt($('#cf_to').value || '0', 10), kind = $('#cf_kind').value;
+            if (cf.items.length >= MAX_ITEMS) return msg(`最多 ${MAX_ITEMS} 筆，請先刪除不用的項目。`);
+            if (!inRange(amt, 0, MAX_AMT) || amt === 0) return msg(`金額需大於 0 且不超過 ${fmt(MAX_AMT)}。`);
+            if (!inRange(from, 1, 36)) return msg('起月需為 1–36。');
+            if (kind === 'm' && to !== 0 && !inRange(to, from, 36)) return msg('迄月需為 0（到最後）或 ≥ 起月且 ≤ 36。');
+            cf.items.push({ id: ++seq, name: $('#cf_name').value.trim().slice(0, 30), kind, amt: amt * +$('#cf_dir').value, from, to: kind === 'o' ? 0 : to });
+            saveCf(); msg('已加入。'); $('#cf_name').value = ''; $('#cf_amt').value = ''; renderCf();
+        };
+        $('#cf_clear').onclick = () => { if (cf.items.length && confirm(`清除全部 ${cf.items.length} 筆收支項目？無法復原。`)) { cf.items = []; saveCf(); renderCf(); } };
+        $('#wipe').onclick = () => { if (confirm('清除本頁儲存的資料（現金流草稿與上次分頁）？無法復原，頁面會重新載入。')) { try { localStorage.removeItem('fincalc_cf'); localStorage.removeItem('fincalc_opts'); } catch (e) { /* 無法存取就算了 */ } location.reload(); } };
+        $('#cards').addEventListener('input', (e) => runCard(e.target.closest('.card')));
+        $('#cards').addEventListener('change', (e) => runCard(e.target.closest('.card')));
+        addEventListener('resize', () => { for (const cv of document.querySelectorAll('#cards canvas')) if (!cv.hidden && cv._chart) draw(cv, cv._chart); if (opts.tab === 'cf') renderCf(); });
+
+        $('#cf_open').value = cf.open; $('#cf_months').value = cf.months;
+        buildCards(); showTab(opts.tab);
+    </script>
+</body>
+
+</html>

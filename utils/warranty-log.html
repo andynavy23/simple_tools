@@ -176,6 +176,11 @@
             <div class="stats" id="stats"></div>
         </div>
 
+        <div class="card" id="consCard" hidden>
+            <h2>30 天內到期的耗材與保養</h2>
+            <div id="consDue"></div>
+        </div>
+
         <div class="card">
             <div class="filters">
                 <input id="q" type="text" placeholder="搜尋品名、店家、備註…" aria-label="搜尋">
@@ -223,6 +228,7 @@
         <li>到期日以台灣時間（UTC+8）的今天判斷；到期當天仍算在保固內，剩 30 天以內標示「30 天內到期」。</li>
         <li>實際保固範圍與起算日以店家與原廠規定為準，這裡只是記錄與估算。</li>
         <li>資料只存在這個瀏覽器，清除網站資料會消失；右上角「💾」可匯出備份。</li>
+        <li>耗材與保養：每筆記錄底下有「耗材與保養」，可加濾網、電池、濾芯等週期性項目（名稱、週期天數、上次更換日），到期日 = 上次更換日 + 週期；逾期與 30 天內到期的會列在清單上方，按「已更換」把上次更換日改成今天。每個項目最多 20 項耗材；刪除記錄會連同耗材一起刪除，單筆耗材也可刪除（需確認）；舊資料沒有耗材時自動補空。</li>
         <li>最多 500 筆，滿了要先刪除舊的才能新增；品名最長 60 字、店家 40 字、位置 100 字、備註 200 字。</li>
         <li>「清除全部」會刪掉所有記錄且無法復原；載入到壞掉的資料會自動略過或補預設值。</li>
         </ul>
@@ -294,8 +300,41 @@
                 id: str(r.id, 40) || newId(), name, cat: CATS.includes(r.cat) ? r.cat : '其他', date: r.date,
                 price: Number.isFinite(p) && p >= 0 && p <= WL.MAX_PRICE ? Math.round(p * 100) / 100 : 0,
                 shop: str(r.shop, WL.SHOP), months: Number.isInteger(m) && m >= 0 && m <= WL.MAX_MONTHS ? m : 0,
-                loc: str(r.loc, WL.LOC), note: str(r.note, WL.NOTE),
+                loc: str(r.loc, WL.LOC), note: str(r.note, WL.NOTE), cons: normConsList(r.cons),
             };
+        }
+        // 耗材與保養：每個項目最多 CONS_MAX 項；週期天數 1–3650；舊資料沒有 cons 就補空陣列
+        const CONS_MAX = 20, CONS_NAME = 30;
+        function normCons(c) {
+            if (!c || typeof c !== 'object') return null;
+            const name = str(c.name, CONS_NAME), days = Number(c.days);
+            if (!name || !Number.isInteger(days) || days < 1 || days > 3650 || !validDate(c.last)) return null;
+            return { id: str(c.id, 40) || newId(), name, days, last: c.last };
+        }
+        function normConsList(raw) {
+            if (!Array.isArray(raw)) return [];
+            const seen = new Set(), out = [];
+            for (const c of raw) { const x = normCons(c); if (!x || seen.has(x.id)) continue; seen.add(x.id); out.push(x); if (out.length >= CONS_MAX) break; }
+            return out;
+        }
+        // 狀態：到期日 = 上次更換日 + 週期天數；逾期 / 30 天內 / 正常
+        function consStatus(c, today) {
+            const due = day.shift(c.last, c.days), left = day.between(today, due);
+            return { key: left < 0 ? 'overdue' : left <= 30 ? 'soon' : 'ok', due, left };
+        }
+        function addCons(item, r, id = newId()) {
+            const c = normCons({ id, name: r.name, days: String(r.days ?? '').trim() === '' ? NaN : Number(r.days), last: String(r.last ?? '').trim() });
+            if (!c) return { item, err: `請填耗材名稱（≤${CONS_NAME} 字）、週期天數（1–3650 的整數）與上次更換日` };
+            if (item.cons.length >= CONS_MAX) return { item, err: `每個項目最多 ${CONS_MAX} 項耗材，請先刪除不用的` };
+            return { item: { ...item, cons: [...item.cons, c] }, err: '' };
+        }
+        const removeCons = (item, cid) => ({ ...item, cons: item.cons.filter(c => c.id !== cid) });
+        const doneCons = (item, cid, today) => ({ ...item, cons: item.cons.map(c => c.id === cid ? { ...c, last: today } : c) });
+        // 已逾期或 within 天內到期的耗材，依剩餘天數排序
+        function dueCons(items, today, within = 30) {
+            const out = [];
+            for (const item of items) for (const c of item.cons) { const s = consStatus(c, today); if (s.left <= within) out.push({ item, c, s }); }
+            return out.sort((a, b) => a.s.left - b.s.left || a.c.id.localeCompare(b.c.id));
         }
         function normList(raw) {
             if (!Array.isArray(raw)) return [];
@@ -322,7 +361,7 @@
             if (s(r.price) !== '') { const p = Number(s(r.price)); if (!(Number.isFinite(p) && p >= 0 && p <= WL.MAX_PRICE)) return '價格請填 0 以上的數字'; }
             return '';
         }
-        const fromForm = (r, id) => normItem({ id, name: r.name, cat: r.cat, date: String(r.date).trim(), price: String(r.price ?? '').trim() === '' ? 0 : r.price, shop: r.shop, months: r.months, loc: r.loc, note: r.note });
+        const fromForm = (r, id, cons = []) => normItem({ id, name: r.name, cat: r.cat, date: String(r.date).trim(), price: String(r.price ?? '').trim() === '' ? 0 : r.price, shop: r.shop, months: r.months, loc: r.loc, note: r.note, cons });
         // 新增：滿 500 筆拒絕（不默默刪舊的）
         function addItem(list, r, id = newId()) {
             const err = checkForm(r);
@@ -335,7 +374,7 @@
             const err = checkForm(r);
             if (err) return { list, err };
             if (!list.some(x => x.id === id)) return { list, err: '找不到這筆記錄' };
-            return { list: list.map(x => x.id === id ? fromForm(r, id) : x), err: '' };
+            return { list: list.map(x => x.id === id ? fromForm(r, id, x.cons) : x), err: '' };
         }
         const removeItem = (list, id) => list.filter(x => x.id !== id);
 
@@ -376,8 +415,31 @@
         }
         function msg(text, bad) { const m = $('#formMsg'); m.textContent = text; m.className = 'msg' + (bad ? ' bad' : ''); }
 
+        const CONS_LABEL = { overdue: '已逾期', soon: '30 天內', ok: '正常' };
+        const consText = (s) => s.left < 0 ? `${s.due} 到期（已過 ${-s.left} 天）` : s.left === 0 ? `${s.due} 到期（今天）` : `${s.due} 到期（還有 ${s.left} 天）`;
+        const updateItemRaw = (id, fn) => { items = items.map(x => x.id === id ? fn(x) : x); save(); render(); };
+        // 每個項目的耗材區：清單（已更換 / 刪除）+ 新增表單
+        function consBox(it, today) {
+            const box = el('details', 'meta'); box.append(el('summary', '', `耗材與保養（${it.cons.length}/${CONS_MAX}）`));
+            for (const c of it.cons) {
+                const s = consStatus(c, today), row = el('div', 'meta'); row.append(el('b', '', c.name), ' ', el('span', 'badge ' + (s.key === 'overdue' ? 'expired' : s.key), CONS_LABEL[s.key]), ' ' + consText(s) + `（每 ${c.days} 天）`);
+                const ok = el('button', 'sm', '已更換'); ok.setAttribute('aria-label', '已更換 ' + c.name); ok.onclick = () => updateItemRaw(it.id, x => doneCons(x, c.id, twToday()));
+                const del = el('button', 'sm', '刪除'); del.setAttribute('aria-label', '刪除耗材 ' + c.name); del.style.color = 'var(--bad)';
+                del.onclick = () => { if (confirm(`刪除耗材「${c.name}」？無法復原。`)) updateItemRaw(it.id, x => removeCons(x, c.id)); };
+                row.append(' ', ok, ' ', del); box.append(row);
+            }
+            const f = el('div', 'fgrid'), mkIn = (ph, type, val) => { const i = el('input'); i.type = type; i.placeholder = ph; i.setAttribute('aria-label', ph); if (val) i.value = val; if (type === 'text') i.maxLength = CONS_NAME; if (type === 'number') { i.min = 1; i.max = 3650; i.inputMode = 'numeric'; } return i; };
+            const n = mkIn('名稱（濾網、電池…）', 'text'), d = mkIn('週期天數', 'number'), l = mkIn('上次更換日', 'date', today), m = el('p', 'msg'), add = el('button', 'sm', '新增耗材');
+            add.onclick = () => { const r = addCons(it, { name: n.value, days: d.value, last: l.value }); if (r.err) { m.textContent = r.err; m.className = 'msg bad'; return; } updateItemRaw(it.id, () => r.item); };
+            f.append(n, d, l); box.append(f, add, m); return box;
+        }
+        function renderCons(today) {
+            const due = dueCons(items, today), card = $('#consCard'); card.hidden = !due.length;
+            $('#consDue').replaceChildren(...due.map(({ item, c, s }) => { const p = el('div', 'meta'); p.append(el('b', '', `${item.name}・${c.name}`), ' ', el('span', 'badge ' + (s.key === 'overdue' ? 'expired' : s.key), CONS_LABEL[s.key]), ' ' + consText(s)); return p; }));
+        }
         function render() {
-            const today = twToday(), st = statsOf(filterItems(items, $('#q').value, $('#catFilter').value), today);
+            const today = twToday(); renderCons(today);
+            const st = statsOf(filterItems(items, $('#q').value, $('#catFilter').value), today);
             const sBox = $('#stats'); sBox.replaceChildren();
             [['筆數', st.count], ['總花費', money(st.total)], ['30 天內到期', st.soon], ['已過期', st.expired]].forEach(([k, v]) => { const d = el('div'); d.append(el('small', '', k), el('b', '', v)); sBox.append(d); });
             const list = $('#list'); list.replaceChildren();
@@ -393,6 +455,7 @@
                 line('保固', when);
                 line('購買', it.date + (it.shop ? ' ・ ' + it.shop : '') + (it.price ? ' ・ ' + money(it.price) + ' 元' : ''));
                 line('放在', it.loc); line('備註', it.note);
+                card.append(consBox(it, today));
                 const b = el('div', 'btns');
                 const ed = el('button', 'sm', '編輯'); ed.onclick = () => startEdit(it.id);
                 const del = el('button', 'sm', '刪除'); del.setAttribute('aria-label', '刪除 ' + it.name); del.style.color = 'var(--bad)';

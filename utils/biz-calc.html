@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="商業計算：毛利率與定價、損益兩平、發票稅額拆分、電商與外送利潤、包裹材積、行銷指標與 A/B 測試顯著性。">
+    <meta property="og:title" content="商業計算" />
+    <meta property="og:description" content="定價、損益兩平、電商 / 外送利潤、材積、行銷指標與 A/B 測試。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/biz-calc.html" />
+    <meta name="st-keys" content="bizcalc_opts">
+    <title>商業計算</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .tabs button {
+            flex: 1 1 auto;
+            padding-left: 8px;
+            padding-right: 8px;
+        }
+
+        .fgrid {
+            margin-bottom: 10px;
+        }
+
+        .fgrid>div {
+            min-width: 0;
+        }
+
+        .out {
+            margin-top: 6px;
+        }
+
+        .warn {
+            color: var(--muted);
+            font-size: 13px;
+            margin: 8px 0 0;
+        }
+
+        .bad {
+            color: var(--bad);
+        }
+
+        canvas {
+            width: 100%;
+            aspect-ratio: 2 / 1;
+            display: block;
+            margin-top: 8px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 110px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>商業計算</h1>
+        <p class="sub">小生意常用的幾個算式放在一起。費率、係數、規格上限都可以自己改；輸入內容只存在這個瀏覽器。</p>
+
+        <div class="tabs" id="tabs"></div>
+
+        <div id="p0">
+            <div class="card">
+                <h2>定價與毛利</h2>
+                <div class="fgrid" id="g_price"></div>
+                <div class="out" id="o_price"></div>
+                <p class="warn">毛利率 = 毛利 ÷ 售價；加價率 = 毛利 ÷ 成本。以下售價皆為未稅價，稅率可改。</p>
+            </div>
+            <div class="card">
+                <h2>損益兩平點（BEP）</h2>
+                <div class="fgrid" id="g_bep"></div>
+                <div class="out" id="o_bep"></div>
+                <canvas id="cv" aria-label="損益兩平圖"></canvas>
+            </div>
+            <div class="card">
+                <h2>發票金額拆分</h2>
+                <div class="fgrid" id="g_tax"></div>
+                <div class="out" id="o_tax"></div>
+                <p class="warn">折扣疊加、買 N 送 M 請用「比價 / 單價計算」。</p>
+            </div>
+        </div>
+
+        <div id="p1" hidden>
+            <div class="card">
+                <h2>網店利潤（平台費 + 金流費）</h2>
+                <div class="fgrid" id="g_shop"></div>
+                <div class="out" id="o_shop"></div>
+                <p class="warn">費率欄位的預設值只是範例值，請自行確認你的平台與金流方案。</p>
+            </div>
+            <div class="card">
+                <h2>外送平台利潤</h2>
+                <div class="fgrid" id="g_dlv"></div>
+                <div class="out" id="o_dlv"></div>
+                <p class="warn">抽成與折扣分攤方式依合約而定，預設值只是範例值。</p>
+            </div>
+            <div class="card">
+                <h2>包裹材積</h2>
+                <div class="fgrid" id="g_vol"></div>
+                <div class="out" id="o_vol"></div>
+                <p class="warn">體積重 = 長 × 寬 × 高 ÷ 材積係數，計費重量取「實重」與「體積重」較大者。係數與進位單位各家物流不同，預設為範例值。</p>
+            </div>
+            <div class="card">
+                <h2>尺寸 / 重量規格檢查</h2>
+                <div class="fgrid" id="g_spec"></div>
+                <div class="out" id="o_spec"></div>
+                <p class="warn">規格上限預設是範例值，物流方可能調整，請以官方公告為準後再修改。</p>
+            </div>
+        </div>
+
+        <div id="p2" hidden>
+            <div class="card">
+                <h2>廣告指標</h2>
+                <p class="muted" style="margin:0 0 10px;font-size:13px">有填的欄位才會算出對應指標。</p>
+                <div class="fgrid" id="g_ads"></div>
+                <div class="out" id="o_ads"></div>
+            </div>
+            <div class="card">
+                <h2>廣告目標反推</h2>
+                <div class="fgrid" id="g_adr"></div>
+                <div class="out" id="o_adr"></div>
+            </div>
+            <div class="card">
+                <h2>轉換漏斗</h2>
+                <label for="fun" class="muted" style="font-size:13px">每行「階段名稱,人數」（最多 20 階段）</label>
+                <textarea id="fun" data-s spellcheck="false"></textarea>
+                <div class="out" id="o_fun"></div>
+            </div>
+            <div class="card">
+                <h2>A/B 測試顯著性</h2>
+                <div class="fgrid" id="g_ab"></div>
+                <div class="out" id="o_ab"></div>
+                <h2 style="margin-top:16px">所需樣本數（每組）</h2>
+                <div class="fgrid" id="g_ss"></div>
+                <div class="out" id="o_ss"></div>
+                <p class="warn">雙比例 z 檢定（雙尾）。p 值低於 1 − 信心水準才視為顯著；請先決定樣本數再看結果，不要邊跑邊偷看。</p>
+            </div>
+            <div class="card">
+                <h2>電子報指標</h2>
+                <div class="fgrid" id="g_nl"></div>
+                <div class="out" id="o_nl"></div>
+            </div>
+        </div>
+
+        <div id="p3" hidden>
+            <div class="card">
+                <h2>多輪募資股權稀釋</h2>
+                <div class="fgrid" id="g_cap"></div>
+                <label for="rounds" class="muted" style="font-size:13px">每行「輪次,募資額,投前估值,投後選擇權池目標%（選填）」（最多 10 輪；以下為虛構範例）</label>
+                <textarea id="rounds" data-s spellcheck="false"></textarea>
+                <div class="out" id="o_cap"></div>
+                <p class="warn">選擇權池依常見作法在「投前」擴充（稀釋既有股東、不稀釋新投資人）；填了目標才會擴充，沒填就不動。簡化：不含可轉債 / SAFE、反稀釋條款、清算優先權與員工離職回收。</p>
+            </div>
+            <div class="card">
+                <h2>簡易估值與敏感度</h2>
+                <div class="fgrid" id="g_val"></div>
+                <div class="out" id="o_val"></div>
+                <p class="warn">估值 = 營收 × 營收倍數、淨利 × 本益倍數；倍數是你的假設值（範例值），各產業與市況差很多。敏感度為倍數乘上 0.5 ~ 1.5。</p>
+            </div>
+            <div class="card">
+                <h2>員工認股權行使損益</h2>
+                <div class="fgrid" id="g_esop"></div>
+                <div class="out" id="o_esop"></div>
+                <p class="warn">稅率請自行填：各國 / 各種認股權方案差異很大（有的在行使日就把價差當所得課稅，有的在出售時才課、有的符合條件可延後或以資本利得計），請向會計師或稅務單位確認。賣出價留空則只算行使當下。</p>
+            </div>
+        </div>
+
+        <button id="reset">重置所有輸入</button>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>四個分頁的商業小計算：「利潤與定價」（毛利、損益兩平、發票稅額拆分）、「電商與外送」（平台費後利潤、包裹材積、規格檢查）、「行銷指標」（CTR / CPC / ROAS、漏斗、A/B 測試、電子報）、「新創股權」（多輪募資稀釋、簡易估值敏感度、員工認股權行使損益）。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>替商品定價、評估某個價格賺不賺錢。</li>
+        <li>上架賣場前，扣完平台抽成與金流費看實際到手多少。</li>
+        <li>廣告成效或 A/B 測試的結果想知道是不是真的有差。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>選分頁，直接在欄位填數字，結果會即時更新；空白欄位視為未填。</li>
+        <li>費率、材積係數、規格上限是可編輯欄位，預設只是範例值，請改成你實際的合約或官方數字。</li>
+        <li>新創股權：填創辦人與選擇權池現有持股，再每行一輪「輪次,募資額,投前估值,投後選擇權池目標%」，看每輪後創辦人剩多少；估值填營收 / 淨利與倍數；認股權填行使價、市價、股數與你的稅率。</li>
+        <li>「重置所有輸入」會清掉記住的輸入並恢復預設值。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">成本 100、想要毛利率 40% → 未稅售價 166.67、含稅 175
+        固定成本 50,000、單價 500、變動成本 300 → 兩平銷量 250 件、營收 125,000
+        A 組 1000 人轉換 100、B 組 1000 人轉換 130 → p ≈ 0.03，在 95% 水準顯著
+        創辦人 100%、募資 100 萬投前估值 400 萬 → 投資人 20%、創辦人剩 80%（再來一輪同條件 → 64%）</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>只記住上次的分頁與各欄位輸入（鍵 bizcalc_opts），不含其他資料，沒有成長問題；壞資料或舊版資料載入時會被忽略並使用預設值。</li>
+        <li>存不下時會顯示共用的儲存失敗提示；「重置」前會先確認，無法復原。</li>
+        <li>新創股權分頁的欄位也一併記住在同一個鍵（bizcalc_opts），沒有另外存資料；稅率、倍數、估值皆為你輸入的假設，不構成投資、法律或稅務建議。</li>
+        <li>計算僅供估算，不構成稅務或財務建議；稅務請以財政部規定與會計師為準。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        const rd = (x, rule) => { x = +(+x).toFixed(8); return rule === 'floor' ? Math.floor(x) : rule === 'ceil' ? Math.ceil(x) : rule === 'none' ? x : Math.round(x); };
+        const div = (a, b) => (b === 0 || !isFinite(a) || !isFinite(b)) ? NaN : a / b;
+
+        // 定價：mode = margin（成本+毛利率→售價）/ markup（成本+加價率→售價）/ price（成本+售價）/ cost（售價+毛利率→成本）
+        function pricing(mode, cost, price, pct) {
+            if (mode === 'margin') { if (!(cost >= 0) || !(pct < 100) || !isFinite(pct)) return null; price = cost / (1 - pct / 100); }
+            else if (mode === 'markup') { if (!(cost >= 0) || !isFinite(pct)) return null; price = cost * (1 + pct / 100); }
+            else if (mode === 'cost') { if (!(price >= 0) || !(pct < 100) || !isFinite(pct)) return null; cost = price * (1 - pct / 100); }
+            if (!(cost >= 0) || !(price > 0)) return null;
+            const profit = price - cost;
+            return { cost, price, profit, margin: profit / price * 100, markup: div(profit, cost) * 100 };
+        }
+        // 損益兩平：目標利潤 target（0 = 剛好打平）。單位毛利 ≤ 0 無解
+        function bep(fixed, varc, price, target) {
+            const cm = price - varc;
+            if (!(fixed >= 0) || !(varc >= 0) || !(price > 0) || !(cm > 0)) return null;
+            const exact = ((fixed) + (target || 0)) / cm, units = Math.ceil(+exact.toFixed(8));
+            return { cm, exact, units, revenue: units * price, cmRatio: cm / price * 100 };
+        }
+        // 發票金額拆分：incl = 輸入為含稅總額（稅額 = 總額 − 未稅，未稅按規則取整）；excl = 輸入為未稅（稅額按規則取整）
+        function taxSplit(amount, mode, ratePct, rule) {
+            if (!(amount >= 0) || !(ratePct >= 0)) return null;
+            const r = ratePct / 100;
+            if (mode === 'incl') { const net = rd(amount / (1 + r), rule); return { net, tax: +(amount - net).toFixed(8), total: amount }; }
+            const tax = rd(amount * r, rule);
+            return { net: amount, tax, total: +(amount + tax).toFixed(8) };
+        }
+        // 網店單筆利潤（每件）：價格 − 成本 − 運費包材 − 平台費 − 金流費（% + 固定）；breakeven = 打平的最低售價
+        function shopProfit(price, cost, ship, platPct, payPct, payFix) {
+            if (!(price > 0) || !(cost >= 0) || !(ship >= 0) || !(platPct >= 0) || !(payPct >= 0) || !(payFix >= 0) || platPct + payPct >= 100) return null;
+            const plat = price * platPct / 100, pay = price * payPct / 100 + payFix, profit = price - cost - ship - plat - pay;
+            return { plat, pay, profit, margin: profit / price * 100, breakeven: (cost + ship + payFix) / (1 - (platPct + payPct) / 100) };
+        }
+        // 外送：店家吸收折扣 disc%；抽成基準 base = before（折扣前售價）/ after（折扣後）
+        function deliveryProfit(price, discPct, commPct, base, pack, food) {
+            if (!(price > 0) || !(discPct >= 0 && discPct <= 100) || !(commPct >= 0 && commPct <= 100) || !(pack >= 0) || !(food >= 0)) return null;
+            const net = price * (1 - discPct / 100), comm = (base === 'after' ? net : price) * commPct / 100, profit = net - comm - pack - food;
+            return { net, comm, profit, margin: div(profit, net) * 100 };
+        }
+        // 材積：體積重 = l*w*h/coef；計費重 = max(實重, 體積重)，step > 0 時向上進位到 step 的倍數
+        function volWeight(l, w, h, kg, coef, step) {
+            if (!(l > 0 && w > 0 && h > 0) || !(kg >= 0) || !(coef > 0)) return null;
+            const vol = l * w * h / coef, base = Math.max(kg, vol), bill = step > 0 ? Math.ceil(+(base / step).toFixed(8)) * step : base;
+            return { vol, base, bill, byVol: vol > kg };
+        }
+        // 規格檢查：lim = { max 最長邊, sum 三邊合, kg 重量 }（欄位為 NaN 或空白表示不檢查）。回傳不符合的說明陣列
+        function specCheck(l, w, h, kg, lim) {
+            const bad = [], longest = Math.max(l, w, h), sum = l + w + h;
+            if (lim.max > 0 && longest > lim.max) bad.push(`最長邊 ${+longest.toFixed(2)} 超過 ${lim.max} cm`);
+            if (lim.sum > 0 && sum > lim.sum) bad.push(`三邊合 ${+sum.toFixed(2)} 超過 ${lim.sum} cm`);
+            if (lim.kg > 0 && kg > lim.kg) bad.push(`重量 ${kg} kg 超過 ${lim.kg} kg`);
+            return bad;
+        }
+        // 廣告指標：任何欄位可為 NaN（未填），算不出的指標為 NaN
+        function adMetrics(imp, clk, cost, conv, rev) {
+            return { ctr: div(clk, imp) * 100, cpc: div(cost, clk), cpm: div(cost, imp) * 1000, cvr: div(conv, clk) * 100, cpa: div(cost, conv), roas: div(rev, cost) };
+        }
+        // 兩平 ROAS = 1 ÷ 毛利率；兩平 CPA = 客單價 × 毛利率；cpa = CPC ÷ 轉換率
+        function adBreakEven(cpc, cvrPct, aov, marginPct) {
+            return { cpa: div(cpc, cvrPct / 100), beRoas: div(1, marginPct / 100), beCpa: aov * marginPct / 100 };
+        }
+        // 漏斗：text 每行「名稱,人數」；回傳 { rows, worst }（worst = 相鄰階段轉換率最低的列索引，至少要 2 階段）
+        function funnel(text) {
+            const rows = [];
+            for (const line of String(text).split(/\r?\n/)) {
+                const m = line.trim().match(/^(.*?)[,，\t]\s*([\d,]+(?:\.\d+)?)$/);
+                if (!m || !m[1].trim()) continue;
+                const n = parseFloat(m[2].replace(/,/g, ''));
+                if (isFinite(n) && n >= 0) rows.push({ name: m[1].trim().slice(0, 30), n });
+                if (rows.length >= 20) break;
+            }
+            let worst = -1, low = Infinity;
+            rows.forEach((r, i) => {
+                r.step = i ? div(r.n, rows[i - 1].n) * 100 : 100; r.total = div(r.n, rows[0].n) * 100; r.lost = i ? rows[i - 1].n - r.n : 0;
+                if (i && r.step < low) { low = r.step; worst = i; }
+            });
+            return { rows, worst };
+        }
+        // 標準常態分布：Φ 用泰勒級數（|x| ≤ 3）與連分數（尾端）；normInv 用 Acklam 近似再牛頓法修正
+        function normCdf(x) {
+            if (x === 0) return 0.5;
+            const a = Math.abs(x) / Math.SQRT2;
+            let erfc;
+            if (a <= 3) {
+                let term = a, sum = a;
+                for (let n = 1; n < 200; n++) { term *= -a * a / n; const d = term / (2 * n + 1); sum += d; if (Math.abs(d) < 1e-17) break; }
+                erfc = 1 - 2 / Math.sqrt(Math.PI) * sum;
+            } else {
+                let t = a; for (let k = 80; k >= 1; k--) t = a + (k / 2) / t;
+                erfc = Math.exp(-a * a) / Math.sqrt(Math.PI) / t;
+            }
+            return x > 0 ? 1 - erfc / 2 : erfc / 2;
+        }
+        function normInv(p) {
+            if (!(p > 0 && p < 1)) return NaN;
+            const a = [-39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716, 2.506628277459239],
+                b = [-54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972, -13.28068155288572],
+                c = [-0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783],
+                d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
+            let x;
+            if (p < 0.02425) { const q = Math.sqrt(-2 * Math.log(p)); x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+            else if (p > 1 - 0.02425) { const q = Math.sqrt(-2 * Math.log(1 - p)); x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+            else { const q = p - 0.5, r = q * q; x = (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1); }
+            for (let i = 0; i < 2; i++) x -= (normCdf(x) - p) / (Math.exp(-x * x / 2) / Math.sqrt(2 * Math.PI));
+            return x;
+        }
+        // 雙比例 z 檢定（雙尾，合併標準誤）+ 差異的信賴區間（未合併標準誤）。conf 為 0–1，例如 0.95
+        function abTest(nA, cA, nB, cB, conf) {
+            if (![nA, cA, nB, cB].every(Number.isInteger) || nA <= 0 || nB <= 0 || cA < 0 || cB < 0 || cA > nA || cB > nB || !(conf > 0 && conf < 1)) return null;
+            const pA = cA / nA, pB = cB / nB, pp = (cA + cB) / (nA + nB), se0 = Math.sqrt(pp * (1 - pp) * (1 / nA + 1 / nB));
+            const z = se0 > 0 ? (pB - pA) / se0 : 0, p = se0 > 0 ? 2 * (1 - normCdf(Math.abs(z))) : 1;
+            const se1 = Math.sqrt(pA * (1 - pA) / nA + pB * (1 - pB) / nB), zc = normInv(1 - (1 - conf) / 2), diff = pB - pA;
+            return { pA, pB, diff, lift: div(diff, pA), z, p: Math.min(1, Math.max(0, p)), ci: [diff - zc * se1, diff + zc * se1], sig: p < 1 - conf };
+        }
+        // 每組所需樣本數：基準轉換率 p1、相對提升 mde（0.1 = +10%）、信心水準 conf、檢定力 power
+        function sampleSize(p1, mde, conf, power) {
+            const p2 = p1 * (1 + mde);
+            if (!(p1 > 0 && p1 < 1) || !(p2 > 0 && p2 < 1) || p1 === p2 || !(conf > 0 && conf < 1) || !(power > 0 && power < 1)) return NaN;
+            const za = normInv(1 - (1 - conf) / 2), zb = normInv(power), pb = (p1 + p2) / 2;
+            const n = Math.pow(za * Math.sqrt(2 * pb * (1 - pb)) + zb * Math.sqrt(p1 * (1 - p1) + p2 * (1 - p2)), 2) / Math.pow(p2 - p1, 2);
+            return Math.ceil(+n.toFixed(8));
+        }
+        // 電子報：已送達 = 寄出 − 退信；開信 / 點擊 / 退訂率以送達為分母；清單成長 = (新增 − 退訂) ÷ 期初
+        function newsletter(sent, bounce, open, click, unsub, added, list) {
+            const dlv = sent - (bounce || 0);
+            return { dlv, bounceRate: div(bounce || 0, sent) * 100, open: div(open, dlv) * 100, click: div(click, dlv) * 100, ctor: div(click, open) * 100, unsub: div(unsub, dlv) * 100, growth: div((added || 0) - (unsub || 0), list) * 100 };
+        }
+        // 多輪稀釋：founder / pool 為現有持股 %（其餘為其他股東）；rounds = [{name, raise, pre, poolTarget(投後 %，0 = 不擴充)}]
+        // 每輪：新投資人 I = 募資 ÷ (投前 + 募資)；池擴充 d（投後占比）使 池 = 目標：d = (P − pool(1−I)) ÷ (1 − pool)，d ≤ 0 不擴充；既有持股 × (1 − I − d)
+        function dilution(founder, pool, rounds) {
+            if (!(founder >= 0 && pool >= 0 && founder + pool <= 100) || !Array.isArray(rounds)) return null;
+            let f = founder / 100, o = pool / 100, others = 1 - f - o, inv = 0;
+            const steps = [];
+            for (const r of rounds) {
+                if (!(r.raise > 0 && r.pre > 0)) return null;
+                const post = r.pre + r.raise, I = r.raise / post, P = (r.poolTarget || 0) / 100;
+                if (P < 0 || P >= 1 - I) return null;
+                const d = P > 0 ? Math.max(0, (P - o * (1 - I)) / (1 - o)) : 0;
+                const s = 1 - I - d;
+                f *= s; others *= s; inv *= s; o = o * s + d; inv += I;
+                steps.push({ name: r.name, post, newInv: I * 100, poolAdd: d * 100, founder: f * 100, pool: o * 100, others: others * 100, inv: inv * 100, founderValue: f * post, effPre: r.pre - d * post });
+            }
+            return steps;
+        }
+        // 每行「輪次,募資額,投前估值,池目標%」；回傳 { rounds } 或 { err }
+        function parseRounds(text) {
+            const lines = String(text).split(/\r?\n/).map(s => s.trim()).filter(Boolean), rounds = [];
+            if (!lines.length || lines.length > 10) return { err: '請填 1–10 輪' };
+            for (let i = 0; i < lines.length; i++) {
+                const c = lines[i].split(/[,，\t]/).map(s => s.trim()), n = [c[1], c[2], c[3] === undefined || c[3] === '' ? '0' : c[3]].map(Number);
+                if (c.length < 3 || c.length > 4 || !c[0] || !(n[0] > 0 && n[1] > 0 && n[0] <= 1e15 && n[1] <= 1e15) || !(n[2] >= 0 && n[2] < 100)) return { err: `第 ${i + 1} 行格式不對（需「輪次,募資額,投前估值,池目標%」）` };
+                rounds.push({ name: c[0].slice(0, 20), raise: n[0], pre: n[1], poolTarget: n[2] });
+            }
+            return { rounds };
+        }
+        // 簡易估值敏感度：倍數 × factors；營收法 = 營收 × 倍數、獲利法 = 淨利 × 倍數（欄位 NaN 或 ≤ 0 則該法為 NaN）
+        function valSens(rev, np, mRev, mPe, factors = [0.5, 0.75, 1, 1.25, 1.5]) {
+            return factors.map(k => ({ k, mRev: mRev * k, mPe: mPe * k, byRev: rev > 0 && mRev > 0 ? rev * mRev * k : NaN, byPe: np > 0 && mPe > 0 ? np * mPe * k : NaN }));
+        }
+        // 認股權：價差稅（行使日，稅率 rEx%）；若有賣出價，再加賣出價 − 行使日市價的價差稅（稅率 rCg%）。價差 ≤ 0（水下）不課稅
+        function esop(strike, fmv, shares, rEx, sale, rCg) {
+            if (!(strike >= 0 && fmv >= 0 && shares > 0 && rEx >= 0 && rEx <= 100 && rCg >= 0 && rCg <= 100)) return null;
+            const cost = strike * shares, spread = (fmv - strike) * shares, taxEx = Math.max(0, spread) * rEx / 100, hasSale = Number.isFinite(sale) && sale >= 0;
+            const r = { cost, spread, taxEx, cashNeed: cost + taxEx, paperNet: spread - taxEx, underwater: spread < 0, net: null, taxCg: 0 };
+            if (hasSale) { r.taxCg = Math.max(0, (sale - fmv) * shares) * rCg / 100; r.net = (sale - strike) * shares - taxEx - r.taxCg; }
+            return r;
+        }
+        // 還原輸入：tab 0–3、v 為 { id: 字串 }（只接受已知 id、字串長度上限）
+        function normOpts(raw, ids) {
+            const o = raw && typeof raw === 'object' ? raw : {}, v = {};
+            if (o.v && typeof o.v === 'object' && !Array.isArray(o.v)) for (const k of ids) if (typeof o.v[k] === 'string' && o.v[k].length <= 2000) v[k] = o.v[k];
+            return { tab: [0, 1, 2, 3].includes(o.tab) ? o.tab : 0, v };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'bizcalc_opts', { store, statRow } = Util;
+        const nf = (x, d = 2) => isFinite(x) ? x.toLocaleString('zh-TW', { maximumFractionDigits: d }) : '—';
+        const pc = (x) => isFinite(x) ? nf(x, 2) + '%' : '—';
+        const num = (id) => { const e = document.getElementById(id); return !e || e.value.trim() === '' ? NaN : +e.value; };
+
+        // 欄位定義：[id, 標籤, 預設值, 'select' 時為 [[值, 文字]…]]
+        const G = {
+            g_price: [['p_mode', '已知', 'margin', [['margin', '成本 + 毛利率 → 售價'], ['markup', '成本 + 加價率 → 售價'], ['price', '成本 + 售價 → 毛利率'], ['cost', '售價 + 毛利率 → 成本']]], ['p_cost', '成本（元）', '100'], ['p_price', '未稅售價（元）', ''], ['p_pct', '毛利率 / 加價率（%）', '40'], ['p_tax', '營業稅率（%）', '5'], ['p_disc', '打折幅度（%，選填）', '']],
+            g_bep: [['b_fix', '固定成本（元）', '50000'], ['b_var', '每件變動成本', '300'], ['b_price', '每件單價', '500'], ['b_tgt', '目標利潤（元，選填）', '']],
+            g_tax: [['t_amt', '金額（元）', '1050'], ['t_mode', '這個金額是', 'incl', [['incl', '含稅總額'], ['excl', '未稅金額']]], ['t_rate', '稅率（%）', '5'], ['t_rule', '小數處理', 'round', [['round', '四捨五入到元'], ['floor', '無條件捨去'], ['ceil', '無條件進位'], ['none', '不處理']]]],
+            g_shop: [['s_price', '售價（元）', '500'], ['s_cost', '進貨成本', '250'], ['s_ship', '運費 / 包材', '60'], ['s_plat', '平台手續費（%）', '5'], ['s_pay', '金流費（%）', '2.8'], ['s_fix', '金流固定費（元 / 筆）', '0'], ['s_qty', '月銷量（選填）', '']],
+            g_dlv: [['d_price', '餐點售價（元）', '200'], ['d_disc', '店家吸收折扣（%）', '10'], ['d_comm', '平台抽成（%）', '30'], ['d_base', '抽成基準', 'before', [['before', '折扣前售價'], ['after', '折扣後售價']]], ['d_pack', '包材（元）', '5'], ['d_food', '餐點成本', '70']],
+            g_vol: [['v_l', '長（cm）', '40'], ['v_w', '寬（cm）', '30'], ['v_h', '高（cm）', '20'], ['v_kg', '實重（kg）', '3'], ['v_coef', '材積係數（cm³/kg，範例）', '6000'], ['v_step', '進位單位（kg，範例；0 不進位）', '0.5']],
+            g_spec: [['c_l', '長（cm）', '30'], ['c_w', '寬（cm）', '20'], ['c_h', '高（cm）', '10'], ['c_kg', '重量（kg）', '2'], ['u_max', '超商：最長邊上限（cm，範例）', '45'], ['u_sum', '超商：三邊合上限（cm，範例）', '105'], ['u_kg', '超商：重量上限（kg，範例）', '5'], ['h_max', '宅配：最長邊上限（cm，範例）', ''], ['h_sum', '宅配：三邊合上限（cm，範例）', '150'], ['h_kg', '宅配：重量上限（kg，範例）', '20']],
+            g_ads: [['m_imp', '曝光數', '100000'], ['m_clk', '點擊數', '2000'], ['m_cost', '廣告花費（元）', '20000'], ['m_conv', '轉換數（訂單）', '80'], ['m_rev', '營收（元，選填）', '60000']],
+            g_adr: [['r_cpc', 'CPC（元）', '10'], ['r_cvr', '點擊轉換率（%）', '4'], ['r_aov', '客單價（元）', '800'], ['r_mgn', '毛利率（%）', '35']],
+            g_ab: [['a_na', 'A 組人數', '1000'], ['a_ca', 'A 組轉換數', '100'], ['a_nb', 'B 組人數', '1000'], ['a_cb', 'B 組轉換數', '130'], ['a_conf', '信心水準', '0.95', [['0.9', '90%'], ['0.95', '95%'], ['0.99', '99%']]]],
+            g_ss: [['q_p', '基準轉換率（%）', '10'], ['q_mde', '最小要偵測的相對提升（%）', '20'], ['q_conf', '信心水準', '0.95', [['0.9', '90%'], ['0.95', '95%'], ['0.99', '99%']]], ['q_pow', '檢定力', '0.8', [['0.7', '70%'], ['0.8', '80%'], ['0.9', '90%']]]],
+            g_cap: [['k_f', '創辦團隊現有持股（%）', '80'], ['k_p', '現有選擇權池（%）', '10']],
+            g_val: [['w_rev', '年營收（元）', '10000000'], ['w_np', '年淨利（元，選填）', '1500000'], ['w_mr', '營收倍數（範例值）', '3'], ['w_mp', '本益倍數（範例值）', '12']],
+            g_esop: [['x_k', '行使價（元 / 股）', '10'], ['x_m', '行使時市價（元 / 股）', '50'], ['x_n', '股數', '10000'], ['x_t', '行使時稅率（% 範例值，視為所得課稅）', '20'], ['x_s', '賣出價（元 / 股，選填）', ''], ['x_c', '賣出價差稅率（%，範例值）', '0']],
+            g_nl: [['n_sent', '寄出封數', '5000'], ['n_bnc', '退信數', '50'], ['n_open', '開信數', '1200'], ['n_clk', '點擊數', '200'], ['n_uns', '退訂數', '10'], ['n_new', '新增訂閱', '80'], ['n_list', '期初清單人數', '5000']],
+        };
+        const IDS = [...Object.values(G).flat().map(f => f[0]), 'fun', 'rounds'];
+        const FUN_DEF = '訪客,10000\n加入購物車,1200\n結帳,600\n付款,420';
+        const ROUNDS_DEF = '種子輪,2000000,8000000,10\nA 輪,20000000,60000000,10';
+        const DEFS = Object.fromEntries([...Object.values(G).flat().map(f => [f[0], f[2]]), ['fun', FUN_DEF], ['rounds', ROUNDS_DEF]]);
+        for (const [gid, fs] of Object.entries(G)) {
+            $('#' + gid).innerHTML = fs.map(([id, lab, def, opts]) => `<div><label for="${id}">${lab}</label>` + (opts
+                ? `<select id="${id}" data-s>${opts.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('')}</select>`
+                : `<input id="${id}" data-s type="number" step="any" inputmode="decimal">`) + '</div>').join('');
+        }
+
+        const TABS = ['利潤與定價', '電商與外送', '行銷指標', '新創股權'];
+        let tab = 0;
+        $('#tabs').innerHTML = TABS.map((t, i) => `<button class="sm" data-i="${i}" aria-pressed="false">${t}</button>`).join('');
+        function showTab(i) {
+            tab = i;
+            [...$('#tabs').children].forEach((b, j) => b.setAttribute('aria-pressed', j === i));
+            TABS.forEach((_, j) => { $('#p' + j).hidden = j !== i; });
+            if (i === 0) drawBep();
+        }
+        $('#tabs').onclick = (e) => { const b = e.target.closest('button'); if (b) { showTab(+b.dataset.i); save(); } };
+
+        const show = (id, rows) => {
+            const box = $('#' + id);
+            if (typeof rows === 'string') { box.replaceChildren(Object.assign(document.createElement('div'), { textContent: rows, className: 'muted' })); return; }
+            box.replaceChildren(...rows.map(r => statRow(r[0], r[1], r[2])));
+        };
+        const NEED = '請填入有效數字';
+        let bepData = null;
+
+        function calc() {
+            const g = (id) => document.getElementById(id).value;
+            // 定價
+            const pr = pricing(g('p_mode'), num('p_cost'), num('p_price'), num('p_pct')), tr = (num('p_tax') || 0) / 100, dc = num('p_disc') || 0;
+            if (!pr) show('o_price', NEED); else {
+                const rows = [['未稅售價', nf(pr.price), 'ok'], ['含稅售價', nf(pr.price * (1 + tr))], ['成本', nf(pr.cost)], ['毛利', nf(pr.profit)], ['毛利率', pc(pr.margin)], ['加價率', pc(pr.markup)]];
+                if (dc > 0 && dc < 100) { const np = pr.price * (1 - dc / 100); rows.push([`打折 ${nf(dc)}% 後未稅價`, nf(np)], ['打折後毛利率', pc((np - pr.cost) / np * 100), np < pr.cost ? 'bad' : '']); }
+                show('o_price', rows);
+            }
+            // BEP
+            const b = bep(num('b_fix'), num('b_var'), num('b_price'), num('b_tgt'));
+            bepData = b && { fix: num('b_fix'), varc: num('b_var'), price: num('b_price') };
+            show('o_bep', !b ? '單價要大於變動成本，且欄位需為有效數字' : [['每件貢獻毛利', nf(b.cm)], ['貢獻毛利率', pc(b.cmRatio)], ['兩平銷量', nf(b.units, 0) + ' 件', 'ok'], ['兩平營收', nf(b.revenue)]]);
+            drawBep();
+            // 稅
+            const t = taxSplit(num('t_amt'), g('t_mode'), num('t_rate'), g('t_rule'));
+            show('o_tax', !t ? NEED : [['未稅金額', nf(t.net)], ['營業稅額', nf(t.tax)], ['含稅總額', nf(t.total), 'ok']]);
+            // 網店
+            const s = shopProfit(num('s_price'), num('s_cost'), num('s_ship') || 0, num('s_plat') || 0, num('s_pay') || 0, num('s_fix') || 0), q = num('s_qty');
+            show('o_shop', !s ? NEED + '（費率合計需小於 100%）' : [['平台手續費', nf(s.plat)], ['金流費', nf(s.pay)], ['每件實際利潤', nf(s.profit), s.profit < 0 ? 'bad' : 'ok'], ['利潤率', pc(s.margin)], ['打平最低售價', nf(s.breakeven)], ...(q > 0 ? [['月利潤', nf(s.profit * q), s.profit < 0 ? 'bad' : '']] : [])]);
+            // 外送
+            const d = deliveryProfit(num('d_price'), num('d_disc') || 0, num('d_comm') || 0, g('d_base'), num('d_pack') || 0, num('d_food') || 0);
+            show('o_dlv', !d ? NEED : [['折扣後實收', nf(d.net)], ['平台抽成', nf(d.comm)], ['每份利潤', nf(d.profit), d.profit < 0 ? 'bad' : 'ok'], ['利潤率（占實收）', pc(d.margin)]]);
+            // 材積
+            const v = volWeight(num('v_l'), num('v_w'), num('v_h'), num('v_kg') || 0, num('v_coef'), num('v_step') || 0);
+            show('o_vol', !v ? NEED : [['體積重', nf(v.vol, 3) + ' kg'], ['實重', nf(num('v_kg') || 0, 3) + ' kg'], ['取大者', nf(v.base, 3) + ' kg（' + (v.byVol ? '體積重' : '實重') + '）'], ['計費重量', nf(v.bill, 3) + ' kg', 'ok']]);
+            // 規格
+            const l = num('c_l'), w = num('c_w'), h = num('c_h'), kg = num('c_kg');
+            if (!(l > 0 && w > 0 && h > 0 && kg >= 0)) show('o_spec', NEED); else {
+                const rows = [['最長邊 / 三邊合', `${nf(Math.max(l, w, h))} / ${nf(l + w + h)} cm`]];
+                for (const [name, p] of [['超商取貨', 'u'], ['宅配', 'h']]) {
+                    const bad = specCheck(l, w, h, kg, { max: num(p + '_max'), sum: num(p + '_sum'), kg: num(p + '_kg') });
+                    rows.push([name, bad.length ? '不符：' + bad.join('；') : '符合', bad.length ? 'bad' : 'ok']);
+                }
+                show('o_spec', rows);
+            }
+            // 廣告
+            const a = adMetrics(num('m_imp'), num('m_clk'), num('m_cost'), num('m_conv'), num('m_rev'));
+            const ar = [['CTR 點擊率', a.ctr, pc], ['CPC 每次點擊', a.cpc, nf], ['CPM 每千次曝光', a.cpm, nf], ['轉換率（轉換 ÷ 點擊）', a.cvr, pc], ['CPA 每次轉換', a.cpa, nf], ['ROAS 廣告報酬', a.roas, (x) => nf(x) + ' 倍']].filter(r => isFinite(r[1]));
+            show('o_ads', ar.length ? ar.map(r => [r[0], r[2](r[1])]) : '填入曝光 / 點擊 / 花費 / 轉換後顯示');
+            const e = adBreakEven(num('r_cpc'), num('r_cvr'), num('r_aov'), num('r_mgn'));
+            show('o_adr', isFinite(e.cpa) && isFinite(e.beRoas) ? [['預期 CPA（CPC ÷ 轉換率）', nf(e.cpa)], ['兩平 ROAS（1 ÷ 毛利率）', nf(e.beRoas) + ' 倍'], ['可承受最高 CPA（客單價 × 毛利率）', nf(e.beCpa), e.cpa > e.beCpa ? 'bad' : 'ok'], ['依預期 CPA', e.cpa > e.beCpa ? '每筆訂單虧損' : '每筆訂單有賺']] : NEED);
+            // 漏斗
+            const f = funnel(g('fun'));
+            if (f.rows.length < 2) show('o_fun', '至少需要兩個階段'); else {
+                show('o_fun', f.rows.map((r, i) => [r.name + (i === f.worst ? '（流失最多）' : ''), i ? `${nf(r.n, 0)} 人　${pc(r.step)}　累計 ${pc(r.total)}　流失 ${nf(r.lost, 0)}` : nf(r.n, 0) + ' 人', i === f.worst ? 'bad' : '']));
+            }
+            // A/B
+            const ab = abTest(num('a_na'), num('a_ca'), num('a_nb'), num('a_cb'), +g('a_conf'));
+            show('o_ab', !ab ? '人數與轉換數需為整數，且轉換數不可超過人數' : [['A / B 轉換率', `${pc(ab.pA * 100)} / ${pc(ab.pB * 100)}`], ['B 相對 A 提升', pc(ab.lift * 100)], ['z 值', nf(ab.z, 4)], ['p 值（雙尾）', nf(ab.p, 4)], [`差異 ${+g('a_conf') * 100}% 信賴區間`, `${nf(ab.ci[0] * 100, 2)}% ~ ${nf(ab.ci[1] * 100, 2)}%（百分點）`], ['結論', ab.sig ? '差異顯著' : '尚無法判定有差異', ab.sig ? 'ok' : '']]);
+            const n = sampleSize(num('q_p') / 100, num('q_mde') / 100, +g('q_conf'), +g('q_pow'));
+            show('o_ss', isFinite(n) ? [['每組所需樣本數', nf(n, 0), 'ok'], ['兩組合計', nf(n * 2, 0)]] : '基準轉換率與提升後的轉換率需介於 0–100% 之間，且提升不為 0');
+            // 新創股權
+            const dr = parseRounds(g('rounds')), ds = dr.rounds && dilution(num('k_f'), num('k_p') || 0, dr.rounds);
+            if (dr.err) show('o_cap', dr.err); else if (!ds) show('o_cap', '持股合計需介於 0–100%，池目標需合理（投後不可超過 100% − 新投資人持股）');
+            else show('o_cap', ds.flatMap(x => [[x.name + '（投後估值 ' + nf(x.post, 0) + '）', '新投資人 ' + pc(x.newInv) + (x.poolAdd > 0 ? '，池擴充 ' + pc(x.poolAdd) : '')], ['　創辦團隊 / 池 / 其他 / 投資人', [x.founder, x.pool, x.others, x.inv].map(pc).join(' / '), 'ok'], ['　創辦團隊持股價值', nf(x.founderValue, 0)]]));
+            const vs = valSens(num('w_rev'), num('w_np'), num('w_mr'), num('w_mp')).filter(r => isFinite(r.byRev) || isFinite(r.byPe));
+            show('o_val', vs.length ? vs.map(r => [`營收 ${nf(r.mRev)} 倍 / 獲利 ${nf(r.mPe)} 倍`, [isFinite(r.byRev) ? '營收法 ' + nf(r.byRev, 0) : '', isFinite(r.byPe) ? '獲利法 ' + nf(r.byPe, 0) : ''].filter(Boolean).join('　'), r.k === 1 ? 'ok' : '']) : '請填入營收或淨利與倍數');
+            const ep = esop(num('x_k'), num('x_m'), num('x_n'), num('x_t') || 0, num('x_s'), num('x_c') || 0);
+            show('o_esop', !ep ? NEED : [['行使成本', nf(ep.cost, 0)], ['行使當下價差', nf(ep.spread, 0), ep.underwater ? 'bad' : ''], ['行使時稅額', nf(ep.taxEx, 0)], ['行使當下需備現金（成本 + 稅）', nf(ep.cashNeed, 0)], ['稅後帳面價差', nf(ep.paperNet, 0), ep.paperNet < 0 ? 'bad' : 'ok'], ...(ep.underwater ? [['提醒', '市價低於行使價（水下），行使會直接虧損']] : []), ...(ep.net == null ? [] : [['賣出價差稅', nf(ep.taxCg, 0)], ['賣出後淨損益', nf(ep.net, 0), ep.net < 0 ? 'bad' : 'ok']])]);
+            // 電子報
+            const nl = newsletter(num('n_sent'), num('n_bnc') || 0, num('n_open'), num('n_clk'), num('n_uns') || 0, num('n_new') || 0, num('n_list'));
+            const nr = [['已送達', isFinite(nl.dlv) ? nf(nl.dlv, 0) : NaN, nf], ['退信率', nl.bounceRate, pc], ['開信率（占送達）', nl.open, pc], ['點擊率（占送達）', nl.click, pc], ['點開率（點擊 ÷ 開信）', nl.ctor, pc], ['退訂率', nl.unsub, pc], ['清單淨成長率', nl.growth, pc]].filter(r => r[1] === r[1]);
+            show('o_nl', nl.dlv > 0 ? nr.map(r => [r[0], typeof r[1] === 'string' ? r[1] : r[2](r[1])]) : NEED);
+        }
+
+        function drawBep() {
+            const cv = $('#cv');
+            if ($('#p0').hidden || !cv.clientWidth) return;
+            const W = cv.width = cv.clientWidth * 2, H = cv.height = cv.clientHeight * 2, c = cv.getContext('2d'), cs = getComputedStyle(document.body);
+            c.clearRect(0, 0, W, H);
+            if (!bepData) return;
+            const { fix, varc, price } = bepData, bu = fix / (price - varc), xmax = Math.max(bu * 2, 1), ymax = Math.max(price * xmax, fix + varc * xmax);
+            const X = (x) => 50 + x / xmax * (W - 70), Y = (y) => H - 30 - y / ymax * (H - 50);
+            const line = (f, col) => { c.beginPath(); c.moveTo(X(0), Y(f(0))); c.lineTo(X(xmax), Y(f(xmax))); c.strokeStyle = col; c.lineWidth = 4; c.stroke(); };
+            c.strokeStyle = cs.getPropertyValue('--line') || '#888'; c.lineWidth = 2; c.strokeRect(50, 20, W - 70, H - 50);
+            line(x => price * x, cs.getPropertyValue('--ok') || 'green'); line(x => fix + varc * x, cs.getPropertyValue('--bad') || 'red');
+            c.fillStyle = cs.color; c.font = '22px sans-serif';
+            c.beginPath(); c.arc(X(bu), Y(price * bu), 8, 0, 7); c.fill();
+            c.fillText('兩平 ' + nf(Math.ceil(bu), 0) + ' 件', Math.min(X(bu) + 12, W - 190), Y(price * bu) - 14);
+            c.fillText('綠：營收　紅：總成本', 60, 48);
+        }
+        addEventListener('resize', drawBep);
+
+        function save() {
+            const v = {}; document.querySelectorAll('[data-s]').forEach(e => { v[e.id] = e.value; });
+            store.set(KEY, { tab, v });
+        }
+        document.addEventListener('input', () => { calc(); save(); });
+        document.addEventListener('change', () => { calc(); save(); });
+        $('#reset').onclick = () => {
+            if (!confirm('確定要清除所有輸入並恢復預設值嗎？頁面會重新載入，無法復原。')) return;
+            try { localStorage.removeItem(KEY); } catch (e) { /* 無法清除也照常重新載入 */ }
+            location.reload();
+        };
+        const opts = normOpts(store.get(KEY, null), IDS);
+        for (const id of IDS) { const e = document.getElementById(id), v = id in opts.v ? opts.v[id] : DEFS[id]; e.value = v; if (e.value !== v) e.value = DEFS[id]; }
+        calc(); showTab(opts.tab);
+    </script>
+</body>
+
+</html>
