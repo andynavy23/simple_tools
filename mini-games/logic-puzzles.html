@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="邏輯謎題：Takuzu、不等式數獨、摩天樓、關燈、Akari 五種謎題，每題保證唯一解（關燈保證可解），有每日挑戰、筆記、提示與最佳時間。">
+    <meta property="og:title" content="邏輯謎題" />
+    <meta property="og:description" content="五種邏輯謎題，程式生成並驗證唯一解，單機可玩。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/logic-puzzles.html" />
+    <meta name="st-keys" content="logicp_best,logicp_game,logicp_daily_*">
+    <title>邏輯謎題</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 520px;
+        }
+
+        .tabs,
+        .bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .tabs {
+            flex-wrap: nowrap;
+            gap: 6px;
+        }
+
+        .tabs button {
+            flex: 1 1 0;
+            min-width: 0;
+            padding: 8px 2px;
+            font-size: 14px;
+        }
+
+        .stat {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 6px 14px;
+            font-variant-numeric: tabular-nums;
+            font-weight: 700;
+        }
+
+        #rule {
+            margin: 0 0 8px;
+        }
+
+        #board {
+            --fs: 20px;
+            display: grid;
+            width: 100%;
+            aspect-ratio: 1;
+            gap: 2px;
+            margin: 12px 0;
+            font-size: var(--fs);
+        }
+
+        #board .c,
+        #board .x {
+            min-width: 0;
+            min-height: 0;
+            padding: 0;
+            overflow: hidden;
+            display: grid;
+            place-items: center;
+            position: relative;
+            border-radius: 6px;
+            font-weight: 600;
+            line-height: 1;
+        }
+
+        #board .c {
+            background: var(--card);
+            color: var(--text);
+            border: 1px solid var(--line);
+            box-shadow: none;
+        }
+
+        #board .x {
+            color: var(--muted);
+            font-size: .7em;
+        }
+
+        #board .clue {
+            font-weight: 800;
+        }
+
+        #board .clue.bad,
+        #board .c.bad {
+            color: var(--bad);
+        }
+
+        #board .c.given {
+            font-weight: 800;
+            background: color-mix(in srgb, var(--muted) 20%, var(--card));
+        }
+
+        #board .c.peer {
+            background: color-mix(in srgb, var(--blue) 10%, var(--card));
+        }
+
+        #board .c.same {
+            background: color-mix(in srgb, var(--blue) 28%, var(--card));
+        }
+
+        #board .c.sel {
+            background: color-mix(in srgb, var(--blue) 45%, var(--card));
+        }
+
+        #board .c.hint {
+            outline: 3px solid var(--ok);
+            outline-offset: -3px;
+        }
+
+        #board .c.on {
+            background: var(--blue);
+            color: var(--on-blue);
+        }
+
+        #board .c.blk {
+            background: var(--text);
+            color: var(--bg);
+            border-color: var(--text);
+        }
+
+        #board .c.blk.bad {
+            color: #ff6b6b;
+        }
+
+        #board .c.lit {
+            background: #ffe9a6;
+            color: #222;
+        }
+
+        #board .c.lamp.bad {
+            background: #ffb3b3;
+        }
+
+        #board .nt {
+            position: absolute;
+            inset: 1px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            font-size: calc(var(--fs) * .4);
+            font-weight: 400;
+            color: var(--muted);
+            pointer-events: none;
+        }
+
+        #board .nt i {
+            font-style: normal;
+            display: grid;
+            place-items: center;
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            #board.win {
+                animation: pop .7s ease;
+            }
+
+            @keyframes pop {
+                40% {
+                    transform: scale(1.04);
+                    filter: brightness(1.15);
+                }
+            }
+        }
+
+        #pad {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+            gap: 6px;
+        }
+
+        #pad button {
+            min-width: 0;
+            min-height: 48px;
+            padding: 0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        #acts {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        #acts button {
+            min-width: 0;
+            min-height: 46px;
+            padding: 0 4px;
+            font-size: 15px;
+        }
+
+        .chk {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 12px;
+        }
+
+        #msg {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>邏輯謎題</h1>
+        <p class="sub">五種謎題，題目由程式生成並驗證唯一解（關燈保證可解）。</p>
+
+        <div class="tabs" id="tabs"></div>
+        <div class="bar">
+            <select id="level" aria-label="難度">
+                <option value="0">簡單</option>
+                <option value="1" selected>普通</option>
+                <option value="2">困難</option>
+            </select>
+            <select id="size" aria-label="尺寸"></select>
+            <button id="daily" aria-pressed="false" title="每天固定同一題（台灣時間）">每日挑戰</button>
+            <button class="primary" id="new" style="margin-left:auto">新題目</button>
+        </div>
+        <div class="bar">
+            <span class="stat">⏱ <span id="time">0:00</span></span>
+            <span class="stat">最佳 <span id="best">—</span></span>
+            <span id="info" class="muted"></span>
+        </div>
+        <p id="rule" class="sub"></p>
+
+        <div id="board" role="grid" aria-label="謎題盤面"></div>
+        <div id="pad"></div>
+        <div id="acts">
+            <button id="mark" aria-pressed="false">✏️ 筆記</button>
+            <button id="undo">↶ 悔棋</button>
+            <button id="redo">↷ 重做</button>
+            <button id="hint">💡 提示</button>
+            <button id="check">✔ 檢查</button>
+            <button id="restart">重新開始</button>
+        </div>
+        <label class="chk"><input type="checkbox" id="err" checked> 即時提示錯誤（紅色標出違反規則的格子）</label>
+        <div id="msg" role="status" aria-live="polite"></div>
+        <button class="sm" id="clearBest" style="margin-top:12px">清除最佳紀錄與存檔</button>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>五種「格子 + 規則 + 唯一解」的邏輯謎題，頂端分頁切換。題目由程式生成，並用求解器確認只有一個解（關燈改為保證可解），不用猜。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>通勤或睡前想動腦，又不想碰運氣。</li>
+            <li>想用「提示」學各種謎題的推理方式。</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+            <li><b>Takuzu</b>：每格填 0 或 1；同一行 / 列不能連續三個相同，0 與 1 數量相等，且沒有兩行（或兩列）完全一樣。</li>
+            <li><b>不等式</b>：每行每列填滿 1～N 不重複，格子間的 &lt; &gt; 與 ∧ ∨ 要成立（尖端指向較小的一邊）。</li>
+            <li><b>摩天樓</b>：每行每列填 1～N 不重複（數字 = 樓高），外圍數字 = 從該方向看過去看得到幾棟（高樓會擋住後面較矮的）。</li>
+            <li><b>關燈</b>：點一格會翻轉它與上下左右的燈，目標全部熄滅。尺寸 3～7；題目一定有解，「提示」會算出最少步數解中的一步。</li>
+            <li><b>Akari</b>：在白格放燈，燈沿上下左右照亮直到黑格；所有白格都要被照亮、燈不能互相照到、黑格上的數字 = 它四周的燈數。</li>
+            <li>數字類：先點格子，再按下方數字鍵（電腦可直接按鍵盤數字、<kbd>Backspace</kbd> 清除、方向鍵移動）。Takuzu 的鍵 0 / 1。Akari 與關燈直接點格子。</li>
+            <li>「筆記」開啟後，數字鍵改為記候選數；關燈 / Akari 則是標記（Akari 標「這格不會放燈」）。</li>
+            <li>「提示」：先指出填錯的格，否則找一格「其他數字都會違反規則」的格子填入並說明；單步推不出來時直接揭示答案。「檢查」告訴你有幾格不對。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">Takuzu 某行已有「1 1 _」→ 第三格一定是 0（不能三連）。摩天樓外圍標 1 → 該方向第一格一定是最高的樓。</div>
+        <h3>小提醒</h3>
+        <ul>
+            <li>難度三級、尺寸可選；「每日挑戰」依台灣時間每天固定同一題（每種謎題 × 難度 × 尺寸各一題），完成時間另外記錄，只保留最近 30 天。</li>
+            <li>完成後以時間記最佳紀錄（每種謎題 × 難度 × 尺寸分開）。使用提示仍會算完成，請自行決定要不要比時間。</li>
+            <li>進行中的這一局會自動存在這台裝置（重新整理可繼續，只記錄最近一次操作時的用時；悔棋紀錄不保留，最多記 500 步）；存檔壞掉會自動重新開一局。</li>
+            <li>最佳與每日紀錄存在這台裝置，只會增加到「謎題種類 × 難度 × 尺寸」的組合數為止；想清掉請按頁面下方的「清除最佳紀錄與存檔」（只清這個工具，無法復原；頁面會重新載入，進行中的這一局會結束）。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { rnd, store, seeded } = Util;
+
+        // --- pure ---
+        const shuf = (a, rand) => { const r = a.slice(); for (let i = r.length - 1; i > 0; i--) { const j = rand.int(i + 1); [r[i], r[j]] = [r[j], r[i]]; } return r; };
+        const popcount = (m) => { let n = 0; while (m) { m &= m - 1; n++; } return n; };
+        const twDay = (ms = Date.now()) => new Date(ms + 8 * 36e5).toISOString().slice(0, 10);
+        // 每日挑戰鍵每天會多：只留最近 keep 天，回傳該刪的鍵
+        const staleDaily = (keys, keep = 30) => keys.filter(k => /^logicp_daily_\d{4}-\d{2}-\d{2}$/.test(k)).sort().reverse().slice(keep);
+        const lines = (n) => {
+            const L = [];
+            for (let r = 0; r < n; r++) L.push(Array.from({ length: n }, (_, c) => r * n + c));
+            for (let c = 0; c < n; c++) L.push(Array.from({ length: n }, (_, r) => r * n + c));
+            return L;
+        };
+        const zeros = (k) => new Array(k).fill(0);
+
+        // ===== Takuzu：1 = 0、2 = 1（0 = 空格）=====
+        function tkErrs(b, n) {
+            const bad = new Set(), full = [];
+            lines(n).forEach((l, idx) => {
+                for (let k = 0; k + 2 < n; k++) { const v = b[l[k]]; if (v && v === b[l[k + 1]] && v === b[l[k + 2]]) l.slice(k, k + 3).forEach(i => bad.add(i)); }
+                for (const v of [1, 2]) if (l.filter(i => b[i] === v).length > n / 2) l.forEach(i => b[i] === v && bad.add(i));
+                if (l.every(i => b[i])) full.push({ l, row: idx < n });
+            });
+            for (let x = 0; x < full.length; x++) for (let y = x + 1; y < full.length; y++)
+                if (full[x].row === full[y].row && full[x].l.every((i, k) => b[i] === b[full[y].l[k]])) { full[x].l.forEach(i => bad.add(i)); full[y].l.forEach(i => bad.add(i)); }
+            return bad;
+        }
+        // 傳播：連兩個相同 / 夾住 / 數量已滿 → 其餘格確定；回傳 false = 矛盾
+        function tkProp(b, n) {
+            const L = lines(n);
+            for (let ch = true; ch;) {
+                ch = false;
+                for (const l of L) {
+                    const set = (k, v) => { if (!b[l[k]]) { b[l[k]] = v; ch = true; } };
+                    for (let k = 0; k < n; k++) {
+                        if (b[l[k]]) continue;
+                        const p1 = b[l[k - 1]], p2 = b[l[k - 2]], n1 = b[l[k + 1]], n2 = b[l[k + 2]];
+                        if (p1 && p1 === p2) set(k, 3 - p1); else if (n1 && n1 === n2) set(k, 3 - n1); else if (p1 && p1 === n1) set(k, 3 - p1);
+                    }
+                    for (const v of [1, 2]) if (l.filter(i => b[i] === v).length === n / 2) l.forEach((i, k) => set(k, 3 - v));
+                }
+            }
+            return tkErrs(b, n).size === 0;
+        }
+        function tkSolve(b0, n, limit, rand) {
+            const out = [];
+            (function go(b) {
+                if (out.length >= limit || !tkProp(b, n)) return;
+                const i = b.indexOf(0);
+                if (i < 0) { out.push(b); return; }
+                for (const v of rand && rand.int(2) ? [2, 1] : [1, 2]) { const c = b.slice(); c[i] = v; go(c); }
+            })(b0.slice());
+            return out;
+        }
+        function tkGen(n, level, rand) {
+            const sol = tkSolve(zeros(n * n), n, 1, rand)[0], g = sol.slice(), want = Math.round(n * n * [0.5, 0.4, 0.3][level]);
+            let left = n * n;
+            for (const i of shuf([...g.keys()], rand)) {
+                if (left <= want) break;
+                const v = g[i]; g[i] = 0;
+                if (tkSolve(g, n, 2).length === 1) left--; else g[i] = v;
+            }
+            return { t: 'takuzu', n, g, sol };
+        }
+
+        // ===== Futoshiki：h / v 關係 1 = 前 < 後（左 < 右、上 < 下），2 = 前 > 後 =====
+        function fuMask(p, b, i) {
+            const n = p.n, r = (i / n) | 0, c = i % n;
+            let used = 0;
+            for (let k = 0; k < n; k++) { used |= 1 << b[r * n + k]; used |= 1 << b[k * n + c]; }
+            let m = ~used & ((1 << (n + 1)) - 2);
+            const nb = [[c > 0, i - 1, p.h[r * (n - 1) + c - 1], 0], [c < n - 1, i + 1, p.h[r * (n - 1) + c], 1], [r > 0, i - n, p.v[(r - 1) * n + c], 0], [r < n - 1, i + n, p.v[r * n + c], 1]];
+            for (const [ex, j, rel, first] of nb) {
+                if (!ex || !rel) continue;
+                const less = first ? rel === 1 : rel === 2, w = b[j];             // less：本格要比鄰格小
+                for (let v = 1; v <= n; v++) if (m >> v & 1 && (less ? !(w ? v < w : v < n) : !(w ? v > w : v > 1))) m &= ~(1 << v);
+            }
+            return m;
+        }
+        function fuSolve(p, limit, rand) {
+            const n = p.n, out = [], b = p.g.slice();
+            (function go() {
+                if (out.length >= limit) return;
+                let bi = -1, bm = 0, bc = 99;
+                for (let i = 0; i < n * n; i++) if (!b[i]) { const m = fuMask(p, b, i), k = popcount(m); if (k < bc) { bi = i; bm = m; bc = k; if (k < 2) break; } }
+                if (bi < 0) { out.push(b.slice()); return; }
+                let vs = []; for (let v = 1; v <= n; v++) if (bm >> v & 1) vs.push(v);
+                if (rand) vs = shuf(vs, rand);
+                for (const v of vs) { b[bi] = v; go(); if (out.length >= limit) break; }
+                b[bi] = 0;
+            })();
+            return out;
+        }
+        function fuErrs(p, b) {
+            const n = p.n, bad = new Set();
+            for (const l of lines(n)) for (const i of l) if (b[i] && l.some(j => j !== i && b[j] === b[i])) bad.add(i);
+            const chk = (x, y, rel) => { if (rel && b[x] && b[y] && (rel === 1 ? b[x] >= b[y] : b[x] <= b[y])) { bad.add(x); bad.add(y); } };
+            for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+                if (c < n - 1) chk(r * n + c, r * n + c + 1, p.h[r * (n - 1) + c]);
+                if (r < n - 1) chk(r * n + c, (r + 1) * n + c, p.v[r * n + c]);
+            }
+            return bad;
+        }
+        function fuGen(n, level, rand) {
+            const p = { t: 'futoshiki', n, g: zeros(n * n), h: zeros(n * (n - 1)), v: zeros((n - 1) * n) };
+            const sol = fuSolve(p, 1, rand)[0];
+            p.sol = sol; p.g = sol.slice();
+            for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+                if (c < n - 1) p.h[r * (n - 1) + c] = sol[r * n + c] < sol[r * n + c + 1] ? 1 : 2;
+                if (r < n - 1) p.v[r * n + c] = sol[r * n + c] < sol[(r + 1) * n + c] ? 1 : 2;
+            }
+            const uniq = () => fuSolve(p, 2).length === 1, keep = Math.round(n * n * [0.35, 0.18, n > 5 ? 0.12 : 0][level]);
+            let left = n * n;
+            for (const i of shuf([...p.g.keys()], rand)) {
+                if (left <= keep) break;
+                const v = p.g[i]; p.g[i] = 0;
+                if (uniq()) left--; else p.g[i] = v;
+            }
+            const rels = shuf([...p.h.keys()].map(i => [p.h, i]).concat([...p.v.keys()].map(i => [p.v, i])), rand);
+            for (const [a, i] of rels.slice(0, [0, rels.length >> 1, n > 5 ? rels.length * 2 / 3 | 0 : rels.length][level])) { const v = a[i]; a[i] = 0; if (!uniq()) a[i] = v; }
+            return p;
+        }
+
+        // ===== Skyscrapers：clue 陣列 c：[上 n][下 n][左 n][右 n]，0 = 無線索 =====
+        const permCache = {};
+        const permsOf = (n) => permCache[n] || (permCache[n] = (() => { const out = []; (function go(p, used) { if (p.length === n) { out.push(p); return; } for (let v = 1; v <= n; v++) if (!(used >> v & 1)) go([...p, v], used | 1 << v); })([], 0); return out; })());
+        const vis = (a) => { let m = 0, c = 0; for (const v of a) if (v > m) { m = v; c++; } return c; };
+        // 第 k 條線索看過去的格子（由外往內）
+        const skLine = (n, k) => { const s = (k / n) | 0, x = k % n; return Array.from({ length: n }, (_, t) => s === 0 ? t * n + x : s === 1 ? (n - 1 - t) * n + x : s === 2 ? x * n + t : x * n + n - 1 - t); };
+        function skErrs(p, b) {
+            const n = p.n, bad = new Set();
+            for (const l of lines(n)) for (const i of l) if (b[i] && l.some(j => j !== i && b[j] === b[i])) bad.add(i);
+            for (let k = 0; k < 4 * n; k++) {
+                if (!p.c[k]) continue;
+                const a = skLine(n, k).map(i => b[i]), z = a.indexOf(0), pre = z < 0 ? a : a.slice(0, z), v = vis(pre);
+                if (v > p.c[k] || (pre.length === n && v !== p.c[k])) bad.add('c' + k);
+            }
+            return bad;
+        }
+        function skSolve(p, limit, rand) {
+            const n = p.n, out = [], all = permsOf(n);
+            const opts = Array.from({ length: n }, (_, r) => all.filter(q => q.every((v, c) => !p.g[r * n + c] || p.g[r * n + c] === v) && (!p.c[2 * n + r] || vis(q) === p.c[2 * n + r]) && (!p.c[3 * n + r] || vis(q.slice().reverse()) === p.c[3 * n + r])));
+            (function go(r, rows, used, mx, seen) {
+                if (out.length >= limit) return;
+                if (r === n) {
+                    for (let c = 0; c < n; c++) {
+                        if (p.c[c] && seen[c] !== p.c[c]) return;
+                        if (p.c[n + c] && vis(rows.map(q => q[c]).reverse()) !== p.c[n + c]) return;
+                    }
+                    out.push(rows.flat()); return;
+                }
+                for (const q of rand ? shuf(opts[r], rand) : opts[r]) {
+                    const u = used.slice(), m = mx.slice(), s = seen.slice();
+                    let ok = true;
+                    for (let c = 0; c < n && ok; c++) {
+                        const v = q[c];
+                        if (u[c] >> v & 1) { ok = false; break; }
+                        u[c] |= 1 << v;
+                        if (v > m[c]) { m[c] = v; s[c]++; }
+                        if (p.c[c] && s[c] > p.c[c]) ok = false;
+                    }
+                    if (ok) go(r + 1, [...rows, q], u, m, s);
+                    if (out.length >= limit) return;
+                }
+            })(0, [], zeros(n), zeros(n), zeros(n));
+            return out;
+        }
+        function skGen(n, level, rand) {
+            const p = { t: 'skyscrapers', n, c: zeros(4 * n), g: zeros(n * n) };
+            const sol = skSolve(p, 1, rand)[0];
+            p.sol = sol; p.c = Array.from({ length: 4 * n }, (_, k) => vis(skLine(n, k).map(i => sol[i])));
+            const uniq = () => skSolve(p, 2).length === 1, cells = shuf([...sol.keys()], rand);
+            for (const i of cells) { if (uniq()) break; p.g[i] = sol[i]; }
+            const order = shuf([...p.c.keys()], rand);
+            for (const k of order.slice(0, [0, order.length >> 1, n > 5 ? order.length >> 1 : order.length][level])) { const v = p.c[k]; p.c[k] = 0; if (!uniq()) p.c[k] = v; }
+            if (level === 0) for (const i of cells.slice(0, n >> 1)) p.g[i] = sol[i];
+            if (level === 2 && n < 6) for (const i of cells) if (p.g[i]) { p.g[i] = 0; if (!uniq()) p.g[i] = sol[i]; }
+            return p;
+        }
+
+        // ===== Lights Out：g = 初始亮燈（1 = 亮）；解 = 要按的格子集合 =====
+        function loPress(b, n, i) {
+            const r = (i / n) | 0, c = i % n; b = b.slice();
+            for (const [dr, dc] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) { const y = r + dr, x = c + dc; if (y >= 0 && y < n && x >= 0 && x < n) b[y * n + x] ^= 1; }
+            return b;
+        }
+        // GF(2) 高斯消去：回傳全部解（無解回傳 []）；解的個數 = 2^(零空間維度)
+        function loSolutions(b, n) {
+            const m = n * n, E = Array.from({ length: m }, (_, i) => loPress(zeros(m), n, i));
+            const A = Array.from({ length: m }, (_, j) => Uint8Array.from([...E.map(e => e[j]), b[j]]));
+            const piv = []; let r = 0;
+            for (let c = 0; c < m && r < m; c++) {
+                let q = r; while (q < m && !A[q][c]) q++;
+                if (q === m) continue;
+                [A[r], A[q]] = [A[q], A[r]];
+                for (let k = 0; k < m; k++) if (k !== r && A[k][c]) for (let j = c; j <= m; j++) A[k][j] ^= A[r][j];
+                piv.push(c); r++;
+            }
+            for (let k = r; k < m; k++) if (A[k][m]) return [];
+            const part = zeros(m); piv.forEach((c, k) => { part[c] = A[k][m]; });
+            const basis = [...Array(m).keys()].filter(c => !piv.includes(c)).map(f => { const v = zeros(m); v[f] = 1; piv.forEach((c, k) => { v[c] = A[k][f]; }); return v; });
+            const out = [];
+            for (let s = 0; s < 1 << basis.length; s++) { const x = part.slice(); basis.forEach((v, t) => { if (s >> t & 1) v.forEach((e, i) => { x[i] ^= e; }); }); out.push(x); }
+            return out;
+        }
+        const wt = (a) => a.reduce((s, v) => s + v, 0);
+        const loBest = (b, n) => loSolutions(b, n).reduce((a, x) => !a || wt(x) < wt(a) ? x : a, null);
+        function loGen(n, level, rand) {
+            const m = n * n, k = Math.max(2, Math.round(m * [0.2, 0.35, 0.5][level]));
+            let g;
+            do { g = zeros(m); for (const i of shuf([...g.keys()], rand).slice(0, k)) g = loPress(g, n, i); } while (!g.some(Boolean));
+            return { t: 'lightsout', n, g, sol: loBest(g, n) };
+        }
+
+        // ===== Akari：g：-1 白格、-2 無數字黑格、0–4 有數字黑格；盤面 1 = 燈 =====
+        const segCache = new WeakMap();
+        function akSeg(p) {
+            if (segCache.has(p)) return segCache.get(p);
+            const n = p.n, seg = [];
+            for (let i = 0; i < n * n; i++) if (p.g[i] === -1) {
+                const r = (i / n) | 0, c = i % n, s = [i];
+                for (const [dr, dc] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) for (let y = r + dr, x = c + dc; y >= 0 && y < n && x >= 0 && x < n && p.g[y * n + x] === -1; y += dr, x += dc) s.push(y * n + x);
+                seg[i] = s;
+            }
+            segCache.set(p, seg); return seg;
+        }
+        const akAdj = (p, i) => { const n = p.n, r = (i / n) | 0, c = i % n; return [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].filter(([y, x]) => y >= 0 && y < n && x >= 0 && x < n && p.g[y * n + x] === -1).map(([y, x]) => y * n + x); };
+        function akLit(p, b) {
+            const seg = akSeg(p), lit = zeros(p.n * p.n);
+            p.g.forEach((v, i) => { if (v === -1 && b[i] === 1) seg[i].forEach(j => { lit[j] = 1; }); });
+            return lit;
+        }
+        function akErrs(p, b) {
+            const seg = akSeg(p), bad = new Set();
+            p.g.forEach((v, i) => {
+                if (v === -1 && b[i] === 1 && seg[i].some(j => j !== i && b[j] === 1)) bad.add(i);
+                if (v >= 0 && akAdj(p, i).filter(j => b[j] === 1).length > v) bad.add(i);
+            });
+            return bad;
+        }
+        function akWon(p, b) {
+            if (akErrs(p, b).size) return false;
+            const lit = akLit(p, b);
+            return p.g.every((v, i) => v === -2 || (v === -1 ? lit[i] === 1 : akAdj(p, i).filter(j => b[j] === 1).length === v));
+        }
+        // 傳播：st 0 未定、1 燈、2 不能放燈；回傳 false = 矛盾
+        function akProp(p, st) {
+            const n = p.n, seg = akSeg(p), W = [], clues = [];
+            p.g.forEach((v, i) => { if (v === -1) W.push(i); else if (v >= 0) clues.push([v, akAdj(p, i)]); });
+            outer: for (;;) {
+                const lit = zeros(n * n);
+                for (const i of W) if (st[i] === 1) { if (seg[i].some(j => j !== i && st[j] === 1)) return false; for (const j of seg[i]) lit[j] = 1; }
+                let ch = false;
+                for (const i of W) if (st[i] === 0 && lit[i]) { st[i] = 2; ch = true; }
+                for (const [num, a] of clues) {
+                    let L = 0, U = 0;
+                    for (const j of a) { if (st[j] === 1) L++; else if (st[j] === 0) U++; }
+                    if (L > num || L + U < num) return false;
+                    if (U && (L === num || L + U === num)) { for (const j of a) if (st[j] === 0) st[j] = L === num ? 2 : 1; continue outer; }
+                }
+                for (const i of W) if (!lit[i]) {
+                    const s = seg[i].filter(j => st[j] === 0);
+                    if (!s.length) return false;
+                    if (s.length === 1) { st[s[0]] = 1; continue outer; }
+                }
+                if (!ch) break;
+            }
+            return true;
+        }
+        function akSolve(p, limit, rand) {
+            const seg = akSeg(p), out = [], W = [];
+            p.g.forEach((v, i) => { if (v === -1) W.push(i); });
+            (function go(st) {
+                if (out.length >= limit || !akProp(p, st)) return;
+                const lit = zeros(p.n * p.n);
+                for (const i of W) if (st[i] === 1) for (const j of seg[i]) lit[j] = 1;
+                let bs = null;
+                for (const i of W) if (!lit[i]) { const s = seg[i].filter(j => st[j] === 0); if (!bs || s.length < bs.length) bs = s; }
+                if (!bs) { out.push(st.map(v => v === 1 ? 1 : 0)); return; }
+                for (const s of rand ? shuf(bs, rand) : bs) { const c = st.slice(); c[s] = 1; go(c); st[s] = 2; if (out.length >= limit) return; }
+            })(zeros(p.n * p.n));
+            return out;
+        }
+        function akGen(n, level, rand) {
+            for (let att = 0; att < 4000; att++) {
+                const g = new Array(n * n).fill(-1), sol = zeros(n * n), p = { t: 'akari', n, g, sol };
+                for (const i of shuf([...g.keys()], rand).slice(0, Math.round(n * n * (0.2 + 0.12 * rand())))) g[i] = -2;
+                const seg = akSeg(p), lit = zeros(n * n);
+                for (const i of shuf(g.map((v, i) => i).filter(i => g[i] === -1), rand)) if (!lit[i]) { sol[i] = 1; seg[i].forEach(j => { lit[j] = 1; }); }
+                const blacks = g.map((v, i) => i).filter(i => g[i] === -2);
+                for (const i of blacks) g[i] = akAdj(p, i).filter(j => sol[j]).length;
+                if (!blacks.length || akSolve(p, 2).length !== 1) continue;
+                const order = shuf(blacks, rand);
+                for (const i of order.slice(0, [0, order.length >> 1, order.length][level])) { const v = g[i]; g[i] = -2; if (akSolve(p, 2).length !== 1) g[i] = v; }
+                return p;
+            }
+            throw new Error('akari: 產生失敗');
+        }
+
+        // ===== 共用：登錄表、初始盤面、存檔驗證、提示 =====
+        const PZ = {
+            takuzu: { name: 'Takuzu', sizes: [6, 8, 10], def: 6, gen: tkGen, solve: (p, l) => tkSolve(p.g, p.n, l), errs: (p, b) => tkErrs(b, p.n), won: (p, b) => b.every(Boolean) && !tkErrs(b, p.n).size },
+            futoshiki: { name: '不等式', sizes: [4, 5, 6], def: 5, gen: fuGen, solve: (p, l) => fuSolve(p, l), errs: fuErrs, won: (p, b) => b.every(Boolean) && !fuErrs(p, b).size },
+            skyscrapers: { name: '摩天樓', sizes: [4, 5, 6], def: 5, gen: skGen, solve: (p, l) => skSolve(p, l), errs: skErrs, won: (p, b) => b.every(Boolean) && !skErrs(p, b).size },
+            lightsout: { name: '關燈', sizes: [3, 4, 5, 6, 7], def: 5, gen: loGen, solve: (p, l) => loSolutions(p.g, p.n).slice(0, l), errs: () => new Set(), won: (p, b) => b.every(v => !v) },
+            akari: { name: 'Akari', sizes: [5, 7], def: 5, gen: akGen, solve: (p, l) => akSolve(p, l), errs: akErrs, won: akWon },
+        };
+        const startBoard = (p) => p.t === 'akari' ? zeros(p.n * p.n) : p.g.slice();
+        const maxVal = (t, n) => t === 'takuzu' ? 2 : t === 'lightsout' || t === 'akari' ? 1 : n;
+        // 存檔只記種子與盤面（題目由種子重新生成）；壞資料一律當作沒存檔
+        function okSave(s) {
+            if (!s || typeof s !== 'object' || !Object.hasOwn(PZ, s.t)) return false;
+            const m = s.size * s.size, arr = (a, hi) => Array.isArray(a) && a.length === m && a.every(x => Number.isInteger(x) && x >= 0 && x <= hi);
+            return [0, 1, 2].includes(s.level) && PZ[s.t].sizes.includes(s.size) && typeof s.seed === 'string' && s.seed.length <= 60 && typeof s.sig === 'string'
+                && (s.daily === null || /^\d{4}-\d{2}-\d{2}$/.test(s.daily)) && Number.isFinite(s.secs) && s.secs >= 0 && typeof s.done === 'boolean'
+                && arr(s.board, maxVal(s.t, s.size)) && arr(s.notes, 255);
+        }
+        // 重新生成的題目與存檔的盤面要吻合（固定格不能被改）
+        const saveFits = (p, s) => p.sol.join('') === s.sig && s.board.every((v, i) => p.t === 'akari' ? p.g[i] === -1 || v === 0 : p.t === 'lightsout' || !p.g[i] || v === p.g[i]);
+        // 數字類謎題的提示：先找填錯的格；再找「其他數字都會違反規則」的格；都沒有就揭示答案
+        function digitHint(P, p, b, sel) {
+            const K = p.t === 'takuzu' ? 2 : p.n, wrong = b.findIndex((v, i) => v && v !== p.sol[i]);
+            if (wrong >= 0) return { cell: wrong, wrong: true };
+            const emp = [...b.keys()].filter(i => !b[i]);
+            if (!emp.length) return null;
+            const order = sel >= 0 && !b[sel] ? [sel, ...emp] : emp;
+            for (const i of order) {
+                const ok = [];
+                for (let v = 1; v <= K; v++) { const t = b.slice(); t[i] = v; if (!P.errs(p, t).size) ok.push(v); }
+                if (ok.length === 1) return { cell: i, v: ok[0], why: 'rule' };
+            }
+            return { cell: order[0], v: p.sol[order[0]], why: 'reveal' };
+        }
+        function akHint(p, b) {
+            const wrong = b.findIndex((v, i) => v === 1 && !p.sol[i]);
+            if (wrong >= 0) return { cell: wrong, wrong: true };
+            const st = b.map(v => v === 1 ? 1 : 0);
+            if (akProp(p, st)) { const i = st.findIndex((v, k) => v === 1 && b[k] !== 1); if (i >= 0) return { cell: i, why: 'rule' }; }
+            const i = p.sol.findIndex((v, k) => v && b[k] !== 1);
+            return i < 0 ? null : { cell: i, why: 'reveal' };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const SAVE = 'logicp_game', BEST = 'logicp_best', MAXHIST = 500;
+        const RULES = {
+            takuzu: '填 0 / 1：同行同列不能連續三個相同，0 與 1 數量相等，沒有兩行（列）完全相同。',
+            futoshiki: '每行每列填 1～N 不重複，並符合格子間的 < >（尖端指向較小的一邊）。',
+            skyscrapers: '每行每列填 1～N 不重複（樓高）；外圍數字 = 從該方向看得到幾棟。',
+            lightsout: '點一格翻轉它與上下左右的燈，把全部燈熄滅。',
+            akari: '白格放燈照亮全部白格；燈不可互照；黑格數字 = 四周燈數。',
+        };
+        let G = null, busy = false;
+        const games = {};                                        // 本次瀏覽中各分頁的進行中題目（切換分頁不丟進度）
+        const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+        const keyOf = () => `${G.t}|${G.level}|${G.size}`;
+        const clean = (o) => { const r = {}; if (o && typeof o === 'object' && !Array.isArray(o)) for (const [k, v] of Object.entries(o)) if (/^[a-z]+\|[0-2]\|\d+$/.test(k) && Number.isFinite(v) && v > 0) r[k] = v; return r; };
+        const getBests = () => clean(store.get(BEST, {}));
+        const getDaily = (d) => clean(store.get('logicp_daily_' + d, {}));
+        const bestNow = () => (G.daily ? getDaily(G.daily) : getBests())[keyOf()] || 0;
+        const secs = () => G.done ? G.secs : Math.floor((Date.now() - G.start) / 1000);
+        const pruneDaily = () => { try { staleDaily(Object.keys(localStorage)).forEach(k => localStorage.removeItem(k)); } catch (e) { } };
+
+        function mk(t, level, size, daily, seed) {
+            seed = seed || (daily ? `logicp-${daily}-${t}-${level}-${size}` : 'r' + Date.now().toString(36) + rnd(1e6));
+            const puz = PZ[t].gen(size, level, seeded(seed));
+            return { t, level, size, seed, daily, puz, board: startBoard(puz), notes: zeros(size * size), hist: [], redo: [], sel: -1, mark: false, hint: -1, start: Date.now(), secs: 0, done: false, err: G ? G.err : true };
+        }
+        function begin(t, level, size, daily) {
+            busy = true; document.body.dataset.ready = '';
+            $('#msg').textContent = '產生題目中…';
+            setTimeout(() => { G = mk(t, level, size, daily); busy = false; document.body.dataset.ready = '1'; sync(); save(); }, 20);
+        }
+        function save() {
+            store.set(SAVE, { t: G.t, level: G.level, size: G.size, seed: G.seed, daily: G.daily, board: G.board, notes: G.notes, secs: secs(), done: G.done, sig: G.puz.sol.join(''), err: G.err });
+        }
+        function restore() {
+            const s = store.get(SAVE, null);
+            if (!okSave(s)) return false;
+            try {
+                const g = mk(s.t, s.level, s.size, s.daily, s.seed);
+                if (!saveFits(g.puz, s)) return false;
+                Object.assign(g, { board: s.board, notes: s.notes, secs: s.secs, done: s.done, err: s.err !== false, start: Date.now() - s.secs * 1000 });
+                G = g; return true;
+            } catch (e) { return false; }
+        }
+        const progressed = () => G && !G.done && G.hist.length > 0;
+        const leave = () => !progressed() || confirm('這題還沒完成，換題會放棄目前的進度。要繼續嗎？');
+
+        // 版面
+        function sync() {
+            const P = PZ[G.t], T = G.t;
+            document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.t === T));
+            $('#size').innerHTML = P.sizes.map(s => `<option value="${s}">${s}×${s}</option>`).join('');
+            $('#size').value = G.size; $('#level').value = G.level;
+            $('#daily').setAttribute('aria-pressed', !!G.daily);
+            $('#err').checked = G.err;
+            $('#rule').textContent = RULES[T];
+            const digit = T === 'takuzu' || T === 'futoshiki' || T === 'skyscrapers', K = T === 'takuzu' ? 2 : G.size;
+            $('#pad').hidden = !digit;
+            $('#pad').innerHTML = digit ? [...Array(K).keys()].map(d => `<button data-d="${d + 1}">${T === 'takuzu' ? d : d + 1}</button>`).join('') + '<button data-d="0" aria-label="清除">⌫</button>' : '';
+            $('#mark').textContent = digit ? '✏️ 筆記' : T === 'akari' ? '● 標記無燈' : '🚩 標記';
+            $('#mark').setAttribute('aria-pressed', G.mark);
+            $('#msg').textContent = G.done ? doneMsg() : G.daily ? G.daily + ' 每日挑戰' : '';
+            const b = bestNow(); $('#best').textContent = b ? fmt(b) : '—';
+            paint();
+        }
+        const doneMsg = () => `🎉 ${G.daily ? G.daily + ' 每日挑戰' : ''}完成！用時 ${fmt(G.secs)}${G.isBest ? '（新紀錄）' : ''}`;
+
+        function paint() {
+            const { puz: p, board: b, notes: nt, t: T } = G, n = p.n, bad = G.err ? PZ[T].errs(p, b) : new Set();
+            const digit = T === 'takuzu' || T === 'futoshiki' || T === 'skyscrapers';
+            const sr = G.sel >= 0 ? (G.sel / n) | 0 : -1, sc = G.sel % n, sv = G.sel >= 0 ? b[G.sel] : 0;
+            const label = (v) => T === 'takuzu' ? v - 1 : v;
+            const cell = (i) => {
+                const v = b[i], r = (i / n) | 0, c = i % n;
+                let cls = 'c', inner = '';
+                if (digit) {
+                    if (p.g[i]) cls += ' given';
+                    if (G.sel >= 0 && (r === sr || c === sc)) cls += ' peer';
+                    if (sv && v === sv) cls += ' same';
+                    if (i === G.sel) cls += ' sel';
+                    if (bad.has(i)) cls += ' bad';
+                    if (i === G.hint) cls += ' hint';
+                    if (v) inner = label(v);
+                    else if (nt[i]) inner = '<div class="nt">' + [...Array(T === 'takuzu' ? 2 : n).keys()].map(k => `<i>${nt[i] >> (k + 1) & 1 ? label(k + 1) : ''}</i>`).join('') + '</div>';
+                } else if (T === 'lightsout') {
+                    if (v) cls += ' on';
+                    if (i === G.hint) cls += ' hint';
+                    if (nt[i]) inner = '🚩';
+                } else if (p.g[i] < 0 && p.g[i] === -2 || p.g[i] >= 0) {
+                    cls += ' blk' + (bad.has(i) ? ' bad' : ''); inner = p.g[i] >= 0 ? p.g[i] : '';
+                } else {
+                    if (lit[i]) cls += ' lit';
+                    if (v) cls += ' lamp' + (bad.has(i) ? ' bad' : '');
+                    if (i === G.hint) cls += ' hint';
+                    inner = v ? '💡' : nt[i] ? '·' : '';
+                }
+                return `<button class="${cls}" data-i="${i}" role="gridcell">${inner}</button>`;
+            };
+            const lit = T === 'akari' ? akLit(p, b) : null;
+            let tpl, html = '', cols;
+            if (T === 'futoshiki') {
+                cols = 2 * n - 1; tpl = `repeat(${n - 1}, minmax(0,1fr) minmax(0,.4fr)) minmax(0,1fr)`;
+                for (let r = 0; r < cols; r++) for (let c = 0; c < cols; c++) {
+                    if (r % 2 === 0 && c % 2 === 0) html += cell(r / 2 * n + c / 2);
+                    else if (r % 2 === 0) html += `<div class="x">${['', '<', '>'][p.h[r / 2 * (n - 1) + (c - 1) / 2]]}</div>`;
+                    else if (c % 2 === 0) html += `<div class="x">${['', '∧', '∨'][p.v[(r - 1) / 2 * n + c / 2]]}</div>`;
+                    else html += '<div></div>';
+                }
+            } else if (T === 'skyscrapers') {
+                cols = n + 2; tpl = `repeat(${n + 2}, minmax(0,1fr))`;
+                const clue = (k) => `<div class="x clue${bad.has('c' + k) ? ' bad' : ''}">${p.c[k] || ''}</div>`;
+                for (let r = 0; r < cols; r++) for (let c = 0; c < cols; c++) {
+                    if (r === 0 && c > 0 && c <= n) html += clue(c - 1);
+                    else if (r === n + 1 && c > 0 && c <= n) html += clue(n + c - 1);
+                    else if (c === 0 && r > 0 && r <= n) html += clue(2 * n + r - 1);
+                    else if (c === n + 1 && r > 0 && r <= n) html += clue(3 * n + r - 1);
+                    else if (r > 0 && r <= n && c > 0 && c <= n) html += cell((r - 1) * n + c - 1);
+                    else html += '<div></div>';
+                }
+            } else {
+                cols = n; tpl = `repeat(${n}, minmax(0,1fr))`;
+                for (let i = 0; i < n * n; i++) html += cell(i);
+            }
+            const bd = $('#board');
+            bd.style.gridTemplate = `${tpl} / ${tpl}`;
+            bd.style.gap = T === 'futoshiki' ? '0' : '2px';
+            bd.style.setProperty('--fs', `min(calc((100vw - 28px) / ${cols} * .5), ${Math.floor(480 / cols * .5)}px)`);
+            bd.classList.toggle('win', G.done);
+            bd.innerHTML = html;
+            $('#info').textContent = T === 'lightsout' ? (G.done ? '' : `最少還需 ${wt(loBest(b, n) || [])} 步`) : '';
+            [...$('#pad').children].forEach(el => { el.disabled = G.done; });
+        }
+
+        // 操作
+        function snap() { G.hist.push(JSON.stringify([G.board, G.notes])); if (G.hist.length > MAXHIST) G.hist.shift(); G.redo = []; }
+        function after() { G.hint = -1; paint(); save(); finish(); }
+        function act(i) {
+            if (G.done || busy) return;
+            const T = G.t, n = G.puz.n;
+            if (T === 'lightsout' || T === 'akari') {
+                if (T === 'akari' && G.puz.g[i] !== -1) return;
+                snap();
+                if (G.mark) { G.notes[i] ^= 1; if (T === 'akari') G.board[i] = 0; }
+                else if (T === 'lightsout') G.board = loPress(G.board, n, i);
+                else { G.board[i] ^= 1; G.notes[i] = 0; }
+                after();
+            } else { G.sel = i; G.hint = -1; paint(); }
+        }
+        function put(d) {
+            if (G.done || busy || G.sel < 0 || G.puz.g[G.sel]) return;
+            const s = G.sel, n = G.puz.n;
+            if (d === 0) { if (!G.board[s] && !G.notes[s]) return; snap(); G.board[s] = 0; G.notes[s] = 0; return after(); }
+            snap();
+            if (G.mark && !G.board[s]) G.notes[s] ^= 1 << d;
+            else {
+                G.board[s] = G.board[s] === d ? 0 : d; G.notes[s] = 0;
+                if (G.board[s] && G.t !== 'takuzu') for (let k = 0; k < n; k++) { G.notes[((s / n) | 0) * n + k] &= ~(1 << d); G.notes[k * n + s % n] &= ~(1 << d); }
+            }
+            after();
+        }
+        function undoRedo(from, to) {
+            if (!from.length || G.done) return;
+            to.push(JSON.stringify([G.board, G.notes]));
+            [G.board, G.notes] = JSON.parse(from.pop());
+            after();
+        }
+        function hint() {
+            if (G.done || busy) return;
+            const T = G.t, p = G.puz, n = p.n, pos = (i) => `第 ${(i / n | 0) + 1} 列第 ${i % n + 1} 行`;
+            if (T === 'lightsout') {
+                const s = loBest(G.board, n), i = s.findIndex(Boolean);
+                if (i < 0) return;
+                G.hint = i; paint();
+                $('#msg').textContent = `提示：按 ${pos(i)}（算出的最少步數解共 ${wt(s)} 步，這格在其中）`;
+                return;
+            }
+            const h = T === 'akari' ? akHint(p, G.board) : digitHint(PZ[T], p, G.board, G.sel);
+            if (!h) return;
+            if (h.wrong) { G.sel = h.cell; G.hint = h.cell; paint(); $('#msg').textContent = `${pos(h.cell)}${T === 'akari' ? '的燈不在答案裡' : '的數字和答案不同'}`; return; }
+            snap();
+            if (T === 'akari') G.board[h.cell] = 1; else G.board[h.cell] = h.v;
+            G.notes[h.cell] = 0; G.sel = h.cell;
+            after();
+            G.hint = h.cell; paint();
+            const why = h.why === 'rule' ? (T === 'akari' ? '依黑格數字與照明規則推得這格必須放燈' : '其他數字都會違反規則，只剩這個') : '單靠一步規則推不出來，直接揭示答案';
+            if (!G.done) $('#msg').textContent = `${pos(h.cell)}：${why}`;
+        }
+        function check() {
+            if (G.done || busy) return;
+            const T = G.t, p = G.puz, b = G.board;
+            if (T === 'lightsout') { $('#msg').textContent = `目前盤面可解，最少還需 ${wt(loBest(b, p.n))} 步`; return; }
+            const wrong = T === 'akari' ? b.filter((v, i) => v === 1 && !p.sol[i]).length : b.filter((v, i) => v && v !== p.sol[i]).length;
+            const left = T === 'akari' ? p.sol.filter((v, i) => v && b[i] !== 1).length : b.filter(v => !v).length;
+            $('#msg').textContent = wrong ? `有 ${wrong} 格和答案不同` : left ? `目前填的都正確，還差 ${left} 格 👍` : '全部正確';
+        }
+        function finish() {
+            if (G.done || !PZ[G.t].won(G.puz, G.board)) return;
+            G.done = true; G.secs = Math.floor((Date.now() - G.start) / 1000);
+            const k = keyOf();
+            if (G.daily) { const d = getDaily(G.daily); G.isBest = !d[k] || G.secs < d[k]; if (G.isBest) { d[k] = G.secs; store.set('logicp_daily_' + G.daily, d); } pruneDaily(); }
+            else { const d = getBests(); G.isBest = !d[k] || G.secs < d[k]; if (G.isBest) { d[k] = G.secs; store.set(BEST, d); } }
+            save(); sync();
+        }
+
+        // 事件
+        $('#tabs').innerHTML = Object.entries(PZ).map(([t, P]) => `<button data-t="${t}" aria-pressed="false">${P.name}</button>`).join('');
+        $('#tabs').onclick = (e) => {
+            const t = e.target.dataset.t;
+            if (!t || busy || t === G.t) return;
+            games[G.t] = G;
+            if (games[t]) { G = games[t]; sync(); save(); } else begin(t, G.level, PZ[t].def, null);
+        };
+        const restart = (t, level, size, daily) => { if (!busy && leave()) begin(t, level, size, daily); };
+        $('#new').onclick = () => { delete games[G.t]; restart(G.t, +$('#level').value, +$('#size').value, null); };
+        $('#daily').onclick = () => { delete games[G.t]; restart(G.t, +$('#level').value, +$('#size').value, G.daily ? null : twDay()); };
+        $('#level').onchange = $('#size').onchange = () => { delete games[G.t]; if (busy || !leave()) { sync(); return; } begin(G.t, +$('#level').value, +$('#size').value, G.daily ? twDay() : null); };
+        $('#board').onclick = (e) => { const el = e.target.closest('[data-i]'); if (el) act(+el.dataset.i); };
+        $('#pad').onclick = (e) => { const d = e.target.dataset.d; if (d !== undefined) put(+d); };
+        $('#mark').onclick = () => { G.mark = !G.mark; $('#mark').setAttribute('aria-pressed', G.mark); };
+        $('#undo').onclick = () => undoRedo(G.hist, G.redo);
+        $('#redo').onclick = () => undoRedo(G.redo, G.hist);
+        $('#hint').onclick = hint;
+        $('#check').onclick = check;
+        $('#restart').onclick = () => {
+            if (busy || G.done || !G.hist.length || !confirm('清掉目前的填寫，從頭開始這一題（計時重來）？')) return;
+            Object.assign(G, { board: startBoard(G.puz), notes: zeros(G.size * G.size), hist: [], redo: [], sel: -1, hint: -1, start: Date.now(), secs: 0 });
+            sync(); save();
+        };
+        $('#err').onchange = () => { G.err = $('#err').checked; paint(); save(); };
+        addEventListener('keydown', (e) => {
+            if (!G || busy || e.ctrlKey || e.metaKey || e.altKey || /SELECT|INPUT/.test(e.target.tagName)) return;
+            const T = G.t, digit = T === 'takuzu' || T === 'futoshiki' || T === 'skyscrapers';
+            if (!digit) return;
+            const n = G.puz.n;
+            if (T === 'takuzu' && /^[01]$/.test(e.key)) put(+e.key + 1);
+            else if (T !== 'takuzu' && /^[1-9]$/.test(e.key) && +e.key <= n) put(+e.key);
+            else if (e.key === 'Backspace' || e.key === 'Delete') put(0);
+            else if (e.key.startsWith('Arrow') && G.sel >= 0) {
+                const d = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -n, ArrowDown: n }[e.key], k = G.sel + d;
+                if (k >= 0 && k < n * n && !(d === -1 && G.sel % n === 0) && !(d === 1 && G.sel % n === n - 1)) { G.sel = k; paint(); e.preventDefault(); }
+            }
+        });
+        setInterval(() => { if (G && !G.done && !busy) $('#time').textContent = fmt(secs()); else if (G && G.done) $('#time').textContent = fmt(G.secs); }, 500);
+
+        pruneDaily();
+        if (restore()) { document.body.dataset.ready = '1'; sync(); } else begin('takuzu', 1, PZ.takuzu.def, null);
+    </script>
+    <script>document.getElementById('clearBest').onclick = () => { if (!confirm('清除邏輯謎題的所有最佳紀錄、每日挑戰紀錄與進行中的存檔？無法復原。頁面會重新載入，正在進行的這一局會結束。')) return; try { Object.keys(localStorage).filter(k => k.startsWith('logicp_')).forEach(k => localStorage.removeItem(k)); } catch (e) { } location.reload(); };</script>
+</body>
+
+</html>

@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="單人紙牌：接龍、空當接龍、蜘蛛紙牌、金字塔紙牌、高爾夫紙牌，有悔棋、提示、每日挑戰與最佳紀錄，離線可玩。">
+    <meta property="og:title" content="單人紙牌" />
+    <meta property="og:description" content="接龍、空當接龍、蜘蛛、金字塔、高爾夫五種單人紙牌，有悔棋與提示。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/solitaire.html" />
+    <meta name="st-keys" content="solit_best,solit_game,solit_opt,solit_daily_*">
+    <title>單人紙牌</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .tabs,
+        .acts {
+            display: grid;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .tabs {
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
+
+        .acts {
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            margin-top: 6px;
+        }
+
+        .tabs button,
+        .acts button {
+            padding: 8px 0;
+            font-size: 14px;
+            min-width: 0;
+        }
+
+        .bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .bar select,
+        .bar input {
+            font-size: 16px;
+        }
+
+        #seed {
+            width: 9.5em;
+        }
+
+        .stat {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 6px 12px;
+            font-variant-numeric: tabular-nums;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        /* 牌桌：--u = 牌寬的十分之一（JS 依容器寬度設定），所有尺寸跟著牌寬縮放，不會橫向溢出 */
+        .tbl {
+            --g: 4px;
+            --u: 4px;
+            margin: 0 -10px 6px;
+        }
+
+        .tbl[data-g=spider] {
+            --g: 2px;
+            margin: 0 -12px 6px;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+            gap: var(--g);
+            align-items: start;
+            margin-bottom: 10px;
+        }
+
+        .pile {
+            position: relative;
+            min-width: 0;
+        }
+
+        .slot {
+            aspect-ratio: 5/7;
+            border: 1.5px dashed var(--line);
+            border-radius: calc(var(--u) * .9);
+            display: grid;
+            place-items: center;
+            color: var(--muted);
+            font-size: calc(var(--u) * 4);
+            opacity: .7;
+        }
+
+        .cd {
+            display: block;
+            position: relative;
+            width: 100%;
+            aspect-ratio: 5/7;
+            border-radius: calc(var(--u) * .9);
+            background: #fff;
+            color: #1c1c1e;
+            border: 1px solid rgba(0, 0, 0, .3);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, .3);
+            overflow: hidden;
+            font-size: calc(var(--u) * 3.1);
+            line-height: 1;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        .cd.red {
+            color: #d62839;
+        }
+
+        .cd b {
+            position: absolute;
+            left: 7%;
+            top: 5%;
+            white-space: nowrap;
+            font-weight: 700;
+            letter-spacing: -.04em;
+        }
+
+        .cd i {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            padding-top: 30%;
+            font-style: normal;
+            font-size: calc(var(--u) * 6);
+        }
+
+        .cd.back {
+            background: var(--blue);
+            background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, .28) 0 2px, transparent 2px 6px);
+            border: 2px solid #fff;
+        }
+
+        .cd.blk {
+            filter: brightness(.72);
+        }
+
+        .pile>.cd+.cd {
+            margin-top: -106%;
+        }
+
+        .pile>.cd.s {
+            margin-top: -124%;
+        }
+
+        .cd.sel {
+            box-shadow: 0 0 0 3px var(--blue), 0 2px 6px rgba(0, 0, 0, .4);
+            z-index: 2;
+        }
+
+        .cd.hl {
+            box-shadow: 0 0 0 3px var(--ok), 0 2px 6px rgba(0, 0, 0, .4);
+            animation: pulse 1s ease-in-out 4;
+        }
+
+        .pile.hlt>.slot,
+        .pile.hlt>.cd:last-child {
+            box-shadow: 0 0 0 3px var(--ok);
+        }
+
+        .pile.tgt::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border: 2px solid var(--blue);
+            border-radius: calc(var(--u) * .9);
+            opacity: .55;
+            pointer-events: none;
+        }
+
+        .cnt {
+            position: absolute;
+            right: 6%;
+            bottom: 6%;
+            background: var(--bg);
+            color: var(--text);
+            border-radius: 99px;
+            padding: 1px 6px;
+            font-size: max(11px, calc(var(--u) * 2.6));
+            font-weight: 700;
+            z-index: 3;
+        }
+
+        .waste {
+            display: grid;
+            justify-items: start;
+        }
+
+        .waste>* {
+            grid-area: 1/1;
+            width: calc((100% - var(--g)) / 2);
+            margin-left: calc(var(--f, 0) * 13%);
+        }
+
+        .pyr {
+            display: grid;
+            grid-template-columns: repeat(14, minmax(0, 1fr));
+            padding-bottom: calc(var(--u) * 7);
+        }
+
+        .pc {
+            grid-row: var(--r);
+            grid-column: var(--c) / span 2;
+            margin-bottom: -70%;
+            padding: 0 1px;
+            position: relative;
+            min-width: 0;
+        }
+
+        /* 金字塔：上排牌會蓋住下排牌的上半部，點數改放在下半部才看得到 */
+        .pc .cd i {
+            display: none;
+        }
+
+        .pc .cd b {
+            top: 56%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: calc(var(--u) * 4);
+        }
+
+        .pc.gone {
+            visibility: hidden;
+        }
+
+        .info {
+            grid-column: 3 / -1;
+            color: var(--muted);
+            font-size: 14px;
+            align-self: center;
+        }
+
+        .land {
+            animation: land .18s ease-out;
+        }
+
+        .fresh .cd {
+            animation: dealin .35s ease-out both;
+            animation-delay: var(--d, 0s);
+        }
+
+        @keyframes land {
+            from {
+                transform: scale(1.14);
+            }
+        }
+
+        @keyframes dealin {
+            from {
+                transform: translateY(-30px);
+                opacity: 0;
+            }
+        }
+
+        @keyframes pulse {
+            50% {
+                transform: translateY(-3px);
+            }
+        }
+
+        @keyframes fall {
+            from {
+                transform: translateY(-10vh) rotate(0);
+            }
+
+            to {
+                transform: translateY(110vh) rotate(540deg);
+            }
+        }
+
+        #confetti {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 5;
+        }
+
+        #confetti span {
+            position: absolute;
+            top: 0;
+            font-size: 28px;
+            animation: fall var(--t, 3s) linear var(--w, 0s) both;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+
+            .land,
+            .fresh .cd,
+            .cd.hl,
+            #confetti span {
+                animation: none;
+            }
+
+            #confetti {
+                display: none;
+            }
+        }
+
+        #winBox {
+            text-align: center;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        #msg {
+            text-align: center;
+            font-weight: 600;
+            min-height: 1.6em;
+            margin: 6px 0;
+        }
+
+        .opts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px 16px;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .opts label {
+            display: inline-flex;
+            gap: 6px;
+            align-items: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>單人紙牌</h1>
+        <p class="sub">五種玩法：接龍、空當接龍、蜘蛛、金字塔、高爾夫。點一張牌再點目的地就能移動。</p>
+
+        <div class="tabs" role="tablist" id="tabs"></div>
+        <div class="bar">
+            <select id="opt" aria-label="難度"></select>
+            <input id="seed" type="number" inputmode="numeric" min="1" max="1000000" aria-label="牌局編號" placeholder="牌局編號">
+            <button class="sm" id="go">開此編號</button>
+        </div>
+        <div class="bar">
+            <span class="stat">⏱ <span id="time">0:00</span></span>
+            <span class="stat">步數 <span id="moves">0</span></span>
+            <span class="stat" id="bestBox">最佳 —</span>
+        </div>
+
+        <div id="winBox" class="card" hidden></div>
+        <div id="tbl" class="tbl" data-g="klondike"></div>
+        <div id="msg" role="status" aria-live="polite"></div>
+
+        <div class="acts">
+            <button id="undo">悔棋</button>
+            <button id="hint">提示</button>
+            <button id="new" class="primary">新局</button>
+            <button id="again">重玩</button>
+            <button id="daily" aria-pressed="false" title="每天固定同一局（台灣時間）">每日</button>
+        </div>
+        <div class="opts">
+            <label id="autoLbl"><input type="checkbox" id="auto" checked> 自動收牌到基礎堆</label>
+            <button class="sm" id="giveup">放棄這局</button>
+            <button class="sm" id="clearBest">清除最佳紀錄</button>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>五種單人紙牌合在一頁：接龍（Klondike）、空當接龍（FreeCell）、蜘蛛紙牌、金字塔紙牌、高爾夫紙牌。不用連線，離線可玩。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>等車、睡前、休息時間，想安靜玩一局。</li>
+            <li>想固定挑戰同一局：用「牌局編號」或「每日」。</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+            <li>最上方分頁選玩法；接龍可選翻 1 / 3 張，蜘蛛可選 1 / 2 / 4 花色。</li>
+            <li>手機：先點要搬的牌（會亮藍框，可放的位置會出現藍框提示），再點目的地。再點一次同一張牌 = 自動送到最合適的位置。滑鼠可直接拖放。</li>
+            <li>點牌庫翻牌（蜘蛛是發一輪牌）；「悔棋」可退回（至少 50 步，悔棋也算一步）；「提示」會標出一個可走的步驟，沒有時會告訴你。</li>
+            <li>「新局」隨機開局，「重玩」重來同一局，「開此編號」輸入牌局編號開同一局，「每日」是台灣時間每天固定的一局（各玩法 / 難度各一局）。</li>
+        </ol>
+        <h3>各玩法規則</h3>
+        <div class="eg">接龍：七欄牌，欄內紅黑交錯由大到小排列；同花色 A→K 收到右上基礎堆；空欄只能放 K。
+空當接龍：牌全部朝上；4 個空當各暫放一張，一次可搬的張數受空當與空欄限制。牌局編號使用微軟經典編號（1～32000 與 Windows 版相同）。
+蜘蛛：同花色由大到小才能一起搬；湊成 K→A 同花色整排會自動收走，收滿 8 排獲勝；發牌前每一欄都要有牌。
+金字塔：把加起來是 13 的兩張露出牌一起移除（J=11、Q=12），K 單張就能移除；牌庫翻到的牌也能配對，重洗最多 2 次。
+高爾夫：桌面最上面的牌，只要比中間那張大 1 或小 1（不循環，K 與 A 不相連）就能接上去；清空桌面獲勝。</div>
+        <h3>範例</h3>
+        <div class="eg">接龍：把紅 6 放到黑 7 上、翻出下面的牌；A 一出現就送到右上角的基礎堆，依序往 K 疊。卡住時按「提示」，或悔棋回到上一個岔路。</div>
+        <h3>小提醒</h3>
+        <ul>
+            <li>「自動收牌」只用在接龍與空當接龍，且只收安全的牌；可在下方關閉。</li>
+            <li>最佳紀錄（每種玩法與難度各自的最少步數、最短時間）與每日挑戰完成紀錄存在這台裝置。每日紀錄只保留最近 30 天；「清除最佳紀錄」會清掉這些（無法復原，不影響進行中的牌局）。</li>
+            <li>進行中的牌局會自動存檔，下次回來接著玩；存檔壞掉會自動重新開局；「放棄這局」會刪除存檔並開新局（無法復原）。</li>
+            <li>除了空當接龍使用微軟編號外，其他玩法的牌局編號為本站專用，與其他軟體不同。</li>
+            <li>卡死偵測看「有沒有有用的走法」，只是提醒，不會自動結束；牌太散時可悔棋或開新局。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store } = Util;
+
+        // --- pure ---
+        // 牌 = 整數 id：rank = id % 13 + 1（A=1…K=13）、suit = floor(id/13) % 4（0♠ 1♥ 2♦ 3♣）；蜘蛛 104 張靠 id >= 52 區分副本
+        const RK = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], SU = ['♠', '♥', '♦', '♣'];
+        const rank = c => c % 13 + 1, suit = c => Math.floor(c / 13) % 4, isRed = c => { const s = suit(c); return s === 1 || s === 2; };
+        const tp = a => a[a.length - 1];
+        const nm = c => RK[rank(c)] + SU[suit(c)];
+        const GAMES = ['klondike', 'freecell', 'spider', 'pyramid', 'golf'];
+        const OPTS = { klondike: [1, 3], freecell: [0], spider: [1, 2, 4], pyramid: [0], golf: [0] };
+        const bestKey = (g, o) => OPTS[g].length > 1 ? g + o : g;
+        const BEST_KEYS = GAMES.flatMap(g => OPTS[g].map(o => bestKey(g, o)));
+        const twDay = (ms = Date.now()) => new Date(ms + 8 * 36e5).toISOString().slice(0, 10);
+        const MAXU = 300, SAVE_UNDO = 50;
+
+        function deckFor(g, o) {
+            if (g !== 'spider') return Array.from({ length: 52 }, (_, i) => i);
+            const d = [];
+            for (let c = 0; c < 8 / o; c++) for (let s = 0; s < o; s++) for (let r = 0; r < 13; r++) d.push(52 * c + 13 * s + r);
+            return d;
+        }
+        function shuf(arr, rand) {
+            const a = [...arr];
+            for (let i = a.length - 1; i > 0; i--) { const j = rand(i + 1); [a[i], a[j]] = [a[j], a[i]]; }
+            return a;
+        }
+        // 微軟 FreeCell 編號演算法（LCG：seed*214013+2531011，取高 15 位），牌序：rank*4+花色（梅花、方塊、紅心、黑桃）
+        function msDeck(seed) {
+            let x = seed >>> 0;
+            const rand = () => { x = (Math.imul(x, 214013) + 2531011) >>> 0; return (x >>> 16) & 0x7fff; };
+            const cards = Array.from({ length: 52 }, (_, i) => i), deck = [];
+            let left = 52;
+            for (let i = 0; i < 52; i++) { const j = rand() % left; deck.push(cards[j]); cards[j] = cards[--left]; }
+            return deck.map(i => [3, 2, 1, 0][i & 3] * 13 + (i >> 2));
+        }
+        const normSeed = v => { const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= 1000000 ? n : 0; };
+
+        function deal(g, o, seed) {
+            if (g === 'freecell') {
+                const tab = Array.from({ length: 8 }, () => []);
+                msDeck(seed).forEach((c, k) => tab[k % 8].push(c));
+                return { g, opt: 0, tab, free: [-1, -1, -1, -1], found: [[], [], [], []] };
+            }
+            const d = shuf(deckFor(g, o), Util.seeded('solit-' + g + '-' + seed).int);
+            if (g === 'klondike') {
+                const tab = [], dn = []; let k = 0;
+                for (let i = 0; i < 7; i++) { tab.push(d.slice(k, k + i + 1)); k += i + 1; dn.push(i); }
+                return { g, opt: o, tab, dn, stock: d.slice(k), waste: [], found: [[], [], [], []] };
+            }
+            if (g === 'spider') {
+                const tab = [], dn = []; let k = 0;
+                for (let i = 0; i < 10; i++) { const n = i < 4 ? 6 : 5; tab.push(d.slice(k, k + n)); k += n; dn.push(n - 1); }
+                return { g, opt: o, tab, dn, stock: d.slice(k), done: 0 };
+            }
+            if (g === 'pyramid') return { g, opt: 0, pyr: d.slice(0, 28), stock: d.slice(28), waste: [], rec: 0 };
+            return { g, opt: 0, tab: Array.from({ length: 7 }, (_, i) => d.slice(i * 5, i * 5 + 5)), waste: [d[35]], stock: d.slice(36) };   // golf
+        }
+        // 每日牌局：同日同玩法同難度 → 同一個編號（空當接龍落在經典 1～32000 內，且避開唯一無解的 11982）
+        function dailySeed(g, o, day) {
+            let n = Util.seeded('solit-daily-' + bestKey(g, o) + '-' + day).int(g === 'freecell' ? 32000 : 999999) + 1;
+            if (g === 'freecell' && n === 11982) n++;
+            return n;
+        }
+
+        const cp = s => { const o = {}; for (const k in s) { const v = s[k]; o[k] = Array.isArray(v) ? v.map(x => Array.isArray(x) ? x.slice() : x) : v; } return o; };
+
+        // 金字塔：位置 0..27 由上而下、由左而右；28 代表棄牌堆頂
+        const pRowStart = r => r * (r + 1) / 2;
+        function pFree(pyr, p) {
+            if (p < 0 || p > 27 || pyr[p] < 0) return false;
+            let r = 0; while (p >= pRowStart(r + 1)) r++;
+            if (r === 6) return true;
+            const a = pRowStart(r + 1) + p - pRowStart(r);
+            return pyr[a] < 0 && pyr[a + 1] < 0;
+        }
+        const pCard = (s, p) => p === 28 ? tp(s.waste) : s.pyr[p];
+
+        // 由暗牌數 dn 找出「暗牌以上可一起搬的連續序列」的起點
+        const altRun = (p, lo) => { let x = p.length - 1; while (x > lo && rank(p[x - 1]) === rank(p[x]) + 1 && isRed(p[x - 1]) !== isRed(p[x])) x--; return x; };
+        const toFound = (found, c) => found[suit(c)].length === rank(c) - 1;
+
+        function kMoves(s) {
+            const M = [], { tab, dn, stock, waste, found } = s, ef = tab.findIndex(p => !p.length);
+            const canTab = (c, j) => { const p = tab[j]; return p.length ? rank(tp(p)) === rank(c) + 1 && isRed(tp(p)) !== isRed(c) : (rank(c) === 13 && j === ef); };
+            const addTab = (sk, si, sx, c) => { for (let j = 0; j < 7; j++) if (!(sk === 't' && j === si) && canTab(c, j)) M.push(['m', sk, si, sx, 't', j]); };
+            if (waste.length) { const c = tp(waste); if (toFound(found, c)) M.push(['m', 'w', 0, 0, 'f', suit(c)]); addTab('w', 0, 0, c); }
+            tab.forEach((p, i) => {
+                if (!p.length) return;
+                for (let x = altRun(p, dn[i]); x < p.length; x++) {
+                    const c = p[x];
+                    if (x === p.length - 1 && toFound(found, c)) M.push(['m', 't', i, x, 'f', suit(c)]);
+                    addTab('t', i, x, c);
+                }
+            });
+            found.forEach((f, k) => { if (f.length) addTab('f', k, 0, tp(f)); });
+            if (stock.length || waste.length) M.push(['d']);
+            return M;
+        }
+        function fMoves(s) {
+            const M = [], { tab, free, found } = s;
+            const fe = free.filter(c => c < 0).length, ec = tab.filter(p => !p.length).length, ef = tab.findIndex(p => !p.length), slot = free.indexOf(-1);
+            const addTab = (sk, si, sx, c, n) => {
+                for (let j = 0; j < 8; j++) {
+                    if (sk === 't' && j === si) continue;
+                    const p = tab[j];
+                    if (p.length ? rank(tp(p)) === rank(c) + 1 && isRed(tp(p)) !== isRed(c) && n <= (fe + 1) * 2 ** ec : j === ef && n <= (fe + 1) * 2 ** (ec - 1)) M.push(['m', sk, si, sx, 't', j]);
+                }
+            };
+            tab.forEach((p, i) => {
+                if (!p.length) return;
+                for (let x = altRun(p, 0); x < p.length; x++) {
+                    const c = p[x];
+                    addTab('t', i, x, c, p.length - x);
+                    if (x === p.length - 1) {
+                        if (toFound(found, c)) M.push(['m', 't', i, x, 'f', suit(c)]);
+                        if (slot >= 0) M.push(['m', 't', i, x, 'c', slot]);
+                    }
+                }
+            });
+            free.forEach((c, k) => { if (c < 0) return; if (toFound(found, c)) M.push(['m', 'c', k, 0, 'f', suit(c)]); addTab('c', k, 0, c, 1); });
+            return M;
+        }
+        function sMoves(s) {
+            const M = [], { tab, dn, stock } = s, ef = tab.findIndex(p => !p.length);
+            tab.forEach((p, i) => {
+                if (!p.length) return;
+                let x = p.length - 1;
+                while (x > dn[i] && suit(p[x - 1]) === suit(p[x]) && rank(p[x - 1]) === rank(p[x]) + 1) x--;
+                for (; x < p.length; x++) {
+                    for (let j = 0; j < 10; j++) {
+                        if (j === i) continue;
+                        const q = tab[j];
+                        if (q.length ? rank(tp(q)) === rank(p[x]) + 1 : j === ef) M.push(['m', 't', i, x, 't', j]);
+                    }
+                }
+            });
+            if (stock.length && ef < 0) M.push(['d']);
+            return M;
+        }
+        function pMoves(s) {
+            const M = [], av = [];
+            for (let p = 0; p < 28; p++) if (pFree(s.pyr, p)) av.push(p);
+            if (s.waste.length) av.push(28);
+            av.forEach((a, i) => {
+                if (rank(pCard(s, a)) === 13) M.push(['r', a, -1]);
+                for (let j = i + 1; j < av.length; j++) if (rank(pCard(s, a)) + rank(pCard(s, av[j])) === 13) M.push(['r', a, av[j]]);
+            });
+            if (s.stock.length || (s.waste.length && s.rec < 2)) M.push(['d']);
+            return M;
+        }
+        function gMoves(s) {
+            const M = [], w = tp(s.waste);
+            s.tab.forEach((p, i) => { if (p.length && Math.abs(rank(tp(p)) - rank(w)) === 1) M.push(['m', 't', i, p.length - 1, 'w', 0]); });
+            if (s.stock.length) M.push(['d']);
+            return M;
+        }
+        const legalMoves = s => ({ klondike: kMoves, freecell: fMoves, spider: sMoves, pyramid: pMoves, golf: gMoves })[s.g](s);
+        const isLegal = (s, m) => legalMoves(s).some(x => x.join() === m.join());
+
+        const srcCard = (s, m) => m[1] === 'w' ? tp(s.waste) : m[1] === 't' ? s.tab[m[2]][m[3]] : m[1] === 'c' ? s.free[m[2]] : tp(s.found[m[2]]);
+        // 暗牌翻開、蜘蛛整排收走
+        function fixPile(s, i) {
+            const p = s.tab[i];
+            if (!p.length) s.dn[i] = 0; else if (s.dn[i] >= p.length) s.dn[i] = p.length - 1;
+        }
+        function spClean(s) {
+            s.tab.forEach((p, i) => {
+                for (; ;) {
+                    const n = p.length;
+                    if (n < 13 || n - 13 < s.dn[i] || rank(p[n - 13]) !== 13) break;
+                    const su = suit(p[n - 1]);
+                    let ok = true;
+                    for (let k = 0; k < 13; k++) if (rank(p[n - 13 + k]) !== 13 - k || suit(p[n - 13 + k]) !== su) { ok = false; break; }
+                    if (!ok) break;
+                    p.splice(n - 13, 13); s.done++;
+                }
+                fixPile(s, i);
+            });
+        }
+        // 套用一步（呼叫端要保證 m 來自 legalMoves）；回傳新狀態，不改動輸入
+        function apply(s0, m) {
+            const s = cp(s0), g = s.g;
+            if (m[0] === 'd') {
+                if (g === 'spider') { for (let i = 0; i < 10; i++) s.tab[i].push(s.stock.pop()); spClean(s); }
+                else if (g === 'klondike' && !s.stock.length) { while (s.waste.length) s.stock.push(s.waste.pop()); }
+                else if (g === 'klondike') { for (let k = Math.min(s.opt, s.stock.length); k > 0; k--) s.waste.push(s.stock.pop()); }
+                else if (g === 'pyramid' && !s.stock.length) { while (s.waste.length) s.stock.push(s.waste.pop()); s.rec++; }
+                else s.waste.push(s.stock.pop());
+                return s;
+            }
+            if (m[0] === 'r') {
+                const a = m[1], b = m[2];
+                if (a < 28) s.pyr[a] = -1; else s.waste.pop();
+                if (b >= 0) { if (b < 28) s.pyr[b] = -1; else s.waste.pop(); }
+                return s;
+            }
+            const [, sk, si, sx, dk, di] = m;
+            let cards;
+            if (sk === 'w') cards = [s.waste.pop()];
+            else if (sk === 'f') cards = [s.found[si].pop()];
+            else if (sk === 'c') { cards = [s.free[si]]; s.free[si] = -1; }
+            else cards = s.tab[si].splice(sx);
+            if (dk === 'f') s.found[di].push(...cards);
+            else if (dk === 'c') s.free[di] = cards[0];
+            else if (dk === 'w') s.waste.push(cards[0]);
+            else s.tab[di].push(...cards);
+            if (g === 'spider') spClean(s); else if (g === 'klondike' && sk === 't') fixPile(s, si);
+            return s;
+        }
+        function win(s) {
+            if (s.g === 'klondike' || s.g === 'freecell') return s.found.every(f => f.length === 13);
+            if (s.g === 'spider') return s.done === 8;
+            if (s.g === 'pyramid') return s.pyr.every(c => c < 0);
+            return s.tab.every(p => !p.length);
+        }
+        // 自動收牌：只收「安全」的牌（A、2，或對色兩套基礎堆都已推到 rank-1），回傳 { s, moves }
+        function autoCollect(s) {
+            const moves = [];
+            if (s.g !== 'klondike' && s.g !== 'freecell') return { s, moves };
+            for (; ;) {
+                const m = legalMoves(s).find(m => {
+                    if (m[0] !== 'm' || m[4] !== 'f' || m[1] === 'f') return false;
+                    const c = srcCard(s, m), r = rank(c), o = isRed(c) ? [0, 3] : [1, 2];
+                    return r <= 2 || Math.min(s.found[o[0]].length, s.found[o[1]].length) >= r - 1;
+                });
+                if (!m) return { s, moves };
+                s = apply(s, m); moves.push(m);
+            }
+        }
+        // 「有用」的步：排除整欄搬到空欄、從基礎堆搬回；用在提示與卡死偵測
+        function useful(s, m) {
+            if (m[0] !== 'm' || s.g === 'golf') return true;
+            if (m[1] === 'f') return false;
+            return !(m[4] === 't' && !s.tab[m[5]].length && m[3] === 0);
+        }
+        function isStuck(s) {
+            if (win(s)) return false;
+            const has = t => legalMoves(t).some(m => m[0] !== 'd' && useful(t, m));
+            if (s.g !== 'klondike') return !legalMoves(s).some(m => useful(s, m));
+            for (let k = s.stock.length + s.waste.length + 1; k > 0; k--) {       // 把牌庫翻過一整輪，看有沒有出現可走的步
+                if (has(s)) return false;
+                if (!s.stock.length && !s.waste.length) break;
+                s = apply(s, ['d']);
+            }
+            return true;
+        }
+        function score(s, m) {
+            if (m[0] === 'r') return 80 + (m[2] < 0 ? 10 : 0);
+            if (s.g === 'golf') return 80;
+            const dk = m[4], sk = m[1];
+            if (dk === 'f') return 100;
+            if (dk === 'c') return 5;
+            let sc = 40;
+            if (sk === 'c') sc += 10; else if (sk === 'w') sc += 5;
+            if (s.dn && sk === 't' && s.dn[m[2]] > 0 && m[3] === s.dn[m[2]]) sc += 40;      // 會翻開暗牌
+            const q = s.tab[m[5]];
+            if (s.g === 'spider' && q.length && suit(tp(q)) === suit(s.tab[m[2]][m[3]])) sc += 20;
+            if (!q.length) sc -= 20;
+            return sc;
+        }
+        // 提示：回傳一個合法的步（一定在 legalMoves 內）；沒有有用的步就回 null
+        function hint(s) {
+            const L = legalMoves(s).filter(m => useful(s, m));
+            let best = null, bs = -1;
+            for (const m of L) if (m[0] !== 'd') { const sc = score(s, m); if (sc > bs) { best = m; bs = sc; } }
+            if (best) return best;
+            const d = L.find(m => m[0] === 'd');
+            return d && !isStuck(s) ? d : null;
+        }
+        function moveText(s, m) {
+            if (m[0] === 'd') return s.g === 'spider' ? '發一輪牌' : s.stock.length ? '翻牌' : '把棄牌堆翻回牌庫';
+            if (m[0] === 'r') return m[2] < 0 ? `${nm(pCard(s, m[1]))} 是 K，點一下就移除` : `${nm(pCard(s, m[1]))} + ${nm(pCard(s, m[2]))} = 13，兩張一起移除`;
+            const c = nm(srcCard(s, m));
+            if (m[4] === 'f') return `把 ${c} 收到基礎堆`;
+            if (m[4] === 'c') return `把 ${c} 暫放到空當`;
+            if (m[4] === 'w') return `把 ${c} 接到中間的 ${nm(tp(s.waste))} 上`;
+            const q = s.tab[m[5]];
+            return q.length ? `把 ${c} 移到 ${nm(tp(q))} 上` : `把 ${c} 移到空欄`;
+        }
+
+        // 一局的狀態 G = { game, opt, seed, daily, s, moves, t, undo, won }
+        function newG(game, opt, seed, daily = '') {
+            return { game, opt, seed, daily, s: deal(game, opt, seed), moves: 0, t: 0, undo: [], won: false };
+        }
+        function play(G, m, auto) {
+            G.undo.push(cp(G.s)); if (G.undo.length > MAXU) G.undo.shift();
+            G.s = apply(G.s, m);
+            if (auto) G.s = autoCollect(G.s).s;
+            G.moves++;
+            return G;
+        }
+        function undoMove(G) {
+            if (!G.undo.length) return false;
+            G.s = G.undo.pop(); G.moves++;
+            return true;
+        }
+
+        // 狀態驗證：結構、牌數、不重複、牌都屬於這副牌（備份還原 / 存檔壞掉時用）
+        function valid(s) {
+            try {
+                if (!s || typeof s !== 'object') return false;
+                const g = s.g, o = s.opt;
+                if (!OPTS[g] || !OPTS[g].includes(o)) return false;
+                const cards = [], add = a => { if (!Array.isArray(a)) throw 0; a.forEach(c => { if (!Number.isInteger(c) || c < 0) throw 0; cards.push(c); }); };
+                const tabN = { klondike: 7, freecell: 8, spider: 10, golf: 7 }[g];
+                if (tabN) {
+                    if (!Array.isArray(s.tab) || s.tab.length !== tabN) return false;
+                    s.tab.forEach(add);
+                }
+                if (g === 'klondike' || g === 'spider') {
+                    if (!Array.isArray(s.dn) || s.dn.length !== tabN) return false;
+                    if (!s.dn.every((d, i) => Number.isInteger(d) && d >= 0 && (s.tab[i].length ? d < s.tab[i].length : d === 0))) return false;
+                }
+                if (g !== 'freecell') add(s.stock);
+                if (g === 'klondike' || g === 'pyramid' || g === 'golf') add(s.waste);
+                if (g === 'klondike' || g === 'freecell') {
+                    if (!Array.isArray(s.found) || s.found.length !== 4) return false;
+                    for (let k = 0; k < 4; k++) { const f = s.found[k]; add(f); if (f.length > 13 || !f.every((c, j) => c === k * 13 + j)) return false; }
+                }
+                if (g === 'freecell') {
+                    if (!Array.isArray(s.free) || s.free.length !== 4) return false;
+                    for (const c of s.free) { if (!Number.isInteger(c) || c < -1) return false; if (c >= 0) cards.push(c); }
+                }
+                if (g === 'pyramid') {
+                    if (!Array.isArray(s.pyr) || s.pyr.length !== 28 || !Number.isInteger(s.rec) || s.rec < 0 || s.rec > 2) return false;
+                    for (const c of s.pyr) { if (!Number.isInteger(c) || c < -1) return false; if (c >= 0) cards.push(c); }
+                }
+                if (g === 'spider') {
+                    if (!Number.isInteger(s.done) || s.done < 0 || s.done > 8 || s.stock.length % 10 || s.stock.length > 50) return false;
+                }
+                if (g === 'golf' && !s.waste.length) return false;
+                const deck = new Set(deckFor(g, o)), seen = new Set();
+                for (const c of cards) { if (!deck.has(c) || seen.has(c)) return false; seen.add(c); }
+                if (g === 'spider') return cards.length === 104 - 13 * s.done;
+                return g === 'pyramid' ? true : cards.length === 52;
+            } catch (e) { return false; }
+        }
+
+        // 最佳 / 每日紀錄：{ 玩法鍵: { m: 最少步數, t: 最短秒數 } }，壞資料丟掉
+        function cleanBest(raw) {
+            const o = {};
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return o;
+            for (const k of BEST_KEYS) { const v = raw[k]; if (v && Number.isInteger(v.m) && v.m > 0 && v.m < 1e6 && Number.isInteger(v.t) && v.t > 0 && v.t < 1e7) o[k] = { m: v.m, t: v.t }; }
+            return o;
+        }
+        function mergeBest(raw, key, m, t) {
+            const b = cleanBest(raw), old = b[key] || { m: Infinity, t: Infinity };
+            t = Math.max(1, Math.round(t));
+            b[key] = { m: Math.min(m, old.m), t: Math.min(t, old.t) };
+            return { best: b, newM: m < old.m, newT: t < old.t };
+        }
+        // 每日挑戰鍵 solit_daily_<日期>：只留最近 keep 天，回傳該刪的鍵
+        function staleDaily(keys, keep = 30) {
+            return keys.filter(k => /^solit_daily_\d{4}-\d{2}-\d{2}$/.test(k)).sort().reverse().slice(keep);
+        }
+        // 讀進行中牌局存檔：驗證失敗回 null（呼叫端重新開局）
+        function cleanGame(raw) {
+            try {
+                if (!raw || typeof raw !== 'object') return null;
+                const { game, opt, seed, daily, s, moves, t, undo } = raw;
+                if (!OPTS[game] || !OPTS[game].includes(opt) || !valid(s) || s.g !== game || s.opt !== opt) return null;
+                if (!normSeed(seed) || !(daily === '' || /^\d{4}-\d{2}-\d{2}$/.test(daily))) return null;
+                if (!Number.isInteger(moves) || moves < 0 || moves > 1e6 || !Number.isInteger(t) || t < 0 || t > 1e7) return null;
+                const u = (Array.isArray(undo) ? undo : []).filter(x => valid(x) && x.g === game && x.opt === opt).slice(-SAVE_UNDO);
+                return { game, opt, seed, daily, s, moves, t, undo: u, won: win(s) };
+            } catch (e) { return null; }
+        }
+        function cleanOpt(raw) {
+            const o = { auto: true, game: 'klondike', o: { klondike: 1, spider: 1 } };
+            if (!raw || typeof raw !== 'object') return o;
+            if (typeof raw.auto === 'boolean') o.auto = raw.auto;
+            if (GAMES.includes(raw.game)) o.game = raw.game;
+            if (raw.o && OPTS.klondike.includes(raw.o.klondike)) o.o.klondike = raw.o.klondike;
+            if (raw.o && OPTS.spider.includes(raw.o.spider)) o.o.spider = raw.o.spider;
+            return o;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const NAMES = { klondike: '接龍', freecell: '空當', spider: '蜘蛛', pyramid: '金字塔', golf: '高爾夫' };
+        const OPT_LABEL = { klondike: { 1: '翻 1 張', 3: '翻 3 張' }, spider: { 1: '1 花色', 2: '2 花色', 4: '4 花色' } };
+        let G, sel = null, hintM = null, landAt = null, timer = null, optSet = cleanOpt(store.get('solit_opt', null));
+        const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+        const msg = (t) => { $('#msg').textContent = t || ''; };
+        const rm = (k) => { try { localStorage.removeItem(k); } catch (e) { } };
+        const saveOpt = () => store.set('solit_opt', optSet);
+        const save = () => { if (!G.won) store.set('solit_game', { game: G.game, opt: G.opt, seed: G.seed, daily: G.daily, s: G.s, moves: G.moves, t: G.t, undo: G.undo.slice(-SAVE_UNDO) }); };
+        const prune = () => { try { staleDaily(Object.keys(localStorage)).forEach(rm); } catch (e) { } };
+        const bestStore = () => G.daily ? 'solit_daily_' + G.daily : 'solit_best';
+
+        // ---------- 開局 ----------
+        function start(game, opt, seed, daily = '') {
+            G = newG(game, opt, seed, daily);
+            sel = hintM = landAt = null;
+            $('#winBox').hidden = true; $('#confetti')?.remove();
+            optSet.game = game; if (OPT_LABEL[game]) optSet.o[game] = opt; saveOpt();
+            msg(daily ? `${daily} 每日挑戰` : '');
+            render(true); save(); startTimer();
+        }
+        const optOf = (g) => OPT_LABEL[g] ? optSet.o[g] : 0;
+        const rndSeed = () => Util.rnd(999999) + 1;
+        function leave(text) { return !G || G.won || G.moves === 0 || confirm(text); }
+
+        function startTimer() {
+            clearInterval(timer);
+            timer = setInterval(() => { if (!G.won && !document.hidden) { G.t++; $('#time').textContent = fmt(G.t); if (G.t % 10 === 0) save(); } }, 1000);
+        }
+
+        // ---------- 走一步 ----------
+        function doMove(m) {
+            const was = G.s;
+            if (!isLegal(was, m)) return;
+            play(G, m, optSet.auto);
+            sel = hintM = null; landAt = m[0] === 'm' ? { k: m[4], i: m[5] } : m[0] === 'd' ? { k: 's', i: 0 } : null;
+            msg('');
+            if (win(G.s)) return onWin();
+            render(); save();
+            if (isStuck(G.s)) msg('😵 看起來沒有有用的走法了：可以悔棋，或開新局');
+        }
+        function onWin() {
+            G.won = true; rm('solit_game');
+            const key = bestKey(G.game, G.opt), r = mergeBest(store.get(bestStore(), {}), key, G.moves, G.t);
+            store.set(bestStore(), r.best); prune();
+            const box = $('#winBox');
+            box.hidden = false;
+            box.textContent = `🎉 完成！${NAMES[G.game]}${OPT_LABEL[G.game] ? '（' + OPT_LABEL[G.game][G.opt] + '）' : ''} 步數 ${G.moves}、用時 ${fmt(G.t)}${r.newM ? '　新紀錄：最少步數！' : ''}${r.newT ? '　新紀錄：最短時間！' : ''}`;
+            render(); confetti();
+        }
+        function confetti() {
+            if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            const c = document.createElement('div'); c.id = 'confetti';
+            for (let i = 0; i < 36; i++) {
+                const s = document.createElement('span');
+                s.textContent = SU[i % 4]; s.style.left = Math.random() * 96 + '%'; s.style.color = i % 4 === 1 || i % 4 === 2 ? '#d62839' : 'var(--text)';
+                s.style.setProperty('--t', 2.5 + Math.random() * 2 + 's'); s.style.setProperty('--w', Math.random() * 1.2 + 's');
+                c.append(s);
+            }
+            document.body.append(c); setTimeout(() => c.remove(), 5000);
+        }
+
+        // ---------- 點選 / 拖放 ----------
+        const dstMatch = (s, m, k, i) => {
+            if (m[4] !== k) return false;
+            if (k === 'f') return true;
+            if (m[5] === i) return true;
+            const empty = (kk, ii) => kk === 't' ? s.tab[ii] && !s.tab[ii].length : kk === 'c' ? s.free[ii] === -1 : false;
+            return empty(k, i) && empty(m[4], m[5]);        // 空欄 / 空當只列第一個，點哪一個都算
+        };
+        function tap(k, i, x) {
+            if (G.won) return;
+            const s = G.s, L = legalMoves(s);
+            hintM = null;
+            if (k === 's') {
+                sel = null;
+                const d = L.find(m => m[0] === 'd');
+                if (d) return doMove(d);
+                render(); return msg(s.g === 'spider' ? '要先讓每一欄都至少有一張牌，才能發牌' : s.g === 'pyramid' ? '牌庫翻完了，重洗次數也用完了' : '沒有牌可翻了');
+            }
+            if (s.g === 'pyramid') return pyrTap(k, i, L);
+            if (s.g === 'golf') {
+                if (k !== 't') return;
+                const m = L.find(m => m[0] === 'm' && m[2] === i);
+                return m ? doMove(m) : msg('這張和中間那張不是相鄰的點數');
+            }
+            x = k === 't' ? +x : 0;
+            if (sel) {
+                const m = L.find(m => m[0] === 'm' && m[1] === sel.k && m[2] === sel.i && m[3] === sel.x && dstMatch(s, m, k, i));
+                if (m) return doMove(m);
+                if (sel.k === k && sel.i === i && sel.x === x) {                // 再點一次同一張：自動選最合適的目的地
+                    const best = L.filter(m => m[0] === 'm' && m[1] === k && m[2] === i && m[3] === x).sort((a, b) => score(s, b) - score(s, a))[0];
+                    if (best) return doMove(best);
+                }
+            }
+            const has = L.some(m => m[0] === 'm' && m[1] === k && m[2] === i && m[3] === x);
+            sel = has ? { k, i, x } : null; render();
+            msg(has ? '' : (sel === null && !isNaN(x) && (k === 't' || k === 'c' || k === 'w' || k === 'f') ? '這張現在不能移動' : ''));
+        }
+        function pyrTap(k, i, L) {
+            const s = G.s, pos = k === 'p' ? i : k === 'w' ? 28 : -1;
+            if (pos < 0) return;
+            const free = pos === 28 ? s.waste.length > 0 : pFree(s.pyr, pos);
+            if (!free) { sel = null; render(); return msg('這張被壓住了，要先移走壓在上面的牌'); }
+            const c = pCard(s, pos);
+            if (rank(c) === 13) return doMove(['r', pos, -1]);
+            if (sel && sel.i === pos) { sel = null; return render(); }
+            if (sel) {
+                const a = Math.min(sel.i, pos), b = Math.max(sel.i, pos), m = L.find(m => m[0] === 'r' && m[1] === a && m[2] === b);
+                if (m) return doMove(m);
+                msg(`${nm(pCard(s, sel.i))} + ${nm(c)} 不是 13`);
+            }
+            sel = { k: 'p', i: pos }; render();
+        }
+        $('#tbl').addEventListener('click', (e) => {
+            const el = e.target.closest('[data-k]'); if (!el) return;
+            tap(el.dataset.k, +el.dataset.i, el.dataset.x);
+        });
+        let drag = null;
+        $('#tbl').addEventListener('dragstart', (e) => {
+            const el = e.target.closest('[data-k]');
+            if (!el || el.dataset.x === undefined && el.dataset.k !== 'w' && el.dataset.k !== 'c') return e.preventDefault();
+            drag = { k: el.dataset.k, i: +el.dataset.i, x: el.dataset.k === 't' ? +el.dataset.x : 0 };
+            e.dataTransfer.setData('text/plain', 'card'); e.dataTransfer.effectAllowed = 'move';
+        });
+        const dragMove = (e) => {
+            const el = e.target.closest('[data-k]');
+            return drag && el && legalMoves(G.s).find(m => m[0] === 'm' && m[1] === drag.k && m[2] === drag.i && m[3] === drag.x && dstMatch(G.s, m, el.dataset.k, +el.dataset.i));
+        };
+        $('#tbl').addEventListener('dragover', (e) => { if (dragMove(e)) e.preventDefault(); });
+        $('#tbl').addEventListener('drop', (e) => { const m = dragMove(e); drag = null; if (m) { e.preventDefault(); doMove(m); } });
+
+        // ---------- 畫面 ----------
+        const COLS = { klondike: 7, freecell: 8, spider: 10, pyramid: 7, golf: 7 };
+        function mk(cls, k, i, x) {
+            const d = document.createElement('div'); d.className = cls;
+            if (k !== undefined) { d.dataset.k = k; d.dataset.i = i; if (x !== undefined) d.dataset.x = x; }
+            return d;
+        }
+        function cardEl(c, up) {
+            const d = mk('cd' + (up ? (isRed(c) ? ' red' : '') : ' back'));
+            if (up) { d.innerHTML = `<b>${RK[rank(c)]}${SU[suit(c)]}</b><i>${SU[suit(c)]}</i>`; d.title = nm(c); }
+            return d;
+        }
+        function render(fresh) {
+            const s = G.s, g = s.g, L = G.won ? [] : legalMoves(s), tbl = $('#tbl');
+            tbl.dataset.g = g; tbl.className = 'tbl' + (fresh && !matchMedia('(prefers-reduced-motion: reduce)').matches ? ' fresh' : '');
+            tbl.style.setProperty('--n', COLS[g]);
+            let n = 0;
+            const delay = (el) => { el.style.setProperty('--d', Math.min(n++ * 0.012, 0.5) + 's'); return el; };
+            const tgt = new Set(), srcOk = new Set();
+            L.forEach(m => { if (m[0] === 'm') srcOk.add([m[1], m[2], m[3]].join()); });
+            if (sel && g !== 'pyramid') L.forEach(m => { if (m[0] === 'm' && m[1] === sel.k && m[2] === sel.i && m[3] === sel.x) tgt.add(m[4] + m[5]); });
+            const hs = hintM && hintM[0] === 'm' ? hintM : null;
+            const row = (cls = '') => mk('row ' + cls);
+            const fine = matchMedia('(pointer: fine)').matches;
+            const pile = (k, i, cls = '') => {
+                const p = mk('pile ' + cls, k, i);
+                if (landAt && landAt.k === k && landAt.i === i) p.dataset.land = 1;
+                if (hs && hs[4] === k && (hs[5] === i || (k === 'f'))) p.classList.add('hlt');
+                if (hintM && hintM[0] === 'd' && k === 's') p.classList.add('hlt');
+                if (tgt.has(k + i) || (k === 'f' && tgt.has('f' + i))) p.classList.add('tgt');
+                return p;
+            };
+            const place = (p, el) => { if (p.dataset.land) el.classList.add('land'); p.append(el); };
+            const stockPile = () => {
+                const p = pile('s', 0), st = s.stock.length;
+                if (st) { const c = delay(cardEl(0, false)); p.append(c); const b = mk('cnt'); b.textContent = st; p.append(b); }
+                else { const sl = mk('slot'); sl.textContent = (g === 'klondike' && s.waste.length) || (g === 'pyramid' && s.waste.length && s.rec < 2) ? '↻' : ''; p.append(sl); }
+                if (p.dataset.land) p.firstChild.classList.add('land');
+                return p;
+            };
+            const foundPile = (k) => {
+                const p = pile('f', k), f = s.found[k];
+                if (f.length) place(p, delay(cardEl(tp(f), true))); else { const sl = mk('slot'); sl.textContent = SU[k]; p.append(sl); }
+                return p;
+            };
+            const tabPile = (i) => {
+                const p = pile('t', i), t = s.tab[i];
+                if (!t.length) p.append(mk('slot'));
+                t.forEach((c, x) => {
+                    const up = !s.dn || x >= s.dn[i], el = delay(cardEl(c, up));
+                    if (up) el.dataset.x = x, el.dataset.k = 't', el.dataset.i = i;
+                    if (x > 0 && s.dn && x - 1 < s.dn[i]) el.classList.add('s');
+                    if (sel && sel.k === 't' && sel.i === i && x >= sel.x) el.classList.add('sel');
+                    if (hs && hs[1] === 't' && hs[2] === i && x >= hs[3]) el.classList.add('hl');
+                    if (fine && up && srcOk.has(['t', i, x].join())) el.draggable = true;
+                    if (x === t.length - 1 && p.dataset.land) el.classList.add('land');
+                    p.append(el);
+                });
+                return p;
+            };
+            const kids = [];
+            if (g === 'klondike') {
+                const r1 = row(); r1.append(stockPile());
+                const wp = pile('w', 0, 'waste'); wp.style.gridColumn = 'span 2';
+                if (s.waste.length) {
+                    const show = s.waste.slice(-s.opt);
+                    show.forEach((c, j) => {
+                        const el = cardEl(c, true); el.style.setProperty('--f', j);
+                        const last = j === show.length - 1;
+                        if (last) { el.dataset.k = 'w'; el.dataset.i = 0; el.dataset.x = 0; if (sel && sel.k === 'w') el.classList.add('sel'); if (hs && hs[1] === 'w') el.classList.add('hl'); if (fine && srcOk.has('w,0,0')) el.draggable = true; }
+                        wp.append(el);
+                    });
+                } else wp.append(mk('slot'));
+                r1.append(wp);
+                for (let k = 0; k < 4; k++) r1.append(foundPile(k));
+                const r2 = row(); for (let i = 0; i < 7; i++) r2.append(tabPile(i));
+                kids.push(r1, r2);
+            } else if (g === 'freecell') {
+                const r1 = row();
+                for (let k = 0; k < 4; k++) {
+                    const p = pile('c', k), c = s.free[k];
+                    if (c >= 0) { const el = cardEl(c, true); el.dataset.k = 'c'; el.dataset.i = k; el.dataset.x = 0; if (sel && sel.k === 'c' && sel.i === k) el.classList.add('sel'); if (hs && hs[1] === 'c' && hs[2] === k) el.classList.add('hl'); if (fine && srcOk.has(['c', k, 0].join())) el.draggable = true; place(p, el); } else p.append(mk('slot'));
+                    r1.append(p);
+                }
+                for (let k = 0; k < 4; k++) r1.append(foundPile(k));
+                const r2 = row(); for (let i = 0; i < 8; i++) r2.append(tabPile(i));
+                kids.push(r1, r2);
+            } else if (g === 'spider') {
+                const r1 = row(), sp = stockPile(); r1.append(sp);
+                const inf = mk('info'); inf.style.gridColumn = '2 / span 6'; inf.textContent = `已收 ${s.done}/8 排　牌庫 ${s.stock.length / 10} 輪`; r1.append(inf);
+                const r2 = row(); for (let i = 0; i < 10; i++) r2.append(tabPile(i));
+                kids.push(r1, r2);
+            } else if (g === 'pyramid') {
+                const py = mk('pyr');
+                for (let r = 0, p = 0; r < 7; r++) for (let i = 0; i <= r; i++, p++) {
+                    const cell = mk('pc' + (s.pyr[p] < 0 ? ' gone' : '')); cell.style.setProperty('--r', r + 1); cell.style.setProperty('--c', 7 - r + 2 * i); cell.style.zIndex = 10 - r;
+                    if (s.pyr[p] >= 0) {
+                        cell.dataset.k = 'p'; cell.dataset.i = p;
+                        const el = delay(cardEl(s.pyr[p], true));
+                        if (!pFree(s.pyr, p)) el.classList.add('blk');
+                        if (sel && sel.i === p) el.classList.add('sel');
+                        if (hintM && hintM[0] === 'r' && (hintM[1] === p || hintM[2] === p)) el.classList.add('hl');
+                        cell.append(el);
+                    }
+                    py.append(cell);
+                }
+                const r2 = row(); r2.append(stockPile());
+                const wp = pile('w', 0);
+                if (s.waste.length) { const el = cardEl(tp(s.waste), true); el.dataset.k = 'w'; el.dataset.i = 0; if (sel && sel.i === 28) el.classList.add('sel'); if (hintM && hintM[0] === 'r' && (hintM[1] === 28 || hintM[2] === 28)) el.classList.add('hl'); place(wp, el); } else wp.append(mk('slot'));
+                r2.append(wp);
+                const inf = mk('info'); inf.textContent = `牌庫 ${s.stock.length} 張　可重洗 ${2 - s.rec} 次`; r2.append(inf);
+                kids.push(py, r2);
+            } else {
+                const r1 = row(); for (let i = 0; i < 7; i++) {
+                    const p = tabPile(i);
+                    if (hs && hs[1] === 't' && hs[2] === i) { /* 提示框由 .hl 處理 */ }
+                    r1.append(p);
+                }
+                const r2 = row(); r2.append(stockPile());
+                const wp = pile('w', 0), el = cardEl(tp(s.waste), true); if (hs && hs[4] === 'w') wp.classList.add('hlt'); place(wp, el); r2.append(wp);
+                const inf = mk('info'); inf.textContent = `牌庫 ${s.stock.length} 張　桌面剩 ${s.tab.reduce((a, p) => a + p.length, 0)} 張`; r2.append(inf);
+                kids.push(r1, r2);
+            }
+            tbl.replaceChildren(...kids);
+            sizeTbl();
+            if (fresh) setTimeout(() => tbl.classList.remove('fresh'), 900);
+            // 狀態列
+            $('#time').textContent = fmt(G.t); $('#moves').textContent = G.moves;
+            const b = cleanBest(store.get(bestStore(), {}))[bestKey(G.game, G.opt)];
+            $('#bestBox').textContent = '最佳 ' + (b ? `${b.m} 步 / ${fmt(b.t)}` : '—');
+            $('#undo').disabled = !G.undo.length || G.won;
+            $('#hint').disabled = G.won;
+            $('#daily').setAttribute('aria-pressed', !!G.daily);
+            $('#daily').textContent = cleanBest(store.get('solit_daily_' + twDay(), {}))[bestKey(G.game, G.opt)] ? '每日 ✓' : '每日';
+            $('#seed').value = G.seed;
+            [...$('#tabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.g === G.game));
+            const os = $('#opt'); os.hidden = !OPT_LABEL[G.game];
+            if (!os.hidden && os.dataset.g !== G.game) { os.dataset.g = G.game; os.replaceChildren(...OPTS[G.game].map(o => new Option(OPT_LABEL[G.game][o], o))); }
+            os.value = G.opt;
+            $('#autoLbl').hidden = !(G.game === 'klondike' || G.game === 'freecell');
+        }
+        function sizeTbl() {
+            const t = $('#tbl'), w = t.clientWidth; if (w) t.style.setProperty('--u', w / (COLS[G.game] * 10) + 'px');
+        }
+        new ResizeObserver(() => { if (G) sizeTbl(); }).observe($('#tbl'));
+
+        // ---------- 按鈕 ----------
+        GAMES.forEach(g => { const b = document.createElement('button'); b.textContent = NAMES[g]; b.dataset.g = g; b.setAttribute('role', 'tab'); b.onclick = () => { if (g !== G.game && leave('目前這局還沒結束，換玩法會放棄這局，確定？')) start(g, optOf(g), rndSeed()); }; $('#tabs').append(b); });
+        $('#opt').onchange = () => { if (leave('目前這局還沒結束，換難度會放棄這局，確定？')) start(G.game, +$('#opt').value, rndSeed()); else $('#opt').value = G.opt; };
+        $('#new').onclick = () => { if (leave('目前這局還沒結束，要放棄並開新局嗎？')) start(G.game, G.opt, rndSeed()); };
+        $('#again').onclick = () => { if (leave('要把這一局重來（回到發牌時的樣子）嗎？')) start(G.game, G.opt, G.seed, G.daily); };
+        $('#go').onclick = () => {
+            const n = normSeed($('#seed').value);
+            if (!n) { $('#seed').value = G.seed; return msg('牌局編號請輸入 1 到 1000000 的整數'); }
+            if (leave('目前這局還沒結束，要放棄並開這個編號嗎？')) start(G.game, G.opt, n);
+        };
+        $('#daily').onclick = () => { if (leave('目前這局還沒結束，要放棄並開今天的每日挑戰嗎？')) { const d = twDay(); start(G.game, G.opt, dailySeed(G.game, G.opt, d), d); } };
+        $('#undo').onclick = () => { if (undoMove(G)) { sel = hintM = landAt = null; msg('已悔棋'); render(); save(); } };
+        $('#hint').onclick = () => {
+            const m = hint(G.s);
+            sel = null; hintM = m;
+            msg(m ? '提示：' + moveText(G.s, m) : (legalMoves(G.s).length ? '沒有有用的走法了，可以悔棋或開新局' : '沒有任何合法的走法了，可以悔棋或開新局'));
+            render();
+        };
+        $('#auto').onchange = () => { optSet.auto = $('#auto').checked; saveOpt(); };
+        $('#giveup').onclick = () => {
+            if (!confirm('放棄這一局？會刪除進行中的存檔並開新局，無法復原。')) return;
+            rm('solit_game'); start(G.game, G.opt, rndSeed());
+        };
+        $('#clearBest').onclick = () => {
+            if (!confirm('清除所有玩法的最佳紀錄與每日挑戰完成紀錄？無法復原。進行中的牌局不受影響。')) return;
+            try { Object.keys(localStorage).filter(k => k === 'solit_best' || k.startsWith('solit_daily_')).forEach(rm); } catch (e) { }
+            msg('已清除最佳紀錄'); render();
+        };
+        addEventListener('pagehide', () => { if (G && !G.won) save(); });
+        document.addEventListener('visibilitychange', () => { if (document.hidden && G && !G.won) save(); });
+
+        // ---------- 啟動 ----------
+        prune();
+        $('#auto').checked = optSet.auto;
+        const rawSave = store.get('solit_game', null), saved = cleanGame(rawSave);
+        if (saved && !saved.won) {
+            G = saved; optSet.game = G.game; if (OPT_LABEL[G.game]) optSet.o[G.game] = G.opt;
+            msg('已接續上次進行中的牌局'); render(); startTimer();
+        } else {
+            if (rawSave !== null) { rm('solit_game'); msg('上次的存檔無法使用，已重新開局'); }
+            const g = optSet.game; start(g, optOf(g), rndSeed());
+            if (rawSave !== null) msg('上次的存檔無法使用，已重新開局');
+        }
+    </script>
+</body>
+
+</html>

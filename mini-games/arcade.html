@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="迷你街機：打地鼠、接水果、打磚塊、恐龍跳、Flappy、切水果六款單機小遊戲，觸控與鍵盤都能玩，記錄最高分，恐龍跳與 Flappy 有每日種子。">
+    <meta property="og:title" content="迷你街機" />
+    <meta property="og:description" content="六款單機街機小遊戲，觸控友善，記錄最高分。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/arcade.html" />
+    <meta name="st-keys" content="arcade_best,arcade_daily_*">
+    <title>迷你街機</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 520px;
+        }
+
+        #tabs {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        #tabs button {
+            padding-left: 4px;
+            padding-right: 4px;
+        }
+
+        .opts {
+            display: flex;
+            gap: 4px 16px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        .opts label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 44px;
+        }
+
+        .bar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        .chip {
+            background: var(--card);
+            border-radius: 980px;
+            padding: 6px 14px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #pauseBtn {
+            display: none;
+            min-height: 44px;
+            min-width: 44px;
+        }
+
+        .stage {
+            position: relative;
+            width: min(100%, calc((100vh - 190px) * .75));
+            width: min(100%, calc((100dvh - 190px) * .75));
+            min-width: min(100%, 260px);
+            margin: 0 auto;
+        }
+
+        #cv {
+            width: 100%;
+            aspect-ratio: 3 / 4;
+            display: block;
+            border-radius: var(--radius, 14px);
+            background: var(--card);
+            touch-action: auto;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        /* 只有「遊戲進行中」才鎖定手勢；選單、結束畫面、暫停時手指可以捲動頁面 */
+        #cv.play {
+            touch-action: none;
+        }
+
+        #cv.play.pan {
+            touch-action: pan-y;
+        }
+
+        #ov {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 16px;
+            text-align: center;
+            border-radius: var(--radius, 14px);
+            background: var(--card);
+            background: color-mix(in srgb, var(--card) 92%, transparent);
+        }
+
+        #ov[hidden] {
+            display: none;
+        }
+
+        #ov h2 {
+            margin: 0;
+        }
+
+        #ov p {
+            margin: 0;
+            color: var(--muted);
+        }
+
+        #msg {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>迷你街機</h1>
+        <p class="sub">六款單機小遊戲，選一款就能玩。觸控、滑鼠、鍵盤皆可。</p>
+        <div id="tabs" role="group" aria-label="選擇遊戲"></div>
+        <div class="opts">
+            <label><input type="checkbox" id="sfx"> 音效</label>
+            <label><input type="checkbox" id="vib"> 震動</label>
+            <label id="dailyL" hidden><input type="checkbox" id="daily"> 每日種子</label>
+            <label><input type="checkbox" id="panMode"> 捲動頁面模式</label>
+        </div>
+        <div class="bar">
+            <span class="chip">分數 <b id="score">0</b></span>
+            <span class="chip">最高 <b id="best">0</b></span>
+            <span class="chip" id="infoChip" hidden><b id="info"></b></span>
+            <button id="pauseBtn" aria-label="暫停">⏸ 暫停</button>
+        </div>
+        <div class="stage">
+            <canvas id="cv" width="360" height="480" aria-label="遊戲畫面"></canvas>
+            <div id="ov"><h2 id="ovT"></h2><p id="ovP"></p><button class="primary" id="go">開始</button></div>
+        </div>
+        <div id="msg" role="status"></div>
+        <button class="sm" id="clearBest" style="margin-top:12px">清除最高分</button>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>六款單機街機小遊戲合在一頁：打地鼠、接水果、打磚塊、恐龍跳、Flappy、切水果。每款各自記錄最高分，不需要連線。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>等車、休息時想玩幾分鐘簡單的小遊戲。</li>
+        <li>練手速、反應與節奏。</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+        <li>點上方六個按鈕選遊戲，按畫面中間的「開始」。</li>
+        <li><b>打地鼠</b>：30 秒內點冒出頭的地鼠，連續打中有連擊加成，越後面越快。電腦可用 <kbd>Q W E / A S D / Z X C</kbd> 或數字鍵盤對應 9 個洞。</li>
+        <li><b>接水果</b>：左右拖曳（或 <kbd>←</kbd><kbd>→</kbd>）移動籃子，接水果得分、躲炸彈。漏接水果或接到炸彈各扣 1 條命，共 3 條。</li>
+        <li><b>打磚塊</b>：拖曳（或方向鍵）移動球拍，點一下（或空白鍵）發球。打碎磚塊會掉道具：加長球拍、多球、慢速。清光磚塊進下一關，3 條命。</li>
+        <li><b>恐龍跳</b>：點畫面（或 <kbd>空白</kbd> / <kbd>↑</kbd>）跳，按住畫面下方三分之一（或 <kbd>↓</kbd>）蹲下躲飛鳥。越跑越快，撞到就結束。</li>
+        <li><b>Flappy</b>：點畫面（或空白鍵）拍翅，穿過水管縫隙，碰到水管或地面就結束。</li>
+        <li><b>切水果</b>：在畫面上滑動切開飛起的水果；連切 3 個以上有加成，千萬別切到炸彈。漏掉水果扣 1 條命，共 3 條。電腦用滑鼠拖曳，或方向鍵移動刀光。</li>
+        <li>遊戲中可按「⏸ 暫停」（或 <kbd>P</kbd> / <kbd>Esc</kbd>）；切到別的分頁會自動暫停。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">打地鼠：連擊 0–4 每隻 10 分，5–9 連擊 20 分，最高每隻 50 分。切水果：一刀切 3 個得 6 分（每個 +1，再加 3 分連切獎勵）。</div>
+        <h3>每日種子</h3>
+        <p>恐龍跳與 Flappy 可勾「每日種子」：同一天（台灣時間）所有人的障礙順序都一樣，適合拿來比分；每日最高分另外記錄，只保留最近 30 天。</p>
+        <h3>小提醒</h3>
+        <ul>
+        <li>遊戲進行中，手指在畫面上不會捲動頁面；選單、暫停、結束畫面都可以正常捲動。想在遊戲中也能滑動頁面，勾「捲動頁面模式」（拖曳類遊戲會比較難玩）。</li>
+        <li>音效預設關閉；手機需要先點一下頁面才會發聲。震動只在支援的手機有效。這兩項與捲動模式不會記住，重新整理後回到預設。</li>
+        <li>減少動態效果：系統開啟「減少動態效果」時，會關閉爆擊光圈、地鼠升起等動畫，遊戲規則不變。</li>
+        <li>最高分存在這台裝置（每款一筆，每日種子最近 30 天各一組）；若被改壞（不是正整數）會當作 0。</li>
+        <li>想重來按頁面下方「清除最高分」：會清掉六款遊戲的最高分與每日紀錄，無法復原；頁面會重新載入，進行中的這一局會結束。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, seeded } = Util;
+
+        // --- pure ---
+        const W = 360, H = 480, STEP = 1 / 60;
+        const GAME_IDS = ['mole', 'fruit', 'brick', 'dino', 'flappy', 'slice'], DAILY_IDS = ['dino', 'flappy'];
+        const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+        // 碰撞：矩形 {x,y,w,h}（邊緣剛好相碰不算撞到）；圓形 vs 矩形；圓形 vs 圓形（相切不算）；線段 vs 圓形（相切算切到）
+        const rectHit = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+        const circleRect = (cx, cy, r, rx, ry, rw, rh) => { const nx = clamp(cx, rx, rx + rw), ny = clamp(cy, ry, ry + rh); return (cx - nx) ** 2 + (cy - ny) ** 2 < r * r; };
+        const circleHit = (ax, ay, ar, bx, by, br) => (ax - bx) ** 2 + (ay - by) ** 2 < (ar + br) ** 2;
+        function segCircle(x1, y1, x2, y2, cx, cy, r) {
+            const dx = x2 - x1, dy = y2 - y1, l2 = dx * dx + dy * dy, t = l2 ? clamp(((cx - x1) * dx + (cy - y1) * dy) / l2, 0, 1) : 0;
+            return (x1 + t * dx - cx) ** 2 + (y1 + t * dy - cy) ** 2 <= r * r;
+        }
+        // 球撞磚塊：回傳要反轉哪個軸（穿入較淺的那一軸），沒碰到回傳 null
+        function bounceAxis(cx, cy, r, b) {
+            if (!circleRect(cx, cy, r, b.x, b.y, b.w, b.h)) return null;
+            const ox = Math.min(cx + r - b.x, b.x + b.w - (cx - r)), oy = Math.min(cy + r - b.y, b.y + b.h - (cy - r));
+            return ox < oy ? 'x' : 'y';
+        }
+        // 球打到球拍：offset -1..1（左緣到右緣）決定反彈角度（最大 60 度），速度大小不變
+        function paddleBounce(offset, speed) { const a = clamp(offset, -1, 1) * Math.PI / 3; return { vx: speed * Math.sin(a), vy: -speed * Math.cos(a) }; }
+
+        // 固定步長：累積時間（毫秒），回傳要更新幾步與剩餘時間。單次最多吃 maxMs（切回分頁不會一次補太多）
+        function fixedSteps(acc, dtMs, stepMs = 1000 / 60, maxMs = 100) {
+            acc += clamp(dtMs, 0, maxMs);
+            const n = Math.floor(acc / stepMs + 1e-9);
+            return { n, acc: Math.max(0, acc - n * stepMs) };
+        }
+
+        // 難度曲線（都隨時間 / 分數單調變難）
+        const moleParams = (t) => ({ gap: Math.max(.35, .9 - t * .02), life: Math.max(.55, 1.1 - t * .018) });
+        const fruitParams = (s) => ({ interval: Math.max(.35, .9 - s * .012), speed: Math.min(420, 140 + s * 3.5), bombP: Math.min(.3, .12 + s * .003) });
+        const ballSpeed = (level) => Math.min(420, 260 + (level - 1) * 20);
+        const dinoSpeed = (dist) => Math.min(600, 260 + dist * .03);
+        const flappyParams = (s) => ({ gap: Math.max(105, 140 - s * 1.5), speed: Math.min(200, 120 + s * 2) });
+
+        // 序列產生器：rand 是 Util.seeded 回傳的函式（rand() 小數、rand.int(n) 整數）；每次呼叫消耗固定數量的亂數，同種子永遠同序列
+        function moleNext(rand, t, last) {
+            const p = moleParams(t), a = rand.int(9), b = rand.int(8), c = rand();
+            return { hole: a === last ? (a + 1 + b) % 9 : a, gap: p.gap * (.8 + c * .4), life: p.life };
+        }
+        function fruitSpawn(rand, score) {
+            const p = fruitParams(score), x = 20 + rand() * (W - 40), bomb = rand() < p.bombP, kind = rand.int(5), v = .85 + rand() * .3;
+            return { x, type: bomb ? 'bomb' : 'fruit', kind, vy: p.speed * v };
+        }
+        const DINO = { c1: { w: 18, h: 36, y: 0 }, c2: { w: 34, h: 46, y: 0 }, bird: { w: 34, h: 22, y: 30 } };    // y = 離地高度
+        function makeDinoGen(seed) {
+            const rand = seeded('dino-' + seed); let i = 0;
+            return () => { const gap = 280 + rand() * 300 + Math.min(i, 30) * 8, k = rand(); let kind = k < .45 ? 'c1' : k < .8 ? 'c2' : 'bird'; if (i < 3 && kind === 'bird') kind = 'c1'; i++; return { gap, kind }; };
+        }
+        function makeFlappyGen(seed) {
+            const rand = seeded('flappy-' + seed); let prev = 200;
+            return () => { prev = clamp(prev + (rand() * 2 - 1) * 140, 100, 340); return prev; };    // 相鄰兩根水管縫隙中心最多差 140
+        }
+        // 磚塊關卡：8 欄，回傳 [{c, r, hp}]；每 3 關有一關是棋盤格，第 2 關起最上排 2 hp，第 4 關起上兩排 2 hp
+        function brickLevel(n) {
+            const rows = Math.min(8, 2 + n), out = [];
+            for (let r = 0; r < rows; r++) for (let c = 0; c < 8; c++) {
+                if (n % 3 === 0 && (r + c) % 2) continue;
+                out.push({ c, r, hp: n >= 4 && r < 2 ? 2 : n >= 2 && r === 0 ? 2 : 1 });
+            }
+            return out;
+        }
+
+        // 計分
+        const moleScore = (combo) => 10 * Math.min(5, 1 + Math.floor(combo / 5));          // combo = 這一下之前已連續打中幾隻
+        const sliceScore = (n) => (n >= 3 ? 2 * n : n);                                      // 一刀切 n 個
+
+        // 最高分資料：驗證容錯（只認已知遊戲、非負有限數字、截斷到 1e9）
+        const cleanBest = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0) ? Math.min(1e9, Math.floor(v)) : 0;
+        const cleanMap = (o, ids = GAME_IDS) => { const r = {}; if (o && typeof o === 'object' && !Array.isArray(o)) for (const id of ids) if (cleanBest(o[id]) > 0) r[id] = cleanBest(o[id]); return r; };
+        const taipeiDay = (ms = Date.now()) => new Date(ms + 8 * 36e5).toISOString().slice(0, 10);   // UTC+8
+        const DAILY_PREFIX = 'arcade_daily_', DAILY_KEEP = 30;
+        // 回傳該刪掉的每日鍵：格式不合的 + 最舊的（只留最近 DAILY_KEEP 天）
+        function dailyPrune(keys) {
+            const good = keys.filter(k => /^arcade_daily_\d{4}-\d\d-\d\d$/.test(k)).sort();
+            return [...keys.filter(k => k.startsWith(DAILY_PREFIX) && !good.includes(k)), ...good.slice(0, Math.max(0, good.length - DAILY_KEEP))];
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const cv = $('#cv'), g = cv.getContext('2d');
+        const rm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const BEST_KEY = 'arcade_best';
+        let C = { card: '#fff', text: '#000', muted: '#888', line: '#ccc' };
+        const refreshColors = () => { const cs = getComputedStyle(document.documentElement), v = (n, d) => cs.getPropertyValue(n).trim() || d; C = { card: v('--card', '#fff'), text: v('--text', '#000'), muted: v('--muted', '#888'), line: v('--line', '#ccc') }; };
+        new MutationObserver(refreshColors).observe(document.documentElement, { attributes: true });
+        const beep = (f, ms = 70) => { if ($('#sfx').checked) Util.tone(f, ms, { vol: .08, type: 'square' }); };
+        const buzz = (ms) => { if ($('#vib').checked) try { navigator.vibrate && navigator.vibrate(ms); } catch (e) { } };
+        const txt = (s, x, y, size = 16, color = C.text, align = 'center') => { g.font = `${size}px system-ui, sans-serif`; g.fillStyle = color; g.textAlign = align; g.textBaseline = 'middle'; g.fillText(s, x, y); };
+        const emo = (s, x, y, size) => txt(s, x, y, size, '#000');
+        const hearts = (n) => '❤️'.repeat(Math.max(0, n));
+
+        const GAMES = {};
+
+        // ---------- 打地鼠 ----------
+        GAMES.mole = {
+            name: '打地鼠', icon: '🔨', desc: '30 秒內點冒出頭的地鼠，連擊加分，越來越快。',
+            make(seed) {
+                const rand = seeded(seed), holes = Array.from({ length: 9 }, () => ({ up: 0, life: 1, hit: 0 }));
+                let t = 0, next = .5, last = -1, combo = 0;
+                const pos = (i) => ({ x: 60 + (i % 3) * 120, y: 170 + Math.floor(i / 3) * 120 });
+                const G = {
+                    score: 0, over: false, holes, pos, info: () => `⏱ ${Math.ceil(30 - t)}　連擊 ${combo}`,
+                    update(dt) {
+                        t += dt; if (t >= 30) { G.over = true; return; }
+                        next -= dt;
+                        if (next <= 0) { const m = moleNext(rand, t, last); last = m.hole; if (!holes[m.hole].up) { holes[m.hole].up = m.life; holes[m.hole].life = m.life; } next = m.gap; }
+                        for (const h of holes) { if (h.up > 0) { h.up -= dt; if (h.up <= 0) { h.up = 0; combo = 0; } } h.hit = Math.max(0, h.hit - dt); }
+                    },
+                    tap(i) { const h = holes[i]; if (h.up > 0) { G.score += moleScore(combo); combo++; h.up = 0; h.hit = .25; beep(660); buzz(15); } else { combo = 0; beep(180); } },
+                    down(x, y) { for (let i = 0; i < 9; i++) { const p = pos(i); if (Math.hypot(x - p.x, y - p.y) < 52) { G.tap(i); return; } } },
+                    key(k, d) { if (!d) return; let i = 'qweasdzxc'.indexOf(k); if (i < 0) i = '789456123'.indexOf(k); if (i >= 0) G.tap(i); },
+                    draw() {
+                        holes.forEach((h, i) => {
+                            const p = pos(i);
+                            g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(p.x, p.y + 22, 44, 16, 0, 0, 7); g.fill();
+                            if (h.up > 0) { const rise = rm() ? 1 : Math.min(1, h.up / .12, (h.life - h.up) / .12 + .15); emo('🐹', p.x, p.y + 6 + (1 - rise) * 30, 60); }
+                            if (h.hit > 0) emo('💥', p.x, p.y, 56);
+                        });
+                    },
+                };
+                return G;
+            },
+        };
+
+        // ---------- 接水果 ----------
+        GAMES.fruit = {
+            name: '接水果', icon: '🍎', desc: '左右拖曳籃子接水果、躲炸彈，3 條命。',
+            make(seed) {
+                const rand = seeded(seed), FR = ['🍎', '🍊', '🍇', '🍉', '🍌'], PY = 436;
+                let sp = .5, lives = 3, L = false, R = false, flash = 0;
+                const G = {
+                    score: 0, over: false, items: [], bx: W / 2, tx: W / 2, info: () => hearts(lives),
+                    update(dt) {
+                        if (L) G.tx -= 360 * dt; if (R) G.tx += 360 * dt;
+                        G.tx = clamp(G.tx, 35, W - 35); G.bx = G.tx; flash = Math.max(0, flash - dt);
+                        sp -= dt; if (sp <= 0) { G.items.push({ ...fruitSpawn(rand, G.score), y: -20 }); sp = fruitParams(G.score).interval; }
+                        G.items = G.items.filter(it => {
+                            it.y += it.vy * dt;
+                            if (circleRect(it.x, it.y, 14, G.bx - 35, PY, 70, 18)) {
+                                if (it.type === 'bomb') { lives--; flash = .3; beep(120, 150); buzz(80); } else { G.score++; beep(700 + it.kind * 60, 50); }
+                                return false;
+                            }
+                            if (it.y > H + 20) { if (it.type === 'fruit') { lives--; flash = .3; buzz(40); } return false; }
+                            return true;
+                        });
+                        if (lives <= 0) G.over = true;
+                    },
+                    down(x) { G.tx = x; }, move(x) { G.tx = x; },
+                    key(k, d) { if (k === 'ArrowLeft' || k === 'a') L = d; if (k === 'ArrowRight' || k === 'd') R = d; },
+                    draw() {
+                        if (flash > 0 && !rm()) { g.fillStyle = 'rgba(255,69,58,.18)'; g.fillRect(0, 0, W, H); }
+                        for (const it of G.items) emo(it.type === 'bomb' ? '💣' : FR[it.kind], it.x, it.y, 28);
+                        g.fillStyle = '#c98a4b'; g.beginPath(); g.roundRect(G.bx - 35, PY, 70, 22, [2, 2, 12, 12]); g.fill();
+                    },
+                };
+                return G;
+            },
+        };
+
+        // ---------- 打磚塊 ----------
+        GAMES.brick = {
+            name: '打磚塊', icon: '🧱', desc: '拖曳球拍反彈球，打碎磚塊，接道具，過關。',
+            make(seed) {
+                const rand = seeded(seed), PY = 448; let L = false, R = false, wideT = 0, slowT = 0, lives = 3;
+                const G = { score: 0, over: false, level: 1, bricks: [], balls: [], drops: [], px: W / 2, pw: 70, info: () => `第 ${G.level} 關　${hearts(lives)}` };
+                const reset = () => { G.balls = [{ x: G.px, y: PY - 7, vx: 0, vy: 0, stuck: true }]; G.drops = []; wideT = slowT = 0; };
+                const load = () => { G.bricks = brickLevel(G.level).map(b => ({ x: 20 + b.c * 40, y: 56 + b.r * 18, w: 38, h: 16, hp: b.hp })); reset(); };
+                G.launch = () => { for (const b of G.balls) if (b.stuck) { Object.assign(b, paddleBounce(rand() * .6 - .3, ballSpeed(G.level)), { stuck: false }); beep(500); } };
+                G.update = (dt) => {
+                    if (L) G.px -= 360 * dt; if (R) G.px += 360 * dt;
+                    wideT = Math.max(0, wideT - dt); slowT = Math.max(0, slowT - dt); G.pw = wideT > 0 ? 100 : 70; G.px = clamp(G.px, G.pw / 2, W - G.pw / 2);
+                    const sp = ballSpeed(G.level) * (slowT > 0 ? .7 : 1);
+                    for (const b of G.balls) {
+                        if (b.stuck) { b.x = G.px; continue; }
+                        const m = Math.hypot(b.vx, b.vy) || 1; b.vx *= sp / m; b.vy *= sp / m;
+                        b.x += b.vx * dt; b.y += b.vy * dt;
+                        if (b.x < 6) { b.x = 6; b.vx = Math.abs(b.vx); } if (b.x > W - 6) { b.x = W - 6; b.vx = -Math.abs(b.vx); } if (b.y < 6) { b.y = 6; b.vy = Math.abs(b.vy); }
+                        if (b.vy > 0 && circleRect(b.x, b.y, 6, G.px - G.pw / 2, PY, G.pw, 10)) { Object.assign(b, paddleBounce((b.x - G.px) / (G.pw / 2), sp)); b.y = PY - 6; beep(400, 40); }
+                        for (const k of G.bricks) {
+                            const ax = bounceAxis(b.x, b.y, 6, k); if (!ax) continue;
+                            if (ax === 'x') b.vx = (b.x < k.x + k.w / 2 ? -1 : 1) * Math.abs(b.vx); else b.vy = (b.y < k.y + k.h / 2 ? -1 : 1) * Math.abs(b.vy);
+                            k.hp--; G.score += k.hp > 0 ? 2 : 10; beep(600, 30);
+                            if (k.hp <= 0 && rand() < .15) G.drops.push({ x: k.x + k.w / 2, y: k.y, type: ['wide', 'multi', 'slow'][rand.int(3)] });
+                            break;
+                        }
+                        G.bricks = G.bricks.filter(k => k.hp > 0);
+                    }
+                    G.balls = G.balls.filter(b => b.y < H + 10);
+                    G.drops = G.drops.filter(d => {
+                        d.y += 120 * dt;
+                        if (d.y > PY - 6 && d.y < PY + 16 && Math.abs(d.x - G.px) < G.pw / 2 + 8) {
+                            if (d.type === 'wide') wideT = 10; else if (d.type === 'slow') slowT = 8;
+                            else for (const b of [...G.balls]) if (!b.stuck && G.balls.length < 12) for (const a of [.4, -.4]) { const c = Math.cos(a), s = Math.sin(a); G.balls.push({ x: b.x, y: b.y, vx: b.vx * c - b.vy * s, vy: b.vx * s + b.vy * c, stuck: false }); }
+                            G.score += 5; beep(900, 80); return false;
+                        }
+                        return d.y < H + 10;
+                    });
+                    if (!G.bricks.length) { G.score += 50 * G.level; G.level++; load(); return; }
+                    if (!G.balls.length) { lives--; if (lives <= 0) G.over = true; else { reset(); buzz(60); } }
+                };
+                G.down = (x) => { G.px = x; G.launch(); }; G.move = (x) => { G.px = x; };
+                G.key = (k, d) => { if (k === 'ArrowLeft' || k === 'a') L = d; if (k === 'ArrowRight' || k === 'd') R = d; if (d && (k === ' ' || k === 'ArrowUp')) G.launch(); };
+                G.draw = () => {
+                    for (const k of G.bricks) { g.fillStyle = `hsl(${((k.y - 56) / 18) * 40},70%,${k.hp > 1 ? 40 : 55}%)`; g.fillRect(k.x, k.y, k.w, k.h); }
+                    for (const d of G.drops) emo({ wide: '↔️', multi: '⚪', slow: '🐌' }[d.type], d.x, d.y, 22);
+                    g.fillStyle = wideT > 0 ? '#ff9f0a' : '#0a84ff'; g.beginPath(); g.roundRect(G.px - G.pw / 2, PY, G.pw, 10, 5); g.fill();
+                    g.fillStyle = C.text; for (const b of G.balls) { g.beginPath(); g.arc(b.x, b.y, 6, 0, 7); g.fill(); }
+                    if (G.balls.some(b => b.stuck)) txt('點一下發球', W / 2, 330, 16, C.muted);
+                };
+                load(); return G;
+            },
+        };
+
+        // ---------- 恐龍跳 ----------
+        GAMES.dino = {
+            name: '恐龍跳', icon: '🦖', desc: '點一下跳、按住下方蹲，無盡跑酷，越跑越快。', daily: true,
+            make(seed) {
+                const gen = makeDinoGen(seed), GY = 400, X = 60; let lastX = W, duck = false, jumpHeld = false;
+                const G = { score: 0, over: false, obs: [], y: 0, vy: 0, dist: 0, info: () => '', get duck() { return duck; } };
+                G.jump = () => { if (G.y === 0) { G.vy = 640; beep(520, 60); } };
+                G.update = (dt) => {
+                    const sp = dinoSpeed(G.dist); G.dist += sp * dt; lastX -= sp * dt;
+                    for (const o of G.obs) o.x -= sp * dt;
+                    G.obs = G.obs.filter(o => o.x > -60);
+                    while (lastX < W + 100) { const n = gen(); lastX += n.gap; G.obs.push({ x: lastX, kind: n.kind, ...DINO[n.kind] }); }
+                    if (G.y > 0 || G.vy > 0) { G.vy -= (duck ? 3600 : 1800) * dt; G.y += G.vy * dt; if (G.y <= 0) { G.y = 0; G.vy = 0; } }
+                    G.score = Math.floor(G.dist / 10);
+                    const h = duck && G.y === 0 ? 22 : 40, me = { x: X + 3, y: GY - G.y - h + 3, w: 20, h: h - 6 };
+                    for (const o of G.obs) if (rectHit(me, { x: o.x, y: GY - o.y - o.h, w: o.w, h: o.h })) { G.over = true; buzz(100); beep(110, 200); }
+                };
+                G.down = (x, y) => { if (y > H * .7) duck = true; else G.jump(); };
+                G.up = () => { duck = false; };
+                G.key = (k, d) => { if (k === 'ArrowDown' || k === 's') duck = d; if (d && (k === ' ' || k === 'ArrowUp' || k === 'w')) G.jump(); };
+                G.draw = () => {
+                    g.strokeStyle = C.line; g.lineWidth = 2; g.beginPath(); g.moveTo(0, GY + 1); g.lineTo(W, GY + 1); g.stroke();
+                    for (let x = -(G.dist % 60); x < W; x += 60) { g.fillStyle = C.line; g.fillRect(x, GY + 10, 14, 2); }
+                    for (const o of G.obs) emo(o.kind === 'bird' ? '🦅' : '🌵', o.x + o.w / 2, GY - o.y - o.h / 2, o.h * 1.05);
+                    const d = duck && G.y === 0; g.save(); g.translate(X + 12, GY - G.y - (d ? 11 : 20)); g.scale(1, d ? .6 : 1); emo('🦖', 0, 0, 44); g.restore();
+                    txt(String(G.score), W - 12, 24, 20, C.muted, 'right');
+                };
+                return G;
+            },
+        };
+
+        // ---------- Flappy ----------
+        GAMES.flappy = {
+            name: 'Flappy', icon: '🐤', desc: '點一下拍翅，穿過水管縫隙，無盡挑戰。', daily: true,
+            make(seed) {
+                const gen = makeFlappyGen(seed), GROUND = H - 40, BX = 90, PW = 52;
+                const G = { score: 0, over: false, started: false, y: 200, vy: 0, pipes: [], info: () => '' };
+                const addPipe = (x) => G.pipes.push({ x, cy: gen(), gap: flappyParams(G.score).gap, passed: false });
+                addPipe(W + 60);
+                G.flap = () => { G.started = true; G.vy = -420; beep(600, 40); };
+                G.update = (dt) => {
+                    if (!G.started) return;
+                    const sp = flappyParams(G.score).speed;
+                    G.vy += 1500 * dt; G.y += G.vy * dt; if (G.y < 0) { G.y = 0; G.vy = 0; }
+                    for (const p of G.pipes) p.x -= sp * dt;
+                    G.pipes = G.pipes.filter(p => p.x > -PW - 10);
+                    const last = G.pipes[G.pipes.length - 1]; if (!last || last.x < W - 120) addPipe((last ? last.x : W) + 190);
+                    for (const p of G.pipes) {
+                        if (!p.passed && p.x + PW < BX) { p.passed = true; G.score++; beep(880, 50); }
+                        if (circleRect(BX, G.y, 11, p.x, 0, PW, p.cy - p.gap / 2) || circleRect(BX, G.y, 11, p.x, p.cy + p.gap / 2, PW, H)) G.over = true;
+                    }
+                    if (G.y > GROUND - 11) { G.y = GROUND - 11; G.over = true; }
+                    if (G.over) { buzz(100); beep(110, 200); }
+                };
+                G.down = () => G.flap();
+                G.key = (k, d) => { if (d && (k === ' ' || k === 'ArrowUp' || k === 'w')) G.flap(); };
+                G.draw = () => {
+                    g.fillStyle = '#34c759';
+                    for (const p of G.pipes) { g.fillRect(p.x, 0, PW, p.cy - p.gap / 2); g.fillRect(p.x, p.cy + p.gap / 2, PW, H); }
+                    g.fillStyle = '#a2845e'; g.fillRect(0, GROUND, W, 40);
+                    g.save(); g.translate(BX, G.y); g.rotate(clamp(G.vy / 900, -.5, 1)); emo('🐤', 0, 0, 30); g.restore();
+                    txt(String(G.score), W / 2, 40, 32, C.text);
+                    if (!G.started) txt('點一下開始', W / 2, 300, 16, C.muted);
+                };
+                return G;
+            },
+        };
+
+        // ---------- 切水果 ----------
+        GAMES.slice = {
+            name: '切水果', icon: '🍉', desc: '滑動切開飛起的水果，連切加分，別切到炸彈。',
+            make(seed) {
+                const rand = seeded(seed), FR = ['🍎', '🍊', '🍉', '🍋', '🍑']; let t = 0, wave = .6, lives = 3, swiping = false, n = 0, keys = {}, kc = { x: W / 2, y: H / 2 };
+                const G = { score: 0, over: false, items: [], trail: [], fx: [], info: () => hearts(lives) };
+                const cut = (it) => {
+                    it.cut = true;
+                    if (it.type === 'bomb') { G.over = true; beep(100, 250); buzz(150); return; }
+                    n++; G.score++; G.fx.push({ x: it.x, y: it.y, t: 0, big: n >= 3 }); beep(500 + n * 80, 50); buzz(10);
+                };
+                const pt = (x, y) => {
+                    const p = G.trail[G.trail.length - 1]; G.trail.push({ x, y, t });
+                    if (p && swiping) for (const it of G.items) if (!it.cut && segCircle(p.x, p.y, x, y, it.x, it.y, it.r)) cut(it);
+                };
+                const endSwipe = () => { if (swiping && n >= 3) G.score += sliceScore(n) - n; swiping = false; n = 0; };
+                G.update = (dt) => {
+                    t += dt;
+                    wave -= dt;
+                    if (wave <= 0) {
+                        const c = 1 + rand.int(1 + Math.min(2, Math.floor(t / 20))), bp = Math.min(.25, .1 + t * .003);
+                        for (let i = 0; i < c; i++) { const x = 40 + rand() * 280; G.items.push({ x, y: H + 20, vx: (W / 2 - x) * .3 + (rand() - .5) * 60, vy: -(560 + rand() * 120), r: 24, type: rand() < bp ? 'bomb' : 'fruit', kind: rand.int(5), cut: false }); }
+                        wave = Math.max(.55, 1.1 - t * .01) * (1 + c * .3);
+                    }
+                    G.items = G.items.filter(it => { it.vy += 700 * dt; it.x += it.vx * dt; it.y += it.vy * dt; if (it.y > H + 30 && it.vy > 0) { if (!it.cut && it.type === 'fruit') { lives--; buzz(40); } return false; } return !it.cut; });
+                    G.fx = G.fx.filter(f => (f.t += dt) < .3);
+                    G.trail = G.trail.filter(p => t - p.t < .15);
+                    const dx = (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0), dy = (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
+                    if (dx || dy) { if (!swiping) { swiping = true; n = 0; G.trail = [{ x: kc.x, y: kc.y, t }]; } kc.x = clamp(kc.x + dx * 480 * dt, 0, W); kc.y = clamp(kc.y + dy * 480 * dt, 0, H); pt(kc.x, kc.y); }
+                    else if (keys.on) { keys.on = false; endSwipe(); }
+                    if (dx || dy) keys.on = true;
+                    if (lives <= 0) G.over = true;
+                };
+                G.down = (x, y) => { swiping = true; n = 0; G.trail = [{ x, y, t }]; };
+                G.move = (x, y) => { if (swiping) pt(x, y); };
+                G.up = () => endSwipe();
+                G.key = (k, d) => { keys[k] = d; };
+                G.draw = () => {
+                    for (const it of G.items) emo(it.type === 'bomb' ? '💣' : FR[it.kind], it.x, it.y, 40);
+                    if (!rm()) for (const f of G.fx) { g.strokeStyle = f.big ? '#ff9f0a' : '#fff'; g.lineWidth = 3; g.beginPath(); g.arc(f.x, f.y, 10 + f.t * 120, 0, 7); g.stroke(); }
+                    g.strokeStyle = '#0a84ff'; g.lineWidth = 4; g.lineCap = 'round'; g.beginPath(); G.trail.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.stroke();
+                    if (n >= 3) txt(`連切 ${n}！`, W / 2, 60, 24, '#ff9f0a');
+                };
+                return G;
+            },
+        };
+
+        // ---------- 框架 ----------
+        let cur = 'mole', G = null, state = 'menu', paused = false, acc = 0, last = 0, raf = 0, run = null, overAt = 0;
+        const dailyOn = () => !!GAMES[cur].daily && $('#daily').checked;
+        const readBest = () => dailyOn() ? cleanMap(store.get(DAILY_PREFIX + taipeiDay(), {}), DAILY_IDS)[cur] || 0 : cleanMap(store.get(BEST_KEY, {}))[cur] || 0;
+        const setTxt = (sel, v) => { const e = $(sel); if (e.textContent !== String(v)) e.textContent = v; };
+        const hud = () => { setTxt('#score', G.score); const s = G.info(); $('#infoChip').hidden = !s; setTxt('#info', s); };
+        function overlay(title, text, btn) { $('#ovT').textContent = title; $('#ovP').textContent = text; $('#go').textContent = btn; $('#ov').hidden = false; $('#pauseBtn').style.display = 'none'; cv.classList.remove('play'); }
+        function menu() {
+            cancelAnimationFrame(raf); state = 'menu'; paused = false; G = null;
+            document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.g === cur));
+            $('#dailyL').hidden = !GAMES[cur].daily; setTxt('#score', 0); setTxt('#best', readBest()); $('#infoChip').hidden = true; $('#msg').textContent = '';
+            overlay(GAMES[cur].icon + ' ' + GAMES[cur].name, GAMES[cur].desc, '開始'); clearCanvas();
+        }
+        function resize() {
+            const w = cv.clientWidth || W, d = window.devicePixelRatio || 1;
+            cv.width = Math.round(w * d); cv.height = Math.round(w * d * H / W); g.setTransform(cv.width / W, 0, 0, cv.width / W, 0, 0);
+            if (G) draw(); else clearCanvas();
+        }
+        function clearCanvas() { g.fillStyle = C.card; g.fillRect(0, 0, W, H); }
+        function draw() { refreshColors(); clearCanvas(); g.lineCap = 'butt'; G.draw(); }
+        function start() {
+            refreshColors(); document.activeElement && document.activeElement.blur();
+            const daily = dailyOn(), day = taipeiDay();
+            run = { id: cur, daily, day, seed: daily ? day : String(Date.now()) + Math.random() };
+            G = GAMES[cur].make(run.seed); G.seed = run.seed; state = 'play'; paused = false; acc = 0; last = 0;
+            $('#ov').hidden = true; $('#pauseBtn').style.display = 'inline-block'; $('#pauseBtn').textContent = '⏸ 暫停'; $('#msg').textContent = daily ? '每日種子 ' + day : '';
+            cv.classList.add('play'); setTxt('#best', readBest()); hud(); draw();
+            cv.scrollIntoView({ block: 'nearest', behavior: rm() ? 'auto' : 'smooth' });
+            raf = requestAnimationFrame(frame);
+        }
+        function frame(ts) {
+            raf = 0; if (state !== 'play' || paused) return;
+            if (last) { const r = fixedSteps(acc, ts - last); acc = r.acc; for (let i = 0; i < r.n && !G.over; i++) G.update(STEP); }
+            last = ts; draw(); hud();
+            if (G.over) return end();
+            raf = requestAnimationFrame(frame);
+        }
+        function end() {
+            state = 'over'; overAt = performance.now(); cancelAnimationFrame(raf);
+            const sc = Math.min(1e9, Math.floor(G.score)), id = run.id; let rec = false;
+            if (sc > 0) {
+                if (run.daily) {
+                    const key = DAILY_PREFIX + run.day, m = cleanMap(store.get(key, {}), DAILY_IDS);
+                    if (sc > (m[id] || 0)) { m[id] = sc; rec = true; store.set(key, m); }
+                    try { dailyPrune(Object.keys(localStorage)).forEach(k => localStorage.removeItem(k)); } catch (e) { }
+                } else {
+                    const m = cleanMap(store.get(BEST_KEY, {}));
+                    if (sc > (m[id] || 0)) { m[id] = sc; rec = true; store.set(BEST_KEY, m); }
+                }
+            }
+            setTxt('#best', readBest());
+            overlay('遊戲結束', `得分 ${sc}${rec ? '　🎉 新紀錄' : ''}${run.daily ? '　（每日種子 ' + run.day + '）' : ''}`, '再玩一次');
+            $('#msg').textContent = rec ? `🎉 新紀錄 ${sc}` : '';
+        }
+        function pause() {
+            if (state !== 'play' || paused) return;
+            paused = true; cancelAnimationFrame(raf); raf = 0; if (G.up) G.up();
+            overlay('⏸ 已暫停', '按「繼續」回到遊戲', '繼續'); $('#pauseBtn').style.display = 'inline-block'; $('#pauseBtn').textContent = '▶ 繼續';
+        }
+        function resume() {
+            if (state !== 'play' || !paused) return;
+            paused = false; acc = 0; last = 0; $('#ov').hidden = true; $('#pauseBtn').textContent = '⏸ 暫停'; cv.classList.add('play'); raf = requestAnimationFrame(frame);
+        }
+        const togglePause = () => paused ? resume() : pause();
+
+        $('#go').onclick = () => { if (state === 'play' && paused) resume(); else if (state === 'over' && performance.now() - overAt < 600) return; else start(); };
+        $('#pauseBtn').onclick = togglePause;
+        $('#daily').onchange = () => { if (state !== 'play') setTxt('#best', readBest()); };
+        $('#panMode').onchange = () => cv.classList.toggle('pan', $('#panMode').checked);
+        document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+        window.addEventListener('resize', resize);
+
+        const toXY = (e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+        cv.addEventListener('pointerdown', (e) => { if (state !== 'play' || paused) return; e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) { } G.down && G.down(...toXY(e)); });
+        cv.addEventListener('pointermove', (e) => { if (state === 'play' && !paused && G.move) G.move(...toXY(e)); });
+        for (const ev of ['pointerup', 'pointercancel']) cv.addEventListener(ev, () => { if (state === 'play' && G.up) G.up(); });
+        const norm = (k) => k.length === 1 ? k.toLowerCase() : k;
+        const GAME_KEYS = /^(ArrowLeft|ArrowRight|ArrowUp|ArrowDown| |[a-z0-9])$/;
+        document.addEventListener('keydown', (e) => {
+            if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) || e.ctrlKey || e.metaKey || e.altKey) return;
+            const k = norm(e.key);
+            if (state === 'play' && (k === 'p' || k === 'Escape')) { e.preventDefault(); togglePause(); return; }
+            if (state !== 'play' || paused) return;
+            if (GAME_KEYS.test(k)) { e.preventDefault(); if (!e.repeat) G.key(k, true); }
+        });
+        document.addEventListener('keyup', (e) => { if (state === 'play' && !paused) G.key(norm(e.key), false); });
+
+        $('#tabs').innerHTML = GAME_IDS.map(id => `<button data-g="${id}" aria-pressed="false">${GAMES[id].icon} ${GAMES[id].name}</button>`).join('');
+        $('#tabs').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; cur = b.dataset.g; menu(); };
+        $('#clearBest').onclick = () => {
+            if (!confirm('清除六款遊戲的所有最高分（含每日種子紀錄）？無法復原。頁面會重新載入，正在進行的這一局會結束。')) return;
+            try { Object.keys(localStorage).filter(k => k === BEST_KEY || k.startsWith(DAILY_PREFIX)).forEach(k => localStorage.removeItem(k)); } catch (e) { }
+            location.reload();
+        };
+        refreshColors(); menu(); resize();
+    </script>
+</body>
+
+</html>

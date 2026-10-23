@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="派對遊戲：兩真一假、二選一、頻率猜心、猜價格、禁語猜詞、間諜。2–12 人連線，或一支手機輪流傳遞。">
+    <meta property="og:title" content="派對遊戲" />
+    <meta property="og:description" content="兩真一假、二選一、頻率猜心、猜價格、禁語猜詞、間諜，一個房間玩六種。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/party-hub.html" />
+    <title>派對遊戲</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>六種聚會小遊戲放在同一個房間：兩真一假、二選一、頻率猜心、猜價格、禁語猜詞、間諜。選好遊戲開房，朋友用連結加入；只有一支手機時也能「同機傳遞」。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>聚餐、旅行、線上聚會想玩點輕鬆的。</li>
+            <li>人在一起：一支手機輪流傳；人不在一起：連線，一人一支手機。</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+            <li><b>連線：</b>輸入暱稱、選遊戲與規則，按「建立房間」，把邀請連結傳給朋友。大家按「我準備好了」，房主按「開始遊戲」（人數上限可選 4–12 人）。</li>
+            <li><b>同機傳遞：</b>輸入玩家名字（2–12 人，一行一位），按「同機傳遞開始」。輪到誰就把手機交給誰，看到「換人」畫面時先別偷看，交給本人再按鈕。禁語猜詞需要連線（至少 4 人）。</li>
+        </ol>
+        <h3>規則</h3>
+        <ul>
+            <li><b>兩真一假：</b>輪流當出題者，寫三句關於自己的話（兩真一假）並標記哪句是假的；其他人猜假的。猜中 +2；出題者每騙到一人 +1、每被猜中一人 -1。</li>
+            <li><b>二選一：</b>題庫約 60 題或房主自己出題，大家同時選 A / B。可選「少數派得分」「多數派得分」（人數較少 / 較多的一邊每人 +1，平手不計）或不計分。</li>
+            <li><b>頻率猜心：</b>出題者看到 0–100 光譜上的隱藏目標，用一句提示詞讓大家猜位置。誤差 ≤4 得 4 分、≤8 得 3、≤14 得 2、≤22 得 1；出題者得大家的平均分。目標用 SHA-256 加鹽承諾，揭曉時自動驗證沒被更動。</li>
+            <li><b>猜價格：</b>輪流有人輸入物品與實際價格，其他人同時猜。「最接近且不超過」：猜的價格不高於實際價、差距最小者得 3 分（全部超過就沒人得分）；「最接近」：不論高低最接近者得 3 分。同差距平分。</li>
+            <li><b>禁語猜詞：</b>分兩隊。說明者看到目標詞與禁用詞，限時讓隊友猜出，不能說出禁用詞；說明者按「猜中了」+1、「跳過」每回合最多 3 次；對隊的人看得到卡片，可按「犯規」讓本隊 -1 並換下一張。</li>
+            <li><b>間諜：</b>除了間諜每人看到同一個地點與自己的角色，間諜只知道自己是間諜。輪流提問與回答；倒數時間內任何人（每人一次）可以指控某人，其餘人全部同意才成立。間諜可隨時猜地點。時間到大家投票。平民贏每人 +2，間諜贏 +4。</li>
+        </ul>
+        <h3>範例</h3>
+        <div class="eg">兩真一假：小美寫「我去過冰島」「我會倒立走路」「我養過三隻貓」，標記第 2 句是假的。小明、小華猜；小明猜第 2 句（+2）、小華猜第 1 句；小美 +1 -1 = 0。</div>
+        <h3>小提醒</h3>
+        <ul>
+            <li>這是一次性的遊戲，不會儲存任何資料，離開頁面就沒了。</li>
+            <li>斷線的人用同一個暱稱重新加入就能回到原位；房主離開則遊戲結束。有人還沒操作時，房主可按「不等了」跳過未完成的人。</li>
+            <li>內建題庫都是輕鬆話題；兩真一假的內容由玩家自己輸入，請彼此尊重。</li>
+            <li>同機傳遞時，記得交給本人再按鈕，看完要蓋起來。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .row input {
+            flex: 1 1 130px;
+            min-width: 0;
+        }
+
+        .row select {
+            flex: 1 1 130px;
+            min-width: 0;
+        }
+
+        .fld {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 10px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .fld select {
+            width: 100%;
+        }
+
+        .pl.turn {
+            border-color: var(--blue);
+        }
+
+        .pl.rdy {
+            border-color: var(--ok);
+        }
+
+        #status,
+        #msg {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.5em;
+            margin: 8px 0;
+        }
+
+        #msg {
+            color: var(--bad);
+            font-weight: 400;
+            min-height: 0;
+            margin: 0 0 8px;
+        }
+
+        .choices {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            margin: 10px 0;
+        }
+
+        .choices.two {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .choices button {
+            text-align: left;
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .trow {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .trow input {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .big {
+            font-size: 30px;
+            text-align: center;
+            font-weight: 700;
+            margin: 8px 0;
+            overflow-wrap: anywhere;
+        }
+
+        .tm {
+            text-align: center;
+            font-size: 28px;
+            font-variant-numeric: tabular-nums;
+            margin: 4px 0;
+        }
+
+        .ban {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            margin: 8px 0;
+        }
+
+        .ban span {
+            padding: 4px 12px;
+            border-radius: var(--radius-sm);
+            background: color-mix(in srgb, var(--bad) 22%, var(--fill));
+        }
+
+        .ends {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            font-weight: 700;
+        }
+
+        .ends span {
+            overflow-wrap: anywhere;
+            max-width: 45%;
+        }
+
+        input[type=range] {
+            width: 100%;
+            accent-color: var(--blue);
+            height: 44px;
+        }
+
+        .track {
+            position: relative;
+            height: 56px;
+            margin: 6px 10px;
+        }
+
+        .track::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 30px;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--line);
+        }
+
+        .track .mk {
+            position: absolute;
+            transform: translateX(-50%);
+            line-height: 1;
+        }
+
+        .track .mk.t {
+            top: 0;
+            font-size: 22px;
+        }
+
+        .track .mk.g {
+            top: 24px;
+            font-size: 18px;
+            color: var(--blue);
+        }
+
+        .good {
+            color: var(--ok);
+        }
+
+        .bad {
+            color: var(--bad);
+        }
+
+        .okmark {
+            text-align: center;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .cover {
+            text-align: center;
+            padding: 24px 8px;
+        }
+
+        .cover p {
+            margin: 0 0 14px;
+        }
+
+        .locs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        details {
+            margin: 8px 0;
+        }
+
+        details summary {
+            cursor: pointer;
+            padding: 8px 0;
+        }
+
+        details .locs span {
+            padding: 4px 8px;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .rank .li b {
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>派對遊戲</h1>
+        <p class="sub">兩真一假、二選一、頻率猜心、猜價格、禁語猜詞、間諜。連線開房，或一支手機輪流傳遞。</p>
+
+        <div class="card" id="cfg">
+            <h2>選遊戲</h2>
+            <div class="fld">遊戲<select id="kind" aria-label="遊戲"></select></div>
+            <div id="opts"></div>
+            <p class="note" id="kindNote"></p>
+        </div>
+
+        <div class="card" id="menu">
+            <h2>同一台裝置傳遞（單機）</h2>
+            <textarea id="soloNames" rows="3" maxlength="200" placeholder="玩家名字，一行一位（2–12 人，每人 1–10 字）" aria-label="玩家名單"></textarea>
+            <div class="row" style="margin-top:8px"><button class="primary" id="soloBtn">同機傳遞開始</button></div>
+            <p class="note" id="soloMsg">輪到誰就把手機交給誰；看到「換人」畫面先別偷看。</p>
+            <h2 style="margin-top:18px">和朋友連線</h2>
+            <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱">
+                <select id="maxP" aria-label="人數上限"></select></div>
+            <div class="row">
+                <button class="primary" id="hostBtn">建立房間</button>
+                <input id="joinId" placeholder="貼上房號" aria-label="房號">
+                <button id="joinBtn">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+        </div>
+
+        <div class="card" id="lobby" hidden>
+            <h2 id="lobbyTitle">等待玩家加入</h2>
+            <div class="players" id="lobbyPlayers"></div>
+            <div class="row" style="margin-top:12px">
+                <button id="copyInvite" hidden>複製邀請連結</button>
+                <button id="readyBtn" hidden>我準備好了</button>
+                <button class="primary" id="startBtn" hidden disabled>開始遊戲</button>
+            </div>
+            <p class="note" id="lobbyHint"></p>
+        </div>
+
+        <div id="game" hidden>
+            <div class="card">
+                <div class="players" id="board"></div>
+                <div id="status" role="status"></div>
+                <div id="msg" role="alert"></div>
+                <div id="body"></div>
+            </div>
+            <div class="row" id="foot" style="justify-content:center"></div>
+        </div>
+        <div class="card" id="closed" hidden>
+            <h2>房主已離開</h2>
+            <p>遊戲結束了。</p>
+            <button class="primary" onclick="location.reload()">回到首頁</button>
+        </div>
+    </div>
+
+    <script>
+        const { rnd } = Util;
+
+        // --- pure ---
+        const MAXP = 12;
+        const KINDS = {
+            truths: { name: '兩真一假', min: 2, solo: true, note: '輪流寫三句話（一句是假的），其他人猜假的。' },
+            thatthis: { name: '二選一', min: 2, solo: true, note: '「寧願…還是…」，大家同時選 A / B。' },
+            wave: { name: '頻率猜心', min: 2, solo: true, note: '看提示詞，在光譜上猜隱藏的位置。' },
+            price: { name: '猜價格', min: 2, solo: true, note: '輪流輸入物品與價格，其他人猜價錢。' },
+            taboo: { name: '禁語猜詞', min: 4, solo: false, note: '兩隊，限時說明目標詞但不能說禁用詞。需連線、至少 4 人。' },
+            spy: { name: '間諜', min: 3, solo: true, note: '找出沒拿到地點的間諜；至少 3 人。' },
+        };
+        const lines = (s) => s.trim().split('\n').map(x => x.trim()).filter(Boolean);
+        const QS = lines(`
+一輩子只吃甜食|一輩子只吃鹹食
+每天早上 5 點起床|每天凌晨 2 點才睡
+能飛但只能飛 1 公尺高|能隱形但只有 10 秒
+永遠夏天|永遠冬天
+只能用手機不能用電腦|只能用電腦不能用手機
+住在海邊|住在山上
+每餐都吃火鍋|每餐都吃便當
+會說所有語言|會彈所有樂器
+養一隻會說話的狗|養一隻會說話的貓
+不能再吃辣|不能再吃甜點
+每週多放一天假但薪水少一點|照常上班但薪水多一點
+只能搭捷運出門|只能騎腳踏車出門
+能回到過去一天|能看到未來一天
+一輩子不能用網路|一輩子不能看電視和電影
+每天都下雨|每天都大太陽
+有很多朋友但都普通|有一個無話不談的摯友
+永遠不用睡覺|永遠不用吃飯
+住在大城市的小套房|住在郊外的大房子
+每天只能吃一種食物但可以選|每天吃隨機的食物
+會游泳像魚一樣快|會跑得像獵豹一樣快
+只能看喜劇|只能看動作片
+擁有一座小島|擁有一間大圖書館
+拿到 100 萬現金|拿到一輩子免費吃飯的資格
+一直遇到綠燈|一直遇到排隊最短的那條
+早餐吃蛋餅|早餐吃三明治
+旅行時住民宿|旅行時住大飯店
+喝熱飲|喝冰飲
+愛看書|愛看影集
+一個人旅行|和一群朋友旅行
+夏天吹冷氣|冬天蓋厚被子
+只能聽一首歌一輩子|只能看一部電影一輩子
+擁有瞬間移動|擁有讀心術
+每天自動打掃的家|每天自動煮飯的廚房
+變成一隻貓|變成一隻鳥
+全世界都說你的母語|你會說全世界的語言
+一輩子不用洗碗|一輩子不用洗衣服
+手機永遠滿電|網路永遠超快
+冬天泡溫泉|夏天去海邊
+吃宵夜|不吃宵夜
+追劇一口氣看完|追劇一週一集慢慢等
+平常穿制服|平常穿自己的衣服
+住在樹屋|住在船上
+能和動物說話|能控制天氣
+薯條沾番茄醬|薯條沾美乃滋
+吃飯配電視|吃飯配音樂
+考試不用準備但成績普通|認真準備才拿高分
+假日在家睡到飽|假日出門走走
+有一個機器人管家|有一輛會飛的車
+把一天變成 30 小時|把一週變成 8 天
+過年領紅包|過年發紅包
+愛吃水果|愛吃蔬菜
+看日出|看日落
+喝咖啡|喝茶
+只用現金生活|只用手機支付生活
+週末睡到中午|週末早起去爬山
+一年四季都吃同一種早餐|每天早餐都不一樣
+住在有貓咖啡廳樓上|住在有書店的樓上
+身邊總有好聽的背景音樂|身邊總有人幫你拍照
+多一小時午休|多一小時早上的睡眠
+每年出國一次|每個月國內旅行一次
+`).map(l => l.split('|'));
+        const WAVES = lines(`
+冷|熱
+便宜|昂貴
+簡單|困難
+無聊|有趣
+小|大
+慢|快
+老派|時尚
+安靜|吵鬧
+軟|硬
+好吃|難吃
+普通|奇怪
+危險|安全
+甜|鹹
+稀有|常見
+嚴肅|搞笑
+輕|重
+乾淨|髒
+好看|難看
+早|晚
+便利|麻煩
+害羞|外向
+健康|不健康
+便宜好用|貴但耐用
+低調|張揚
+新鮮|過時
+放鬆|緊張
+幸運|倒楣
+有名|沒沒無聞
+好聞|難聞
+適合小孩|適合大人
+室內|戶外
+晴天心情|雨天心情
+適合早餐|適合宵夜
+需要運氣|需要技巧
+團體活動|個人活動
+動物園的動物|家裡的寵物
+懶惰|勤勞
+好笑|感人
+黑|白
+平凡|傳奇
+`).map(l => l.split('|'));
+        const TABOO = lines(`
+蘋果:紅色,水果,削皮,牛頓
+香蕉:黃色,猴子,水果,剝皮
+西瓜:夏天,籽,綠色,水果
+冰淇淋:甜,夏天,冷,甜筒
+披薩:起司,義大利,圓形,外送
+漢堡:麵包,牛肉,速食,薯條
+珍珠奶茶:台灣,吸管,飲料,Q彈
+咖啡:提神,拿鐵,咖啡因,杯
+泡麵:熱水,宵夜,碗,速食
+火鍋:湯,涮,肉片,沾醬
+壽司:日本,生魚片,米飯,海苔
+蛋糕:生日,蠟燭,甜點,奶油
+巧克力:可可,甜,苦,糖果
+爆米花:電影,玉米,奶油,零食
+手機:電話,通訊,螢幕,觸控
+電腦:鍵盤,滑鼠,上網,螢幕
+耳機:聽,音樂,耳朵,線
+眼鏡:近視,鏡片,戴,眼睛
+雨傘:下雨,撐,淋,擋
+手錶:時間,手腕,戴,指針
+背包:揹,肩膀,旅行,登山
+鑰匙:鎖,門,開,串
+枕頭:睡覺,床,軟,棉被
+棉被:睡覺,床,蓋,暖
+牙刷:牙膏,口腔,嘴巴,潔牙
+吹風機:頭髮,熱風,洗頭,電
+冰箱:冷,食物,廚房,電
+電風扇:夏天,轉,涼,葉片
+腳踏車:騎,輪子,踏板,兩輪
+公車:站牌,司機,乘客,道路
+捷運:地下,車廂,站,台北
+飛機:機場,天空,機票,機長
+火車:鐵軌,車站,站,車廂
+船:海,水,港口,航行
+太陽:白天,熱,光,天空
+月亮:晚上,圓,中秋,天空
+彩虹:雨,顏色,七,天空
+雪人:冬天,胡蘿蔔,冷,堆
+海灘:沙子,海浪,夏天,游泳
+森林:樹,動物,綠,山
+沙漠:沙子,乾,駱駝,熱
+瀑布:水,高處,山,流
+老虎:貓科,條紋,森林,猛獸
+大象:鼻子,長,象牙,動物園
+企鵝:南極,冰,黑白,鳥
+熊貓:竹子,黑白,中國,圓滾滾
+長頸鹿:脖子,高,斑點,動物園
+貓:喵,寵物,鬍鬚,抓
+狗:汪,寵物,骨頭,忠心
+兔子:耳朵,跳,蘿蔔,白
+魚:水,游,海,釣
+蝴蝶:花,翅膀,毛毛蟲,飛
+鋼琴:黑白,琴鍵,音樂,彈
+吉他:弦,彈,音樂,樂團
+電影:戲院,爆米花,演員,螢幕
+籃球:投籃,NBA,球場,運動
+足球:世界盃,球門,踢,球場
+游泳:水,泳池,蛙式,泳衣
+露營:帳篷,野外,營火,山
+釣魚:魚竿,餌,河邊,魚線
+棒球:球棒,投手,打擊,手套
+溜冰:鞋,冰刀,冬天,滑行
+生日:蛋糕,蠟燭,禮物,歲
+婚禮:新娘,新郎,結婚,喜帖
+聖誕節:聖誕老人,禮物,樹,十二月
+過年:紅包,春節,鞭炮,團圓
+中秋節:月餅,烤肉,月亮,團圓
+圖書館:借書,安靜,閱讀,書架
+醫生:醫院,看病,白袍,病人
+老師:學校,教,學生,課
+廚師:煮,廚房,餐廳,菜
+消防員:火,水管,滅,救
+太空人:火箭,月球,星球,宇宙
+魔術師:變,帽子,表演,神奇
+超市:購物車,買,結帳,食物
+夜市:小吃,逛,攤販,台灣
+遊樂園:雲霄飛車,摩天輪,玩,票
+博物館:展覽,文物,參觀,歷史
+溫泉:泡湯,熱,水,冬天
+電視:節目,遙控器,客廳,頻道
+`).map(l => { const [w, b] = l.split(':'); return { w, ban: b.split(',') }; });
+        const LOCS = lines(`
+學校:老師,學生,校長,工友,家長,警衛,福利社阿姨,轉學生
+醫院:醫生,護士,病人,家屬,藥師,清潔人員,實習生,志工
+電影院:觀眾,售票員,放映師,清潔人員,情侶,影評人,爆米花店員,小朋友
+超級市場:店員,結帳員,顧客,店長,理貨員,試吃推銷員,送貨司機,媽媽
+海邊:游泳的人,救生員,攤販,衝浪客,觀光客,情侶,攝影師,小孩
+飯店:櫃檯人員,房客,行李員,清潔人員,經理,廚師,旅行團導遊,商務客
+遊樂園:遊客,售票員,吉祥物,機台操作員,小販,清潔人員,攝影師,迷路的小孩
+圖書館:館員,讀者,學生,研究者,志工,老先生,小朋友,警衛
+機場:旅客,機長,空服員,海關人員,行李員,清潔人員,地勤,接機的家人
+火車站:旅客,站長,售票員,小販,清潔人員,乘務員,攝影愛好者,送行的人
+餐廳:服務生,廚師,客人,領檯,洗碗工,經理,美食評論家,外送員
+動物園:遊客,動物園管理員,獸醫,小販,導覽員,小孩,攝影師,清潔人員
+銀行:行員,客戶,經理,警衛,保全,辦手續的老人,理財專員,工讀生
+健身房:教練,會員,櫃檯人員,清潔人員,新手,瑜珈老師,營養師,常客
+公園:慢跑者,遛狗的人,小孩,老人,攤販,情侶,攝影師,太極拳老師
+咖啡廳:咖啡師,客人,店長,打工人員,寫作的人,約會的人,送貨員,常客
+夜市:攤販,逛街的人,情侶,小孩,遊客,店員,清潔人員,常客
+博物館:導覽員,遊客,館長,保全,學生,攝影師,修復師,志工
+郵局:郵務員,顧客,櫃檯人員,送信的人,寄包裹的人,老先生,郵票收藏家,主管
+農場:農夫,工人,小孩,遊客,獸醫,採收工,卡車司機,廚師
+太空站:太空人,指揮官,工程師,醫生,科學家,實習生,技術員,攝影師
+馬戲團:小丑,魔術師,走鋼索的人,觀眾,馴獸師,小販,團長,雜耍演員
+溫泉旅館:泡湯客,老闆娘,服務人員,廚師,按摩師,情侶,家庭客,清潔人員
+消防隊:消防員,隊長,救護員,新人,廚師,志工,駕駛,訓練官
+圖書出版社:編輯,作家,設計師,校對,業務,實習生,老闆,送貨員
+`).map(l => { const [n, r] = l.split(':'); return { n, roles: r.split(',') }; });
+        const BANKS = { thatthis: QS, wave: WAVES, taboo: TABOO, spy: LOCS };
+
+        // ---- 選項 ----
+        const R1 = ['rounds', '回合', [['m1', '每人一次'], ['m2', '每人兩次']]];
+        const OPT = {
+            truths: [R1],
+            wave: [R1],
+            thatthis: [['rounds', '題數', [['5', '5 題'], ['8', '8 題'], ['12', '12 題']], '8'], ['src', '出題方式', [['bank', '內建題庫'], ['host', '房主 / 第一位玩家自己出']]], ['score', '計分', [['minority', '少數派得分'], ['majority', '多數派得分'], ['none', '不計分']]]],
+            price: [R1, ['mode', '規則', [['under', '最接近且不超過'], ['near', '最接近（高低都可）']]]],
+            taboo: [R1, ['secs', '每回合秒數', [['45', '45 秒'], ['60', '60 秒'], ['90', '90 秒']], '60']],
+            spy: [['rounds', '局數', [['1', '1 局'], ['2', '2 局'], ['3', '3 局'], ['5', '5 局']], '2'], ['secs', '每局時間', [['300', '5 分鐘'], ['480', '8 分鐘'], ['600', '10 分鐘']], '480']],
+        };
+        // 只留合法的選項值，缺的補預設
+        function cleanOpts(kind, o) {
+            const out = {};
+            for (const [k, , vals, def] of OPT[kind] || []) { const v = String(o && o[k]); out[k] = vals.some(x => x[0] === v) ? v : (def || vals[0][0]); }
+            return out;
+        }
+        const resolveRounds = (v, n) => { const s = String(v); return s[0] === 'm' ? n * (+s.slice(1) || 1) : Math.max(1, Math.min(30, +s || 1)); };
+
+        // ---- 承諾（SHA-256 加鹽）----
+        const commitStr = (kind, round, secret, salt) => `${kind}|${round}|${secret}|${salt}`;
+        const commitHash = (kind, round, secret, salt) => Util.sha256(commitStr(kind, round, secret, salt));
+        async function verifyCommit(commit, kind, round, secret, salt) {
+            return typeof commit === 'string' && /^[0-9a-f]{64}$/.test(commit) && typeof salt === 'string' && await commitHash(kind, round, secret, salt) === commit;
+        }
+
+        // ---- 抽題 / 隊伍 / 排名 ----
+        function deckOf(len, rand) { const a = [...Array(len).keys()]; for (let i = len - 1; i > 0; i--) { const j = rand(i + 1);[a[i], a[j]] = [a[j], a[i]]; } return a; }
+        const shuffleBy = (arr, rand) => deckOf(arr.length, rand).map(i => arr[i]);
+        // 種子可重現的亂數（deckOf 的 rand 參數用）
+        const seedRand = (seed) => { const r = Util.seeded(seed); return (n) => r.int(n); };
+        function tabooTeams(n, rand) { const t = Array(n).fill(0); deckOf(n, rand).forEach((seat, k) => { t[seat] = k % 2; }); return t; }
+        // 第 t 回合（從 0 起算）的說明者：兩隊輪流，各隊內依座位順序輪替
+        function tabooGiver(team, t) {
+            const L = [0, 1].map(k => team.map((x, i) => (x === k ? i : -1)).filter(i => i >= 0));
+            const l = L[t % 2].length ? L[t % 2] : L[1 - t % 2];
+            return l[Math.floor(t / 2) % l.length];
+        }
+        // 犯規只能由「不同隊、不是說明者、仍在線」的人按
+        const canFoul = (G, seat) => G.phase === 'turn' && seat !== G.giver && G.team[seat] !== G.team[G.giver] && !G.absent[seat];
+        function rank(scores) {
+            const idx = scores.map((s, i) => i).sort((a, b) => scores[b] - scores[a] || a - b); let r = 0;
+            return idx.map((seat, k) => { if (k === 0 || scores[seat] !== scores[idx[k - 1]]) r = k + 1; return { seat, score: scores[seat], rank: r }; });
+        }
+        // 唯一最高票的座位；平手或沒人投回傳 -1
+        function voteTally(votes) {
+            const c = {}; for (const t of Object.values(votes)) c[t] = (c[t] || 0) + 1;
+            const e = Object.entries(c); if (!e.length) return -1;
+            const m = Math.max(...e.map(x => x[1])), top = e.filter(x => x[1] === m);
+            return top.length === 1 ? +top[0][0] : -1;
+        }
+
+        // ---- 計分 ----
+        const waveScore = (err) => (err <= 4 ? 4 : err <= 8 ? 3 : err <= 14 ? 2 : err <= 22 ? 1 : 0);
+        function waveRound(target, guesses) {
+            const pts = {}; let sum = 0, c = 0;
+            for (const [s, g] of Object.entries(guesses)) { pts[s] = waveScore(Math.abs(g - target)); sum += pts[s]; c++; }
+            return { pts, giver: c ? Math.round(sum / c) : 0 };
+        }
+        function truthsScore(lie, votes) {
+            const pts = {}; let fooled = 0, caught = 0;
+            for (const [s, v] of Object.entries(votes)) { if (v === lie) { pts[s] = 2; caught++; } else { pts[s] = 0; fooled++; } }
+            return { pts, author: fooled - caught };
+        }
+        // 二選一：少數派 / 多數派每人 +1；人數相同或該邊沒人不計分
+        function thisThatScore(mode, picks) {
+            const count = [0, 0], pts = {};
+            for (const v of Object.values(picks)) count[v]++;
+            if (mode !== 'none' && count[0] !== count[1]) {
+                const side = (mode === 'minority') === (count[0] < count[1]) ? 0 : 1;
+                for (const [s, v] of Object.entries(picks)) if (v === side) pts[s] = 1;
+            }
+            return { count, pts };
+        }
+        // 猜價格：回傳得分者（同差距全部算）
+        function priceWinners(price, guesses, mode) {
+            const ok = Object.entries(guesses).filter(([, g]) => mode !== 'under' || g <= price);
+            if (!ok.length) return [];
+            const best = Math.min(...ok.map(([, g]) => Math.abs(g - price)));
+            return ok.filter(([, g]) => Math.abs(g - price) === best).map(([s]) => +s);
+        }
+        // 間諜：平民贏每位在線平民 +2；間諜贏 +4
+        function spyScore(winner, spy, present) {
+            const pts = {};
+            if (winner === 'spy') pts[spy] = 4;
+            else present.forEach((p, i) => { if (p && i !== spy) pts[i] = 2; });
+            return pts;
+        }
+
+        // ---- 遊戲引擎（房主 / 單機共用；所有輸入都在這裡驗證）----
+        // G：整局狀態（只存在房主端 / 單機）。view(G, seat) 產生「該座位看得到的」狀態，隱藏資訊絕不放進別人的 view。
+        const H = {};
+        const live = (G) => G.names.map((_, i) => i).filter(i => !G.absent[i]);
+        const setPhase = (G, p) => { G.phase = p; G.excused = []; };
+        const apply = (G, pts) => { for (const [s, p] of Object.entries(pts)) G.scores[+s] += p; };
+        const str = (x, max) => (typeof x === 'string' && x.trim().length >= 1 && x.trim().length <= max ? x.trim() : null);
+        const seatOk = (G, s) => Number.isInteger(s) && s >= 0 && s < G.n && !G.absent[s];
+        function pickActor(G) { for (let k = 0; k < G.n; k++) { const s = (G.round - 1 + k) % G.n; if (!G.absent[s]) return s; } return -1; }
+        function pending(G) { return ((H[G.kind] && H[G.kind].pend(G)) || []).filter(i => !G.absent[i] && !G.excused.includes(i)); }
+        const skipRound = (G, msg) => { G.res = { skip: msg }; setPhase(G, 'reveal'); };
+
+        function newGame(kind, names, o, rand) {
+            const K = KINDS[kind], n = names.length;
+            if (!K || n < K.min || n > MAXP) return null;
+            const opts = cleanOpts(kind, o);
+            const G = { kind, n, names: names.slice(), absent: names.map(() => false), excused: [], scores: names.map(() => 0), round: 0, rounds: resolveRounds(opts.rounds || 'm1', n), opts, phase: 'lobby', res: null, deck: deckOf((BANKS[kind] || []).length, rand) };
+            if (kind === 'taboo') { G.team = tabooTeams(n, rand); G.tscore = [0, 0]; G.turn = 0; G.cid = 0; }
+            return G;
+        }
+        // ctx = { rand, now, salt }
+        function nextRound(G, ctx) {
+            if (G.round >= G.rounds || live(G).length < 1) { setPhase(G, 'over'); return; }
+            G.round++; G.res = null; G.commit = ''; G.commitSrc = '';
+            H[G.kind].start(G, ctx);
+            H[G.kind].check(G, ctx);
+        }
+        function setAbsent(G, seat, flag, ctx) { if (!G || !(seat >= 0 && seat < G.n)) return; G.absent[seat] = !!flag; if (flag && G.phase !== 'lobby' && G.phase !== 'over') H[G.kind].check(G, ctx); }
+        // 回傳 null（成功）或錯誤訊息
+        function act(G, seat, a, ctx) {
+            if (!G || !a || typeof a !== 'object' || typeof a.t !== 'string') return '無效的操作';
+            if (!seatOk(G, seat)) return '你不在遊戲中';
+            if (G.phase === 'over') return '遊戲已結束';
+            if (a.t === 'next') {
+                if (seat !== 0) return '只有房主可以進行下一步';
+                if (G.phase !== 'reveal') return '現在還不能進行下一步';
+                nextRound(G, ctx); return null;
+            }
+            if (a.t === 'end') { if (seat !== 0) return '只有房主可以結束遊戲'; setPhase(G, 'over'); return null; }
+            if (a.t === 'force') {
+                if (seat !== 0) return '只有房主可以跳過未完成的人';
+                if (G.phase === 'reveal') return '現在不需要';
+                G.excused = pending(G); H[G.kind].check(G, ctx); return null;
+            }
+            const err = H[G.kind].act(G, seat, a, ctx);
+            if (!err) H[G.kind].check(G, ctx);
+            return err || null;
+        }
+        function view(G, seat, now = 0) {
+            return { kind: G.kind, phase: G.phase, round: G.round, rounds: G.rounds, names: G.names, scores: G.scores, absent: G.absent, me: seat, pend: pending(G), res: G.phase === 'reveal' || G.phase === 'over' ? G.res : null, opts: G.opts, g: H[G.kind].view(G, seat, now) };
+        }
+        const voted = (o) => Object.keys(o).map(Number);
+
+        // 兩真一假
+        H.truths = {
+            start(G) { G.actor = pickActor(G); G.stm = null; G.lie = -1; G.votes = {}; setPhase(G, 'write'); },
+            pend(G) { return G.phase === 'write' ? [G.actor] : G.phase === 'vote' ? live(G).filter(i => i !== G.actor && !(i in G.votes)) : []; },
+            act(G, s, a) {
+                if (a.t === 'write') {
+                    if (G.phase !== 'write' || s !== G.actor) return '現在不能這樣做';
+                    if (!Array.isArray(a.s) || a.s.length !== 3) return '需要三句話';
+                    const t = a.s.map(x => str(x, 40));
+                    if (t.some(x => !x)) return '每句話要 1–40 字';
+                    if (new Set(t).size !== 3) return '三句話不能重複';
+                    if (!Number.isInteger(a.lie) || a.lie < 0 || a.lie > 2) return '請標記哪一句是假的';
+                    G.stm = t; G.lie = a.lie; setPhase(G, 'vote'); return null;
+                }
+                if (a.t === 'vote') {
+                    if (G.phase !== 'vote' || s === G.actor) return '現在不能投票';
+                    if (s in G.votes) return '你已經投過了';
+                    if (!Number.isInteger(a.v) || a.v < 0 || a.v > 2) return '選項錯誤';
+                    G.votes[s] = a.v; return null;
+                }
+                return '未知的操作';
+            },
+            check(G) {
+                if (G.phase === 'write' && !pending(G).length) return skipRound(G, '出題者沒有出題，這輪略過');
+                if (G.phase === 'vote' && !pending(G).length) {
+                    const r = truthsScore(G.lie, G.votes); apply(G, r.pts); G.scores[G.actor] += r.author;
+                    G.res = { actor: G.actor, stm: G.stm, lie: G.lie, votes: { ...G.votes }, pts: r.pts, author: r.author }; setPhase(G, 'reveal');
+                }
+            },
+            view(G, s) { return { actor: G.actor, stm: G.stm, lie: s === G.actor || G.phase === 'reveal' ? G.lie : -1, voted: voted(G.votes), mine: s in G.votes ? G.votes[s] : -1 }; },
+        };
+
+        // 二選一
+        H.thatthis = {
+            start(G) { G.q = null; G.picks = {}; G.actor = 0; if (G.opts.src === 'host') setPhase(G, 'ask'); else { const q = QS[G.deck[(G.round - 1) % QS.length]]; G.q = [q[0], q[1]]; setPhase(G, 'pick'); } },
+            pend(G) { return G.phase === 'ask' ? [0] : G.phase === 'pick' ? live(G).filter(i => !(i in G.picks)) : []; },
+            act(G, s, a) {
+                if (a.t === 'ask') {
+                    if (G.phase !== 'ask' || s !== 0) return '現在不能出題';
+                    const x = str(a.a, 30), y = str(a.b, 30);
+                    if (!x || !y) return '兩個選項都要填（1–30 字）';
+                    if (x === y) return '兩個選項不能一樣';
+                    G.q = [x, y]; setPhase(G, 'pick'); return null;
+                }
+                if (a.t === 'pick') {
+                    if (G.phase !== 'pick') return '現在不能選';
+                    if (s in G.picks) return '你已經選過了';
+                    if (a.v !== 0 && a.v !== 1) return '選項錯誤';
+                    G.picks[s] = a.v; return null;
+                }
+                return '未知的操作';
+            },
+            check(G) {
+                if (G.phase === 'ask' && !pending(G).length) return skipRound(G, '沒有出題，這題略過');
+                if (G.phase === 'pick' && !pending(G).length) { const r = thisThatScore(G.opts.score, G.picks); apply(G, r.pts); G.res = { q: G.q, count: r.count, picks: { ...G.picks }, pts: r.pts, mode: G.opts.score }; setPhase(G, 'reveal'); }
+            },
+            view(G, s) { return { q: G.q, voted: voted(G.picks), mine: s in G.picks ? G.picks[s] : -1 }; },
+        };
+
+        // 頻率猜心
+        H.wave = {
+            start(G, ctx) {
+                G.actor = pickActor(G); G.pair = WAVES[G.deck[(G.round - 1) % WAVES.length]]; G.target = ctx.rand(101); G.salt = ctx.salt(); G.clue = ''; G.guesses = {};
+                G.commitSrc = commitStr('wave', G.round, G.target, G.salt); setPhase(G, 'clue');
+            },
+            pend(G) { return G.phase === 'clue' ? [G.actor] : G.phase === 'guess' ? live(G).filter(i => i !== G.actor && !(i in G.guesses)) : []; },
+            act(G, s, a) {
+                if (a.t === 'clue') {
+                    if (G.phase !== 'clue' || s !== G.actor) return '現在不能給提示';
+                    const c = str(a.text, 30); if (!c) return '提示詞要 1–30 字';
+                    G.clue = c; setPhase(G, 'guess'); return null;
+                }
+                if (a.t === 'guess') {
+                    if (G.phase !== 'guess' || s === G.actor) return '現在不能猜';
+                    if (s in G.guesses) return '你已經猜過了';
+                    if (!Number.isInteger(a.v) || a.v < 0 || a.v > 100) return '位置要在 0–100';
+                    G.guesses[s] = a.v; return null;
+                }
+                return '未知的操作';
+            },
+            check(G) {
+                if (G.phase === 'clue' && !pending(G).length) return skipRound(G, '出題者沒有給提示，這輪略過');
+                if (G.phase === 'guess' && !pending(G).length) {
+                    const r = waveRound(G.target, G.guesses); apply(G, r.pts); G.scores[G.actor] += r.giver;
+                    G.res = { actor: G.actor, pair: G.pair, clue: G.clue, target: G.target, secret: String(G.target), salt: G.salt, guesses: { ...G.guesses }, pts: r.pts, giver: r.giver }; setPhase(G, 'reveal');
+                }
+            },
+            view(G, s) { return { actor: G.actor, pair: G.pair, clue: G.clue, target: s === G.actor ? G.target : -1, commit: G.commit, voted: voted(G.guesses), mine: s in G.guesses ? G.guesses[s] : -1 }; },
+        };
+
+        // 猜價格
+        H.price = {
+            start(G) { G.actor = pickActor(G); G.item = ''; G.price = null; G.guesses = {}; setPhase(G, 'set'); },
+            pend(G) { return G.phase === 'set' ? [G.actor] : G.phase === 'guess' ? live(G).filter(i => i !== G.actor && !(i in G.guesses)) : []; },
+            act(G, s, a) {
+                if (a.t === 'set') {
+                    if (G.phase !== 'set' || s !== G.actor) return '現在不能出題';
+                    const it = str(a.item, 20); if (!it) return '物品名稱要 1–20 字';
+                    if (typeof a.price !== 'number' || !Number.isFinite(a.price) || a.price < 0.01 || a.price > 1e9) return '價格要在 0.01–1,000,000,000';
+                    G.item = it; G.price = Math.round(a.price * 100) / 100; setPhase(G, 'guess'); return null;
+                }
+                if (a.t === 'guess') {
+                    if (G.phase !== 'guess' || s === G.actor) return '現在不能猜';
+                    if (s in G.guesses) return '你已經猜過了';
+                    if (typeof a.v !== 'number' || !Number.isFinite(a.v) || a.v < 0 || a.v > 1e9) return '價格要在 0–1,000,000,000';
+                    G.guesses[s] = Math.round(a.v * 100) / 100; return null;
+                }
+                return '未知的操作';
+            },
+            check(G) {
+                if (G.phase === 'set' && !pending(G).length) return skipRound(G, '出題者沒有出題，這輪略過');
+                if (G.phase === 'guess' && !pending(G).length) {
+                    const w = priceWinners(G.price, G.guesses, G.opts.mode); w.forEach(s => { G.scores[s] += 3; });
+                    G.res = { actor: G.actor, item: G.item, price: G.price, guesses: { ...G.guesses }, winners: w, mode: G.opts.mode }; setPhase(G, 'reveal');
+                }
+            },
+            view(G, s) { return { actor: G.actor, item: G.item, price: s === G.actor ? G.price : null, voted: voted(G.guesses), mine: s in G.guesses ? G.guesses[s] : null }; },
+        };
+
+        // 禁語猜詞
+        const tscores = (G) => { G.scores = G.team.map(t => G.tscore[t]); };
+        H.taboo = {
+            start(G) {
+                let t = G.turn; while (G.absent[tabooGiver(G.team, t)] && t < G.turn + 2 * G.n) t++;
+                G.giver = tabooGiver(G.team, t); G.turn = t + 1; G.card = null; G.got = 0; G.fouls = 0; G.skips = 0; G.deadline = 0; G.turnPts = 0; setPhase(G, 'ready');
+            },
+            pend(G) { return G.phase === 'ready' ? [G.giver] : []; },
+            act(G, s, a, ctx) {
+                const card = () => { G.cid++; G.card = TABOO[G.deck[G.cid % TABOO.length]]; };
+                if (a.t === 'go') {
+                    if (G.phase !== 'ready' || s !== G.giver) return '現在不能開始';
+                    G.deadline = ctx.now + (+G.opts.secs) * 1000; card(); setPhase(G, 'turn'); return null;
+                }
+                if (a.t === 'timeup') {
+                    if (G.phase !== 'turn') return '現在不能結束';
+                    if (!(ctx.now >= G.deadline || (s === 0 && a.force))) return '時間還沒到';
+                    return end(G);
+                }
+                if (G.phase !== 'turn') return '現在不能這樣做';
+                if (ctx.now >= G.deadline) return '時間到了';
+                if (a.c !== G.cid) return '這張卡片已經過了';
+                if (a.t === 'ok') { if (s !== G.giver) return '只有說明者可以按'; G.tscore[G.team[s]]++; G.turnPts++; G.got++; tscores(G); card(); return null; }
+                if (a.t === 'skip') { if (s !== G.giver) return '只有說明者可以按'; if (G.skips >= 3) return '跳過次數用完了'; G.skips++; card(); return null; }
+                if (a.t === 'foul') { if (!canFoul(G, s)) return '你不能按犯規'; G.tscore[G.team[G.giver]]--; G.turnPts--; G.fouls++; tscores(G); card(); return null; }
+                return '未知的操作';
+            },
+            check(G, ctx) {
+                if (G.phase === 'ready' && !pending(G).length) return skipRound(G, '說明者沒有開始，這輪略過');
+                if (G.phase === 'turn' && (G.absent[G.giver] || (ctx && ctx.now >= G.deadline))) end(G);
+            },
+            view(G, s, now) {
+                const giver = s === G.giver, opp = s >= 0 && s < G.n && s !== G.giver && G.team[s] !== G.team[G.giver];
+                return { team: G.team, tscore: G.tscore, giver: G.giver, got: G.got, fouls: G.fouls, skips: G.skips, cid: G.cid, remain: G.phase === 'turn' ? Math.max(0, G.deadline - now) : 0, card: G.phase === 'turn' && (giver || opp) ? G.card : null, role: giver ? 'giver' : opp ? 'opp' : 'mate' };
+            },
+        };
+        function end(G) { G.res = { giver: G.giver, team: G.team[G.giver], pts: G.turnPts, got: G.got, fouls: G.fouls }; setPhase(G, 'reveal'); return null; }
+
+        // 間諜
+        H.spy = {
+            start(G, ctx) {
+                const ps = live(G); G.spy = ps[ctx.rand(ps.length)]; G.li = G.deck[(G.round - 1) % LOCS.length];
+                const roles = shuffleBy(LOCS[G.li].roles, ctx.rand); G.role = {}; let k = 0;
+                ps.forEach(s => { if (s !== G.spy) G.role[s] = roles[k++ % roles.length]; });
+                G.asker = ps[ctx.rand(ps.length)]; G.log = []; G.accused = []; G.acc = null; G.fv = {}; G.salt = ctx.salt();
+                G.commitSrc = commitStr('spy', G.round, `${G.spy}:${G.li}`, G.salt); G.deadline = ctx.now + (+G.opts.secs) * 1000; setPhase(G, 'play');
+            },
+            pend(G) {
+                if (G.phase === 'vote') return live(G).filter(i => i !== G.acc.target && i !== G.acc.by && !(i in G.acc.y));
+                if (G.phase === 'final') return live(G).filter(i => !(i in G.fv));
+                return [];
+            },
+            act(G, s, a, ctx) {
+                if (a.t === 'ask') {
+                    if (G.phase !== 'play' || s !== G.asker) return '現在不是你提問';
+                    if (!seatOk(G, a.to) || a.to === s) return '請選另一位玩家';
+                    G.log.push([s, a.to]); if (G.log.length > 40) G.log.shift(); G.asker = a.to; return null;
+                }
+                if (a.t === 'accuse') {
+                    if (G.phase !== 'play') return '現在不能指控';
+                    if (G.accused.includes(s)) return '每人只能指控一次';
+                    if (!seatOk(G, a.target) || a.target === s) return '請選另一位玩家';
+                    G.accused.push(s); G.acc = { by: s, target: a.target, y: {} }; setPhase(G, 'vote'); return null;
+                }
+                if (a.t === 'avote') {
+                    if (G.phase !== 'vote') return '現在不能表決';
+                    if (s === G.acc.by || s === G.acc.target) return '你不能表決';
+                    if (s in G.acc.y) return '你已經表決過了';
+                    if (typeof a.y !== 'boolean') return '選項錯誤';
+                    G.acc.y[s] = a.y; return null;
+                }
+                if (a.t === 'guess') {
+                    if (G.phase !== 'play' || s !== G.spy) return '只有間諜可以猜地點';
+                    if (!Number.isInteger(a.loc) || a.loc < 0 || a.loc >= LOCS.length) return '地點錯誤';
+                    return finish(G, a.loc === G.li ? 'spy' : 'players', 'guess');
+                }
+                if (a.t === 'timeup') {
+                    if (G.phase !== 'play') return '現在不能結束';
+                    if (!(ctx.now >= G.deadline || (s === 0 && a.force))) return '時間還沒到';
+                    G.fv = {}; setPhase(G, 'final'); return null;
+                }
+                if (a.t === 'fvote') {
+                    if (G.phase !== 'final') return '現在不能投票';
+                    if (s in G.fv) return '你已經投過了';
+                    if (!seatOk(G, a.target) || a.target === s) return '請選另一位玩家';
+                    G.fv[s] = a.target; return null;
+                }
+                return '未知的操作';
+            },
+            check(G) {
+                if (G.phase === 'play' || G.phase === 'vote' || G.phase === 'final') {
+                    if (G.absent[G.spy]) { G.res = { skip: '間諜離線了，這局作廢', spy: G.spy, li: G.li, secret: `${G.spy}:${G.li}`, salt: G.salt }; return setPhase(G, 'reveal'); }
+                }
+                if (G.phase === 'vote') {
+                    const { by, target, y } = G.acc;
+                    if (G.absent[target] || G.absent[by] || Object.values(y).includes(false)) { G.acc = null; G.note = '指控沒有成立，繼續遊戲'; setPhase(G, 'play'); return; }
+                    if (!pending(G).length) finish(G, target === G.spy ? 'players' : 'spy', 'accuse');
+                } else if (G.phase === 'final' && !pending(G).length) {
+                    finish(G, voteTally(G.fv) === G.spy ? 'players' : 'spy', 'vote');
+                }
+            },
+            view(G, s, now) {
+                const isSpy = s === G.spy, inRound = isSpy || s in G.role;
+                return {
+                    asker: G.asker, log: G.log, isSpy, spec: !inRound, li: !isSpy && inRound ? G.li : -1, role: !isSpy && inRound ? G.role[s] : null, commit: G.commit, remain: G.phase === 'play' ? Math.max(0, G.deadline - now) : 0,
+                    acc: G.acc ? { by: G.acc.by, target: G.acc.target, voted: voted(G.acc.y) } : null, accused: G.accused, fvoted: voted(G.fv || {}), mine: G.fv && s in G.fv ? G.fv[s] : -1,
+                    note: G.note || '',
+                };
+            },
+        };
+        function finish(G, winner, how) {
+            const present = G.names.map((_, i) => !G.absent[i]), pts = spyScore(winner, G.spy, present); apply(G, pts);
+            G.res = { winner, how, spy: G.spy, li: G.li, secret: `${G.spy}:${G.li}`, salt: G.salt, pts, by: G.acc ? G.acc.by : -1, target: G.acc ? G.acc.target : -1 }; setPhase(G, 'reveal'); return null;
+        }
+        // 成員端：檢查房主傳來的 view 是否像樣（不信任任何輸入）
+        function validView(v) {
+            const arr = (a, f, n = MAXP) => Array.isArray(a) && a.length <= n && a.every(f), int = Number.isInteger;
+            return !!v && typeof v === 'object' && !!KINDS[v.kind] && ['lobby', 'write', 'vote', 'ask', 'pick', 'clue', 'guess', 'set', 'ready', 'turn', 'play', 'final', 'reveal', 'over'].includes(v.phase)
+                && int(v.round) && int(v.rounds) && int(v.me) && arr(v.names, n => typeof n === 'string' && n.length <= 12) && arr(v.scores, n => Number.isFinite(n)) && arr(v.absent, b => typeof b === 'boolean') && arr(v.pend, int)
+                && v.names.length === v.scores.length && v.names.length === v.absent.length && !!v.g && typeof v.g === 'object';
+        }
+        // 單機：玩家名單 → { names } 或 { err }
+        function soloSetup(text, kind) {
+            const names = Util.parseNames(text), K = KINDS[kind];
+            if (!K || !K.solo) return { err: '這個遊戲需要連線（至少 4 人）' };
+            if (new Set(names).size !== names.length) return { err: '名字不能重複' };
+            if (names.some(n => n.length > 10)) return { err: '名字最多 10 字' };
+            if (names.length < K.min || names.length > MAXP) return { err: `${K.name}要 ${K.min}–${MAXP} 人（目前 ${names.length} 人）` };
+            return { names };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const h = (t, p, ...k) => { const e = document.createElement(t); for (const [x, y] of Object.entries(p || {})) { if (x.includes('-')) e.setAttribute(x, y); else e[x] = y; } e.append(...k.flat().filter(x => x != null && x !== false)); return e; };
+        const btn = (text, fn, primary, p) => h('button', { textContent: text, className: primary ? 'primary' : '', onclick: fn, ...p });
+        const show = (id, on) => { $(id).hidden = !on; };
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+        // ---------- 狀態 ----------
+        // mode：'' 尚未開始 / 'solo' / 'host' / 'member'
+        let mode = '', room = null, G = null, V = null, LB = null, my = -1, hostId = '', closed = false;
+        const ready = new Set();           // 房主端：已準備的暱稱
+        let seen = {};                     // 成員端：每回合第一次看到的承諾 round -> commit
+        let D = {}, lastSig = '', cur = null, S = null;
+        const ctx = () => ({ rand: rnd, now: Date.now(), salt: () => Util.randomHex(8) });
+        const msg = (t) => { $('#msg').textContent = t || ''; };
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const kindNow = () => $('#kind').value;
+        const optsNow = () => Object.fromEntries((OPT[kindNow()] || []).map(([k]) => [k, $('#o_' + k).value]));
+
+        // ---------- 選項畫面 ----------
+        for (const [k, v] of Object.entries(KINDS)) $('#kind').append(h('option', { value: k, textContent: v.name }));
+        for (let i = 4; i <= MAXP; i++) $('#maxP').append(h('option', { value: i, textContent: `人數上限 ${i}`, selected: i === 8 }));
+        function drawOpts() {
+            const k = kindNow();
+            $('#opts').replaceChildren(...(OPT[k] || []).map(([key, label, vals, def]) => h('label', { className: 'fld' }, label, h('select', { id: 'o_' + key, 'aria-label': label }, vals.map(([v, t]) => h('option', { value: v, textContent: t, selected: v === (def || vals[0][0]) }))))));
+            $('#kindNote').textContent = KINDS[k].note;
+        }
+        $('#kind').onchange = () => { drawOpts(); if (mode === 'host' && !G) { pushLobby(); } };
+        drawOpts();
+        $('#opts').onchange = () => { if (mode === 'host' && !G) pushLobby(); };
+
+        // ---------- 畫面基礎 ----------
+        function screens(which) { show('#cfg', which === 'menu' || (which === 'lobby' && mode === 'host')); show('#menu', which === 'menu'); show('#lobby', which === 'lobby'); show('#game', which === 'game'); show('#closed', which === 'closed'); }
+        const names = (v, ids) => ids.map(i => v.names[i]).join('、');
+        const fmt = (ms) => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
+        // 送出自己的動作
+        function go(a, seat) {
+            msg('');
+            if (mode === 'member') return room.send({ t: 'A', a });
+            if (mode === 'host') return hostDo(() => { const e = act(G, 0, a, ctx()); if (e) msg(e); });
+            if (mode === 'solo') { const sa = seat == null ? S.seat : seat; const e = act(G, sa, a, ctx()); if (e) msg(e); else if (seat == null || seat === S.seat) { S.shown = false; S.seat = -1; } soloDraw(); }
+        }
+        const goCtl = (a) => go(a, 0);
+        function redraw() { if (mode === 'solo') soloDraw(); else if (cur) draw(cur.v, cur.o); }
+
+        // ---------- 通用元件 ----------
+        const waitLine = (v) => (v.pend.length ? `等待：${names(v, v.pend)}` : '');
+        const choices = (items, cur2, onPick, two) => h('div', { className: 'choices' + (two ? ' two' : '') }, items.map((t, i) => btn(t, () => onPick(i), false, { 'aria-pressed': cur2 === i })));
+        const fmtN = (n) => (n == null ? '?' : Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 }));
+        const note = (t) => h('p', { className: 'note', textContent: t });
+        const deltaList = (v, pts) => Object.entries(pts || {}).filter(([, p]) => p).map(([s, p]) => Util.statRow(v.names[s] || '?', (p > 0 ? '+' : '') + p, p > 0 ? 'ok' : 'bad'));
+        const verifyEl = (v, secret, salt) => {
+            const e = h('p', { className: 'okmark', textContent: '驗證承諾中…' });
+            const c = seen[v.round];
+            verifyCommit(c, v.kind, v.round, secret, salt).then(ok => { e.textContent = c ? (ok ? '✓ SHA-256 承諾驗證通過：房主沒有更動答案' : '✗ 承諾驗證失敗：答案可能被更動過') : '（本局中途加入，沒有承諾可驗證）'; e.className = 'okmark ' + (ok ? 'good' : c ? 'bad' : ''); });
+            return e;
+        };
+
+        // ---------- 各遊戲內容 ----------
+        const B = {};
+        B.truths = (v) => {
+            const g = v.g, my2 = v.me, who = v.names[g.actor];
+            if (v.phase === 'write') {
+                if (my2 !== g.actor) return [note(`${who} 正在寫三句話…`)];
+                D.s = D.s || ['', '', '']; D.lie = D.lie == null ? -1 : D.lie;
+                return [note('寫三句關於你的話：兩句真、一句假，再點「假」標記哪句是假的。'), ...D.s.map((t, i) => h('div', { className: 'trow' }, h('input', { value: t, maxLength: 40, placeholder: `第 ${i + 1} 句`, 'aria-label': `第 ${i + 1} 句`, oninput: e => { D.s[i] = e.target.value; } }), btn('假', () => { D.lie = i; redraw(); }, false, { 'aria-pressed': D.lie === i, 'aria-label': `第 ${i + 1} 句是假的` }))),
+                btn('送出', () => { if (D.lie < 0) return msg('請標記哪一句是假的'); go({ t: 'write', s: D.s, lie: D.lie }); }, true)];
+            }
+            if (v.phase === 'vote') {
+                const list = g.stm.map((t, i) => `${i + 1}. ${t}`);
+                if (my2 === g.actor) return [note('大家正在猜哪句是假的。你標記的假句是第 ' + (g.lie + 1) + ' 句。'), ...list.map(t => h('p', { textContent: t }))];
+                if (g.mine >= 0) return [note('你已投票，等待其他人。'), h('p', { textContent: '你猜第 ' + (g.mine + 1) + ' 句' })];
+                D.v = D.v == null ? -1 : D.v;
+                return [note(`${who} 的三句話，哪一句是假的？`), choices(list, D.v, (i) => { D.v = i; redraw(); }), btn('確定', () => { if (D.v < 0) return msg('請先選一句'); go({ t: 'vote', v: D.v }); }, true)];
+            }
+            const r = v.res;
+            if (!r || r.skip) return [note(r ? r.skip : '')];
+            return [h('p', { textContent: `${who} 的三句話` }), ...r.stm.map((t, i) => h('div', { className: 'li stat' }, h('span', { textContent: `${i + 1}. ${t}` }), h('b', { className: i === r.lie ? 'bad' : '', textContent: (i === r.lie ? '假 ' : '真 ') + Object.values(r.votes).filter(x => x === i).length + ' 票' }))),
+            ...Object.entries(r.votes).map(([s, x]) => Util.statRow(v.names[s], `猜第 ${x + 1} 句`, x === r.lie ? 'ok' : 'bad')), ...deltaList(v, { ...r.pts, [r.actor]: r.author })];
+        };
+        B.thatthis = (v) => {
+            const g = v.g;
+            if (v.phase === 'ask') {
+                if (v.me !== 0) return [note(`等待 ${v.names[0]} 出題…`)];
+                D.a = D.a || ''; D.b = D.b || '';
+                return [note('輸入兩個選項（「寧願 A，還是 B？」）'), h('div', { className: 'trow' }, h('input', { value: D.a, maxLength: 30, placeholder: 'A', 'aria-label': '選項 A', oninput: e => { D.a = e.target.value; } })), h('div', { className: 'trow' }, h('input', { value: D.b, maxLength: 30, placeholder: 'B', 'aria-label': '選項 B', oninput: e => { D.b = e.target.value; } })), btn('出題', () => go({ t: 'ask', a: D.a, b: D.b }), true)];
+            }
+            if (v.phase === 'pick') {
+                const head = h('p', { className: 'big', textContent: '寧願…' });
+                if (g.mine >= 0) return [head, note(`你選了 ${'AB'[g.mine]}：${g.q[g.mine]}。等待其他人。`)];
+                return [head, choices([`A　${g.q[0]}`, `B　${g.q[1]}`], -1, (i) => go({ t: 'pick', v: i }))];
+            }
+            const r = v.res;
+            if (!r || r.skip) return [note(r ? r.skip : '')];
+            const side = (i) => Object.entries(r.picks).filter(([, x]) => x === i).map(([s]) => v.names[s]).join('、') || '沒有人';
+            return [h('p', { className: 'big', textContent: '揭曉' }), ...[0, 1].map(i => Util.statRow(`${'AB'[i]}　${r.q[i]}`, `${r.count[i]} 人`)), ...[0, 1].map(i => note(`${'AB'[i]}：${side(i)}`)), note(r.mode === 'none' ? '本局不計分' : r.mode === 'minority' ? '少數派每人 +1（平手不計）' : '多數派每人 +1（平手不計）'), ...deltaList(v, r.pts)];
+        };
+        const track = (target, guesses) => h('div', { className: 'track' }, ...Object.entries(guesses || {}).map(([s, x]) => h('span', { className: 'mk g', style: `left:${x}%`, textContent: '●', title: String(x) })), h('span', { className: 'mk t', style: `left:${target}%`, textContent: '🎯' }));
+        const ends = (pair) => h('div', { className: 'ends' }, h('span', { textContent: '0　' + pair[0] }), h('span', { style: 'text-align:right', textContent: pair[1] + '　100' }));
+        B.wave = (v) => {
+            const g = v.g, who = v.names[g.actor];
+            if (v.phase === 'clue') {
+                if (v.me !== g.actor) return [note(`${who} 正在想提示詞…`), ends(g.pair)];
+                D.c = D.c || '';
+                return [ends(g.pair), track(g.target, {}), h('p', { className: 'big', textContent: `目標在 ${g.target}` }), note('給一個提示詞，讓大家猜出目標的位置（別直接說數字）。'), h('div', { className: 'trow' }, h('input', { value: D.c, maxLength: 30, placeholder: '提示詞', 'aria-label': '提示詞', oninput: e => { D.c = e.target.value; } }), btn('送出', () => go({ t: 'clue', text: D.c }), true))];
+            }
+            if (v.phase === 'guess') {
+                const head = [h('p', { className: 'big', textContent: `提示：${g.clue}` }), ends(g.pair)];
+                if (v.me === g.actor) return [...head, track(g.target, {}), note('目標在 ' + g.target + '。大家正在猜…')];
+                if (g.mine >= 0) return [...head, note(`你猜了 ${g.mine}，等待其他人。`)];
+                D.g = D.g == null ? 50 : D.g;
+                const out = h('p', { className: 'big', textContent: String(D.g) });
+                return [...head, h('input', { type: 'range', min: 0, max: 100, value: D.g, 'aria-label': '猜的位置', oninput: e => { D.g = +e.target.value; out.textContent = D.g; } }), out, btn('確定', () => go({ t: 'guess', v: D.g }), true)];
+            }
+            const r = v.res;
+            if (!r || r.skip) return [note(r ? r.skip : '')];
+            return [ends(r.pair), track(r.target, r.guesses), h('p', { className: 'big', textContent: `提示「${r.clue}」→ 目標 ${r.target}` }), verifyEl(v, r.secret, r.salt), ...Object.entries(r.guesses).map(([s, x]) => Util.statRow(`${v.names[s]} 猜 ${x}（差 ${Math.abs(x - r.target)}）`, '+' + r.pts[s], r.pts[s] ? 'ok' : '')), Util.statRow(`${who} 出題者（平均）`, '+' + r.giver, r.giver ? 'ok' : '')];
+        };
+        B.price = (v) => {
+            const g = v.g, who = v.names[g.actor], rule = v.opts.mode === 'under' ? '最接近且不超過' : '最接近';
+            if (v.phase === 'set') {
+                if (v.me !== g.actor) return [note(`${who} 正在輸入物品與價格…`)];
+                D.i = D.i || ''; D.p = D.p || '';
+                return [note('輸入物品與實際價格，其他人會同時猜（規則：' + rule + '）。'), h('div', { className: 'trow' }, h('input', { value: D.i, maxLength: 20, placeholder: '物品，例如 珍珠奶茶', 'aria-label': '物品', oninput: e => { D.i = e.target.value; } })), h('div', { className: 'trow' }, h('input', { value: D.p, inputMode: 'decimal', placeholder: '實際價格', 'aria-label': '實際價格', oninput: e => { D.p = e.target.value; } })), btn('送出', () => { const p = parseFloat(D.p); go({ t: 'set', item: D.i, price: p }); }, true)];
+            }
+            if (v.phase === 'guess') {
+                const head = [h('p', { className: 'big', textContent: g.item }), note('規則：' + rule)];
+                if (v.me === g.actor) return [...head, note(`實際價格 ${fmtN(g.price)}。大家正在猜…`)];
+                if (g.mine != null) return [...head, note(`你猜了 ${fmtN(g.mine)}，等待其他人。`)];
+                D.g = D.g || '';
+                return [...head, h('div', { className: 'trow' }, h('input', { value: D.g, inputMode: 'decimal', placeholder: '你猜多少', 'aria-label': '猜的價格', oninput: e => { D.g = e.target.value; } }), btn('確定', () => { const x = parseFloat(D.g); if (!Number.isFinite(x)) return msg('請輸入數字'); go({ t: 'guess', v: x }); }, true))];
+            }
+            const r = v.res;
+            if (!r || r.skip) return [note(r ? r.skip : '')];
+            return [h('p', { className: 'big', textContent: `${r.item}　${fmtN(r.price)}` }), ...Object.entries(r.guesses).sort((a, b) => Math.abs(a[1] - r.price) - Math.abs(b[1] - r.price)).map(([s, x]) => Util.statRow(`${v.names[s]} 猜 ${fmtN(x)}${x > r.price ? '（超過）' : ''}`, r.winners.includes(+s) ? '+3' : '', 'ok')), note(r.winners.length ? `得分：${names(v, r.winners)}` : '沒有人得分（全部超過或沒人猜）')];
+        };
+        B.taboo = (v) => {
+            const g = v.g, who = v.names[g.giver], tn = (t) => (t ? '🔵藍隊' : '🔴紅隊');
+            const head = [Util.statRow('🔴紅隊', g.tscore[0]), Util.statRow('🔵藍隊', g.tscore[1])];
+            if (v.phase === 'ready') return [...head, note(`${tn(g.team[g.giver])}的 ${who} 要說明。${v.me === g.giver ? '準備好就按開始，其他隊友請在旁邊準備猜。' : '請等待說明者開始。'}`), v.me === g.giver ? btn('開始計時', () => go({ t: 'go' }), true) : null];
+            if (v.phase === 'turn') {
+                const tm = h('div', { className: 'tm', textContent: fmt(g.remain) }); tm.dataset.tm = '1';
+                if (g.role === 'mate') return [...head, tm, note(`${who} 正在說明，大聲猜答案！`)];
+                const c = g.card, card = [h('p', { className: 'big', textContent: c ? c.w : '' }), h('div', { className: 'ban' }, (c ? c.ban : []).map(x => h('span', { textContent: x })))];
+                if (g.role === 'giver') return [...head, tm, ...card, note(`本回合已猜中 ${g.got}・犯規 ${g.fouls}`), h('div', { className: 'choices two' }, btn('猜中了 +1', () => go({ t: 'ok', c: g.cid }), true), btn(`跳過（剩 ${3 - g.skips}）`, () => go({ t: 'skip', c: g.cid }), false, { disabled: g.skips >= 3 }))];
+                return [...head, tm, ...card, note('你是監督：說明者說出禁用詞就按犯規。'), btn('犯規！', () => go({ t: 'foul', c: g.cid }), true)];
+            }
+            const r = v.res;
+            if (!r || r.skip) return [...head, note(r ? r.skip : '')];
+            return [...head, note(`${tn(r.team)} ${who}：猜中 ${r.got}、犯規 ${r.fouls}，本回合 ${r.pts >= 0 ? '+' : ''}${r.pts}`)];
+        };
+        const spyLoc = (v) => h('details', {}, h('summary', { textContent: '地點清單' }), h('div', { className: 'locs' }, LOCS.map(l => h('span', { textContent: l.n }))));
+        B.spy = (v, o) => {
+            const g = v.g, nm = (i) => v.names[i] || '?';
+            const idCard = () => (g.spec ? [note('本局你是觀戰者')] : g.isSpy ? [h('p', { className: 'big bad', textContent: '你是間諜' }), note('你不知道地點。聽大家的提問，猜出地點，或別被抓到。')] : [h('p', { className: 'big', textContent: LOCS[g.li].n }), note('你的角色：' + g.role)]);
+            if (o.look) return [...idCard(), btn('記住了，蓋起來', () => { S.look.shift(); S.shown = false; soloDraw(); }, true)];
+            const others = (f) => v.names.map((n, i) => (i !== v.me && !v.absent[i] ? btn(n, () => f(i)) : null));
+            if (v.phase === 'play') {
+                const tm = h('div', { className: 'tm', textContent: fmt(g.remain) }); tm.dataset.tm = '1';
+                const out = [tm, ...(o.solo ? [] : idCard()), ...(g.note ? [note(g.note)] : [])];
+                if (!o.solo) {
+                    out.push(note(g.asker === v.me ? '輪到你提問：選一位玩家發問（口頭問，問完按他的名字）' : `輪到 ${nm(g.asker)} 提問`));
+                    if (g.asker === v.me && !g.spec) out.push(h('div', { className: 'choices two' }, others(i => go({ t: 'ask', to: i }))));
+                    if (g.log.length) out.push(note(g.log.slice(-4).map(([a, b]) => `${nm(a)}→${nm(b)}`).join('　')));
+                }
+                out.push(spyLoc(v));
+                if (o.solo) {
+                    D.sub = D.sub || '';
+                    if (D.sub === 'acc') out.push(note(D.by == null ? '誰要指控？' : `${nm(D.by)} 要指控誰？`), h('div', { className: 'choices two' }, v.names.map((n, i) => (D.by == null ? btn(n, () => { D.by = i; redraw(); }, false, { disabled: g.accused.includes(i) }) : i !== D.by ? btn(n, () => { const by = D.by; D.sub = ''; D.by = null; go({ t: 'accuse', target: i }, by); }) : null))), btn('取消', () => { D.sub = ''; D.by = null; redraw(); }));
+                    else if (D.sub === 'guess') out.push(note('請把裝置交給間諜本人（不要說出誰是間諜）。'), btn('我是間諜，要猜地點', () => { S.spyGuess = true; S.shown = true; D.sub = ''; soloDraw(); }, true), btn('取消', () => { D.sub = ''; redraw(); }));
+                    else out.push(note('輪流口頭提問與回答。'), h('div', { className: 'choices' }, btn('有人要指控', () => { D.sub = 'acc'; D.by = null; redraw(); }), btn('間諜要猜地點', () => { D.sub = 'guess'; redraw(); })));
+                } else {
+                    if (!g.spec && !g.accused.includes(v.me)) { D.sub = D.sub || ''; out.push(D.sub === 'acc' ? h('div', {}, note('指控誰？（全部同意才成立）'), h('div', { className: 'choices two' }, others(i => { D.sub = ''; go({ t: 'accuse', target: i }); })), btn('取消', () => { D.sub = ''; redraw(); })) : btn('指控某人', () => { D.sub = 'acc'; redraw(); })); }
+                    if (g.isSpy) { out.push(h('div', { className: 'choices' }, btn(D.guess ? '取消猜地點' : '我知道地點了（猜地點）', () => { D.guess = !D.guess; redraw(); }))); if (D.guess) out.push(h('div', { className: 'locs' }, LOCS.map((l, i) => btn(l.n, () => go({ t: 'guess', loc: i }))))); }
+                }
+                return out;
+            }
+            if (v.phase === 'vote') {
+                const a = g.acc;
+                if (!a) return [];
+                const head = [note(`${nm(a.by)} 指控 ${nm(a.target)} 是間諜。要全部同意才成立。`)];
+                if (v.me === a.by || v.me === a.target || g.spec) return [...head, note(v.me === a.target ? '你被指控了，等待大家表決。' : '等待表決…')];
+                if (a.voted.includes(v.me)) return [...head, note('已表決，等待其他人。')];
+                return [...head, h('div', { className: 'choices two' }, btn('同意', () => go({ t: 'avote', y: true }), true), btn('不同意', () => go({ t: 'avote', y: false })))];
+            }
+            if (v.phase === 'final') {
+                if (g.mine >= 0 || g.spec) return [note('已投票，等待其他人。')];
+                return [note('時間到！投給你覺得是間諜的人。'), h('div', { className: 'choices two' }, others(i => go({ t: 'fvote', target: i })))];
+            }
+            const r = v.res;
+            if (!r) return [];
+            if (r.skip) return [note(r.skip)];
+            return [h('p', { className: 'big', textContent: r.winner === 'spy' ? '🕵️ 間諜獲勝' : '🎉 平民獲勝' }), Util.statRow('間諜', nm(r.spy), 'bad'), Util.statRow('地點', LOCS[r.li].n), note({ guess: '間諜猜地點', accuse: '指控結果', vote: '投票結果' }[r.how] || ''), verifyEl(v, r.secret, r.salt), ...deltaList(v, r.pts)];
+        };
+
+        // ---------- 畫面 ----------
+        function statusOf(v) {
+            if (v.phase === 'over') return '遊戲結束';
+            const head = `第 ${v.round}/${v.rounds} 回合`;
+            if (v.phase === 'reveal') return head + '・揭曉';
+            const w = waitLine(v);
+            return head + (w ? '・' + w : '');
+        }
+        function draw(v, o = {}) {
+            if (!cur || cur.v !== v) cur = { v, o, t0: performance.now() }; else cur.o = o;
+            screens('game');
+            const g = v.g, actor = v.kind === 'taboo' ? g.giver : g.actor;
+            $('#board').replaceChildren(...v.names.map((n, i) => h('div', { className: 'pl' + (v.absent[i] ? ' off' : '') + (i === actor && v.phase !== 'over' ? ' turn' : ''), textContent: `${v.kind === 'taboo' ? (g.team[i] ? '🔵' : '🔴') : ''}${n}${i === v.me ? '（我）' : ''}　${v.scores[i]}` })));
+            $('#status').textContent = o.look ? '傳遞看身分中' : statusOf(v);
+            const body = $('#body'), sig = [v.kind, v.round, v.phase, v.me, o.look ? 1 : 0, o.solo ? 1 : 0].join('|'), ae = document.activeElement;
+            if (sig === lastSig && ae && body.contains(ae) && /^(INPUT|TEXTAREA)$/.test(ae.tagName)) return;
+            if (sig !== lastSig) D = {};
+            lastSig = sig;
+            try {
+                if (v.phase === 'over') body.replaceChildren(...overBody(v));
+                else body.replaceChildren(...B[v.kind](v, o).filter(Boolean));
+            } catch (e) { body.replaceChildren(note('畫面資料異常')); }
+            // 單機私密畫面不放房主按鈕
+            const f = [];
+            if (!o.look && !o.private) {
+                if (v.phase === 'reveal' && o.ctl) f.push(btn(v.round >= v.rounds ? '看最終結果' : '下一輪', () => goCtl({ t: 'next' }), true));
+                if (v.phase === 'over' && o.ctl) f.push(btn(mode === 'solo' ? '再玩一次' : '回大廳', backToStart, true));
+                if (o.ctl && v.pend.length && v.phase !== 'reveal' && v.phase !== 'over' && mode !== 'solo') f.push(btn('不等了，跳過未完成的人', () => goCtl({ t: 'force' })));
+                if (o.ctl && (v.phase === 'turn' || (v.phase === 'play' && v.kind === 'spy'))) f.push(btn('提前結束計時', () => goCtl({ t: 'timeup', force: true })));
+                if (o.ctl && v.phase !== 'over') f.push(btn('結束遊戲', () => { if (confirm('要結束這局遊戲嗎？（直接進入最終排名，無法復原）')) goCtl({ t: 'end' }); }));
+                f.push(btn('離開', () => { if (confirm('要離開遊戲嗎？進行中的這一局會結束。')) location.reload(); }));
+            }
+            $('#foot').replaceChildren(...f);
+        }
+        function overBody(v) {
+            const rk = rank(v.scores), top = rk[0].rank;
+            return [h('p', { className: 'big', textContent: '🏆 ' + rk.filter(r => r.rank === top).map(r => v.names[r.seat]).join('、') }), h('div', { className: 'rank' }, rk.map(r => Util.statRow(`${r.rank}. ${v.names[r.seat]}`, r.score + ' 分')))];
+        }
+        // 倒數顯示（以收到狀態時的剩餘時間為準）
+        setInterval(() => {
+            if (!cur) return;
+            const left = Math.max(0, (cur.v.g.remain || 0) - (performance.now() - cur.t0));
+            document.querySelectorAll('[data-tm]').forEach(e => { e.textContent = fmt(left); });
+            // 房主 / 單機：時間到由本機觸發（房主驗證時鐘）
+            if ((mode === 'host' || mode === 'solo') && G && ((G.phase === 'turn') || (G.kind === 'spy' && G.phase === 'play')) && Date.now() >= G.deadline) { const ph = G.phase; if (mode === 'host') hostDo(() => { if (G && G.phase === ph) act(G, 0, { t: 'timeup' }, ctx()); }); else { act(G, 0, { t: 'timeup' }, ctx()); soloDraw(); } }
+        }, 250);
+
+        // ---------- 房主 ----------
+        let chain = Promise.resolve();
+        function hostDo(fn) { chain = chain.then(async () => { try { fn(); await seal(); pushAll(); } catch (e) { console.error(e); } }); return chain; }
+        async function seal() { if (G && G.commitSrc && !G.commit) G.commit = await Util.sha256(G.commitSrc); }
+        function pushAll() {
+            if (!G) return pushLobby();
+            const now = Date.now();
+            room.players.forEach((p, i) => { if (i && p.connected) room.sendTo(i, { t: 'V', v: view(G, i, now) }); });
+            draw(view(G, 0, now), { ctl: true });
+        }
+        const lobbyInfo = () => ({ t: 'LOBBY', kind: kindNow(), opts: cleanOpts(kindNow(), optsNow()), ready: room.players.filter(p => ready.has(p.nick)).map(p => p.index) });
+        function pushLobby() { if (!room) return; const L = lobbyInfo(); room.broadcast(L); LB = L; drawLobby(); }
+        function startGame() {
+            const kind = kindNow(), K = KINDS[kind];
+            const ps = room.players; if (ps.filter(p => p.connected).length < K.min) return;
+            if (ps.some(p => p.index && p.connected && !ready.has(p.nick))) return;
+            G = newGame(kind, ps.map(p => p.nick), optsNow(), rnd); if (!G) return;
+            G.absent = ps.map(p => !p.connected);
+            hostDo(() => nextRound(G, ctx()));
+        }
+        function backToStart() {
+            if (mode === 'solo') { G = null; return soloStart(); }
+            hostDo(() => { G = null; cur = null; lastSig = ''; ready.clear(); room.prune(); pushLobby(); });
+        }
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: +$('#maxP').value, keepSlots: true,
+                onReady(r) { mode = 'host'; my = 0; hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id); pushLobby(); },
+                canJoin(n) { return G && !room.players.some(p => !p.connected && p.nick === n) ? '遊戲已經開始' : null; },
+                onJoin(p, info) { if (G) { if (info.rejoined) hostDo(() => setAbsent(G, p.index, false, ctx())); else hostDo(() => { }); } else pushLobby(); },
+                onLeave(p) { if (G) hostDo(() => setAbsent(G, p.index, true, ctx())); else { ready.delete(p.nick); room.prune(); pushLobby(); } },
+                onMessage(p, d) {
+                    if (!d || typeof d !== 'object') return;
+                    if (d.t === 'READY' && !G) { if (d.r === true) ready.add(p.nick); else ready.delete(p.nick); pushLobby(); }
+                    else if (d.t === 'A' && G) hostDo(() => { const e = act(G, p.index, d.a, ctx()); if (e) room.sendTo(p.index, { t: 'E', m: e }); });
+                },
+                onError(e, m) { if (mode) return; netMsg(m); enableNet(true); if (room) { room.destroy(); room = null; } },
+            });
+        }
+
+        // ---------- 成員 ----------
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return; if (!id) return netMsg('請貼上房號');
+            enableNet(false); netMsg('連線中…'); hostId = id;
+            room = P2PRoom.join(id, {
+                nick,
+                onRoster(players, me) { my = me; if (!mode) { mode = 'member'; } room.roster = players; if (!V) { LB = LB || { kind: 'truths', opts: {}, ready: [] }; drawLobby(); } },
+                onMessage(d) {
+                    if (!d || typeof d.t !== 'string') return;
+                    if (d.t === 'V' && validView(d.v)) {
+                        V = d.v; my = V.me;
+                        if (V.phase === 'reveal' || V.phase === 'over') { /* 承諾以先前看到的為準 */ } else if (V.g && typeof V.g.commit === 'string' && V.g.commit && !seen[V.round]) seen[V.round] = V.g.commit;
+                        draw(V, {});
+                    } else if (d.t === 'LOBBY' && typeof d.kind === 'string' && KINDS[d.kind] && Array.isArray(d.ready)) { LB = { kind: d.kind, opts: cleanOpts(d.kind, d.opts), ready: d.ready.filter(Number.isInteger).slice(0, MAXP) }; V = null; cur = null; lastSig = ''; seen = {}; drawLobby(); }
+                    else if (d.t === 'E' && typeof d.m === 'string') msg(d.m.slice(0, 60));
+                },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (mode) { closed = true; screens('closed'); } },
+                onError(e, m) { if (mode) return; netMsg(m); enableNet(true); if (room) { room.destroy(); room = null; } },
+            });
+        }
+        // 成員端也要在 view 到達時記住承諾：第一次看到的才算（見 onMessage），揭曉時比對
+
+        // ---------- 大廳 ----------
+        function drawLobby() {
+            if (!room) return;
+            screens('lobby');
+            const players = room.players && room.players.length ? room.players : (room.roster || []);
+            const rd = new Set(mode === 'host' ? room.players.filter(p => ready.has(p.nick)).map(p => p.index) : (LB ? LB.ready : []));
+            const kind = mode === 'host' ? kindNow() : (LB && LB.kind) || 'truths', K = KINDS[kind];
+            $('#lobbyTitle').textContent = `${K.name}・等待玩家（${players.filter(p => p.connected).length} 人）`;
+            $('#lobbyPlayers').replaceChildren(...players.map(p => h('div', { className: 'pl' + (p.connected ? '' : ' off') + (rd.has(p.index) || p.index === 0 ? ' rdy' : ''), textContent: `${p.nick}${p.index === 0 ? ' 👑' : rd.has(p.index) ? ' ✓' : ''}${p.index === my ? '（我）' : ''}` })));
+            const optText = (OPT[kind] || []).map(([k, label, vals]) => { const val = mode === 'host' ? $('#o_' + k).value : (LB && LB.opts[k]); const x = vals.find(z => z[0] === val); return x ? `${label}：${x[1]}` : ''; }).filter(Boolean).join('　');
+            const n = players.filter(p => p.connected).length;
+            show('#copyInvite', mode === 'host'); show('#startBtn', mode === 'host'); show('#readyBtn', mode === 'member');
+            if (mode === 'host') {
+                const allReady = players.every(p => p.index === 0 || !p.connected || ready.has(p.nick));
+                $('#startBtn').disabled = n < K.min || !allReady;
+                $('#lobbyHint').textContent = n < K.min ? `把邀請連結傳給朋友，至少 ${K.min} 人才能開始` : allReady ? `${n} 人到齊，可以開始。${optText}` : '等所有成員按「我準備好了」';
+            } else {
+                const me = rd.has(my);
+                $('#readyBtn').textContent = me ? '取消準備' : '我準備好了';
+                $('#lobbyHint').textContent = `房主選的遊戲：${K.name}。${optText}`;
+            }
+        }
+        $('#readyBtn').onclick = () => { const r = !(LB && LB.ready.includes(my)); room.send({ t: 'READY', r }); };
+        $('#startBtn').onclick = startGame;
+        $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
+
+        // ---------- 單機：同機傳遞 ----------
+        function soloStart() {
+            const kind = kindNow(), r = soloSetup($('#soloNames').value, kind);
+            if (r.err) { screens('menu'); $('#soloMsg').textContent = r.err; return; }
+            G = newGame(kind, r.names, optsNow(), rnd); mode = 'solo'; my = -9; cur = null; lastSig = '';
+            S = { seat: -1, shown: false, look: [], lookRound: 0, spyGuess: false };
+            nextRound(G, ctx()); soloDraw();
+        }
+        function soloDraw() {
+            if (!G) return;
+            if (G.kind === 'spy' && G.phase === 'play' && S.lookRound !== G.round) { S.lookRound = G.round; S.look = live(G); }
+            let seat = -1, kind = '';
+            if (G.kind === 'spy' && G.phase === 'play' && S.spyGuess) { seat = G.spy; kind = 'spyGuess'; }
+            else if (G.kind === 'spy' && G.phase === 'play' && S.look.length) { seat = S.look[0]; kind = 'look'; }
+            else { const p = pending(G); if (p.length) { seat = p[0]; kind = 'act'; } }
+            const now = Date.now();
+            if (seat < 0) { S.seat = -1; return draw(view(G, -1, now), { ctl: true, solo: true }); }
+            if (kind === 'spyGuess') {
+                const v = view(G, seat, now); screens('game'); cur = null; lastSig = '';
+                $('#board').replaceChildren(); $('#status').textContent = '間諜猜地點'; $('#foot').replaceChildren();
+                $('#body').replaceChildren(note('選出你認為的地點；猜對間諜獲勝，猜錯平民獲勝。'), h('div', { className: 'locs' }, LOCS.map((l, i) => btn(l.n, () => { S.spyGuess = false; S.shown = false; const e = act(G, seat, { t: 'guess', loc: i }, ctx()); if (e) msg(e); soloDraw(); }))), btn('取消', () => { S.spyGuess = false; S.shown = false; soloDraw(); }));
+                return;
+            }
+            const nm = G.names[seat];
+            if (S.seat !== seat || !S.shown) {
+                S.seat = seat; S.shown = false; screens('game'); cur = null; lastSig = '';
+                $('#board').replaceChildren(); $('#status').textContent = '換人'; $('#foot').replaceChildren();
+                $('#body').replaceChildren(h('div', { className: 'cover' }, h('p', { className: 'big', textContent: `請把裝置交給「${nm}」` }), h('p', { className: 'note', textContent: '其他人不要偷看，交給本人再按下面的按鈕。' }), btn(`我是 ${nm}，開始`, () => { S.shown = true; soloDraw(); }, true, { id: 'coverBtn' })));
+                return;
+            }
+            draw(view(G, seat, now), { solo: true, look: kind === 'look', private: true, ctl: false });
+        }
+        $('#soloBtn').onclick = soloStart;
+
+        // ---------- 連線表單 ----------
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick', '#maxP'].forEach(s => { $(s).disabled = !on; });
+        function readNick() { const n = $('#nick').value.trim(); if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; } return n; }
+        $('#hostBtn').onclick = hostRoom;
+        $('#joinBtn').onclick = joinRoom;
+        if (P2PRoom.roomFromUrl() && P2PRoom.roomFromUrl() !== 'a') $('#joinId').value = P2PRoom.roomFromUrl();
+    </script>
+</body>
+
+</html>
