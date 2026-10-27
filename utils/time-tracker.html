@@ -142,6 +142,24 @@
             font-variant-numeric: tabular-nums;
         }
 
+        .bar {
+            height: 10px;
+            border-radius: 5px;
+            background: var(--fill);
+            overflow: hidden;
+            margin: 4px 0 2px;
+        }
+
+        .bar i {
+            display: block;
+            height: 100%;
+            background: var(--blue);
+        }
+
+        .bar i.done {
+            background: var(--ok);
+        }
+
         #msg {
             min-height: 20px;
             color: var(--bad);
@@ -198,6 +216,22 @@
             <div class="axis" id="axis"></div>
         </div>
 
+        <div class="card" id="studyCard">
+            <h2>學習時數</h2>
+            <p class="small">把專案標成「科目」並設每週目標時數，就能看到進度條與週 / 月彙總。時數直接取自上面的紀錄與計時。</p>
+            <div class="seg" role="group" aria-label="學習統計期間">
+                <button id="sper-week" aria-pressed="true">本週</button><button id="sper-month" aria-pressed="false">本月</button>
+            </div>
+            <div id="studyRows"></div>
+            <h2 style="margin-top:16px">近 8 週</h2>
+            <div id="studyWeeks"></div>
+            <div class="row" style="margin-top:12px">
+                <input type="text" id="sName" placeholder="科目名稱（新增，或輸入既有專案名）" maxlength="30" aria-label="科目名稱">
+                <input type="number" id="sGoal" placeholder="每週目標（小時）" min="0" max="168" step="any" inputmode="decimal" aria-label="每週目標小時數">
+                <button class="primary" id="sAdd">新增 / 設為科目</button>
+            </div>
+        </div>
+
         <div class="card">
             <h2>紀錄</h2>
             <div id="logs"></div>
@@ -231,6 +265,7 @@
         <li>按「停止」存成一筆紀錄。計時用開始時間計算，重新整理或關掉分頁再回來，時間仍會正確接續。</li>
         <li>忘記計時：在「手動補登」選專案、日期、開始與結束時間（可填備註）後按「新增紀錄」。</li>
         <li>「紀錄」清單可按「編輯」修改或「刪除」單筆。</li>
+        <li>「學習時數」：輸入科目名稱與每週目標小時按「新增 / 設為科目」（名稱和既有專案相同就是把該專案設為科目）。科目會顯示本週 / 本月時數、進度條與近 8 週時數；月目標約等於週目標 × 當月天數 ÷ 7。「改目標」可修改、「取消科目」只拿掉科目標記，專案與紀錄都保留。</li>
         <li>「統計」切換今天 / 本週（週一起算）/ 本月；下方是近 14 天長條圖。計時跨午夜時會自動拆到兩天。</li>
         </ol>
         <h3>範例</h3>
@@ -242,6 +277,7 @@
         <li>刪除專案時會問你要把該專案的紀錄一併刪除，或保留（保留的紀錄會顯示為「已刪除的專案」）。</li>
         <li>「資料管理」可刪除一年前的紀錄、清除全部紀錄（專案會保留）；皆無法復原，建議先匯出。</li>
         <li>手動補登的結束時間必須晚於開始時間；跨午夜的一段請用計時，或拆成兩筆。</li>
+        <li>科目只是專案上的兩個選填欄位（是否為科目、每週目標 0–168 小時），不另外存資料，科目算在專案 50 個的上限內；舊資料沒有這兩欄會當成「不是科目」。</li>
         <li>備份資料的鍵：工時專案、紀錄、進行中的計時；壞掉的資料載入時會自動略過。</li>
         </ul>
     </template>
@@ -253,6 +289,7 @@
         const TT = { PROJ_MAX: 50, LOG_MAX: 20000, NOTE_MAX: 100, NAME_MAX: 30 };
         const isTs = (v) => typeof v === 'number' && Number.isFinite(v) && v > 0 && v < 4e12;
         const cleanColor = (c) => (/^#[0-9a-f]{6}$/i.test(c) ? c : '#4f8cff');
+        const cleanGoal = (g) => { g = Number(g); return Number.isFinite(g) && g > 0 && g <= 168 ? Math.round(g * 10) / 10 : 0; };
         const cleanRate = (r) => { r = Number(r); return Number.isFinite(r) && r > 0 && r <= 1e7 ? r : 0; };
         const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
@@ -264,7 +301,7 @@
                 if (!p || typeof p !== 'object') continue;
                 const id = typeof p.id === 'string' ? p.id : '', name = String(p.name ?? '').trim().slice(0, TT.NAME_MAX);
                 if (!id || !name || seen.has(id)) continue;
-                seen.add(id); out.push({ id, name, color: cleanColor(p.color), rate: cleanRate(p.rate) });
+                seen.add(id); out.push({ id, name, color: cleanColor(p.color), rate: cleanRate(p.rate), study: p.study === true, goal: cleanGoal(p.goal) });
                 if (out.length >= TT.PROJ_MAX) break;
             }
             return out;
@@ -334,12 +371,32 @@
         }
 
         // 新增 / 刪除：回傳 { list, err }。滿了就拒絕，不默默刪舊資料
-        function addProject(projects, name, color, rate) {
+        function addProject(projects, name, color, rate, opts = {}) {
             name = String(name ?? '').trim().slice(0, TT.NAME_MAX);
             if (!name) return { list: projects, err: '請輸入專案名稱' };
             if (projects.length >= TT.PROJ_MAX) return { list: projects, err: `專案最多 ${TT.PROJ_MAX} 個，請先刪除不用的` };
             if (projects.some(p => p.name === name)) return { list: projects, err: '已經有同名的專案' };
-            return { list: [...projects, { id: uid(), name, color: cleanColor(color), rate: cleanRate(rate) }] };
+            return { list: [...projects, { id: uid(), name, color: cleanColor(color), rate: cleanRate(rate), study: !!opts.study, goal: cleanGoal(opts.goal) }] };
+        }
+        // 設為科目 / 修改目標 / 取消科目（id 找不到就原樣回傳）
+        const setStudy = (projects, id, study, goal) => projects.map(p => (p.id === id ? { ...p, study: !!study, goal: study ? cleanGoal(goal) : 0 } : p));
+        // 學習時數彙總。kind: week / month；週目標 = 小時 × 36e5，月目標 ≈ 週目標 × 當月天數 / 7；沒設目標 goalMs = 0、pct = null
+        function studyReport(projects, logs, active, now, kind) {
+            const [a, b] = periodRange(kind, now), t = totals(withActive(logs, active, now), a, b), scale = kind === 'month' ? Math.round((b - a) / 864e5) / 7 : 1;
+            const rows = projects.filter(p => p.study).map(p => {
+                const ms = t[p.id] || 0, goalMs = p.goal ? Math.round(p.goal * 36e5 * scale) : 0;
+                return { id: p.id, name: p.name, color: p.color, ms, goalMs, pct: goalMs ? Math.round(ms / goalMs * 100) : null };
+            });
+            return { rows, total: rows.reduce((x, r) => x + r.ms, 0), goalTotal: rows.reduce((x, r) => x + r.goalMs, 0) };
+        }
+        // 近 n 週（含本週，舊 → 新）各週科目總時數與總週目標
+        function studyWeeks(projects, logs, active, now, n = 8) {
+            const all = withActive(logs, active, now), ids = projects.filter(p => p.study), goal = ids.reduce((x, p) => x + p.goal, 0) * 36e5, out = [];
+            for (let i = n - 1; i >= 0; i--) {
+                const a = addDays(weekStart(now), -7 * i), t = totals(all, a, addDays(a, 7));
+                out.push({ start: a, ms: ids.reduce((x, p) => x + (t[p.id] || 0), 0), goalMs: goal });
+            }
+            return out;
         }
         function addLog(logs, p, s, e, note) {
             if (logs.length >= TT.LOG_MAX) return { list: logs, err: `紀錄已滿 ${TT.LOG_MAX} 筆，請先用「刪除一年前的紀錄」或匯出後清除` };
@@ -390,7 +447,7 @@
         function renderProjects() {
             const now = NOW(), t = totals(withActive(logs, active, now), dayStart(now), addDays(dayStart(now), 1));
             $('#projects').innerHTML = projects.length ? projects.map(p => `<div class="li${active && active.p === p.id ? ' run' : ''}" data-id="${p.id}">
-                <div class="grow"><span class="dot" style="background:${p.color}"></span><b>${Util.esc(p.name)}</b>${p.rate ? ` <span class="small">時薪 ${p.rate}</span>` : ''}<div class="small">今天 ${fmtHM(t[p.id] || 0)}</div></div>
+                <div class="grow"><span class="dot" style="background:${p.color}"></span><b>${Util.esc(p.name)}</b>${p.rate ? ` <span class="small">時薪 ${p.rate}</span>` : ''}${p.study ? ` <span class="small">📚 科目${p.goal ? `・週目標 ${p.goal} 小時` : ''}</span>` : ''}<div class="small">今天 ${fmtHM(t[p.id] || 0)}</div></div>
                 <div class="acts">${active && active.p === p.id ? '<button class="sm" data-act="stop">停止</button>' : '<button class="sm primary" data-act="start">開始</button>'}<button class="sm" data-act="del" aria-label="刪除專案 ${Util.esc(p.name)}">刪除</button></div></div>`).join('')
                 : '<p class="muted">還沒有專案，先在下面新增一個。</p>';
             $('#mProject').innerHTML = projects.map(p => `<option value="${p.id}">${Util.esc(p.name)}</option>`).join('');
@@ -425,7 +482,15 @@
             $('#more').hidden = sorted.length <= shown;
             $('#usage').textContent = `專案 ${projects.length} / ${TT.PROJ_MAX}　紀錄 ${logs.length} / ${TT.LOG_MAX}`;
         }
-        const renderAll = () => { renderProjects(); renderClock(); renderStats(); renderLogs(); };
+        let sPeriod = 'week';
+        function renderStudy() {
+            const now = NOW(), r = studyReport(projects, logs, active, now, sPeriod);
+            $('#studyRows').innerHTML = r.rows.length ? r.rows.map(x => `<div data-id="${x.id}" class="li" style="display:block"><div class="row" style="justify-content:space-between"><span><span class="dot" style="background:${x.color}"></span><b>${Util.esc(x.name)}</b></span><span class="money">${fmtHM(x.ms)}${x.goalMs ? ` / ${fmtHM(x.goalMs)}（${x.pct}%）` : ''}</span></div>${x.goalMs ? `<div class="bar" role="img" aria-label="${x.pct}%"><i class="${x.pct >= 100 ? 'done' : ''}" style="width:${Math.min(100, x.pct)}%"></i></div>` : ''}<div class="acts"><button class="sm" data-act="goal">改目標</button><button class="sm" data-act="unstudy">取消科目</button></div></div>`).join('')
+                + `<div class="li stat"><span>合計</span><b>${fmtHM(r.total)}${r.goalTotal ? ` / ${fmtHM(r.goalTotal)}` : ''}</b></div>` : '<p class="muted">還沒有科目。在下方輸入名稱與每週目標，建立第一個科目。</p>';
+            const w = studyWeeks(projects, logs, active, now), mx = Math.max(36e5, ...w.map(x => Math.max(x.ms, x.goalMs)));
+            $('#studyWeeks').innerHTML = r.rows.length ? w.map(x => `<div class="li stat"><span>${dateStr(x.start).slice(5)} 起</span><span class="grow" style="margin:0 8px"><span class="bar" style="display:block"><i style="width:${(x.ms / mx * 100).toFixed(1)}%"></i></span></span><b>${fmtHM(x.ms)}</b></div>`).join('') : '<p class="muted">沒有科目時不顯示。</p>';
+        }
+        const renderAll = () => { renderProjects(); renderClock(); renderStats(); renderStudy(); renderLogs(); };
 
         function resetForm() {
             editId = null; $('#manualTitle').textContent = '手動補登'; $('#mSave').textContent = '新增紀錄'; $('#mCancel').hidden = true; $('#mNote').value = ''; msg('');
@@ -480,6 +545,30 @@
                 renderProjects(); $('#mProject').value = l.p; $('#mDate').value = dateStr(l.s); $('#mStart').value = timeStr(l.s); $('#mEnd').value = timeStr(l.e); $('#mNote').value = l.note; msg('');
                 $('#mDate').scrollIntoView({ block: 'center' });
             }
+        };
+        for (const k of ['week', 'month']) $('#sper-' + k).onclick = () => { sPeriod = k; for (const j of ['week', 'month']) $('#sper-' + j).setAttribute('aria-pressed', j === k); renderStudy(); };
+        $('#sAdd').onclick = () => {
+            const name = $('#sName').value.trim().slice(0, TT.NAME_MAX), goal = $('#sGoal').value;
+            if (!name) { say('請輸入科目名稱'); return; }
+            if ($('#sGoal').value !== '' && cleanGoal(goal) === 0) { say('每週目標請填 0.1–168 小時（不設目標就留空）'); return; }
+            const ex = projects.find(p => p.name === name);
+            if (ex) projects = setStudy(projects, ex.id, true, goal);
+            else { const r = addProject(projects, name, '#34c759', 0, { study: true, goal }); if (r.err) { say(r.err); return; } projects = r.list; }
+            saveP(); $('#sName').value = ''; $('#sGoal').value = ''; renderAll();
+        };
+        $('#studyRows').onclick = (e) => {
+            const b = e.target.closest('button[data-act]'); if (!b) return;
+            const id = b.closest('[data-id]').dataset.id, p = pById(id); if (!p) return;
+            if (b.dataset.act === 'goal') {
+                const v = prompt(`「${p.name}」每週目標幾小時？（0.1–168，留空＝不設目標）`, p.goal || '');
+                if (v === null) return;
+                if (v.trim() !== '' && cleanGoal(v) === 0) { say('請填 0.1–168 之間的小時數'); return; }
+                projects = setStudy(projects, id, true, v);
+            } else {
+                if (!confirm(`取消「${p.name}」的科目標記？專案與所有紀錄都會保留，只是不再出現在學習時數，每週目標會清除。`)) return;
+                projects = setStudy(projects, id, false, 0);
+            }
+            saveP(); renderAll();
         };
         $('#more').onclick = () => { shown += 50; renderLogs(); };
         for (const k of ['day', 'week', 'month']) $('#per-' + k).onclick = () => { period = k; for (const j of ['day', 'week', 'month']) $('#per-' + j).setAttribute('aria-pressed', j === k); renderStats(); };

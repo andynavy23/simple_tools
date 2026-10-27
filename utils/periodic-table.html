@@ -10,7 +10,7 @@
     <meta property="og:description" content="118 個元素的互動週期表與電子組態。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/periodic-table.html" />
-    <meta name="st-keys" content="pt_sel">
+    <meta name="st-keys" content="pt_sel,pt_quiz">
     <title>週期表</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -207,6 +207,64 @@
                 font-size: 48px;
             }
         }
+
+        #quizCard>summary {
+            cursor: pointer;
+            font-weight: 700;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+        }
+
+        #quizCard[open]>summary {
+            margin-bottom: 8px;
+        }
+
+        .qbig {
+            font-size: 44px;
+            font-weight: 800;
+            text-align: center;
+            margin: 10px 0;
+            word-break: break-word;
+        }
+
+        .qopts {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .qopts button.right {
+            outline: 3px solid var(--ok);
+        }
+
+        .qopts button.wrong {
+            outline: 3px solid var(--bad);
+        }
+
+        #qBox input[type=text] {
+            width: 100%;
+        }
+
+        .qres {
+            font-weight: 700;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .qres.ok {
+            color: var(--ok);
+        }
+
+        .qres.bad {
+            color: var(--bad);
+        }
+
+        @media (max-width: 700px) {
+            #quizCard {
+                order: 4;
+            }
+        }
     </style>
 </head>
 
@@ -227,6 +285,23 @@
         </div>
 
         <div class="card" id="detail"></div>
+
+        <details class="card" id="quizCard">
+            <summary>記憶測驗</summary>
+            <p class="note">元素符號、名稱、原子序互相測驗；可選範圍，答錯的元素會更常出現。</p>
+            <div class="row">
+                <label>問 <select id="qFrom" aria-label="題目給什麼"><option value="sym">符號</option><option value="name">名稱</option><option value="z">原子序</option></select></label>
+                <label>答 <select id="qTo" aria-label="要回答什麼"><option value="name">名稱</option><option value="sym">符號</option><option value="z">原子序</option></select></label>
+                <select id="qMode" aria-label="題型"><option value="choice">選擇題</option><option value="input">輸入題</option></select>
+            </div>
+            <div class="row">
+                <select id="qRange" aria-label="範圍"></select>
+                <button class="primary" id="qStart">開始測驗</button>
+                <button class="sm" id="qClear">清除測驗紀錄</button>
+            </div>
+            <p class="muted" id="qStats"></p>
+            <div id="qBox" hidden></div>
+        </details>
     </div>
 
     <template id="help">
@@ -243,6 +318,7 @@
         <li>點上方的類別按鈕（鹼金屬、惰性氣體…）只看該類，再點一次取消。</li>
         <li>點表格中的元素，詳細資料顯示在卡片上。手機版詳情在表格上方，表格可左右滑動。</li>
         <li>鑭系與錒系放在表格最下方兩列。</li>
+        <li>「記憶測驗」：選「問」與「答」（符號 / 名稱 / 原子序）、選擇題或輸入題、範圍（全部、前 20 號、各週期、各族、f 區、錯題），按「開始測驗」。答錯的元素之後會更常出現；選「錯題」範圍只練答錯過的。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">搜尋「gold」
@@ -252,7 +328,9 @@
         <ul>
         <li>放射性元素的原子量是最穩定同位素的質量數。</li>
         <li>電子組態依填入順序加上常見例外，少數元素的實測值可能略有不同。</li>
-        <li>部分人造元素沒有常用中文字形，只顯示英文。</li>
+        <li>部分人造元素沒有常用中文字形，只顯示英文；測驗中這類元素的「名稱」就是英文名。</li>
+        <li>輸入題答名稱時，中文名或英文名都算對（不分大小寫，Aluminum / Cesium / Sulphur 等常見拼法也接受）；答符號不分大小寫。</li>
+        <li>測驗統計（每個元素的答題數與答對數，最多 118 項）只存在這個瀏覽器，也在備份範圍內；按「清除測驗紀錄」會先確認，無法復原。壞掉的資料載入時會自動略過。</li>
         </ul>
     </template>
 
@@ -325,6 +403,66 @@
             const all = E.map((_, i) => i + 1), exact = all.filter(z => String(z) === q || E[z - 1][0].toLowerCase() === q || E[z - 1][1] === q || E[z - 1][2].toLowerCase() === q);
             return exact.length ? exact : all.filter(z => E[z - 1][2].toLowerCase().startsWith(q) || (q.length === 1 && E[z - 1][1] && E[z - 1][1].includes(q)));
         }
+
+        // ===== 記憶測驗 =====
+        const QUIZ_KEY = 'pt_quiz', QALIAS = { 13: ['aluminum'], 55: ['cesium'], 16: ['sulphur'] };
+        const elName = (z) => E[z - 1][1] || E[z - 1][2];
+        const periodOf = (z) => { const r = position(z).row; return r === 8 ? 6 : r === 9 ? 7 : r; };
+        const groupOf = (z) => { const p = position(z); return p.row >= 8 ? 'f' : p.col; };
+        const qLabel = (z, kind) => (kind === 'sym' ? E[z - 1][0] : kind === 'name' ? elName(z) : String(z));
+        // 載入驗證：{ s: { <原子序>: { a 答題數, c 答對數, l 最近一次是否答對 1/0 } } }；只收 1–118，故最多 118 項
+        function cleanQuiz(raw) {
+            const src = raw && typeof raw === 'object' && raw.s && typeof raw.s === 'object' && !Array.isArray(raw.s) ? raw.s : {}, out = {};
+            for (const [k, v] of Object.entries(src)) {
+                const z = Number(k); if (!Number.isInteger(z) || z < 1 || z > 118 || !v || typeof v !== 'object') continue;
+                const a = Math.floor(Number(v.a)); if (!(a >= 0 && a <= 1e6)) continue;
+                let c = Math.floor(Number(v.c)); if (!(c >= 0)) c = 0;
+                out[z] = { a, c: Math.min(c, a), l: v.l === 0 ? 0 : 1 };
+            }
+            return { s: out };
+        }
+        const recordAnswer = (quiz, z, correct) => {
+            const o = quiz.s[z] || { a: 0, c: 0, l: 1 };
+            return { s: { ...quiz.s, [z]: { a: Math.min(1e6, o.a + 1), c: Math.min(1e6, o.c + (correct ? 1 : 0)), l: correct ? 1 : 0 } } };
+        };
+        const quizSummary = (quiz) => {
+            const v = Object.values(quiz.s), answered = v.reduce((x, o) => x + o.a, 0), correct = v.reduce((x, o) => x + o.c, 0);
+            return { answered, correct, pct: answered ? Math.round(correct / answered * 100) : 0, seen: v.filter(o => o.a > 0).length, weak: v.filter(o => o.a > 0 && o.l === 0).length };
+        };
+        // 範圍：all / first20 / p1–p7（週期）/ g1–g18、gf（族、f 區）/ wrong（答錯過且最近一次仍錯）
+        function quizPool(spec, quiz) {
+            const all = Array.from({ length: 118 }, (_, i) => i + 1);
+            let m;
+            if (spec === 'first20') return all.filter(z => z <= 20);
+            if (spec === 'wrong') return all.filter(z => quiz.s[z] && quiz.s[z].a > 0 && quiz.s[z].l === 0);
+            if ((m = /^p([1-7])$/.exec(spec))) return all.filter(z => periodOf(z) === +m[1]);
+            if ((m = /^g(\d+|f)$/.exec(spec))) return all.filter(z => String(groupOf(z)) === m[1]);
+            return all;
+        }
+        // 加權抽題：最近答錯的權重 3；不連續出同一題（池子只有一個時除外）。rand 回傳 [0,1)
+        function pickZ(pool, quiz, last, rand = () => Util.rnd(1e6) / 1e6) {
+            const c = pool.length > 1 ? pool.filter(z => z !== last) : pool; if (!c.length) return 0;
+            const w = c.map(z => (quiz.s[z] && quiz.s[z].l === 0 ? 3 : 1)); let r = rand() * w.reduce((x, y) => x + y, 0);
+            for (let i = 0; i < c.length; i++) { r -= w[i]; if (r < 0) return c[i]; }
+            return c[c.length - 1];
+        }
+        // 出題：choice 給 4 個不重複選項（含正解）；input 沒有選項
+        function makeQuestion(z, from, to, mode) {
+            const q = { z, from, to, mode, prompt: qLabel(z, from), answer: qLabel(z, to) };
+            if (mode === 'choice') {
+                const opts = new Set([q.answer]);
+                while (opts.size < 4) opts.add(qLabel(1 + Util.rnd(118), to));
+                q.options = Util.shuffle([...opts]);
+            }
+            return q;
+        }
+        function checkAnswer(q, input) {
+            const t = String(input ?? '').trim().toLowerCase(); if (!t) return false;
+            if (q.to === 'z') return /^\d+$/.test(t) && String(+t) === String(q.z);
+            if (q.to === 'sym') return t === E[q.z - 1][0].toLowerCase();
+            const [, zh, en] = E[q.z - 1];
+            return t === en.toLowerCase() || (!!zh && t === zh) || (QALIAS[q.z] || []).includes(t);
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -359,6 +497,52 @@
         $('#clr').onclick = () => { $('#q').value = ''; hits = new Set(); filter = ''; paint(); };
         if (!(sel >= 1 && sel <= 118)) sel = 26;
         build(); paint();
+
+        // ----- 記憶測驗 -----
+        const esc = Util.esc;
+        let quiz = cleanQuiz(store.get(QUIZ_KEY, null)), qcur = null, qlast = 0, sess = { n: 0, ok: 0 };
+        const KN = { sym: '符號', name: '名稱', z: '原子序' };
+        (() => {
+            const og = (label, items) => { const g = document.createElement('optgroup'); g.label = label; g.append(...items.map(([v, t]) => new Option(t, v))); return g; };
+            $('#qRange').append(og('範圍', [['all', '全部 118 個'], ['first20', '前 20 號'], ['wrong', '錯題加強（只練答錯過的）']]),
+                og('週期', [1, 2, 3, 4, 5, 6, 7].map(n => ['p' + n, `第 ${n} 週期`])),
+                og('族', [...Array.from({ length: 18 }, (_, i) => ['g' + (i + 1), `第 ${i + 1} 族`]), ['gf', 'f 區（鑭系 / 錒系）']]));
+        })();
+        function qStats() {
+            const m = quizSummary(quiz);
+            $('#qStats').textContent = `累計答題 ${m.answered} 題，正確率 ${m.pct}%；練習過 ${m.seen} / 118 個元素，目前待加強 ${m.weak} 個` + (sess.n ? `　｜　本次 ${sess.ok} / ${sess.n}` : '');
+        }
+        function qRender(res) {
+            const box = $('#qBox'); box.hidden = !qcur; if (!qcur) return;
+            const q = qcur, done = res !== undefined;
+            box.innerHTML = `<div class="qbig">${esc(q.prompt)}</div><p class="muted" style="text-align:center">這個${KN[q.from]}的「${KN[q.to]}」是？</p>`
+                + (q.mode === 'choice' ? `<div class="qopts">${q.options.map((o, i) => `<button data-i="${i}" ${done ? 'disabled' : ''}>${esc(o)}</button>`).join('')}</div>`
+                    : `<input type="text" id="qIn" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="你的答案" ${q.to === 'z' ? 'inputmode="numeric"' : ''} ${done ? 'disabled' : ''}><div class="row" style="margin-top:8px"><button class="primary" id="qOk" ${done ? 'hidden' : ''}>送出</button></div>`)
+                + (done ? `<div class="qres ${res ? 'ok' : 'bad'}">${res ? '✔ 正確' : '✘ 答錯了'}（${esc(q.prompt)} → ${esc(q.answer)}）</div><div class="row" style="justify-content:center"><button class="primary" id="qNext">下一題</button><button id="qStop">結束</button></div>` : '');
+            if (done && q.mode === 'choice') box.querySelectorAll('.qopts button').forEach(b => { const o = q.options[+b.dataset.i]; if (o === q.answer) b.classList.add('right'); else if (o === q.picked) b.classList.add('wrong'); });
+            box.querySelectorAll('.qopts button').forEach(b => { if (!done) b.onclick = () => qAnswer(q.options[+b.dataset.i]); });
+            if ($('#qOk') && !done) { $('#qOk').onclick = () => qAnswer($('#qIn').value); $('#qIn').onkeydown = (e) => { if (e.key === 'Enter') $('#qOk').click(); }; $('#qIn').focus(); }
+            if (done) { $('#qNext').onclick = qAsk; $('#qStop').onclick = () => { qcur = null; qRender(); }; $('#qNext').focus(); }
+        }
+        function qAnswer(input) {
+            if (!qcur || qcur.done) return;
+            const ok = checkAnswer(qcur, input); qcur.done = true; qcur.picked = input;
+            quiz = recordAnswer(quiz, qcur.z, ok); store.set(QUIZ_KEY, quiz); sess.n++; if (ok) sess.ok++;
+            qStats(); qRender(ok);
+        }
+        function qAsk() {
+            const from = $('#qFrom').value, to = $('#qTo').value;
+            if (from === to) { $('#qStats').textContent = '「問」與「答」要選不同的項目'; return; }
+            const pool = quizPool($('#qRange').value, quiz);
+            if (!pool.length) { qcur = null; qRender(); $('#qStats').textContent = '這個範圍沒有題目（還沒有答錯過的元素？）'; return; }
+            const z = pickZ(pool, quiz, qlast); qlast = z; qcur = makeQuestion(z, from, to, $('#qMode').value); qRender();
+        }
+        $('#qStart').onclick = () => { sess = { n: 0, ok: 0 }; qStats(); qAsk(); };
+        $('#qClear').onclick = () => {
+            if (!confirm('清除全部測驗紀錄（每個元素的答題數、答對數與錯題）？無法復原。週期表本身的資料不受影響。')) return;
+            quiz = { s: {} }; store.set(QUIZ_KEY, quiz); qcur = null; sess = { n: 0, ok: 0 }; qRender(); qStats();
+        };
+        qStats();
     </script>
 </body>
 

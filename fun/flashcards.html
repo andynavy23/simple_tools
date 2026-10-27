@@ -97,6 +97,45 @@
         .counts b {
             color: var(--text);
         }
+        details.card > summary {
+            cursor: pointer;
+            font-weight: 700;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+        }
+
+        details.card[open] > summary {
+            margin-bottom: 8px;
+        }
+
+        #dictBox input[type=text] {
+            width: 100%;
+        }
+
+        #dictBox .res {
+            font-weight: 700;
+            margin: 8px 0;
+            word-break: break-word;
+        }
+
+        #dictBox .res.ok {
+            color: var(--ok);
+        }
+
+        #dictBox .res.bad {
+            color: var(--bad);
+        }
+
+        #csvPrev {
+            font-size: 14px;
+            margin-top: 8px;
+            word-break: break-word;
+        }
+
+        #csvPrev .err {
+            color: var(--bad);
+        }
     </style>
 </head>
 
@@ -128,6 +167,37 @@
             <textarea id="import" placeholder="apple | 蘋果&#10;banana, 香蕉&#10;library	圖書館" aria-label="貼上詞庫"></textarea>
             <div class="row" style="margin-top:8px"><button class="primary" id="importBtn">加入詞庫</button><button class="sm" id="exportBtn">複製整個詞庫</button><span class="muted" id="info"></span></div>
         </div>
+        <details class="card" id="dictCard">
+            <summary>聽寫模式</summary>
+            <p class="note">用語音朗讀目前詞庫的單字（正面），你輸入拼寫並判分；每回合最多 20 題，不影響間隔複習的排程。</p>
+            <div class="row">
+                <select id="dictLang" aria-label="朗讀語言">
+                    <option value="en-US">英文（美）</option><option value="en-GB">英文（英）</option><option value="ja-JP">日文</option><option value="ko-KR">韓文</option><option value="fr-FR">法文</option><option value="de-DE">德文</option><option value="es-ES">西班牙文</option><option value="zh-TW">中文</option>
+                </select>
+                <label><input type="checkbox" id="dictHint"> 顯示解釋當提示</label>
+                <button class="primary" id="dictStart">開始聽寫</button>
+            </div>
+            <p class="muted" id="dictNote"></p>
+            <div id="dictBox" hidden></div>
+        </details>
+
+        <details class="card" id="csvCard">
+            <summary>CSV / TSV 匯入</summary>
+            <p class="note">貼上 CSV 或從試算表複製（Tab 分隔）：兩欄「單字、解釋」或三欄「單字、解釋、例句」，一筆一行；欄位含逗號請用雙引號包起來。第一行若是標題（word / 單字）會自動略過。</p>
+            <textarea id="csv" placeholder="apple,蘋果,I eat an apple.&#10;&quot;hello, world&quot;,哈囉世界" aria-label="貼上 CSV"></textarea>
+            <div class="row" style="margin-top:8px">
+                <select id="csvDup" aria-label="重複處理"><option value="skip">重複的單字：略過</option><option value="overwrite">重複的單字：覆蓋解釋（保留進度）</option></select>
+                <button id="csvPreview">預覽</button>
+                <button class="primary" id="csvGo" disabled>確認匯入</button>
+            </div>
+            <div id="csvPrev" aria-live="polite"></div>
+        </details>
+
+        <details class="card" id="builtinCard">
+            <summary>內建字庫：多益核心字</summary>
+            <p class="note">商務與職場常見單字，含詞性、中文意思與一句例句。一鍵建立成「多益核心字」詞庫；已經有同名詞庫時只會補上缺少的字，不影響已有的進度。</p>
+            <div class="row"><button class="primary" id="addToeic">加入「多益核心字」</button><span class="muted" id="toeicInfo"></span></div>
+        </details>
     </div>
 
     <template id="help">
@@ -145,6 +215,9 @@
         <li>上方卡片點一下或按「翻面」看答案。</li>
         <li>依記憶程度按「重來」「困難」「良好」「簡單」，按鈕下方會顯示下次複習時間。</li>
         <li>電腦鍵盤：空白鍵／Enter 翻面，翻面後按 <kbd>1</kbd>–<kbd>4</kbd> 評分。</li>
+        <li>「聽寫模式」：選語言按「開始聽寫」，聽到單字後輸入拼寫按「送出」；大小寫、前後空白、全形字元、弧形撇號都會寬容處理，差一個字母會提示「差一點」但仍算錯。</li>
+        <li>「CSV / TSV 匯入」：貼上兩欄（單字、解釋）或三欄（單字、解釋、例句），先按「預覽」看新增 / 重複 / 錯誤行號，再按「確認匯入」。重複的單字可選略過或覆蓋解釋（覆蓋時保留學習進度）。</li>
+        <li>「內建字庫」按一下就建立「多益核心字」詞庫（約 300 字）；再按一次只會補上缺少的字。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">貼上「apple | 蘋果」→ 新卡片。第一次按「良好」：1 天後；隔天再按「良好」：3 天後；再按「良好」：8 天後。按「重來」則今天稍後會再出現。</div>
@@ -152,12 +225,14 @@
         <ul>
         <li>每天最多出 20 張新卡；重複的正面會被略過。最多 30 個詞庫、每個詞庫 3000 張。</li>
         <li>「複製整個詞庫」可備份，資料只存在這個瀏覽器；刪除詞庫會一併刪掉進度。</li>
+        <li>聽寫需要裝置支援語音朗讀；沒有語音（或找不到該語言的語音）時會提示，此時會自動顯示解釋，改成看解釋拼單字。聽寫成績不會儲存。</li>
+        <li>CSV 匯入每筆資料必須在同一行（不支援欄位內換行）；單字最長 80 字、解釋與例句各 200 字，超過會列為錯誤行；詞庫滿 3000 張時多出的會被拒絕並提示，不會刪舊卡。例句存在卡片的選填欄位，舊卡片沒有例句也能正常使用。</li>
         </ul>
     </template>
 
     <script src="../shared/js/util.js"></script>
     <script>
-        const { store, day, copyWithFeedback } = Util;
+        const { store, day, copyWithFeedback, parseCSV, shuffle, esc } = Util;
 
         // --- pure ---
         // 一行一張，分隔符號優先順序：Tab > | > 逗號；沒有分隔符號的行略過；重複的正面略過
@@ -200,8 +275,466 @@
         // 驗證整份資料（還原備份可能寫回壞資料）：非物件 → 空；每個牌組只留合法卡片、最多 MAX_CARDS 張、最多 MAX_DECKS 副
         function cleanDecks(d) {
             if (!d || typeof d !== 'object' || Array.isArray(d)) return {};
-            return Object.fromEntries(Object.entries(d).slice(0, MAX_DECKS).map(([k, v]) => [k, Array.isArray(v) ? v.filter(validCard).slice(0, MAX_CARDS) : []]));
+            return Object.fromEntries(Object.entries(d).slice(0, MAX_DECKS).map(([k, v]) => [k, Array.isArray(v) ? v.filter(validCard).slice(0, MAX_CARDS).map(cleanEx) : []]));
         }
+        // 例句是選填欄位（舊卡片沒有）：不是字串就移除，過長截斷
+        function cleanEx(c) {
+            if (!('ex' in c)) return c;
+            const { ex, ...rest } = c;
+            return typeof ex === 'string' && ex.trim() ? { ...rest, ex: ex.slice(0, LIM.ex) } : rest;
+        }
+
+        // ===== 新卡片 / CSV 匯入 / 內建字庫 =====
+        const LIM = { f: 80, b: 200, ex: 200 };
+        const mkCard = (f, b, ex = '') => ({ f, b, ...(ex ? { ex } : {}), ease: 2.5, iv: 0, reps: 0, due: '', seen: false });
+        // 解析 CSV / TSV：每筆一行（不支援欄位內換行）；2 或 3 欄（單字、解釋、例句）；分隔符號依第一個非空白行自動判斷（Tab > 逗號 > | > 全形逗號）。
+        // 回傳 { cards, errors: [{ line, why }] }，line 是原文的行號（從 1 起算）
+        function parseCsvCards(text) {
+            const lines = String(text ?? '').replace(/^\uFEFF/, '').split(/\r?\n/), cards = [], errors = [];
+            const first = lines.find(l => l.trim()) || '', delim = ['\t', ',', '|', '，'].find(d => first.includes(d)) || ',';
+            let started = false;
+            lines.forEach((raw, i) => {
+                if (!raw.trim()) return;
+                const line = i + 1;
+                let cell;
+                try { cell = (parseCSV(raw, delim)[0] || []).map(x => x.trim()); } catch (e) { errors.push({ line, why: '雙引號沒有成對' }); started = true; return; }
+                const head = !started; started = true;
+                if (head && /^(word|front|term|單字|正面|詞彙)$/i.test(cell[0])) return;
+                while (cell.length > 2 && !cell[cell.length - 1]) cell.pop();
+                if (cell.length < 2 || cell.length > 3) { errors.push({ line, why: `需要 2 或 3 欄（這行有 ${cell.length} 欄）` }); return; }
+                const [f, b, ex = ''] = cell;
+                if (!f || !b) errors.push({ line, why: f ? '缺少解釋' : '缺少單字' });
+                else if (f.length > LIM.f) errors.push({ line, why: `單字超過 ${LIM.f} 字` });
+                else if (b.length > LIM.b) errors.push({ line, why: `解釋超過 ${LIM.b} 字` });
+                else if (ex.length > LIM.ex) errors.push({ line, why: `例句超過 ${LIM.ex} 字` });
+                else cards.push(mkCard(f, b, ex));
+            });
+            return { cards, errors };
+        }
+        // 合併進現有卡片。mode：skip 略過重複 / overwrite 覆蓋解釋與例句（保留學習進度）。新增超過 room 的拒絕（full 計數），不刪舊卡
+        function mergeCards(list, cards, mode = 'skip', room = MAX_CARDS - list.length) {
+            const out = list.slice(), at = new Map(out.map((c, i) => [c.f, i]));
+            let added = 0, updated = 0, skipped = 0, full = 0;
+            for (const c of cards) {
+                if (at.has(c.f)) {
+                    if (mode === 'overwrite') { const i = at.get(c.f); out[i] = { ...out[i], b: c.b, ...(c.ex ? { ex: c.ex } : {}) }; updated++; } else skipped++;
+                    continue;
+                }
+                if (added >= room) { full++; continue; }
+                at.set(c.f, out.length); out.push(c); added++;
+            }
+            return { list: out, added, updated, skipped, full };
+        }
+
+        // ===== 聽寫判分 =====
+        // 正規化：全形轉半形、小寫、弧形撇號 / 各種連字號統一、連字號與空白視為相同、去掉結尾標點與多餘空白
+        const spellNorm = (s) => String(s ?? '').normalize('NFKC').toLowerCase().replace(/[’‘`´]/g, "'").replace(/[‐‑–—−]/g, '-').replace(/[-\s]+/g, ' ').trim().replace(/[.,!?;:。，！？]+$/, '').trim();
+        const editOne = (a, b) => {                                          // 編輯距離是否恰為 1（含相鄰字母對調）
+            if (a === b || Math.abs(a.length - b.length) > 1) return false;
+            let i = 0; while (i < a.length && i < b.length && a[i] === b[i]) i++;
+            if (a.length === b.length) return a.slice(i + 1) === b.slice(i + 1) || (a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2));
+            const [l, s] = a.length > b.length ? [a, b] : [b, a];
+            return l.slice(i + 1) === s.slice(i);
+        };
+        // 目標可寫多種拼法：「color / colour」；整串與各部分都算對。near：差一個字母（長度 ≥ 4 才提示）
+        function judgeSpell(answer, target) {
+            const a = spellNorm(answer);
+            if (!a) return { ok: false, near: false };
+            const alts = [spellNorm(target), ...String(target ?? '').split(/\s+[\/／]\s+|[;；]/).map(spellNorm)].filter(Boolean);
+            if (alts.includes(a)) return { ok: true, near: false };
+            return { ok: false, near: a.length >= 4 && alts.some(t => editOne(a, t)) };
+        }
+
+        // ===== 內建字庫：多益核心字（詞|詞性|中文|例句） =====
+        const TOEIC_NAME = '多益核心字';
+        const TOEIC_RAW = `accommodate|v.|容納；提供住宿|The hotel can accommodate up to 300 guests.
+account|n.|帳戶；帳目|Please check your account balance before paying.
+accurate|adj.|準確的|The report must be accurate and up to date.
+achieve|v.|達成|We aim to achieve our sales target this quarter.
+acquire|v.|取得；併購|The company plans to acquire a smaller rival.
+address|v.|處理（問題）；對…演講|The manager will address the complaint today.
+adjust|v.|調整|Please adjust the chair to a comfortable height.
+administration|n.|行政；管理|She works in the administration department.
+advance|n.|預付；進展|Tickets must be booked well in advance.
+advertise|v.|刊登廣告|They advertise their products on social media.
+afford|v.|負擔得起|We cannot afford to hire more staff right now.
+agenda|n.|議程|Please send out the agenda before the meeting.
+agreement|n.|協議；合約|Both parties signed the agreement on Monday.
+allocate|v.|分配|The budget was allocated to three projects.
+allow|v.|允許|Employees are not allowed to park here.
+alternative|n.|替代方案|We need an alternative to this supplier.
+analysis|n.|分析|The analysis shows a rise in online sales.
+announce|v.|宣布|The firm will announce its new CEO tomorrow.
+annual|adj.|每年的|The annual report is due in March.
+anticipate|v.|預期|We anticipate a strong demand for the product.
+applicant|n.|申請人；應徵者|Each applicant must submit a résumé.
+application|n.|申請；應用程式|Your application is being processed.
+appointment|n.|約會；任命|I have a dental appointment at three.
+appreciate|v.|感激；欣賞|I appreciate your quick reply.
+approach|n.|方法|A new approach to training improved results.
+appropriate|adj.|適當的|Please wear appropriate clothing to the interview.
+approval|n.|批准|The plan needs approval from the board.
+approve|v.|批准|The committee approved the new budget.
+arrange|v.|安排|She arranged a meeting with the client.
+arrival|n.|抵達|Please confirm your arrival time.
+assemble|v.|組裝；集合|Workers assemble the parts on the line.
+assess|v.|評估|The team will assess the damage next week.
+asset|n.|資產|Our employees are our greatest asset.
+assign|v.|指派|The manager assigned the task to Tom.
+assistance|n.|協助|Thank you for your assistance with the project.
+associate|n.|同事；夥伴|She is a sales associate at the store.
+attach|v.|附上|Please see the attached file for details.
+attend|v.|出席|Over 200 people attended the conference.
+attendee|n.|與會者|All attendees must wear a name tag.
+attract|v.|吸引|The sale will attract more customers.
+audience|n.|觀眾；聽眾|The audience applauded the speaker.
+authorize|v.|授權|Only managers can authorize overtime.
+available|adj.|可用的；有空的|Is the conference room available at noon?
+award|n.|獎項|She received an award for excellent service.
+aware|adj.|知道的|Are you aware of the new safety rules?
+balance|n.|餘額；平衡|Your account balance is shown below.
+bankruptcy|n.|破產|The firm filed for bankruptcy last year.
+benefit|n.|福利；益處|The job offers good health benefits.
+bid|n.|投標；出價|Our bid for the contract was accepted.
+bill|n.|帳單|The electricity bill is due on the 15th.
+board|n.|董事會|The board meets every month.
+boost|v.|提升|The ad campaign boosted sales by 20 percent.
+branch|n.|分公司；分行|The bank opened a new branch downtown.
+brand|n.|品牌|It is a well-known brand of sportswear.
+breakdown|n.|故障；明細|There was a breakdown of the copy machine.
+brochure|n.|宣傳小冊|Please take a brochure at the front desk.
+budget|n.|預算|We are over budget this month.
+bulk|n.|大量|Buying in bulk saves money.
+cancel|v.|取消|The flight was canceled due to the storm.
+candidate|n.|候選人|The best candidate will be hired next week.
+capacity|n.|容量；產能|The hall has a capacity of 500 people.
+carrier|n.|運送業者；航空公司|The carrier delivers packages overnight.
+cashier|n.|收銀員|Please pay at the cashier.
+catalog|n.|型錄|Our new catalog is available online.
+catering|n.|外燴；餐飲服務|They hired a company for catering.
+celebrate|v.|慶祝|We celebrated the company's 20th anniversary.
+certificate|n.|證書|She earned a certificate in accounting.
+challenge|n.|挑戰|The project presents a big challenge.
+charge|n.|費用；v. 收費|There is no charge for delivery.
+check|n.|支票|He paid by check.
+claim|n.|索賠；主張|She filed an insurance claim.
+clarify|v.|釐清|Could you clarify the deadline for me?
+client|n.|客戶|We value every client.
+colleague|n.|同事|My colleague will cover for me.
+commercial|adj.|商業的|The company makes commercial software.
+commission|n.|佣金|Sales staff earn a commission on each sale.
+commit|v.|承諾；投入|We are committed to quality.
+communicate|v.|溝通|Good managers communicate clearly.
+commute|v.|通勤|He commutes to work by train.
+compare|v.|比較|Compare prices before you buy.
+compensate|v.|補償|The airline will compensate passengers for the delay.
+compete|v.|競爭|Small shops compete with large chains.
+competitive|adj.|有競爭力的|The firm offers competitive salaries.
+complaint|n.|抱怨；投訴|We received a complaint about the noise.
+complete|v.|完成|Please complete the form in black ink.
+compliance|n.|遵守；合規|All staff must ensure compliance with the rules.
+comply|v.|遵守|Companies must comply with safety regulations.
+component|n.|零件；成分|The factory makes parts and components.
+comprehensive|adj.|全面的|The plan offers comprehensive coverage.
+conclude|v.|結束；下結論|The meeting concluded at five o'clock.
+conduct|v.|進行；執行|The firm will conduct a survey next month.
+conference|n.|會議；研討會|She spoke at an international conference.
+confidential|adj.|機密的|The contract is strictly confidential.
+confirm|v.|確認|Please confirm your reservation by email.
+consequence|n.|後果|Late delivery has serious consequences.
+consider|v.|考慮|We are considering a new location.
+consistent|adj.|一致的；穩定的|The quality has been consistent for years.
+construction|n.|建設；施工|Road construction will begin in May.
+consult|v.|諮詢|You should consult a lawyer first.
+consumer|n.|消費者|Consumer spending rose last quarter.
+contact|v.|聯絡|Contact us if you have any questions.
+contract|n.|合約|The contract runs for two years.
+contribute|v.|貢獻|Everyone contributed to the success of the project.
+convenient|adj.|方便的|The office is in a convenient location.
+cooperate|v.|合作|The two firms agreed to cooperate.
+coordinate|v.|協調|She coordinates the training programs.
+cost|n.|成本|We need to reduce costs.
+courier|n.|快遞員|The courier delivered the package this morning.
+coverage|n.|承保範圍；報導|The policy provides full coverage.
+credit|n.|信用；貸方|You can pay by credit card.
+criteria|n.|標準（複數）|The candidates meet all the criteria.
+currency|n.|貨幣|Please change your money into local currency.
+customer|n.|顧客|The customer asked for a refund.
+customs|n.|海關|The shipment is stuck in customs.
+deadline|n.|截止日期|The deadline for applications is Friday.
+deal|n.|交易|They closed the deal yesterday.
+dealer|n.|經銷商|He works as a car dealer.
+debt|n.|債務|The company paid off its debt.
+decline|v.|下降；婉拒|Sales declined slightly in June.
+decrease|v.|減少|The number of orders decreased in winter.
+dedicate|v.|奉獻|She dedicated her career to teaching.
+defect|n.|瑕疵|The product had a manufacturing defect.
+delay|n.|延誤|There was a delay in shipping.
+delegate|v.|委派|A good manager knows how to delegate.
+deliver|v.|遞送|We deliver within three business days.
+demand|n.|需求|Demand for electric cars is growing.
+demonstrate|v.|示範；證明|He demonstrated how to use the machine.
+department|n.|部門|She works in the marketing department.
+deposit|n.|訂金；存款|A deposit of 20 percent is required.
+depreciate|v.|貶值|Cars depreciate quickly in the first year.
+describe|v.|描述|Please describe the problem in detail.
+destination|n.|目的地|Our final destination is Tokyo.
+detail|n.|細節|The contract lists every detail.
+determine|v.|決定；查明|We must determine the cause of the delay.
+develop|v.|開發；發展|The firm is developing a new app.
+device|n.|裝置|This device saves energy.
+directory|n.|名錄；目錄|Check the staff directory for his number.
+disclose|v.|透露|The company refused to disclose the price.
+discount|n.|折扣|Members receive a 10 percent discount.
+discuss|v.|討論|Let's discuss the plan after lunch.
+display|v.|展示|The new models are displayed in the lobby.
+distribute|v.|分發；配銷|The firm distributes goods across Asia.
+distributor|n.|經銷商；配銷商|We signed a deal with a local distributor.
+diverse|adj.|多樣的|The company has a diverse workforce.
+dividend|n.|股息|Shareholders received a dividend this year.
+document|n.|文件|Please bring all required documents.
+domestic|adj.|國內的|Domestic flights are often cheaper.
+donate|v.|捐贈|The firm donated computers to the school.
+draft|n.|草稿|Please review the first draft of the report.
+due|adj.|到期的|The payment is due on Monday.
+duty|n.|職責；關稅|It is her duty to inform the staff.
+earn|v.|賺得|She earns a good salary.
+economy|n.|經濟|The economy is slowly recovering.
+effective|adj.|有效的；生效的|The new policy is effective from May 1.
+efficient|adj.|有效率的|The new system is more efficient.
+eligible|adj.|有資格的|Full-time staff are eligible for the bonus.
+emphasize|v.|強調|The CEO emphasized the need for teamwork.
+employ|v.|僱用|The factory employs about 500 workers.
+employee|n.|員工|Each employee gets two weeks of vacation.
+employer|n.|雇主|Her employer offers flexible hours.
+enclose|v.|隨函附上|I have enclosed a copy of the invoice.
+encourage|v.|鼓勵|We encourage staff to share ideas.
+endorse|v.|背書；認可|The star endorsed the new product.
+enhance|v.|提升；增強|The update will enhance performance.
+enroll|v.|註冊；報名|He enrolled in a business course.
+ensure|v.|確保|Please ensure that all doors are locked.
+enterprise|n.|企業|It is a small enterprise with ten staff.
+entitle|v.|使有資格|The pass entitles you to free entry.
+equipment|n.|設備|The office equipment is out of date.
+estimate|n.|估價；v. 估計|Please send us an estimate for the repairs.
+evaluate|v.|評估|Managers evaluate staff once a year.
+evidence|n.|證據|There is no evidence of any error.
+exceed|v.|超過|Sales exceeded our expectations.
+exchange|v.|交換；兌換|You can exchange the item within 30 days.
+executive|n.|主管；高階主管|She is a senior executive at the bank.
+exhibit|n.|展覽品；v. 展出|The firm will exhibit its new products at the fair.
+expand|v.|擴張|The company plans to expand overseas.
+expense|n.|費用|Travel expenses will be reimbursed.
+expertise|n.|專業知識|He has expertise in digital marketing.
+expire|v.|到期|My passport expires next month.
+export|v.|出口|The country exports electronic goods.
+facility|n.|設施|The company has a new training facility.
+factor|n.|因素|Price is an important factor.
+feasible|adj.|可行的|The plan does not seem feasible.
+fee|n.|費用|There is a small fee for registration.
+fiscal|adj.|財政的；會計的|The fiscal year ends in December.
+fluctuate|v.|波動|Oil prices fluctuate daily.
+forecast|n.|預測|The sales forecast looks positive.
+form|n.|表格|Please fill out the form.
+franchise|n.|加盟店；特許經營|She owns a coffee shop franchise.
+freight|n.|貨運|Freight costs have risen sharply.
+fund|n.|資金|The project received funding from the government.
+gather|v.|聚集；蒐集|Staff gathered in the hall for the announcement.
+generate|v.|產生|The new product generated high profits.
+goods|n.|商品|The store sells household goods.
+grant|n.|補助金|The school received a research grant.
+guarantee|n.|保證|The watch comes with a two-year guarantee.
+guideline|n.|指導方針|Follow the safety guidelines at all times.
+headquarters|n.|總部|The firm's headquarters are in Taipei.
+hire|v.|僱用|We plan to hire five new engineers.
+honor|v.|兌現；表揚|The store will honor this coupon until Friday.
+implement|v.|實施|The firm will implement the plan in May.
+import|v.|進口|The shop imports wine from France.
+improve|v.|改善|We hope to improve customer service.
+incentive|n.|獎勵；誘因|Bonuses are an incentive to work harder.
+include|v.|包含|The price includes breakfast.
+income|n.|收入|Her monthly income has increased.
+incorporate|v.|納入；合併|The design incorporates several new features.
+increase|v.|增加|Prices will increase next month.
+incur|v.|招致（費用）|The firm incurred heavy losses.
+indicate|v.|顯示；指出|Results indicate a rise in demand.
+industry|n.|產業|He works in the fashion industry.
+inform|v.|通知|Please inform us of any changes.
+initial|adj.|最初的|The initial cost is high.
+innovative|adj.|創新的|It is an innovative design.
+inquiry|n.|詢問|We received an inquiry about the product.
+inspect|v.|檢查|Officials inspect the factory every year.
+install|v.|安裝|Technicians will install the software.
+instruct|v.|指示；教導|She instructed staff to close the office early.
+insurance|n.|保險|The policy includes travel insurance.
+interview|n.|面試|I have a job interview on Monday.
+inventory|n.|庫存|We check the inventory every week.
+invest|v.|投資|They invested heavily in new equipment.
+invoice|n.|發票；請款單|Please send the invoice by email.
+issue|n.|議題；v. 發行|The main issue is the cost.
+itinerary|n.|行程表|Here is your travel itinerary.
+job|n.|工作|She got a job at a bank.
+launch|v.|推出|The firm will launch a new phone in June.
+lease|n.|租約|The lease on the office ends in July.
+legal|adj.|合法的；法律的|You should get legal advice.
+liability|n.|責任；負債|The company accepts no liability for loss.
+license|n.|執照|You need a license to run a restaurant.
+limit|n.|限制|There is a limit of two bags per person.
+liquidate|v.|清算|The firm had to liquidate its assets.
+loan|n.|貸款|He took out a loan to buy a house.
+logistics|n.|物流|She manages logistics for the company.
+loss|n.|損失|The firm reported a loss this quarter.
+maintain|v.|維持；維修|It is hard to maintain high standards.
+maintenance|n.|維護|The machine needs regular maintenance.
+manage|v.|管理|She manages a team of ten.
+manufacture|v.|製造|The plant manufactures car parts.
+margin|n.|利潤；邊際|The profit margin is quite small.
+market|n.|市場|The firm leads the Asian market.
+material|n.|材料|The factory uses recycled materials.
+mature|adj.|成熟的；v. 到期|The bonds mature in five years.
+measure|n.|措施；v. 測量|The firm took measures to cut costs.
+merchandise|n.|商品|The store displays its merchandise by the door.
+merge|v.|合併|The two banks plan to merge.
+mention|v.|提到|As I mentioned, the meeting is at ten.
+minimum|n.|最小值|The minimum order is 50 units.
+minutes|n.|會議紀錄|Who will take the minutes today?
+monitor|v.|監控|Staff monitor the system around the clock.
+mortgage|n.|房屋貸款|They are paying off their mortgage.
+negotiate|v.|談判|We negotiated a lower price.
+net|adj.|淨額的|The net profit was two million dollars.
+notice|n.|通知|Please give two weeks' notice before leaving.
+notify|v.|通知|We will notify you when the order ships.
+objective|n.|目標|The main objective is to cut costs.
+obligation|n.|義務|You are under no obligation to buy.
+obtain|v.|取得|You can obtain a copy from the office.
+occupy|v.|佔用|The firm occupies three floors.
+offer|v.|提供|The shop offers free delivery.
+operate|v.|營運；操作|The store operates from nine to six.
+opportunity|n.|機會|It is a great opportunity for young graduates.
+option|n.|選項|You have two payment options.
+order|n.|訂單|We placed an order for 100 chairs.
+organize|v.|組織；籌辦|She organized the annual conference.
+outstanding|adj.|傑出的；未付的|There is an outstanding balance on your account.
+overdue|adj.|逾期的|Your payment is overdue.
+overtime|n.|加班|Staff will be paid for overtime.
+owe|v.|欠|The firm owes its supplier ten thousand dollars.
+package|n.|包裹；套裝方案|The package arrived this morning.
+participate|v.|參與|All staff are encouraged to participate.
+partner|n.|合夥人|She is a partner in a law firm.
+patent|n.|專利|The firm holds a patent for the device.
+payroll|n.|薪資單；薪資總額|The payroll is processed on the 25th.
+penalty|n.|罰款；懲罰|There is a penalty for late payment.
+pension|n.|退休金|He will receive a pension at 65.
+perform|v.|執行；表現|The machine performs well.
+permit|n.|許可證|You need a permit to build here.
+personnel|n.|人員；人事|Contact the personnel department.
+policy|n.|政策；保單|The company has a strict return policy.
+postpone|v.|延期|The meeting was postponed until Friday.
+potential|adj.|潛在的|We have many potential customers.
+precaution|n.|預防措施|Take precautions to avoid accidents.
+predict|v.|預測|Experts predict a rise in prices.
+premium|n.|保費；高級的|The monthly premium is fifty dollars.
+presentation|n.|簡報|She gave a presentation to the board.
+prevent|v.|預防|The new system prevents errors.
+previous|adj.|先前的|He worked at a previous company for five years.
+priority|n.|優先事項|Safety is our top priority.
+procedure|n.|程序|Follow the correct procedure when you apply.
+proceed|v.|繼續進行|Please proceed to gate 12.
+process|n.|流程；v. 處理|The process takes about two weeks.
+procure|v.|採購|The firm procures materials from overseas.
+produce|v.|生產|The plant produces 500 cars a day.
+productivity|n.|生產力|The new tool improved productivity.
+profit|n.|利潤|The company made a large profit.
+promote|v.|促銷；晉升|She was promoted to manager.
+promotion|n.|促銷活動；升遷|There is a special promotion this weekend.
+property|n.|房地產；財產|He owns property in the city center.
+proposal|n.|提案|The board accepted our proposal.
+prospect|n.|前景；潛在客戶|The job offers good career prospects.
+provide|v.|提供|The hotel provides free breakfast.
+purchase|v.|購買|You can purchase tickets online.
+qualification|n.|資格|She has the right qualifications for the job.
+quality|n.|品質|The firm is known for high quality.
+quarter|n.|季度|Sales rose in the third quarter.
+quote|n.|報價|Please send me a quote for the repairs.
+rate|n.|費率；比率|The hotel has a special weekend rate.
+receipt|n.|收據|Keep the receipt for your records.
+receive|v.|收到|We received your order on Tuesday.
+recession|n.|經濟衰退|The country is in a recession.
+recommend|v.|推薦|I recommend the seafood pasta.
+reduce|v.|減少|We aim to reduce waste.
+refund|n.|退款|You can get a full refund within a week.
+register|v.|註冊；登記|Please register before the event.
+regulation|n.|規定|Follow the safety regulations at all times.
+reimburse|v.|報銷|The firm will reimburse your travel costs.
+relocate|v.|搬遷|The office will relocate next spring.
+remind|v.|提醒|Please remind me to call the client.
+renew|v.|續約；更新|You must renew your license each year.
+rent|n.|租金|The rent is due on the first of the month.
+replace|v.|更換|We will replace the broken part.
+reply|v.|回覆|Please reply by Friday.
+representative|n.|代表|Our sales representative will visit you.
+request|n.|請求|We received a request for more information.
+require|v.|需要；要求|The job requires two years of experience.
+reservation|n.|預訂|I made a reservation for two at eight.
+resign|v.|辭職|The manager resigned last week.
+resolve|v.|解決|We resolved the problem quickly.
+resource|n.|資源|Human resources manages hiring.
+respond|v.|回應|Please respond to the invitation soon.
+responsible|adj.|負責的|She is responsible for the budget.
+restrict|v.|限制|Access is restricted to staff only.
+résumé|n.|履歷|Please send your résumé and cover letter.
+retail|n.|零售|She works in retail.
+retire|v.|退休|He will retire at the end of the year.
+revenue|n.|營收|Annual revenue reached ten million dollars.
+review|v.|審查|The manager will review your report.
+revise|v.|修訂|Please revise the schedule.
+salary|n.|薪水|The salary is paid monthly.
+sample|n.|樣品|Ask for a free sample.
+schedule|n.|時間表|The schedule has been changed.
+secure|adj.|安全的；v. 取得|The data is stored in a secure server.
+shareholder|n.|股東|Shareholders voted on the merger.
+shipment|n.|出貨；貨物|The shipment will arrive on Monday.
+shortage|n.|短缺|There is a shortage of skilled workers.
+sign|v.|簽署|Please sign at the bottom of the page.
+specification|n.|規格|Check the specifications before you order.
+staff|n.|員工|The staff meets every Monday.
+statement|n.|報表；聲明|Your bank statement is attached.
+strategy|n.|策略|The firm has a new marketing strategy.
+submit|v.|提交|Submit the report by noon.
+subscribe|v.|訂閱|You can subscribe to our newsletter.
+subsidiary|n.|子公司|The firm is a subsidiary of a larger group.
+substitute|n.|代替品|Use a substitute if it is out of stock.
+supervisor|n.|主管|Report any problems to your supervisor.
+supply|n.|供應；用品|We are running low on office supplies.
+supplier|n.|供應商|We changed our supplier to cut costs.
+survey|n.|問卷調查|The survey shows customers are happy.
+suspend|v.|暫停|The service was suspended for repairs.
+target|n.|目標|We hit our sales target.
+tariff|n.|關稅|The government raised the tariff on steel.
+tax|n.|稅|The price includes tax.
+temporary|adj.|暫時的|He took a temporary job.
+tenant|n.|房客|The tenant pays rent monthly.
+terminate|v.|終止|The contract was terminated in June.
+trade|n.|貿易|Trade between the two countries is growing.
+transfer|v.|轉移；調職|She was transferred to the Paris office.
+transaction|n.|交易|The transaction was completed online.
+turnover|n.|營業額；離職率|The firm's turnover rose sharply.
+update|v.|更新|Please update your contact details.
+upgrade|v.|升級|You can upgrade to business class.
+urgent|adj.|緊急的|This is an urgent matter.
+utility|n.|公用事業；水電瓦斯|The rent includes utilities.
+valid|adj.|有效的|The coupon is valid until June.
+vendor|n.|供應商；攤販|The vendor delivers every Friday.
+venue|n.|場地|The venue can hold 1,000 people.
+verify|v.|核實|Please verify your email address.
+vacancy|n.|職缺；空房|There is a vacancy in the sales team.
+warehouse|n.|倉庫|The goods are stored in a warehouse.
+warranty|n.|保固|The laptop has a one-year warranty.
+withdraw|v.|提領；撤回|You can withdraw cash at any branch.
+workforce|n.|勞動力|The firm has a workforce of 2,000.
+workshop|n.|工作坊|She attended a training workshop.
+yield|n.|收益；v. 產出|The investment yields five percent a year.`;
+        const TOEIC = TOEIC_RAW.split('\n').map(l => l.split('|')).filter(p => p.length === 4).map(([f, pos, zh, ex]) => mkCard(f, `(${pos}) ${zh}`, ex));
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -231,6 +764,7 @@
             face.replaceChildren(Object.assign(document.createElement('span'), { textContent: c.f }));
             if (flipped) {
                 face.firstChild.append(Object.assign(document.createElement('span'), { className: 'back', textContent: c.b }));
+                if (c.ex) face.firstChild.append(Object.assign(document.createElement('small'), { textContent: c.ex }));
                 $('#grades').replaceChildren(...GRADES.map(([n, g]) => {
                     const b = document.createElement('button'), nx = schedule(c, g, t), small = document.createElement('small');
                     small.textContent = nx.iv === 0 ? '今天再看' : `${nx.iv} 天後`;
@@ -270,6 +804,73 @@
             renderDecks(); buildQueue(); render();
         };
         $('#exportBtn').onclick = () => copyWithFeedback($('#exportBtn'), cards().map(c => `${c.f} | ${c.b}`).join('\n'), () => { $('#info').textContent = '複製失敗，請手動選取'; });
+
+        // ----- 聽寫 -----
+        let dict = null;                                                    // { order, i, ok, res }
+        const canSpeak = !!window.speechSynthesis;
+        const voiceMissing = (lang) => { try { const v = speechSynthesis.getVoices(); return v.length > 0 && !v.some(x => x.lang.toLowerCase().replace('_', '-').startsWith(lang.slice(0, 2).toLowerCase())); } catch { return false; } };
+        function dictNote() {
+            const lang = $('#dictLang').value;
+            $('#dictNote').textContent = !canSpeak ? '這個瀏覽器 / 裝置沒有語音朗讀功能，無法聽寫；會改成顯示解釋，讓你看解釋拼單字。' : voiceMissing(lang) ? '這個裝置似乎沒有安裝此語言的語音，可能聽不到聲音；可勾選「顯示解釋當提示」。' : '';
+        }
+        const dictCur = () => dict && cards()[dict.order[dict.i]];
+        const dictSay = () => { const c = dictCur(); if (c && canSpeak) Util.speak(c.f, { lang: $('#dictLang').value, rate: 0.85 }); };
+        function dictRender() {
+            const box = $('#dictBox'); box.hidden = !dict; if (!dict) return;
+            const n = dict.order.length, c = dictCur();
+            if (!c) {
+                box.innerHTML = `<p class="res ${dict.ok === n ? 'ok' : ''}">完成！答對 ${dict.ok} / ${n} 題</p><div class="row"><button class="primary" id="dAgain">再來一回</button></div>`;
+                $('#dAgain').onclick = dictStart; return;
+            }
+            const hint = $('#dictHint').checked || !canSpeak;
+            box.innerHTML = `<p class="muted">第 ${dict.i + 1} / ${n} 題　答對 ${dict.ok}</p>${hint ? `<p>解釋：${esc(c.b)}</p>` : ''}<div class="row">${canSpeak ? '<button id="dSay">🔊 再聽一次</button>' : ''}</div>`
+                + `<input type="text" id="dIn" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="輸入拼寫" placeholder="輸入你聽到的單字" ${dict.res ? 'disabled' : ''}>`
+                + (dict.res ? `<div class="res ${dict.res.ok ? 'ok' : 'bad'}">${dict.res.ok ? '✔ 正確' : dict.res.near ? '✘ 差一點' : '✘ 錯了'}：${esc(c.f)}</div><p class="muted">${esc(c.b)}</p>` : '')
+                + `<div class="row"><button class="primary" id="dGo">${dict.res ? '下一題' : '送出'}</button></div>`;
+            if ($('#dSay')) $('#dSay').onclick = dictSay;
+            $('#dGo').onclick = () => {
+                if (dict.res) { dict.i++; dict.res = null; dictRender(); dictSay(); if ($('#dIn')) $('#dIn').focus(); return; }
+                dict.res = judgeSpell($('#dIn').value, c.f); if (dict.res.ok) dict.ok++; dictRender();
+            };
+            if (!dict.res) $('#dIn').onkeydown = (e) => { if (e.key === 'Enter') $('#dGo').click(); }; else $('#dGo').focus();
+        }
+        function dictStart() {
+            if (!cards().length) { $('#dictNote').textContent = '目前詞庫是空的，先新增卡片。'; return; }
+            dictNote(); dict = { order: shuffle(cards().map((_, i) => i)).slice(0, 20), i: 0, ok: 0, res: null }; dictRender(); dictSay();
+            if ($('#dIn')) $('#dIn').focus();
+        }
+        $('#dictStart').onclick = dictStart; $('#dictLang').onchange = dictNote; $('#dictHint').onchange = () => dictRender();
+        dictNote();
+
+        // ----- CSV 匯入 -----
+        let csvPending = null;
+        function csvPreview() {
+            const { cards: cs, errors } = parseCsvCards($('#csv').value);
+            if (!cur) { $('#csvPrev').textContent = '請先建立詞庫'; return; }
+            const m = mergeCards(cards(), cs, $('#csvDup').value);
+            csvPending = cs.length ? cs : null; $('#csvGo').disabled = !(m.added || m.updated);
+            const e = errors.slice(0, 30).map(x => `<div class="err">第 ${x.line} 行：${esc(x.why)}</div>`).join('') + (errors.length > 30 ? `<div class="err">…還有 ${errors.length - 30} 行錯誤</div>` : '');
+            $('#csvPrev').innerHTML = `預覽：新增 <b>${m.added}</b>、覆蓋 <b>${m.updated}</b>、略過重複 <b>${m.skipped}</b>、格式錯誤 <b>${errors.length}</b>` + (m.full ? `<div class="err">詞庫已達 ${MAX_CARDS} 張上限，有 ${m.full} 張新卡無法加入</div>` : '') + e
+                + (cs.length ? '<div class="muted">前幾筆：' + cs.slice(0, 3).map(c => esc(`${c.f}＝${c.b}${c.ex ? '（' + c.ex + '）' : ''}`)).join('；') + '</div>' : '');
+        }
+        $('#csvPreview').onclick = csvPreview;
+        $('#csv').oninput = $('#csvDup').onchange = () => { $('#csvGo').disabled = true; csvPending = null; };
+        $('#csvGo').onclick = () => {
+            if (!cur || !csvPending) return;
+            const m = mergeCards(cards(), csvPending, $('#csvDup').value);
+            decks[cur] = m.list; save(); $('#csv').value = ''; csvPending = null; $('#csvGo').disabled = true;
+            $('#csvPrev').textContent = `已匯入：新增 ${m.added}、覆蓋 ${m.updated}、略過 ${m.skipped}` + (m.full ? `；${m.full} 張因超過 ${MAX_CARDS} 張上限被拒絕` : '');
+            renderDecks(); buildQueue(); render();
+        };
+
+        // ----- 內建字庫 -----
+        $('#addToeic').onclick = () => {
+            const had = !!decks[TOEIC_NAME];
+            if (!had && Object.keys(decks).length >= MAX_DECKS) { $('#toeicInfo').textContent = `最多 ${MAX_DECKS} 個詞庫，請先刪除不用的`; return; }
+            const m = mergeCards(decks[TOEIC_NAME] || [], TOEIC);
+            decks[TOEIC_NAME] = m.list; cur = TOEIC_NAME; save(); renderDecks(); buildQueue(); render();
+            $('#toeicInfo').textContent = m.added ? (had ? `補上缺少的 ${m.added} 字` : `已建立詞庫，共 ${m.added} 字`) : '這副牌的字都已經在了，沒有新增';
+        };
 
         renderDecks(); buildQueue(); render();
     </script>

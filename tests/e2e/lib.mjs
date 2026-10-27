@@ -16,7 +16,7 @@ export async function launchEdge(extraArgs = []) {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'st-e2e-'));
     // Edge 的啟動程序會立刻結束（puppeteer.launch 會誤判失敗），所以自己啟動再用除錯埠連線
     const port = 9300 + Math.floor(Math.random() * 600);
-    spawn(executablePath, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${path.join(tmp, 'profile')}`, '--disable-extensions', '--no-first-run', '--enable-automation', ...extraArgs, 'about:blank'], { stdio: 'ignore', detached: true }).unref();
+    spawn(executablePath, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${path.join(tmp, 'profile')}`, '--disable-extensions', '--no-first-run', '--enable-automation', '--force-prefers-no-reduced-motion', ...extraArgs, 'about:blank'], { stdio: 'ignore', detached: true }).unref();
     let browser;
     for (let i = 0; i < 50 && !browser; i++) {
         try { browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${port}`, defaultViewport: null }); } catch { await new Promise(r => setTimeout(r, 200)); }

@@ -6,7 +6,11 @@ const set = (v) => page.evaluate((v) => { const q = document.querySelector('#q')
 const n = () => page.$$eval('details.t', d => d.length);
 assert.ok(await n() >= 15);
 await page.evaluate(() => document.querySelector('#cats button[data-c="韓文"]').click());
-assert.equal(await n(), 5);
+assert.equal(await n(), await page.evaluate(() => TOPICS.filter(t => t.cat === '韓文').length));
+for (const c of ['其他語言', '中文與公文']) {
+    await page.evaluate((c) => document.querySelector(`#cats button[data-c="${c}"]`).click(), c);
+    assert.ok(await n() >= 2, c);
+}
 await page.evaluate(() => document.querySelector('#cats button[data-c=""]').click());
 await set('廁所');
 assert.ok(await n() >= 4);
