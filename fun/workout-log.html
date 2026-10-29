@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
     <meta name="description" content="重訓記錄：記下每次訓練的動作、重量與次數，自動算預估 1RM、個人最佳（PR）、1RM 趨勢圖與每週訓練量，資料只存在你的瀏覽器。">
-    <meta name="st-keys" content="workout_log,workout_moves,workout_prefs">
+    <meta name="st-keys" content="workout_log,workout_moves,workout_prefs,workout_plan">
     <meta property="og:title" content="重訓記錄" />
     <meta property="og:description" content="記錄每組重量與次數，看預估 1RM 與 PR。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
@@ -49,6 +49,14 @@
         .setrow input {
             flex: 1;
             min-width: 0;
+        }
+
+        .setrow {
+            flex-wrap: wrap;
+        }
+
+        .setrow .rp {
+            flex: 1 1 5em;
         }
 
         .setrow span {
@@ -180,6 +188,24 @@
             <div id="chart"></div>
             <h2 style="margin-top:14px">每週訓練量（近 8 週）</h2>
             <div id="weekly"></div>
+            <h2 style="margin-top:14px">訓練負荷與 RPE（全部動作，近 8 週）</h2>
+            <p class="note">週訓練量 = 組數 × 次數 × 重量；平均 RPE 取每組 RPE，沒填的組用整次訓練的 RPE。</p>
+            <div id="load"></div>
+        </div>
+
+        <div class="card" id="planCard">
+            <h2>重訓菜單產生</h2>
+            <p class="note">依訓練天數與目標產生分化菜單範本，僅為一般性範本、非個人化處方；有傷痛或疾病請先問醫師 / 教練。</p>
+            <div class="row">
+                <div class="f"><label for="pgDays">每週訓練天數</label><select id="pgDays"></select></div>
+                <div class="f"><label for="pgGoal">目標</label><select id="pgGoal"></select></div>
+                <button class="sm" id="pgGen">產生菜單</button>
+            </div>
+            <div id="pgDraft"></div>
+            <div class="row"><button class="primary" id="pgApply" hidden>套用為我的計畫</button></div>
+            <h2 style="margin-top:14px">我的計畫</h2>
+            <div id="pgPlan"></div>
+            <div class="row"><button class="sm" id="pgClear" hidden>清除計畫</button></div>
         </div>
 
         <div class="card">
@@ -227,6 +253,8 @@
         <li>「動作統計」顯示該動作的預估 1RM、重量 / 1RM / 次數 PR、近 12 次趨勢與每週訓練量；破紀錄的那筆歷史會標 🏆。</li>
         <li>歷史可「編輯」「刪除」「複製」成文字。kg / lb 與 Epley / Brzycki 只影響顯示與計算方式，不改你輸入的資料。</li>
         </ol>
+        <p>RPE（自覺強度 1–10）可每組填（選填，0.5 刻度），「訓練負荷與 RPE」顯示近 8 週每週組數、總訓練量、平均 RPE 與和上週的變化。</p>
+        <p>「重訓菜單產生」：選每週訓練天數（1–6）與目標（肌力 / 增肌 / 耐力），產生推拉腿或上下肢等分化範本；按「套用為我的計畫」存起來，計畫裡每個動作的「記錄」會把動作與組數、次數帶進上面的表單，補上重量就能記錄。範本不是個人化處方，有傷痛或疾病請先問醫師 / 教練。</p>
         <h3>範例</h3>
         <div class="eg">深蹲 100 kg × 5：Epley 預估 1RM = 100 × (1 + 5/30) = 116.7 kg
         Brzycki = 100 × 36 / (37 − 5) = 112.5 kg
@@ -235,7 +263,8 @@
         <ul>
         <li>資料只存在本機瀏覽器，請用右上角「💾」備份。</li>
         <li>上限：訓練紀錄 5,000 次、每次最多 40 組、自訂動作 50 個；達到上限會拒絕新增並提示，請先刪除舊紀錄。</li>
-        <li>清除：每筆有「刪除」；「資料管理」可刪某動作的全部紀錄、刪一年前的紀錄、清除全部（連同自訂動作），都會先確認且無法復原。刪除自訂動作時，它的紀錄也會一併刪除。</li>
+        <li>清除：每筆有「刪除」；「資料管理」可刪某動作的全部紀錄、刪一年前的紀錄、清除全部（連同自訂動作），都會先確認且無法復原。刪除自訂動作時，它的紀錄也會一併從訓練紀錄與計畫中刪除。</li>
+        <li>計畫最多 1 份（最多 7 天、每天 12 個動作），套用新的會取代舊的；「清除計畫」可單獨刪除，「清除全部」也會一併清掉計畫。</li>
         <li>重量以 kg 儲存；切到 lb 時，輸入也以 lb 為單位並換算存成 kg。預估 1RM 只是估算，次數越多越不準（Brzycki 超過 36 次以 36 次計）。</li>
         </ul>
     </template>
@@ -289,9 +318,62 @@
         }
         // 近 n 次訓練的預估 1RM（由舊到新）
         const trend = (log, moveId, formula, n = 12) => chrono(log).filter(e => e.m === moveId).slice(-n).map(e => ({ d: e.d, v: entryStats(e, formula).e1rm }));
+        const monOf = (d) => day.shift(d, -((day.num(d) + 3) % 7));
+        // 每組 RPE：1–10、0.5 刻度（選填，放在組別陣列第 3 格）
+        const validRpe = (v) => Number.isFinite(v) && v >= 1 && v <= 10 && Math.abs(v * 2 - Math.round(v * 2)) < 1e-9;
+        // 每週訓練負荷（全部動作，週一起算，最近 n 週含本週）：組數、總量（組數×次數×重量）、平均 RPE（組沒填用整次訓練的 RPE）、RPE ≥ 9 的組數、與上週總量的變化 %
+        function weeklyLoad(log, today, n = 8) {
+            const thisWk = monOf(today), weeks = [];
+            for (let i = n - 1; i >= 0; i--) weeks.push({ wk: day.shift(thisWk, -7 * i), sets: 0, vol: 0, rs: 0, rn: 0, hard: 0 });
+            for (const e of log) {
+                const w = weeks.find(x => x.wk === monOf(e.d)); if (!w) continue;
+                for (const [wt, r, rp] of e.s) {
+                    w.sets++; w.vol += wt * r;
+                    const x = validRpe(rp) ? rp : e.rpe;
+                    if (x) { w.rs += x; w.rn++; if (x >= 9) w.hard++; }
+                }
+            }
+            return weeks.map((w, i) => ({ wk: w.wk, sets: w.sets, vol: w.vol, avgRpe: w.rn ? r1(w.rs / w.rn) : null, hard: w.hard, chg: i && weeks[i - 1].vol > 0 ? Math.round((w.vol / weeks[i - 1].vol - 1) * 100) : null }));
+        }
+
+        // ---------- 重訓菜單產生（一般性範本；主項 = 大重量複合動作）----------
+        const TPL = {
+            full: ['全身', [['squat', 1], ['bench', 1], ['row', 1], ['ohp', 0], ['rdl', 0], ['curl', 0]]],
+            upper: ['上肢', [['bench', 1], ['row', 1], ['ohp', 0], ['latpd', 0], ['curl', 0], ['pushdown', 0]]],
+            lower: ['下肢', [['squat', 1], ['rdl', 1], ['legpress', 0], ['legcurl', 0], ['calf', 0]]],
+            push: ['推', [['bench', 1], ['ohp', 1], ['incline', 0], ['lateral', 0], ['pushdown', 0]]],
+            pull: ['拉', [['deadlift', 1], ['row', 1], ['pullup', 0], ['facepull', 0], ['curl', 0]]],
+            legs: ['腿', [['squat', 1], ['rdl', 0], ['lunge', 0], ['legcurl', 0], ['calf', 0]]],
+        };
+        const SPLITS = { 1: ['full'], 2: ['upper', 'lower'], 3: ['push', 'pull', 'legs'], 4: ['upper', 'lower', 'upper', 'lower'], 5: ['push', 'pull', 'legs', 'upper', 'lower'], 6: ['push', 'pull', 'legs', 'push', 'pull', 'legs'] };
+        const GOALS = { strength: ['肌力（主項 4×5、輔助 3×8）', [4, 5, 3, 8]], muscle: ['增肌（主項 4×8、輔助 3×12）', [4, 8, 3, 12]], endure: ['耐力 / 減脂（全部 3×15）', [3, 15, 3, 15]] };
+        // 產生菜單 { goal, days: [{ name, items: [{ m, sets, reps }] }] }；天數 1–6、目標不合法回 null
+        function genPlan(days, goal) {
+            const sp = SPLITS[days], g = GOALS[goal]; if (!sp || !g) return null;
+            const cnt = {}; for (const k of sp) cnt[k] = (cnt[k] || 0) + 1;
+            const seen = {};
+            return { goal, days: sp.map(k => { const [nm, list] = TPL[k]; seen[k] = (seen[k] || 0) + 1; return { name: nm + (cnt[k] > 1 ? ' ' + 'AB'[seen[k] - 1] : ''), items: list.map(([m, main]) => ({ m, sets: g[1][main ? 0 : 2], reps: g[1][main ? 1 : 3] })) }; }) };
+        }
+        const MAX_PLAN_DAYS = 7, MAX_PLAN_ITEMS = 12;
+        // 載入驗證：壞資料回 null；截斷到上限
+        function cleanPlan(raw) {
+            if (!raw || typeof raw !== 'object' || !Array.isArray(raw.days)) return null;
+            const days = raw.days.slice(0, MAX_PLAN_DAYS).map(d => {
+                if (!d || typeof d.name !== 'string' || !Array.isArray(d.items)) return null;
+                const items = d.items.slice(0, MAX_PLAN_ITEMS).filter(i => i && typeof i.m === 'string' && i.m && Number.isInteger(i.sets) && i.sets >= 1 && i.sets <= MAX_SETS && Number.isInteger(i.reps) && i.reps >= 1 && i.reps <= 1000).map(i => ({ m: i.m, sets: i.sets, reps: i.reps }));
+                return { name: d.name.slice(0, 20), items };
+            }).filter(Boolean);
+            return days.length ? { goal: typeof raw.goal === 'string' && GOALS[raw.goal] ? raw.goal : 'muscle', days } : null;
+        }
+        // 刪除動作時，同步從計畫拿掉；沒有任何動作的天數也移除，整份空了回 null
+        function planWithoutMove(plan, id) {
+            if (!plan) return null;
+            const days = plan.days.map(d => ({ ...d, items: d.items.filter(i => i.m !== id) })).filter(d => d.items.length);
+            return days.length ? { ...plan, days } : null;
+        }
         // 每週（週一起算）總訓練量：最近 n 週（含本週）；moveId 為空表示全部動作
         function weeklyVolume(log, today, moveId, n = 8) {
-            const mon = (d) => day.shift(d, -((day.num(d) + 3) % 7)), thisWk = mon(today), weeks = [];
+            const mon = monOf, thisWk = mon(today), weeks = [];
             for (let i = n - 1; i >= 0; i--) weeks.push({ wk: day.shift(thisWk, -7 * i), vol: 0 });
             for (const e of log) {
                 if (moveId && e.m !== moveId) continue;
@@ -302,7 +384,7 @@
         // 驗證 / 清理一筆紀錄；無效回 null
         function cleanEntry(x) {
             if (!x || typeof x !== 'object' || typeof x.id !== 'string' || !x.id || typeof x.m !== 'string' || !x.m || typeof x.d !== 'string' || !DATE_RE.test(x.d) || !Array.isArray(x.s)) return null;
-            const s = x.s.filter(a => Array.isArray(a) && Number.isFinite(a[0]) && a[0] >= 0 && a[0] <= 2000 && Number.isInteger(a[1]) && a[1] >= 1 && a[1] <= 1000).slice(0, MAX_SETS).map(a => [Math.round(a[0] * 1000) / 1000, a[1]]);
+            const s = x.s.filter(a => Array.isArray(a) && Number.isFinite(a[0]) && a[0] >= 0 && a[0] <= 2000 && Number.isInteger(a[1]) && a[1] >= 1 && a[1] <= 1000).slice(0, MAX_SETS).map(a => (validRpe(a[2]) ? [Math.round(a[0] * 1000) / 1000, a[1], a[2]] : [Math.round(a[0] * 1000) / 1000, a[1]]));
             if (!s.length) return null;
             return { id: x.id, d: x.d, m: x.m, s, n: typeof x.n === 'string' ? x.n.slice(0, 200) : '', rpe: Number.isFinite(x.rpe) && x.rpe >= 1 && x.rpe <= 10 ? x.rpe : null };
         }
@@ -325,14 +407,15 @@
         const toKg = (v, lb) => Math.round((lb ? v / LB : v) * 1000) / 1000;
         function entryText(e, name, lb) {
             const u = lb ? 'lb' : 'kg';
-            return `${e.d} ${name}\n` + e.s.map(([w, r], i) => `${i + 1}. ${dispW(w, lb)}${u} × ${r}`).join('\n') + (e.rpe ? `\nRPE ${e.rpe}` : '') + (e.n ? `\n${e.n}` : '');
+            return `${e.d} ${name}\n` + e.s.map(([w, r, rp], i) => `${i + 1}. ${dispW(w, lb)}${u} × ${r}` + (rp ? ` @RPE ${rp}` : '')).join('\n') + (e.rpe ? `\nRPE ${e.rpe}` : '') + (e.n ? `\n${e.n}` : '');
         }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
         const el = (t, p, ...k) => { const e = Object.assign(document.createElement(t), p); e.append(...k); return e; };
-        let log = cleanLog(store.get('workout_log', [])), custom = cleanMoves(store.get('workout_moves', [])), prefs = cleanPrefs(store.get('workout_prefs', null));
-        let editing = null, shown = 60, setRows = [];
+        let log = cleanLog(store.get('workout_log', [])), custom = cleanMoves(store.get('workout_moves', [])), prefs = cleanPrefs(store.get('workout_prefs', null)), plan = cleanPlan(store.get('workout_plan', null));
+        let editing = null, shown = 60, setRows = [], draft = null;
+        const savePlan = () => store.set('workout_plan', plan);
         const saveLog = () => store.set('workout_log', log), saveMoves = () => store.set('workout_moves', custom), savePrefs = () => store.set('workout_prefs', prefs);
         const moves = () => [...BUILTIN, ...custom];
         const mvName = (id) => { const m = moves().find(x => x.id === id); return m ? m.zh : id + '（已刪除的動作）'; };
@@ -349,9 +432,10 @@
             $('#sets').replaceChildren(...setRows.map((r, i) => {
                 const w = el('input', { type: 'number', min: 0, step: 'any', inputmode: 'decimal', value: r[0], placeholder: u() }), n = el('input', { type: 'number', min: 1, step: 1, inputmode: 'numeric', value: r[1], placeholder: '次數' });
                 w.setAttribute('aria-label', `第 ${i + 1} 組重量（${u()}）`); n.setAttribute('aria-label', `第 ${i + 1} 組次數`);
-                w.oninput = () => { r[0] = w.value; }; n.oninput = () => { r[1] = n.value; };
+                const rp = el('input', { type: 'number', className: 'rp', min: 1, max: 10, step: 0.5, inputmode: 'decimal', value: r[2] ?? '', placeholder: 'RPE' }); rp.setAttribute('aria-label', `第 ${i + 1} 組 RPE（選填）`);
+                w.oninput = () => { r[0] = w.value; }; n.oninput = () => { r[1] = n.value; }; rp.oninput = () => { r[2] = rp.value; };
                 const del = el('button', { className: 'sm', textContent: '×' }); del.setAttribute('aria-label', `刪除第 ${i + 1} 組`); del.onclick = () => { setRows.splice(i, 1); if (!setRows.length) setRows.push(['', '']); renderSets(); };
-                return el('div', { className: 'setrow' }, el('span', { textContent: `#${i + 1}` }), w, el('span', { textContent: u() }), n, el('span', { textContent: '下' }), del);
+                return el('div', { className: 'setrow' }, el('span', { textContent: `#${i + 1}` }), w, el('span', { textContent: u() }), n, el('span', { textContent: '下' }), rp, del);
             }));
         }
         function render() {
@@ -370,16 +454,20 @@
             }
             const wk = weeklyVolume(log, day.today(), mid), mx = Math.max(1, ...wk.map(x => x.vol));
             $('#weekly').replaceChildren(...wk.map(x => el('div', { className: 'wk' }, el('span', { textContent: x.wk.slice(5) }), el('i', { style: `width:${Math.max(x.vol ? 2 : 0, x.vol / mx * 55)}%` }), el('span', { textContent: `${fmt(dispW(x.vol, prefs.lb))} ${u()}` }))));
+            const ld = weeklyLoad(log, day.today()), lmx = Math.max(1, ...ld.map(x => x.vol));
+            $('#load').replaceChildren(...ld.map(x => el('div', { className: 'it' }, el('div', { className: 'wk' }, el('span', { textContent: x.wk.slice(5) }), el('i', { style: `width:${Math.max(x.vol ? 2 : 0, x.vol / lmx * 55)}%` }), el('span', { textContent: `${fmt(dispW(x.vol, prefs.lb))} ${u()}` })),
+                el('small', { textContent: x.sets ? `${x.sets} 組・平均 RPE ${x.avgRpe ?? '—'}・RPE ≥ 9 共 ${x.hard} 組` + (x.chg === null ? '' : `・比上週 ${x.chg > 0 ? '+' : ''}${x.chg}%`) : '沒有訓練' }))));
+            renderPlan();
             // 歷史
             const flags = {}; for (const id of new Set(log.map(e => e.m))) Object.assign(flags, prFlags(log, id, f));
             const list = chrono(log).reverse(); let lastD = '';
             $('#hist').replaceChildren(...(list.length ? list.slice(0, shown).flatMap(e => {
                 const s = entryStats(e, f), fl = flags[e.id], out = [];
                 if (e.d !== lastD) { lastD = e.d; out.push(el('div', { className: 'dh', textContent: e.d })); }
-                const row = el('div', { className: 'it' }, el('b', { textContent: mvName(e.m) + (fl ? ' 🏆' : '') }), el('small', { textContent: e.s.map(([w, r]) => `${fmt(dispW(w, prefs.lb))}×${r}`).join('、') }),
+                const row = el('div', { className: 'it' }, el('b', { textContent: mvName(e.m) + (fl ? ' 🏆' : '') }), el('small', { textContent: e.s.map(([w, r, rp]) => `${fmt(dispW(w, prefs.lb))}×${r}` + (rp ? `@${rp}` : '')).join('、') }),
                     el('small', { textContent: `預估 1RM ${fmt(dispW(s.e1rm, prefs.lb))} ${u()}・訓練量 ${fmt(dispW(s.vol, prefs.lb))} ${u()}` + (fl ? `・破紀錄：${[fl.e && '1RM', fl.w && '重量', fl.r && '次數'].filter(Boolean).join('、')}` : '') + (e.rpe ? `・RPE ${e.rpe}` : '') + (e.n ? `・${e.n}` : '') }));
                 const bt = el('div', { className: 'btns' }), ed = el('button', { className: 'sm', textContent: '編輯' }), cp = el('button', { className: 'sm', textContent: '複製' }), dl = el('button', { className: 'sm', textContent: '刪除' });
-                ed.onclick = () => startEdit(e); cp.onclick = () => copyWithFeedback(entryText(e, mvName(e.m), prefs.lb), cp, '複製');
+                ed.onclick = () => startEdit(e); cp.onclick = () => copyWithFeedback(cp, entryText(e, mvName(e.m), prefs.lb));
                 dl.setAttribute('aria-label', `刪除 ${e.d} ${mvName(e.m)}`); dl.onclick = () => { if (confirm('刪除這次訓練紀錄？無法復原。')) { log = log.filter(x => x.id !== e.id); if (editing === e.id) stopEdit(); saveLog(); render(); } };
                 bt.append(ed, cp, dl); row.append(bt); out.push(row); return out;
             }) : [el('p', { className: 'muted', textContent: '還沒有訓練紀錄' })]));
@@ -387,22 +475,23 @@
             $('#count').textContent = `目前 ${log.length} / ${MAX_LOG} 次訓練、自訂動作 ${custom.length} / ${MAX_CUSTOM} 個。`;
             $('#custom').replaceChildren(...custom.map(m => {
                 const d = el('button', { className: 'sm', textContent: '刪除' }); d.setAttribute('aria-label', '刪除動作 ' + m.zh);
-                d.onclick = () => { const n = log.filter(e => e.m === m.id).length; if (confirm(`刪除自訂動作「${m.zh}」？它的 ${n} 筆訓練紀錄也會一併刪除，無法復原。`)) { custom = custom.filter(x => x.id !== m.id); log = log.filter(e => e.m !== m.id); saveMoves(); saveLog(); renderMoveSelect(); render(); } };
+                d.onclick = () => { const n = log.filter(e => e.m === m.id).length; if (confirm(`刪除自訂動作「${m.zh}」？它的 ${n} 筆訓練紀錄也會一併刪除，無法復原。`)) { custom = custom.filter(x => x.id !== m.id); log = log.filter(e => e.m !== m.id); plan = planWithoutMove(plan, m.id); if (draft) draft = planWithoutMove(draft, m.id); saveMoves(); saveLog(); savePlan(); renderMoveSelect(); render(); } };
                 return el('div', { className: 'mv' }, el('span', { textContent: m.en ? `${m.zh} ${m.en}` : m.zh }), d);
             }));
         }
         function startEdit(e) {
             editing = e.id; $('#date').value = e.d; $('#move').value = e.m; $('#rpe').value = e.rpe || ''; $('#note').value = e.n;
-            setRows = e.s.map(([w, r]) => [dispW(w, prefs.lb), r]); renderSets(); $('#save').textContent = '更新這次訓練'; $('#cancel').hidden = false; $('#msg').textContent = '編輯中'; window.scrollTo({ top: 0 }); render();
+            setRows = e.s.map(([w, r, rp]) => [dispW(w, prefs.lb), r, rp ?? '']); renderSets(); $('#save').textContent = '更新這次訓練'; $('#cancel').hidden = false; $('#msg').textContent = '編輯中'; window.scrollTo({ top: 0 }); render();
         }
         function stopEdit() { editing = null; $('#save').textContent = '記錄這次訓練'; $('#cancel').hidden = true; $('#msg').textContent = ''; }
 
         $('#save').onclick = () => {
-            const sets = setRows.filter(r => r[0] !== '' || r[1] !== '').map(r => [toKg(parseFloat(r[0]), prefs.lb), Number(r[1])]);
+            const sets = setRows.filter(r => r[0] !== '' || r[1] !== '').map(r => (r[2] === '' || r[2] == null ? [toKg(parseFloat(r[0]), prefs.lb), Number(r[1])] : [toKg(parseFloat(r[0]), prefs.lb), Number(r[1]), Number(r[2])]));
             const rpe = $('#rpe').value === '' ? null : parseFloat($('#rpe').value);
             const e = cleanEntry({ id: editing || newId(), d: $('#date').value, m: $('#move').value, s: sets, n: $('#note').value.trim(), rpe });
             if (!e || e.s.length !== sets.length) { $('#msg').textContent = '請填日期，每組需有重量（≥ 0）與次數（1 以上的整數）'; return; }
             if (sets.length > MAX_SETS) { $('#msg').textContent = `每次最多 ${MAX_SETS} 組`; return; }
+            if (sets.some((a, i) => a.length === 3 && e.s[i].length !== 3)) { $('#msg').textContent = '每組 RPE 需介於 1 到 10（0.5 刻度）'; return; }
             if ($('#rpe').value !== '' && e.rpe === null) { $('#msg').textContent = 'RPE 需介於 1 到 10'; return; }
             if (editing) log = log.map(x => (x.id === editing ? e : x));
             else { if (log.length >= MAX_LOG) { $('#msg').textContent = `訓練紀錄已達 ${MAX_LOG} 次上限，請先刪除舊紀錄（資料管理）`; return; } log.push(e); }
@@ -412,7 +501,7 @@
         $('#addSet').onclick = () => { if (setRows.length >= MAX_SETS) { $('#msg').textContent = `每次最多 ${MAX_SETS} 組`; return; } setRows.push(['', '']); renderSets(); };
         $('#dupSet').onclick = () => { if (setRows.length >= MAX_SETS) { $('#msg').textContent = `每次最多 ${MAX_SETS} 組`; return; } setRows.push([...setRows[setRows.length - 1]]); renderSets(); };
         $('#move').onchange = () => { shown = 60; render(); };
-        const setUnit = (lb) => { setRows = setRows.map(r => (r[0] === '' ? r : [dispW(toKg(parseFloat(r[0]), prefs.lb), lb), r[1]])); prefs.lb = lb; savePrefs(); renderSets(); render(); };
+        const setUnit = (lb) => { setRows = setRows.map(r => (r[0] === '' ? r : [dispW(toKg(parseFloat(r[0]), prefs.lb), lb), r[1], r[2] ?? ''])); prefs.lb = lb; savePrefs(); renderSets(); render(); };
         $('#uKg').onclick = () => setUnit(false); $('#uLb').onclick = () => setUnit(true);
         $('#fEp').onclick = () => { prefs.formula = 'epley'; savePrefs(); render(); }; $('#fBr').onclick = () => { prefs.formula = 'brzycki'; savePrefs(); render(); };
         $('#more').onclick = () => { shown += 60; render(); };
@@ -425,7 +514,36 @@
         };
         $('#delMove').onclick = () => { const id = $('#move').value, n = log.filter(e => e.m === id).length; if (n && confirm(`刪除「${mvName(id)}」的全部 ${n} 筆訓練紀錄？無法復原。`)) { log = log.filter(e => e.m !== id); stopEdit(); saveLog(); render(); } };
         $('#delOld').onclick = () => { const keep = pruneOlder(log, day.today()), n = log.length - keep.length; if (n && confirm(`刪除一年前（${day.shift(day.today(), -365)} 之前）的 ${n} 筆訓練紀錄？無法復原。`)) { log = keep; stopEdit(); saveLog(); render(); } };
-        $('#delAll').onclick = () => { if ((log.length || custom.length) && confirm(`清除全部 ${log.length} 筆訓練紀錄與 ${custom.length} 個自訂動作？無法復原。`)) { log = []; custom = []; stopEdit(); saveLog(); saveMoves(); renderMoveSelect(); render(); } };
+        $('#delAll').onclick = () => { if ((log.length || custom.length || plan) && confirm(`清除全部 ${log.length} 筆訓練紀錄、${custom.length} 個自訂動作與${plan ? '訓練計畫' : '（無計畫）'}？無法復原。`)) { log = []; custom = []; plan = null; draft = null; stopEdit(); saveLog(); saveMoves(); savePlan(); renderMoveSelect(); render(); } };
+
+        // ---- 重訓菜單產生 ----
+        function planDays(box, p, withRec) {
+            box.replaceChildren(...p.days.map(d => el('div', { className: 'it' }, el('b', { textContent: d.name }), ...d.items.map(i => {
+                const row = el('div', { className: 'mv' }, el('span', { textContent: `${mvName(i.m)} ${i.sets} × ${i.reps}` }));
+                if (withRec) {
+                    const b = el('button', { className: 'sm', textContent: '記錄' }); b.setAttribute('aria-label', `記錄 ${mvName(i.m)}`);
+                    b.onclick = () => {
+                        if (!moves().some(m => m.id === i.m)) { $('#msg').textContent = '這個動作已被刪除'; return; }
+                        if (editing) stopEdit();
+                        $('#move').value = i.m; setRows = Array.from({ length: i.sets }, () => ['', String(i.reps), '']); renderSets(); render();
+                        $('#msg').textContent = `已帶入 ${mvName(i.m)} ${i.sets} 組 × ${i.reps} 下，填入重量後記錄`; window.scrollTo({ top: 0 });
+                    };
+                    row.append(b);
+                }
+                return row;
+            }))));
+        }
+        function renderPlan() {
+            $('#pgDraft').replaceChildren(); $('#pgApply').hidden = !draft;
+            if (draft) planDays($('#pgDraft'), draft, false);
+            if (plan) planDays($('#pgPlan'), plan, true); else $('#pgPlan').replaceChildren(el('p', { className: 'muted', textContent: '還沒有計畫，產生菜單後按「套用為我的計畫」。' }));
+            $('#pgClear').hidden = !plan;
+        }
+        $('#pgDays').replaceChildren(...[1, 2, 3, 4, 5, 6].map(n => new Option(`${n} 天`, n))); $('#pgDays').value = 3;
+        $('#pgGoal').replaceChildren(...Object.entries(GOALS).map(([k, g]) => new Option(g[0], k))); $('#pgGoal').value = 'muscle';
+        $('#pgGen').onclick = () => { draft = genPlan(Number($('#pgDays').value), $('#pgGoal').value); renderPlan(); };
+        $('#pgApply').onclick = () => { if (!draft || (plan && !confirm('套用後會取代目前的計畫，確定？'))) return; plan = draft; draft = null; savePlan(); renderPlan(); };
+        $('#pgClear').onclick = () => { if (plan && confirm('刪除目前的訓練計畫？無法復原（訓練紀錄不受影響）。')) { plan = null; savePlan(); renderPlan(); } };
 
         $('#date').value = day.today(); setRows = [['', '']]; renderMoveSelect(); renderSets(); render();
     </script>

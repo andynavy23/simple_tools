@@ -223,6 +223,7 @@
         <div class="row tabs">
             <button id="tabConv" aria-pressed="true">時間對照</button>
             <button id="tabMeet" aria-pressed="false">會議時間尋找</button>
+            <button id="tabTrip" aria-pressed="false">出差 / 旅行版</button>
         </div>
 
         <div id="paneConv">
@@ -272,6 +273,24 @@
                 <div class="row" style="margin-top:12px"><button class="primary" id="mtCopy">複製建議會議時間</button></div>
             </div>
         </div>
+
+        <div id="paneTrip" class="mt" hidden>
+            <div class="card">
+                <p class="meta" style="margin:0 0 10px">出差 / 旅行期間，固定的會議時間（例如每天台灣 21:00 的站會）換算成出差地每一天的當地時間；遇到夏令時間切換會標示差幾小時變了。</p>
+                <div class="row"><label for="trFrom" class="meta">會議時間是哪個城市的</label><select id="trFrom" aria-label="會議時間所在城市"></select></div>
+                <div class="row" style="margin-top:8px"><label for="trTo" class="meta">我出差到</label><select id="trTo" aria-label="出差地"></select></div>
+                <div class="row" style="margin-top:8px">
+                    <input type="date" id="trStart" aria-label="出差開始日期（以會議所在城市的日期為準）">
+                    <input type="date" id="trEnd" aria-label="出差結束日期">
+                    <input type="time" id="trTime" value="10:00" aria-label="會議時間">
+                </div>
+                <p class="meta" id="trMsg" style="margin:8px 0 0"></p>
+            </div>
+            <div class="card">
+                <div id="trOut"></div>
+                <div class="row" style="margin-top:12px"><button class="primary" id="trCopy">複製換算表</button></div>
+            </div>
+        </div>
     </div>
 
 
@@ -293,6 +312,7 @@
         <li>每個城市下方可「加忙碌」：選日期與起訖時間（當地時間；結束早於開始代表跨午夜到隔天），紅色是忙碌。有忙碌時標題變成「共同空檔」，建議時段會避開所有人的忙碌，× 可刪單筆，「清除全部忙碌時段」會先確認。</li>
         <li>按「複製建議會議時間」貼給同事，每個城市都是當地時間，跨日會標「前一天 / 後一天」。</li>
         </ol>
+        <p><b>出差 / 旅行版</b>：切到「出差 / 旅行版」，選「會議時間是哪個城市的」與「我出差到」（城市來自「時間對照」清單），選出差起訖日期（最多 31 天）與會議時間，會列出每一天在出差地的當地時間與日期（跨日標前一天 / 後一天），出差期間若遇夏令時間切換，會標示「時差變動」；那天若會議時間剛好落在被跳過的夏令時段會標「該時間不存在」。可「複製換算表」。這個分頁不儲存資料。</p>
         <h3>範例</h3>
         <div class="eg">臺北、東京、雪梨，2026/10/03，皆 09:00–18:00
         → 共同上班時間：臺北時間 09:00–16:00（雪梨這天還是 UTC+10）
@@ -434,6 +454,30 @@
         // 一個建議時段的文字：每個城市的當地時間
         function slotText(slot, cities, names) {
             return cities.map((c, i) => `${names[i]} ${hhmm(slot.start, c.z)}–${hhmm(slot.end, c.z)}${dayTag(slot.start, c.z, cities[0].z)}`).join('\n');
+        }
+
+        // ---------- 出差 / 旅行版：固定的會議時間（from 城市的牆上時間）換算成 to 城市每天的當地時間 ----------
+        const MAX_TRIP_DAYS = 31;
+        // start / end 為 from 城市的日期；回傳 { rows } 或 { err }。row: d、wd（週幾 0=日）、from / to（HH:MM）、tag（前一天 / 後一天）、diff（to 比 from 快幾分鐘）、shift（時差和前一天不同）、gap（該時間不存在，已順延）
+        function tripRows(start, end, time, from, to) {
+            if (!validDate(start) || !validDate(end)) return { err: '請選出差開始與結束日期' };
+            const t = toMin(time); if (t === null) return { err: '請填會議時間' };
+            const [y, m, d] = start.split('-').map(Number), [y2, m2, d2] = end.split('-').map(Number);
+            const n = Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y, m - 1, d)) / 864e5) + 1, p2 = (v) => String(v).padStart(2, '0');
+            if (n < 1) return { err: '結束日期不能早於開始日期' };
+            if (n > MAX_TRIP_DAYS) return { err: `最多 ${MAX_TRIP_DAYS} 天，請縮短期間` };
+            const rows = []; let prev = null;
+            for (let i = 0; i < n; i++) {
+                const [Y, M, D] = addDays(y, m, d, i), ms = zonedToMs(Y, M, D, Math.floor(t / 60), t % 60, from), diff = Math.round((offsetMs(ms, to) - offsetMs(ms, from)) / 60000);
+                rows.push({ d: `${Y}-${p2(M)}-${p2(D)}`, wd: new Date(Date.UTC(Y, M - 1, D)).getUTCDay(), from: hhmm(ms, from), to: hhmm(ms, to), tag: dayTag(ms, to, from), diff, shift: prev !== null && diff !== prev, gap: hhmm(ms, from) !== time });
+                prev = diff;
+            }
+            return { rows };
+        }
+        const diffLabel = (min) => `${min < 0 ? '慢' : '快'} ${Math.floor(Math.abs(min) / 60)}${Math.abs(min) % 60 ? ':' + String(Math.abs(min) % 60).padStart(2, '0') : ''} 小時`;
+        function tripText(rows, fromName, toName) {
+            const W = ['日', '一', '二', '三', '四', '五', '六'];
+            return `${fromName} → ${toName} 會議時間換算\n` + rows.map(r => `${r.d.slice(5)}（${W[r.wd]}）${fromName} ${r.from} = ${toName} ${r.to}${r.tag}${r.shift ? `　※時差變動（${toName}${diffLabel(r.diff)}）` : ''}${r.gap ? '　※該時間不存在（夏令轉換），已順延' : ''}`).join('\n');
         }
         // --- /pure ---
 
@@ -644,8 +688,37 @@
         };
         $('#mtCopy').onclick = () => { if (lastText) Util.copyWithFeedback($('#mtCopy'), lastText, () => { $('#mtMsg').textContent = '無法自動複製，請手動選取上面的建議時間'; }); };
         $('#mtClearBusy').onclick = () => { if (!confirm('要清除所有城市的忙碌時段嗎？城市與上班時段不受影響，清除後無法復原。')) return; meet.forEach(c => { c.b = []; }); saveMeet(); renderMeet(); };
-        const tab = (meetOn) => { $('#paneConv').hidden = meetOn; $('#paneMeet').hidden = !meetOn; $('#tabConv').setAttribute('aria-pressed', !meetOn); $('#tabMeet').setAttribute('aria-pressed', meetOn); if (meetOn) renderMeet(); };
-        $('#tabConv').onclick = () => tab(false); $('#tabMeet').onclick = () => tab(true);
+        // ---------- 出差 / 旅行版（介面；不儲存）----------
+        let tripLast = '';
+        function renderTrip() {
+            const zs = zones.concat(DEFAULT).filter((z, i, a) => a.indexOf(z) === i), cur = [$('#trFrom').value, $('#trTo').value];
+            if ([...$('#trFrom').options].map(o => o.value).join() !== zs.join()) {
+                for (const id of ['#trFrom', '#trTo']) $(id).replaceChildren(...zs.map(z => new Option(city(z) + ' (' + z + ')', z)));
+                $('#trFrom').value = cur[0] && zs.includes(cur[0]) ? cur[0] : zs.includes('Asia/Taipei') ? 'Asia/Taipei' : zs[0];
+                $('#trTo').value = cur[1] && zs.includes(cur[1]) ? cur[1] : zs.find(z => z !== $('#trFrom').value) || zs[0];
+            }
+            const r = tripRows($('#trStart').value, $('#trEnd').value, $('#trTime').value, $('#trFrom').value, $('#trTo').value), out = $('#trOut');
+            tripLast = ''; $('#trMsg').textContent = r.err || '';
+            if (r.err) { out.replaceChildren(); return; }
+            const fn = city($('#trFrom').value), tn = city($('#trTo').value), W = ['日', '一', '二', '三', '四', '五', '六'];
+            out.replaceChildren(...r.rows.map(x => {
+                const row = document.createElement('div'); row.className = 'li';
+                row.append(Object.assign(document.createElement('span'), { textContent: `${x.d.slice(5)}（${W[x.wd]}）${fn} ${x.from}` }), Object.assign(document.createElement('b'), { textContent: `${tn} ${x.to}${x.tag}` }));
+                if (x.shift || x.gap) { const s = document.createElement('div'); s.className = 'meta'; s.style.flexBasis = '100%'; s.textContent = (x.shift ? `※時差變動（${tn}${diffLabel(x.diff)}）` : '') + (x.gap ? ' ※該時間不存在（夏令轉換），已順延' : ''); row.style.flexWrap = 'wrap'; row.append(s); }
+                return row;
+            }));
+            tripLast = tripText(r.rows, fn, tn);
+        }
+        $('#trStart').value = $('#trEnd').value = $('#mtDate').value;
+        for (const id of ['#trFrom', '#trTo', '#trStart', '#trEnd', '#trTime']) $(id).addEventListener('change', renderTrip);
+        $('#trStart').addEventListener('change', () => { if ($('#trEnd').value < $('#trStart').value) { $('#trEnd').value = $('#trStart').value; renderTrip(); } });
+        $('#trCopy').onclick = () => { if (tripLast) Util.copyWithFeedback($('#trCopy'), tripLast, () => { $('#trMsg').textContent = '無法自動複製，請手動選取上面的換算表'; }); };
+        const tab = (k) => {
+            $('#paneConv').hidden = k !== 'conv'; $('#paneMeet').hidden = k !== 'meet'; $('#paneTrip').hidden = k !== 'trip';
+            $('#tabConv').setAttribute('aria-pressed', k === 'conv'); $('#tabMeet').setAttribute('aria-pressed', k === 'meet'); $('#tabTrip').setAttribute('aria-pressed', k === 'trip');
+            if (k === 'meet') renderMeet(); if (k === 'trip') renderTrip();
+        };
+        $('#tabConv').onclick = () => tab('conv'); $('#tabMeet').onclick = () => tab('meet'); $('#tabTrip').onclick = () => tab('trip');
         setNow();
         render();
     </script>

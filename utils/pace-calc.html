@@ -143,6 +143,20 @@
             <div class="tw" id="spOut"></div>
         </div>
 
+        <div class="card" id="trCard">
+            <h2>越野跑爬升配速</h2>
+            <p class="note" style="margin-top:0">累積爬升會拖慢配速。用 km-effort（等效平地距離 = 距離 + 累積爬升 ÷ 100）換算，另列健行用的 Naismith 法供對照。只是粗估，地形、海拔與天氣差異很大。</p>
+            <label class="f" for="trMode">已知</label>
+            <select id="trMode" class="w"><option value="pace">平地配速 → 預估完賽時間</option><option value="time">預計完賽時間 → 等效平地配速</option></select>
+            <label class="f" for="trD">距離（公里）</label>
+            <input id="trD" class="w" inputmode="decimal" placeholder="例如 25" aria-label="越野距離">
+            <label class="f" for="trA">累積爬升（公尺）</label>
+            <input id="trA" class="w" inputmode="decimal" placeholder="例如 1200" aria-label="累積爬升">
+            <label class="f" for="trV" id="trVL">平地配速（m:ss /km）</label>
+            <input id="trV" class="w" inputmode="text" autocomplete="off" placeholder="例如 6:00" aria-label="平地配速或完賽時間">
+            <div class="tw" id="trOut" style="margin-top:10px"></div>
+        </div>
+
         <div class="card">
             <button id="reset">清除記住的輸入</button>
             <p class="note">只會記住上次的輸入選項（在這台裝置），按上方按鈕可清除。</p>
@@ -177,6 +191,7 @@ Riegel（k = 1.06）：10K ≈ 52:07、半馬 ≈ 1:55:36、全馬 ≈ 4:02:49</
             <li>半馬 21.0975 公里、全馬 42.195 公里；1 英里 = 1.609344 公里。</li>
             <li>「記住的輸入」只存上次選項這一份小資料，可用最下方按鈕清除，也能用右上角 💾 備份。</li>
             <li>心率區間請用「健康計算機」。</li>
+            <li>「越野跑爬升配速」：填距離、累積爬升，再填平地配速（得到預估完賽時間與實際平均配速），或填預計完賽時間（得到等效平地配速）。公式是 km-effort：等效平地距離 = 距離 + 累積爬升 ÷ 100（每爬 100 m 約等於多跑 1 km），並列健行用的 Naismith 法（平地 5 km/h，每爬升 600 m 加 1 小時）對照。例：25 km、爬升 1,200 m、平地 6:00 → 等效 37 km、約 3:42:00。粗估值，不會儲存。</li>
         </ul>
     </template>
 
@@ -281,6 +296,22 @@ Riegel（k = 1.06）：10K ≈ 52:07、半馬 ≈ 1:55:36、全馬 ≈ 4:02:49</
             ['dist', 'time', 'rate', 'k', 'neg'].forEach(k => str(k));
             return o;
         }
+
+        // 越野跑爬升：km-effort 等效平地距離 = 距離 + 累積爬升 / 100；Naismith（健行）= 距離 / 5 km/h + 爬升 / 600 m 每小時
+        const trailEffort = (distKm, ascentM) => (distKm > 0 && distKm <= MAX_KM && ascentM >= 0 && ascentM <= 100000 ? distKm + ascentM / 100 : NaN);
+        // 已知平地配速（秒 / 公里）→ 預估完賽時間與實際平均配速
+        function trailFromPace(distKm, ascentM, flatSpk) {
+            const eff = trailEffort(distKm, ascentM);
+            if (!(eff > 0) || !(flatSpk > 0 && flatSpk <= 36000)) return null;
+            const timeSec = eff * flatSpk; return { effortKm: eff, timeSec, actualSpk: timeSec / distKm, slowPct: (eff / distKm - 1) * 100 };
+        }
+        // 已知預計完賽時間（秒）→ 等效平地配速
+        function trailFromTime(distKm, ascentM, timeSec) {
+            const eff = trailEffort(distKm, ascentM);
+            if (!(eff > 0) || !(timeSec > 0 && timeSec <= MAX_SEC)) return null;
+            return { effortKm: eff, flatSpk: timeSec / eff, actualSpk: timeSec / distKm };
+        }
+        const naismithSec = (distKm, ascentM) => (distKm > 0 && ascentM >= 0 ? (distKm / 5 + ascentM / 600) * 3600 : NaN);
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -347,6 +378,20 @@ Riegel（k = 1.06）：10K ≈ 52:07、半馬 ≈ 1:55:36、全馬 ≈ 4:02:49</
             try { localStorage.removeItem(KEY); } catch (e) { }
             o = loadOpts(null); fill(); renderPresets(); render();
         };
+        // 越野跑爬升配速（不儲存）
+        function renderTrail() {
+            const pace = $('#trMode').value === 'pace', d = parseNum($('#trD').value), a = $('#trA').value.trim() === '' ? 0 : parseNum($('#trA').value), out = $('#trOut');
+            $('#trVL').textContent = pace ? '平地配速（m:ss /km）' : '預計完賽時間（h:mm:ss）';
+            const v = pace ? rateToSecPerKm($('#trV').value, 'pkm') : parseTime($('#trV').value);
+            const r = pace ? trailFromPace(d, a, v) : trailFromTime(d, a, v);
+            if (!r) { out.textContent = '請輸入距離（公里）、累積爬升（公尺，可留空）與' + (pace ? '平地配速' : '完賽時間'); return; }
+            out.replaceChildren(li('等效平地距離', `${fmtNum(r.effortKm, 1)} km（km-effort）`),
+                pace ? li('預估完賽時間', fmtTime(r.timeSec)) : li('等效平地配速', `${fmtPace(r.flatSpk)} /km`),
+                li('實際平均配速', `${fmtPace(r.actualSpk)} /km`),
+                ...(pace ? [li('比平地慢', `約 ${fmtNum(r.slowPct, 0)}%`)] : []),
+                li('Naismith（健行）', fmtTime(naismithSec(d, a))));
+        }
+        $('#trCard').addEventListener('input', renderTrail); renderTrail();
         fill(); renderPresets(); render();
     </script>
 </body>

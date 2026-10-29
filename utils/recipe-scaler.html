@@ -125,6 +125,33 @@
             font-variant-numeric: tabular-nums;
         }
 
+        .tagbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 8px 0;
+        }
+
+        #list .li {
+            flex-wrap: wrap;
+        }
+
+        #list .acts {
+            flex-wrap: wrap;
+        }
+
+        .cst {
+            display: grid;
+            grid-template-columns: 1.4fr 1fr 1fr auto;
+            gap: 6px;
+            margin: 4px 0;
+        }
+
+        .cst input {
+            min-width: 0;
+            width: 100%;
+        }
+
         textarea {
             min-height: 150px;
             resize: vertical;
@@ -163,10 +190,28 @@
 
         <div class="card">
             <h2>我的食譜</h2>
-            <div class="row"><input type="text" id="rName" placeholder="食譜名稱" maxlength="30" aria-label="食譜名稱"><button id="save">儲存這份食譜</button></div>
+            <div class="row"><input type="text" id="rName" placeholder="食譜名稱" maxlength="30" aria-label="食譜名稱"><input type="text" id="rTags" placeholder="標籤（逗號分隔，最多 5 個）" maxlength="60" aria-label="標籤"></div>
+            <div class="row" style="margin-top:8px"><button id="save">儲存這份食譜</button></div>
             <div id="saveMsg" class="small" style="min-height:20px;margin-top:6px"></div>
+            <input type="search" id="rSearch" placeholder="搜尋食譜（名稱、食材、標籤）" maxlength="30" aria-label="搜尋食譜" style="width:100%;margin-top:8px">
+            <div class="tagbar" id="tagBar"></div>
             <div id="list"></div>
-            <div class="row" style="margin-top:8px"><span class="small" id="usage" style="flex:1"></span><button class="sm" id="clearAll">清除全部食譜</button></div>
+            <div class="row" style="margin-top:8px"><span class="small" id="usage" style="flex:1"></span><button class="sm" id="expAll">下載全部 .txt</button><button class="sm" id="clearAll">清除全部食譜</button></div>
+        </div>
+
+        <div class="card" id="costBox" hidden>
+            <h2 id="costTitle">食譜成本</h2>
+            <p class="small">每項填單價（每個用量單位的價格）與用量，單位要一致，例如麵粉每 g 0.03 元、用 250 g。價格請自己填，本工具不內建價格。</p>
+            <div class="fgrid">
+                <div><label for="cServ">做幾份</label><input type="number" id="cServ" min="1" max="1000" step="any" inputmode="decimal" value="1"></div>
+                <div><label for="cSell">每份售價（可不填）</label><input type="number" id="cSell" min="0" step="any" inputmode="decimal"></div>
+                <div class="full"><label for="cTags">標籤（逗號分隔，最多 5 個）</label><input type="text" id="cTags" maxlength="60"></div>
+            </div>
+            <div id="costItems" style="margin-top:10px"></div>
+            <div class="row"><button class="sm" id="cAdd">新增一列</button><button class="sm" id="cFill">從食材帶入名稱與用量</button></div>
+            <div class="out"><div class="ln" id="costOut"></div></div>
+            <div class="row"><button class="primary" id="cSave">儲存成本與標籤</button><button id="cClose">關閉</button></div>
+            <div id="costMsg" class="small" style="min-height:20px;margin-top:6px"></div>
         </div>
 
         <details class="card" id="dBake">
@@ -240,7 +285,14 @@
         <li>顆、個、片等計數單位不會拆成小數：接近整數就取整數（3.97 顆 → 4 顆），不然會進位並在該行下方提示實際數字，請自行取捨。</li>
         <li>沒有數量（如「鹽 適量」）、溫度與時間（180°C、烤 25 分鐘）的行會原樣保留並標示「無法解析・原樣保留」。</li>
         <li>重量與體積不會互相換算（不知道食材密度），「常用」只轉換體積單位。</li>
-        <li>食譜最多存 100 份，每份食材 ≤ 3000 字；超過會提示並拒絕儲存。每份可單獨刪除，也可「清除全部食譜」（無法復原）。載入時壞掉的資料會自動略過。</li>
+        <li>食譜最多存 100 份，每份食材 ≤ 3000 字；超過會提示並拒絕儲存。每份可單獨刪除，也可「清除全部食譜」（無法復原；標籤與成本會一併刪除）。載入時壞掉的資料會自動略過。</li>
+        </ul>
+        <h3>食譜本：搜尋、標籤、成本、匯出</h3>
+        <ul>
+        <li>儲存時可加標籤（逗號分隔，最多 5 個、每個 ≤ 10 字）；「我的食譜」上方可依名稱、食材、標籤搜尋，點標籤鈕篩選。舊食譜沒有標籤與成本，會自動補預設。</li>
+        <li>按食譜的「成本」：填做幾份、每份售價（可不填），每列填食材、單價（每個用量單位的價格）與用量，單位要一致，例如麵粉每 g 0.03 元、用 250 g。可按「從食材帶入名稱與用量」先帶入，再補單價。會算出總成本、每份成本，有填售價時再算毛利與毛利率（毛利 = 售價 - 每份成本）。價格都是你自己輸入的，本工具不內建任何價格。按「儲存成本與標籤」存回該食譜。每份食譜最多 30 列成本食材。</li>
+        <li>「複製」把該食譜（食材與成本）複製成文字；「下載全部 .txt」匯出所有食譜。</li>
+        <li>食譜資料（鍵 recipe_saved）也會被「採買與冰箱」的一週菜單唯讀讀取，只用名稱與食材。</li>
         </ul>
         <h3>烘焙換算與手沖咖啡</h3>
         <ul>
@@ -378,18 +430,52 @@
                 if (!r || typeof r !== 'object' || typeof r.id !== 'string' || !r.id || seen.has(r.id)) continue;
                 const name = String(r.name ?? '').trim().slice(0, RS.NAME_MAX), text = typeof r.text === 'string' ? r.text.slice(0, RS.TEXT_MAX) : '';
                 if (!name || !text.trim()) continue;
-                seen.add(r.id); out.push({ id: r.id, name, text });
+                seen.add(r.id); out.push({ id: r.id, name, text, tags: cleanTags(r.tags), cost: cleanCost(r.cost) });
                 if (out.length >= RS.MAX) break;
             }
             return out;
         }
-        function addRecipe(list, name, text) {
+        // ---- 食譜本：標籤、成本（舊食譜沒有這些欄位，載入時補預設）----
+        const TAG = { MAX: 5, LEN: 10 }, COST = { ITEMS: 30, NAME: 30, MAX: 1e6 };
+        function cleanTags(raw) {
+            const a = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(/[,，、\s]+/) : [], out = [];
+            for (const t of a) { const s = typeof t === 'string' ? t.trim().slice(0, TAG.LEN) : ''; if (s && !out.includes(s)) out.push(s); if (out.length >= TAG.MAX) break; }
+            return out;
+        }
+        const num0 = (v, max) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? Math.min(n, max) : 0; };
+        function cleanCost(raw) {
+            const c = raw && typeof raw === 'object' ? raw : {}, sv = Number(c.servings);
+            const items = (Array.isArray(c.items) ? c.items : []).filter(i => i && typeof i === 'object' && String(i.n ?? '').trim()).slice(0, COST.ITEMS).map(i => ({ n: String(i.n).trim().slice(0, COST.NAME), p: num0(i.p, COST.MAX), q: num0(i.q, COST.MAX) }));
+            return { servings: sv > 0 && sv <= 1000 ? sv : 1, sell: num0(c.sell, COST.MAX), items };
+        }
+        const r2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
+        // 總成本 = Σ 單價 × 用量；每份 = 總成本 / 份數；毛利 = 售價 - 每份成本；毛利率 = 毛利 / 售價（沒填售價則為 null）
+        function costCalc(cost) {
+            const c = cleanCost(cost), total = c.items.reduce((s, i) => s + i.p * i.q, 0), per = total / c.servings, profit = c.sell > 0 ? c.sell - per : null;
+            return { total: r2(total), per: r2(per), profit: profit === null ? null : r2(profit), margin: profit === null ? null : r2(profit / c.sell * 100) };
+        }
+        const allTags = (list) => [...new Set(list.flatMap(r => r.tags))].sort((a, b) => a.localeCompare(b, 'zh-TW'));
+        function filterRecipes(list, q, tag) {
+            q = String(q ?? '').trim().toLowerCase();
+            return list.filter(r => (!tag || r.tags.includes(tag)) && (!q || (r.name + '\n' + r.text + '\n' + r.tags.join(' ')).toLowerCase().includes(q)));
+        }
+        const updateRecipe = (list, id, patch) => list.map(r => r.id === id ? { ...r, tags: 'tags' in patch ? cleanTags(patch.tags) : r.tags, cost: 'cost' in patch ? cleanCost(patch.cost) : r.cost } : r);
+        function recipeToText(r) {
+            const out = [r.name]; if (r.tags.length) out.push('標籤：' + r.tags.join('、'));
+            out.push('', '食材', r.text.trim());
+            if (r.cost.items.length) {
+                const c = costCalc(r.cost);
+                out.push('', `成本（${r.cost.servings} 份）`, ...r.cost.items.map(i => `${i.n}：單價 ${i.p} × 用量 ${i.q} = ${r2(i.p * i.q)}`), `總成本 ${c.total}，每份 ${c.per}` + (c.profit === null ? '' : `，售價 ${r.cost.sell}，毛利 ${c.profit}（${c.margin}%）`));
+            }
+            return out.join('\n');
+        }
+        function addRecipe(list, name, text, tags = []) {
             name = String(name ?? '').trim().slice(0, RS.NAME_MAX); text = String(text ?? '');
             if (!name) return { list, err: '請輸入食譜名稱' };
             if (!text.trim()) return { list, err: '食材內容是空的' };
             if (text.length > RS.TEXT_MAX) return { list, err: `食材太長（${text.length} 字），單份最多 ${RS.TEXT_MAX} 字` };
             if (list.length >= RS.MAX) return { list, err: `最多儲存 ${RS.MAX} 份，請先刪除不用的` };
-            return { list: [...list, { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, text }] };
+            return { list: [...list, { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, text, tags: cleanTags(tags), cost: cleanCost(null) }] };
         }
         const removeRecipe = (list, id) => list.filter(r => r.id !== id);
 
@@ -472,10 +558,32 @@
             const bad = rows.filter(r => !r.ok && !r.blank).length;
             $('#hint').textContent = (bad ? `有 ${bad} 行沒有數量，沒有縮放。` : '') + (rows.some(r => r.note) ? '　計數單位（顆、個、片…）不會拆成小數，請留意標示。' : '');
         }
+        let rQ = '', rTag = '', editId = '', draft = null;
         function renderList() {
-            $('#list').innerHTML = saved.length ? saved.map(r => `<div class="li" data-id="${r.id}"><div class="grow"><b>${Util.esc(r.name)}</b><div class="small">${r.text.split(/\r?\n/).filter(x => x.trim()).length} 項食材</div></div><div class="acts"><button class="sm" data-act="load">載入</button><button class="sm" data-act="del" aria-label="刪除 ${Util.esc(r.name)}">刪除</button></div></div>`).join('') : '<p class="muted">還沒有儲存的食譜。</p>';
-            $('#usage').textContent = `已存 ${saved.length} / ${RS.MAX} 份`;
+            const tags = allTags(saved); if (rTag && !tags.includes(rTag)) rTag = '';
+            $('#tagBar').innerHTML = tags.length ? ['', ...tags].map(t => `<button class="sm" data-tag="${Util.esc(t)}" aria-pressed="${t === rTag}">${t ? Util.esc(t) : '全部'}</button>`).join('') : '';
+            const shown = filterRecipes(saved, rQ, rTag);
+            $('#list').innerHTML = shown.length ? shown.map(r => {
+                const c = r.cost.items.length ? costCalc(r.cost) : null;
+                return `<div class="li" data-id="${Util.esc(r.id)}"><div class="grow"><b>${Util.esc(r.name)}</b><div class="small">${r.text.split(/\r?\n/).filter(x => x.trim()).length} 項食材${r.tags.length ? '・' + r.tags.map(Util.esc).join('、') : ''}${c ? `・每份成本 ${c.per}` : ''}</div></div><div class="acts"><button class="sm" data-act="load">載入</button><button class="sm" data-act="cost">成本</button><button class="sm" data-act="copy">複製</button><button class="sm" data-act="del" aria-label="刪除 ${Util.esc(r.name)}">刪除</button></div></div>`;
+            }).join('') : `<p class="muted">${saved.length ? '沒有符合的食譜。' : '還沒有儲存的食譜。'}</p>`;
+            $('#usage').textContent = `已存 ${saved.length} / ${RS.MAX} 份` + (shown.length !== saved.length ? `（顯示 ${shown.length}）` : '');
         }
+        // 成本編輯：draft 暫存輸入（字串），每次輸入只更新結果，不重畫列（免得輸入框失焦）
+        function costRows() {
+            $('#costItems').innerHTML = draft.items.map((it, i) => `<div class="cst" data-i="${i}"><input type="text" data-k="n" maxlength="${COST.NAME}" value="${Util.esc(it.n)}" placeholder="食材" aria-label="第 ${i + 1} 列食材"><input type="number" data-k="p" min="0" step="any" inputmode="decimal" value="${it.p}" placeholder="單價" aria-label="第 ${i + 1} 列單價"><input type="number" data-k="q" min="0" step="any" inputmode="decimal" value="${it.q}" placeholder="用量" aria-label="第 ${i + 1} 列用量"><button class="sm" data-cdel aria-label="刪除第 ${i + 1} 列">✕</button></div>`).join('');
+            costOut();
+        }
+        function costOut() {
+            const cost = { servings: $('#cServ').value, sell: $('#cSell').value, items: draft.items }, c = costCalc(cost);
+            $('#costOut').textContent = `總成本 ${c.total}，每份成本 ${c.per}` + (c.profit === null ? '（填每份售價可算毛利）' : `；毛利 ${c.profit}（毛利率 ${c.margin}%）`);
+        }
+        function openCost(r) {
+            editId = r.id; draft = { items: r.cost.items.map(i => ({ ...i })) };
+            $('#costTitle').textContent = `食譜成本：${r.name}`; $('#cServ').value = r.cost.servings; $('#cSell').value = r.cost.sell || ''; $('#cTags').value = r.tags.join(', ');
+            $('#costMsg').textContent = ''; $('#costBox').hidden = false; costRows(); $('#costBox').scrollIntoView({ block: 'nearest' });
+        }
+        const closeCost = () => { editId = ''; draft = null; $('#costBox').hidden = true; };
         const msg = (t) => { $('#saveMsg').textContent = t || ''; };
 
         for (const id of ['#src', '#orig', '#target', '#ratio', '#mode']) { $(id).addEventListener('input', render); $(id).addEventListener('change', render); }
@@ -483,21 +591,46 @@
         $('#byServ').onclick = () => setBy(false); $('#byRatio').onclick = () => setBy(true);
         $('#copy').onclick = () => { const t = recipeText(rows); if (!t) return; Util.copyWithFeedback($('#copy'), t); };
         $('#save').onclick = () => {
-            const r = addRecipe(saved, $('#rName').value, $('#src').value);
+            const r = addRecipe(saved, $('#rName').value, $('#src').value, $('#rTags').value);
             if (r.err) { msg(r.err); return; }
-            saved = r.list; Util.store.set('recipe_saved', saved); $('#rName').value = ''; msg('已儲存（存的是原始食材，不是縮放後的結果）'); renderList();
+            saved = r.list; Util.store.set('recipe_saved', saved); $('#rName').value = ''; $('#rTags').value = ''; msg('已儲存（存的是原始食材，不是縮放後的結果）'); renderList();
         };
         $('#list').onclick = (e) => {
             const b = e.target.closest('button[data-act]'); if (!b) return;
             const id = b.closest('[data-id]').dataset.id, r = saved.find(x => x.id === id); if (!r) return;
             if (b.dataset.act === 'load') { $('#src').value = r.text; msg(`已載入「${r.name}」`); render(); }
-            else { if (!confirm(`刪除食譜「${r.name}」？無法復原。`)) return; saved = removeRecipe(saved, id); Util.store.set('recipe_saved', saved); msg(''); renderList(); }
+            else if (b.dataset.act === 'cost') openCost(r);
+            else if (b.dataset.act === 'copy') Util.copyWithFeedback(b, recipeToText(r));
+            else { if (!confirm(`刪除食譜「${r.name}」（含標籤與成本）？無法復原。`)) return; saved = removeRecipe(saved, id); Util.store.set('recipe_saved', saved); if (editId === id) closeCost(); msg(''); renderList(); }
         };
         $('#clearAll').onclick = () => {
             if (!saved.length) { msg('沒有儲存的食譜'); return; }
-            if (!confirm(`清除全部 ${saved.length} 份食譜？無法復原。`)) return;
-            saved = []; Util.store.set('recipe_saved', saved); msg(''); renderList();
+            if (!confirm(`清除全部 ${saved.length} 份食譜（含標籤與成本）？無法復原。`)) return;
+            saved = []; Util.store.set('recipe_saved', saved); closeCost(); msg(''); renderList();
         };
+        $('#rSearch').addEventListener('input', () => { rQ = $('#rSearch').value; renderList(); });
+        $('#tagBar').onclick = (e) => { const b = e.target.closest('button[data-tag]'); if (b) { rTag = b.dataset.tag; renderList(); } };
+        $('#expAll').onclick = () => { if (!saved.length) { msg('沒有儲存的食譜'); return; } Util.download(new Blob(['﻿' + saved.map(recipeToText).join('\n\n--------\n\n')], { type: 'text/plain;charset=utf-8' }), 'recipes.txt'); };
+        $('#costItems').addEventListener('input', (e) => { const k = e.target.dataset.k, row = e.target.closest('.cst'); if (k && row) { draft.items[+row.dataset.i][k] = e.target.value; costOut(); } });
+        $('#costItems').addEventListener('click', (e) => { const b = e.target.closest('[data-cdel]'); if (b) { draft.items.splice(+b.closest('.cst').dataset.i, 1); costRows(); } });
+        $('#cServ').addEventListener('input', () => costOut()); $('#cSell').addEventListener('input', () => costOut());
+        $('#cAdd').onclick = () => { if (draft.items.length >= COST.ITEMS) { $('#costMsg').textContent = `最多 ${COST.ITEMS} 列`; return; } draft.items.push({ n: '', p: '', q: '' }); costRows(); };
+        $('#cFill').onclick = () => {
+            const r = saved.find(x => x.id === editId); if (!r) return;
+            let added = 0;
+            for (const raw of r.text.split(/\r?\n/)) {
+                if (!raw.trim() || draft.items.length >= COST.ITEMS) continue;
+                const p = parseLine(raw), name = (p.ok ? (p.pre + p.post) : raw).replace(/^\s*(?:[-*•・●]|\d+[.)、）])\s+/, '').trim().slice(0, COST.NAME);
+                if (!name || draft.items.some(i => i.n === name)) continue;
+                draft.items.push({ n: name, p: '', q: p.ok ? p.lo : '' }); added++;
+            }
+            $('#costMsg').textContent = added ? `已帶入 ${added} 列，請填單價（用量單位與單價要一致）` : '沒有可帶入的新食材'; costRows();
+        };
+        $('#cSave').onclick = () => {
+            saved = updateRecipe(saved, editId, { tags: $('#cTags').value, cost: { servings: $('#cServ').value, sell: $('#cSell').value, items: draft.items } });
+            Util.store.set('recipe_saved', saved); $('#costMsg').textContent = '已儲存'; renderList();
+        };
+        $('#cClose').onclick = closeCost;
         render(); renderList();
 
         // ---- 烘焙換算（不儲存）----

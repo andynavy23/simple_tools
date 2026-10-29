@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="採買與冰箱：購物清單、冰箱庫存與到期提醒、一週菜單（可一鍵加入購物清單）、優格與酸種發酵記錄。資料只存在本機。">
+    <meta property="og:title" content="採買與冰箱" />
+    <meta property="og:description" content="購物清單、冰箱到期、一週菜單、發酵記錄一次管理。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/pantry.html" />
+    <meta name="st-keys" content="pantry_shop,pantry_fridge,pantry_menu,pantry_ferment,recipe_saved">
+    <title>採買與冰箱</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        .seg {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-bottom: 16px;
+        }
+
+        .seg button {
+            padding: 9px 2px;
+            font-size: 14px;
+            min-height: 44px;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        .fgrid select,
+        .fgrid input {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .btns {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .msg {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 8px 0 0;
+            min-height: 1.2em;
+        }
+
+        .msg.bad {
+            color: var(--bad);
+        }
+
+        .small {
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .chips button {
+            padding: 6px 12px;
+            font-size: 14px;
+            min-height: 44px;
+        }
+
+        .it {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .it label {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 44px;
+            word-break: break-all;
+            cursor: pointer;
+        }
+
+        .it input[type=checkbox] {
+            width: 22px;
+            height: 22px;
+            flex: none;
+        }
+
+        .it.done label span {
+            text-decoration: line-through;
+            color: var(--muted);
+        }
+
+        .it button {
+            min-width: 44px;
+            min-height: 44px;
+            padding: 4px 0;
+        }
+
+        .gh {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--muted);
+            margin: 12px 0 2px;
+        }
+
+        .grow {
+            flex: 1;
+            min-width: 0;
+            word-break: break-all;
+        }
+
+        .chip {
+            font-size: 12px;
+            color: var(--muted);
+            background: var(--fill);
+            border-radius: 99px;
+            padding: 1px 8px;
+            margin-left: 4px;
+            white-space: nowrap;
+        }
+
+        .badge {
+            font-size: 12px;
+            font-weight: 700;
+            border-radius: 99px;
+            padding: 1px 8px;
+            margin-left: 4px;
+            white-space: nowrap;
+            border: 1px solid var(--muted);
+        }
+
+        .badge.expired {
+            background: var(--bad);
+            border-color: var(--bad);
+            color: #fff;
+        }
+
+        .badge.d3 {
+            background: var(--blue);
+            border-color: var(--blue);
+            color: var(--on-blue);
+        }
+
+        .badge.d7 {
+            border-color: var(--blue);
+            color: var(--blue);
+        }
+
+        .menu {
+            display: grid;
+            grid-template-columns: 2.6em 1fr 1fr;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .menu input {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .menu b {
+            font-size: 14px;
+        }
+
+        details.card>summary {
+            font-weight: 700;
+            cursor: pointer;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>採買與冰箱</h1>
+        <p class="sub">購物清單、冰箱到期、一週菜單、發酵記錄。資料只存在本機。</p>
+
+        <div class="seg" role="group" aria-label="分頁">
+            <button data-tab="shop" aria-pressed="true">購物清單</button><button data-tab="fridge" aria-pressed="false">冰箱庫存</button><button data-tab="menu" aria-pressed="false">一週菜單</button><button data-tab="ferment" aria-pressed="false">發酵記錄</button>
+        </div>
+
+        <!-- 購物清單 -->
+        <section id="p-shop">
+            <div class="card">
+                <div class="fgrid">
+                    <div class="full"><label for="sName">品項</label><input id="sName" type="text" maxlength="60" placeholder="例如：高麗菜"></div>
+                    <div><label for="sQty">數量 / 備註</label><input id="sQty" type="text" maxlength="20" placeholder="例如：1 顆"></div>
+                    <div><label for="sCat">分類</label><select id="sCat"></select></div>
+                </div>
+                <div class="btns"><button class="primary" id="sAdd">加入清單</button></div>
+                <div class="small" style="margin-top:10px">常買項目（點一下加入）</div>
+                <div class="chips" id="sQuick"></div>
+                <p class="msg" id="sMsg"></p>
+            </div>
+            <div class="card">
+                <h2>清單　<span class="small" id="sUsage"></span></h2>
+                <div id="sList"></div>
+                <div class="btns">
+                    <button class="primary" id="sCopy">複製分享文字</button>
+                    <button id="sClearDone">清空已勾選</button>
+                    <button id="sClearAll" style="color:var(--bad)">清除全部</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 冰箱庫存 -->
+        <section id="p-fridge" hidden>
+            <div class="card" id="fEat" hidden>
+                <h2>今日優先食用</h2>
+                <div id="fEatList"></div>
+            </div>
+            <div class="card">
+                <div class="fgrid">
+                    <div class="full"><label for="fName">食材</label><input id="fName" type="text" maxlength="60" placeholder="例如：雞胸肉"></div>
+                    <div><label for="fQty">數量</label><input id="fQty" type="text" maxlength="20" placeholder="例如：2 片"></div>
+                    <div><label for="fLoc">存放位置</label><select id="fLoc"></select></div>
+                    <div><label for="fBuy">購買日</label><input id="fBuy" type="date"></div>
+                    <div><label for="fExp">到期日</label><input id="fExp" type="date"></div>
+                    <div class="full"><label for="fPre">保存天數建議（一般原則，以包裝標示為準）</label><select id="fPre"></select></div>
+                </div>
+                <div class="btns"><button class="primary" id="fAdd">加入冰箱</button></div>
+                <p class="msg" id="fMsg"></p>
+            </div>
+            <div class="card">
+                <h2>庫存（依到期日排序）　<span class="small" id="fUsage"></span></h2>
+                <div id="fList"></div>
+                <div class="btns"><button id="fClearAll" style="color:var(--bad)">清除全部庫存</button></div>
+            </div>
+        </section>
+
+        <!-- 一週菜單 -->
+        <section id="p-menu" hidden>
+            <div class="card">
+                <h2>午 / 晚餐</h2>
+                <p class="small">直接輸入菜名；輸入框會列出「食譜份量縮放」已儲存的食譜名稱可選。</p>
+                <div class="menu" id="mGrid"></div>
+                <datalist id="dishes"></datalist>
+                <div class="btns">
+                    <button class="primary" id="mToShop">菜單食材加入購物清單</button>
+                    <button id="mClear" style="color:var(--bad)">清除菜單</button>
+                </div>
+                <p class="msg" id="mMsg"></p>
+            </div>
+        </section>
+
+        <!-- 發酵記錄 -->
+        <section id="p-ferment" hidden>
+            <div class="card">
+                <div class="fgrid">
+                    <div class="full"><label for="gName">名稱</label><input id="gName" type="text" maxlength="30" placeholder="例如：家裡的酸種 / 優格 A"></div>
+                    <div><label for="gKind">種類</label><select id="gKind"></select></div>
+                    <div><label for="gStart">開始日期</label><input id="gStart" type="date"></div>
+                    <div><label for="gRatio">餵養比例</label><input id="gRatio" type="text" maxlength="20" placeholder="例如：1:1:1"></div>
+                    <div><label for="gEvery">幾天餵一次（0＝不提醒）</label><input id="gEvery" type="number" min="0" max="60" step="1" inputmode="numeric" value="0"></div>
+                    <div class="full"><label for="gNote">狀態備註</label><input id="gNote" type="text" maxlength="100" placeholder="例如：氣泡多、微酸"></div>
+                </div>
+                <div class="btns"><button class="primary" id="gAdd">新增記錄</button></div>
+                <p class="msg" id="gMsg"></p>
+            </div>
+            <div class="card">
+                <h2>我的發酵　<span class="small" id="gUsage"></span></h2>
+                <div id="gList"></div>
+                <div class="btns"><button id="gClearAll" style="color:var(--bad)">清除全部記錄</button></div>
+            </div>
+        </section>
+
+        <details class="card">
+            <summary>資料管理</summary>
+            <p class="small">四個分頁各有自己的清除鈕；這裡可一次清掉本工具的全部資料（購物清單、冰箱、菜單、發酵）。無法復原。「食譜份量縮放」的食譜不受影響。</p>
+            <div class="btns" style="margin-top:0"><button id="allClear" style="color:var(--bad)">清除本工具全部資料</button></div>
+            <p class="msg" id="allMsg"></p>
+        </details>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>把採買、冰箱、菜單、發酵放在一起：吃什麼 → 缺什麼 → 買什麼 → 放哪裡、何時吃完，共用同一批食材。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>出門採買前整理清單，買完逐項打勾。</li>
+        <li>怕冰箱的食材放到過期，想看哪些要先吃。</li>
+        <li>排一週午晚餐，一鍵把需要的食材丟進購物清單。</li>
+        <li>養酸種、做優格，想記得開始日期與該餵養的時間。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>「購物清單」：填品項、數量備註、分類後加入；同名且尚未勾選的品項會合併數量。下方「常買項目」點一下就加入。逛超市時點項目打勾；「複製分享文字」只複製未勾選的，貼給家人；「清空已勾選」買完一次清掉。</li>
+        <li>「冰箱庫存」：填食材、數量、存放位置、購買日、到期日。可用「保存天數建議」依購買日推算到期日（一般原則，實際以包裝標示、氣味與外觀為準）。清單依到期日排序，已過期、3 天內、7 天內有標示；3 天內與已過期的會列在最上方「今日優先食用」。吃完或丟掉按「用完 / 丟棄」移除。</li>
+        <li>「一週菜單」：週一到週日各有午、晚餐格子，直接輸入菜名（便當也可以寫在格子裡）；輸入框可選「食譜份量縮放」已存的食譜。按「菜單食材加入購物清單」：菜名對得上已存食譜時，加入該食譜的每行食材；沒有食材資料的只加「備料：菜名」。</li>
+        <li>「發酵記錄」：填名稱、種類、開始日期、餵養比例與狀態備註。「幾天餵一次」大於 0 時會顯示下次餵養日與是否逾期，按「已餵養」會把最近餵養日改成今天。酸種常溫約每天餵、冷藏約每週餵，請依自己的狀況調整；優格不需要餵養可填 0。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">雞胸肉 2 片、冷藏、購買日 10/28、套用「生鮮肉 / 魚」→ 到期日 10/30，標示「2 天內」並出現在今日優先食用。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>日期以台灣時間（UTC+8）計算。</li>
+        <li>上限：購物清單 500 項（品項 ≤ 60 字、數量 ≤ 20 字）、冰箱 500 項、發酵 50 筆、菜單固定 7 天 × 午晚餐；滿了會拒絕新增並提示，不會默默刪舊資料。</li>
+        <li>刪除：購物清單可逐項 ✕、清空已勾選、清除全部；冰箱逐項「用完 / 丟棄」、清除全部；菜單「清除菜單」；發酵逐筆刪除、清除全部；「資料管理」可全部清除。清除全部與刪除發酵記錄都需確認且無法復原。</li>
+        <li>本工具只讀取「食譜份量縮放」的食譜，不會修改它。載入時壞掉的資料自動略過；儲存失敗（空間滿）會提示。右上角「💾」可備份與還原。</li>
+        <li>保存天數只是通行的一般原則（例如熟食剩菜冷藏約 3 天、生鮮肉魚約 2 天、冷凍品質約 3 個月內），不是食品安全保證；有疑慮就丟掉。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { day } = Util;
+        // --- pure ---
+        const PT = { SHOP_MAX: 500, FRIDGE_MAX: 500, FERMENT_MAX: 50, NAME: 60, QTY: 20, NOTE: 100, DISH: 30, FNAME: 30, RECIPE_LINES: 30 };
+        const CATS = ['蔬果', '肉蛋海鮮', '乳品', '主食乾貨', '調味', '日用', '其他'];
+        const LOCS = ['冷藏', '冷凍', '常溫'];
+        const KINDS = ['優格', '酸種', '其他'];
+        const WEEK = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
+        const QUICK = ['牛奶', '雞蛋', '吐司', '米', '洋蔥', '高麗菜', '番茄', '雞胸肉', '豆腐', '衛生紙', '洗碗精', '食用油'];
+        // 保存天數建議：只放通行的一般原則（以包裝標示為準）
+        const SHELF = [
+            { label: '熟食剩菜・冷藏約 3 天', loc: '冷藏', days: 3 },
+            { label: '生鮮肉 / 魚・冷藏約 2 天', loc: '冷藏', days: 2 },
+            { label: '冷凍食品・品質約 3 個月', loc: '冷凍', months: 3 },
+        ];
+        const DEFAULT_EVERY = { 優格: 0, 酸種: 1, 其他: 0 };
+
+        const str = (v, n) => (typeof v === 'string' || typeof v === 'number') ? String(v).trim().slice(0, n) : '';
+        const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        const todayTW = (ms = Date.now()) => new Date(ms + 8 * 3600e3).toISOString().slice(0, 10);   // 台灣時間（UTC+8）
+        const validDate = (s) => typeof s === 'string' && /^20\d\d-\d\d-\d\d$/.test(s) && day.shift(s, 0) === s;
+        const normName = (s) => s.replace(/\s+/g, '').toLowerCase();
+        const cleanList = (raw, one, max) => {
+            if (!Array.isArray(raw)) return [];
+            const seen = new Set(), out = [];
+            for (const r of raw) {
+                if (!r || typeof r !== 'object' || typeof r.id !== 'string' || !r.id || seen.has(r.id)) continue;
+                const v = one(r); if (!v) continue;
+                seen.add(r.id); out.push(v);
+                if (out.length >= max) break;
+            }
+            return out;
+        };
+
+        // ---- 購物清單 ----
+        const cleanShop = (raw) => cleanList(raw, r => { const name = str(r.name, PT.NAME); return name && { id: r.id, name, qty: str(r.qty, PT.QTY), cat: CATS.includes(r.cat) ? r.cat : '其他', done: r.done === true }; }, PT.SHOP_MAX);
+        // 同名（忽略空白與大小寫）且未勾選 → 合併數量；否則新增。回傳 { list, err, merged }
+        function addShop(list, name, qty = '', cat = '其他') {
+            name = str(name, PT.NAME); qty = str(qty, PT.QTY);
+            if (!name) return { list, err: '請輸入品項' };
+            const hit = list.find(x => !x.done && normName(x.name) === normName(name));
+            if (hit) {
+                const q = !qty || qty === hit.qty ? hit.qty : hit.qty ? (hit.qty + '+' + qty).slice(0, PT.QTY) : qty;
+                return { list: list.map(x => x === hit ? { ...x, qty: q } : x), err: '', merged: true };
+            }
+            if (list.length >= PT.SHOP_MAX) return { list, err: `最多 ${PT.SHOP_MAX} 項，請先清除已勾選的` };
+            return { list: [...list, { id: newId(), name, qty, cat: CATS.includes(cat) ? cat : '其他', done: false }], err: '', merged: false };
+        }
+        function mergeShop(list, items) {
+            let added = 0, merged = 0, skipped = 0;
+            for (const it of items) {
+                const r = addShop(list, it.name, it.qty, it.cat);
+                if (r.err) { skipped++; continue; }
+                list = r.list; r.merged ? merged++ : added++;
+            }
+            return { list, added, merged, skipped };
+        }
+        const toggleShop = (list, id) => list.map(x => x.id === id ? { ...x, done: !x.done } : x);
+        const removeById = (list, id) => list.filter(x => x.id !== id);
+        const clearDone = (list) => list.filter(x => !x.done);
+        // 分享文字：只含未勾選，依分類分組
+        function shopText(list) {
+            const left = list.filter(x => !x.done); if (!left.length) return '';
+            const out = ['【購物清單】'];
+            for (const c of CATS) {
+                const g = left.filter(x => x.cat === c); if (!g.length) continue;
+                out.push('▸' + c, ...g.map(x => '□ ' + x.name + (x.qty ? ' ' + x.qty : '')));
+            }
+            return out.join('\n');
+        }
+
+        // ---- 冰箱 ----
+        const cleanFridge = (raw) => cleanList(raw, r => {
+            const name = str(r.name, PT.NAME); if (!name) return null;
+            return { id: r.id, name, qty: str(r.qty, PT.QTY), loc: LOCS.includes(r.loc) ? r.loc : '冷藏', buy: validDate(r.buy) ? r.buy : '', exp: validDate(r.exp) ? r.exp : '' };
+        }, PT.FRIDGE_MAX);
+        function addFridge(list, f) {
+            const name = str(f.name, PT.NAME);
+            if (!name) return { list, err: '請輸入食材名稱' };
+            if (f.buy && !validDate(f.buy)) return { list, err: '購買日格式不正確' };
+            if (f.exp && !validDate(f.exp)) return { list, err: '到期日格式不正確' };
+            if (f.buy && f.exp && f.exp < f.buy) return { list, err: '到期日不能早於購買日' };
+            if (list.length >= PT.FRIDGE_MAX) return { list, err: `最多 ${PT.FRIDGE_MAX} 項，請先移除用完的` };
+            return { list: [...list, { id: newId(), name, qty: str(f.qty, PT.QTY), loc: LOCS.includes(f.loc) ? f.loc : '冷藏', buy: f.buy || '', exp: f.exp || '' }], err: '' };
+        }
+        // 到期狀態：days = 到期日 - 今天；<0 已過期、0–3 三天內（含當天）、4–7 七天內、更久 ok；沒有到期日 none
+        function expiryOf(exp, today) {
+            if (!validDate(exp) || !validDate(today)) return { days: null, level: 'none' };
+            const d = day.between(today, exp);
+            return { days: d, level: d < 0 ? 'expired' : d <= 3 ? 'd3' : d <= 7 ? 'd7' : 'ok' };
+        }
+        const sortFridge = (list) => [...list].sort((a, b) => (a.exp || '9999') < (b.exp || '9999') ? -1 : (a.exp || '9999') > (b.exp || '9999') ? 1 : a.name.localeCompare(b.name, 'zh-TW'));
+        const eatFirst = (list, today) => sortFridge(list).filter(x => { const l = expiryOf(x.exp, today).level; return l === 'expired' || l === 'd3'; });
+        // 依購買日與建議推算到期日（冷凍用「月」，月底進位取月底：1/31 + 1 個月 = 2/28）
+        function suggestExp(buy, preset) {
+            if (!validDate(buy) || !preset) return '';
+            return preset.months ? day.addMonths(buy, preset.months) : day.shift(buy, preset.days);
+        }
+
+        // ---- 一週菜單（7 天 × 午 / 晚）----
+        const emptyMenu = () => WEEK.map(() => ['', '']);
+        const cleanMenu = (raw) => { const a = Array.isArray(raw) ? raw : []; return WEEK.map((_, i) => { const r = Array.isArray(a[i]) ? a[i] : []; return [str(r[0], PT.DISH), str(r[1], PT.DISH)]; }); };
+        const setDish = (menu, d, m, v) => menu.map((r, i) => i === d ? r.map((x, j) => j === m ? str(v, PT.DISH) : x) : r);
+        // 唯讀讀取 recipe-scaler 的食譜（鍵 recipe_saved）：嚴格驗證，只留 id / 名稱 / 食材文字
+        const cleanRecipePicks = (raw) => cleanList(raw, r => { const name = str(r.name, 30), text = typeof r.text === 'string' ? r.text.slice(0, 3000) : ''; return name && text.trim() ? { id: r.id, name, text } : null; }, 100);
+        // 菜單 → 購物項目：菜名對得上食譜 → 該食譜每行食材；否則只加「備料：菜名」
+        function menuToShop(menu, recipes) {
+            const out = [], dishes = [...new Set(menu.flat().filter(Boolean))];
+            for (const d of dishes) {
+                const r = recipes.find(x => x.name === d);
+                const lines = r ? r.text.split(/\r?\n/).map(l => l.replace(/^\s*(?:[-*•・●]|\d+[.)、）])\s+/, '').trim()).filter(Boolean).slice(0, PT.RECIPE_LINES) : [];
+                if (lines.length) for (const l of lines) out.push({ name: l.slice(0, PT.NAME), qty: '', cat: '其他' });
+                else out.push({ name: ('備料：' + d).slice(0, PT.NAME), qty: '', cat: '其他' });
+            }
+            return out;
+        }
+
+        // ---- 發酵 ----
+        const cleanEvery = (v) => { const n = Math.round(Number(v)); return n >= 0 && n <= 60 ? n : 0; };
+        const cleanFerment = (raw) => cleanList(raw, r => {
+            const name = str(r.name, PT.FNAME), start = r.start; if (!name || !validDate(start)) return null;
+            return { id: r.id, name, kind: KINDS.includes(r.kind) ? r.kind : '其他', start, ratio: str(r.ratio, PT.QTY), note: str(r.note, PT.NOTE), every: cleanEvery(r.every), last: validDate(r.last) && r.last >= start ? r.last : start };
+        }, PT.FERMENT_MAX);
+        function addFerment(list, f) {
+            const name = str(f.name, PT.FNAME);
+            if (!name) return { list, err: '請輸入名稱' };
+            if (!validDate(f.start)) return { list, err: '請選擇開始日期' };
+            if (list.length >= PT.FERMENT_MAX) return { list, err: `最多 ${PT.FERMENT_MAX} 筆，請先刪除不用的` };
+            return { list: [...list, { id: newId(), name, kind: KINDS.includes(f.kind) ? f.kind : '其他', start: f.start, ratio: str(f.ratio, PT.QTY), note: str(f.note, PT.NOTE), every: cleanEvery(f.every), last: f.start }], err: '' };
+        }
+        const nextFeed = (it) => it.every > 0 && validDate(it.last) ? day.shift(it.last, it.every) : null;
+        // 下次餵養：days < 0 逾期、0 今天、1 明天（soon）、更久 ok；不提醒 none
+        function feedStatus(it, today) {
+            const n = nextFeed(it); if (!n || !validDate(today)) return { next: null, days: null, level: 'none' };
+            const d = day.between(today, n);
+            return { next: n, days: d, level: d < 0 ? 'overdue' : d === 0 ? 'today' : d === 1 ? 'soon' : 'ok' };
+        }
+        const markFed = (list, id, today) => list.map(x => x.id === id && validDate(today) ? { ...x, last: today < x.start ? x.start : today } : x);
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEYS = { shop: 'pantry_shop', fridge: 'pantry_fridge', menu: 'pantry_menu', ferment: 'pantry_ferment' };
+        let shop = cleanShop(Util.store.get(KEYS.shop, [])), fridge = cleanFridge(Util.store.get(KEYS.fridge, [])),
+            menu = cleanMenu(Util.store.get(KEYS.menu, [])), ferment = cleanFerment(Util.store.get(KEYS.ferment, [])),
+            recipes = cleanRecipePicks(Util.store.get('recipe_saved', []));
+        const save = (k, v) => Util.store.set(KEYS[k], v);
+        const msg = (id, t, bad) => { const e = $(id); e.textContent = t || ''; e.classList.toggle('bad', !!bad); };
+        const opts = (arr) => arr.map(x => `<option>${Util.esc(x)}</option>`).join('');
+        const dateLabel = (s) => s ? s.slice(5).replace('-', '/') : '';
+
+        // 分頁
+        function tab(t) {
+            for (const b of document.querySelectorAll('.seg button')) b.setAttribute('aria-pressed', b.dataset.tab === t);
+            for (const k of Object.keys(KEYS)) $('#p-' + k).hidden = k !== t;
+        }
+        $('.seg').onclick = (e) => { const b = e.target.closest('button[data-tab]'); if (b) tab(b.dataset.tab); };
+
+        // ---- 購物清單 ----
+        $('#sCat').innerHTML = opts(CATS); $('#sCat').value = '其他';
+        $('#sQuick').innerHTML = QUICK.map(q => `<button class="sm" data-q="${Util.esc(q)}">${Util.esc(q)}</button>`).join('');
+        function renderShop() {
+            $('#sUsage').textContent = `${shop.length} / ${PT.SHOP_MAX} 項`;
+            let h = '';
+            for (const c of CATS) {
+                const g = shop.filter(x => x.cat === c); if (!g.length) continue;
+                h += `<div class="gh">${c}</div>` + g.map(x => `<div class="it${x.done ? ' done' : ''}" data-id="${Util.esc(x.id)}"><label><input type="checkbox" ${x.done ? 'checked' : ''}><span>${Util.esc(x.name)}${x.qty ? `<span class="chip">${Util.esc(x.qty)}</span>` : ''}</span></label><button data-del aria-label="刪除 ${Util.esc(x.name)}">✕</button></div>`).join('');
+            }
+            $('#sList').innerHTML = h || '<p class="muted">清單是空的。</p>';
+        }
+        function shopAdd(name, qty, cat) {
+            const r = addShop(shop, name, qty, cat);
+            if (r.err) { msg('#sMsg', r.err, true); return false; }
+            shop = r.list; save('shop', shop); msg('#sMsg', r.merged ? '已合併到既有品項' : '已加入'); renderShop(); return true;
+        }
+        $('#sAdd').onclick = () => { if (shopAdd($('#sName').value, $('#sQty').value, $('#sCat').value)) { $('#sName').value = ''; $('#sQty').value = ''; } };
+        $('#sName').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#sAdd').click(); });
+        $('#sQuick').onclick = (e) => { const b = e.target.closest('button[data-q]'); if (b) shopAdd(b.dataset.q, '', '其他'); };
+        $('#sList').onclick = (e) => {
+            const row = e.target.closest('[data-id]'); if (!row) return;
+            if (e.target.closest('[data-del]')) { if (!confirm('移除這個項目？')) return; shop = removeById(shop, row.dataset.id); save('shop', shop); renderShop(); }
+        };
+        $('#sList').onchange = (e) => { const row = e.target.closest('[data-id]'); if (row) { shop = toggleShop(shop, row.dataset.id); save('shop', shop); renderShop(); } };
+        $('#sCopy').onclick = () => { const t = shopText(shop); if (!t) { msg('#sMsg', '沒有未勾選的品項可複製', true); return; } Util.copyWithFeedback($('#sCopy'), t); };
+        $('#sClearDone').onclick = () => {
+            const n = shop.filter(x => x.done).length; if (!n) { msg('#sMsg', '沒有已勾選的品項'); return; }
+            if (!confirm(`清空 ${n} 個已勾選的品項？無法復原。`)) return;
+            shop = clearDone(shop); save('shop', shop); msg('#sMsg', ''); renderShop();
+        };
+        $('#sClearAll').onclick = () => {
+            if (!shop.length) { msg('#sMsg', '清單已經是空的'); return; }
+            if (!confirm(`清除全部 ${shop.length} 項購物清單？無法復原。`)) return;
+            shop = []; save('shop', shop); msg('#sMsg', ''); renderShop();
+        };
+
+        // ---- 冰箱 ----
+        $('#fLoc').innerHTML = opts(LOCS);
+        $('#fPre').innerHTML = '<option value="">不套用（自己填到期日）</option>' + SHELF.map((s, i) => `<option value="${i}">${Util.esc(s.label)}</option>`).join('');
+        $('#fBuy').value = todayTW();
+        $('#fPre').onchange = () => { const p = SHELF[$('#fPre').value]; if (!p) return; $('#fLoc').value = p.loc; $('#fExp').value = suggestExp($('#fBuy').value, p); };
+        const expBadge = (exp, today) => {
+            const e = expiryOf(exp, today);
+            if (e.level === 'none') return '';
+            const t = e.level === 'expired' ? `已過期 ${-e.days} 天` : e.days === 0 ? '今天到期' : e.level === 'd3' ? `${e.days} 天內` : e.level === 'd7' ? `${e.days} 天內` : '';
+            return t ? `<span class="badge ${e.level}">${t}</span>` : '';
+        };
+        function fridgeRow(x, today, withDates) {
+            return `<div class="li" data-id="${Util.esc(x.id)}"><div class="grow"><b>${Util.esc(x.name)}</b>${x.qty ? `<span class="chip">${Util.esc(x.qty)}</span>` : ''}<span class="chip">${x.loc}</span>${expBadge(x.exp, today)}${withDates ? `<div class="small">${x.buy ? '買 ' + dateLabel(x.buy) + '　' : ''}${x.exp ? '到期 ' + x.exp : '沒有到期日'}</div>` : ''}</div><button class="sm" data-use>用完 / 丟棄</button></div>`;
+        }
+        function renderFridge() {
+            const today = todayTW(), eat = eatFirst(fridge, today);
+            $('#fEat').hidden = !eat.length;
+            $('#fEatList').innerHTML = eat.map(x => fridgeRow(x, today, false)).join('');
+            $('#fUsage').textContent = `${fridge.length} / ${PT.FRIDGE_MAX} 項`;
+            $('#fList').innerHTML = fridge.length ? sortFridge(fridge).map(x => fridgeRow(x, today, true)).join('') : '<p class="muted">冰箱是空的。</p>';
+        }
+        $('#fAdd').onclick = () => {
+            const r = addFridge(fridge, { name: $('#fName').value, qty: $('#fQty').value, loc: $('#fLoc').value, buy: $('#fBuy').value, exp: $('#fExp').value });
+            if (r.err) { msg('#fMsg', r.err, true); return; }
+            fridge = r.list; save('fridge', fridge); $('#fName').value = ''; $('#fQty').value = ''; $('#fExp').value = ''; $('#fPre').value = ''; msg('#fMsg', '已加入'); renderFridge();
+        };
+        const useUp = (e) => { const b = e.target.closest('[data-use]'); if (!b) return; if (!confirm('標記為用完 / 丟棄並移除？')) return; fridge = removeById(fridge, b.closest('[data-id]').dataset.id); save('fridge', fridge); renderFridge(); };
+        $('#fList').onclick = useUp; $('#fEatList').onclick = useUp;
+        $('#fClearAll').onclick = () => {
+            if (!fridge.length) { msg('#fMsg', '冰箱已經是空的'); return; }
+            if (!confirm(`清除全部 ${fridge.length} 項冰箱庫存？無法復原。`)) return;
+            fridge = []; save('fridge', fridge); msg('#fMsg', ''); renderFridge();
+        };
+
+        // ---- 一週菜單 ----
+        function renderMenu() {
+            $('#dishes').innerHTML = recipes.map(r => `<option value="${Util.esc(r.name)}">`).join('');
+            $('#mGrid').innerHTML = WEEK.map((w, d) => `<b>${w}</b>` + [0, 1].map(m => `<input type="text" maxlength="${PT.DISH}" list="dishes" data-d="${d}" data-m="${m}" value="${Util.esc(menu[d][m])}" placeholder="${m ? '晚餐' : '午餐'}" aria-label="${w}${m ? '晚餐' : '午餐'}">`).join('')).join('');
+        }
+        $('#mGrid').onchange = (e) => { const t = e.target; if (t.dataset.d === undefined) return; menu = setDish(menu, +t.dataset.d, +t.dataset.m, t.value); save('menu', menu); msg('#mMsg', ''); };
+        $('#mToShop').onclick = () => {
+            const items = menuToShop(menu, recipes);
+            if (!items.length) { msg('#mMsg', '菜單是空的', true); return; }
+            const r = mergeShop(shop, items); shop = r.list; save('shop', shop); renderShop();
+            msg('#mMsg', `已加入購物清單：新增 ${r.added} 項、合併 ${r.merged} 項` + (r.skipped ? `；${r.skipped} 項因超過 ${PT.SHOP_MAX} 項上限未加入` : ''), !!r.skipped);
+        };
+        $('#mClear').onclick = () => {
+            if (!menu.flat().some(Boolean)) { msg('#mMsg', '菜單已經是空的'); return; }
+            if (!confirm('清除整週菜單？無法復原。')) return;
+            menu = emptyMenu(); save('menu', menu); msg('#mMsg', ''); renderMenu();
+        };
+
+        // ---- 發酵 ----
+        $('#gKind').innerHTML = opts(KINDS); $('#gStart').value = todayTW();
+        $('#gKind').onchange = () => { $('#gEvery').value = DEFAULT_EVERY[$('#gKind').value] ?? 0; };
+        function renderFerment() {
+            const today = todayTW();
+            $('#gUsage').textContent = `${ferment.length} / ${PT.FERMENT_MAX} 筆`;
+            $('#gList').innerHTML = ferment.length ? ferment.map(x => {
+                const s = feedStatus(x, today), age = day.between(x.start, today);
+                const rem = s.level === 'none' ? '' : s.level === 'overdue' ? `<span class="badge expired">餵養逾期 ${-s.days} 天</span>` : s.level === 'today' ? '<span class="badge d3">今天要餵養</span>' : s.level === 'soon' ? '<span class="badge d7">明天餵養</span>' : '';
+                return `<div class="li" data-id="${Util.esc(x.id)}"><div class="grow"><b>${Util.esc(x.name)}</b><span class="chip">${x.kind}</span>${rem}<div class="small">開始 ${x.start}（第 ${Math.max(0, age) + 1} 天）${x.ratio ? '　比例 ' + Util.esc(x.ratio) : ''}${s.next ? `<br>上次餵養 ${x.last}，下次 ${s.next}` : ''}${x.note ? '<br>' + Util.esc(x.note) : ''}</div></div><div style="display:flex;flex-direction:column;gap:6px">${x.every ? '<button class="sm" data-fed>已餵養</button>' : ''}<button class="sm" data-del>刪除</button></div></div>`;
+            }).join('') : '<p class="muted">還沒有發酵記錄。</p>';
+        }
+        $('#gAdd').onclick = () => {
+            const r = addFerment(ferment, { name: $('#gName').value, kind: $('#gKind').value, start: $('#gStart').value, ratio: $('#gRatio').value, note: $('#gNote').value, every: $('#gEvery').value });
+            if (r.err) { msg('#gMsg', r.err, true); return; }
+            ferment = r.list; save('ferment', ferment); for (const i of ['#gName', '#gRatio', '#gNote']) $(i).value = ''; msg('#gMsg', '已新增'); renderFerment();
+        };
+        $('#gList').onclick = (e) => {
+            const row = e.target.closest('[data-id]'); if (!row) return;
+            const id = row.dataset.id, it = ferment.find(x => x.id === id); if (!it) return;
+            if (e.target.closest('[data-fed]')) { ferment = markFed(ferment, id, todayTW()); save('ferment', ferment); renderFerment(); }
+            else if (e.target.closest('[data-del]')) { if (!confirm(`刪除發酵記錄「${it.name}」？無法復原。`)) return; ferment = removeById(ferment, id); save('ferment', ferment); renderFerment(); }
+        };
+        $('#gClearAll').onclick = () => {
+            if (!ferment.length) { msg('#gMsg', '沒有記錄'); return; }
+            if (!confirm(`清除全部 ${ferment.length} 筆發酵記錄？無法復原。`)) return;
+            ferment = []; save('ferment', ferment); msg('#gMsg', ''); renderFerment();
+        };
+
+        // ---- 全部清除（只清本工具的 4 個鍵）----
+        $('#allClear').onclick = () => {
+            if (!confirm('清除本工具全部資料（購物清單、冰箱、菜單、發酵）？無法復原。「食譜份量縮放」的食譜不受影響。')) return;
+            shop = []; fridge = []; menu = emptyMenu(); ferment = [];
+            for (const k of Object.keys(KEYS)) save(k, k === 'menu' ? menu : []);
+            renderShop(); renderFridge(); renderMenu(); renderFerment(); msg('#allMsg', '已清除');
+        };
+        renderShop(); renderFridge(); renderMenu(); renderFerment();
+    </script>
+</body>
+
+</html>

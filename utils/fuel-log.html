@@ -198,6 +198,16 @@
             <p class="note" id="taxNote"></p>
         </details>
 
+        <details class="card" id="dTire">
+            <summary>輪胎規格解讀</summary>
+            <p class="note">輸入胎側規格（例如 205/55R16 91V），解析尺寸、載重與速度；填第二組可比較外徑與里程表誤差。不儲存資料。</p>
+            <div class="row">
+                <div class="f"><label for="tireA">原規格</label><input type="text" id="tireA" value="205/55R16 91V" maxlength="30" autocomplete="off" autocapitalize="characters"></div>
+                <div class="f"><label for="tireB">新規格（選填，比較用）</label><input type="text" id="tireB" maxlength="30" placeholder="215/50R17" autocomplete="off" autocapitalize="characters"></div>
+            </div>
+            <div class="res" id="tireOut"></div>
+        </details>
+
         <details class="card" id="dMaint">
             <summary>保養與稅費提醒</summary>
             <div class="row">
@@ -250,6 +260,7 @@
         <ul>
         <li>計程車費率、停車費：輸入距離 / 時間或停車時段估算費用，費率欄位都可修改；預設為大台北地區費率，各縣市不同，請自行核對公告。這兩塊不儲存資料。</li>
         <li>買車 vs 租車：填車價、殘值、保險、稅費、保養、貸款與租金，比較 N 年總花費；預設是範例值，油耗與油價會自動帶入上方紀錄。不儲存。</li>
+        <li>輪胎規格解讀：輸入 205/55R16 91V 這類規格，算出胎壁高、外徑、周長，並對照載重指數（60–120）與速度符號；填第二組規格可比較外徑差與里程表誤差（新胎較大時實際車速比儀表快）。不儲存資料；實際換胎請以原廠建議與輪胎行為準。</li>
         <li>牌照稅：依排氣量查小客車全年稅額（財政部稅務入口網，頁面更新 115/04/09）；汽油車的燃料使用費隨油價收取，沒有年度稅額表。</li>
         <li>保養與稅費提醒：記錄機油、輪胎、煞車、驗車、保險、牌照稅、燃料稅等的日期 / 里程週期，列出「已逾期」「即將到期」（30 天內或 500 km 內）；按「已完成」會把上次日期與里程更新為今天與目前里程。最多 300 筆，滿了拒絕新增；每筆可刪除、「清除全部提醒」需確認且無法復原；存在本機（鍵 fuel_maint），壞資料載入時自動略過。</li>
         </ul>
@@ -387,6 +398,25 @@
         }
         // 完成一次：上次日期改今天、里程改目前里程（有看里程且知道目前里程才改）
         const doneMaint = (m, today, curOdo) => ({ ...m, date: today, odo: m.km && curOdo !== null && curOdo !== undefined ? curOdo : m.odo });
+
+        // 輪胎規格：205/55R16 91V。載重指數（ISO 對照，60–120）與速度符號
+        const LOAD_INDEX = [250, 257, 265, 272, 280, 290, 300, 307, 315, 325, 335, 345, 355, 365, 375, 387, 400, 412, 425, 437, 450, 462, 475, 487, 500, 515, 530, 545, 560, 580, 600, 615, 630, 650, 670, 690, 710, 730, 750, 775, 800, 825, 850, 875, 900, 925, 950, 975, 1000, 1030, 1060, 1090, 1120, 1150, 1180, 1215, 1250, 1285, 1320, 1360, 1400];
+        const SPEED_SYM = { J: 100, K: 110, L: 120, M: 130, N: 140, P: 150, Q: 160, R: 170, S: 180, T: 190, U: 200, H: 210, V: 240, W: 270, Y: 300 };
+        const loadKg = (i) => Number.isInteger(i) && i >= 60 && i <= 120 ? LOAD_INDEX[i - 60] : null;
+        function parseTire(s) {
+            const m = /^(?:P|LT)?(\d{3})(?:\/|\s)(\d{2})\s*(?:Z?R|-|\s)\s*(\d{2})(?:\s*(\d{2,3})\s*([A-Z]))?$/.exec(String(s ?? '').trim().toUpperCase());
+            if (!m) return null;
+            const w = +m[1], a = +m[2], rim = +m[3];
+            if (w < 105 || w > 405 || a < 20 || a > 95 || rim < 10 || rim > 30) return null;
+            const side = w * a / 100, dia = rim * 25.4 + 2 * side, li = m[4] ? +m[4] : null, sp = m[5] || null;
+            return { w, a, rim, side, dia, circ: Math.PI * dia, li, kg: li === null ? null : loadKg(li), sp, kmh: sp ? SPEED_SYM[sp] ?? null : null };
+        }
+        // 換胎後：直徑差與里程表誤差（新胎較大 → 實際比儀表快）
+        function tireCompare(a, b) {
+            if (!a || !b) return null;
+            const diff = b.dia - a.dia, pct = diff / a.dia * 100;
+            return { diff, pct, actual100: 100 * b.dia / a.dia };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -488,6 +518,20 @@
             maint = r.list; saveM(); $('#mName').value = ''; renderMaint();
         };
         $('#mClear').onclick = () => { if (maint.length && confirm(`確定刪除全部 ${maint.length} 筆保養與稅費提醒？無法復原。`)) { maint = []; saveM(); renderMaint(); } };
+        function renderTire() {
+            const a = parseTire($('#tireA').value), bs = $('#tireB').value.trim(), b = bs ? parseTire(bs) : null, rows = [];
+            if (!a) rows.push(statRow('原規格', '無法解析（格式如 205/55R16 91V）', 'bad'));
+            else {
+                rows.push(statRow('寬度 / 扁平比 / 輪圈', `${a.w} mm / ${a.a}% / ${a.rim} 吋`), statRow('胎壁高 / 外徑', `${fmt(a.side, 1)} mm / ${fmt(a.dia, 1)} mm`), statRow('周長（每轉前進）', `${fmt(a.circ / 1000, 3)} m`));
+                if (a.li !== null) rows.push(statRow('載重指數', a.kg ? `${a.li} = 每條 ${a.kg} kg` : `${a.li}（對照表未收錄）`));
+                if (a.sp) rows.push(statRow('速度符號', a.kmh ? `${a.sp} = ${a.kmh} km/h` : `${a.sp}（對照表未收錄）`));
+            }
+            if (bs && !b) rows.push(statRow('新規格', '無法解析', 'bad'));
+            const c = tireCompare(a, b);
+            if (c) rows.push(statRow('新規格外徑', `${fmt(b.dia, 1)} mm（${c.diff >= 0 ? '+' : ''}${fmt(c.diff, 1)} mm、${c.pct >= 0 ? '+' : ''}${fmt(c.pct, 2)}%）`, Math.abs(c.pct) > 3 ? 'bad' : 'ok'), statRow('儀表 100 km/h 時實際', `${fmt(c.actual100, 1)} km/h`), statRow('提醒', Math.abs(c.pct) > 3 ? '外徑差超過約 3%，不建議（影響里程表、ABS、法規）' : '外徑差在約 3% 內較常見；仍請確認輪圈寬度與車身空間'));
+            $('#tireOut').replaceChildren(...rows);
+        }
+        $('#dTire').oninput = renderTire; renderTire();
         render();
     </script>
 </body>

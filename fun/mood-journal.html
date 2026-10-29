@@ -205,6 +205,8 @@
             <div class="chips" id="chips"></div>
             <div class="row" style="margin-top:8px"><input id="newTag" maxlength="12" placeholder="自訂標籤（最多 12 字）" aria-label="自訂標籤"><button id="addTag">新增標籤</button><button id="mgTag" aria-expanded="false">管理標籤</button></div>
             <div id="tagMgr" hidden style="margin-top:8px"></div>
+            <label>感恩日記（今天值得感謝的三件事，選填）</label>
+            <div id="gInputs"><input class="g" maxlength="100" placeholder="感恩的事 1" aria-label="感恩的事 1"><input class="g" maxlength="100" placeholder="感恩的事 2" aria-label="感恩的事 2" style="margin-top:6px"><input class="g" maxlength="100" placeholder="感恩的事 3" aria-label="感恩的事 3" style="margin-top:6px"></div>
             <label for="text">想說的話</label>
             <textarea id="text" rows="4" maxlength="2000" placeholder="今天發生了什麼？"></textarea>
             <div class="row" style="margin-top:10px">
@@ -242,6 +244,10 @@
             <div id="dist"></div>
             <h2 style="margin-top:14px">最常出現的標籤</h2>
             <div id="topTags"></div>
+            <h2 style="margin-top:14px">感恩回顧</h2>
+            <div id="gStats"></div>
+            <div class="row" style="margin-top:8px"><button id="gRand">隨機回顧一則</button><button id="gClear">清除全部感恩事項</button></div>
+            <div id="gView"></div>
         </div>
 
         <div class="card">
@@ -269,6 +275,7 @@
         <li>寫下想說的話，按「儲存（覆蓋當天）」；同一天想再補充，按「追加到當天」，文字會接在後面、標籤合併。</li>
         <li>月曆點某一天可查看或修改；顏色越綠越開心、越紅越低落。</li>
         <li>「年度回顧」選年份：看當年記錄天數、平均心情、每天一格的心情熱度圖（顏色同月曆，灰色是沒記的日子，點 / 長按格子可看日期）、每月平均、心情分布與最常出現的前 10 個標籤。只讀取現有日記，不新增資料。</li>
+        <li>「感恩日記」：表單裡可寫下當天三件感謝的事（選填、每件最多 100 字，跟當天的日記存在同一筆）；「年度回顧」下方的「感恩回顧」顯示寫過的天數、連續天數、最近 7 筆，按「隨機回顧一則」重溫過去的感恩。</li>
         <li>「搜尋與匯出」可搜文字 / 標籤 / 日期，並匯出 .txt 或 .md。</li>
         </ol>
         <h3>範例</h3>
@@ -282,6 +289,7 @@
         <li>想全部重來？按「清除全部日記」（會先確認，標籤清單保留，無法復原，建議先匯出）。</li>
         <li>連續天數：今天還沒記沒關係，從昨天往回算。</li>
         <li>資料只在本機，換手機或清除瀏覽資料前請先用右上角備份。</li>
+        <li>感恩事項跟日記一起算在 3650 筆上限內；刪除當天或「清除全部日記」會一併刪除，只想清感恩事項（保留心情與日記）請按「清除全部感恩事項」，會先確認且無法復原。</li>
         <li>標籤用久了太多？按「管理標籤」可以改名（新名稱已存在就合併）或刪除；刪除時可選擇舊日記要不要一起移除。標籤清單最多 40 個。</li>
         </ul>
     </template>
@@ -318,12 +326,32 @@
             const swap = (a) => [...new Set(a.map(x => (x === from ? n : x)))];
             return { tagList: swap(tagList), entries: entries.map(e => (e.tags.includes(from) ? { ...e, tags: swap(e.tags) } : e)), name: n };
         }
+        // ---------- 感恩日記：每筆日記的選填欄位 g（最多 3 件，每件 1–100 字）----------
+        const MAX_G = 3, G_LEN = 100;
+        const cleanGrat = (a) => (Array.isArray(a) ? a.filter(x => typeof x === 'string').map(x => x.trim().slice(0, G_LEN)).filter(Boolean).slice(0, MAX_G) : []);
+        // 感恩統計：有寫感恩的天數、件數、連續天數（今天沒寫從昨天算）
+        function gratStats(list, today) {
+            const has = new Set(list.filter(e => e.g && e.g.length).map(e => e.date));
+            let d = has.has(today) ? today : day.shift(today, -1), streak = 0;
+            while (has.has(d)) { streak++; d = day.shift(d, -1); }
+            return { days: has.size, items: list.reduce((n, e) => n + (e.g ? e.g.length : 0), 0), streak };
+        }
+        // 最近 n 天有感恩的日記（新到舊）
+        const gratRecent = (list, n = 7) => list.filter(e => e.g && e.g.length).slice(-n).reverse();
+        // 隨機挑一則過去的感恩（排除今天；沒有回 null）；r 為 0–1 的亂數
+        function gratPick(list, today, r) {
+            const all = list.filter(e => e.g && e.g.length && e.date !== today).flatMap(e => e.g.map(t => ({ date: e.date, t })));
+            return all.length ? all[Math.min(all.length - 1, Math.floor(r * all.length))] : null;
+        }
+        // 清除全部感恩事項（保留心情 / 標籤 / 文字）
+        const clearGrat = (list) => list.map(e => { if (!e.g) return e; const { g, ...rest } = e; return rest; });
         // 驗證並補預設值；不合法回傳 null
         function normEntry(e) {
             if (!e || typeof e !== 'object' || !isDate(e.date)) return null;
             const mood = Math.round(Number(e.mood));
             if (!(mood >= 1 && mood <= 5)) return null;
-            return { date: e.date, mood, tags: cleanTags(e.tags), text: typeof e.text === 'string' ? e.text.slice(0, 2000) : '' };
+            const g = cleanGrat(e.g);
+            return { date: e.date, mood, tags: cleanTags(e.tags), text: typeof e.text === 'string' ? e.text.slice(0, 2000) : '', ...(g.length ? { g } : {}) };
         }
         // 清單整理：丟掉壞資料、同日後者覆蓋前者、依日期排序、超過上限留最新
         function cleanEntries(list) {
@@ -374,13 +402,13 @@
         function search(list, q) {
             q = String(q).trim().toLowerCase();
             if (!q) return [];
-            return list.filter(e => (e.date + ' ' + e.tags.join(' ') + ' ' + e.text).toLowerCase().includes(q)).reverse();
+            return list.filter(e => (e.date + ' ' + e.tags.join(' ') + ' ' + e.text + ' ' + (e.g || []).join(' ')).toLowerCase().includes(q)).reverse();
         }
         function exportText(list, md) {
             return list.map(e => {
                 const t = e.tags.join('、');
-                return md ? `## ${e.date}\n\n- 心情：${MOODS[e.mood - 1]} ${e.mood}/5\n` + (t ? `- 標籤：${t}\n` : '') + (e.text ? `\n${e.text}\n` : '')
-                    : `${e.date}  ${MOODS[e.mood - 1]} ${e.mood}/5` + (t ? `  [${t}]` : '') + (e.text ? `\n${e.text}` : '') + '\n';
+                return md ? `## ${e.date}\n\n- 心情：${MOODS[e.mood - 1]} ${e.mood}/5\n` + (t ? `- 標籤：${t}\n` : '') + (e.g ? `- 感恩：${e.g.join('；')}\n` : '') + (e.text ? `\n${e.text}\n` : '')
+                    : `${e.date}  ${MOODS[e.mood - 1]} ${e.mood}/5` + (t ? `  [${t}]` : '') + (e.g ? `\n感恩：${e.g.join('；')}` : '') + (e.text ? `\n${e.text}` : '') + '\n';
             }).join('\n');
         }
         // 年度回顧：該年的筆數、平均、心情分布（1–5 各幾天）、最常出現標籤（前 10）、每月筆數與平均
@@ -417,6 +445,7 @@
         function loadDate() {
             const d = $('#date').value, e = entries.find(x => x.date === d);
             curMood = e ? e.mood : 0; curTags = new Set(e ? e.tags : []); $('#text').value = e ? e.text : '';
+            document.querySelectorAll('#gInputs .g').forEach((inp, i) => { inp.value = e && e.g ? e.g[i] || '' : ''; });
             $('#dateNote').textContent = e ? '此日已有記錄，可修改後覆蓋或追加。' : '';
             $('#del').disabled = !e; $('#append').disabled = !e;
             drawForm(); drawCal();
@@ -426,7 +455,7 @@
             if (!isDate(d)) { $('#saveNote').textContent = '請選日期'; return; }
             if (d > today) { $('#saveNote').textContent = '不能寫未來的日期'; return; }
             if (!curMood) { $('#saveNote').textContent = '請先選心情'; return; }
-            const r = saveEntry(entries, { date: d, mood: curMood, tags: [...curTags], text: $('#text').value }, append);
+            const r = saveEntry(entries, { date: d, mood: curMood, tags: [...curTags], text: $('#text').value, g: [...document.querySelectorAll('#gInputs .g')].map(i => i.value) }, append);
             if (!r) { $('#saveNote').textContent = '資料不正確'; return; }
             entries = r; tagList = [...new Set([...tagList, ...curTags])];
             $('#saveNote').textContent = persist() ? '已儲存' : ''; loadDate(); drawAll();
@@ -486,7 +515,21 @@
             $('#results').innerHTML = r.slice(0, 50).map(e => `<div class="ent"><b>${e.date}</b> ${MOODS[e.mood - 1]} <small>${esc(e.tags.join('、'))}</small><br>${esc(e.text)}</div>`).join('') + (r.length > 50 ? `<p class="note">只顯示前 50 筆，共 ${r.length} 筆</p>` : '');
             $('#count').textContent = $('#q').value.trim() ? `找到 ${r.length} 筆` : '';
         }
-        function drawAll() { drawCal(); drawStats(); drawReview(); drawSearch(); }
+        function drawGrat() {
+            const st = gratStats(entries, today);
+            $('#gStats').replaceChildren(Util.statRow('寫過感恩的天數', `${st.days} 天（共 ${st.items} 件）`), Util.statRow('連續天數', `${st.streak} 天`));
+            $('#gView').replaceChildren(...gratRecent(entries).map(e => Object.assign(document.createElement('div'), { className: 'ent', textContent: e.date + '\n' + e.g.map((t, i) => `${i + 1}. ${t}`).join('\n') })));
+        }
+        $('#gRand').onclick = () => {
+            const p = gratPick(entries, today, Util.rnd(1e6) / 1e6);
+            $('#gView').replaceChildren(Object.assign(document.createElement('div'), { className: p ? 'ent' : 'muted', textContent: p ? `${p.date}\n${p.t}` : '還沒有過去的感恩事項，先在上面寫下今天的吧。' }));
+        };
+        $('#gClear').onclick = () => {
+            const n = entries.filter(e => e.g && e.g.length).length;
+            if (!n || !confirm(`清除 ${n} 天的感恩事項？心情、標籤與日記文字會保留。無法復原。`)) return;
+            entries = clearGrat(entries); persist(); loadDate(); drawAll();
+        };
+        function drawAll() { drawCal(); drawStats(); drawReview(); drawSearch(); drawGrat(); }
 
         $('#date').onchange = () => { const p = $('#date').value; if (isDate(p)) { vy = day.parse(p).y; vm = day.parse(p).m; } loadDate(); drawStats(); };
         $('#save').onclick = () => doSave(false);
@@ -529,7 +572,7 @@
         $('#q').oninput = drawSearch;
         const exp = (md) => { if (!entries.length) { $('#count').textContent = '沒有可匯出的資料'; return; } download(new Blob([exportText(entries, md)], { type: 'text/plain;charset=utf-8' }), `mood-journal.${md ? 'md' : 'txt'}`); };
         $('#expTxt').onclick = () => exp(false); $('#expMd').onclick = () => exp(true);
-        loadDate(); drawStats(); drawReview(); drawSearch();
+        loadDate(); drawStats(); drawReview(); drawSearch(); drawGrat();
     </script>
 </body>
 

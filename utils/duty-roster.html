@@ -198,6 +198,7 @@
         <li>家事分配的次數：一週＝每天 7 次、每週 1 次、一次性 1 次（每月的家事不排入一週）；一個月＝每天 30 次、每週 4 次、每月 1 次、一次性 1 次</li>
         <li>再次按「自動分配」會把已打勾的紀錄存進統計，並以目前的分配表當作「上一輪」；完成紀錄最多保留 1,000 筆，「清除分配與完成紀錄」可歸零</li>
         <li>刪除家事會一併從分配表拿掉；把成員從名單拿掉（離開輸入框後生效）也會移除他的分配</li>
+        <li>完成統計後面的百分比是「公平度」：該人分數與全體平均的差距（+20% = 比平均多做兩成）；沒有完成紀錄的成員算 0 分；用難度分數代替工時，這裡不記時數</li>
         <li>人員請假時，把名字從名單拿掉或調整「從第幾位開始」再重排</li>
         </ul>
     </template>
@@ -296,6 +297,14 @@
                 if (r.date.slice(0, 7) === ym && r.date <= today) add(out.month);
             }
             return out;
+        }
+        // 公平度：各人分數與「全體平均」的偏離百分比（成員清單內沒紀錄的人算 0）；平均為 0 時偏離不計
+        function fairness(stat, members) {
+            const names = [...new Set([...members, ...Object.keys(stat)])];
+            if (!names.length) return [];
+            const rows = names.map(m => ({ member: m, n: (stat[m] || { n: 0 }).n, score: (stat[m] || { score: 0 }).score }));
+            const avg = rows.reduce((a, r) => a + r.score, 0) / rows.length;
+            return rows.map(r => ({ ...r, dev: avg ? Math.round((r.score / avg - 1) * 100) : 0 }));
         }
         // 複製用文字：每人一行，同名家事合併成 ×N
         function choresText(rows, members, period) {
@@ -402,7 +411,7 @@
                 });
             }
             const st = choreStats([...cd.log, ...rowsT.filter(r => r.done).map(r => ({ member: r.member, score: r.score, date: r.done }))], today);
-            const fmt = (o) => Object.entries(o).map(([m, v]) => `${m} ${v.n} 次 / ${v.score} 分`).join('、') || '還沒有完成紀錄';
+            const fmt = (o) => Object.keys(o).length ? fairness(o, cMembers()).map(r => `${r.member} ${r.n} 次 / ${r.score} 分（${r.dev > 0 ? '+' : ''}${r.dev}%）`).join('、') : '還沒有完成紀錄';
             $('#cStats').replaceChildren(...[['本週', st.week], ['本月', st.month]].map(([k, o]) => { const p = document.createElement('p'); p.className = 'stat'; p.textContent = `${k}：${fmt(o)}`; return p; }));
         }
         function cAssign() {

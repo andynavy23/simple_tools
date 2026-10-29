@@ -56,6 +56,7 @@ node tests/run.mjs 頁名片段            # 只跑「內容提到該片段」�
 node tests/run.mjs --ios [片段]        # iPhone 17 版面稽核（真 WebKit，6 種視窗，約 25 秒，有快取）
 node tests/run.mjs --smoke [片段]      # 全站煙霧測試（Edge 手機視窗：無例外、無 404、無橫向溢出，約 25 秒）
 node tests/run.mjs --e2e               # tests/e2e/ 內所有頁面 e2e
+node tests/run.mjs --all               # 全部（單元 + 強制全站 iPhone 稽核 + 煙霧 + 全部 e2e），通過只印一行、失敗才印內容
 ```
 
 - **不要把測試輸出整段讀進對話**：用 `node tests/run.mjs …`（通過只有一行）；直接跑 `tools.test.js` 會印幾百行 `ok`。失敗時才看最後幾行，修完只重跑那一個檔。
@@ -66,6 +67,8 @@ node tests/run.mjs --e2e               # tests/e2e/ 內所有頁面 e2e
 - 截圖等除錯產物放暫存資料夾（系統 temp），用完刪除，不要留在 repo 或「下載」。
 
 ## 新增 / 合併工具
+
+0. 登錄用 `node tests/register.mjs temp_reg_*.json`（規格檔寫在 repo 根目錄的 `temp_reg_<代號>.json`，欄位見 `tests/register.mjs` 檔頭）：一次補好首頁卡片、README、TOOLS，並刪掉 IDEAS.md 已完成的編號；不用手動改四個檔。
 
 1. 先查 `TOOLS.md`：是既有工具的子集或延伸 → 擴充它（指名要加的分頁），不另開新檔；兩個工具共用同一份資料 / 輸入 → 合併。
 2. 新增：依分類建 `<category>/xxx.html`（含 chrome.js 與 help 模板），並在 `index.html`（複製一張 `<a class="card">`，填 `data-cat` / `data-topic`）、`README.md` 表格、`TOOLS.md`、`tests/tools.test.js` 各補一筆；若點子來自 `IDEAS.md`，做完把該項從 `IDEAS.md` 刪除。

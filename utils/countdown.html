@@ -159,6 +159,18 @@
             <p class="note" id="msg"></p>
         </div>
 
+        <div class="card" id="quitCard">
+            <h2>戒除計數</h2>
+            <p class="note" style="margin-top:0">戒菸 / 戒酒 / 戒糖已持續幾天、省下多少錢。依你填的「每天花費」估算，非醫療建議；有成癮或戒斷症狀請洽醫師。</p>
+            <div class="row">
+                <input type="text" id="qName" maxlength="30" placeholder="名稱（例如：戒菸）" aria-label="戒除名稱" style="flex:1 1 100%">
+                <label>起算日 <input type="date" id="qDate" aria-label="起算日"></label>
+                <label>每天花費 NT$ <input type="number" id="qCost" min="0" max="100000" step="1" inputmode="numeric" placeholder="例如 100" aria-label="每天花費" style="width:100px"></label>
+            </div>
+            <div class="row" style="margin-top:10px"><button class="primary" id="qAdd" style="margin-left:auto">開始計數</button></div>
+            <p class="note" id="qMsg"></p>
+        </div>
+
         <div class="card" id="list"></div>
         <div style="text-align:center"><button class="sm" id="ics">匯出成行事曆檔（.ics）</button></div>
     </div>
@@ -178,7 +190,7 @@
         <li>上方「今日倒數」填目標名稱、開始與目標時間，會即時倒數並顯示進度條</li>
         <li>下方輸入名稱與日期，要每年重複就勾「每年重複（紀念日）」，按「新增」</li>
         <li>列表依距離排序，每筆右邊的 × 可以刪除</li>
-        <li>每筆展開「清單」可新增項目（Enter）、勾選完成，或按「加入旅行行李範本」一次補上常用項目</li>
+        <li>每筆展開「清單」可新增項目（Enter）、勾選完成，或按「加入旅行行李範本」「加入行前待辦範本」一次補上常用項目</li>
         <li>按「匯出成行事曆檔（.ics）」可匯入手機或電腦的行事曆</li>
         </ol>
         <h3>範例</h3>
@@ -187,6 +199,8 @@
         <ul>
         <li>資料只存在這個瀏覽器，換裝置或清除資料就沒了，重要的可先匯出 .ics</li>
         <li>每年重複的 2/29 在非閏年算 2/28</li>
+        <li>戒除計數：在「戒除計數」填名稱、起算日與每天花費（0 也可），會在下方列表顯示已持續天數（起算日當天為 0 天，每過一天加 1）、估算省下的金額與下一個里程碑；起算日若在未來則照一般倒數。復發要重來可展開該筆的「清單」按「重新起算（今天）」，不要了按 × 刪除。非醫療建議。</li>
+        <li>旅遊倒數：新增旅行出發日，展開「清單」可「加入旅行行李範本」與「加入行前待辦範本」，一邊倒數一邊勾選。</li>
         <li>清單每個日期最多 60 項，同名項目不會重複加入；日期最多 200 個，過期的請按 × 刪除</li>
         </ul>
     </template>
@@ -277,11 +291,37 @@
         const toggleItem = (items, i) => items.map((x, k) => (k === i ? { ...x, done: !x.done } : x));
         // 把範本中還沒有的項目補進來
         const mergeTemplate = (items, tpl) => tpl.reduce((acc, t) => addItem(acc, t), items);
+        const TRIP_TODO = ['訂機票', '訂住宿', '確認護照效期（6 個月以上）', '辦理簽證 / 入境登記', '購買旅平險 / 旅遊保險', '換匯 / 確認信用卡海外額度', '申請網卡 / eSIM / 漫遊', '預辦登機 / 選位', '確認行李額度與違禁品', '下載離線地圖', '安排家中事務（鑰匙 / 寵物 / 垃圾）', '列印 / 截圖各種憑證', '查當地天氣、電壓與插頭'];
+
+        // ---------- 戒除計數（存成一般日期的 quit: { perDay } 欄位，date 為起算日）----------
+        const QUIT_MILESTONES = [1, 3, 7, 14, 30, 60, 100, 180, 365, 730, 1000, 1825, 3650];
+        const validPerDay = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 100000;
+        // 載入時清理：quit 不合法就拿掉（變成一般日期），合法則取整數花費
+        function cleanEvent(e) {
+            if (!validEvent(e)) return null;
+            const out = { ...e };
+            if ('quit' in out) { if (out.quit && validPerDay(out.quit.perDay)) out.quit = { perDay: Math.round(out.quit.perDay) }; else delete out.quit; }
+            return out;
+        }
+        const nextMilestone = (days) => QUIT_MILESTONES.find(m => m > days) || null;
+        // 已持續天數（起算日當天 = 0）與省下金額；起算日在未來回傳 { pending: 還有幾天 }
+        function quitStats(todayStr, e) {
+            const days = daysBetween(e.date, todayStr);
+            if (days < 0) return { pending: -days };
+            const nm = nextMilestone(days);
+            return { days, saved: days * e.quit.perDay, next: nm, toNext: nm === null ? null : nm - days };
+        }
+        function describeQuit(todayStr, e) {
+            const q = quitStats(todayStr, e);
+            if (q.pending) return { kind: 'future', days: q.pending, big: q.pending, label: '距離開始還有', sub: e.date + ' 起算 ・ 戒除', sort: q.pending, text: q.pending + ' 天' };
+            const ms = q.next === null ? '' : ` ・ 下個里程碑 ${q.next} 天（還有 ${q.toNext} 天）`;
+            return { kind: 'today', days: q.days, big: q.days, label: '已持續', sub: `${e.date} 起算 ・ 省下約 NT$ ${q.saved.toLocaleString('zh-TW')}${ms}`, sort: 1e9 - q.days, text: q.days + ' 天' };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
         const KEY = 'countdown_events';
-        let events = (Array.isArray(Util.store.get(KEY, [])) ? Util.store.get(KEY, []) : []).filter(validEvent).slice(0, MAX_EVENTS);
+        let events = (Array.isArray(Util.store.get(KEY, [])) ? Util.store.get(KEY, []) : []).map(cleanEvent).filter(Boolean).slice(0, MAX_EVENTS);
         const todayStr = day.today;
         $('#date').value = todayStr();
 
@@ -293,7 +333,7 @@
             const key = e.name + '|' + e.date, { done, total } = itemProgress(e.items);
             const det = document.createElement('details'); det.open = openKeys.has(key);
             det.ontoggle = () => { det.open ? openKeys.add(key) : openKeys.delete(key); };
-            const sum = document.createElement('summary'); sum.textContent = total ? `清單 ${done}/${total}` : '清單'; sum.style.cssText = 'cursor:pointer;font-size:13px;color:var(--muted)';
+            const sum = document.createElement('summary'); sum.textContent = (total ? `清單 ${done}/${total}` : '清單') + (e.quit ? '・重新起算' : ''); sum.style.cssText = 'cursor:pointer;font-size:13px;color:var(--muted)';
             det.append(sum);
             e.items.forEach((x, i) => {
                 const lab = document.createElement('label'); lab.style.cssText = 'display:flex;gap:8px;align-items:center;margin:4px 0;font-size:14px';
@@ -308,7 +348,14 @@
             add.onkeydown = (ev) => { if (ev.key === 'Enter' && add.value.trim()) { openKeys.add(key); e.items = addItem(e.items, add.value); save(); render(); } };
             const tpl = Object.assign(document.createElement('button'), { className: 'sm', textContent: '加入旅行行李範本' }); tpl.style.marginTop = '6px';
             tpl.onclick = () => { openKeys.add(key); e.items = mergeTemplate(e.items, PACKING); save(); render(); };
-            det.append(add, tpl);
+            const todo = Object.assign(document.createElement('button'), { className: 'sm', textContent: '加入行前待辦範本' }); todo.style.cssText = 'margin:6px 0 0 6px';
+            todo.onclick = () => { openKeys.add(key); e.items = mergeTemplate(e.items, TRIP_TODO); save(); render(); };
+            det.append(add, tpl, todo);
+            if (e.quit) {
+                const rs = Object.assign(document.createElement('button'), { className: 'sm', textContent: '重新起算（今天）' }); rs.style.cssText = 'margin:6px 0 0 6px';
+                rs.onclick = () => { if (confirm(`把「${e.name}」的起算日改成今天？已持續天數會歸零，無法復原。`)) { e.date = todayStr(); save(); render(); } };
+                det.append(rs);
+            }
             return det;
         }
 
@@ -317,7 +364,7 @@
             box.replaceChildren();
             if (!events.length) { box.append(Object.assign(document.createElement('div'), { className: 'muted', textContent: '還沒有任何日期，從上面新增一個吧' })); return; }
             const today = todayStr();
-            events.map((e, i) => ({ e, i, d: describe(today, e) })).sort((a, b) => a.d.sort - b.d.sort).forEach(({ e, i, d }) => {
+            events.map((e, i) => ({ e, i, d: e.quit ? describeQuit(today, e) : describe(today, e) })).sort((a, b) => a.d.sort - b.d.sort).forEach(({ e, i, d }) => {
                 const row = document.createElement('div');
                 row.className = 'li ev ' + d.kind;
                 const left = document.createElement('div');
@@ -329,7 +376,7 @@
                 right.className = 'big';
                 right.innerHTML = '<small></small><span></span>';
                 right.firstChild.textContent = d.label;
-                right.lastChild.textContent = d.kind === 'today' ? '🎉' : `${d.big} 天`;
+                right.lastChild.textContent = d.text || (d.kind === 'today' ? '🎉' : `${d.big} 天`);
                 right.firstChild.style.display = 'block';
                 const del = document.createElement('button');
                 del.className = 'del'; del.textContent = '×'; del.setAttribute('aria-label', '刪除 ' + e.name);
@@ -351,6 +398,16 @@
             save();
             $('#name').value = ''; $('#msg').textContent = '';
             render();
+        };
+        $('#qDate').value = todayStr();
+        $('#qAdd').onclick = () => {
+            const name = $('#qName').value.trim(), date = $('#qDate').value, cost = $('#qCost').value.trim() === '' ? 0 : Number($('#qCost').value), m = $('#qMsg');
+            if (!name) { m.textContent = '請輸入名稱'; return; }
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { m.textContent = '請選擇起算日'; return; }
+            if (!validPerDay(cost)) { m.textContent = '每天花費請輸入 0–100000'; return; }
+            if (events.length >= MAX_EVENTS) { m.textContent = `最多 ${MAX_EVENTS} 個日期，請先刪除不用的`; return; }
+            events.push({ name, date, yearly: false, items: [], quit: { perDay: Math.round(cost) } }); save();
+            $('#qName').value = ''; m.textContent = '已開始計數'; render();
         };
         // ---------- 今日倒數 ----------
         const cfg = { label: '下班', start: '09:00', end: '18:00', ...(Util.store.get('countdown_today', null) || {}) };

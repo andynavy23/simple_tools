@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="居家計算：園藝（肥料、盆土、堆肥）、水族、體感溫度與空氣品質、冷氣與燈光、家具能否搬入、寵物餵食量、尿布用量，離線運算。">
+    <meta property="og:title" content="居家計算" />
+    <meta property="og:description" content="園藝、水族、室內環境、冷氣燈光、家具搬運、寵物餵食、尿布用量七合一。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/home-calc.html" />
+    <meta name="st-keys" content="homec_opts">
+    <title>居家計算</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .tabs button {
+            flex: 1 1 auto;
+            padding-left: 8px;
+            padding-right: 8px;
+        }
+
+        .fgrid {
+            margin-bottom: 10px;
+        }
+
+        .fgrid>div {
+            min-width: 0;
+        }
+
+        .fgrid select {
+            width: 100%;
+        }
+
+        .fgrid .wide {
+            grid-column: 1 / -1;
+        }
+
+        .out {
+            margin-top: 6px;
+        }
+
+        .warn {
+            color: var(--muted);
+            font-size: 13px;
+            margin: 8px 0 0;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 80px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>居家計算</h1>
+        <p class="sub">園藝、水族、室內環境、冷氣燈光、搬家具、寵物與寶寶的居家小算式。數值多為經驗值或範例，欄位都可改；輸入內容只存在這個瀏覽器。</p>
+
+        <div class="tabs" id="tabs"></div>
+        <div id="panes"></div>
+
+        <button id="reset">重置所有輸入</button>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>七個分頁的居家小計算：園藝（肥料稀釋、盆栽土量、堆肥碳氮比）、水族（水量換水、藥劑劑量）、室內環境（體感溫度、露點結露、PM2.5 與 AQI、二氧化碳通風）、冷氣與燈光、家具尺寸檢查、寵物餵食量、尿布用量。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>買肥料 / 盆土 / 冷氣 / 燈具前先估份量。</li>
+        <li>要搬大型家具，想先確認過得了門、電梯與樓梯轉角。</li>
+        <li>想知道今天出門的體感、房間會不會結露、空氣品質該不該運動。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>選分頁，在欄位填數字，結果即時更新；空白欄位視為未填，選填欄位可不填。</li>
+        <li>預設值只是範例（例如肥料 20-20-20、冷氣每坪 0.6 kW、AQI 門檻），請改成你實際的產品標示或官方公告。</li>
+        <li>家具：填家具長 / 寬 / 高與各通道尺寸，會檢查可否直放或斜放通過；樓梯轉角以「走廊轉彎」公式估算。</li>
+        <li>「重置所有輸入」會清掉記住的輸入並恢復預設值。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">肥料 20-20-20、稀釋 1000 倍 → 每公升水 1 g，氮 / 磷 / 鉀 約 200 / 200 / 200 ppm（P2O5、K2O 計）
+        濕度 60%、氣溫 25 °C → 露點 16.7 °C
+        -10 °C 風速 20 km/h → 風寒約 -18 °C
+        6 坪、一般樓層、2 人 → 冷氣約需 3.6 kW
+        10 kg 絕育成犬、飼料 350 kcal/100g → 每日約 180 g</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>只記住上次的分頁與各欄位輸入（鍵 homec_opts），沒有其他資料與成長問題；壞資料或舊版資料載入時會被忽略並使用預設值。存不下時會顯示共用的儲存失敗提示；「重置」前會先確認，無法復原。</li>
+        <li>肥料與藥劑只做濃度換算，實際用量請以產品說明為準；寵物餵食量只是依體重與熱量的估算起點，請以獸醫建議為準；水族藥劑請依標示與魚種。</li>
+        <li>AQI 採「台灣環境部」或「美國 EPA（2024 修訂）」的 PM2.5 分段，門檻僅為範例，以官方公告為準。體感溫度的風寒適用氣溫 10 °C 以下且風速 4.8 km/h 以上，熱指數適用 26.7 °C（80 °F）以上。</li>
+        <li>冷氣、照度、家具搬運、堆肥碳氮比都是粗估：冷氣請以專業評估為準；樓梯是斜的、家具有突出物，搬運請多留餘裕並實測。</li>
+        <li>CO2 速查為居家參考值，不是診斷；通風量以一般成人安靜活動估算。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        const SQ = 3.305785;                       // 1 坪 = 3.305785 m²
+        const fin = (...a) => a.every(x => typeof x === 'number' && isFinite(x));
+
+        // ===== 園藝 =====
+        // 肥料：N、P2O5、K2O 百分比；dil = 稀釋倍數（1 份肥料兌 dil 份水）；vol = 水量 L。targetN（ppm）有填則反推倍數
+        function fertMix(n, p, k, dil, vol, targetN) {
+            if (!fin(n, p, k) || n < 0 || p < 0 || k < 0 || n + p + k <= 0 || n > 100 || p > 100 || k > 100) return null;
+            if (fin(targetN) && targetN > 0) { if (!(n > 0)) return null; dil = n * 1e4 / targetN; }
+            if (!(dil > 0) || !isFinite(dil)) return null;
+            const ppm = (x) => x * 1e4 / dil, mn = Math.min(...[n, p, k].filter(x => x > 0));
+            return { dil, perL: 1000 / dil, total: fin(vol) && vol > 0 ? vol * 1000 / dil : NaN, ppm: [ppm(n), ppm(p), ppm(k)], ratio: [n, p, k].map(x => x / mn) };
+        }
+        // 盆土：圓盆（a = 上緣直徑、b = 底徑）或方盆（a 長、b 寬，上下一樣）；h 高；drain 排水層厚；gap 土面離盆緣；單位 cm
+        function potSoil(shape, a, b, h, drain, gap, bag) {
+            if (!fin(a, b, h, drain, gap) || a <= 0 || b <= 0 || h <= 0 || drain < 0 || gap < 0 || drain + gap >= h) return null;
+            const slice = (y1, y2) => {
+                if (shape === 'rect') return a * b * (y2 - y1);
+                const R = a / 2, r = b / 2, rad = (y) => r + (R - r) * y / h, r1 = rad(y1), r2 = rad(y2);
+                return Math.PI * (y2 - y1) / 3 * (r1 * r1 + r1 * r2 + r2 * r2);
+            };
+            const total = slice(0, h) / 1000, drainL = slice(0, drain) / 1000, soil = slice(drain, h - gap) / 1000;
+            return { total, drain: drainL, soil, bags: fin(bag) && bag > 0 ? soil / bag : NaN };
+        }
+        // 堆肥：每行「名稱,碳氮比,重量」。混合碳氮比 = 總重 ÷ Σ(重量 ÷ 碳氮比)（假設各材料單位重量含碳量相近，粗估）
+        function compostMix(text) {
+            const rows = [];
+            for (const ln of String(text ?? '').split('\n').slice(0, 30)) {
+                const t = ln.split(/[,，\t]/).map(s => s.trim());
+                if (t.length < 3 || !t[0]) continue;
+                const r = +t[1], w = +t[2];
+                if (r > 0 && w > 0 && isFinite(r) && isFinite(w)) rows.push({ name: t[0], r, w });
+            }
+            if (!rows.length) return null;
+            const W = rows.reduce((s, x) => s + x.w, 0), N = rows.reduce((s, x) => s + x.w / x.r, 0);
+            return { rows, cn: W / N, weight: W };
+        }
+        // 已知青料碳氮比 g、褐料碳氮比 b、目標 t：每 1 份青料要幾份褐料（重量比）
+        function compostRatio(g, b, t) {
+            if (!fin(g, b, t) || !(g > 0 && b > 0 && t > 0) || !(g < t && t < b)) return null;
+            return (t / g - 1) / (1 - t / b);
+        }
+
+        // ===== 水族 =====
+        // 缸：l w h cm；gap 水面離缸緣 cm；ded 底砂 / 器材佔體積 %；pct 每次換水 %
+        function tankWater(l, w, h, gap, ded, pct) {
+            if (!fin(l, w, h, gap, ded) || l <= 0 || w <= 0 || h <= 0 || gap < 0 || gap >= h || ded < 0 || ded >= 100) return null;
+            const full = l * w * h / 1000, water = l * w * (h - gap) / 1000 * (1 - ded / 100), c = fin(pct) && pct > 0 && pct <= 100 ? water * pct / 100 : NaN;
+            return { full, water, change: c };
+        }
+        // 藥劑：標示「每 per L 加 amt」；或目標 ppm（mg/L）與藥水濃度 str（mg/mL）→ mL
+        function dose(vol, per, amt, ppm, str) {
+            if (!fin(vol) || vol <= 0) return null;
+            return { label: fin(per, amt) && per > 0 && amt >= 0 ? vol / per * amt : NaN, byPpm: fin(ppm, str) && ppm > 0 && str > 0 ? ppm * vol / str : NaN };
+        }
+
+        // ===== 室內環境 =====
+        // 風寒（加拿大 / NWS 公式）：t °C、v km/h；適用 t ≤ 10 且 v > 4.8，否則 NaN
+        function windChill(t, v) {
+            if (!fin(t, v) || t > 10 || v <= 4.8) return NaN;
+            const p = Math.pow(v, 0.16);
+            return 13.12 + 0.6215 * t - 11.37 * p + 0.3965 * t * p;
+        }
+        // 熱指數（NWS Rothfusz + 修正）：t °C、rh %；t < 26.7 °C（80 °F）回傳 NaN
+        function heatIndex(tc, rh) {
+            if (!fin(tc, rh) || rh < 0 || rh > 100) return NaN;
+            const T = tc * 9 / 5 + 32;
+            if (T < 80) return NaN;
+            const R = rh;
+            let hi = -42.379 + 2.04901523 * T + 10.14333127 * R - 0.22475541 * T * R - 0.00683783 * T * T - 0.05481717 * R * R + 0.00122874 * T * T * R + 0.00085282 * T * R * R - 0.00000199 * T * T * R * R;
+            if (R < 13 && T <= 112) hi -= (13 - R) / 4 * Math.sqrt((17 - Math.abs(T - 95)) / 17);
+            else if (R > 85 && T <= 87) hi += (R - 85) / 10 * (87 - T) / 5;
+            return (hi - 32) * 5 / 9;
+        }
+        const heatLevel = (hic) => !isFinite(hic) ? '' : hic < 26.7 ? '' : hic < 32.2 ? '注意（久站活動可能疲勞）' : hic < 39.4 ? '特別注意（可能中暑痙攣、熱衰竭）' : hic < 51.7 ? '危險（易中暑）' : '極度危險（高度中暑風險）';
+        // 露點（Magnus，a=17.62 b=243.12）與絕對濕度 g/m³
+        function dewPoint(t, rh) {
+            if (!fin(t, rh) || rh <= 0 || rh > 100) return NaN;
+            const g = Math.log(rh / 100) + 17.62 * t / (243.12 + t);
+            return 243.12 * g / (17.62 - g);
+        }
+        function absHumidity(t, rh) {
+            if (!fin(t, rh) || rh < 0 || rh > 100) return NaN;
+            const e = 6.112 * Math.exp(17.67 * t / (t + 243.5)) * rh / 100;
+            return 216.74 * e / (273.15 + t);
+        }
+        // 結露風險：表面溫度（窗 / 牆）與露點比較
+        function condRisk(td, surf) {
+            if (!fin(td, surf)) return '';
+            return surf <= td ? '會結露（表面溫度 ≤ 露點）' : surf - td <= 2 ? '接近結露（差 ≤ 2 °C）' : '暫無結露風險';
+        }
+        // PM2.5（µg/m³，24 小時值）AQI 分段 [濃度下限, 濃度上限, AQI 下限, AQI 上限]（範例門檻，以官方公告為準）
+        const AQI_TW = [[0, 15.4, 0, 50], [15.5, 35.4, 51, 100], [35.5, 54.4, 101, 150], [54.5, 150.4, 151, 200], [150.5, 250.4, 201, 300], [250.5, 350.4, 301, 400], [350.5, 500.4, 401, 500]];
+        const AQI_US = [[0, 9.0, 0, 50], [9.1, 35.4, 51, 100], [35.5, 55.4, 101, 150], [55.5, 125.4, 151, 200], [125.5, 225.4, 201, 300], [225.5, 325.4, 301, 500]];
+        const AQI_LEVELS = [['良好', '各種活動不受限'], ['普通', '極少數敏感族群留意'], ['對敏感族群不健康', '氣喘、心肺疾病者、老人小孩減少戶外劇烈活動'], ['對所有族群不健康', '減少戶外活動，外出戴 N95 / 口罩'], ['非常不健康', '避免戶外活動，室內開空氣清淨機'], ['危害', '留在室內，盡量避免外出']];
+        const aqiLevel = (aqi) => aqi <= 50 ? 0 : aqi <= 100 ? 1 : aqi <= 150 ? 2 : aqi <= 200 ? 3 : aqi <= 300 ? 4 : 5;
+        // 濃度 → AQI（先截到 0.1），超出表尾回傳 NaN
+        function pmToAqi(c, table) {
+            if (!fin(c) || c < 0) return NaN;
+            c = Math.floor(c * 10 + 1e-9) / 10;
+            const row = table.find(r => c <= r[1] + 1e-9);
+            return row ? Math.round((row[3] - row[2]) / (row[1] - row[0]) * (c - row[0]) + row[2]) : NaN;
+        }
+        function aqiToPm(a, table) {
+            if (!fin(a) || a < 0) return NaN;
+            const row = table.find(r => a <= r[3]);
+            return row ? Math.round(((row[1] - row[0]) / (row[3] - row[2]) * (a - row[2]) + row[0]) * 10) / 10 : NaN;
+        }
+        // CO2（ppm）分級（居家參考值）
+        const co2Level = (c) => !fin(c) ? '' : c < 800 ? '良好' : c < 1000 ? '尚可' : c < 1500 ? '偏高，建議通風' : c < 2500 ? '不佳，請開窗 / 換氣' : '很差，請立即換氣離開';
+        // 人 n、體積 vol m³、室外 out、目標 tgt（ppm）：每人 CO2 產生量 0.0052 L/s（一般成人安靜）
+        function co2Vent(n, vol, out, tgt) {
+            if (!fin(n, vol, out, tgt) || n <= 0 || vol <= 0 || tgt <= out) return null;
+            const gen = n * 0.0052e-3 * 3600, flow = gen / ((tgt - out) * 1e-6), rate = gen / vol * 1e6;
+            return { flow, ach: flow / vol, rate, hours: (tgt - out) / rate };
+        }
+
+        // ===== 冷氣與燈光 =====
+        const AC_MODELS = [2.2, 2.8, 3.6, 4.1, 5.0, 6.3, 7.1, 8.0, 9.0, 10.0, 12.5];
+        // 粗估冷房能力 kW：坪 × 0.6 ×（1 + 日照加成）×（1 + 樓層加成）+ 超過 2 人每人 0.1 + 電器熱源 W
+        function acNeed(ping, sun, floor, people, appW) {
+            if (!fin(ping) || ping <= 0) return null;
+            const s = { low: 0, mid: 0.1, high: 0.2 }[sun] ?? 0.1, f = { mid: 0, top: 0.15 }[floor] ?? 0, p = fin(people) && people > 2 ? (people - 2) * 0.1 : 0, a = fin(appW) && appW > 0 ? appW / 1000 : 0;
+            const kw = ping * 0.6 * (1 + s) * (1 + f) + p + a;
+            return { kw, tons: kw / 3.517, model: AC_MODELS.find(m => m >= kw - 1e-9) ?? null };
+        }
+        // 居家照度參考（lux，常見建議值，非法規）
+        const ROOM_LUX = { living: ['客廳', 150], bed: ['臥室', 100], study: ['書房 / 閱讀', 500], kitchen: ['廚房', 300], bath: ['浴室', 200], dining: ['餐廳', 200], entry: ['玄關', 100], hall: ['走廊', 75] };
+        // 所需總流明 = lux × 面積 ÷ 利用係數
+        function lightNeed(lux, ping, uf, perLamp) {
+            if (!fin(lux, ping, uf) || lux <= 0 || ping <= 0 || uf <= 0 || uf > 1) return null;
+            const m2 = ping * SQ, lm = lux * m2 / uf;
+            return { m2, lm, lamps: fin(perLamp) && perLamp > 0 ? Math.ceil(lm / perLamp - 1e-9) : NaN };
+        }
+
+        // ===== 家具尺寸 =====
+        // 長方形 p×q 能否放進長方形 a×b（允許斜放，Carver 1956）
+        function rectFits(p, q, a, b) {
+            if (!fin(p, q, a, b) || p <= 0 || q <= 0 || a <= 0 || b <= 0) return false;
+            if (p < q) [p, q] = [q, p];
+            if (a < b) [a, b] = [b, a];
+            if (q > b) return false;
+            if (p <= a) return true;
+            return b >= (2 * p * q * a + (p * p - q * q) * Math.sqrt(p * p + q * q - a * a)) / (p * p + q * q);
+        }
+        const others = (d, i) => d.filter((_, j) => j !== i);
+        // 門框：沿哪個尺寸前進都試，橫斷面（另兩邊）過得了框就行；tilt = 必須斜放
+        function doorCheck(dims, W, H, m = 0) {
+            if (!fin(...dims, W, H, m)) return null;
+            W -= m; H -= m;
+            let best = { ok: false };
+            for (let i = 0; i < 3; i++) {
+                const [x, y] = others(dims, i);
+                if (!rectFits(x, y, W, H)) continue;
+                const tilt = !((x <= W && y <= H) || (y <= W && x <= H));
+                if (!best.ok || (best.tilt && !tilt)) best = { ok: true, tilt, pass: i };
+            }
+            return best;
+        }
+        // 直角轉彎（走廊 / 樓梯平台）：寬 w 的長方形最長可過多長（最小化 L(θ) = a/sinθ + b/cosθ − w/(sinθcosθ)）
+        function cornerMax(a, b, w) {
+            if (!fin(a, b, w) || a <= 0 || b <= 0 || w < 0 || w >= Math.min(a, b)) return NaN;
+            let m = Infinity;
+            for (let d = 0.05; d < 90; d += 0.05) {
+                const t = d * Math.PI / 180, s = Math.sin(t), c = Math.cos(t), L = a / s + b / c - w / (s * c);
+                if (L < m) m = L;
+            }
+            return m;
+        }
+        // 轉角：三種擺法（高度方向 = 某一邊，需 ≤ 天花板高）都試，取最能過的
+        function cornerCheck(dims, a, b, ceil, m = 0) {
+            if (!fin(...dims, a, b, ceil, m)) return null;
+            let best = null;
+            for (let i = 0; i < 3; i++) {
+                if (dims[i] > ceil - m) continue;
+                const [x, y] = others(dims, i), L = Math.max(x, y), w = Math.min(x, y), mx = cornerMax(a - m, b - m, w);
+                if (!(mx >= 0)) continue;
+                if (!best || mx - L > best.mx - best.L) best = { mx, L, w, h: dims[i], ok: mx >= L };
+            }
+            return best;
+        }
+        // 電梯：門框 + 車廂內（任一邊當高度 ≤ 車廂高，另兩邊放得進車廂地板）
+        function elevCheck(dims, dw, dh, cw, cd, ch, m = 0) {
+            const door = doorCheck(dims, dw, dh, m);
+            if (!door || !fin(cw, cd, ch)) return null;
+            const car = [0, 1, 2].some(i => dims[i] <= ch - m && rectFits(...others(dims, i), cw - m, cd - m));
+            return { door, car, ok: door.ok && car };
+        }
+
+        // ===== 寵物 / 嬰兒 =====
+        // 每日熱量 = RER × 係數；RER = 70 × 體重^0.75（kcal）。係數為常見經驗值，個體差異大
+        const PET_K = { dog: { y1: 3.0, y2: 2.0, neuter: 1.6, intact: 1.8, senior: 1.4, diet: 1.0 }, cat: { y1: 2.5, y2: 2.0, neuter: 1.2, intact: 1.4, senior: 1.1, diet: 0.8 } };
+        function petFeed(sp, kg, stage, kcal100, meals) {
+            const k = PET_K[sp]?.[stage];
+            if (!k || !fin(kg, kcal100) || kg <= 0 || kg > 100 || kcal100 <= 0) return null;
+            const rer = 70 * Math.pow(kg, 0.75), der = rer * k, g = der / (kcal100 / 100);
+            return { rer, k, der, grams: g, perMeal: fin(meals) && meals >= 1 ? g / Math.floor(meals) : NaN };
+        }
+        // 每日尿布片數（依月齡，範例）：不足 1 / 3 / 6 / 12 / 24 / 36 個月 → 11 / 9 / 8 / 7 / 6 / 5，之後 4
+        const diaperDaily = (m) => !fin(m) || m < 0 ? NaN : m < 1 ? 11 : m < 3 ? 9 : m < 6 ? 8 : m < 12 ? 7 : m < 24 ? 6 : m < 36 ? 5 : 4;
+        // 從 from 月到 to 月（不含 to）；perDay 有填則固定用該值；每月 30 天
+        function diaperPlan(from, to, perDay, pack, price) {
+            if (!fin(from, to, pack, price) || from < 0 || to <= from || to > 72 || pack <= 0 || price < 0) return null;
+            const fix = fin(perDay) && perDay > 0 ? perDay : NaN;
+            let pieces = 0;
+            for (let m = Math.floor(from); m < to; m++) pieces += (isFinite(fix) ? fix : diaperDaily(m)) * 30;
+            const nowDay = isFinite(fix) ? fix : diaperDaily(from), monthPcs = nowDay * 30;
+            return { nowDay, monthPcs, monthPacks: Math.ceil(monthPcs / pack - 1e-9), monthCost: monthPcs * price / pack, unit: price / pack, pieces, packs: Math.ceil(pieces / pack - 1e-9), cost: pieces * price / pack };
+        }
+
+        // 還原用：只收白名單 id 的字串值，限制長度
+        function normOpts(raw, ids) {
+            const o = raw && typeof raw === 'object' ? raw : {}, v = {};
+            if (o.v && typeof o.v === 'object' && !Array.isArray(o.v)) for (const k of ids) if (typeof o.v[k] === 'string' && o.v[k].length <= 2000) v[k] = o.v[k];
+            return { tab: Number.isInteger(o.tab) && o.tab >= 0 && o.tab <= 6 ? o.tab : 0, v };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'homec_opts', { store, statRow } = Util;
+        const nf = (x, d = 2) => isFinite(x) ? x.toLocaleString('zh-TW', { maximumFractionDigits: d }) : '—';
+        const num = (id) => { const e = document.getElementById(id); return !e || e.value.trim() === '' ? NaN : +e.value; };
+        const val = (id) => document.getElementById(id).value;
+
+        // 欄位：[id, 標籤, 預設值, 選項（陣列 = select；'ta' = textarea）]
+        const YN = [['mid', '一般樓層'], ['top', '頂樓']];
+        const G = {
+            g_fert: ['肥料稀釋', 0, [['fe_n', '氮 N（%）', '20'], ['fe_p', '磷 P2O5（%）', '20'], ['fe_k', '鉀 K2O（%）', '20'], ['fe_d', '稀釋倍數', '1000'], ['fe_v', '配水量（L）', '2'], ['fe_t', '目標氮濃度（ppm，選填，填了反推倍數）', '']], '用量以 g 或 mL 計（液肥視密度約 1 g = 1 mL）。實際用量請以產品說明為準，濃度過高會燒根。'],
+            g_pot: ['盆栽土量', 0, [['po_s', '盆形', 'round', [['round', '圓盆（上緣直徑 / 底徑）'], ['rect', '方盆（長 / 寬）']]], ['po_a', '上緣直徑 或 長（cm）', '20'], ['po_b', '底徑 或 寬（cm）', '15'], ['po_h', '盆高（cm）', '18'], ['po_dr', '排水層厚（cm）', '2'], ['po_gap', '土面離盆緣（cm）', '2'], ['po_bag', '每包培養土（L）', '25'], ['po_n', '盆數', '1']], '排水層（發泡煉石、陶粒）鋪在盆底；土量 = 排水層以上到土面的體積。'],
+            g_comp: ['堆肥碳氮比（材料清單）', 0, [['cm_t', '每行「名稱,碳氮比,重量」（重量單位一致，乾重 / 濕重請統一）', '枯葉,60,2\n廚餘,15,1\n咖啡渣,20,1', 'ta']], '理想碳氮比約 25–35。混合比為粗估：假設各材料單位重量的含碳量相近。'],
+            g_comp2: ['堆肥配比（青料 + 褐料）', 0, [['cp_g', '青料碳氮比（廚餘 15、青草 20）', '15'], ['cp_b', '褐料碳氮比（枯葉 60、稻草 80、木屑 400）', '60'], ['cp_t', '目標碳氮比', '30'], ['cp_w', '青料重量（kg，選填）', '5']], '常見碳氮比：廚餘 15、咖啡渣 20、青草 20、牛糞 20、枯葉 60、稻草 80、紙板 350、木屑 400（範例，隨來源差異大）。'],
+            g_tank: ['魚缸水量與換水', 1, [['ta_l', '缸長（cm）', '60'], ['ta_w', '缸寬（cm）', '30'], ['ta_h', '缸高（cm）', '36'], ['ta_gap', '水面離缸緣（cm）', '3'], ['ta_d', '底砂 / 器材佔體積（%）', '10'], ['ta_p', '每次換水（%）', '25']], '實際水量依底砂、造景而不同，這裡是估算。'],
+            g_dose: ['藥劑劑量換算', 1, [['do_v', '水量（L）', '54'], ['do_per', '標示：每幾 L', '10'], ['do_amt', '標示：加幾 mL / g', '1'], ['do_ppm', '目標濃度（ppm，選填）', ''], ['do_str', '藥水濃度（mg / mL，選填）', '']], '只做比例換算，請依藥劑標示、魚種與水質；有疑慮請問水族店或獸醫。換水後新水需補相應劑量。'],
+            g_feel: ['體感溫度（風寒與熱指數）', 2, [['fl_t', '氣溫（°C）', '25'], ['fl_rh', '相對濕度（%）', '60'], ['fl_v', '風速（km/h）', '10']], '風寒適用氣溫 ≤ 10 °C 且風速 > 4.8 km/h；熱指數適用 ≥ 26.7 °C（美國 NWS 公式）。'],
+            g_dew: ['露點與結露風險', 2, [['dw_t', '室內氣溫（°C）', '25'], ['dw_rh', '相對濕度（%）', '60'], ['dw_s', '窗 / 牆表面溫度（°C，選填）', '16']], '露點用 Magnus 公式。表面溫度低於露點就會結露；可用除濕機或通風降低濕度。'],
+            g_aqi: ['PM2.5 與 AQI', 2, [['aq_std', '採用標準', 'tw', [['tw', '台灣環境部（範例門檻）'], ['us', '美國 EPA（2024 修訂，範例門檻）']]], ['aq_mode', '換算方向', 'p2a', [['p2a', 'PM2.5 → AQI'], ['a2p', 'AQI → PM2.5']]], ['aq_v', '數值（µg/m³ 或 AQI）', '30']], '分段線性內插；門檻僅為範例，以官方公告為準。'],
+            g_co2: ['二氧化碳與通風', 2, [['co_n', '人數', '2'], ['co_ping', '房間坪數', '4'], ['co_h', '天花板高（m）', '2.6'], ['co_now', '目前 CO2（ppm，選填）', ''], ['co_out', '室外 CO2（ppm）', '420'], ['co_tgt', '目標上限（ppm）', '1000']], '人體每人約產生 0.0052 L/s CO2（成人安靜）。「門窗緊閉」時間為估計，不含滲漏。'],
+            g_ac: ['冷氣能力估算（粗估）', 3, [['ac_p', '坪數', '6'], ['ac_s', '日照', 'mid', [['low', '較少'], ['mid', '一般'], ['high', '強烈 / 西曬']]], ['ac_f', '樓層', 'mid', YN], ['ac_n', '常駐人數', '2'], ['ac_w', '電器熱源（W，電腦 / 電視等）', '0']], '經驗式：每坪 0.6 kW，日照 +0–20%、頂樓 +15%、超過 2 人每人 +0.1 kW、再加電器功率。粗估，請以專業評估為準。'],
+            g_light: ['居家照度規劃', 3, [['li_r', '空間', 'living', Object.entries(ROOM_LUX).map(([k, v]) => [k, `${v[0]}（${v[1]} lux）`])], ['li_lux', '自訂照度（lux，選填）', ''], ['li_p', '坪數', '6'], ['li_uf', '利用係數（0–1）', '0.5'], ['li_lm', '每顆燈亮度（lm，選填）', '800']], '建議照度為常見參考，閱讀與工作區要更亮。燈具 lm 看包裝（約 800 lm ≈ 60 W 白熱燈）。'],
+            g_furn: ['家具尺寸', 4, [['fu_a', '長（cm）', '200'], ['fu_b', '寬（cm）', '90'], ['fu_c', '高（cm）', '80'], ['fu_m', '預留餘裕（cm）', '2']], '三個尺寸不分方向；通道每一邊會先扣掉餘裕。'],
+            g_door: ['門框', 4, [['dr_w', '門寬（cm）', '80'], ['dr_h', '門高（cm）', '200']], ''],
+            g_elev: ['電梯', 4, [['el_dw', '電梯門寬（cm）', '80'], ['el_dh', '電梯門高（cm）', '210'], ['el_cw', '車廂寬（cm）', '110'], ['el_cd', '車廂深（cm）', '140'], ['el_ch', '車廂高（cm）', '230']], ''],
+            g_corner: ['走廊 / 樓梯轉角', 4, [['cn_a', '通道寬 A（cm）', '90'], ['cn_b', '轉彎後寬 B（cm）', '90'], ['cn_h', '天花板高（cm）', '220']], '以平面直角轉彎估算。實際樓梯是斜的、扶手與牆面會突出，請多留餘裕並實測。'],
+            g_pet: ['每日餵食量', 5, [['pe_sp', '種類', 'dog', [['dog', '狗'], ['cat', '貓']]], ['pe_kg', '體重（kg）', '10'], ['pe_st', '階段', 'neuter', [['y1', '幼年（4 個月內）'], ['y2', '幼年（4–12 個月）'], ['neuter', '成年已絕育'], ['intact', '成年未絕育'], ['senior', '老年'], ['diet', '減重（用理想體重）']]], ['pe_kcal', '飼料熱量（kcal / 100 g）', '350'], ['pe_m', '每天幾餐', '2']], '以產品說明與獸醫建議為準；這只是依體重與熱量的估算起點，需依體態與活動量調整。'],
+            g_dia: ['尿布用量與花費', 6, [['di_a', '目前月齡', '2'], ['di_to', '預計用到幾個月', '30'], ['di_day', '每日片數（選填，空白依月齡表）', ''], ['di_pk', '每包片數', '64'], ['di_pr', '每包價格（元）', '520']], '月齡表為範例（每日 11 → 4 片）；每月以 30 天計；尺寸會隨月齡換，單價請依各尺寸調整。']
+        };
+        const TABS = ['園藝', '水族', '室內環境', '冷氣燈光', '家具', '寵物', '尿布'];
+        const IDS = Object.values(G).flatMap(g => g[2].map(f => f[0]));
+        const DEFS = Object.fromEntries(Object.values(G).flatMap(g => g[2].map(f => [f[0], f[2]])));
+
+        $('#panes').innerHTML = TABS.map((_, i) => `<div id="p${i}" hidden>` + Object.entries(G).filter(([, g]) => g[1] === i).map(([gid, g]) =>
+            `<div class="card"><h2>${g[0]}</h2><div class="fgrid">` + g[2].map(([id, lab, def, opts]) => opts === 'ta'
+                ? `<div class="wide"><label for="${id}">${lab}</label><textarea id="${id}" data-s maxlength="2000" spellcheck="false"></textarea></div>`
+                : `<div><label for="${id}">${lab}</label>` + (opts ? `<select id="${id}" data-s>${opts.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('')}</select>` : `<input id="${id}" data-s type="number" step="any" inputmode="decimal">`) + '</div>').join('')
+            + `</div><div class="out" id="o_${gid}"></div>${g[3] ? `<p class="warn">${g[3]}</p>` : ''}</div>`).join('') + '</div>').join('');
+        let tab = 0;
+        $('#tabs').innerHTML = TABS.map((t, i) => `<button class="sm" data-i="${i}" aria-pressed="false">${t}</button>`).join('');
+        function showTab(i) {
+            tab = i;
+            [...$('#tabs').children].forEach((b, j) => b.setAttribute('aria-pressed', j === i));
+            TABS.forEach((_, j) => { $('#p' + j).hidden = j !== i; });
+        }
+        $('#tabs').onclick = (e) => { const b = e.target.closest('button'); if (b) { showTab(+b.dataset.i); save(); } };
+
+        const NEED = '請填入有效數字';
+        const show = (gid, rows) => {
+            const box = $('#o_' + gid);
+            if (typeof rows === 'string') { box.replaceChildren(Object.assign(document.createElement('div'), { textContent: rows, className: 'muted' })); return; }
+            box.replaceChildren(...rows.map(r => statRow(r[0], r[1], r[2])));
+        };
+        const fit = (r) => !r ? NEED : !r.ok ? ['無法通過', 'bad'] : r.tilt ? ['可通過，但需斜放', ''] : ['可直放通過', 'ok'];
+
+        function calc() {
+            // 園藝
+            const fe = fertMix(num('fe_n'), num('fe_p'), num('fe_k'), num('fe_d'), num('fe_v'), num('fe_t'));
+            show('g_fert', !fe ? '氮磷鉀需為 0–100 的有效數字且至少一項大於 0，稀釋倍數需大於 0（填目標氮濃度時氮需大於 0）' : [['N-P-K 比', fe.ratio.map(x => nf(x, 1)).join(' : ')], ['稀釋倍數', nf(fe.dil, 0) + ' 倍'], ['每 L 水加', nf(fe.perL, 2) + ' g / mL', 'ok'], ...(isFinite(fe.total) ? [['配水量用量', nf(fe.total, 2) + ' g / mL', 'ok']] : []), ['濃度 N / P2O5 / K2O', fe.ppm.map(x => nf(x, 0)).join(' / ') + ' ppm']]);
+            const ps = potSoil(val('po_s'), num('po_a'), num('po_b'), num('po_h'), num('po_dr') || 0, num('po_gap') || 0, num('po_bag')), pn = num('po_n') > 0 ? Math.min(Math.floor(num('po_n')), 999) : 1;
+            show('g_pot', !ps ? '尺寸需為正數，且排水層 + 土面距離要小於盆高' : [['盆器容積', nf(ps.total, 2) + ' L'], ['排水層體積', nf(ps.drain, 2) + ' L'], ['每盆土量', nf(ps.soil, 2) + ' L', 'ok'], ...(pn > 1 ? [[`${pn} 盆共需`, nf(ps.soil * pn, 2) + ' L', 'ok']] : []), ...(isFinite(ps.bags) ? [['需培養土', nf(ps.soil * pn / num('po_bag'), 2) + ' 包（進位買 ' + Math.ceil(ps.soil * pn / num('po_bag') - 1e-9) + ' 包）']] : [])]);
+            const cm = compostMix(val('cm_t'));
+            show('g_comp', !cm ? '每行「名稱,碳氮比,重量」，至少一行有效' : [...cm.rows.map(r => [r.name, `碳氮比 ${nf(r.r, 1)}・重量 ${nf(r.w, 2)}`]), ['混合碳氮比（粗估）', nf(cm.cn, 1), cm.cn >= 25 && cm.cn <= 35 ? 'ok' : 'bad'], ['判讀', cm.cn < 25 ? '氮偏多（易臭、氨味），加褐料' : cm.cn > 35 ? '碳偏多（分解慢），加青料' : '落在理想範圍 25–35']]);
+            const cr = compostRatio(num('cp_g'), num('cp_b'), num('cp_t')), cw = num('cp_w');
+            show('g_comp2', cr === null ? '需 青料碳氮比 < 目標 < 褐料碳氮比' : [['褐料 : 青料（重量比）', nf(cr, 2) + ' : 1', 'ok'], ...(cw > 0 ? [[`青料 ${nf(cw, 2)} kg 需褐料`, nf(cr * cw, 2) + ' kg', 'ok']] : [])]);
+            // 水族
+            const tk = tankWater(num('ta_l'), num('ta_w'), num('ta_h'), num('ta_gap') || 0, num('ta_d') || 0, num('ta_p'));
+            show('g_tank', !tk ? '尺寸需為正數，水面距離需小於缸高，佔體積需 < 100%' : [['缸體滿水容積', nf(tk.full, 1) + ' L'], ['實際水量（估）', nf(tk.water, 1) + ' L', 'ok'], ...(isFinite(tk.change) ? [['每次換水量', nf(tk.change, 1) + ' L', 'ok'], ['每週一次，每月約', nf(tk.change * 52 / 12, 0) + ' L']] : [])]);
+            const ds = dose(num('do_v'), num('do_per'), num('do_amt'), num('do_ppm'), num('do_str'));
+            show('g_dose', !ds ? '請填水量' : !isFinite(ds.label) && !isFinite(ds.byPpm) ? '填入標示用量，或目標濃度與藥水濃度' : [...(isFinite(ds.label) ? [['依標示用量', nf(ds.label, 2) + ' mL / g', 'ok']] : []), ...(isFinite(ds.byPpm) ? [['依目標濃度', nf(ds.byPpm, 2) + ' mL', 'ok']] : [])]);
+            // 室內環境
+            const t = num('fl_t'), rh = num('fl_rh'), wc = windChill(t, num('fl_v')), hi = heatIndex(t, rh);
+            show('g_feel', !fin(t) ? NEED : [['氣溫', nf(t, 1) + ' °C'], ...(isFinite(wc) ? [['風寒（體感）', nf(wc, 1) + ' °C', 'ok']] : []), ...(isFinite(hi) ? [['熱指數（體感）', nf(hi, 1) + ' °C', hi >= 32.2 ? 'bad' : 'ok'], ['熱傷害等級', heatLevel(hi) || '無']] : []), ...(!isFinite(wc) && !isFinite(hi) ? [['體感', '氣溫在 10–26.7 °C 之間（或風太小 / 濕度未填），體感接近氣溫']] : []), ['穿衣', (isFinite(wc) ? wc : isFinite(hi) ? hi : t) < 0 ? '羽絨外套、手套、帽子' : (isFinite(wc) ? wc : t) < 10 ? '厚外套加毛衣' : t < 16 ? '外套' : t < 22 ? '薄長袖' : t < 28 ? '短袖' : '輕薄透氣、多補水']]);
+            const dt = num('dw_t'), dp = dewPoint(dt, num('dw_rh')), ah = absHumidity(dt, num('dw_rh'));
+            show('g_dew', !isFinite(dp) ? '濕度需為 1–100' : [['露點', nf(dp, 1) + ' °C', 'ok'], ['絕對濕度', nf(ah, 1) + ' g/m³'], ...(isFinite(num('dw_s')) ? [['結露風險', condRisk(dp, num('dw_s')), num('dw_s') <= dp ? 'bad' : 'ok']] : []), ['除濕', num('dw_rh') > 70 ? '濕度偏高（> 70%），建議除濕或通風' : num('dw_rh') < 40 ? '偏乾（< 40%）' : '40–70% 屬舒適範圍']]);
+            const tb = val('aq_std') === 'us' ? AQI_US : AQI_TW, av = num('aq_v'), a2p = val('aq_mode') === 'a2p', r = a2p ? aqiToPm(av, tb) : pmToAqi(av, tb), aqi = a2p ? av : r;
+            show('g_aqi', !isFinite(r) ? '數值需為 0 以上，且不超出表尾（台灣 500.4、EPA 325.4 µg/m³；AQI 500）' : [[a2p ? 'PM2.5 濃度（該 AQI 區段內插）' : 'AQI', a2p ? nf(r, 1) + ' µg/m³' : nf(r, 0), 'ok'], ['等級', AQI_LEVELS[aqiLevel(aqi)][0], aqiLevel(aqi) >= 2 ? 'bad' : 'ok'], ['建議', AQI_LEVELS[aqiLevel(aqi)][1]]]);
+            const vol = num('co_ping') * SQ * num('co_h'), cv = co2Vent(num('co_n'), vol, num('co_out'), num('co_tgt'));
+            show('g_co2', !cv ? '人數、坪數、天花板高需為正數，目標需高於室外' : [...(isFinite(num('co_now')) ? [['目前濃度', co2Level(num('co_now')), num('co_now') >= 1000 ? 'bad' : 'ok']] : []), ['房間體積', nf(vol, 1) + ' m³'], ['維持在目標以下所需換氣量', nf(cv.flow, 0) + ' m³/h（每小時換氣 ' + nf(cv.ach, 2) + ' 次）', 'ok'], ['門窗緊閉，CO2 上升速度', nf(cv.rate, 0) + ' ppm/小時'], ['緊閉約多久升到目標', nf(cv.hours, 1) + ' 小時']]);
+            // 冷氣燈光
+            const ac = acNeed(num('ac_p'), val('ac_s'), val('ac_f'), num('ac_n'), num('ac_w'));
+            show('g_ac', !ac ? '請填坪數' : [['估算冷房能力', nf(ac.kw, 2) + ' kW', 'ok'], ['約等於', nf(ac.tons, 2) + ' 噸（1 冷凍噸 = 3.517 kW）'], ['建議機型（常見規格）', ac.model ? ac.model + ' kW 以上' : '超出常見分離式規格，請找專業評估', 'ok']]);
+            const lux = num('li_lux') > 0 ? num('li_lux') : ROOM_LUX[val('li_r')][1], ln = lightNeed(lux, num('li_p'), num('li_uf'), num('li_lm'));
+            show('g_light', !ln ? '坪數需大於 0，利用係數需介於 0–1' : [['目標照度', nf(lux, 0) + ' lux'], ['面積', nf(ln.m2, 1) + ' m²'], ['所需總流明', nf(ln.lm, 0) + ' lm', 'ok'], ...(isFinite(ln.lamps) ? [['燈具顆數', ln.lamps + ' 顆'] ] : [])]);
+            // 家具
+            const dims = [num('fu_a'), num('fu_b'), num('fu_c')], mg = num('fu_m') || 0, ok3 = dims.every(x => x > 0);
+            if (!ok3) ['g_door', 'g_elev', 'g_corner'].forEach(g => show(g, '請先填家具三個尺寸')); else {
+                const d = doorCheck(dims, num('dr_w'), num('dr_h'), mg), df = fit(d);
+                show('g_door', !d ? NEED : [['結果', df[0], df[1]]]);
+                const e = elevCheck(dims, num('el_dw'), num('el_dh'), num('el_cw'), num('el_cd'), num('el_ch'), mg), ef = e && fit(e.door);
+                show('g_elev', !e ? NEED : [['電梯門', ef[0], ef[1]], ['車廂內', e.car ? '放得進去' : '放不進去', e.car ? 'ok' : 'bad'], ['整體', e.ok ? '可搬入' : '無法搬入', e.ok ? 'ok' : 'bad']]);
+                const c = cornerCheck(dims, num('cn_a'), num('cn_b'), num('cn_h'), mg);
+                show('g_corner', !c ? '尺寸需為有效數字；家具太寬或太高時無法轉彎' : [['最佳擺法', `平面 ${nf(c.L, 0)} × ${nf(c.w, 0)} cm、直立高 ${nf(c.h, 0)} cm`], ['轉彎可過最長', nf(c.mx, 0) + ' cm'], ['結果', c.ok ? '可轉過' : '轉不過去（太長）', c.ok ? 'ok' : 'bad']]);
+            }
+            // 寵物 / 尿布
+            const pf = petFeed(val('pe_sp'), num('pe_kg'), val('pe_st'), num('pe_kcal'), num('pe_m'));
+            show('g_pet', !pf ? '體重與熱量需為有效數字' : [['基礎代謝 RER', nf(pf.rer, 0) + ' kcal/天'], ['活動係數', pf.k + '（經驗值）'], ['每日熱量', nf(pf.der, 0) + ' kcal', 'ok'], ['每日餵食量', nf(pf.grams, 0) + ' g', 'ok'], ...(isFinite(pf.perMeal) ? [['每餐', nf(pf.perMeal, 0) + ' g']] : []), ['提醒', '以產品說明與獸醫建議為準']]);
+            const dp2 = diaperPlan(num('di_a'), num('di_to'), num('di_day'), num('di_pk'), num('di_pr'));
+            show('g_dia', !dp2 ? '月齡需在 0–72 之間且預計月齡要大於目前月齡；包裝片數需大於 0' : [['目前每日片數', nf(dp2.nowDay, 1) + ' 片'], ['每月用量', nf(dp2.monthPcs, 0) + ' 片（約 ' + dp2.monthPacks + ' 包）', 'ok'], ['每片單價', nf(dp2.unit, 2) + ' 元'], ['每月花費', nf(dp2.monthCost, 0) + ' 元', 'ok'], ['到預計月齡共', `${nf(dp2.pieces, 0)} 片（約 ${dp2.packs} 包）・${nf(dp2.cost, 0)} 元`]]);
+        }
+
+        function save() {
+            const v = {}; document.querySelectorAll('[data-s]').forEach(e => { v[e.id] = e.value; });
+            store.set(KEY, { tab, v });
+        }
+        document.addEventListener('input', () => { calc(); save(); });
+        document.addEventListener('change', () => { calc(); save(); });
+        $('#reset').onclick = () => {
+            if (!confirm('確定要清除所有輸入並恢復預設值嗎？頁面會重新載入，無法復原。')) return;
+            try { localStorage.removeItem(KEY); } catch (e) { /* 無法清除也照常重新載入 */ }
+            location.reload();
+        };
+        const opts = normOpts(store.get(KEY, null), IDS);
+        for (const id of IDS) { const e = document.getElementById(id), v = id in opts.v ? opts.v[id] : DEFS[id]; e.value = v; if (e.value !== v) e.value = DEFS[id]; }
+        calc(); showTab(opts.tab);
+    </script>
+</body>
+
+</html>

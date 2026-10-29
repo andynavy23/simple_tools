@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="旅行計算與速查：出發時間倒推、時差調整、航班飛行時間、機場接送、開車休息、租車費用、行程緩衝、eSIM 流量、周遊券回本、小費退稅、申根 90/180 天；機場代碼、緊急電話插座、國碼、尺碼、保險速查，離線可用。">
+    <meta name="st-keys" content="travelc_opts">
+    <meta property="og:title" content="旅行計算與速查" />
+    <meta property="og:description" content="出發時間、時差、申根天數、租車費用、eSIM 流量與機場代碼、插座、國碼速查。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/travel-calc.html" />
+    <title>旅行計算與速查</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root { --wrap-w: 720px; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .tabs button { flex: 1 1 auto; }
+        .fgrid .wide { grid-column: 1 / -1; }
+        .fgrid select, .fgrid textarea { width: 100%; }
+        .fgrid textarea { min-height: 96px; resize: vertical; }
+        .out { margin-top: 12px; }
+        .disc { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
+        .seg { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+        .seg button { flex: 1 0 auto; }
+        .rw { padding: 8px 0; border-top: 1px solid var(--fill); }
+        .rw .t { font-weight: 700; overflow-wrap: anywhere; }
+        .rw .d { color: var(--muted); font-size: 14px; margin-top: 2px; overflow-wrap: anywhere; }
+        .rw .c { color: var(--muted); font-size: 12px; }
+        #lug { width: 100%; min-height: 110px; resize: vertical; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>旅行計算與速查</h1>
+        <p class="sub">出發前的各種算一算與查一查；規定類資料請以官方公告為準。</p>
+
+        <div class="tabs" id="tabs" role="group" aria-label="功能分頁"></div>
+        <div id="cards"></div>
+
+        <div id="t_ref" hidden>
+            <div class="card">
+                <input id="q" type="search" placeholder="搜尋：TPE、東京、日本、插座、國碼…" aria-label="搜尋速查" autocomplete="off" spellcheck="false" autocapitalize="off">
+                <div class="seg" id="cats"></div>
+                <p class="note" id="count" role="status"></p>
+                <div id="list"></div>
+            </div>
+            <div class="card">
+                <h2>我的行李規定表（自己填）</h2>
+                <p class="note">每行「航空公司,艙等,托運規定,手提規定」，最多 30 行、每行 80 字；內容只存在這台裝置，下方為虛構範例，請改成訂票時官網的實際規定。</p>
+                <textarea id="lug" spellcheck="false" aria-label="我的行李規定表"></textarea>
+            </div>
+        </div>
+
+        <p class="disc" style="margin-top:8px">時區轉換與會議時間請用 <a href="timezone.html">時區轉換</a>，座標與日出日落請用 <a href="geo-calc.html">地理座標計算</a>。
+            <button class="sm" id="wipe">清除本頁儲存資料</button></p>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>把出國 / 旅行前常算的數字與常查的資料收在一頁。計算：出發時間倒推、時差調整計畫、航班飛行時間（含跨日與夏令時間）、機場接送時間、長途開車休息、租車費用、行程時間緩衝、eSIM 流量估算、周遊券回本、小費與退稅、申根 90/180 天。速查：機場代碼（約 150 個）、緊急電話與插座電壓、國碼與撥號、鞋服尺碼、行李規定、旅遊保險保額說明。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>搭飛機 / 高鐵前想知道最晚幾點要出門。</li>
+        <li>去申根區想知道還能停留幾天、下次最早何時能入境。</li>
+        <li>租車自駕或買周遊券前，想比較總費用是否划算。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>上方切換分頁，修改卡片內的數字，結果即時更新；所有預設值都是範例，請改成你的實際情況。</li>
+        <li>速查分頁用搜尋欄與分類鈕縮小範圍（多個詞用空白分隔，須全部符合）。</li>
+        <li>申根：每行輸入一段「入境日 出境日」（YYYY-MM-DD，入出境當天都算停留天數）。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">起飛 10:30、報到截止 60 分、通關 90 分、交通 60 分、緩衝 30 分 → 8:30 前到機場、7:30 出門
+搜尋 NRT → 成田；搜尋 日本 → 日本的機場、緊急電話、國碼</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>所有計算是估算；申根天數請以歐盟官方短期停留計算器與入境官員認定為準；簽證天數、免稅額、托運與手提規定、插座電壓與緊急電話會變動，行前請查官方公告（資料整理於 2026 年 10 月）。</li>
+        <li>只存上次分頁、各欄輸入值與行李規定表（`travelc_opts`，約數 KB，輸入值最多 200 欄、每欄 2000 字，超過的部分載入時忽略）；沒有累積成長的資料。右下「清除本頁儲存資料」會刪掉這些並重新載入頁面；備份可用右上角「💾」。</li>
+        <li>儲存的資料壞了或被改過時，會自動忽略壞的部分並回到預設值。</li>
+        <li>不會連線、不上傳任何資料。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, statRow } = Util;
+
+        // --- pure ---
+        const MIN = 60000, DAY = 86400000;
+        const pad = (n) => String(n).padStart(2, '0');
+        const num = (v, lo, hi) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
+        const parseHM = (s) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(s || '').trim()); if (!m || +m[1] > 23 || +m[2] > 59) return null; return +m[1] * 60 + +m[2]; };
+        const clockOf = (min) => { const day = Math.floor(min / 1440), r = min - day * 1440; return { hm: `${pad(Math.floor(r / 60))}:${pad(r % 60)}`, day }; };
+        const clockText = (min) => { const c = clockOf(Math.round(min)); return c.hm + (c.day < 0 ? `（前 ${-c.day} 天）` : c.day > 0 ? `（+${c.day} 天）` : ''); };
+        const dur = (m) => { m = Math.round(m); return `${Math.floor(m / 60)} 小時 ${m % 60} 分`; };
+        const dayNum = (s) => { const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(s || '').trim()); if (!m) return null; const t = Date.UTC(+m[1], +m[2] - 1, +m[3]); return new Date(t).toISOString().slice(0, 10) === `${m[1]}-${pad(+m[2])}-${pad(+m[3])}` ? t / DAY : null; };
+        const dayStr = (n) => new Date(n * DAY).toISOString().slice(0, 10);
+        const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+        // 1. 出發時間倒推：抵達提前量 = max(報到截止, 報到安檢通關登機所需) + 緩衝
+        function departPlan({ t, cutoff, procs, buf, travel }) {
+            if (t === null || ![cutoff, procs, buf, travel].every(x => num(x, 0, 1440))) return null;
+            const lead = Math.max(cutoff, procs) + buf, arrive = t - lead;
+            return { cutoffAt: t - cutoff, lead, arrive, leave: arrive - travel };
+        }
+
+        // 時區：以 Intl 取得某瞬間的 UTC 位移（分鐘），夏令時間自動處理
+        const tzOk = (tz) => { try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return typeof tz === 'string' && tz.length > 0; } catch (e) { return false; } };
+        function tzOffsetMin(tz, ms) {
+            const p = {}, s = Math.floor(ms / 1000) * 1000;
+            for (const x of new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }).formatToParts(s)) p[x.type] = +x.value;
+            return Math.round((Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - s) / MIN);
+        }
+        const offText = (m) => `UTC${m < 0 ? '-' : '+'}${pad(Math.floor(Math.abs(m) / 60))}:${pad(Math.abs(m) % 60)}`;
+        // 當地時間 'YYYY-MM-DDTHH:MM' + 時區 → UTC 毫秒（二次修正以處理夏令切換日）
+        function localToUtc(str, tz) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(String(str || ''));
+            if (!m || !tzOk(tz)) return null;
+            const L = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+            if (new Date(L).toISOString().slice(0, 16) !== str) return null;
+            const t1 = L - tzOffsetMin(tz, L) * MIN;
+            return L - tzOffsetMin(tz, t1) * MIN;
+        }
+
+        // 2. 時差調整：east = 目的地比出發地早（往東），建議提早睡；往西延後。差 ≤ 2 小時不調整
+        function jetLagPlan({ home, dest, date, bed, wake, rate, maxDays }) {
+            const d = dayNum(date), b = parseHM(bed), w = parseHM(wake);
+            if (d === null || b === null || w === null || !tzOk(home) || !tzOk(dest) || !num(rate, 15, 180) || !num(maxDays, 1, 7)) return null;
+            const ref = d * DAY + 12 * 60 * MIN;
+            let diff = tzOffsetMin(dest, ref) - tzOffsetMin(home, ref);
+            while (diff > 720) diff -= 1440;
+            while (diff <= -720) diff += 1440;
+            const abs = Math.abs(diff), east = diff > 0, rows = [];
+            if (abs > 120) {
+                const days = Math.min(maxDays, Math.ceil(abs / rate));
+                for (let k = 1; k <= days; k++) {
+                    const sh = Math.min(rate * k, abs) * (east ? -1 : 1);
+                    rows.push({ before: days - k + 1, bed: clockOf(b + sh).hm, wake: clockOf(w + sh).hm, shift: sh });
+                }
+            }
+            return { diff, east, rows, remain: abs > 120 && rows.length ? Math.max(0, abs - Math.abs(rows[rows.length - 1].shift)) : abs };
+        }
+
+        // 3. 航班：起降當地時間 → 飛行分鐘、抵達日差
+        function flightCalc({ dep, depTz, arr, arrTz }) {
+            const a = localToUtc(dep, depTz), b = localToUtc(arr, arrTz);
+            if (a === null || b === null) return null;
+            const mins = (b - a) / MIN, dd = (dayNum(arr.slice(0, 10)) - dayNum(dep.slice(0, 10)));
+            return { mins, dayDiff: dd, odd: mins <= 0 || mins > 26 * 60 };
+        }
+
+        // 4. 機場接送：落地 → 可出關 → 抵達住宿
+        function pickupPlan({ land, immig, bag, exit, travel }) {
+            if (land === null || ![immig, bag, exit, travel].every(x => num(x, 0, 600))) return null;
+            const out = land + immig + bag + exit;
+            return { out, hotel: out + travel };
+        }
+
+        // 5. 長途開車
+        function driveCalc({ km, speed, every, rest, start, fuel }) {
+            if (!num(km, 1, 20000) || !num(speed, 5, 200) || !num(every, 15, 600) || !num(rest, 0, 240) || start === null || !num(fuel, 0, 5000)) return null;
+            const drive = km / speed * 60, n = Math.max(0, Math.ceil(drive / every - 1e-9) - 1), stops = [];
+            for (let k = 1; k <= Math.min(n, 20); k++) stops.push({ km: speed * k * every / 60, at: start + k * every + (k - 1) * rest });
+            const total = drive + n * rest;
+            return { drive, n, stops, total, arrive: start + total, fuels: fuel > 0 ? Math.max(0, Math.ceil(km / fuel - 1e-9) - 1) : 0 };
+        }
+
+        // 6. eSIM：use = [[每天小時, MB/小時], ...]；margin = 安全餘裕 %
+        const ESIM_TIERS = [1, 2, 3, 5, 8, 10, 15, 20, 30, 50];
+        function esimCalc({ days, use, margin }) {
+            if (!num(days, 1, 365) || !num(margin, 0, 200) || !use.every(([h, m]) => num(h, 0, 24) && num(m, 0, 5000))) return null;
+            const perDay = use.reduce((s, [h, m]) => s + h * m, 0) * (1 + margin / 100), total = perDay * days / 1024;
+            return { perDay, total, tier: ESIM_TIERS.find(t => t >= total) || null };
+        }
+
+        // 7. 申根 90/180：日期以 UTC 日數計，入出境當天都算
+        function parseStays(text) {
+            const lines = String(text || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean), stays = [];
+            if (lines.length > 100) return { err: '最多 100 段停留' };
+            for (const [i, ln] of lines.entries()) {
+                const ds = ln.match(/\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/g) || [];
+                if (ds.length !== 2) return { err: `第 ${i + 1} 行需有兩個日期（入境 出境）` };
+                const [a, b] = ds.map(x => dayNum(x.replace(/[/.]/g, '-')));
+                if (a === null || b === null) return { err: `第 ${i + 1} 行日期不存在` };
+                if (b < a) return { err: `第 ${i + 1} 行出境日早於入境日` };
+                if (b - a > 3660) return { err: `第 ${i + 1} 行停留過長` };
+                stays.push([a, b]);
+            }
+            return { stays };
+        }
+        const stayDays = (stays) => { const s = new Set(); for (const [a, b] of stays) for (let d = a; d <= b; d++) s.add(d); return s; };
+        const inWindow = (set, ref) => { let c = 0; for (let d = ref - 179; d <= ref; d++) if (set.has(d)) c++; return c; };
+        const schengenUsed = (stays, ref) => inWindow(stayDays(stays), ref);
+        // 計畫入境日起最多可連續停留幾天（含入境日；不計入境日之後已填的未來停留以外的限制）
+        function schengenMax(stays, entry) {
+            const s = stayDays(stays);
+            for (let n = 1; n <= 91; n++) { s.add(entry + n - 1); if (inWindow(s, entry + n - 1) > 90) return n - 1; }
+            return 90;
+        }
+
+        // 8. 周遊券：每行「名稱,金額」或只有金額
+        function parseAmounts(text) {
+            const rows = [], lines = String(text || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+            if (lines.length > 200) return { err: '最多 200 行' };
+            for (const [i, ln] of lines.entries()) {
+                const m = /^(?:(.*?)[,，\t]\s*)?(\d+(?:\.\d+)?)$/.exec(ln);
+                if (!m || +m[2] > 1e9) return { err: `第 ${i + 1} 行格式為「名稱,金額」` };
+                rows.push({ name: (m[1] || '').slice(0, 30), amt: +m[2] });
+            }
+            return { rows };
+        }
+        function passCalc(rows, price) {
+            if (!num(price, 0, 1e9)) return null;
+            const total = rows.reduce((s, r) => s + r.amt, 0);
+            return { total, save: total - price, worth: total > price, ratio: price > 0 ? total / price : 0 };
+        }
+
+        // 9. 租車
+        function rentalCalc(o) {
+            const { daily, days, ins, fixed, km, free, extra, kmpl, fuelPrice, shortL, shortMult } = o;
+            if (!num(days, 1, 365) || !num(daily, 0, 1e6) || !num(ins, 0, 1e6) || !num(fixed, 0, 1e7) || !num(km, 0, 1e5) || !num(free, 0, 1e5) || !num(extra, 0, 1e4) || !num(kmpl, 0.5, 100) || !num(fuelPrice, 0, 1e4) || !num(shortL, 0, 500) || !num(shortMult, 1, 10)) return null;
+            const base = daily * days, insurance = ins * days, over = free > 0 ? Math.max(0, km - free * days) : 0, mile = over * extra, fuel = km / kmpl * fuelPrice, short = shortL * fuelPrice * shortMult;
+            const total = base + insurance + fixed + mile + fuel + short;
+            return { base, insurance, fixed, over, mile, fuel, short, total, perDay: total / days };
+        }
+
+        // 10. 行程緩衝：每行「名稱,分鐘」
+        function parseSegs(text) {
+            const lines = String(text || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean), segs = [];
+            if (!lines.length) return { err: '請輸入至少一段（名稱,分鐘）' };
+            if (lines.length > 60) return { err: '最多 60 段' };
+            for (const [i, ln] of lines.entries()) {
+                const m = /^(.*?)[,，\t]\s*(\d+)$/.exec(ln);
+                if (!m || +m[2] > 1440) return { err: `第 ${i + 1} 行格式為「名稱,分鐘」` };
+                segs.push({ name: m[1].slice(0, 30), min: +m[2] });
+            }
+            return { segs };
+        }
+        function bufferPlan(segs, start, end, pct, minBuf) {
+            if (start === null || end === null || !num(pct, 0, 300) || !num(minBuf, 0, 240)) return null;
+            let t = start, buf = 0;
+            const rows = segs.map(s => { const b = Math.max(minBuf, Math.ceil(s.min * pct / 100)); const r = { ...s, buf: b, from: t, to: t + s.min + b }; t = r.to; buf += b; return r; });
+            const avail = (end > start ? end : end + 1440) - start, total = t - start;
+            return { rows, total, buf, avail, spare: avail - total, over: total > avail, tight: total > avail * 0.9 };
+        }
+
+        // 11. 小費與退稅
+        function tipCalc({ bill, pct, people }) {
+            if (!num(bill, 0, 1e9) || !num(pct, 0, 100) || !num(people, 1, 100) || !Number.isInteger(people)) return null;
+            const tip = bill * pct / 100, total = bill + tip;
+            return { tip, total, per: total / people };
+        }
+        function taxRefund({ amt, rate, threshold, pct }) {
+            if (!num(amt, 0, 1e9) || !num(rate, 0, 100) || !num(threshold, 0, 1e9) || !num(pct, 0, 100)) return null;
+            const vat = amt * rate / (100 + rate), ok = amt >= threshold;
+            return { vat, ok, refund: ok ? vat * pct / 100 : 0, short: ok ? 0 : threshold - amt };
+        }
+
+        // ---------- 速查資料 ----------
+        const R = (c, t, d, k = '') => ({ c, t, d, k });
+        const AIRPORTS = [
+            ['台灣 Taiwan', 'TPE 台北桃園/Taoyuan Taipei', 'TSA 台北松山/Songshan', 'KHH 高雄/Kaohsiung', 'RMQ 台中/Taichung', 'TNN 台南/Tainan', 'HUN 花蓮/Hualien', 'TTT 台東/Taitung', 'MZG 澎湖馬公/Penghu Magong', 'KNH 金門/Kinmen', 'MFK 馬祖南竿/Matsu Nangan'],
+            ['日本 Japan', 'NRT 東京成田/Narita Tokyo', 'HND 東京羽田/Haneda Tokyo', 'KIX 大阪關西/Kansai Osaka', 'ITM 大阪伊丹/Itami Osaka', 'UKB 神戶/Kobe', 'NGO 名古屋中部/Chubu Centrair Nagoya', 'FUK 福岡/Fukuoka', 'CTS 札幌新千歲/New Chitose Sapporo', 'HKD 函館/Hakodate', 'OKA 沖繩那霸/Naha Okinawa', 'ISG 石垣/Ishigaki', 'MMY 宮古/Miyako', 'KOJ 鹿兒島/Kagoshima', 'KMJ 熊本/Kumamoto', 'NGS 長崎/Nagasaki', 'OIT 大分/Oita', 'HIJ 廣島/Hiroshima', 'TAK 高松/Takamatsu', 'MYJ 松山/Matsuyama', 'KMQ 小松/Komatsu', 'SDJ 仙台/Sendai', 'AOJ 青森/Aomori'],
+            ['韓國 Korea', 'ICN 首爾仁川/Incheon Seoul', 'GMP 首爾金浦/Gimpo Seoul', 'PUS 釜山/Busan', 'CJU 濟州/Jeju', 'TAE 大邱/Daegu'],
+            ['中國 China', 'PEK 北京首都/Beijing Capital', 'PKX 北京大興/Beijing Daxing', 'PVG 上海浦東/Shanghai Pudong', 'SHA 上海虹橋/Shanghai Hongqiao', 'CAN 廣州白雲/Guangzhou', 'SZX 深圳寶安/Shenzhen', 'CTU 成都雙流/Chengdu Shuangliu', 'TFU 成都天府/Chengdu Tianfu', 'CKG 重慶/Chongqing', 'XIY 西安/Xian', 'HGH 杭州/Hangzhou', 'NKG 南京/Nanjing', 'XMN 廈門/Xiamen', 'FOC 福州/Fuzhou', 'WUH 武漢/Wuhan', 'CSX 長沙/Changsha', 'KMG 昆明/Kunming', 'TAO 青島/Qingdao', 'HAK 海口/Haikou', 'SYX 三亞/Sanya'],
+            ['港澳 Hong Kong Macau', 'HKG 香港/Hong Kong', 'MFM 澳門/Macau'],
+            ['東南亞 Southeast Asia', 'SIN 新加坡樟宜/Changi Singapore', 'BKK 曼谷素萬那普/Suvarnabhumi Bangkok', 'DMK 曼谷廊曼/Don Mueang Bangkok', 'HKT 普吉/Phuket', 'CNX 清邁/Chiang Mai', 'KUL 吉隆坡/Kuala Lumpur', 'PEN 檳城/Penang', 'BKI 亞庇/Kota Kinabalu', 'KCH 古晉/Kuching', 'CGK 雅加達/Jakarta Soekarno-Hatta', 'DPS 峇里島/Bali Denpasar', 'SUB 泗水/Surabaya', 'MNL 馬尼拉/Manila', 'CEB 宿霧/Cebu', 'CRK 克拉克/Clark', 'SGN 胡志明市/Ho Chi Minh Saigon', 'HAN 河內/Hanoi', 'DAD 峴港/Da Nang', 'CXR 金蘭(芽莊)/Cam Ranh Nha Trang', 'PQC 富國島/Phu Quoc', 'REP 暹粒/Siem Reap Angkor', 'PNH 金邊/Phnom Penh', 'RGN 仰光/Yangon', 'VTE 永珍/Vientiane', 'BWN 汶萊/Brunei'],
+            ['南亞 South Asia', 'DEL 德里/Delhi', 'BOM 孟買/Mumbai', 'BLR 班加羅爾/Bengaluru', 'MAA 清奈/Chennai', 'CCU 加爾各答/Kolkata', 'CMB 可倫坡/Colombo', 'KTM 加德滿都/Kathmandu', 'MLE 馬爾地夫馬列/Male Maldives'],
+            ['中東 Middle East', 'DXB 杜拜/Dubai', 'AUH 阿布達比/Abu Dhabi', 'DOH 杜哈/Doha Qatar', 'IST 伊斯坦堡/Istanbul', 'SAW 伊斯坦堡薩比哈/Sabiha Gokcen Istanbul', 'TLV 特拉維夫/Tel Aviv', 'JED 吉達/Jeddah', 'RUH 利雅德/Riyadh'],
+            ['英愛 UK Ireland', 'LHR 倫敦希斯洛/Heathrow London', 'LGW 倫敦蓋威克/Gatwick London', 'STN 倫敦斯坦斯特/Stansted London', 'MAN 曼徹斯特/Manchester', 'EDI 愛丁堡/Edinburgh', 'DUB 都柏林/Dublin'],
+            ['西歐 Western Europe', 'CDG 巴黎戴高樂/Charles de Gaulle Paris', 'ORY 巴黎奧利/Orly Paris', 'NCE 尼斯/Nice', 'LYS 里昂/Lyon', 'AMS 阿姆斯特丹/Amsterdam Schiphol', 'BRU 布魯塞爾/Brussels', 'FRA 法蘭克福/Frankfurt', 'MUC 慕尼黑/Munich', 'BER 柏林/Berlin', 'DUS 杜塞道夫/Dusseldorf', 'HAM 漢堡/Hamburg', 'ZRH 蘇黎世/Zurich', 'GVA 日內瓦/Geneva', 'VIE 維也納/Vienna'],
+            ['南歐 Southern Europe', 'FCO 羅馬/Rome Fiumicino', 'MXP 米蘭馬爾彭薩/Milan Malpensa', 'VCE 威尼斯/Venice', 'NAP 那不勒斯/Naples', 'BCN 巴塞隆納/Barcelona', 'MAD 馬德里/Madrid', 'PMI 帕爾馬馬約卡/Palma Mallorca', 'LIS 里斯本/Lisbon', 'OPO 波多/Porto', 'ATH 雅典/Athens'],
+            ['北歐與東歐 Nordic Eastern Europe', 'CPH 哥本哈根/Copenhagen', 'ARN 斯德哥爾摩/Stockholm Arlanda', 'OSL 奧斯陸/Oslo', 'HEL 赫爾辛基/Helsinki', 'KEF 雷克雅維克/Reykjavik Keflavik', 'WAW 華沙/Warsaw', 'PRG 布拉格/Prague', 'BUD 布達佩斯/Budapest', 'SVO 莫斯科謝列梅捷沃/Moscow Sheremetyevo'],
+            ['北美 North America', 'JFK 紐約甘迺迪/John F Kennedy New York', 'EWR 紐華克/Newark New York', 'LGA 紐約拉瓜迪亞/LaGuardia New York', 'BOS 波士頓/Boston', 'IAD 華盛頓杜勒斯/Dulles Washington', 'ATL 亞特蘭大/Atlanta', 'MIA 邁阿密/Miami', 'MCO 奧蘭多/Orlando', 'ORD 芝加哥歐海爾/Chicago OHare', 'DTW 底特律/Detroit', 'MSP 明尼阿波利斯/Minneapolis', 'DFW 達拉斯/Dallas Fort Worth', 'IAH 休士頓/Houston', 'DEN 丹佛/Denver', 'LAS 拉斯維加斯/Las Vegas', 'PHX 鳳凰城/Phoenix', 'LAX 洛杉磯/Los Angeles', 'SAN 聖地牙哥/San Diego', 'SFO 舊金山/San Francisco', 'SEA 西雅圖/Seattle', 'PDX 波特蘭/Portland', 'ANC 安克拉治/Anchorage', 'HNL 檀香山/Honolulu Hawaii', 'GUM 關島/Guam', 'YVR 溫哥華/Vancouver', 'YYC 卡加利/Calgary', 'YYZ 多倫多/Toronto Pearson', 'YUL 蒙特婁/Montreal', 'MEX 墨西哥城/Mexico City', 'CUN 坎昆/Cancun'],
+            ['中南美 Latin America', 'GRU 聖保羅/Sao Paulo', 'EZE 布宜諾斯艾利斯/Buenos Aires', 'SCL 聖地牙哥/Santiago Chile', 'LIM 利馬/Lima', 'BOG 波哥大/Bogota', 'PTY 巴拿馬城/Panama City'],
+            ['大洋洲 Oceania', 'SYD 雪梨/Sydney', 'MEL 墨爾本/Melbourne', 'BNE 布里斯本/Brisbane', 'PER 伯斯/Perth', 'ADL 阿德雷德/Adelaide', 'CNS 凱恩斯/Cairns', 'AKL 奧克蘭/Auckland', 'CHC 基督城/Christchurch', 'NAN 斐濟楠迪/Nadi Fiji', 'PPT 大溪地/Papeete Tahiti'],
+            ['非洲 Africa', 'CAI 開羅/Cairo', 'JNB 約翰尼斯堡/Johannesburg', 'CPT 開普敦/Cape Town', 'NBO 奈洛比/Nairobi', 'CMN 卡薩布蘭加/Casablanca'],
+        ].flatMap(([ctry, ...xs]) => xs.map(s => { const [zh, en] = s.slice(4).split('/'); return R('機場代碼', `${s.slice(0, 3)}　${zh}`, `${ctry} ・ ${en}`, `${s.slice(0, 3)} ${en}`); }));
+        const NOTE_UPD = '（資料整理於 2026-10，行前請查官方）';
+        const EMG = [
+            ['台灣', 'Taiwan', '警察 110、消防與救護 119', 'A / B', '110 V / 60 Hz'],
+            ['日本', 'Japan', '警察 110、消防與救護 119', 'A / B', '100 V / 東日本 50 Hz、西日本 60 Hz'],
+            ['韓國', 'South Korea', '警察 112、消防與救護 119', 'C / F', '220 V / 60 Hz'],
+            ['中國', 'China', '警察 110、消防 119、救護 120', 'A / C / I', '220 V / 50 Hz'],
+            ['香港', 'Hong Kong', '警察 / 消防 / 救護 999', 'G', '220 V / 50 Hz'],
+            ['澳門', 'Macau', '警察 / 消防 / 救護 999', '以現場為準', '220 V / 50 Hz'],
+            ['泰國', 'Thailand', '警察 191、救護 1669、消防 199、觀光警察 1155', 'A / B / C / F / O', '220 V / 50 Hz'],
+            ['越南', 'Vietnam', '警察 113、消防 114、救護 115', 'A / C', '220 V / 50 Hz'],
+            ['新加坡', 'Singapore', '警察 999、消防與救護 995', 'G', '230 V / 50 Hz'],
+            ['馬來西亞', 'Malaysia', '警察與救護 999、消防 994', 'G', '240 V / 50 Hz'],
+            ['印尼', 'Indonesia', '警察 110、消防 113、救護 118 / 119', 'C / F', '230 V / 50 Hz'],
+            ['菲律賓', 'Philippines', '全國緊急 911', 'A / B / C', '220 V / 60 Hz'],
+            ['印度', 'India', '全國緊急 112', 'C / D / M', '230 V / 50 Hz'],
+            ['英國', 'United Kingdom', '999 或 112', 'G', '230 V / 50 Hz'],
+            ['愛爾蘭', 'Ireland', '999 或 112', 'G', '230 V / 50 Hz'],
+            ['法國', 'France', '歐盟通用 112（警察 17、救護 15、消防 18）', 'C / E', '230 V / 50 Hz'],
+            ['德國', 'Germany', '消防與救護 112、警察 110', 'C / F', '230 V / 50 Hz'],
+            ['義大利', 'Italy', '歐盟通用 112（救護 118、消防 115）', 'C / F / L', '230 V / 50 Hz'],
+            ['西班牙', 'Spain', '歐盟通用 112', 'C / F', '230 V / 50 Hz'],
+            ['葡萄牙', 'Portugal', '歐盟通用 112', 'C / F', '230 V / 50 Hz'],
+            ['荷蘭', 'Netherlands', '歐盟通用 112', 'C / F', '230 V / 50 Hz'],
+            ['瑞士', 'Switzerland', '112（警察 117、消防 118、救護 144）', 'C / J', '230 V / 50 Hz'],
+            ['奧地利', 'Austria', '112（警察 133、消防 122、救護 144）', 'C / F', '230 V / 50 Hz'],
+            ['捷克', 'Czech Republic', '歐盟通用 112', 'C / E', '230 V / 50 Hz'],
+            ['希臘', 'Greece', '歐盟通用 112', 'C / F', '230 V / 50 Hz'],
+            ['瑞典', 'Sweden', '歐盟通用 112', 'C / F', '230 V / 50 Hz'],
+            ['丹麥', 'Denmark', '歐盟通用 112', 'C / E / F / K', '230 V / 50 Hz'],
+            ['挪威', 'Norway', '警察 112、消防 110、救護 113', 'C / F', '230 V / 50 Hz'],
+            ['冰島', 'Iceland', '112', 'C / F', '230 V / 50 Hz'],
+            ['土耳其', 'Turkey', '112', 'C / F', '230 V / 50 Hz'],
+            ['阿聯', 'United Arab Emirates UAE Dubai', '警察 999、救護 998、消防 997', 'G', '230 V / 50 Hz'],
+            ['美國', 'United States USA', '911', 'A / B', '120 V / 60 Hz'],
+            ['加拿大', 'Canada', '911', 'A / B', '120 V / 60 Hz'],
+            ['墨西哥', 'Mexico', '911', 'A / B', '127 V / 60 Hz'],
+            ['澳洲', 'Australia', '000（手機也可撥 112）', 'I', '230 V / 50 Hz'],
+            ['紐西蘭', 'New Zealand', '111', 'I', '230 V / 50 Hz'],
+        ].map(([z, en, em, plug, volt]) => R('緊急與插座', z, `緊急：${em}｜插座：${plug}｜電壓頻率：${volt}`, `${en} 電話 插座 電壓 emergency plug voltage`));
+        const PLUGS = [
+            R('緊急與插座', '台灣旅外急難救助', '外交部旅外國人急難救助全球免付費專線 +800-0885-0885（海外撥打），請以外交部領事事務局公告為準', '外交部 領事 急難 護照遺失 emergency'),
+            R('緊急與插座', '插座形式說明', 'A 兩扁腳（台灣、日本、北美）；B 兩扁加圓接地；C 兩圓腳（歐陸通用）；E / F 兩圓腳加接地（歐陸）；G 三方腳（英、港、新）；I 斜八字扁腳（澳紐、中國部分）。台灣兩扁腳插頭在歐陸、英國需轉接頭', 'plug type 轉接頭 轉換插頭'),
+            R('緊急與插座', '電壓提醒', '台灣 110 V 的電器到 220–240 V 地區，先看變壓器標示是否 100–240 V（手機、筆電充電器多半支援）；吹風機、電棒類多半不支援，直接插會燒毀', '變壓器 吹風機 voltage'),
+            R('緊急與插座', '歐盟通用 112', '歐盟各國皆可撥 112 求助；手機沒訊號時多數國家仍可撥緊急電話', '112 歐洲 緊急'),
+        ];
+        const CODES = [
+            ['台灣', 'Taiwan', '886'], ['日本', 'Japan', '81'], ['韓國', 'Korea', '82'], ['中國', 'China', '86'], ['香港', 'Hong Kong', '852'], ['澳門', 'Macau', '853'], ['泰國', 'Thailand', '66'], ['越南', 'Vietnam', '84'], ['新加坡', 'Singapore', '65'], ['馬來西亞', 'Malaysia', '60'], ['印尼', 'Indonesia', '62'], ['菲律賓', 'Philippines', '63'], ['印度', 'India', '91'], ['英國', 'United Kingdom UK', '44'], ['愛爾蘭', 'Ireland', '353'], ['法國', 'France', '33'], ['德國', 'Germany', '49'], ['義大利', 'Italy', '39'], ['西班牙', 'Spain', '34'], ['葡萄牙', 'Portugal', '351'], ['荷蘭', 'Netherlands', '31'], ['瑞士', 'Switzerland', '41'], ['奧地利', 'Austria', '43'], ['捷克', 'Czech', '420'], ['希臘', 'Greece', '30'], ['瑞典', 'Sweden', '46'], ['丹麥', 'Denmark', '45'], ['挪威', 'Norway', '47'], ['冰島', 'Iceland', '354'], ['土耳其', 'Turkey', '90'], ['阿聯', 'UAE', '971'], ['美國 / 加拿大', 'USA Canada', '1'], ['墨西哥', 'Mexico', '52'], ['澳洲', 'Australia', '61'], ['紐西蘭', 'New Zealand', '64'], ['俄羅斯', 'Russia', '7'],
+        ].map(([z, en, c]) => R('國碼撥號', `${z}　+${c}`, `從台灣撥到${z}：+${c} 後接對方號碼（去掉開頭的 0）`, `${en} 國碼 country code ${c}`));
+        const DIAL = [
+            R('國碼撥號', '台灣手機撥國際電話', '格式：+國碼 + 區碼或手機號碼（去掉開頭 0）。例：撥日本東京 03-1234-5678 → +81 3 1234 5678；撥日本手機 090-1234-5678 → +81 90 1234 5678。手機直接按「+」（長按 0）最通用；也可用國際冠碼（依電信業者，常見 002、009、019 等）代替 +', '國際電話 冠碼 002 009 019 怎麼撥'),
+            R('國碼撥號', '從國外撥回台灣', '+886 後接號碼去掉開頭 0：手機 0912-345-678 → +886 912 345 678；台北市話 (02) 2345-6789 → +886 2 2345 6789', '撥回台灣 漫遊'),
+            R('國碼撥號', '例外：義大利市話', '多數國家國際撥打要去掉開頭 0，但義大利固網（市話）要保留 0；實際請看對方提供的國際格式', '義大利 0'),
+        ];
+        const SIZES = [
+            R('尺碼', '鞋・男（美 / 歐 / 英 / 日腳長 cm）', '美 7 ＝ 歐 40 ＝ 英 6 ＝ 25 cm；美 8 ＝ 歐 41 ＝ 英 7 ＝ 26 cm；美 9 ＝ 歐 42.5 ＝ 英 8 ＝ 27 cm；美 10 ＝ 歐 44 ＝ 英 9 ＝ 28 cm；美 11 ＝ 歐 45 ＝ 英 10 ＝ 29 cm', '鞋 男鞋 shoe men'),
+            R('尺碼', '鞋・女（美 / 歐 / 英 / 日腳長 cm）', '美 6 ＝ 歐 36.5 ＝ 英 3.5 ＝ 23 cm；美 7 ＝ 歐 37.5 ＝ 英 4.5 ＝ 24 cm；美 8 ＝ 歐 39 ＝ 英 5.5 ＝ 25 cm；美 9 ＝ 歐 40.5 ＝ 英 6.5 ＝ 26 cm；美 10 ＝ 歐 42 ＝ 英 7.5 ＝ 27 cm', '鞋 女鞋 shoe women'),
+            R('尺碼', '台灣鞋碼', '台灣店家常以腳長公分數標示（和日本相同，如 24.5 cm），部分品牌用美 / 歐碼；各品牌楦型不同，同一碼可能差半碼到一碼，建議試穿', '台灣 鞋 公分'),
+            R('尺碼', '上衣・男（美碼 / 胸圍）', 'S ≈ 胸圍 86–91 cm；M ≈ 96–101 cm；L ≈ 106–112 cm；XL ≈ 116–122 cm（美 / 歐版）。亞洲版通常比歐美版小約一號：台灣穿 M 者在歐美常需 L', '衣服 男 上衣 shirt'),
+            R('尺碼', '上衣・女（美碼）', 'XS（美 0–2）、S（美 4–6）、M（美 8–10）、L（美 12–14）；歐碼與美碼差異大且各品牌不同，請對照該品牌尺寸表。台灣穿 S 者在歐美常需 M', '衣服 女 洋裝 dress'),
+            R('尺碼', '量測方式', '腳長：腳跟站牆量到最長趾頭（傍晚量較準）；胸圍：腋下水平量胸部最豐處；腰圍：肚臍上方最細處；臀圍：最豐處。量好後對照品牌尺寸表，不要只看標示碼', '怎麼量 胸圍 腰圍 臀圍 腳長'),
+        ];
+        const LUGGAGE = [
+            R('行李保險', '託運與手提：先看自己的訂位', '各航空公司的托運重量 / 件數、手提尺寸與重量，依航線、艙等、票種（特價票常不含托運）而不同；以訂位確認信與航空官網為準，可在本頁下方「我的行李規定表」自己記錄', '行李 托運 手提 重量 尺寸 baggage'),
+            R('行李保險', '手提行李常見範圍（僅供參考）', '多數航空手提約 7–10 kg、三邊合計約 115 cm（例如 56×36×23 cm）上下，廉航常更嚴；貴重物品、藥品、證件請隨身', '手提 登機箱 cabin'),
+            R('行李保險', '鋰電池與行動電源', '行動電源、備用鋰電池不可托運，必須隨身手提（多數航空另有容量 / 數量限制）；起飛後不建議使用或充電，依航空公司規定', '行動電源 鋰電池 充電寶'),
+            R('行李保險', '液體限制（國際線）', '隨身液體、膠狀、噴霧每瓶不超過 100 mL，全部裝進一個容量不超過 1 公升的透明夾鏈袋；過安檢後買的免稅品依各機場規定（轉機要留意）', '液體 100ml 化妝品 保養品'),
+            R('行李保險', '尖銳物品與打火機', '刀具、剪刀（多數）等尖銳物品需托運；打火機通常限帶 1 個且須隨身，不可托運（各國規定不同）；禁止攜帶品以航空公司與機場公告為準', '打火機 刀 違禁品'),
+        ];
+        const INSURE = [
+            R('行李保險', '傷害醫療與疾病醫療（海外）', '分「實支實付」（憑收據在保額內報銷）與「日額 / 定額」；歐美醫療費高，海外突發疾病與傷害的實支實付保額宜看夠高，並確認是否含「到院診療前的緊急處置」', '旅平險 醫療 實支實付 保額'),
+            R('行李保險', '緊急救援', '含醫療轉送、病危探視、遺體運返、搜救費用；偏遠或登山 / 潛水活動前要確認是否屬於除外項目', '救援 轉送 搜救'),
+            R('行李保險', '班機延誤與行李延誤 / 損失', '旅行不便險：班機延誤、行李延誤、行李損失的給付通常有「延誤幾小時才賠」與「單項上限」，留意是否包含「轉機延誤」', '旅行不便險 延誤 行李遺失'),
+            R('行李保險', '旅程取消與縮短', '因本人或親屬傷病等約定事由取消 / 縮短行程的已付費用補償；常見條件是須先在出發前投保', '取消 縮短 退費'),
+            R('行李保險', '個人責任', '在國外不小心弄壞他人財物或傷到人時的賠償責任；歐美索賠金額高，可確認有無此項及保額', '責任 賠償'),
+            R('行李保險', '信用卡刷卡旅遊險', '多數需「用該卡支付機票或團費」才適用，保額與涵蓋範圍因卡而異；可與另外投保的保單合併計算，細節以發卡銀行條款為準', '信用卡 旅遊險 刷卡'),
+            R('行李保險', '申根簽證的醫療保險要求', '申請申根簽證通常要有涵蓋整個申根區、效期涵蓋全程的醫療保險，保額至少 30,000 歐元並含緊急送返；實際要求以受理簽證的國家為準', '申根 簽證 保險 30000'),
+            R('行李保險', '說明', '本頁只說明保額項目的意義，不推薦任何保險商品；請以保單條款與保險公司說明為準', '保額 非商品推薦'),
+        ];
+        const REFS = [...AIRPORTS, ...EMG.concat(PLUGS), ...CODES.concat(DIAL), ...SIZES, ...LUGGAGE, ...INSURE];
+        const REF_CATS = ['機場代碼', '緊急與插座', '國碼撥號', '尺碼', '行李保險'];
+        const searchRef = (rows, q, cat) => {
+            const ts = String(q || '').toLowerCase().split(/\s+/).filter(Boolean);
+            return rows.filter(r => (!cat || r.c === cat) && ts.every(t => `${r.c} ${r.t} ${r.d} ${r.k}`.toLowerCase().includes(t)));
+        };
+
+        // ---------- 本機設定 ----------
+        const TABS = [['go', '出發與航班'], ['road', '開車與行程'], ['money', '費用'], ['sch', '申根'], ['ref', '速查']];
+        const LUG_DEF = '範例航空甲,經濟艙,23 kg × 1 件,7 kg・56×36×23 cm（虛構範例，請改成實際規定）';
+        function cleanOpts(raw) {
+            const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}, v = {};
+            if (r.v && typeof r.v === 'object' && !Array.isArray(r.v)) for (const [k, x] of Object.entries(r.v)) if (Object.keys(v).length < 200 && /^[a-z0-9_]{1,40}$/.test(k) && typeof x === 'string' && x.length <= 2000) v[k] = x;
+            const lug = typeof r.lug === 'string' ? r.lug.split(/\r?\n/).slice(0, 30).map(s => s.slice(0, 80)).join('\n') : LUG_DEF;
+            return { tab: TABS.some(t => t[0] === r.tab) ? r.tab : 'go', v, lug };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const fmt = (n, d = 0) => n.toLocaleString('zh-TW', { minimumFractionDigits: d, maximumFractionDigits: d });
+        const yn = (rows, extra = {}) => ({ rows, ...extra });
+        const today = ymd(new Date());
+        const TZS = ['Asia/Taipei', 'Asia/Tokyo', 'Asia/Seoul', 'Asia/Shanghai', 'Asia/Hong_Kong', 'Asia/Bangkok', 'Asia/Singapore', 'Asia/Kuala_Lumpur', 'Asia/Manila', 'Asia/Ho_Chi_Minh', 'Asia/Jakarta', 'Asia/Kolkata', 'Asia/Dubai', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Rome', 'Europe/Madrid', 'Europe/Amsterdam', 'Europe/Zurich', 'Europe/Istanbul', 'Europe/Athens', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Vancouver', 'America/Toronto', 'Pacific/Honolulu', 'Australia/Sydney', 'Australia/Perth', 'Pacific/Auckland'];
+        const SEL = (o) => ({ t: 'sel', o });
+        const TZ = { t: 'tz' }, TIME = { t: 'time' }, DATE = { t: 'date' }, DT = { t: 'dt' }, TA = (ph) => ({ t: 'ta', ph });
+
+        // 卡片：f 欄位 [id, 標籤, 預設（字串 / 函式）, 型別]；run(v) → { rows: [[標籤, 值, 樣式]], err, note }
+        const CARDS = [
+            {
+                tab: 'go', id: 'dep', title: '出發時間倒推（航班 / 高鐵）',
+                f: [['t', '起飛 / 發車時間', '10:30', TIME], ['cut', '報到截止（起飛前幾分鐘）', '60'], ['proc', '報到 + 安檢通關 + 走到登機門（分鐘）', '90'], ['buf', '緩衝（分鐘）', '30'], ['trv', '出門到機場 / 車站交通（分鐘）', '60']],
+                note: '到場時間 = 起飛 − (報到截止 與 所需時間取較大者 + 緩衝)；各航空與機場的報到截止請看訂位資訊。高鐵可把截止填 0、所需時間填 10。',
+                run(v) {
+                    const r = departPlan({ t: parseHM(v.t), cutoff: v.cut, procs: v.proc, buf: v.buf, travel: v.trv });
+                    if (!r) return { err: '請填入時間與 0–1440 的分鐘數' };
+                    return yn([['報到櫃檯截止', clockText(r.cutoffAt)], ['最晚抵達機場 / 車站', clockText(r.arrive), 'ok'], ['最晚出門', clockText(r.leave), 'ok'], ['提前量', dur(r.lead + v.trv)]]);
+                },
+            },
+            {
+                tab: 'go', id: 'jet', title: '時差調整計畫（睡眠）',
+                f: [['home', '出發地時區', 'Asia/Taipei', TZ], ['dest', '目的地時區', 'Europe/London', TZ], ['date', '出發日期', today, DATE], ['bed', '平常就寢', '23:00', TIME], ['wake', '平常起床', '07:00', TIME], ['rate', '每天調整（分鐘）', '60'], ['max', '最多提前幾天調整', '3']],
+                note: '時差以 Intl 依該日夏令時間計算；往東（目的地時間較早）建議提早睡、往西延後，差超過 12 小時時取較短方向；差 2 小時內不用調整。每天調整量是常見經驗值，因人而異。',
+                run(v) {
+                    const r = jetLagPlan({ home: (v.home || '').trim(), dest: (v.dest || '').trim(), date: v.date, bed: v.bed, wake: v.wake, rate: v.rate, maxDays: v.max });
+                    if (!r) return { err: '時區請填 IANA 名稱（如 Asia/Tokyo）、日期與時間要完整，每天調整 15–180 分、天數 1–7' };
+                    const h = Math.abs(r.diff) / 60, rows = [['時差', `${r.diff === 0 ? '無' : `${r.east ? '往東' : '往西'} ${fmt(h, h % 1 ? 1 : 0)} 小時`}`, 'ok']];
+                    if (!r.rows.length) rows.push(['建議', '時差小，可不調整，抵達後照當地作息即可']);
+                    for (const x of r.rows) rows.push([`出發前第 ${x.before} 天`, `就寢 ${x.bed}、起床 ${x.wake}（${x.shift < 0 ? '提早' : '延後'} ${Math.abs(x.shift)} 分）`]);
+                    if (r.remain > 0 && r.rows.length) rows.push(['抵達後', `還差約 ${fmt(r.remain / 60, 1)} 小時，抵達後白天多曬太陽、照當地作息`]);
+                    return yn(rows);
+                },
+            },
+            {
+                tab: 'go', id: 'flt', title: '航班時間與時差換算',
+                f: [['dep', '起飛（當地時間）', `${today}T10:00`, DT], ['dtz', '起飛地時區', 'Asia/Taipei', TZ], ['arr', '降落（當地時間）', `${today}T15:00`, DT], ['atz', '降落地時區', 'Asia/Tokyo', TZ]],
+                note: '用 Intl 依各地當日夏令時間換算，跨夏令切換日也正確；飛行時間為空中到降落的總時間（含地面滑行）。',
+                run(v) {
+                    const r = flightCalc({ dep: v.dep, depTz: (v.dtz || '').trim(), arr: v.arr, arrTz: (v.atz || '').trim() });
+                    if (!r) return { err: '請填完整的日期時間與 IANA 時區名稱' };
+                    const dm = tzOffsetMin(v.atz.trim(), localToUtc(v.arr, v.atz.trim())) - tzOffsetMin(v.dtz.trim(), localToUtc(v.dep, v.dtz.trim()));
+                    if (r.odd) return { err: r.mins <= 0 ? '降落早於起飛，請檢查日期與時區' : `飛行 ${dur(r.mins)} 不太合理（超過 26 小時），請檢查` };
+                    return yn([['飛行時間', dur(r.mins), 'ok'], ['降落日', r.dayDiff === 0 ? '同一天' : `${r.dayDiff > 0 ? '+' : ''}${r.dayDiff} 天（跨日）`], ['兩地時差', `${dm >= 0 ? '+' : '-'}${fmt(Math.abs(dm) / 60, Math.abs(dm) % 60 ? 1 : 0)} 小時`]]);
+                },
+            },
+            {
+                tab: 'go', id: 'pick', title: '機場接送時間（落地後）',
+                f: [['land', '落地時間（當地）', '14:20', TIME], ['imm', '入境通關（分鐘）', '45'], ['bag', '提領行李（分鐘）', '30'], ['out', '出關後會合 / 買網卡（分鐘）', '15'], ['trv', '機場到住宿交通（分鐘）', '50']],
+                note: '尖峰時段或大機場通關可能更久；接機請約「可出關時間」之後，並留意航班動態。',
+                run(v) {
+                    const r = pickupPlan({ land: parseHM(v.land), immig: v.imm, bag: v.bag, exit: v.out, travel: v.trv });
+                    if (!r) return { err: '請填入落地時間與 0–600 的分鐘數' };
+                    return yn([['預計出關（接機會合）', clockText(r.out), 'ok'], ['預計抵達住宿', clockText(r.hotel), 'ok']]);
+                },
+            },
+            {
+                tab: 'road', id: 'drv', title: '長途開車休息規劃',
+                f: [['km', '總里程（km）', '350'], ['spd', '平均時速（km/h，含塞車）', '80'], ['evr', '每開幾分鐘休息', '120'], ['rst', '每次休息（分鐘）', '15'], ['st', '出發時間', '08:00', TIME], ['fuel', '加滿油可跑（km，0＝不算）', '450']],
+                note: '建議連續駕駛約 2 小時休息一次；休息點的公里數與時間為估算，加油可併入休息。',
+                run(v) {
+                    const r = driveCalc({ km: v.km, speed: v.spd, every: v.evr, rest: v.rst, start: parseHM(v.st), fuel: v.fuel });
+                    if (!r) return { err: '請檢查里程、時速（5–200）、休息間隔（15–600 分）與出發時間' };
+                    return yn([['純駕駛時間', dur(r.drive)], ['休息', `${r.n} 次，共 ${dur(r.n * v.rst)}`], ['預計抵達', clockText(r.arrive), 'ok'], ['全程', dur(r.total)], ['加油', r.fuels ? `途中約需 ${r.fuels} 次（可併入休息）` : '不需中途加油'],
+                    ...r.stops.map((s, i) => [`休息點 ${i + 1}`, `約 ${fmt(s.km)} km，${clockText(s.at)} 到`])]);
+                },
+            },
+            {
+                tab: 'road', id: 'rent', title: '租車費用估算',
+                f: [['day', '日租（元 / 天）', '1800'], ['n', '天數', '3'], ['ins', '保險（元 / 天）', '300'], ['fix', '其他固定費（異地還車、機場附加、座椅…）', '0'], ['km', '預計總里程（km）', '400'], ['free', '每日免費里程（km，0＝不限）', '0'], ['ext', '超里程單價（元 / km）', '5'], ['kpl', '油耗（km / L）', '12'], ['fp', '油價（元 / L）', '32'], ['sl', '還車時少油（L）', '0'], ['sm', '少油補收倍數（×油價）', '2']],
+                note: '各租車公司規則不同，倍數與費率請依租約填寫；貨幣自行統一。油費是你自己加油的估算，不是租車公司收費。',
+                run(v) {
+                    const r = rentalCalc({ daily: v.day, days: v.n, ins: v.ins, fixed: v.fix, km: v.km, free: v.free, extra: v.ext, kmpl: v.kpl, fuelPrice: v.fp, shortL: v.sl, shortMult: v.sm });
+                    if (!r) return { err: '請檢查各欄位（天數 1–365、油耗 ≥ 0.5、倍數 ≥ 1，皆不可為負）' };
+                    return yn([['租金', fmt(r.base)], ['保險', fmt(r.insurance)], ['其他固定費', fmt(r.fixed)], ['超里程費', `${fmt(r.mile)}（超出 ${fmt(r.over)} km）`], ['油費（估）', fmt(r.fuel)], ['少油補收', fmt(r.short)], ['合計', fmt(r.total), 'ok'], ['平均每天', fmt(r.perDay)]]);
+                },
+            },
+            {
+                tab: 'road', id: 'buf', title: '行程時間緩衝（一天行程是否過滿）',
+                f: [['segs', '每行「名稱,分鐘」（含交通段）', '飯店出發,0\n電車到景點,40\n參觀,90\n午餐,60\n移動,30\n逛街,120', TA('名稱,分鐘')], ['st', '開始時間', '09:00', TIME], ['en', '結束時間（需回到住宿）', '18:00', TIME], ['pct', '每段加緩衝（%）', '20'], ['mn', '每段至少緩衝（分鐘）', '5']],
+                run(v) {
+                    const q = parseSegs(v.segs);
+                    if (q.err) return { err: q.err };
+                    const r = bufferPlan(q.segs, parseHM(v.st), parseHM(v.en), v.pct, v.mn);
+                    if (!r) return { err: '請填開始 / 結束時間與緩衝設定' };
+                    return yn([...r.rows.map(x => [`${clockText(x.from).slice(0, 5)}–${clockText(x.to)}`, `${x.name || '（未命名）'}（${x.min} + 緩衝 ${x.buf}）`]),
+                    ['總時間', `${dur(r.total)}（緩衝共 ${dur(r.buf)}）`], ['可用時間', dur(r.avail)], [r.over ? '超出' : '剩餘', dur(Math.abs(r.spare)), r.over ? 'bad' : r.tight ? '' : 'ok'], ['判斷', r.over ? '行程過滿，建議刪減' : r.tight ? '很緊湊，剩餘不到 10%' : '時間寬裕', r.over ? 'bad' : 'ok']]);
+                },
+            },
+            {
+                tab: 'money', id: 'esim', title: 'eSIM 流量估算',
+                f: [['d', '旅遊天數', '5'], ['map', '地圖導航（小時 / 天）', '1'], ['mapm', '　每小時 MB（假設）', '15'], ['soc', '社群 / 網頁（小時 / 天）', '2'], ['socm', '　每小時 MB（假設）', '100'], ['vid', '影音串流（小時 / 天）', '0.5'], ['vidm', '　每小時 MB（假設）', '600'], ['msg', '通訊 / 翻譯（小時 / 天）', '1'], ['msgm', '　每小時 MB（假設）', '20'], ['mg', '安全餘裕（%）', '20']],
+                note: '每小時 MB 是粗略假設（影音畫質、社群的影片自動播放差很多），請依自己習慣調整；熱點分享給別人要另外加。方案檔位為常見規格，以業者實際販售為準。',
+                run(v) {
+                    const r = esimCalc({ days: v.d, use: [[v.map, v.mapm], [v.soc, v.socm], [v.vid, v.vidm], [v.msg, v.msgm]], margin: v.mg });
+                    if (!r) return { err: '請填入合理的天數、小時（≤ 24）與 MB' };
+                    return yn([['每天約', `${fmt(r.perDay)} MB`], ['全程約', `${fmt(r.total, 2)} GB`, 'ok'], ['建議方案', r.tier ? `${r.tier} GB 以上（總量方案）；若買每日方案，每日量約 ${fmt(r.perDay / 1024, 2)} GB` : '超過 50 GB，建議買吃到飽方案或分段購買']]);
+                },
+            },
+            {
+                tab: 'money', id: 'pass', title: '周遊券回本計算',
+                f: [['price', '周遊券價格', '10000'], ['rows', '行程各段交通費（每行「名稱,金額」或只填金額）', '成田到東京,3070\n東京到京都,14000\n京都到大阪,580', TA('名稱,金額')]],
+                note: '把「不買券時」每段實際會付的票價填入；也別忘了加上券不包含的路線（要另外付的不要填）。',
+                run(v) {
+                    const q = parseAmounts(v.rows);
+                    if (q.err) return { err: q.err };
+                    const r = passCalc(q.rows, v.price);
+                    if (!r) return { err: '請填入券價（≥ 0）' };
+                    return yn([['單買總額', fmt(r.total)], ['券價', fmt(v.price)], [r.worth ? '買券省下' : '買券多花', fmt(Math.abs(r.save)), r.worth ? 'ok' : 'bad'], ['結論', r.worth ? '划算（單買為券價的 ' + fmt(r.ratio * 100) + '%）' : `不划算，還需再搭 ${fmt(-r.save)} 才回本`, r.worth ? 'ok' : 'bad']]);
+                },
+            },
+            {
+                tab: 'money', id: 'tip', title: '小費計算與分攤',
+                f: [['bill', '帳單金額（未含小費）', '100'], ['pct', '小費比例（%）', '15'], ['ppl', '分攤人數', '2']],
+                note: '常見做法（僅供參考，依地區與餐廳而異）：美國餐廳約 15–20%，加拿大相近；日本、韓國、台灣一般不需小費；歐洲多數已含服務費，通常湊整或加少許；帳單若已含「service charge」就不用再加。比例可自行改。',
+                run(v) {
+                    const r = tipCalc({ bill: v.bill, pct: v.pct, people: v.ppl });
+                    if (!r) return { err: '人數需為 1–100 整數，金額與比例不可為負' };
+                    return yn([['小費', fmt(r.tip, 2)], ['含小費總額', fmt(r.total, 2), 'ok'], ['每人', fmt(r.per, 2), 'ok']]);
+                },
+            },
+            {
+                tab: 'money', id: 'tax', title: '退稅估算',
+                f: [['amt', '單店單日含稅消費金額', '10000'], ['rate', '消費稅 / VAT 稅率（%）', '10'], ['th', '退稅門檻（金額）', '5000'], ['pct', '實際可退比例（% 稅額，扣手續費後）', '80']],
+                note: '稅率、門檻與可退比例各國、各店、各退稅代辦商不同，預設值只是範例，請改成店家公告；是否適用要看商品種類與護照 / 出境規定。',
+                run(v) {
+                    const r = taxRefund({ amt: v.amt, rate: v.rate, threshold: v.th, pct: v.pct });
+                    if (!r) return { err: '請填入非負數字（比例 0–100）' };
+                    return yn([['含稅額', fmt(r.vat, 2)], ['是否達門檻', r.ok ? '達到' : `未達，還差 ${fmt(r.short, 2)}`, r.ok ? 'ok' : 'bad'], ['預估可退', fmt(r.refund, 2), r.ok ? 'ok' : '']]);
+                },
+            },
+            {
+                tab: 'sch', id: 'sch', title: '申根 90/180 天計算',
+                f: [['stays', '每行一段「入境日 出境日」（YYYY-MM-DD，當天都算）', '', TA('2025-01-10 2025-02-05')], ['ref', '計算基準日', today, DATE], ['ent', '計畫入境日（選填，算最多可停幾天）', '', DATE]],
+                note: '規則：任何連續 180 天內最多停留 90 天（含入出境當天）。本頁依單純日期計算，不含簽證類型、雙邊協定或各國例外，實際以歐盟官方短期停留計算器與入境官員認定為準。',
+                run(v) {
+                    const q = parseStays(v.stays), ref = dayNum(v.ref);
+                    if (q.err) return { err: q.err };
+                    if (ref === null) return { err: '請填基準日' };
+                    const used = schengenUsed(q.stays, ref), rows = [['視窗', `${dayStr(ref - 179)} ～ ${dayStr(ref)}`], ['已停留', `${used} 天`, used > 90 ? 'bad' : ''], ['剩餘', `${Math.max(0, 90 - used)} 天`, used >= 90 ? 'bad' : 'ok']];
+                    if (used > 90) rows.push(['警示', `已超出 ${used - 90} 天`, 'bad']);
+                    const ent = dayNum(v.ent);
+                    if (v.ent && ent === null) return { err: '計畫入境日不是有效日期' };
+                    if (ent !== null) { const m = schengenMax(q.stays, ent); rows.push([`${dayStr(ent)} 入境`, m ? `最多可連續停留 ${m} 天（至 ${dayStr(ent + m - 1)} 出境）` : '當天入境即超過 90 天，不可', m ? 'ok' : 'bad']); }
+                    return yn(rows);
+                },
+            },
+        ];
+
+        // ---------- 設定存取 ----------
+        let opts = cleanOpts(store.get('travelc_opts', null));
+        const save = () => store.set('travelc_opts', opts);
+        const el = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+
+        function field(cd, [id, label, def, t]) {
+            const key = `${cd.id}_${id}`, box = el('div'), ty = t && t.t;
+            let inp;
+            if (ty === 'ta') { inp = el('textarea', { rows: 5, spellcheck: false, placeholder: t.ph || '' }); box.className = 'wide'; }
+            else if (ty === 'sel') inp = el('select', {}, ...t.o.map(([v, l]) => el('option', { value: v, textContent: l })));
+            else if (ty === 'tz') { inp = el('input', { type: 'text', autocapitalize: 'off', spellcheck: false }); inp.setAttribute('list', 'tzs'); }
+            else if (ty) inp = el('input', { type: ty === 'dt' ? 'datetime-local' : ty });
+            else { inp = el('input', { type: 'number', step: 'any', inputMode: 'decimal' }); }
+            inp.id = key; inp.dataset.k = id;
+            inp.value = typeof opts.v[key] === 'string' ? opts.v[key] : def;
+            if (ty === 'sel' && !inp.value) inp.value = def;
+            box.append(el('label', { htmlFor: key, textContent: label }), inp);
+            if (['tz', 'dt', 'date'].includes(ty) || ty === 'ta') box.classList.add('wide');
+            return box;
+        }
+        function runCard(card) {
+            const cd = CARDS.find(x => x.id === card.dataset.c), v = {};
+            for (const [id, , , t] of cd.f) { const e = card.querySelector(`[data-k="${id}"]`); v[id] = t ? e.value : parseFloat(e.value); }
+            let r;
+            try { r = cd.run(v); } catch (e) { r = { err: '輸入有誤，無法計算' }; }
+            card.querySelector('.out').replaceChildren(...(r.err ? [el('p', { className: 'bad', textContent: r.err })] : r.rows.map(([l, x, c]) => statRow(l, x, c))));
+        }
+        function buildCards() {
+            $('#cards').replaceChildren(el('datalist', { id: 'tzs' }, ...TZS.map(z => el('option', { value: z }))), ...CARDS.map(cd => {
+                const card = el('div', { className: 'card' }, el('h2', { textContent: cd.title }), el('div', { className: 'fgrid' }, ...cd.f.map(f => field(cd, f))), el('div', { className: 'out', role: 'status' }));
+                if (cd.note) card.append(el('p', { className: 'note', textContent: cd.note }));
+                card.dataset.c = cd.id; card.dataset.tab = cd.tab;
+                return card;
+            }));
+        }
+        function showTab(t) {
+            opts.tab = t; save();
+            $('#tabs').replaceChildren(...TABS.map(([k, l]) => el('button', { textContent: l, onclick: () => showTab(k), ariaPressed: String(k === t) })));
+            $('#t_ref').hidden = t !== 'ref';
+            for (const c of document.querySelectorAll('#cards .card')) { c.hidden = c.dataset.tab !== t; if (!c.hidden) runCard(c); }
+            if (t === 'ref') renderRef();
+        }
+
+        // ---------- 速查 ----------
+        let cat = '';
+        const MAXROWS = 200;
+        function renderRef() {
+            const rows = searchRef(REFS, $('#q').value, cat);
+            $('#cats').replaceChildren(...['', ...REF_CATS].map(c => el('button', { className: 'sm', textContent: c || '全部', ariaPressed: String(c === cat), onclick: () => { cat = c; renderRef(); } })));
+            $('#count').textContent = `${rows.length} 筆${rows.length > MAXROWS ? `，只顯示前 ${MAXROWS} 筆，請縮小範圍` : ''}　${NOTE_UPD}`;
+            $('#list').replaceChildren(...rows.slice(0, MAXROWS).map(r => el('div', { className: 'rw' }, el('div', { className: 't', textContent: r.t }), el('div', { className: 'd', textContent: r.d }), el('div', { className: 'c', textContent: r.c }))));
+        }
+        $('#q').oninput = renderRef;
+        $('#lug').value = opts.lug;
+        $('#lug').oninput = () => { opts.lug = cleanOpts({ lug: $('#lug').value }).lug; save(); };
+
+        $('#cards').addEventListener('input', (e) => {
+            const card = e.target.closest('.card'); if (!card) return;
+            const val = e.target.value;
+            if (val.length <= 2000) opts.v[`${card.dataset.c}_${e.target.dataset.k}`] = val;
+            if (Object.keys(opts.v).length <= 200) save();
+            runCard(card);
+        });
+        $('#cards').addEventListener('change', (e) => { const card = e.target.closest('.card'); if (card) runCard(card); });
+        $('#wipe').onclick = () => { if (confirm('清除本頁儲存的資料（上次分頁、各欄輸入值與行李規定表）？無法復原，頁面會重新載入。')) { try { localStorage.removeItem('travelc_opts'); } catch (e) { window.Chrome && Chrome.storageFailed(); } location.reload(); } };
+
+        buildCards(); showTab(opts.tab);
+    </script>
+</body>
+
+</html>
