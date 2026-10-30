@@ -47,7 +47,7 @@
     if (typeof document === 'undefined') { if (typeof module !== 'undefined') module.exports = { matcher, buildBackup, parseBackup, fmtBytes }; return; }
 
     const STYLES = [
-        ['apple', '簡約', '#0071e3', '#f5f5f7'],
+        ['apple', '墨線', '#c23d17', '#f3f0e8'],
         ['neon', '霓虹', '#00b7ff', '#12142a'],
         ['paper', '紙本', '#b5532b', '#f3ead7'],
         ['forest', '森林', '#2f8f4e', '#e6f0df'],
