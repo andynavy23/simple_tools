@@ -26,10 +26,12 @@
 - **上色只用 theme.css 的變數**（`--bg --card --text --muted --fill --line --blue --on-blue --ok --bad --radius --radius-sm --btn-radius`…），不要寫死色碼，這樣 5 套風格 × 明暗才會整頁一起換。遊戲專屬的色彩（牌色、棋子色）可以寫死，但底色、文字、卡片、按鈕一律用變數。
 - 風格 / 明暗由 `<html data-ui-style data-ui-mode>` 決定（chrome.js 設定）。**不要在頁面用 `data-style` / `data-mode` 屬性**（已經出過撞名 bug）。
 - 每頁 `<head>` 在 theme.css 之後放 `<script src="../shared/js/chrome.js"></script>`（`index.html` 與根目錄頁面路徑不用 `../`）。
+- **視覺風格（預設「墨線」）**：暖色紙面、墨色文字、朱紅單一重點色、細線框取代陰影、標題用襯線字（系統字，不載外部字型）；風格代碼仍是 `apple`（相容已存偏好），其餘四種風格各自保留。共用元件由 `theme.css` / `chrome.js` 提供，頁面別再自己寫：6 個以上分頁鈕的 `.tabs` / `.chips` 手機自動變單列橫向捲動；標題為「結果」的 `.card` 會被標成 `.st-result`（左側重點色邊，桌面 ≥ 1000px 且為 `.wrap` 直屬時改左輸入右結果兩欄，結果在畫面外時浮出「↓ 看結果」）；沒有 class / id 的 `<table>` 有預設樣式；右上角按鈕是線條圖示。首頁圖示用 `index.html` 內 `ICONS` 的單色線條 SVG（`data-ic`）。canvas 圖表若在畫圖當下才讀 CSS 變數，要監聽 `st-themechange` 事件（切換風格 / 明暗時由 chrome.js 派發）重畫。
 - **手機優先**：以 390px 寬為基準設計。按鈕與可點區域 ≥ 44px（theme.css 已對觸控裝置處理）；不可橫向捲動；棋盤 / 畫布用 `aspect-ratio` 與 `%` / `vw`，不要寫死像素；輸入框字級 ≥ 16px（避免 iOS 放大）；常用操作放在拇指好按的位置。改完用 390×844（`isMobile`）截圖檢查。
 - **iPhone / Safari 專屬陷阱**：文字輸入（input / select / textarea）在觸控裝置上字級必須 ≥ 16px，否則 iOS 聚焦時會自動放大整個頁面（之後版面變寬、要手動縮回；chrome.js 已用 `!important` 全站強制，不要再用更小的字級）；高度用 `dvh`（寫在 `vh` 後面當後援），不要只用 `vh`；不要對 html / body 設 `overflow:hidden`；不要依賴外部 CDN（樣式、字型、圖示都要本地化，網路慢或 App 內建瀏覽器載入失敗時頁面會壞）；大面積 `touch-action:none`（遊戲盤面、畫布）會讓手指在上面無法捲動頁面，要確保盤面外有可滑動的區域，或提供「捲動頁面」模式切換。手機排版用真正的 WebKit（iPhone 17 模擬）稽核：`ios_audit.mjs`（6 種視窗狀態，約 20 秒，有快取）。
 - **每個工具頁都要有說明**：頁面內放 `<template id="help">`，用 `<h3>` 分段：這是什麼 / 什麼時候用 / 怎麼用（或怎麼玩）/ 範例（`<div class="eg">`）/ 小提醒。不會自動彈出，使用者需要時從右上角「？」開啟。連線遊戲要寫清楚怎麼開房、怎麼邀請、規則與限制，以及單機模式怎麼玩。
-- **本機資料一定要能備份**：頁面只要讀寫 localStorage，就必須在 `<head>` 宣告 `<meta name="st-keys" content="鍵1,鍵2,前綴_*">`（動態鍵用 `*` 結尾的前綴）；chrome.js 會因此在右上角出現「💾」，提供匯出 / 載入 JSON 備份（首頁是 `content="*"` 全站備份）。新增或改名鍵時同步更新這行（`tools.test.js` 會靜態檢查、`e2e_keys.mjs` 會執行期檢查）。讀取資料時一律驗證並容錯，因為還原會把舊版資料寫回來。
+- **免責聲明**：健康、飲食、寵物、財稅、旅行規定、手作等「看錯可能造成損失或傷害」的頁面，在 `<head>` 加 `<meta name="st-disclaimer" content="health|food|pet|finance|travel|craft|general">`，chrome.js 會在頁尾顯示「僅供參考、本站不負責」（文案集中在 chrome.js 的 `DISCLAIMERS`）。使用者的決定：有這行說明即可，不必逐項查證數值。
+- **本機資料一定要能備份**：頁面只要讀寫 localStorage，就必須在 `<head>` 宣告 `<meta name="st-keys" content="鍵1,鍵2,前綴_*">`（動態鍵用 `*` 結尾的前綴）；chrome.js 會因此在右上角出現「💾」，提供匯出 / 載入 JSON 備份（首頁是 `content="*"` 全站備份）。新增或改名鍵時同步更新這行（`tools.test.js` 會靜態檢查、`node tests/e2e/storage_fuzz.mjs [片段]` 會對每個宣告 st-keys 的頁面塞 8 種壞資料再載入、檢查沒有未捕捉例外，手動跑，不在 --all 內）。讀取資料時一律驗證並容錯，因為還原會把舊版資料寫回來。
 - **連線遊戲必須有單機模式**（電腦玩家 / 練習模式），不連線也能玩。
 - 首頁（`index.html`）由卡片 `<a class="card" data-cat data-topic>` 自動產生分類磚 / 搜尋 / 最愛 / 最近使用；新工具要填 `data-topic`（見檔內註解）。
 - 新卡片還要填：`data-kw`（4–10 個詞、空白分隔，寫別名 / 英文名 / 用途詞，不重複標題與說明已有的詞）、`data-added="YYYY-MM-DD"`（上線當天，之後不改；30 天內顯示「新」並進「最近新增」）、`data-store="1"`（`TOOLS.md` 第 3 欄有 localStorage 鍵才加）。搜尋、篩選、新標籤、主題跳轉全由這些屬性自動產生；`tests/new-f1.test.js` 會檢查格式。首頁是 PWA（`sw.js`、`manifest.webmanifest`）：改了 `sw.js` 要同步 `index.html` 的 `SW_CACHE` 版本常數。
@@ -51,12 +53,13 @@
 測試是固定腳本，**通過時不該花任何心力或 token**：用安靜的執行器，只有失敗才會印出內容，只針對失敗的那幾項去讀、去修。
 
 ```bash
-node tests/run.mjs                    # 共用模組 + 工具單元測試（shared.test.js、tools.test.js，後者已含 solo-* / new-*，約 1 分鐘）
+node tests/run.mjs                    # 共用模組 + 工具單元測試（shared.test.js、tools.test.js 主體 + solo-* / new-* 分片並行，約 1.5 分鐘；加 --serial 改一個一個跑）
 node tests/run.mjs 頁名片段            # 只跑「內容提到該片段」的單元測試與 e2e，例如 markdown-preview
 node tests/run.mjs --ios [片段]        # iPhone 17 版面稽核（真 WebKit，6 種視窗，約 25 秒，有快取）
 node tests/run.mjs --smoke [片段]      # 全站煙霧測試（Edge 手機視窗：無例外、無 404、無橫向溢出，約 25 秒）
 node tests/run.mjs --e2e               # tests/e2e/ 內所有頁面 e2e
 node tests/run.mjs --all               # 全部（單元 + 強制全站 iPhone 稽核 + 煙霧 + 全部 e2e），通過只印一行、失敗才印內容
+node tests/e2e/visual_audit.mjs [片段]  # 全站視覺稽核（淺 / 深色各載入一次，找對比 < 3、沒用 theme.css 的離群頁；是找線索不是通過 / 失敗，不在 --all 內；`--shots 資料夾 片段` 可另存截圖）
 ```
 
 - **不要把測試輸出整段讀進對話**：用 `node tests/run.mjs …`（通過只有一行）；直接跑 `tools.test.js` 會印幾百行 `ok`。失敗時才看最後幾行，修完只重跑那一個檔。
@@ -68,9 +71,9 @@ node tests/run.mjs --all               # 全部（單元 + 強制全站 iPhone �
 
 ## 新增 / 合併工具
 
-0. 登錄用 `node tests/register.mjs temp_reg_*.json`（規格檔寫在 repo 根目錄的 `temp_reg_<代號>.json`，欄位見 `tests/register.mjs` 檔頭）：一次補好首頁卡片、README、TOOLS，並刪掉 IDEAS.md 已完成的編號；不用手動改四個檔。
+0. 登錄用 `node tests/register.mjs temp_reg_*.json`（規格檔寫在 repo 根目錄的 `temp_reg_<代號>.json`，欄位見 `tests/register.mjs` 檔頭）：一次補好首頁卡片、README、TOOLS，並刪掉 IDEAS.md 已完成的編號；不用手動改四個檔。規格欄位另有：`ic`（首頁線條圖示名，須在 `index.html` 的 `ICONS` 內，沒填就退回 emoji）、`remove`（合併掉的頁面路徑陣列，從首頁 / README / TOOLS 刪掉對應卡片與列；頁面檔本身要先自己刪）。`cat` 支援 遊戲輔助 / 工具 / 小遊戲 / 趣味。**用 Bash heredoc 寫含反斜線的程式（正規表示式、`\n`）會被吃掉，改用 Write / Edit 工具。**
 
 1. 先查 `TOOLS.md`：是既有工具的子集或延伸 → 擴充它（指名要加的分頁），不另開新檔；兩個工具共用同一份資料 / 輸入 → 合併。
 2. 新增：依分類建 `<category>/xxx.html`（含 chrome.js 與 help 模板），並在 `index.html`（複製一張 `<a class="card">`，填 `data-cat` / `data-topic`）、`README.md` 表格、`TOOLS.md`、`tests/tools.test.js` 各補一筆；若點子來自 `IDEAS.md`，做完把該項從 `IDEAS.md` 刪除。
-3. 刪除或改名頁面時，同步改上述四處，並讓舊 localStorage 鍵能被新頁面帶過去。
+3. 刪除、改名或合併頁面時，同步改上述四處（合併用 `register.mjs` 的 `remove`），舊 localStorage 鍵**沿用同名**讓新頁面直接讀（鍵是全站共用的，不需搬資料），新頁的 `st-keys` 要全列；把相關測試的 `load(...)` 路徑與 e2e 改指向新頁、不刪斷言。不留轉址頁，舊網址會失效。合併時把各頁腳本包進 IIFE 或加前綴、id 加前綴、CSS 用 `@scope` 或前綴，第一次切到分頁才初始化。
 4. 提供「每日挑戰」用 `Util.seeded(種子)`；台灣時間用 UTC+8 算術；`Util.rnd(n)` 只支援 n ≤ 2^32。

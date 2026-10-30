@@ -237,6 +237,15 @@
         if (!ddlg.open) ddlg.showModal();
     }
 
+    const DISCLAIMERS = {
+        health: '僅供一般參考，不構成醫療或專業建議；本站不對使用結果負責，身體不適請就醫或諮詢專業人員。',
+        food: '僅供一般參考，食品安全與營養請以官方公告與專業人員建議為準；本站不對使用結果負責。',
+        pet: '僅供一般參考，不構成獸醫建議；本站不對使用結果負責，寵物不適請就醫。',
+        finance: '僅供試算參考，不構成財務、稅務或投資建議；實際金額以官方與金融機構為準，本站不對使用結果負責。',
+        travel: '規定與數值可能變動，僅供參考，請以官方公告為準；本站不對使用結果負責。',
+        craft: '僅供一般參考，操作與配方請自行確認安全；本站不對使用結果負責。',
+        general: '僅供一般參考，數值多為經驗值或粗估；本站不對使用結果負責。',
+    };
     const ICON = {
         save: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>',
         help: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg>',
@@ -268,6 +277,9 @@
         bar = el('div', { class: 'st-bar' });
         if (metaKeys()) { const d = el('button', { type: 'button', class: 'st-databtn', 'aria-label': '資料備份與還原', title: '資料備份與還原' }); d.innerHTML = ICON.save + '<span class="st-lb">備份</span>'; d.onclick = () => openData(); bar.append(d); }
         if (!root.lang) root.lang = 'zh-TW';
+        // 免責聲明：頁面加 <meta name="st-disclaimer" content="health|food|pet|finance|travel|craft">，頁尾統一顯示「僅供參考、本站不負責」（health|food|pet|finance|travel|craft|general）
+        const dm = document.querySelector('meta[name=st-disclaimer]'), dt = dm && DISCLAIMERS[dm.content.trim()];
+        if (dt) document.querySelector('.wrap, main, body').append(el('p', { class: 'note st-disc', text: dt }));
         if (tpl()) { const h = el('button', { type: 'button', class: 'st-helpbtn', 'aria-label': '使用說明', title: '使用說明' }); h.innerHTML = ICON.help + '<span class="st-lb">說明</span>'; h.onclick = () => openHelp(false); bar.append(h); }
         const th = el('button', { type: 'button', class: 'st-theme', 'aria-label': '外觀：風格與明暗', title: '外觀', 'aria-expanded': 'false' }); th.innerHTML = ICON.theme + '<span class="st-lb">外觀</span>'; th.onclick = () => togglePanel();
         if (themed) bar.append(th);

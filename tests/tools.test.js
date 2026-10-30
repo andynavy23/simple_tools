@@ -121,7 +121,7 @@ const NL = String.fromCharCode(10);
 
 // ===== 捲軸期望值 =====
 {
-    const m = load('game-assist/scroll-calculator.html', 'expected, attemptsFor');
+    const m = load('game-assist/artale-calc.html', 'expected, attemptsFor');
     near(m.expected(3, 0.6, 0, 100, 0), 500);
     const sim = (k, p, d, c, price, N = 150000) => {
         let total = 0;
@@ -423,7 +423,7 @@ const NL = String.fromCharCode(10);
 
 // ===== 經驗效率 =====
 {
-    const m = load('game-assist/exp-calculator.html', 'expPlan, fmtDuration');
+    const m = load('game-assist/artale-calc.html', 'expPlan, fmtDuration');
     const p = m.expPlan({ current: 12.5, target: 100, gain: 0.35, perHour: 240, bonus: 0 });
     near(p.remaining, 87.5); assert.equal(p.runs, 250); near(p.hours, 250 / 240);
     const b = m.expPlan({ current: 0, target: 100, gain: 1, perHour: 100, bonus: 100 });     // 加成 100% = 每次 2%
@@ -441,7 +441,7 @@ const NL = String.fromCharCode(10);
 
 // ===== 抽卡機率 =====
 {
-    const m = load('game-assist/gacha-calculator.html', 'pullRates, firstHitPmf, convolve, expectation, cdf, quantile, upPmf');
+    const m = load('game-assist/artale-calc.html', 'pullRates, firstHitPmf, convolve, expectation, cdf, quantile, upPmf');
     const rates = m.pullRates(0.006, 90, 74, 0.06), pmf = m.firstHitPmf(rates);
     near(pmf.reduce((a, b) => a + b), 1, 1e-9);
     assert.equal(rates[89], 1); assert.equal(rates[0], 0.006);
@@ -1977,7 +1977,7 @@ const NL = String.fromCharCode(10);
 
 // ===== 生日 / 星座 / 生肖 =====
 {
-    const m = load('utils/age-zodiac.html', 'westernSign, lunarOf, zodiacOf, ganzhiOf, ageOf, nextBirthday, dayNumber, ZODIAC, SIGNS');
+    const m = load('utils/date-calc.html', 'westernSign, lunarOf, zodiacOf, ganzhiOf, ageOf, nextBirthday, dayNumber, ZODIAC, SIGNS');
     const sg = (mo, d) => m.westernSign(mo, d).name;
     assert.deepEqual([[1, 1], [1, 19], [1, 20], [2, 18], [2, 19], [3, 20], [3, 21], [4, 19], [4, 20], [5, 20], [5, 21], [6, 20], [6, 21], [7, 22], [7, 23], [8, 22], [8, 23], [9, 22], [9, 23], [10, 22], [10, 23], [11, 21], [11, 22], [12, 21], [12, 22], [12, 31]].map(x => sg(...x)),
         ['摩羯座', '摩羯座', '水瓶座', '水瓶座', '雙魚座', '雙魚座', '牡羊座', '牡羊座', '金牛座', '金牛座', '雙子座', '雙子座', '巨蟹座', '巨蟹座', '獅子座', '獅子座', '處女座', '處女座', '天秤座', '天秤座', '天蠍座', '天蠍座', '射手座', '射手座', '摩羯座', '摩羯座']);
@@ -2355,7 +2355,8 @@ const NL = String.fromCharCode(10);
 }
 
 // ===== 單機模式 / 新工具測試：tests/solo-*.test.js、tests/new-*.test.js 各自獨立，這裡一起執行；非同步測試請 push 到 require('./_load').pending =====
-for (const f of fs.readdirSync(__dirname).filter(x => /^(solo|new)-.*\.test\.js$/.test(x)).sort()) require(path.join(__dirname, f));
+// ST_NO_SOLO=1：不在這裡載入（run.mjs 會用 _unit_shard.js 分片並行跑它們）
+if (!process.env.ST_NO_SOLO) for (const f of fs.readdirSync(__dirname).filter(x => /^(solo|new)-.*\.test\.js$/.test(x)).sort()) require(path.join(__dirname, f));
 pending.push(...require('./_load').pending);
 
 Promise.all(pending).then(() => console.log('ALL OK')).catch((e) => { console.error(e); process.exit(1); });
