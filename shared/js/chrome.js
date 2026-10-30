@@ -8,6 +8,7 @@
  * 資料備份：頁面若有寫入 localStorage，必須在 <head> 宣告 <meta name="st-keys" content="鍵1,鍵2,前綴_*">（動態鍵用 * 結尾的前綴；
  *   首頁用 content="*" 代表全站）。有宣告就會出現「💾」按鈕，可匯出 / 載入 JSON 備份（換瀏覽器、清除網站資料前先匯出）。
  *   載入時只會寫入符合宣告的鍵（首頁的全站備份例外），並會先讓使用者確認。
+ * 切換風格 / 明暗（含系統明暗改變）後會在 window 派發 'st-themechange'；canvas 圖表監聽它即可用新顏色重畫。
  * 提示訊息：Chrome.toast(文字, 毫秒) 顯示非阻塞的小提示；Chrome.storageFailed() 是「儲存失敗」的標準提示
  *   （Util.store.set 失敗時會自動呼叫；不用 Util.store 而直接寫 localStorage 的頁面，要在 catch 裡自己呼叫）。
  * 沒有 JS 時退回蘋果風格並跟隨系統明暗（見 theme.css）。
@@ -62,16 +63,17 @@
     let style = get('st_style', 'apple'); if (!STYLES.some(s => s[0] === style)) style = 'apple';
     let mode = get('st_mode', 'auto'); if (!MODES.some(m => m[0] === mode)) mode = 'auto';
 
-    function apply() {
+    function apply(notify) {
         const dark = mode === 'dark' || (mode === 'auto' && mq && mq.matches);
         root.setAttribute('data-ui-style', style);
         root.setAttribute('data-ui-mode', dark ? 'dark' : 'light');
         let meta = document.querySelector('meta[name=theme-color]');
         if (!meta) { meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.append(meta); }
         requestAnimationFrame(() => { meta.content = getComputedStyle(root).getPropertyValue('--bg').trim() || '#f5f5f7'; });
+        if (notify) requestAnimationFrame(() => window.dispatchEvent(new Event('st-themechange')));
     }
     apply();
-    if (mq) (mq.addEventListener ? mq.addEventListener('change', () => { if (mode === 'auto') apply(); }) : mq.addListener(() => { if (mode === 'auto') apply(); }));
+    if (mq) (mq.addEventListener ? mq.addEventListener('change', () => { if (mode === 'auto') apply(true); }) : mq.addListener(() => { if (mode === 'auto') apply(true); }));
 
     const CSS = `
 .st-bar{position:fixed;top:max(8px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right));z-index:60;display:flex;gap:6px}
@@ -131,13 +133,13 @@
             el('h4', { text: '風格' }),
             el('div', { class: 'st-row' }, ...STYLES.map(([id, name, a, b]) => {
                 const sw = el('button', { class: 'st-sw', type: 'button', 'aria-pressed': String(id === style), style: `--a:${a};--b:${b}` }, el('i'), name);
-                sw.onclick = () => { style = id; set('st_style', id); apply(); renderPanel(); };
+                sw.onclick = () => { style = id; set('st_style', id); apply(true); renderPanel(); };
                 return sw;
             })),
             el('h4', { text: '明暗' }),
             el('div', { class: 'st-row m' }, ...MODES.map(([id, name]) => {
                 const b = el('button', { class: 'st-md', type: 'button', 'aria-pressed': String(id === mode), text: name });
-                b.onclick = () => { mode = id; set('st_mode', id); apply(); renderPanel(); };
+                b.onclick = () => { mode = id; set('st_mode', id); apply(true); renderPanel(); };
                 return b;
             })),
         );
@@ -278,5 +280,5 @@
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 
-    window.Chrome = { STYLES, MODES, openHelp, openData, toast, storageFailed, matcher, buildBackup, parseBackup, get style() { return style; }, get mode() { return mode; }, setStyle(v) { style = v; set('st_style', v); apply(); }, setMode(v) { mode = v; set('st_mode', v); apply(); } };
+    window.Chrome = { STYLES, MODES, openHelp, openData, toast, storageFailed, matcher, buildBackup, parseBackup, get style() { return style; }, get mode() { return mode; }, setStyle(v) { style = v; set('st_style', v); apply(true); }, setMode(v) { mode = v; set('st_mode', v); apply(true); } };
 })();

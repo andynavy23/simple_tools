@@ -1,7 +1,7 @@
 // 安靜的測試執行器：通過只印一行，失敗才印最後幾行輸出（測試是固定腳本，不需要把全部輸出讀一遍）。
 //   node tests/run.mjs                 共用模組 + 工具單元測試（shared.test.js、tools.test.js；後者已含 solo-* / new-*）
 //   node tests/run.mjs 頁名片段…        只跑「內容提到該片段」的單元測試與 e2e（例如 markdown-preview）
-//   node tests/run.mjs --e2e           e2e 全部（tests/e2e/*.mjs，不含 lib / ios_audit / smoke）
+//   node tests/run.mjs --e2e           e2e 全部（tests/e2e/*.mjs，不含 lib / ios_audit / smoke / visual_audit（後者是找離群頁的稽核，手動跑））
 //   node tests/run.mjs --ios [片段…]   iPhone 版面稽核（WebKit，有快取）
 //   node tests/run.mjs --smoke [片段…] 全站煙霧測試（Edge）
 //   node tests/run.mjs --all           全部（單元 + 強制全站 iPhone 稽核 + 煙霧 + 全部 e2e），通過時只印一行總結，失敗才印內容
@@ -22,7 +22,7 @@ function run(file, extra = []) {
     return false;
 }
 const list = (d, re) => fs.readdirSync(d).filter(f => re.test(f)).map(f => path.join(d, f));
-const E2E_SKIP = /^(lib|ios_audit|smoke)\.mjs$/;
+const E2E_SKIP = /^(lib|ios_audit|smoke|visual_audit)\.mjs$/;
 let results = [];
 
 if (flags.includes('--all')) {
