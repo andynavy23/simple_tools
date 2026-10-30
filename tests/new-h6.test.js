@@ -1,4 +1,4 @@
-// 批次 h6：utils/log-viewer.html（日誌 / JSON Lines / Stack trace）與 utils/nosql-query.html（Redis / Elasticsearch）純邏輯
+// 批次 h6：utils/log-viewer.html（日誌 / JSON Lines / Stack trace）與 utils/db-query.html（Redis / Elasticsearch）純邏輯
 const { load, ok } = require('./_load');
 const assert = require('assert');
 
@@ -170,7 +170,7 @@ exit status 2`;
 }
 
 { // ================= nosql-query =================
-    const N = load('utils/nosql-query.html', 'CMDS, GROUPS, LIM, loadOpts, buildRedis, cliQuote, renderRedis, argTokens, buildEs, renderEs, defaultEs, validIndex');
+    const N = load('utils/db-query.html', 'CMDS, GROUPS, LIM, loadOpts, buildRedis, cliQuote, renderRedis, argTokens, buildEs, renderEs, defaultEs, validIndex', '// --- pure:nosql ---', '// --- /pure:nosql ---');
     const R = (cmd, vals) => N.buildRedis(cmd, vals), cli = (cmd, vals) => { const r = R(cmd, vals); assert.ok(r.ok, cmd + ' ' + r.errs.join()); return N.renderRedis(r.argv, 'cli'); };
 
     // 跳脫

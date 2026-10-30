@@ -57,6 +57,17 @@ try {
     assert.ok((await val('#uriOut')).startsWith('iVBOR'));
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 
+// 併入的 JWT 解碼與檢查、網址拆解與重組
+await click('#jwSample'); await set('#jwSecret', 'your-256-bit-secret'); await new Promise(r => setTimeout(r, 200));
+assert.ok((await txt('#jwVOut')).startsWith('簽章相符'), 'JWT 驗簽');
+assert.ok((await txt('#jwPl')).includes('John Doe'));
+await set('#jwGs', 'k'); await click('#jwGen'); await new Promise(r => setTimeout(r, 200));
+assert.equal((await txt('#jwGOut')).split('.').length, 3, 'JWT 產生');
+await set('#urIn', 'https://a.com/p?utm_source=x&id=1&id=2#h'); await click('#urQTrack');
+assert.equal(await val('#urOut'), 'https://a.com/p?id=1&id=2#h', '網址移除追蹤參數');
+await set('#urBin', 'https://a.com/?id=1 https://b.com/?id=3'); await set('#urBKey', 'id');
+assert.ok((await txt('#urBOut')).includes('2 個網址，找到 2 個值'));
+
 assert.ok(await page.evaluate(() => document.scrollingElement.scrollWidth <= innerWidth), '橫向捲動');
 assert.deepEqual(errors, []);
 await browser.close();

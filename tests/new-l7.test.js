@@ -1,7 +1,7 @@
-// 批次 l7：mini-games/kids-play.html 純邏輯（找不同、點點連線、著色區域、拼貼、節奏、進度、家長驗證）
+// 批次 l7：mini-games/kids-learn.html 純邏輯（找不同、點點連線、著色區域、拼貼、節奏、進度、家長驗證）
 const assert = require('assert');
 const { load, read, ok } = require('./_load');
-const m = load('mini-games/kids-play.html', 'EM, SPOT_LV, spotScene, spotHit, spotHint, DOTS, DOT_TOL, validDots, dotsStep, TPL, validColoring, inRegion, colorInner, svgDoc, SHAPES, CL_MAX, addItem, xform, removeItem, collageInner, WIN, RH, rhythmTargets, judge, matchRhythm, calibrate, nearest, defProg, cleanProgress, gateQ, gateOk');
+const m = load('mini-games/kids-learn.html', 'EM, SPOT_LV, spotScene, spotHit, spotHint, DOTS, DOT_TOL, validDots, dotsStep, TPL, validColoring, inRegion, colorInner, svgDoc, CL_SHAPES, CL_MAX, addItem, xform, removeItem, collageInner, WIN, RH, rhythmTargets, judge, matchRhythm, calibrate, nearest, defProg, cleanProgress, gateQ, gateOk', '// --- pure-play ---', '// --- /pure-play ---');
 
 // 找不同：差異數正確、位置不重複、確實不同、同種子可重現
 for (let lv = 1; lv <= 3; lv++) for (let s = 0; s < 150; s++) {
@@ -111,7 +111,7 @@ assert.ok(m.gateOk(q, '9') && m.gateOk(q, ' 9 ')); assert.ok(!m.gateOk(q, '') &&
 ok('l7 gate');
 
 // 頁面靜態：鍵宣告、說明、不用 CDN
-const html = read('mini-games/kids-play.html');
-assert.ok(html.includes('<meta name="st-keys" content="kidsp_progress">') && html.includes('<template id="help">'));
+const html = read('mini-games/kids-learn.html');
+assert.ok(html.includes('<meta name="st-keys" content="kidsl_stats,kidsl_opts,kidsl_tab,kidsp_progress">') && html.includes('<template id="help">'));
 assert.ok(!/https?:\/\/(?!andynavy23)[^"' )]*\.(js|css)/.test(html));
 ok('l7 page');

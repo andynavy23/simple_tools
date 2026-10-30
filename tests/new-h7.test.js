@@ -243,7 +243,7 @@ const { spawnSync } = require('child_process');
 }
 
 { // ---------- sql-query：DDL 工具 ----------
-    const m = load('utils/sql-query.html', 'ddlParse, ddlToCode, ddlDetect, ddlLayout, ddlEdgePts, ddlCategory, ddlWords, ddlCase');
+    const m = load('utils/db-query.html', 'ddlParse, ddlToCode, ddlDetect, ddlLayout, ddlEdgePts, ddlCategory, ddlWords, ddlCase', '// --- pure:sql ---', '// --- /pure:sql ---');
     const P = (s) => m.ddlParse(s);
     const col = (t, n) => t.columns.find(c => c.name === n);
 

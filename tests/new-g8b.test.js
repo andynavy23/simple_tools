@@ -1,9 +1,9 @@
-// 批次 g8（續）：SQL 指令產生器頁面（utils/sql-query.html）的「SQL 格式化」
+// 批次 g8（續）：SQL 指令產生器頁面（utils/db-query.html）的「SQL 格式化」
 const assert = require('assert');
 const { load, ok } = require('./_load');
 
 { // ---------- sql-query：SQL 格式化 ----------
-    const m = load('utils/sql-query.html', 'sqlFormat, sqlTokens, sqlSig, sqlSame');
+    const m = load('utils/db-query.html', 'sqlFormat, sqlTokens, sqlSig, sqlSame', '// --- pure:sql ---', '// --- /pure:sql ---');
     const F = (s, o) => m.sqlFormat(s, o);
     // 版面
     assert.equal(F('select a,b from t where x=1 and y=2 order by a desc limit 5;'), 'SELECT\n    a,\n    b\nFROM t\nWHERE x = 1\n    AND y = 2\nORDER BY a DESC\nLIMIT 5;\n');

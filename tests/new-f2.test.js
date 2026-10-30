@@ -183,7 +183,7 @@ const assert = require('assert');
 
 // ===== 3. url-parser =====
 {
-    const m = load('utils/url-parser.html', 'decodeSafe, decodeOk, isTracking, doubleEncoded, parseQuery, hashQuery, pathSegments, parseUrl, asciiHost, punyDecode, unicodeHost, hostInfo, buildUrl, stripTracking, countTracking, checkUrl, extractParam');
+    const m = load('utils/encode-decode.html', 'decodeSafe, decodeOk, isTracking, doubleEncoded, parseQuery, hashQuery, pathSegments, parseUrl, asciiHost, punyDecode, unicodeHost, hostInfo, buildUrl, stripTracking, countTracking, checkUrl, extractParam');
     const rt = (u, o) => m.buildUrl(m.parseUrl(u), o);
     // 往返（沒改任何東西：原樣）
     for (const u of [

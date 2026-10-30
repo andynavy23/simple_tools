@@ -2,7 +2,7 @@
 import assert from 'assert';
 import { launchEdge, openPage } from './lib.mjs';
 const browser = await launchEdge();
-const { page, errors } = await openPage(browser, 'utils/sql-query.html');
+const { page, errors } = await openPage(browser, 'utils/db-query.html');
 const set = (sel, v) => page.evaluate((s, x) => { document.querySelector(s).value = x; }, sel, v);
 const click = (sel) => page.evaluate((s) => document.querySelector(s).click(), sel);
 const text = (sel) => page.evaluate((s) => document.querySelector(s).textContent, sel);

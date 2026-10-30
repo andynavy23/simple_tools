@@ -15,13 +15,11 @@
 | 工具 | 已有功能 | 本機資料（localStorage） | 連線 |
 |---|---|---|---|
 | [技能冷卻時間板](game-assist/cooldown-board.html) | 自訂技能冷卻，數字鍵觸發，冷卻完成語音 / 提示音 | `cd_skills`、`cd_opts` |  |
-| [經驗效率計算機](game-assist/exp-calculator.html) | 以百分比計算：還需次數、時間、預計完成時刻 | — |  |
-| [抽卡機率計算機](game-assist/gacha-calculator.html) | 軟 / 硬保底、UP 與大保底，期望抽數與 50/80/90/99% 抽數 | — |  |
 | [困難拉圖斯](game-assist/papulatus.html) | 小怪 / 黑水 / 系統扣時倒數，支援語音與振動 | — |  |
 | [團練小工具](game-assist/party.html) | Artale 團練即時同步：經驗追蹤、掉寶統計、生存測試；單機：單人使用（不連線，資料只在這次開啟期間、不存檔） | `artale_v4_name` | ✓ |
 | [RJPQ 門位標記](game-assist/rjpq.html) | 10 層 × 4 門標記，全隊即時共享；單機：單人使用（不連線，資料只在這次開啟期間、不存檔） | — | ✓ |
-| [捲軸期望值計算機](game-assist/scroll-calculator.html) | 算衝捲平均花費與各把握度所需次數，可設定失敗損毀機率 | — |  |
 | [幸運頻道計算機](game-assist/lucky-channel.html) | 依角色、怪物、日期算今日幸運頻道 | — |  |
+| [Artale 計算機](game-assist/artale-calc.html) | 三分頁計算機：捲軸期望值（成功率×價格、損毀重買、各把握度張數）、經驗效率（還差幾次／幾小時／預計完成時間）、抽卡機率（軟硬保底、UP、大保底、各把握度抽數與花費）；不內建遊戲數值，合併自 scroll-calculator / exp-calculator / gacha-calculator | — |  |
 
 ## 小遊戲
 
@@ -63,8 +61,7 @@
 | [西洋棋](mini-games/chess.html) | 完整規則（王車易位、吃過路兵、升變、將死 / 逼和、三次重複 / 五十步 / 子力不足）；單機對電腦（簡單 / 普通 / 困難，alpha-beta + 迭代加深，Web Worker）、同機雙人、連線 1 對 1（房主驗證、計時、求和 / 悔棋 / 認輸、重連）；SAN 棋譜、PGN 匯出、FEN 載入；perft 與公認數字一致 | `chess_stats`、`chess_opts`、`chess_game` | ✓ |
 | [德州撲克](mini-games/texas-holdem.html) | 無限注現金桌（遊戲籌碼，無真錢）2–8 人；單機 1 真人加 1–7 電腦（簡單 / 普通 / 困難）；盲注可選可升盲、邊池與主池、平分餘數、單挑盲注；連線房主制、手牌只私送、每手 SHA-256 承諾牌堆並於結束時核對（棄牌者手牌結束時亦會公開）、斷線託管、重連、觀戰；只存設定與統計 | `holdem_opts`、`holdem_stats` | ✓ |
 | [語言練習](mini-games/lang-drill.html) | 13 個題庫共約 2000 題（英文時態 / 介系詞 / 冠詞 / 不規則動詞、日文助詞 / 形容詞 / 動詞變化 / 漢字讀音、西班牙語變位、德語冠詞、韓文字母、破音字、錯別字）；選擇或輸入作答，模式循序 / 隨機 / 錯題加強 / 限時 60 秒；統計與最弱 10 個；題庫為代理依知識整理，請母語者抽查；單機 | `langd_stats`、`langd_opts` |  |
-| [兒童學習樂園](mini-games/kids-learn.html) | 13 個兒童認知單元（數數、加減法、九九乘法、形狀顏色、動物、英文單字、星期月份、認時鐘、認錢幣、ABC、注音、看圖拼字、情緒），三級難度、溫和鼓勵、家長設定（算術題進入）；注音例字只收有把握者；單機 | `kidsl_stats`、`kidsl_opts` |  |
-| [兒童遊樂](mini-games/kids-play.html) | 找不同（emoji 場景 3 級）、點點連線（10 圖案）、著色線稿（10 張區域資料，匯出 PNG）、形狀拼貼（6 形狀，上限 40 個）、節奏拍手（時間戳判定、延遲校正）；家長設定要先答加法題；進度與最佳紀錄存本機，作品不存；單機 | `kidsp_progress` |  |
+| [兒童遊樂園](mini-games/kids-learn.html) | 13 個兒童認知單元（數數、加減法、九九乘法、形狀顏色、動物、英文單字、星期月份、認時鐘、認錢幣、ABC、注音、看圖拼字、情緒），三級難度、溫和鼓勵、家長設定（算術題進入）；注音例字只收有把握者；單機；追加…（已併入原『兒童遊樂』五個遊戲，頁面改名為兒童遊樂園） | `kidsl_stats`、`kidsl_opts`、`kidsp_progress`、`kidsl_tab` |  |
 | [史地小百科](mini-games/history-geo.html) | 朝代年表（118 條，年代為通行說法）、約 190 國國旗與首都對照表與三種測驗（含錯題加強；裝置不顯示國旗 emoji 時自動停用看旗題）、台灣地理速查、歷史重點閃卡（簡化間隔複習）；台灣、巴勒斯坦、科索沃不列入國家清單；譯名與數字請自行抽查；只存測驗統計與卡片進度 | `histgeo_stats` |  |
 | [樂感訓練](mini-games/ear-training.html) | 五分頁：音程聽辨（旋律上下行 / 和聲、三級難度、錯題加強）、視唱（麥克風自相關偵測音高，容差 ±50/30/15 音分，八度不限，無麥克風或拒絕授權時顯示說明）、吉他指板（標準調音、指定弦 / 任一弦、限時 30 秒）、琴鍵（音名或高 / 低音譜號 SVG 五線譜）、樂理速查（名詞記號搜尋、五度圈互動、音階與和弦組成音）。統計每項上限 99999、可清除；單機。高 / 低音譜號圖案依裝置字型顯示，需抽查；視唱需實機麥克風驗證。 | `eartrain_stats` |  |
 
@@ -113,15 +110,14 @@
 | 工具 | 已有功能 | 本機資料（localStorage） | 連線 |
 |---|---|---|---|
 | [文字加密 / 解密](utils/aes-crypt.html) | AES-256-GCM + PBKDF2-SHA256 60 萬次；隨機鹽與 IV；密文帶版本前綴；改動或密碼錯誤會被偵測；新增金鑰對與憑證分頁（RSA / ECDSA 金鑰對、X.509 解析、PEM ⇄ DER） | — |  |
-| [生日 / 星座 / 生肖](utils/age-zodiac.html) | 年月日年齡、活了幾天、星座與元素、農曆生日與天干地支（Intl 農曆）、下次生日、第 10000 天 | `zodiac_birth` |  |
 | [進位 / 位元運算工具](utils/base-converter.html) | 2 / 8 / 10 / 16 / 36 進位互轉（BigInt）、位元運算（8–64 位元、二補數）、float32 / float64 拆解；新增浮點數視覺化分頁（IEEE 754 單 / 雙精度位元、精確十進位值、0.1+0.2≠0.3 示範）；新增「文字 ⇄ 進位」分頁（UTF-8 / UTF-16 位元組互轉） | `base_tab` |  |
 | [計算機](utils/calculator.html) | 自製運算式解析器（不用 eval）、隱含乘法、sin / cos / ln / log / sqrt…、ans、角度 / 弧度，歷史紀錄可點回重算 | `calc_history`、`calc_angle` |  |
 | [色彩工具](utils/color-tools.html) | 色碼互轉、配色產生（互補 / 類似 / 三角 / 分裂 / 四角 / 單色 / 漸層）、色票庫（存檔、複製成 CSS 變數）、WCAG 對比度檢查、四種色覺缺陷模擬；新增色盲模擬（色票或圖片本機處理；紅 / 綠 / 藍黃 / 全色盲與弱視，Machado 2009 矩陣；配色診斷標示難以分辨的色票）；新增「近似 Tailwind 色」（Tailwind v3.4 預設色階，ΔE 排序）；「圖片主色」：載入圖片以 k-means（k-means++、固定種子可重現）萃取 3–8 個主色與占比，點色塊複製、可設為主色 | `color_lib` |  |
 | [倒數日 / 紀念日](utils/countdown.html) | 還有 / 已經幾天，可設定每年重複（週年）；「今日倒數」到下班時刻的時分秒與進度條；每個日期可附清單（旅行行李範本、勾選進度）；匯出 .ics（全天事件、每年重複用 RRULE）；戒除計數（已持續天數、省下金額、里程碑，存在 countdown_events 的 quit 欄位）與行前待辦範本 | `countdown_today`、`countdown_events` |  |
 | [Cron 表達式解析](utils/cron-parser.html) | 5 欄位 cron（* , - / ?、月份星期縮寫、@daily）中文說明與未來 10 次執行時間；新增 cron / systemd OnCalendar / GitHub Actions 排程語法互轉 | `cron_expr` |  |
 | [CSV / TSV 表格工具](utils/csv-tool.html) | RFC 4180 解析（引號、跳脫、儲存格內換行）、自動判斷分隔符號、排序與篩選、輸出 JSON / Markdown / TSV；新增 XLSX 讀寫（單一工作表、10MB 上限）；新增進階處理：資料清理（可復原一步）、合併 JOIN、樞紐分析、HTML 表格擷取 | — |  |
-| [日期計算機](utils/date-calc.html) | 相差（天 / 週 / 年月日 / 工作日）、加減（含工作日）、星期與 ISO 週次 | `datecalc_tab` |  |
-| [編碼解碼](utils/encode-decode.html) | Base64 / URL / Unicode / HTML 實體 / 十六進位；JWT 解析（顯示過期時間，不驗簽）；網址參數拆解 / 組合；SHA-1 / 256 / 384 / 512 雜湊（文字與檔案，可貼官方值比對）；摩斯密碼、凱薩密碼、ROT13；字元檢視：逐字素列出碼位 / UTF-8 / UTF-16 / 類別 / 腳本，標示零寬、BOM、NBSP、方向控制、同形異義字元；可移除零寬與方向控制字元；NFC / NFD / NFKC / NFKD 正規化（不存資料）；另有 Base32、Base58 / Base58Check、URL 批次編碼、HTML 實體查表、檔案轉 data URI、雜湊類型辨識；新增校驗碼計算（CRC-32 / CRC-16 / Adler-32，文字或檔案；Luhn、ISBN、EAN / UPC 檢查碼） | — |  |
+| [日期計算機](utils/date-calc.html) | 相差（天 / 週 / 年月日 / 工作日）、加減（含工作日）、星期與 ISO 週次；追加「生日 / 星座」分頁（年齡、星座、農曆生肖、下次生日；沿用 zodiac_birth） | `datecalc_tab`、`zodiac_birth` |  |
+| [編碼解碼](utils/encode-decode.html) | Base64 / URL / Unicode / HTML 實體 / 十六進位；JWT 解析（顯示過期時間，不驗簽）；網址參數拆解 / 組合；SHA-1 / 256 / 384 / 512 雜湊（文字與檔案，可貼官方值比對）；摩斯密碼、凱薩密碼、ROT13；字元檢視：逐字素列出碼位 / UTF-8 / UTF-16 / 類別 / 腳本，標示零寬、BOM、NBSP、方向控制、同形異義字元；可移除零寬與方向控制字元；NFC / NFD / NFKC / NFKD 正規化（不存資料）；另有 Base32、Base58 / Base58Check、URL 批次編碼、HTML 實體查表、檔案轉 data URI、雜湊類型辨識；新增校驗碼計算（CRC-32 / CRC-16 / Adler-32，文字或檔案；Luhn、ISBN、EAN / UPC 檢查碼）；內含「JWT 解碼與檢查」（風險檢查、exp/iat/nbf 時間、HS256/384/512 驗簽與產生測試 token）與「網址拆解與重組」（各部分可編輯、重複參數、移除追蹤參數、重組編碼選項、punycode、批次抽取參數） | — |  |
 | [記帳本](utils/expense-tracker.html) | 收支分類、月統計、分類佔比；固定支出 / 訂閱（每週 / 月 / 年、下次扣款日、折合每月 / 每年、一鍵記入明細）；資料只在本機，可匯出 CSV（防公式注入）；外幣記帳：17 種外幣，匯率取自單位換算器的匯率快取並於記帳當下鎖定，同存外幣金額 / 幣別 / 匯率 / 台幣金額，離線可手動輸入匯率，CSV 多三欄；新增 50/30/20 預算、財務自由進度（資產快照與被動收入覆蓋率）、旅行 / 專案預算（多幣別歸專案彙總） | `expenses`、`expense_fixed`、`fx_cache`、`expense_budget`、`expense_assets`、`expense_trips` |  |
 | [油耗 / 行車成本](utils/fuel-log.html) | 加滿到加滿法計算每段油耗（沒加滿的併入下一次）、整體平均、最近 12 段走勢、匯出 CSV；新增計程車費率、停車費、買車 vs 租車總持有成本、牌照稅（財政部 115/04/09 表）、保養與稅費提醒（≤300 筆）；新增「輪胎規格解讀」（解析 205/55R16 91V 的寬度 / 扁平比 / 胎壁 / 外徑 / 載重指數 60–120 / 速度符號，可比較兩組外徑與里程表誤差，不存資料） | `fuel_entries`、`fuel_maint` |  |
 | [BMI / 熱量 / 心率計算](utils/health-calc.html) | BMI（台灣標準）、BMR、TDEE、心率區間（含儲備心率法）；體重紀錄（折線圖、目標線、近 30 天趨勢、預估達標日）；飲食記錄：約 170 種臺灣常見食物估計熱量、搜尋別名、自訂食物最多 50 個、與 TDEE 對照、各餐別小計、近 7 天圖；紀錄上限 5000 筆（估計值，不是醫療建議）；新增運動消耗熱量（MET）與孕期週數 / 預產期（非醫療建議）；另有蛋白質需求（g/kg 區間）、體重目標日期預測（依熱量差）、腰臀比（WHO 分級）、ABO 血型遺傳機率（皆不存資料、非醫療建議） | `weight_log`、`weight_goal`、`food_log`、`food_custom` |  |
@@ -161,13 +157,10 @@
 | [亂碼修復 / 編碼轉換](utils/encoding-fixer.html) | 檔案轉碼（自動偵測 BOM / UTF-8 / Big5 / GBK / SJIS 等，手動指定、預覽、另存 UTF-8，可選 BOM 與換行，上限 20MB）；貼上亂碼逆向修復（互錯組合評分排序）；含 � 的無法修復；不存資料；新增「位元組並排」分頁（UTF-8 / UTF-16 / Big5 / GBK 位元組並排與亂碼成因提示） | — |  |
 | [chmod 權限計算器](utils/chmod-calc.html) | 勾選、八進位、符號三向同步，含 setuid / setgid / sticky；常見組合速查；umask 計算；符號模式模擬（u/g/o/a、+ - =、r w x X s t、g=u）；產生 chmod 與 find 指令；不存資料；umask 新增反推與常見值說明 | — |  |
 | [股票交易成本與損益試算](utils/stock-cost.html) | 臺股現股 / 零股 / 當沖 / ETF 手續費（折扣、最低手續費）、證交稅、淨損益、報酬率、損益平衡賣價；進位可選；股利補充保費與殖利率；分批買進（最多 20 批）平均成本；費率稅率皆可改（以當時法規與券商為準）；只存偏好設定；新增進階試算：股利填息、攤平成本、融資融券、當沖與現股比較、ETF 配息補充保費、ETF 與基金費用比較、估值（部分費率為範例值，請自行確認）；進階試算另有「加密貨幣損益」（手續費、滑價、平均成本、損益平衡價） | `stockcost_opts` |  |
-| [MongoDB 指令產生器](utils/mongo-query.html) | find / findOne / countDocuments / distinct / aggregate / 新增 / 更新 / 取代 / 刪除 / createIndex；條件建構器（15 種運算子、8 種值型別、一層巢狀 and / or）、投影、排序、limit / skip、12 種更新運算子、聚合階段（可上下移）、索引（unique / TTL / partialFilter）；輸出 mongosh、Node.js、pymongo、Compass JSON 並一鍵複製；8 個快速範本；寫入類操作條件為空時紅色警告；不連線資料庫；只存上次的操作與輸出格式 | `mongoq_opts` |  |
 | [螢幕分享](utils/screen-share.html) | 電腦分享螢幕 / 視窗 / 分頁（可含系統聲音），其他裝置開連結或輸入 6 碼房號觀看；PeerJS 點對點 WebRTC，最多 4 位觀看者（可踢除，顯示連線狀態）；畫質可選 15 / 30 fps 與最大寬度；觀看端顯示解析度 / fps / 位元率 / 延遲，支援全螢幕；手機瀏覽器無法分享螢幕（只能觀看）；對稱型 NAT 需 TURN，本工具未提供；內附手機鏡像到電腦的說明（scrcpy、Miracast、AirPlay、Chromecast）；不存資料；新增螢幕錄影：「只錄影（不分享）」模式（可錄系統聲音、可混入麥克風，暫停 / 繼續，預覽後下載 webm，不支援時 mp4；單次 60 分鐘 / 1GB 上限）與分享時「同時錄製這次分享」；僅桌面瀏覽器，錄影只存記憶體 | — |  |
-| [SQL 指令產生器](utils/sql-query.html) | MySQL / PostgreSQL / SQLite / SQL Server；SELECT（別名與聚合、DISTINCT、最多 4 個 JOIN、AND/OR 一層巢狀條件、GROUP BY / HAVING、多欄排序、分頁）、每組最新一筆（視窗函式）、INSERT（單筆 / 多筆 / upsert）、UPDATE、DELETE、CREATE TABLE、CREATE INDEX、ALTER TABLE；輸出純 SQL（字面值已跳脫）、參數化、Node.js、Python；識別字一律加引號；無條件的 UPDATE / DELETE 紅色警告；七個快速範本；不連線、不提供 DROP / TRUNCATE；只存上次的方言 / 操作 / 輸出格式；新增「格式化 SQL」分頁（關鍵字大小寫、子句換行、子查詢與 CASE 縮排、逗號位置、保證 token 序列不變）；新增「DDL 工具」分頁：貼 CREATE TABLE 畫關聯圖（可匯出 PNG）並轉 TypeScript / Go / Python / Java 型別 | `sqlq_opts` |  |
 | [音頻產生器 / 聽力頻率測試](utils/tone-generator.html) | Web Audio 六種波形（正弦 / 方波 / 三角 / 鋸齒 / 白噪音 / 粉紅噪音），20–20000 Hz，音量 -60 至 -6 dBFS（預設 -30）；左右聲道測試（含左→右輪流）、定時停止；頻率掃描（線性 / 對數、可循環）；聽力頻率測試（8–20 kHz 共 10 階，非醫療）；雙耳拍；即時頻譜 / 波形；需點擊才發聲、離開頁面即停止；不存資料；新增「麥克風頻譜」分頁（即時 FFT 與最強頻率，需手勢與許可，無法時顯示說明） | — |  |
 | [字幕時間軸工具](utils/subtitle-tool.html) | 解析 SRT / VTT / ASS（基本）/ SBV，自動偵測編碼（失敗時可改用 Big5 / GBK）；就地編輯 / 新增 / 刪除 / 排序；整體平移（可指定範圍）、兩點線性校正、幀率轉換；合併重疊或過短、依字數拆分（不拆英文單字與 emoji）、搜尋取代（含 regex）；檢查七類問題並一鍵修正，復原 10 步；輸出 SRT / VTT / SBV / 純文字 / CSV（CRLF / LF、BOM）；單檔 5 MB、5 萬行；不做簡繁轉換、ASS 只讀；不存資料 | — |  |
 | [跨裝置傳檔 / 傳文字](utils/file-drop.html) | 兩台裝置開同一連結或輸入 6 碼房號，PeerJS 點對點 WebRTC 互傳檔案與文字（1 對 1，第三位被拒）；多檔依序傳送（選擇 / 拖放），每塊 16KB 並依 bufferedAmount 背壓，顯示進度 / 速度 / 剩餘時間，可取消；逐塊 + 總 CRC32 校驗（非加密雜湊）；單檔 ≤ 500MB（接收端記憶體暫存最多 30 個 / 1GB）；文字單則 ≤ 50,000 字、記憶體內最多 100 則；檔名過濾；壞訊息忽略並計數；任何知道房號者可連入、信令用公共 PeerJS、對稱型 NAT 需 TURN（未提供）；不存資料 | — |  |
-| [JWT 解碼與檢查](utils/jwt-decoder.html) | 解 header / payload（base64url 容錯），顯示 exp / iat / nbf 本地時間與已過期 / 還有多久，附 iss / sub / aud / jti 說明；風險提示（alg none、無簽章、HS 與非對稱提醒、jku / x5u / jwk / kid、過期）；可用 Web Crypto 驗 HS256/384/512 簽章並產生測試用 HS JWT；不支援 RS / ES 驗證；不存資料 | — |  |
 | [HTTP 狀態碼與 Header 速查](utils/http-ref.html) | 內建 63 個標準狀態碼（白話說明、何時看到、排查方向）、50 個 Header（含 CORS / 快取）與 28 個 MIME，附範例值；搜尋、分類篩選、展開詳情、一鍵複製；不收錄非標準碼；不存資料；新增「安全標頭」（CORS / CSP 產生器與現有標頭檢查）與「Cookie 解析」（Set-Cookie 欄位表與常見問題提醒） | — |  |
 | [SemVer 與版本比較](utils/semver.html) | 解析版本（含 prerelease / build）、比較排序並標出無效版本、判斷是否符合 npm 範圍（^ ~ >= <=、連字號、x 範圍、||）並顯示展開後的等價比較式、說明 A 升到 B 屬於 major / minor / patch / prerelease；不存資料；新增依 Conventional Commits 判斷升級等級並算下一版（含 0.x 與預發行） | — |  |
 | [Docker / .env 小幫手](utils/docker-helper.html) | 表單產生 docker run 與 docker-compose.yml，可貼 docker run 指令（支援引號與 \ 續行）解析回表單，不認得的旗標保留並提醒；.env 檢查（重複鍵、空值、格式錯誤、未加引號含空白、疑似密鑰）、排序、輸出整理版、轉 compose environment；compose 不含多服務與健康檢查；只存上次分頁；新增 compose 服務範本庫（Redis / PostgreSQL / MySQL / MariaDB / MongoDB / RabbitMQ）、多語言多階段 Dockerfile 與 .dockerignore 產生、.env 命名檢查 | `dockerh_opts` |  |
@@ -180,7 +173,6 @@
 | [跑步配速計算](utils/pace-calc.html) | 配速（min/km、min/mile）、時速、距離、完賽時間三者算第四者；距離快捷 5K / 10K / 半馬 / 全馬 / 自訂；Riegel 預測 8 個距離（指數 1.00–1.20，預設 1.06）；分段配速表（等速 / 前慢後快 0–20%）；時間輸入支援 h:mm:ss / mm:ss / 小數分；只存上次輸入，可清除；越野跑爬升配速（km-effort 等效平地距離 + Naismith 對照） | `pace_opts` |  |
 | [面額點算與找零](utils/cash-count.html) | 新臺幣為主（可勾選 2000 與 20 元紀念鈔），可切換日圓 / 美元 / 人民幣；模式一依各面額張數算小計與總額、換整建議；模式二輸入應付與實付算找零與最少張數（已用 DP 驗證貪心成立）；數字鍵盤友善；面額為憑記憶列出，請自行核對；不存資料 | — |  |
 | [德州撲克勝率計算](utils/poker-odds.html) | 選 2 張手牌、0–5 張公共牌、1–8 位對手（可個別指定對手牌）；蒙地卡羅預設 20,000 局（可選 5,000 / 100,000），分批執行可中止並標示誤差；輸出勝率 / 平分 / 輸率 / 期望勝率與 9 種最終牌型機率；牌型評估器已用全部 2,598,960 手 5 張牌的分布驗證；不存資料 | — |  |
-| [網址參數解析與組合](utils/url-parser.html) | 貼 URL 拆成協定 / 帳密 / 主機 / 埠 / 路徑逐段 / query 表格式編輯 / hash；重組時可選編碼方式、空值處理、鍵名排序、主機轉 punycode；一鍵移除追蹤參數（utm_*、fbclid、gclid…）；批次抽取某參數；未修改的參數原樣往返；不存資料 | — |  |
 | [Excel 公式速查](utils/excel-formula.html) | 79 個常用函式，每個有語法、白話說明、範例資料表與結果、常見錯誤、Google 試算表差異、Excel 版本需求（依印象整理，以實際軟體為準）；分類篩選與搜尋；「我想做…」問答導引；範例結果由程式求值驗證；不存資料；新增「快捷鍵」分頁（Windows / macOS 搜尋，附 Google 試算表差異；macOS 鍵位請自行核對） | — |  |
 | [用電度數與電費試算](utils/power-cost.html) | 電器清單（名稱、功率 W、每天小時、每月天數，12 種預設，最多 50 筆）算每期度數與電費；期間跨 6/1–9/30 依天數分夏月與非夏月；可由電表上期 / 本期度數反推；各電器占比與冷氣調高 1°C 粗估；費率採 2023/4 起的住宅累進值（701 度以上未確認），頁面標註生效日期，請自行核對台電公告；只存上次輸入，可清除；新增水費累進級距試算（可編輯）與瓦斯（桶裝天數與費用、天然氣度數） | `power_opts` |  |
 | [迷你看板](utils/banner-board.html) | 文字 / 時鐘（12/24 小時、秒、日期）/ 倒數（N 分鐘或指定時間，結束閃爍與嗶聲）/ 跑馬燈；字級自動填滿、高對比預設與自訂色、閃爍；fixed 滿版看板，點一下顯示 / 隱藏控制列，支援 Fullscreen API（iOS 不支援時改看板模式）與 Wake Lock；只存上次設定，可重置 | `banner_opts` |  |
@@ -198,7 +190,6 @@
 | [外語速查](utils/lang-ref.html) | 日文數字 / 助數詞 / 敬語、韓文字母與兩套數字、英文字根字首字尾（約 96 列）、日韓英泰旅行短句；分類 + 搜尋 + 複製 + 朗讀（裝置有語音才顯示）；內容為整理參考，泰語與韓語發音請自行核對；不存資料；新增英文（句型、數字年份、日期時間、面試與 Email、台式英文、自然發音等）、日韓文問候與助詞、輸入法技巧、法越印尼台客語基礎、多語自我介紹、中文標點與公文用語（台語 / 客語 / 越南語等請母語者抽查） | — |  |
 | [摩斯與古典密碼](utils/classic-ciphers.html) | 摩斯互轉與聲光播放及聽音練習（閃光有光敏提醒）、英文點字（Grade 1，注音點字未做）、凱薩 / ROT13 / 維吉尼亞 / 柵欄加解密與頻率分析、NATO 拼音；不存資料 | — |  |
 | [日誌與錯誤檢視](utils/log-viewer.html) | 自動辨識 nginx/Apache combined、syslog、Java/Log4j、Python logging、每行 JSON；依等級 / 時間 / 關鍵字或正則篩選並高亮；折疊重複行；等級分布與每分鐘筆數簡圖；JSON Lines 欄位表；Stack trace 整理（Java / Python / JS / .NET / Go，折疊框架、標專案程式碼、Caused by 鏈）；上限 20MB 與 20 萬行；不存資料 | — |  |
-| [Redis 與 Elasticsearch 查詢產生](utils/nosql-query.html) | Redis 依型別（String / Hash / List / Set / ZSet / Stream / 到期與鍵管理）產生約 70 個指令，顯示時間複雜度與注意事項，KEYS / FLUSHDB 紅色警告，輸出 redis-cli / ioredis / redis-py；Elasticsearch 條件建構、排序、分頁（from/size、search_after）、_source、聚合，輸出 DSL / Kibana / curl；版本需求依記憶整理請自行核對；不連線；只存上次選項 | `nosqlq_opts` |  |
 | [理財規劃計算](utils/finance-calc.html) | 時間價值（PV / FV / PMT / 期數 / 利率）、72 法則、NPV、CAGR、IRR / XIRR（掃描加二分法，多解會提示）、儲蓄險與年繳月繳實質利率、外幣定存損益、定期定額、通膨購買力、FIRE 提領、緊急預備金、債券價格與殖利率、現金流預測（草稿存本機，上限 100 筆）；預設利率與提領率為範例值，非投資建議；另有「存款與卡片」分頁：存款利率比較（單利 / 複利 / 機動）與信用卡回饋比較（規則自填，不內建銀行資料） | `fincalc_cf`、`fincalc_opts` |  |
 | [台灣稅費試算](utils/tw-tax-calc.html) | 房屋稅 / 地價稅 / 契稅 / 印花稅 / 土增稅與買賣雙方成本；遺產稅與贈與稅；海外網購進口稅、出國菸酒與行李免稅額；含稅未稅換算、發票拆分、小規模營業人、營所稅概算；稅制常數可編輯並標註年度與來源（多數為新聞與稅務網站整理，請自行核對）；只存上次輸入與常數 | `twtax_opts` |  |
 | [商業計算](utils/biz-calc.html) | 三分頁：利潤與定價（毛利率 / 加價率 / BEP / 含稅未稅 / 發票拆分）、電商與外送（平台費用後利潤、外送利潤、材積、超商宅配規格檢查）、行銷指標（CTR / CPC / ROAS、漏斗、A/B 測試、電子報指標）；費率與規格皆為可編輯的範例值；折扣疊加請用比價工具；只存上次分頁與輸入；新增「新創股權」分頁（多輪稀釋、估值敏感度、認股權行使損益） | `bizcalc_opts` |  |
@@ -225,9 +216,10 @@
 | [圖片編修](utils/image-edit.html) | 多分頁圖片工具（不存資料）：遮蔽標註（馬賽克/塗黑/框/箭頭/文字，匯出清 EXIF，觸控預設捲動模式需按開始繪製）、九宮格切圖（自訂欄列，ZIP store 或逐張）、迷因描邊字幕、證件照（2吋/1吋/2×2吋 + 自訂 mm，排 4×6 沖印版 1200×1800）、手寫簽名透明 PNG、YouTube 縮圖 1280×720、LINE 貼圖規格檢查（可編輯規格）與社群尺寸速查（數值需抽查，標以官方為準）。圖片單邊上限 4000px，標記上限 300。 | — |  |
 | [排版設計小幫手](utils/design-kit.html) | 六分頁：海報（3 種版型，文字＋圖片，匯出 1080×1440 PNG）、Logo（文字＋形狀＋配色，匯出 SVG / PNG，文字已轉義）、電子名片頁（產生單一 HTML 名片頁與 vCard，只接受 http(s) 網址；QR 請到 QR Code 產生器選名片 vCard）、漫畫分格（4 種模板，圖片＋對話框，匯出長圖）、彩虹漸層文字（CSS 輸出與 PNG，可透明底）、中文稿紙（20×20 共 400 字一頁，字數與頁數統計，A4 列印；不做避頭點）。圖片上限 8 MB；只記上次分頁。需抽查：真機列印稿紙格線是否正方、PNG 匯出字型 | `designkit_tab` |  |
 | [作曲與音響小工坊](utils/music-lab.html) | 八分頁：和弦進行（11 種風格，級數轉調）、隨機旋律（種子可重現）、ABC 記譜播放（子集：X T M L Q K、升降、八度、時值、休止、> < 、-，錯誤顯示行號，顯示簡譜）、MIDI 檔檢視與簡易播放（SMF，2MB 上限、2 萬音符播放上限、不支援 SMPTE、略過打擊樂聲道）、簡譜轉音符與五線譜位置文字、BPM 延遲時間（ms / Hz）、房間軸向駐波（聲速可調）、喇叭串並聯阻抗與功率 / 音壓估算（理想電壓源）。只存上次分頁與欄位輸入。需抽查：實機播放音質、MIDI 實檔、ABC 常見曲譜相容性。 | `musiclab_opts` |  |
-| [影音小工具](utils/media-kit.html) | 七分頁：影片轉音訊（decodeAudioData→16-bit WAV，檔案上限 500MB、解碼估算上限 1GB，可轉單聲道）、本機播放器（A-B 循環、0.25–2× 變速、currentTime 逐格並標限制、SRT/VTT 字幕、鏡像）、音樂視覺化（AnalyserNode 四種樣式）、語音轉文字（SpeechRecognition，不支援或 iOS 顯示說明）、YouTube 章節時間戳（首個 00:00、至少 3 章、每章 10 秒，標依現行說明）、GIF 逐格（ImageDecoder，不支援退回動畫）、規格速查（範例值，以官方為準）。不存資料。抽查：真實影片解碼、語音辨識、iOS 行為。 | — |  |
+| [影音小工具](utils/media-kit.html) | 七分頁：影片轉音訊（decodeAudioData→16-bit WAV，檔案上限 500MB、解碼估算上限 1GB，可轉單聲道）、本機播放器（A-B 循環、0.25–2× 變速、currentTime 逐格並標限制、SRT/VTT 字幕、鏡像）、音樂視覺化（AnalyserNode 四種樣式）、語音轉文字（SpeechRecognition，不支援或 iOS 顯示說明）、YouTube 章節時間戳（首個 00:00、至少 3 章、每章 10 秒，標依現行說明）、GIF 逐格（ImageDecoder，不支援退回動畫）、規格速查（範例值，以官方為準）。不存資料。抽查：真實影片解碼、語音辨識、iOS 行為。；已移除語音轉文字分頁（請用語音備忘錄） | — |  |
 | [攝影與影片計算](utils/photo-calc.html) | 11 分頁：縮時（間隔 / 成片秒 / 張數 / 拍攝時間互算）、慢動作幀率、影片檔案大小與位元率互算、直播頻寬（常見建議值範例）、色溫速查（Mired）、ND 濾鏡（ND8=3 格、ND1000≈10 格）、星軌 500 法則 + NPF 簡化版、曝光三要素與 EV、景深與超焦距（CoC 可自訂）、分鏡表（≤200 列、文字匯出、列印、單列刪除 / 清除）、打光配置簡圖（≤20 元素、拖曳模式切換避免擋捲動、匯出 PNG）。直播頻寬與色溫對照為範例值需抽查；計算分頁只存上次輸入，分鏡表 / 燈位圖另存、各自有清除。 | `photoc_opts`、`photoc_shots`、`photoc_light` |  |
 | [手作工坊](utils/craft-kit.html) | 八分頁：3D 列印成本與報價、編織密度與針數（含針數循環）、拼豆與十字繡圖案轉換（載入圖片、可編輯通用範例色板、用量表、匯出 PNG / 列印，圖片 20 MB / 1600 萬像素、4–150 格）、一維裁切 first-fit-decreasing（標示啟發式、附下限）、蠟燭配比（香精 6–10%）、手工皂 NaOH 皂化（8 種常見油 SAP，需以專業計算機核對；安全提醒）、16 種針法圖例。只存上次輸入。抽查：SAP 值與針法說明。 | `craftkit_opts` |  |
+| [資料庫指令產生器](utils/db-query.html) | 三分頁：SQL（MySQL / PostgreSQL / SQLite / SQL Server 的 SELECT / INSERT / UPDATE / DELETE / 建表 / 索引，含參數化與程式碼，另有 SQL 格式化與 DDL 關聯圖 / 轉型別）、MongoDB（find / aggregate / update / delete / createIndex，mongosh / Node / Python / Compass 四種輸出）、Redis 與 Elasticsearch（Redis 指令含時間複雜度與警告、ES 查詢 DSL / curl / Kibana）；只在本機產生，記住各分頁上次選項與上次分頁 | `sqlq_opts`、`mongoq_opts`、`nosqlq_opts`、`dbquery_tab` |  |
 
 ## 閱讀
 

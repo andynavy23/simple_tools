@@ -1,10 +1,10 @@
-// kids-play（兒童遊樂）：五個遊戲各開局操作一次、著色匯出 PNG、家長設定、壞資料容錯、390px 無橫向溢出與捲動切換
+// kids-learn 遊樂分頁（原 kids-play）：五個遊戲各開局操作一次、著色匯出 PNG、家長設定、壞資料容錯、390px 無橫向溢出與捲動切換
 import assert from 'assert';
 import fs from 'fs';
 import path from 'path';
 import { launchEdge, openPage } from './lib.mjs';
 const browser = await launchEdge();
-const { page, errors } = await openPage(browser, 'mini-games/kids-play.html');
+const { page, errors } = await openPage(browser, 'mini-games/kids-learn.html');
 const ev = (f, ...a) => page.evaluate(f, ...a);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const click = (sel) => ev((s) => document.querySelector(s).click(), sel);
@@ -12,7 +12,7 @@ const tab = (g) => click(`#tabs button[data-g="${g}"]`);
 const noScroll = async (tag) => assert.ok(await ev(() => document.scrollingElement.scrollWidth <= innerWidth), tag + '：橫向捲動');
 const KEY = 'kidsp_progress';
 const prog = () => ev((k) => JSON.parse(localStorage.getItem(k)), KEY);
-await ev(() => localStorage.clear()); await page.reload({ waitUntil: 'load' });
+await ev(() => localStorage.clear()); await page.reload({ waitUntil: 'load' }); await click('#topTabs [data-t=play]');
 
 // 版面
 await noScroll('找不同');
@@ -112,7 +112,7 @@ const lat = (await prog()).lat; assert.ok(lat >= 20 && lat <= 120, '校正延遲
 await noScroll('節奏後');
 
 // 家長設定：答錯換題、答對進入、改難度、清除紀錄（confirm）
-await click('#parentBtn');
+await click('#pParentBtn');
 assert.strictEqual(await ev(() => document.querySelector('#pset').hidden), true);
 await ev(() => { document.querySelector('#ga').value = '1'; document.querySelector('#gok').click(); });
 assert.strictEqual(await ev(() => document.querySelector('#pset').hidden), true, '答錯不能進入');
@@ -132,6 +132,7 @@ assert.deepStrictEqual(await ev(() => prog), await ev(() => defProg()));
 for (const bad of ['not json', 'null', '[1,2]', '{"lv":"x","lat":1e9,"spot":"no","rhy":[999],"dots":5}', '{"spot":[[1,2,3],null]}']) {
     await ev((k, b) => localStorage.setItem(k, b), KEY, bad);
     await page.reload({ waitUntil: 'load' });
+    await click('#topTabs [data-t=play]');
     assert.ok(await ev(() => prog.lv >= 1 && prog.lv <= 3 && prog.lat >= -300 && prog.lat <= 300 && prog.dots.length === 10 && prog.spot.length === 3 && prog.rhy.length === 3), '壞資料：' + bad);
     assert.ok(await ev(() => document.querySelectorAll('#spA button').length >= 12), '壞資料仍可玩：' + bad);
 }

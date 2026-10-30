@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="編碼解碼：Base64、URL、Unicode 跳脫、HTML 實體、十六進位互轉，並能解析 JWT、計算 SHA 雜湊、摩斯與凱薩密碼，支援中文與 emoji。">
+    <meta name="description" content="編碼解碼：Base64、URL、Unicode 跳脫、HTML 實體、十六進位互轉，並能解析與驗證 JWT、拆解重組網址參數、計算 SHA 雜湊、摩斯與凱薩密碼，支援中文與 emoji。">
     <meta property="og:title" content="編碼解碼" />
     <meta property="og:description" content="Base64、URL、Unicode、十六進位互轉，JWT、SHA 雜湊與古典密碼。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
@@ -102,6 +102,39 @@
             font-size: 14px;
             min-height: 1.4em;
         }
+        /* JWT 解碼與檢查（#jwt）、網址拆解與重組（#url） */
+        #jwt .row, #url .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+        #jwt .row input, #jwt .row select { flex: 1; min-width: 140px; }
+        #jwt .card+.card, #url .card+.card, #jwt .card+#jwRes, #jwRes+.card { margin-top: 14px; }
+        #jwt .card, #url .card { margin-top: 14px; }
+        #jwt textarea, #url textarea { min-height: 96px; word-break: break-all; }
+        #jwGh, #jwGp { min-height: 90px; }
+        #jwt label { margin: 10px 0 6px; }
+        #jwt .mono, #url .mono { font-family: ui-monospace, Menlo, Consolas, monospace; word-break: break-all; }
+        #jwt .li b { text-align: right; overflow-wrap: anywhere; }
+        #jwt .code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; background: var(--fill); border-radius: var(--radius-sm); padding: 10px 12px; margin: 8px 0; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+        #jwt .ok { color: var(--ok); }
+        #jwt .bad { color: var(--bad); }
+        #jwt .risk { padding: 10px 12px; margin: 8px 0; border-radius: var(--radius-sm); background: var(--fill); border-left: 4px solid var(--muted); overflow-wrap: anywhere; }
+        #jwt .risk.bad { border-left-color: var(--bad); }
+        #jwt .risk.warn { border-left-color: var(--blue); }
+        #jwt .risk b { display: block; margin-bottom: 2px; }
+        #url .row label.chk { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin: 0; font-weight: 400; }
+        #url .fg { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 10px 0; }
+        #url .fg label, #url .qrow label { color: var(--muted); font-size: 13px; font-weight: 400; margin-bottom: 3px; }
+        #url .fg input, #url .fg select, #url .qrow input { width: 100%; font-family: ui-monospace, Menlo, Consolas, monospace; }
+        #url .qrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px; margin-bottom: 8px; }
+        #url .qrow>div { flex: 1 1 130px; min-width: 0; }
+        #url .qrow button { min-width: 44px; min-height: 44px; padding: 6px 12px; }
+        #url .tags { flex-basis: 100%; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 13px; color: var(--muted); }
+        #url .tags .t { border: 1px solid var(--line); border-radius: 99px; padding: 1px 8px; }
+        #url .tags .t.bad { color: var(--bad); border-color: var(--bad); }
+        #url .warn { color: var(--bad); font-size: 14px; margin: 4px 0; }
+        #url .seg { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+        #url .seg:last-child { border-bottom: 0; }
+        #url .seg b { color: var(--muted); min-width: 1.6em; }
+        #url table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        #url td, #url th { border-bottom: 1px solid var(--line); padding: 6px 4px; text-align: left; vertical-align: top; word-break: break-all; }
     </style>
 </head>
 
@@ -109,7 +142,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>編碼解碼</h1>
-        <p class="sub">中文、emoji 都以 UTF-8 處理，全部在本機完成。也能解析 JWT、拆解網址參數、計算文字與檔案的 SHA 雜湊。</p>
+        <p class="sub">中文、emoji 都以 UTF-8 處理，全部在本機完成。也能解析與驗證 JWT、拆解重組網址參數、計算文字與檔案的 SHA 雜湊。</p>
 
         <div class="card">
             <label for="type">格式</label>
@@ -214,6 +247,111 @@
             <div class="btns"><button class="primary" id="ckVerify">驗證</button><button id="ckCalc">補檢查碼</button><button id="ckConv">ISBN-10 ⇄ 13</button></div>
             <div id="ckRes" role="status" style="word-break:break-all"></div>
         </div>
+
+        <div id="jwt">
+        <div class="card">
+            <h2>JWT 解碼與檢查</h2>
+            <p class="note" style="border-left:4px solid var(--bad);padding-left:12px">請勿貼上正式環境、仍有效的敏感 token。本頁不會上傳，但剪貼簿、瀏覽器擴充或螢幕分享仍可能外洩。</p>
+            <label for="jwIn">JWT</label>
+            <textarea id="jwIn" aria-label="JWT" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="eyJhbGciOiJIUzI1NiIs...（可含 Bearer 前綴）"></textarea>
+            <div class="row" style="margin-top:8px"><button class="sm" id="jwSample">帶入範例</button><button class="sm" id="jwClear">清空</button></div>
+            <p class="note bad" id="jwErr"></p>
+        </div>
+
+        <div id="jwRes" hidden>
+            <div class="card"><h2>風險與提醒</h2>
+                <div id="jwRisks"></div>
+            </div>
+            <div class="card"><h2>Header</h2>
+                <div class="code" id="jwHdr"></div>
+                <h2>Payload</h2>
+                <div class="code" id="jwPl"></div>
+                <button class="sm" id="jwCopyPl">複製 Payload</button>
+            </div>
+            <div class="card" id="jwTimeCard"><h2>時間</h2>
+                <div id="jwTimes"></div>
+            </div>
+            <div class="card" id="jwClaimCard"><h2>常見欄位說明</h2>
+                <div id="jwClaims"></div>
+            </div>
+            <div class="card"><h2>驗證簽章（HS256 / HS384 / HS512）</h2>
+                <div class="row"><select id="jwValg" aria-label="演算法">
+                        <option value="">依 header 的 alg</option>
+                        <option>HS256</option>
+                        <option>HS384</option>
+                        <option>HS512</option>
+                    </select><input id="jwSecret" class="mono" placeholder="密鑰（當成 UTF-8 文字）" aria-label="密鑰" spellcheck="false" autocapitalize="off" autocomplete="off"></div>
+                <p class="note" id="jwVOut">輸入密鑰後才會驗證。密鑰只在瀏覽器內用 Web Crypto 計算，不會送出。</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>產生測試用 JWT（HS256 / 384 / 512）</h2>
+            <label for="jwGh">Header（JSON，alg 會依下方選擇覆蓋）</label>
+            <textarea id="jwGh" aria-label="Header JSON" spellcheck="false" autocapitalize="off">{"typ":"JWT"}</textarea>
+            <label for="jwGp">Payload（JSON）</label>
+            <textarea id="jwGp" aria-label="Payload JSON" spellcheck="false" autocapitalize="off"></textarea>
+            <div class="row" style="margin-top:8px"><select id="jwGalg" aria-label="產生用演算法">
+                    <option>HS256</option>
+                    <option>HS384</option>
+                    <option>HS512</option>
+                </select><input id="jwGs" class="mono" placeholder="密鑰" aria-label="產生用密鑰" spellcheck="false" autocapitalize="off" autocomplete="off" value="test-secret"></div>
+            <div class="row" style="margin-top:8px"><button class="primary" id="jwGen">產生</button><button class="sm" id="jwCopyGen" hidden>複製</button></div>
+            <p class="note bad" id="jwGErr"></p>
+            <div class="code" id="jwGOut" hidden></div>
+        </div>
+        </div>
+
+        <div id="url">
+        <div class="card">
+            <h2>網址拆解與重組</h2>
+            <label for="urIn" class="muted">貼上網址</label>
+            <textarea id="urIn" spellcheck="false" autocomplete="off" aria-label="網址" placeholder="https://example.com/path?utm_source=x&q=你好#top"></textarea>
+            <div class="row"><button id="urSample" type="button" class="sm">範例</button><button id="urClear" type="button" class="sm">清空</button></div>
+            <div id="urInfo"></div>
+        </div>
+
+        <div class="card" id="urParts" hidden>
+            <h2>各部分</h2>
+            <div class="fg">
+                <div><label for="urScheme">協定</label><input type="text" id="urScheme" spellcheck="false"></div>
+                <div><label for="urUser">帳號</label><input type="text" id="urUser" spellcheck="false" autocomplete="off"></div>
+                <div><label for="urPass">密碼</label><input type="text" id="urPass" spellcheck="false" autocomplete="off"></div>
+                <div><label for="urHost">主機</label><input type="text" id="urHost" spellcheck="false"></div>
+                <div><label for="urPort">埠</label><input type="text" id="urPort" spellcheck="false" inputmode="numeric"></div>
+            </div>
+            <div class="fg"><div style="grid-column:1/-1"><label for="urPath">路徑</label><input type="text" id="urPath" spellcheck="false"></div></div>
+            <div id="urSegs"></div>
+            <div class="fg"><div style="grid-column:1/-1"><label for="urHash">Hash（# 後面）</label><input type="text" id="urHash" spellcheck="false"></div></div>
+            <div id="urHashq"></div>
+        </div>
+
+        <div class="card" id="urQCard" hidden>
+            <h2>Query 參數</h2>
+            <div id="urQRows"></div>
+            <div class="row"><button id="urQAdd" type="button">＋ 新增參數</button><button id="urQTrack" type="button">移除追蹤參數</button><span class="muted" id="urQCount"></span></div>
+        </div>
+
+        <div class="card" id="urRCard" hidden>
+            <h2>重組結果</h2>
+            <div class="fg">
+                <div><label for="urEnc">編碼方式</label><select id="urEnc"><option value="keep">沒改的保持原樣</option><option value="component">全部重新編碼（空白 → %20）</option><option value="form">全部重新編碼（空白 → +）</option></select></div>
+                <div><label for="urEmpty">空值參數</label><select id="urEmpty"><option value="keep">照原樣</option><option value="drop">移除</option><option value="bare">只留鍵名（不加 =）</option></select></div>
+            </div>
+            <div class="row"><label class="chk"><input type="checkbox" id="urSort"> 參數依鍵名排序</label><label class="chk"><input type="checkbox" id="urPuny"> 主機轉成 punycode</label></div>
+            <textarea id="urOut" readonly spellcheck="false" aria-label="重組後的網址"></textarea>
+            <div class="row"><button class="primary" id="urCopy" type="button">複製網址</button><button id="urApply" type="button">套用到上方輸入框</button></div>
+            <div id="urStat"></div>
+        </div>
+
+        <div class="card">
+            <h2>批次抽取參數</h2>
+            <p class="muted" style="margin:0 0 8px">貼多個網址（一行一個或以空白分隔），指定參數名稱，抽出每個網址的值。</p>
+            <textarea id="urBin" spellcheck="false" aria-label="多個網址" placeholder="https://a.com/?id=1&amp;x=2&#10;https://b.com/?id=3"></textarea>
+            <div class="row"><input type="text" id="urBKey" spellcheck="false" placeholder="參數名稱，例如 id" aria-label="參數名稱" style="flex:1 1 140px"><button id="urBCopy" type="button">複製所有值</button></div>
+            <div id="urBOut"></div>
+        </div>
+        </div>
     </div>
 
     <template id="help">
@@ -231,7 +369,9 @@
         <ol>
         <li>在「格式」選一種，在「輸入」貼上內容，按「編碼 ↓」或「解碼 ↓」，結果在「輸出」；「結果放回輸入」可連續轉換</li>
         <li>選「網址參數」：貼完整網址（或 a=1&amp;b=2）按「解碼」，會拆成一行一個參數；改完按「編碼」組回查詢字串</li>
-        <li>選「JWT 解碼」按「解析」；選 SHA 系列則按「計算雜湊」</li>
+        <li>選「JWT 解碼」按「解析」可快速看內容；選 SHA 系列則按「計算雜湊」</li>
+        <li>「JWT 解碼與檢查」（頁內分區，網址加 #jwt 可直接跳到）：貼 JWT（可含 Bearer 前綴）會顯示風險與提醒（alg none、沒有簽章、jku / x5u / jwk / kid 可疑、已過期、沒有 exp）、Header、Payload、exp / iat / nbf 的本地時間與倒數、iss / sub / aud / jti 說明；輸入密鑰可用 HS256 / 384 / 512 驗證簽章；下方「產生測試用 JWT」可自訂 Header / Payload 與密鑰簽出 HS 系列 token。</li>
+        <li>「網址拆解與重組」（#url）：貼網址（沒寫協定會自動補 https://）拆成協定、帳密、主機、埠、路徑（逐段解碼）、hash，每個欄位都能改；Query 參數可改鍵值、刪除、新增，同鍵重複會標示、可一鍵移除 utm_* / fbclid / gclid 等追蹤參數、偵測編碼兩次可「再解一層」；「重組結果」可選編碼方式（沒改的保持原樣 / 空白變 %20 / 空白變 +）、空值處理、鍵名排序、主機轉 punycode，並可複製或套用回輸入框；最下方「批次抽取參數」貼多個網址、填參數名稱，列出每個網址的值。</li>
         <li>「字元檢視」：把文字貼進該區的「文字」，會逐字列出碼位、UTF-8 位元組、UTF-16 單元、類別與腳本，可疑字元以紅邊標示；按「移除零寬與方向控制字元」清掉隱形字元，或按 NFC / NFD / NFKC / NFKD 看正規化前後的字元數差。</li>
         <li>選「Base32」「Base58」（比特幣字母表）「URL 編碼批次」：與其他格式相同；URL 編碼批次是一行一筆，分「component」（連 / ? &amp; = 都編碼，用在參數值）與「整串 encodeURI」（保留網址結構字元）。</li>
         <li>「HTML 實體查表」：搜尋後點一格複製；下方文字框可把 &amp;copy; 轉成 &amp;#169;，或反過來。「Base58Check」：貼十六進位按「編碼」加檢查碼，貼位址按「解碼並驗證」。</li>
@@ -243,7 +383,9 @@
         <div class="eg">Base64 輸入「你好」按「編碼」得到 <b>5L2g5aW9</b>，按「解碼」會還原。<br>SHA-256 輸入 <b>abc</b>，結果以 <b>ba7816bf</b> 開頭。<br>字元檢視貼上「а」（西里爾字母），會標示「長得像拉丁字母 a，但其實是 Cyrillic」，碼位 U+0430。</div>
         <h3>小提醒</h3>
         <ul>
-        <li>雜湊無法還原；JWT 只能解析，且不驗證簽章，不代表 token 可信</li>
+        <li>雜湊無法還原；上方「JWT 解碼」格式只解析、不驗簽章，不代表 token 可信</li>
+        <li>JWT 區：解碼只是 base64url 還原，任何人都做得到，要信任必須驗證簽章。密鑰只在瀏覽器用 Web Crypto 計算、不上傳，仍請勿貼正式環境仍有效的 token 或密鑰。RS / ES / PS 等非對稱簽章需要公鑰，此頁不驗證；密鑰會當成 UTF-8 文字；產生器會重新序列化 JSON，結果僅供測試。</li>
+        <li>網址區：解碼時 + 視為空白，要代表加號請用「全部重新編碼」或把值改成 %2B；空的 ? 或 # 重組時省略；帳密會顯示在畫面上，分享前請留意；「追蹤參數」依常見名稱判斷，少數網站可能把同名參數用在正事上，移除前請看一下。JWT 與網址這兩區都不儲存任何資料。</li>
         <li>摩斯密碼只支援英文字母、數字與常用標點</li>
         <li>檔案不會上傳，上限 500 MB；比對時會忽略大小寫、空白與冒號</li>
         <li>凱薩密碼的位移可設 1–25</li>
@@ -664,6 +806,207 @@
             } catch (e) { return bad(e.message); }
             return bad('未知的種類');
         }
+
+        // ---------- JWT 解碼與檢查（取自原 jwt-decoder）----------
+        const HASH = { HS256: 'SHA-256', HS384: 'SHA-384', HS512: 'SHA-512' };
+        // base64url（也容忍標準 base64、空白與 padding）→ bytes；無效丟出 Error
+        function b64uDecode(s) {
+            const t = String(s ?? '').replace(/\s+/g, '').replace(/=+$/, '');
+            if (!/^[A-Za-z0-9_\-+/]*$/.test(t)) throw new Error('含無效字元（只能是 A-Z a-z 0-9 - _）');
+            if (t.length % 4 === 1) throw new Error('長度無效');
+            const bin = atob(t.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((t.length + 3) % 4));
+            return Uint8Array.from(bin, c => c.charCodeAt(0));
+        }
+        const b64uEncode = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        const isObj = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
+        function decodeJson(part, label) {
+            let text;
+            try { text = new TextDecoder('utf-8', { fatal: true }).decode(b64uDecode(part)); } catch (e) { throw new Error(`${label}不是有效的 base64url：${e.message}`); }
+            try { return JSON.parse(text); } catch (e) { throw new Error(`${label}解碼後不是有效的 JSON`); }
+        }
+        function parseJwt(raw) {
+            const t = String(raw ?? '').replace(/^\s*bearer\s+/i, '').replace(/["'\s]/g, '');
+            if (!t) return { ok: false, error: '請貼上 JWT' };
+            const parts = t.split('.');
+            if (parts.length < 2 || parts.length > 3) return { ok: false, error: `需要 2～3 段、以 . 分隔（header.payload.signature），目前有 ${parts.length} 段` };
+            try {
+                const header = decodeJson(parts[0], 'Header');
+                if (!isObj(header)) return { ok: false, error: 'Header 必須是 JSON 物件' };
+                const payload = decodeJson(parts[1], 'Payload');
+                return { ok: true, header, payload, signingInput: parts[0] + '.' + parts[1], sig: parts[2] ?? '' };
+            } catch (e) { return { ok: false, error: e.message }; }
+        }
+        // 時間長度（毫秒）→ 最多兩個單位的中文
+        function fmtDur(ms) {
+            let s = Math.floor(ms / 1000);
+            if (s < 1) return '不到 1 秒';
+            const out = [];
+            for (const [sec, u] of [[31536000, '年'], [86400, '天'], [3600, '小時'], [60, '分鐘'], [1, '秒']]) {
+                const n = Math.floor(s / sec); s -= n * sec;
+                if (n && out.length < 2) out.push(`${n} ${u}`); else if (out.length) break;
+            }
+            return out.join(' ');
+        }
+        // exp / nbf / iat（NumericDate，秒）；status：valid expired notyet future ok invalid
+        function timeClaims(payload, nowMs) {
+            if (!isObj(payload)) return [];
+            const out = [];
+            for (const name of ['exp', 'nbf', 'iat']) {
+                if (!Object.prototype.hasOwnProperty.call(payload, name)) continue;
+                const v = payload[name], ms = typeof v === 'number' ? v * 1000 : NaN;
+                if (!Number.isFinite(new Date(ms).getTime())) { out.push({ name, status: 'invalid', text: '不是有效的時間（NumericDate 需為秒數）' }); continue; }
+                const d = ms - nowMs;
+                const r = name === 'exp' ? (d <= 0 ? ['expired', `已過期 ${fmtDur(-d)}`] : ['valid', `還有 ${fmtDur(d)} 到期`])
+                    : name === 'nbf' ? (d > 0 ? ['notyet', `尚未生效，還有 ${fmtDur(d)}`] : ['ok', '已生效'])
+                        : (d > 0 ? ['future', '發行時間在未來（時鐘不同步？）'] : ['ok', `${fmtDur(-d)}前發行`]);
+                out.push({ name, ms, status: r[0], text: r[1] });
+            }
+            return out;
+        }
+        function riskList(header, payload, sig, nowMs) {
+            const r = [], add = (level, title, text) => r.push({ level, title, text });
+            const alg = header && header.alg;
+            if (typeof alg !== 'string' || !alg) add('warn', '缺少 alg', 'Header 沒有 alg 欄位，無法得知簽章演算法。');
+            else if (alg.toLowerCase() === 'none') add('bad', 'alg 為 none', '未簽章的 token，任何人都能偽造；伺服器若接受就是嚴重漏洞。');
+            else if (/^HS/i.test(alg)) add('info', 'HS 系列（共享密鑰）', '只有知道密鑰才能驗證或簽發。此頁只能在你輸入密鑰時驗證，無法判斷簽發者是否可信。');
+            else if (/^(RS|PS|ES)|^EdDSA$/i.test(alg)) add('info', '非對稱簽章', `${alg} 需要簽發者的公鑰才能驗證，此頁不驗證；解碼內容不代表可信。`);
+            if (!sig && !(typeof alg === 'string' && alg.toLowerCase() === 'none')) add('bad', '沒有簽章', '第三段是空的，這個 token 沒有簽章可驗證。');
+            for (const k of ['jku', 'x5u', 'jwk']) if (header && Object.prototype.hasOwnProperty.call(header, k)) add('warn', `Header 含 ${k}`, '這會指示驗證端去哪裡取得金鑰；攻擊者可能指向自己的金鑰，驗證端應只信任白名單來源。');
+            if (header && typeof header.kid === 'string' && (/[^A-Za-z0-9_.:-]/.test(header.kid) || header.kid.includes('..'))) add('warn', 'kid 含特殊字元', 'kid 若被直接用來查檔案或資料庫，要防路徑穿越與注入。');
+            const tc = timeClaims(payload, nowMs), has = (n) => tc.find(x => x.name === n);
+            if (has('exp') && has('exp').status === 'expired') add('warn', '已過期', `exp：${has('exp').text}。`);
+            if (has('exp') && has('exp').status === 'invalid') add('warn', 'exp 格式不對', 'exp 必須是以秒為單位的數字。');
+            if (has('nbf') && has('nbf').status === 'notyet') add('warn', '尚未生效', `nbf：${has('nbf').text}。`);
+            if (isObj(payload) && !has('exp')) add('info', '沒有 exp', 'Token 沒有到期時間，外流後永遠有效；建議設定 exp。');
+            return r;
+        }
+        // 用 Web Crypto 驗證 HMAC 簽章（crypto.subtle.verify 為定時比較）
+        async function verifyHS(alg, secret, signingInput, sigB64) {
+            const hash = HASH[alg];
+            if (!hash) return { ok: false, error: '只支援 HS256 / HS384 / HS512' };
+            if (!secret) return { ok: false, error: '請輸入密鑰' };
+            if (!sigB64) return { ok: false, error: '沒有簽章可驗證' };
+            let sig; try { sig = b64uDecode(sigB64); } catch (e) { return { ok: false, error: '簽章不是有效的 base64url' }; }
+            const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash }, false, ['verify']);
+            return { ok: await crypto.subtle.verify('HMAC', key, sig, new TextEncoder().encode(signingInput)) };
+        }
+        async function signHS(alg, secret, signingInput) {
+            const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: HASH[alg] }, false, ['sign']);
+            return b64uEncode(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signingInput))));
+        }
+        // 由 header / payload JSON 文字與密鑰產生 token；header.alg 會被覆蓋成 alg
+        async function buildJwt(alg, headerText, payloadText, secret) {
+            if (!HASH[alg]) return { ok: false, error: '只支援 HS256 / HS384 / HS512' };
+            if (!secret) return { ok: false, error: '請輸入密鑰' };
+            let h, p;
+            try { h = JSON.parse(headerText); } catch (e) { return { ok: false, error: 'Header 不是有效的 JSON' }; }
+            try { p = JSON.parse(payloadText); } catch (e) { return { ok: false, error: 'Payload 不是有效的 JSON' }; }
+            if (!isObj(h)) return { ok: false, error: 'Header 必須是 JSON 物件' };
+            if (!isObj(p)) return { ok: false, error: 'Payload 必須是 JSON 物件' };
+            const enc = new TextEncoder(), input = b64uEncode(enc.encode(JSON.stringify({ ...h, alg }))) + '.' + b64uEncode(enc.encode(JSON.stringify(p)));
+            return { ok: true, token: input + '.' + await signHS(alg, secret, input) };
+        }
+
+        // ---------- 網址拆解與重組（取自原 url-parser）----------
+        const decodeSafe = (s, plus = true) => { try { return decodeURIComponent(plus ? String(s).replace(/\+/g, ' ') : String(s)); } catch (e) { return String(s); } };
+        const decodeOk = (s) => { try { decodeURIComponent(s); return true; } catch (e) { return false; } };
+        const TRACK_RE = /^(utm_[\w-]*|fbclid|gclid|gbraid|wbraid|dclid|msclkid|yclid|twclid|ttclid|igshid|mc_cid|mc_eid|_ga|_gl|_hsenc|_hsmi|mkt_tok|vero_id|ref_src|li_fat_id)$/i;
+        const isTracking = (k) => TRACK_RE.test(String(k));
+        // 解碼後還有 %XX 且原文有 %25：可能被編碼兩次
+        const doubleEncoded = (raw) => /%25[0-9a-f]{2}/i.test(String(raw));
+
+        // query 字串 → [{ k, v, eq, rk, rv }]；k / v 是解碼後，rk / rv 是原文（沒改的參數重組時用原文，才能原樣往返），eq 表示原本有 =
+        function parseQuery(qs, plus = true) {
+            return String(qs ?? '').split('&').filter(Boolean).map(seg => {
+                const i = seg.indexOf('='), rk = i < 0 ? seg : seg.slice(0, i), rv = i < 0 ? '' : seg.slice(i + 1);
+                return { k: decodeSafe(rk, plus), v: decodeSafe(rv, plus), eq: i >= 0, rk, rv };
+            });
+        }
+        // Hash 像 query 時解析：#a=1&b=2 或 #/route?a=1；否則 null
+        function hashQuery(h) {
+            if (!h) return null;
+            if (h[0] === '/' || h[0] === '!') { const q = h.indexOf('?'); return q >= 0 ? { route: h.slice(0, q), pairs: parseQuery(h.slice(q + 1)) } : null; }
+            return /^[^=&?#]+=/.test(h) ? { route: '', pairs: parseQuery(h) } : null;
+        }
+        const pathSegments = (path) => String(path ?? '').split('/').slice(String(path ?? '')[0] === '/' ? 1 : 0).map(raw => ({ raw, dec: decodeSafe(raw, false) }));
+
+        const HOSTISH = /^(?:[^\s@:/]*@)?(?:\[[0-9a-f:.]+\]|[^\s@:/\[\]]+\.[^\s@:/\[\]]+|localhost)(?::\d*)?$/i;
+        const URL_RE = /^(?:([a-z][a-z0-9+.-]*):)?(?:\/\/([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#([\s\S]*))?$/i;
+        // 拆解網址（不經過 URL 物件，才能原樣往返）。回傳 { scheme, user, pass, hasAuth, host, port, path, query: 陣列|null, hash: 字串|null, assumed（補了 https://）, relative, warns }；空字串回傳 null
+        function parseUrl(text) {
+            let t = String(text ?? '').trim(); if (!t) return null;
+            let assumed = false;
+            const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(t);
+            if (/^[a-z][a-z0-9+.-]*:\d+(?:[/?#]|$)/i.test(t) || (!hasScheme && !/^[/.?#]/.test(t) && HOSTISH.test(t.split(/[/?#]/)[0]))) { t = 'https://' + t; assumed = true; }
+            const m = URL_RE.exec(t); if (!m) return null;
+            const [, scheme = '', auth, path = '', qs, hash] = m, hasAuth = auth !== undefined, warns = [];
+            let user = '', pass = '', host = '', port = '';
+            if (hasAuth) {
+                let a = auth; const at = a.lastIndexOf('@');
+                if (at >= 0) { const ui = a.slice(0, at), c = ui.indexOf(':'); a = a.slice(at + 1); user = c < 0 ? ui : ui.slice(0, c); pass = c < 0 ? '' : ui.slice(c + 1); }
+                const pm = /^(\[[^\]]*\]|[^:]*)(?::([\s\S]*))?$/.exec(a); host = pm[1]; port = pm[2] ?? '';
+                if (port !== '' && !(/^\d+$/.test(port) && +port <= 65535)) warns.push('埠號不正確（要 0–65535 的數字）');
+                if (!host) warns.push('缺少主機名稱');
+            }
+            if (/\s/.test(t)) warns.push('網址含空白，URL 物件會把它編成 %20');
+            return { scheme, user, pass, hasAuth, host, port, path, query: qs === undefined ? null : parseQuery(qs), hash: hash === undefined ? null : hash, assumed, relative: !scheme && !hasAuth, warns };
+        }
+
+        // 主機名稱的 ASCII（punycode）寫法；IPv6 或無法解析時原樣回傳
+        function asciiHost(h) { if (!h || h[0] === '[') return h; try { return new URL('http://' + h).hostname; } catch (e) { return h; } }
+        // RFC 3492 解碼（不含 xn-- 前綴）
+        function punyDecode(s) {
+            const out = []; let n = 128, i = 0, bias = 72, b = s.lastIndexOf('-'); if (b < 0) b = 0;
+            for (let j = 0; j < b; j++) { if (s.charCodeAt(j) >= 128) throw new RangeError('bad'); out.push(s.charCodeAt(j)); }
+            for (let idx = b > 0 ? b + 1 : 0; idx < s.length;) {
+                const oldi = i;
+                for (let w = 1, k = 36; ; k += 36) {
+                    if (idx >= s.length) throw new RangeError('bad');
+                    const c = s.charCodeAt(idx++), d = c >= 48 && c < 58 ? c - 22 : c >= 65 && c < 91 ? c - 65 : c >= 97 && c < 123 ? c - 97 : 36;
+                    if (d >= 36) throw new RangeError('bad');
+                    i += d * w; const t = k <= bias ? 1 : k >= bias + 26 ? 26 : k - bias; if (d < t) break; w *= 36 - t;
+                }
+                const len = out.length + 1; let delta = i - oldi; delta = oldi === 0 ? Math.floor(delta / 700) : delta >> 1; delta += Math.floor(delta / len);
+                let k = 0; while (delta > 455) { delta = Math.floor(delta / 35); k += 36; }
+                bias = k + Math.floor(36 * delta / (delta + 38)); n += Math.floor(i / len); i %= len; out.splice(i++, 0, n);
+            }
+            return String.fromCodePoint(...out);
+        }
+        const unicodeHost = (a) => String(a).split('.').map(l => { if (!/^xn--/i.test(l)) return l; try { return punyDecode(l.slice(4)); } catch (e) { return l; } }).join('.');
+        // 主機資訊 { kind: empty|ipv6|ipv4|domain, ascii, unicode, idn }
+        function hostInfo(host) {
+            if (!host) return { kind: 'empty', ascii: '', unicode: '', idn: false };
+            if (host[0] === '[') return { kind: 'ipv6', ascii: host, unicode: host, idn: false };
+            const ascii = asciiHost(host), unicode = unicodeHost(ascii);
+            return { kind: /^\d+\.\d+\.\d+\.\d+$/.test(host) ? 'ipv4' : 'domain', ascii, unicode, idn: ascii !== host.toLowerCase() || unicode !== ascii };
+        }
+
+        // 重組網址。o：enc（keep 沒改的用原文 / component / form）、empty（keep / drop / bare）、sort、puny
+        function buildUrl(m, o = {}) {
+            const form = o.enc === 'form', raw = !o.enc || o.enc === 'keep', enc = (s) => { const e = encodeURIComponent(s); return form ? e.replace(/%20/g, '+') : e; };
+            let pairs = (m.query || []).slice();
+            if (o.empty === 'drop') pairs = pairs.filter(p => p.v !== '');
+            if (o.sort) pairs.sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : 0));
+            const qs = pairs.map(p => {
+                const k = raw && p.rk !== undefined ? p.rk : enc(p.k), v = raw && p.rv !== undefined ? p.rv : enc(p.v);
+                return p.v === '' && (o.empty === 'bare' || (o.empty !== 'drop' && p.eq === false)) ? k : k + '=' + v;
+            }).join('&');
+            let s = m.scheme ? m.scheme + ':' : '';
+            if (m.hasAuth) s += '//' + (m.user !== '' || m.pass !== '' ? m.user + (m.pass !== '' ? ':' + m.pass : '') + '@' : '') + (o.puny ? asciiHost(m.host) : m.host) + (m.port !== '' ? ':' + m.port : '');
+            return s + m.path + (qs ? '?' + qs : '') + (m.hash ? '#' + m.hash : '');
+        }
+        const stripTracking = (m) => ({ ...m, query: (m.query || []).filter(p => !isTracking(p.k)) });
+        const countTracking = (m) => (m.query || []).filter(p => isTracking(p.k)).length;
+        // 用 URL 物件確認網址能不能被瀏覽器接受；相對網址以假的基底解析
+        function checkUrl(s, relative) { try { return { ok: true, href: new URL(s, relative ? 'http://relative.invalid' : undefined).href }; } catch (e) { return { ok: false, href: '' }; } }
+        // 批次：每個網址（空白分隔）中 query 與 hash 參數裡鍵名等於 key 的所有值
+        function extractParam(text, key) {
+            return String(text ?? '').split(/\s+/).filter(Boolean).map(url => {
+                const m = parseUrl(url), values = [];
+                if (m) { for (const p of m.query || []) if (p.k === key) values.push(p.v); const hq = hashQuery(m.hash); if (hq) for (const p of hq.pairs) if (p.k === key) values.push(p.v); }
+                return { url, values };
+            });
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -827,6 +1170,135 @@
         $('#dec').onclick = () => run('dec');
         $('#swap').onclick = () => { $('#in').value = $('#out').value; $('#out').value = ''; };
         $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), $('#out').value, () => $('#out').select());
+
+        // ---------- JWT 解碼與檢查：畫面 ----------
+        {
+
+                const JW_SAMPLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+        const JW_CLAIMS = { iss: ['發行者 (issuer)', '誰簽發了這個 token'], sub: ['主體 (subject)', 'token 代表的對象，通常是使用者 ID'], aud: ['受眾 (audience)', 'token 要給哪個服務使用；接收端應檢查自己在其中'], jti: ['編號 (JWT ID)', '每個 token 的唯一識別，可用來撤銷或防重放'] };
+        const jel = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+        const li = (k, v, cls) => { const d = jel('div', 'li'), b = jel('b', cls, v); d.append(jel('span', 'muted', k), b); return d; };
+        const JW_STAT = { valid: 'ok', ok: 'ok', expired: 'bad', notyet: 'bad', future: 'bad', invalid: 'bad' };
+        let jwCur = null, jwSeq = 0;
+
+        function jwShow() {
+            const r = parseJwt($('#jwIn').value); jwCur = r.ok ? r : null;
+            $('#jwRes').hidden = !r.ok; $('#jwErr').textContent = $('#jwIn').value.trim() && !r.ok ? r.error : '';
+            if (!r.ok) return;
+            const now = Date.now();
+            $('#jwHdr').textContent = JSON.stringify(r.header, null, 2); $('#jwPl').textContent = JSON.stringify(r.payload, null, 2);
+            $('#jwRisks').replaceChildren(...riskList(r.header, r.payload, r.sig, now).map(x => { const d = jel('div', 'risk ' + x.level); d.append(jel('b', '', { bad: '嚴重：', warn: '注意：', info: '提醒：' }[x.level] + x.title), jel('span', '', x.text)); return d; }));
+            const tc = timeClaims(r.payload, now);
+            $('#jwTimeCard').hidden = !tc.length;
+            $('#jwTimes').replaceChildren(...tc.map(x => { const d = jel('div', 'li'); const b = jel('b', JW_STAT[x.status], (x.ms !== undefined ? new Date(x.ms).toLocaleString() + '（' : '') + x.text + (x.ms !== undefined ? '）' : '')); d.append(jel('span', 'muted', x.name), b); return d; }));
+            const cl = isObj(r.payload) ? Object.keys(JW_CLAIMS).filter(k => k in r.payload) : [];
+            $('#jwClaimCard').hidden = !cl.length;
+            $('#jwClaims').replaceChildren(...cl.map(k => { const v = r.payload[k], d = jel('div', 'li'); const b = jel('b', '', `${typeof v === 'string' ? v : JSON.stringify(v)}`); const s = jel('span'); s.append(jel('span', '', k + '　' + JW_CLAIMS[k][0]), jel('div', 'note', JW_CLAIMS[k][1])); d.append(s, b); return d; }));
+            jwVerify();
+        }
+        async function jwVerify() {
+            const my = ++jwSeq, o = $('#jwVOut'); o.className = 'note';
+            if (!jwCur) return;
+            if (!$('#jwSecret').value) { o.textContent = '輸入密鑰後才會驗證。密鑰只在瀏覽器內用 Web Crypto 計算，不會送出。'; return; }
+            const alg = $('#jwValg').value || jwCur.header.alg;
+            let res; try { res = await verifyHS(alg, $('#jwSecret').value, jwCur.signingInput, jwCur.sig); } catch (e) { res = { ok: false, error: '此瀏覽器無法使用 Web Crypto（需要 https 或 localhost）' }; }
+            if (my !== jwSeq) return;
+            o.className = 'note ' + (res.ok ? 'ok' : 'bad');
+            o.textContent = res.ok ? `簽章相符（${alg}）：token 內容未被竄改，且簽發者持有此密鑰。` : res.error ? `無法驗證：${res.error}` : `簽章不符（${alg}）：密鑰錯誤、演算法不同，或內容被改過。`;
+        }
+        $('#jwIn').oninput = jwShow; $('#jwSecret').oninput = $('#jwValg').onchange = jwVerify;
+        $('#jwSample').onclick = () => { $('#jwIn').value = JW_SAMPLE; jwShow(); };
+        $('#jwClear').onclick = () => { $('#jwIn').value = ''; $('#jwSecret').value = ''; jwShow(); };
+        $('#jwCopyPl').onclick = () => Util.copyWithFeedback($('#jwCopyPl'), $('#jwPl').textContent);
+        $('#jwGp').value = JSON.stringify({ sub: 'user-1', name: 'Test User', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 3600 }, null, 2);
+        $('#jwGen').onclick = async () => {
+            const o = $('#jwGOut'); o.hidden = true; $('#jwCopyGen').hidden = true; $('#jwGErr').textContent = '';
+            let r; try { r = await buildJwt($('#jwGalg').value, $('#jwGh').value, $('#jwGp').value, $('#jwGs').value); } catch (e) { r = { ok: false, error: '此瀏覽器無法使用 Web Crypto（需要 https 或 localhost）' }; }
+            if (!r.ok) { $('#jwGErr').textContent = r.error; return; }
+            o.textContent = r.token; o.hidden = false; $('#jwCopyGen').hidden = false;
+        };
+        $('#jwCopyGen').onclick = () => Util.copyWithFeedback($('#jwCopyGen'), $('#jwGOut').textContent);
+        }
+
+        // ---------- 網址拆解與重組：畫面 ----------
+        {
+
+        const uel = (tag, attrs = {}, kids = []) => { const e = document.createElement(tag); Object.assign(e, attrs); e.append(...kids); return e; };
+        const ulab = (text, input) => uel('div', {}, [uel('label', { textContent: text }), input]);
+        let UM = null;
+
+        function urOpts() { return { enc: $('#urEnc').value, empty: $('#urEmpty').value, sort: $('#urSort').checked, puny: $('#urPuny').checked }; }
+        function urRenderOut() {
+            if (!UM) return;
+            const out = buildUrl(UM, urOpts()), c = checkUrl(out, UM.relative);
+            $('#urOut').value = out;
+            const rows = [Util.statRow('URL 物件', c.ok ? '可以解析' : '無法解析（網址格式有問題）', c.ok ? 'ok' : 'bad')];
+            if (c.ok && c.href !== out) rows.push(Util.statRow('標準化後', c.href, 'mono'));
+            $('#urStat').replaceChildren(...rows);
+        }
+        function urRenderInfo() {
+            const rows = [];
+            for (const w of UM.warns) rows.push(uel('div', { className: 'warn', textContent: '⚠ ' + w }));
+            if (UM.assumed) rows.push(Util.statRow('協定', '沒有寫協定，已自動補 https://'));
+            if (UM.relative) rows.push(Util.statRow('類型', '相對網址（沒有協定與主機）'));
+            else if (UM.hasAuth && !UM.scheme) rows.push(Util.statRow('類型', '省略協定的網址（//開頭）'));
+            const hi = hostInfo(UM.host);
+            if (hi.kind === 'ipv6') rows.push(Util.statRow('主機', 'IPv6 位址'));
+            else if (hi.kind === 'ipv4') rows.push(Util.statRow('主機', 'IPv4 位址'));
+            else if (hi.idn) { rows.push(Util.statRow('網域（punycode）', hi.ascii, 'mono')); if (hi.unicode !== hi.ascii) rows.push(Util.statRow('網域（顯示）', hi.unicode, 'mono')); }
+            $('#urInfo').replaceChildren(...rows);
+        }
+        function urRenderSegs() {
+            const segs = pathSegments(UM.path).filter((s, i, a) => !(i === a.length - 1 && s.raw === '' && a.length > 1));
+            $('#urSegs').replaceChildren(...segs.map((s, i) => uel('div', { className: 'seg' }, [uel('b', { textContent: i + 1 }), uel('span', { className: 'mono', textContent: s.dec + (s.dec !== s.raw ? `　（原文 ${s.raw}）` : '') })])));
+            const hq = hashQuery(UM.hash || '');
+            $('#urHashq').replaceChildren(...(hq ? [uel('div', { className: 'muted', textContent: 'Hash 看起來是參數' + (hq.route ? `（路由 ${hq.route}）` : '') + '：' }), uel('table', {}, hq.pairs.map(p => uel('tr', {}, [uel('td', { className: 'mono', textContent: p.k }), uel('td', { className: 'mono', textContent: p.v })])))] : []));
+        }
+        function urRenderQuery() {
+            const q = UM.query || [], cnt = {}; q.forEach(p => { cnt[p.k] = (cnt[p.k] || 0) + 1; });
+            $('#urQRows').replaceChildren(...q.map((p, i) => {
+                const ik = uel('input', { type: 'text', value: p.k, spellcheck: false, oninput() { p.k = this.value; delete p.rk; urRenderOut(); } }), iv = uel('input', { type: 'text', value: p.v, spellcheck: false, oninput() { p.v = this.value; delete p.rv; if (p.v !== '') p.eq = true; urRenderOut(); } });
+                ik.setAttribute('aria-label', `第 ${i + 1} 個參數的鍵`); iv.setAttribute('aria-label', `第 ${i + 1} 個參數的值`);
+                const rm = uel('button', { type: 'button', textContent: '✕', onclick() { q.splice(i, 1); urRenderQuery(); urRenderOut(); } }); rm.setAttribute('aria-label', `刪除第 ${i + 1} 個參數`);
+                const tags = [];
+                if (cnt[p.k] > 1) tags.push(uel('span', { className: 't', textContent: `重複 ×${cnt[p.k]}` }));
+                if (isTracking(p.k)) tags.push(uel('span', { className: 't', textContent: '追蹤參數' }));
+                if (p.rv !== undefined && /%[0-9a-f]{2}/i.test(p.rv)) tags.push(uel('span', { className: 't', textContent: '含編碼' }));
+                if (p.rv !== undefined && !decodeOk(p.rv.replace(/\+/g, ' '))) tags.push(uel('span', { className: 't bad', textContent: '無效的 % 編碼' }));
+                if (doubleEncoded(p.rv ?? '') || doubleEncoded(p.rk ?? '')) tags.push(uel('span', { className: 't bad', textContent: '⚠ 可能被編碼兩次' }), uel('button', { type: 'button', className: 'sm', textContent: '再解一層', onclick() { p.v = decodeSafe(p.v, false); p.k = decodeSafe(p.k, false); delete p.rk; delete p.rv; urRenderQuery(); urRenderOut(); } }));
+                return uel('div', { className: 'qrow' }, [ulab('鍵', ik), ulab('值', iv), rm, ...(tags.length ? [uel('div', { className: 'tags' }, tags)] : [])]);
+            }));
+            const t = countTracking(UM); $('#urQTrack').disabled = !t; $('#urQTrack').textContent = t ? `移除追蹤參數（${t}）` : '移除追蹤參數'; $('#urQCount').textContent = `${q.length} 個參數`;
+        }
+        function urLoad(text) {
+            UM = parseUrl(text);
+            for (const id of ['urParts', 'urQCard', 'urRCard']) $('#' + id).hidden = !UM;
+            if (!UM) { $('#urInfo').replaceChildren(); return; }
+            if (!UM.query) UM.query = [];
+            $('#urScheme').value = UM.scheme; $('#urUser').value = UM.user; $('#urPass').value = UM.pass; $('#urHost').value = UM.host; $('#urPort').value = UM.port; $('#urPath').value = UM.path; $('#urHash').value = UM.hash ?? '';
+            for (const id of ['urUser', 'urPass', 'urHost', 'urPort']) $('#' + id).disabled = !UM.hasAuth;
+            urRenderInfo(); urRenderSegs(); urRenderQuery(); urRenderOut();
+        }
+        const urBind = (id, key) => { $(id).oninput = () => { UM[key] = $(id).value; if (key === 'path' || key === 'hash') urRenderSegs(); if (key === 'host') urRenderInfo(); urRenderOut(); }; };
+        urBind('#urScheme', 'scheme'); urBind('#urUser', 'user'); urBind('#urPass', 'pass'); urBind('#urHost', 'host'); urBind('#urPort', 'port'); urBind('#urPath', 'path'); urBind('#urHash', 'hash');
+        $('#urIn').oninput = () => urLoad($('#urIn').value);
+        $('#urSample').onclick = () => { $('#urIn').value = 'https://user:pw@例子.測試:8080/a%20b/c/?utm_source=fb&q=%E4%BD%A0%E5%A5%BD&q=2&tag=a+b&empty=&flag&fbclid=abc#section=2&x=1'; urLoad($('#urIn').value); };
+        $('#urClear').onclick = () => { $('#urIn').value = ''; urLoad(''); };
+        $('#urQAdd').onclick = () => { UM.query.push({ k: '', v: '', eq: true }); urRenderQuery(); urRenderOut(); };
+        $('#urQTrack').onclick = () => { UM.query = stripTracking(UM).query; urRenderQuery(); urRenderOut(); };
+        for (const id of ['#urEnc', '#urEmpty', '#urSort', '#urPuny']) $(id).onchange = urRenderOut;
+        $('#urCopy').onclick = () => Util.copyWithFeedback($('#urCopy'), $('#urOut').value, () => $('#urOut').select());
+        $('#urApply').onclick = () => { $('#urIn').value = $('#urOut').value; urLoad($('#urOut').value); };
+
+        function urRenderBatch() {
+            const key = $('#urBKey').value, rows = key === '' ? [] : extractParam($('#urBin').value, key), vals = rows.flatMap(r => r.values);
+            $('#urBCopy').disabled = !vals.length;
+            $('#urBOut').replaceChildren(...(rows.length ? [uel('div', { className: 'muted', textContent: `${rows.length} 個網址，找到 ${vals.length} 個值` }), uel('table', {}, rows.map(r => uel('tr', {}, [uel('td', { className: 'mono', textContent: r.values.length ? r.values.join(', ') : '（沒有）' }), uel('td', { className: 'mono muted', textContent: r.url })])))] : []));
+        }
+        $('#urBin').oninput = $('#urBKey').oninput = urRenderBatch;
+        $('#urBCopy').onclick = () => Util.copyWithFeedback($('#urBCopy'), extractParam($('#urBin').value, $('#urBKey').value).flatMap(r => r.values).join('\n'));
+        urRenderBatch();
+        }
     </script>
 </body>
 

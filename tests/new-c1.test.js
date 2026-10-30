@@ -1,10 +1,10 @@
-// 批次 c1：SQL 指令產生器（utils/sql-query.html）、JSON 整理器「產生型別」
+// 批次 c1：SQL 指令產生器（utils/db-query.html）、JSON 整理器「產生型別」
 const { load, ok } = require('./_load');
 const assert = require('assert');
 const { spawnSync } = require('child_process');
 
 { // ---------- sql-query ----------
-    const m = load('utils/sql-query.html', 'compile, generate, defaultState, newRow, newGroup, newCol, newCt, template, toCountCheck, loadOpts, ident, identOne, val, finalize, strLit, parseDate, TEMPLATES, OPS');
+    const m = load('utils/db-query.html', 'compile, generate, defaultState, newRow, newGroup, newCol, newCt, template, toCountCheck, loadOpts, ident, identOne, val, finalize, strLit, parseDate, TEMPLATES, OPS', '// --- pure:sql ---', '// --- /pure:sql ---');
     const { newRow: R, newGroup: G, newCol: C, newCt: CT } = m;
     const st = (o = {}) => ({ ...m.defaultState(), table: 'users', ...o });
     const sel = (o) => ({ ...m.defaultState().sel, ...o });

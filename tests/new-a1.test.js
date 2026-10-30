@@ -54,7 +54,7 @@ const U = require('../shared/js/util.js');
 }
 
 // ===== MongoDB 指令產生器 =====
-const q = load('utils/mongo-query.html', 'OPS, FMTS, WRITE_OPS, LIM, defaultState, newRow, newGroup, newUpd, newStage, loadOpts, validColl, validField, parseDate, coerce, condRow, combine, compileGroup, compileProj, compileKeys, compileUpdate, compileStages, buildCommand, render, strLit, ser, template, TEMPLATES, Tag, M, escapeRe');
+const q = load('utils/db-query.html', 'OPS, FMTS, WRITE_OPS, LIM, defaultState, newRow, newGroup, newUpd, newStage, loadOpts, validColl, validField, parseDate, coerce, condRow, combine, compileGroup, compileProj, compileKeys, compileUpdate, compileStages, buildCommand, render, strLit, ser, template, TEMPLATES, Tag, M, escapeRe', '// --- pure:mongo ---', '// --- /pure:mongo ---');
 const { newRow, newGroup, newUpd, newStage, buildCommand, render } = q;
 const base = (o = {}) => ({ ...q.defaultState(), coll: 'users', ...o });
 const rowsState = (rows, mode = 'and', o = {}) => base({ filter: newGroup(mode, rows.map(r => newRow(r))), ...o });

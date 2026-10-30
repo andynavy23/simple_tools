@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="Artale 計算機：捲軸期望值、經驗效率、抽卡機率三合一，不內建任何遊戲數值，數字由你填。">
+    <meta property="og:title" content="Artale 計算機" />
+    <meta property="og:description" content="捲軸期望值、經驗效率、抽卡機率三合一。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/game-assist/artale-calc.html" />
+    <title>Artale 計算機</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+        .tabs button { flex: 1; }
+        #pScroll .big { font-size: 28px; font-weight: 700; }
+        #pExp .big { font-size: 26px; }
+        h2.sec { margin-top: 16px; }
+        .full { grid-column: 1 / -1; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>Artale 計算機</h1>
+        <div class="tabs" id="tabs"><button data-t="pScroll">捲軸期望值</button><button data-t="pExp">經驗效率</button><button data-t="pGacha">抽卡機率</button></div>
+
+        <section id="pScroll" hidden>
+            <p class="sub">不內建任何遊戲數值，成功率與價格都由你填，適用任何「成功率 × 花費」的強化。</p>
+
+            <div class="fgrid">
+                <div><label for="k">需要成功幾次</label><input id="k" type="number" min="1" max="50" value="1"></div>
+                <div><label for="p">單次成功率 (%)</label><input id="p" type="number" min="0.01" max="100" step="any" value="60"></div>
+                <div><label for="c">每張捲軸價格</label><input id="c" type="number" min="0" step="any" value="100"></div>
+                <div><label for="d">失敗時裝備損毀機率 (%)</label><input id="d" type="number" min="0" max="100" step="any" value="0"></div>
+                <div><label for="price">裝備本身價格（損毀時重買）</label><input id="price" type="number" min="0" step="any" value="0"></div>
+            </div>
+        </div>
+
+
+        <div class="card" id="out1"></div>
+        </section>
+
+        <section id="pExp" hidden>
+            <p class="sub">以「百分比」計算，不內建任何等級經驗表，填你看到的數字就好。</p>
+
+            <div class="fgrid">
+                <div><label for="cur">目前經驗 (%)</label><input id="cur" type="number" min="0" step="any" value="12.5"></div>
+                <div><label for="tgt">目標經驗 (%)（滿等 = 100）</label><input id="tgt" type="number" min="0" step="any" value="100"></div>
+                <div><label for="gain">每次獲得 (%)</label><input id="gain" type="number" min="0" step="any" value="0.35"></div>
+                <div><label for="rph">每小時次數</label><input id="rph" type="number" min="0" step="any" value="240"></div>
+                <div><label for="bonus">經驗加成 (%)（選填）</label><input id="bonus" type="number" min="0" step="any" value="0"></div>
+            </div>
+            <p class="note">「每次」可以是一場、一波怪、一次任務，單位自己定，只要和「每小時次數」對得上。</p>
+        </div>
+
+
+        <div class="card" id="out2"></div>
+        </section>
+
+        <section id="pGacha" hidden>
+            <p class="sub">不內建任何遊戲數值，機率與保底由你填，適用大多數有保底的抽卡。</p>
+
+            <div class="fgrid">
+                <div><label for="base">基礎機率 (%)</label><input id="base" type="number" min="0.001" max="100" step="any" value="0.6"></div>
+                <div><label for="hard">硬保底（第幾抽必出）</label><input id="hard" type="number" min="1" max="500" step="1" value="90"></div>
+                <div><label for="soft">軟保底開始（第幾抽，0 = 無）</label><input id="soft" type="number" min="0" max="500" step="1" value="74"></div>
+                <div><label for="step">軟保底每抽增加 (%)</label><input id="step" type="number" min="0" max="100" step="any" value="6"></div>
+                <div><label for="up">UP 角色佔比 (%)（100 = 沒有歪）</label><input id="up" type="number" min="0" max="100" step="any" value="50"></div>
+                <div><label for="cost">每抽花費（任意單位）</label><input id="cost" type="number" min="0" step="any" value="160"></div>
+                <div class="full"><label><input type="checkbox" id="guar" checked style="width:auto;vertical-align:middle"> 歪了之後，下一個一定是 UP（大保底）</label></div>
+            </div>
+            <p class="note">軟保底：從指定抽數開始，每抽機率增加一個固定值，直到硬保底必出。假設每次出貨後保底計數歸零。</p>
+        </div>
+
+
+        <div class="card" id="out3"></div>
+        </section>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>三個遊戲計算機合一：捲軸期望值、經驗效率、抽卡機率。都不內建任何遊戲數值，數字由你填，上方分頁切換。</p>
+        <h3>什麼時候用</h3>
+        <p>衝捲前估預算、估算還要練多久升級、抽卡前估要存多少抽。</p>
+        <h3>怎麼用</h3>
+        <p>點上方分頁選計算機，填入欄位，結果會立刻顯示在下方，不必按按鈕。各分頁說明如下。</p>
+        <h3>捲軸期望值</h3>
+<h4>這是什麼</h4>
+            <p>算「成功率 × 價格」的強化期望值：平均要用幾張捲軸、花多少錢，還能看要用幾張才有把握成功。</p>
+            <h4>什麼時候用</h4>
+            <ul>
+            <li>衝裝備卷軸前先估預算，決定要不要衝。</li>
+            <li>有「失敗會損毀裝備」的強化，算連同重買裝備的總花費。</li>
+            </ul>
+            <h4>怎麼用</h4>
+            <ol>
+            <li>「需要成功幾次」填目標成功次數（例如要上 3 次卷）。</li>
+            <li>「單次成功率 (%)」與「每張捲軸價格」照實填。</li>
+            <li>若失敗可能損毀，填「失敗時裝備損毀機率 (%)」與「裝備本身價格」（損毀後重買並從頭來過）。</li>
+            <li>看下方結果：平均用量、平均總花費；損毀機率為 0 時還會列出 50%、80%、95%、99% 把握所需張數。</li>
+            </ol>
+            <h4>範例</h4>
+            <div class="eg">成功 1 次、成功率 60%、每張 100、不會損毀：<br>平均要用 1.67 張；平均總花費 166.67；50% 把握 1 張（約 100）、80% 把握 2 張、95% 把握 4 張、99% 把握 6 張（約 600）。</div>
+            <h4>小提醒</h4>
+            <ul>
+            <li>期望值是長期平均，運氣差時可能遠高於平均。</li>
+            <li>有損毀機率時只提供平均值，不列「幾張才有把握」。</li>
+            <li>成功次數限 1–50，成功率限 0.01–100%。</li>
+            </ul>
+        <h3>經驗效率</h3>
+<h4>這是什麼</h4>
+            <p>用「百分比」估算還要練多久才升級。不內建任何等級經驗表，你填畫面上看到的數字即可。</p>
+            <h4>什麼時候用</h4>
+            <ul>
+            <li>想知道練到下一級（或滿等）大約還要幾小時。</li>
+            <li>比較不同練功地點、有沒有吃經驗加成的效率差別。</li>
+            </ul>
+            <h4>怎麼用</h4>
+            <ol>
+            <li>「目前經驗 (%)」填現在的經驗條百分比。</li>
+            <li>「目標經驗 (%)」填想到的位置，升一級就是 100。</li>
+            <li>「每次獲得 (%)」填打完一場／一波怪／一次任務大約增加幾 %。</li>
+            <li>「每小時次數」填一小時大約能做幾次（單位要和上一欄一致）。</li>
+            <li>有雙倍經驗等效果，在「經驗加成 (%)」填加成數字，沒有就維持 0。</li>
+            <li>結果會立刻顯示在下方，不必按按鈕。</li>
+            </ol>
+            <h4>範例</h4>
+            <div class="eg">目前 40、目標 100、每次 0.5、每小時 120 次、加成 20：<br>還差 60 %；實際每次 0.6 %；每小時 72 %；還需要 100 次；預計時間 50 分鐘。</div>
+            <h4>小提醒</h4>
+            <ul>
+            <li>結果是平均估算，實際經驗會有波動。</li>
+            <li>目前經驗已達目標時會顯示「已經達到目標」。</li>
+            <li>每次獲得必須大於 0，否則無法計算。</li>
+            </ul>
+        <h3>抽卡機率</h3>
+<h4>這是什麼</h4>
+            <p>輸入抽卡的機率與保底規則，算出平均要抽幾次、抽幾次有多大把握出貨。不內建任何遊戲的數值。</p>
+            <h4>什麼時候用</h4>
+            <ul>
+            <li>想先估算要存多少抽或多少錢，再決定要不要抽。</li>
+            <li>比較有無「大保底」、UP 角色佔比不同時的花費差異。</li>
+            </ul>
+            <h4>怎麼用</h4>
+            <ol>
+            <li>「基礎機率 (%)」填最高稀有度的原始機率。</li>
+            <li>「硬保底」填第幾抽必出；「軟保底開始」填機率開始上升的抽數（0 = 沒有軟保底），「軟保底每抽增加 (%)」填每抽加多少。</li>
+            <li>「UP 角色佔比 (%)」填出貨時是 UP 角色的機率；100 代表沒有歪。</li>
+            <li>有大保底（歪了下一個必定是 UP）就勾選那個選項。</li>
+            <li>「每抽花費」填一抽的價格（任何單位），結果會一併換算花費。</li>
+            </ol>
+            <h4>範例</h4>
+            <div class="eg">基礎 0.6%、硬保底 90、軟保底 74、每抽 +6%、UP 50%、每抽 160、勾大保底：<br>任一個 5★：平均 62.3 抽（約 9,968），50% 機率 76 抽內出貨（約 12,160）。<br>指定 UP：平均 93.4 抽。</div>
+            <h4>小提醒</h4>
+            <ul>
+            <li>「N% 機率出貨」指 N 抽內至少出貨一次的機率；期望值是長期平均，單次可能差很多。</li>
+            <li>假設每次出貨後保底計數歸零，與個別遊戲規則不同時結果僅供參考。</li>
+            <li>輸入不合理（如軟保底大於硬保底）時會提示檢查。</li>
+            </ul>
+        <h3>小提醒</h3>
+        <ul>
+        <li>所有結果都是長期平均的估算，實際運氣會有波動。</li>
+        <li>本頁不儲存任何資料，重新整理就回到預設值。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+                // 期望總花費：要累積 k 次成功；每次嘗試花 c，成功機率 p；
+        // 失敗時有 d 的機率裝備損毀，損毀要重買 price 並從 0 次成功重來。
+        // 設 E[s] = a_s + b_s * E[0]（s = 目前已成功次數），由 E[k] = 0 往回推，再解出 E[0]。
+        function expected(k, p, d, c, price) {
+            const q = 1 - (1 - p) * (1 - d); // 每次嘗試後「狀態有變化」的機率
+            let a = 0, b = 0;
+            for (let s = k - 1; s >= 0; s--) {
+                a = (c + p * a + (1 - p) * d * price) / q;
+                b = (p * b + (1 - p) * d) / q;
+            }
+            return a / (1 - b);
+        }
+
+        // d = 0 時：需要的嘗試次數 N 滿足 P(N 次內成功 >= k) >= level 的最小值
+        function attemptsFor(k, p, level, cap = 200000) {
+            const dist = new Array(k).fill(0); // dist[j] = 目前恰好 j 次成功的機率（j < k）
+            dist[0] = 1;
+            for (let n = 1; n <= cap; n++) {
+                for (let j = k - 1; j >= 0; j--) {
+                    const stay = dist[j] * (1 - p);
+                    dist[j] = stay + (j > 0 ? dist[j - 1] * p : 0);
+                }
+                // 從 k-1 成功的機率質量，移走成功的那一份
+                const done = 1 - dist.reduce((s, x) => s + x, 0);
+                if (done >= level) return n;
+            }
+            return null;
+        }
+
+                // 回傳 { remaining, perRun, perHour, runs, hours }；輸入不合法時回傳 { error }
+        function expPlan({ current, target, gain, perHour, bonus = 0 }) {
+            if (![current, target, gain, perHour, bonus].every(Number.isFinite) || current < 0 || target < 0 || gain < 0 || perHour < 0 || bonus < 0) return { error: '請輸入不為負的數字' };
+            const remaining = Math.max(0, target - current);
+            const perRun = gain * (1 + bonus / 100);
+            if (remaining === 0) return { remaining, perRun, perHour: perRun * perHour, runs: 0, hours: 0 };
+            if (perRun <= 0) return { error: '每次獲得必須大於 0' };
+            const runs = Math.ceil(remaining / perRun - 1e-9);
+            const hours = perHour > 0 ? runs / perHour : Infinity;
+            return { remaining, perRun, perHour: perRun * perHour, runs, hours };
+        }
+
+        function fmtDuration(hours) {
+            if (!Number.isFinite(hours)) return '—';
+            const mins = Math.round(hours * 60), d = Math.floor(mins / 1440), h = Math.floor(mins % 1440 / 60), m = mins % 60;
+            return [d ? `${d} 天` : '', h ? `${h} 小時` : '', m || (!d && !h) ? `${m} 分鐘` : ''].filter(Boolean).join(' ');
+        }
+
+                // 第 1..hard 抽各自的出貨機率（0–1）：基礎 → 軟保底遞增 → 硬保底 100%
+        function pullRates(base, hard, soft, step) {
+            const r = [];
+            for (let i = 1; i <= hard; i++) {
+                let p = base;
+                if (soft > 0 && i >= soft) p = base + (i - soft + 1) * step;
+                r.push(i === hard ? 1 : Math.min(1, p));
+            }
+            return r;
+        }
+
+        // 「第 k 抽首次出貨」的機率（k = 1..hard）
+        function firstHitPmf(rates) {
+            const pmf = []; let alive = 1;
+            for (const p of rates) { pmf.push(alive * p); alive *= 1 - p; }
+            return pmf;
+        }
+
+        function convolve(a, b) {
+            const out = new Array(a.length + b.length + 1).fill(0);   // 索引 = 抽數（第 0 位不用）
+            a.forEach((x, i) => b.forEach((y, j) => { out[i + 1 + j + 1] += x * y; }));
+            return out.slice(1);                                      // 索引 k-1 = 剛好 k 抽
+        }
+
+        const expectation = (pmf) => pmf.reduce((s, p, i) => s + p * (i + 1), 0);
+        const cdf = (pmf) => { let s = 0; return pmf.map(p => (s += p)); };
+        // 累積機率第一次 >= q 的抽數
+        function quantile(pmf, q) {
+            const c = cdf(pmf);
+            const i = c.findIndex(v => v >= q - 1e-12);
+            return i < 0 ? null : i + 1;
+        }
+
+        // UP 的分佈：每次出貨有 f 機率是 UP；若有大保底，歪一次後下一個必為 UP
+        function upPmf(pmf, f, guaranteed) {
+            const two = convolve(pmf, pmf);
+            const len = two.length;
+            const one = pmf.concat(new Array(len - pmf.length).fill(0));
+            if (guaranteed) return one.map((p, i) => f * p + (1 - f) * two[i]);
+            // 沒有大保底：要出的貨數 T 服從幾何分佈 P(T=t) = f(1-f)^(t-1)；總抽數 = T 次「首次出貨」相加
+            let cur = pmf, out = pmf.map(p => f * p), total = f;
+            for (let t = 2; t <= 80 && 1 - total > 1e-9; t++) {
+                cur = convolve(cur, pmf);
+                const w = f * Math.pow(1 - f, t - 1);
+                const size = Math.max(out.length, cur.length);
+                out = Array.from({ length: size }, (_, i) => (out[i] || 0) + w * (cur[i] || 0));
+                total += w;
+            }
+            return out;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const num = (id) => parseFloat($('#' + id).value);
+        const row = Util.statRow;
+
+        // 捲軸
+        (() => {
+        const money = (v) => v.toLocaleString('zh-TW', { maximumFractionDigits: 2 });
+
+
+        function render() {
+            const out = $('#out1');
+            out.replaceChildren();
+            const k = Math.floor(num('k')), p = num('p') / 100, d = num('d') / 100, c = num('c'), price = num('price');
+            if (!(k >= 1 && k <= 50) || !(p > 0 && p <= 1) || !(d >= 0 && d <= 1) || !(c >= 0) || !(price >= 0)) {
+                out.textContent = '請檢查輸入：成功次數 1–50、成功率 0.01–100%、損毀機率 0–100%、價格不可為負';
+                return;
+            }
+            const uses = expected(k, p, d, 1, 0);
+            const items = expected(k, p, d, 0, 1);
+            const h = document.createElement('h2');
+            h.textContent = '期望值';
+            out.append(h,
+                row('平均要用捲軸', `${money(uses)} 張`),
+                row('平均總花費', money(expected(k, p, d, c, price)), 'big'));
+            if (d > 0) out.append(row('平均損毀裝備', `${money(items)} 件`));
+
+            if (d === 0) {
+                const h2 = document.createElement('h2');
+                h2.style.marginTop = '16px';
+                h2.textContent = '要用幾張才有把握';
+                out.append(h2);
+                for (const lv of [0.5, 0.8, 0.95, 0.99]) {
+                    const n = attemptsFor(k, p, lv);
+                    out.append(row(`${lv * 100}% 機率完成`, n ? `${n} 張（約 ${money(n * c)}）` : '次數過多，無法估算'));
+                }
+            } else {
+                const n = document.createElement('p');
+                n.className = 'note';
+                n.textContent = '有損毀機率時，「幾張才有把握」的分佈較複雜，這裡只提供平均值。';
+                out.append(n);
+            }
+            const note = document.createElement('p');
+            note.className = 'note';
+            note.textContent = '期望值是長期平均，單次可能遠高於或低於這個數字。';
+            out.append(note);
+        }
+
+
+        document.querySelectorAll('#pScroll input').forEach(i => i.oninput = render);
+        render();
+        })();
+
+        // 經驗
+        (() => {
+        const nf = (v, d = 2) => v.toLocaleString('zh-TW', { maximumFractionDigits: d });
+
+
+        function render() {
+            const out = $('#out2');
+            out.replaceChildren();
+            const p = expPlan({ current: num('cur'), target: num('tgt'), gain: num('gain'), perHour: num('rph'), bonus: num('bonus') || 0 });
+            if (p.error) { out.textContent = p.error; return; }
+            if (p.remaining === 0) { out.textContent = '已經達到目標 🎉'; return; }
+            const finish = Number.isFinite(p.hours) ? new Date(Date.now() + p.hours * 3600e3) : null;
+            out.append(
+                row('還差經驗', `${nf(p.remaining)} %`),
+                row('實際每次獲得', `${nf(p.perRun, 4)} %`),
+                row('每小時獲得', `${nf(p.perHour)} %`),
+                row('還需要次數', `${nf(p.runs, 0)} 次`),
+                row('預計時間', fmtDuration(p.hours), 'big'),
+                row('預計完成', finish ? finish.toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'),
+            );
+        }
+
+
+        document.querySelectorAll('#pExp input').forEach(i => i.oninput = render);
+        render();
+        })();
+
+        // 抽卡
+        (() => {
+        const nf = (v, d = 1) => v.toLocaleString('zh-TW', { maximumFractionDigits: d });
+
+
+        function section(title, pmf, cost) {
+            const frag = document.createDocumentFragment(), h = document.createElement('h2');
+            h.className = 'sec'; h.textContent = title;
+            frag.append(h, row('期望抽數', `${nf(expectation(pmf))} 抽${cost ? `（約 ${nf(expectation(pmf) * cost, 0)}）` : ''}`));
+            for (const q of [0.5, 0.8, 0.9, 0.99]) {
+                const n = quantile(pmf, q);
+                frag.append(row(`${q * 100}% 機率出貨`, n ? `${n} 抽${cost ? `（約 ${nf(n * cost, 0)}）` : ''}` : '—'));
+            }
+            return frag;
+        }
+
+        function render() {
+            const out = $('#out3');
+            out.replaceChildren();
+            const base = num('base') / 100, hard = Math.round(num('hard')), soft = Math.round(num('soft')) || 0, step = num('step') / 100, up = num('up') / 100, cost = num('cost') || 0;
+            if (!(base > 0 && base <= 1) || !(hard >= 1 && hard <= 500) || !(soft >= 0 && soft <= hard) || !(step >= 0) || !(up >= 0 && up <= 1) || !(cost >= 0)) {
+                out.textContent = '請檢查輸入：機率 0–100%、硬保底 1–500、軟保底不可大於硬保底';
+                return;
+            }
+            const pmf = firstHitPmf(pullRates(base, hard, soft, step));
+            out.append(section('任意一個 5★（出貨）', pmf, cost));
+            if (up < 1) out.append(section('指定的 UP 角色', upPmf(pmf, up, $('#guar').checked), cost));
+            const note = document.createElement('p');
+            note.className = 'note';
+            note.textContent = '期望值是長期平均；「N% 機率」代表 N 抽內至少出貨一次的機率。';
+            out.append(note);
+        }
+
+
+        document.querySelectorAll('#pGacha input').forEach(i => i.oninput = render);
+        render();
+        })();
+
+        // 分頁
+        const tabs = document.querySelectorAll('#tabs button');
+        function show(id) {
+            tabs.forEach(b => b.setAttribute('aria-pressed', b.dataset.t === id));
+            document.querySelectorAll('section').forEach(s => s.hidden = s.id !== id);
+        }
+        tabs.forEach(b => b.onclick = () => show(b.dataset.t));
+        show('pScroll');
+    </script>
+</body>
+
+</html>

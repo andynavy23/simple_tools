@@ -138,7 +138,7 @@ const assert = require('assert');
 
     // ---------- JWT ----------
     {
-        const m = load('utils/jwt-decoder.html', 'b64uDecode, b64uEncode, parseJwt, timeClaims, fmtDur, riskList, verifyHS, signHS, buildJwt');
+        const m = load('utils/encode-decode.html', 'b64uDecode, b64uEncode, parseJwt, timeClaims, fmtDur, riskList, verifyHS, signHS, buildJwt');
         const { b64uDecode, b64uEncode, parseJwt, timeClaims, fmtDur, riskList, verifyHS, signHS, buildJwt } = m;
         const SAMPLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
         const td = (b) => new TextDecoder().decode(b);

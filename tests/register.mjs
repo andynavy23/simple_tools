@@ -2,6 +2,7 @@
 //   node tests/register.mjs temp_reg_*.json      （規格檔由各批次代理寫在 repo 根目錄的 temp_reg_<代號>.json，temp_* 已 gitignore）
 // 規格：{ tools: [{href, cat, topic, icons[], ic（選用：首頁線條圖示名，須在 index.html 的 ICONS 內）, c1, c2, title, desc, tags, kw, feature, keys, conn}],
 //        updates: [{href, feature, desc, keys[]}],      // 擴充既有頁：追加到卡片說明 / README / TOOLS 功能欄，keys 補進 TOOLS 的資料鍵欄
+//        remove: [href…],                               // 合併掉的頁面：從首頁 / README / TOOLS 刪掉卡片與列（頁面檔本身由合併者先刪）
 //        ideas: [編號…] }                                // 已完成的 IDEAS.md 編號
 import fs from 'fs';
 import path from 'path';
@@ -10,11 +11,12 @@ import { repo } from './e2e/lib.mjs';
 const files = process.argv.slice(2).filter(f => !f.startsWith('--'));
 if (!files.length) { console.log('用法：node tests/register.mjs temp_reg_*.json'); process.exit(1); }
 const specs = files.map(f => JSON.parse(fs.readFileSync(path.resolve(repo, f), 'utf8')));
+const removes = specs.flatMap(s => s.remove || []);
 const tools = specs.flatMap(s => s.tools || []), updates = specs.flatMap(s => s.updates || []), ideas = new Set(specs.flatMap(s => s.ideas || []));
 const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 
-const ANCHOR = { 工具: 'reading/stealth-reader.html', 小遊戲: 'mini-games/memory-match.html', 趣味: 'fun/sleep-log.html' };
-const SECTION = { 工具: '## 工具\n', 小遊戲: '## 小遊戲\n', 趣味: '## 趣味\n' };
+const ANCHOR = { 遊戲輔助: 'game-assist/cooldown-board.html', 工具: 'reading/stealth-reader.html', 小遊戲: 'mini-games/memory-match.html', 趣味: 'fun/sleep-log.html' };
+const SECTION = { 遊戲輔助: '## 遊戲輔助\n', 工具: '## 工具\n', 小遊戲: '## 小遊戲\n', 趣味: '## 趣味\n' };
 const rd = (p) => { const s = fs.readFileSync(path.join(repo, p), 'utf8'); return [s.replace(/\r\n/g, '\n'), s.includes('\r\n')]; };
 const wr = (p, s, crlf) => fs.writeFileSync(path.join(repo, p), crlf ? s.replace(/\n/g, '\r\n') : s);
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -47,6 +49,11 @@ for (const u of updates) {
     if (!m) fail('首頁找不到卡片 ' + u.href);
     idx = idx.slice(0, m.index) + m[1] + m[2].replace(/。$/, '') + (u.desc || '') + '。' + m[3] + idx.slice(m.index + m[0].length);
 }
+for (const href of removes) {
+    const re = new RegExp(`[ \\t]*<a class="card" href="${esc(href)}"[^]*?</a>\\n\\n?`);
+    if (!re.test(idx)) fail('首頁找不到要移除的卡片 ' + href);
+    idx = idx.replace(re, '');
+}
 wr('index.html', idx, ci);
 
 let [readme, cr] = rd('README.md');
@@ -57,6 +64,11 @@ for (const u of updates) {
     const m = new RegExp(`^(\\| \\[[^\\]]+\\]\\(${esc(u.href)}\\) \\| [^|]+ \\| )(.*?)( \\|)$`, 'm').exec(readme);
     if (!m) fail('README 找不到 ' + u.href);
     readme = readme.slice(0, m.index) + m[1] + m[2] + u.feature + m[3] + readme.slice(m.index + m[0].length);
+}
+for (const href of removes) {
+    const re = new RegExp(`^\\| \\[[^\\]]+\\]\\(${esc(href)}\\) \\|.*\\n`, 'm');
+    if (!re.test(readme)) fail('README 找不到要移除的 ' + href);
+    readme = readme.replace(re, '');
 }
 wr('README.md', readme, cr);
 
@@ -79,6 +91,11 @@ for (const u of updates) {
     if (add.length) keys = /^(—|\s*)$/.test(keys) ? add.join('、') : keys + '、' + add.join('、');
     tl = tl.slice(0, m.index) + '| ' + head + (u.feature || '') + ' | ' + keys + ' | ' + conn + ' |' + tl.slice(m.index + m[0].length);
 }
+for (const href of removes) {
+    const re = new RegExp(`^\\| \\[[^\\]]+\\]\\(${esc(href)}\\) \\|.*\\n`, 'm');
+    if (!re.test(tl)) fail('TOOLS 找不到要移除的 ' + href);
+    tl = tl.replace(re, '');
+}
 wr('TOOLS.md', tl, ct);
 
 let removed = 0, left = 0;
@@ -93,4 +110,4 @@ if (ideas.size) {
     t = t.replace(/目前還有 \d+ 個點子/, `目前還有 ${left} 個點子`);
     wr('IDEAS.md', t, cd);
 }
-console.log(`register OK：新工具 ${tools.length}、擴充 ${updates.length}、IDEAS 刪 ${removed}（剩 ${left || '—'}）`);
+console.log(`register OK：新工具 ${tools.length}、擴充 ${updates.length}、移除 ${removes.length}、IDEAS 刪 ${removed}（剩 ${left || '—'}）`);

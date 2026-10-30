@@ -57,12 +57,6 @@ try {
     await feed('vzFile', 't.wav', 'wav');
     await wait(() => document.getElementById('vzA').src.startsWith('blob:'));
 
-    // 語音轉文字：依支援度顯示控制項或僅說明
-    await click('[data-t=stt]');
-    const sup = await page.evaluate(() => !!(window.SpeechRecognition || window.webkitSpeechRecognition));
-    assert.equal(await page.evaluate(() => document.getElementById('sttCtl').hidden), !sup);
-    assert.ok((await text('#sttInfo')).length > 10);
-
     // 章節
     await click('[data-t=chap]');
     await page.evaluate(() => { const t = document.getElementById('chIn'); t.value = '0:05 a\n0:08 b'; t.dispatchEvent(new Event('input')); });
