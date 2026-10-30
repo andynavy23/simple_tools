@@ -169,8 +169,9 @@
         <p class="sub">調整參數即時預覽，複製寫好的 CSS。</p>
 
         <div class="card">
-            <div class="tabs" id="tabs"><button data-t="shadow">陰影</button><button data-t="gradient">漸層</button><button data-t="radius">圓角</button><button data-t="layout">版面</button><button data-t="scale">字型比例</button><button data-t="units">單位換算</button><button data-t="glass">毛玻璃/新擬態</button><button data-t="fonts">字型偵測</button></div>
+            <div class="tabs" id="tabs"><button data-t="shadow">陰影</button><button data-t="gradient">漸層</button><button data-t="radius">圓角</button><button data-t="layout">版面</button><button data-t="scale">字型比例</button><button data-t="units">單位換算</button><button data-t="glass">毛玻璃/新擬態</button><button data-t="fonts">字型偵測</button><button data-t="anim">動畫 keyframes</button></div>
             <div class="stage" id="stage"><div id="box">預覽</div><div id="lay" hidden></div><div id="x" hidden></div></div>
+            <style id="animStyle"></style>
             <div id="ctls"></div>
             <pre id="css"></pre>
             <div id="note" class="sub"></div>
@@ -209,6 +210,7 @@
         <li>預覽方塊的底色固定，只用來看效果</li>
         <li>字型偵測用「寬度量測法」：用該字型與三種保底字型量同一段文字，寬度不同就視為已安裝；字型與保底字型剛好等寬時會誤判成未安裝，document.fonts.check 對系統字型常常一律回傳 true，只供參考。偵測結果只代表「這台裝置」，別人的電腦不一定有</li>
         <li>單位換算的 em 以「基準字級」當父層字級；vw / vh 以你填的視窗尺寸計。新增分頁的設定一樣記在 cssgen，壞資料會退回預設</li>
+        <li>「動畫 keyframes」：選動畫類型（彈跳、淡入、滑入、旋轉、脈動、搖晃、翻轉、擺動）、時間曲線、時長、延遲、次數與方向，預覽方塊會直接播放，並輸出 @keyframes 加 .animated 類別；設定一樣記在 cssgen，壞資料退回預設。要尊重「減少動態效果」的使用者，可自行加 @media (prefers-reduced-motion: reduce) 關掉動畫。</li>
         <li>版面欄位只接受數字、字母、空白與 ( ) , . % / * + - ，不合法的值會退回預設；項目數上限 12。輸出的類別名稱 .container / .item 請自行改成你的類別</li>
         </ul>
     </template>
@@ -362,6 +364,34 @@
             return [`新擬態的陰影與底色對比約 ${rd(r, 2)}:1（非文字元件建議至少 3:1），浮凸邊界對低視力使用者很難分辨；` + (r < 3 ? '目前不足，按鈕請另加邊框或色塊。' : '目前達標。'), `深灰字（#333）對底色對比 ${rd(t, 2)}:1（一般文字需 4.5:1）。`];
         }
 
+        // ---- CSS 動畫 keyframes ----
+        const ANIM_KF = {
+            bounce: ['0%, 20%, 50%, 80%, 100% { transform: translateY(0); }', '40% { transform: translateY(-30px); }', '60% { transform: translateY(-15px); }'],
+            fade: ['0% { opacity: 0; }', '100% { opacity: 1; }'],
+            slide: ['0% { transform: translateX(-100%); opacity: 0; }', '100% { transform: translateX(0); opacity: 1; }'],
+            spin: ['0% { transform: rotate(0deg); }', '100% { transform: rotate(360deg); }'],
+            pulse: ['0%, 100% { transform: scale(1); }', '50% { transform: scale(1.12); }'],
+            shake: ['0%, 100% { transform: translateX(0); }', '20%, 60% { transform: translateX(-10px); }', '40%, 80% { transform: translateX(10px); }'],
+            flip: ['0% { transform: perspective(400px) rotateY(0deg); }', '100% { transform: perspective(400px) rotateY(360deg); }'],
+            swing: ['0% { transform: rotate(0deg); }', '20% { transform: rotate(15deg); }', '40% { transform: rotate(-10deg); }', '60% { transform: rotate(5deg); }', '80% { transform: rotate(-5deg); }', '100% { transform: rotate(0deg); }'],
+        };
+        const ANIM_NAMES = { bounce: '彈跳', fade: '淡入', slide: '滑入', spin: '旋轉', pulse: '脈動', shake: '搖晃', flip: '翻轉', swing: '擺動' };
+        const ANIM_EASE = ['ease', 'ease-in', 'ease-out', 'ease-in-out', 'linear', 'cubic-bezier(0.68, -0.55, 0.27, 1.55)'];
+        function animNorm(o) {
+            o = obj(o);
+            return {
+                type: pick(o.type, Object.keys(ANIM_KF), 'bounce'), ease: pick(o.ease, ANIM_EASE, 'ease'), dur: rd(num(o.dur, 0.2, 10, 1), 1), delay: rd(num(o.delay, 0, 5, 0), 1),
+                iter: pick(String(o.iter), ['1', '2', '3', 'infinite'], 'infinite'), dir: pick(o.dir, ['normal', 'alternate', 'reverse'], 'normal'),
+            };
+        }
+        // 類型 / 曲線 / 次數 / 方向都來自白名單，數值經 clamp，輸出不會夾帶使用者字串
+        const animShort = (a) => `${a.type} ${a.dur}s ${a.ease} ${a.delay}s ${a.iter} ${a.dir}`;
+        const animKeyframes = (type) => `@keyframes ${type} {\n${ANIM_KF[type].map(l => '  ' + l).join('\n')}\n}`;
+        function animCss(raw) {
+            const a = animNorm(raw);
+            return `${animKeyframes(a.type)}\n\n.animated {\n  animation: ${animShort(a)};\n}`;
+        }
+
         const FONT_LIST = ['Microsoft JhengHei', 'PingFang TC', 'Noto Sans TC', 'Noto Serif TC', 'PMingLiU', 'DFKai-SB', 'Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Consolas', 'Menlo', 'Segoe UI', 'Roboto'];
         function fontsNorm(o) {
             o = obj(o); const t = typeof o.text === 'string' ? o.text.slice(0, 80) : '';
@@ -382,9 +412,9 @@
             radius: { tl: 24, tr: 24, br: 24, bl: 24, unit: 'px', ...S.radius },
         };
         state.layout = layoutNorm(S.layout);
-        state.scale = tsNorm(S.scale); state.units = unitsNorm(S.units); state.glass = glassNorm(S.glass); state.fonts = fontsNorm(S.fonts);
-        const NORM = { scale: tsNorm, units: unitsNorm, glass: glassNorm, fonts: fontsNorm };
-        let tab = ['shadow', 'gradient', 'radius', 'layout', 'scale', 'units', 'glass', 'fonts'].includes(S.tab) ? S.tab : 'shadow';
+        state.scale = tsNorm(S.scale); state.units = unitsNorm(S.units); state.glass = glassNorm(S.glass); state.fonts = fontsNorm(S.fonts); state.anim = animNorm(S.anim);
+        const NORM = { scale: tsNorm, units: unitsNorm, glass: glassNorm, fonts: fontsNorm, anim: animNorm };
+        let tab = ['shadow', 'gradient', 'radius', 'layout', 'scale', 'units', 'glass', 'fonts', 'anim'].includes(S.tab) ? S.tab : 'shadow';
 
         const DEFS = {
             shadow: [['x', '水平', -100, 100], ['y', '垂直', -100, 100], ['blur', '模糊', 0, 200], ['spread', '擴散', -50, 100], ['alpha', '透明度', 0, 1, 0.01], ['color', '顏色', 'color'], ['inset', '內陰影', 'check']],
@@ -397,6 +427,7 @@
                     : [...top, ['shape', '形狀', 'select', [['flat', '平面'], ['convex', '凸起'], ['concave', '凹陷'], ['pressed', '按下（內陰影）']]], ['dist', '陰影距離', 1, 30], ['nblur', '陰影模糊', 0, 60], ['inten', '強度 %', 5, 40], ['base', '底色', 'color'], ['radius', '圓角', 0, 60]];
             },
             fonts: [['text', '預覽文字', 'text'], ['size', '字級 px', 12, 72], ['weight', '字重', 'select', ['300', '400', '500', '700', '900'].map(w => [w, w])]],
+            anim: [['type', '動畫類型', 'select', Object.entries(ANIM_NAMES)], ['ease', '時間曲線', 'select', ANIM_EASE.map(e => [e, e.startsWith('cubic') ? '回彈 cubic-bezier' : e])], ['dur', '時長 秒', 0.2, 10, 0.1], ['delay', '延遲 秒', 0, 5, 0.1], ['iter', '次數', 'select', [['1', '1 次'], ['2', '2 次'], ['3', '3 次'], ['infinite', '無限']]], ['dir', '方向', 'select', [['normal', '正向'], ['alternate', '來回'], ['reverse', '反向']]]],
             radius: [['tl', '左上', 0, 200], ['tr', '右上', 0, 200], ['br', '右下', 0, 200], ['bl', '左下', 0, 200], ['unit', '單位', 'select', [['px', 'px'], ['%', '%']]]],
         };
 
@@ -417,6 +448,7 @@
             if (tab === 'scale') return typeScaleCss(state.scale);
             if (tab === 'units') return unitsText(state.units);
             if (tab === 'glass') return glassCss(state.glass);
+            if (tab === 'anim') return animCss(state.anim);
             if (tab === 'fonts') return fontsCss(detect().filter(r => r.ok).map(r => r.name));
             const s = state[tab];
             if (tab === 'shadow') return shadowCss(s);
@@ -469,6 +501,13 @@
                 $('#stage').style.background = g.mode === 'glass' ? 'linear-gradient(135deg,#ff7a18,#af002d 50%,#319197)' : g.base;
                 box.style.cssText = (g.mode === 'glass' ? glassRules(g) : neuRules(g)).join(' ') + (g.mode === 'glass' ? 'color:#fff;' : 'color:#333;');
                 $('#note').textContent = glassNotes(g).join('\n');
+                store.set('cssgen', { tab, ...state }); return;
+            }
+            if (tab === 'anim') {
+                const a = state.anim, box = $('#box');
+                $('#css').textContent = css(); $('#animStyle').textContent = animKeyframes(a.type); box.className = '';
+                box.style.cssText = 'animation:none;background:var(--blue);color:var(--on-blue)'; void box.offsetWidth; box.style.animation = animShort(a);
+                $('#note').textContent = '預覽每次調整都會重新播放。';
                 store.set('cssgen', { tab, ...state }); return;
             }
             $('#note').textContent = '';

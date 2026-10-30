@@ -107,7 +107,7 @@
         <h1>音頻產生器 / 聽力頻率測試</h1>
         <p class="sub">用瀏覽器產生測試音：檢查耳機左右聲道、掃頻、測聽力上限。全部在本機播放。</p>
         <div class="warn" id="safety" role="alert"><b>安全提醒：</b>請先把<b>裝置音量調到最小</b>，再慢慢加大。高頻與突然的聲音可能傷耳；兒童與聽力敏感者請特別小心。本工具<b>不是醫療檢測</b>，不能取代聽力檢查。</div>
-        <div class="tabs" id="tabs"><button data-t="gen" aria-pressed="true">音頻</button><button data-t="sweep" aria-pressed="false">掃頻</button><button data-t="hear" aria-pressed="false">聽力</button><button data-t="bin" aria-pressed="false">雙耳拍</button></div>
+        <div class="tabs" id="tabs"><button data-t="gen" aria-pressed="true">音頻</button><button data-t="sweep" aria-pressed="false">掃頻</button><button data-t="hear" aria-pressed="false">聽力</button><button data-t="mic" aria-pressed="false">麥克風頻譜</button><button data-t="bin" aria-pressed="false">雙耳拍</button></div>
 
         <div id="pg-gen">
             <div class="card">
@@ -165,6 +165,17 @@
             </div>
         </div>
 
+        <div id="pg-mic" hidden>
+            <div class="card">
+                <h2>麥克風即時頻譜（FFT）</h2>
+                <p>用麥克風收音並即時畫出頻譜（對數頻率軸，20 Hz–20 kHz）與最強頻率。聲音只在瀏覽器內分析，<b>不會播放出來、不會錄下、不會上傳</b>。</p>
+                <div class="big" id="micPeak">–</div>
+                <canvas id="micCv" aria-label="麥克風頻譜" style="width:100%;aspect-ratio:2/1;background:var(--fill);border-radius:var(--radius-sm)"></canvas>
+                <div class="chips"><button class="primary" id="micGo">開啟麥克風</button></div>
+                <p class="note" id="micMsg">需要按按鈕並允許麥克風權限（需 https 或 localhost）。</p>
+            </div>
+        </div>
+
         <div id="pg-bin" hidden>
             <div class="card">
                 <h2>雙耳拍 / 節拍</h2>
@@ -201,6 +212,7 @@
         <li>聲道：選「左 → 右 自動輪流」，會每 1.5 秒換邊並顯示現在是哪一邊；若你聽到的和顯示相反，代表耳機戴反或左右接反。</li>
         <li>掃頻：設起訖頻率與秒數，選線性或對數，可循環；上方即時顯示目前頻率。</li>
         <li>聽力：按「開始測試」，每階播 2 秒，按「聽得到 / 聽不到」（沒聽清楚可「再播一次」），第一次聽不到就結束並給出結果。</li>
+        <li>麥克風頻譜：切到該分頁按「開啟麥克風」並允許權限，會即時畫出 20 Hz–20 kHz 頻譜並顯示最強頻率與音名；聲音不會播放出來、不會錄下。無法使用麥克風時會顯示說明，其他分頁不受影響。</li>
         <li>雙耳拍：戴耳機，設基礎頻率與差值，按「開始」。</li>
         <li>可選「定時自動停止」；頁面切到背景或離開時會自動停止聲音。</li>
         </ol>
@@ -280,6 +292,12 @@
         }
         // 解析使用者輸入的頻率（壞值回預設）
         const parseFreq = (v, def = 440) => { const n = parseFloat(v); return Number.isFinite(n) ? clamp(n, FMIN, FMAX) : def; };
+        // 頻譜（dB 陣列，index 0..N-1 對應 0..sr/2）中最強的頻率（Hz）；低於 floorDb 或低於 minHz 視為無聲，回傳 -1
+        function peakFreq(db, sr, minHz = 20, floorDb = -90) {
+            const n = db.length, hz = sr / 2 / n; let best = -1, bv = floorDb;
+            for (let i = Math.max(1, Math.ceil(minHz / hz)); i < n; i++) if (db[i] > bv) { bv = db[i]; best = i; }
+            return best < 0 ? -1 : best * hz;
+        }
         // --- /pure ---
 
         const $ = (id) => document.getElementById(id);
@@ -395,12 +413,45 @@
         document.addEventListener('visibilitychange', () => { if (document.hidden) stopAll(); });
         addEventListener('pagehide', stopAll);
 
+        // ---- 麥克風頻譜 ----
+        const M = { ctx: null, stream: null, an: null, raf: 0 };
+        function stopMic() {
+            cancelAnimationFrame(M.raf); if (M.stream) M.stream.getTracks().forEach(t => t.stop());
+            if (M.ctx) M.ctx.close().catch(() => { }); M.ctx = M.stream = M.an = null;
+            $('micGo').textContent = '開啟麥克風'; $('micPeak').textContent = '–';
+            const c = $('micCv'); c.getContext('2d').clearRect(0, 0, c.width, c.height);
+        }
+        async function startMic() {
+            if (!AC || !(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) { $('micMsg').textContent = '這個瀏覽器不支援麥克風（需要 https 或 localhost 與較新的瀏覽器）。其他分頁仍可使用。'; return; }
+            try {
+                M.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+                M.ctx = new AC(); await M.ctx.resume(); const src = M.ctx.createMediaStreamSource(M.stream);
+                M.an = M.ctx.createAnalyser(); M.an.fftSize = 4096; M.an.smoothingTimeConstant = 0.6; src.connect(M.an); // 不接 destination：不會發聲、不會回授
+                $('micGo').textContent = '關閉麥克風'; $('micMsg').textContent = '對著麥克風發出聲音；最強頻率會顯示在上方。';
+                const d = new Float32Array(M.an.frequencyBinCount), cv = $('micCv'), g = cv.getContext('2d');
+                (function loop() {
+                    if (!M.an) return; M.raf = requestAnimationFrame(loop);
+                    const dpr = Math.min(window.devicePixelRatio || 1, 2), w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
+                    if (w && (cv.width !== w || cv.height !== h)) { cv.width = w; cv.height = h; }
+                    M.an.getFloatFrequencyData(d); g.clearRect(0, 0, cv.width, cv.height);
+                    g.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--blue').trim() || '#38f'; g.lineWidth = Math.max(1, cv.width / 400); g.beginPath();
+                    const ny = M.ctx.sampleRate / 2;
+                    for (let x = 0; x < cv.width; x += 2) { const f = posToFreq(x / cv.width), v = d[Math.min(d.length - 1, Math.round(f / ny * d.length))], y = cv.height - Math.max(0, Math.min(1, (v + 100) / 100)) * cv.height; x ? g.lineTo(x, y) : g.moveTo(x, y); }
+                    g.stroke();
+                    const pf = peakFreq(d, M.ctx.sampleRate, 20, -70); $('micPeak').textContent = pf < 0 ? '–' : Math.round(pf) + ' Hz' + (freqToNote(pf) ? '（' + freqToNote(pf).name + '）' : '');
+                })();
+            } catch (e) { stopMic(); $('micMsg').textContent = e && e.name === 'NotAllowedError' ? '麥克風權限被拒絕，請在瀏覽器網址列允許後再試。' : '無法使用麥克風（需要 https 或 localhost，且裝置有麥克風）。'; }
+        }
+        $('micGo').onclick = () => (M.stream ? stopMic() : startMic());
+        addEventListener('pagehide', stopMic);
+        document.addEventListener('visibilitychange', () => { if (document.hidden) stopMic(); });
+
         // ---- 分頁 ----
         $('tabs').onclick = (e) => {
             const b = e.target.closest('button'); if (!b) return;
-            stopAll();
+            stopAll(); stopMic();
             document.querySelectorAll('#tabs button').forEach(x => x.setAttribute('aria-pressed', x === b));
-            for (const t of ['gen', 'sweep', 'hear', 'bin']) $('pg-' + t).hidden = t !== b.dataset.t;
+            for (const t of ['gen', 'sweep', 'hear', 'mic', 'bin']) $('pg-' + t).hidden = t !== b.dataset.t;
         };
 
         // ---- 音頻產生器 ----

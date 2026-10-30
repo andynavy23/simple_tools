@@ -141,7 +141,7 @@
         <p class="sub">節拍器完全在本機發聲。調音器需要麥克風權限，音訊只在瀏覽器內分析，不會上傳。</p>
 
         <div class="card">
-            <div class="tabs"><button data-t="met" aria-pressed="true">節拍器</button><button data-t="tun" aria-pressed="false">調音器</button></div>
+            <div class="tabs"><button data-t="met" aria-pressed="true">節拍器</button><button data-t="poly" aria-pressed="false">複節奏</button><button data-t="tun" aria-pressed="false">調音器</button></div>
 
             <div class="pane" data-t="met">
                 <div id="bpmBig">100</div>
@@ -153,6 +153,16 @@
                 </div>
                 <div id="beats"></div>
                 <button class="primary" id="go" style="display:block;margin:0 auto;padding:10px 40px">開始</button>
+            </div>
+
+            <div class="pane" data-t="poly" hidden>
+                <p class="muted" style="margin-top:0">兩條獨立節奏在同一個循環內各自均分：例如 3 對 4，A 打 3 下、B 打 4 下，每個循環在第一下對齊。速度沿用節拍器分頁的 BPM。</p>
+                <div class="row"><label for="pa">A（低音）</label><input type="number" id="pa" value="3" min="1" max="16" style="width:70px"><label for="pb">B（高音）</label><input type="number" id="pb" value="4" min="1" max="16" style="width:70px"><label for="pc">每循環拍數</label><input type="number" id="pc" value="4" min="1" max="16" style="width:70px"></div>
+                <div class="row"><button class="sm" data-p="3,4">3 對 4</button><button class="sm" data-p="5,4">5 對 4</button><button class="sm" data-p="2,3">2 對 3</button><button class="sm" data-p="3,2">3 對 2</button><button class="sm" data-p="7,4">7 對 4</button></div>
+                <div id="pinfo" class="muted" style="text-align:center"></div>
+                <div id="pdots" style="margin:12px 0"></div>
+                <button class="primary" id="pgo" style="display:block;margin:0 auto;padding:10px 40px">開始</button>
+                <p class="note" id="pmsg"></p>
             </div>
 
             <div class="pane" data-t="tun" hidden>
@@ -182,6 +192,7 @@
         <li>不確定速度時，跟著節奏連按「Tap 測速」。</li>
         <li>調音器分頁：選「樂器」，點弦名可播放參考音；按「開啟麥克風」後彈一根弦。</li>
         <li>指針在中間並顯示「準了」才算調準；「偏高」要放鬆、「偏低」要鎖緊。</li>
+        <li>複節奏分頁：設定 A、B 各打幾下（也可按 3 對 4、5 對 4 等快捷），A 為低音方波、B 為高音三角波，兩條節奏在一個循環內各自均分、循環開頭對齊。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">吉他 6 弦空弦是 E2 A2 D3 G3 B3 E4。彈第六弦，若顯示 E2 偏低 12 音分，就慢慢鎖緊到「準了」。</div>
@@ -189,7 +200,7 @@
         <ul>
         <li>調音器需要麥克風權限，音訊只在瀏覽器內分析、不會上傳；需 https 或 localhost。</li>
         <li>安靜環境較準；「A4 =」可微調基準音高（415–466 Hz）。</li>
-        <li>切換分頁或離開頁面會自動停止。</li>
+        <li>切換分頁或離開頁面會自動停止。複節奏速度沿用節拍器 BPM（要改請先回節拍器分頁），改 BPM 後需重新開始才會套用；複節奏設定不會儲存。</li>
         </ul>
     </template>
 
@@ -206,6 +217,15 @@
             if (!(freq > 0)) return null;
             const n = 69 + 12 * Math.log2(freq / a4), r = Math.round(n), midi = r;
             return { name: NOTE_NAMES[((midi % 12) + 12) % 12], octave: Math.floor(midi / 12) - 1, midi, cents: Math.round((n - r) * 100), target: a4 * Math.pow(2, (midi - 69) / 12) };
+        }
+        // 複節奏：一個循環 cycleSec 秒內，A 均分 a 下、B 均分 b 下；回傳 [{t, v:'A'|'B'}]（t 秒，已排序，同時刻 A 在前）
+        function polyHits(a, b, cycleSec, cycles = 1) {
+            const out = [];
+            for (let c = 0; c < cycles; c++) {
+                for (let i = 0; i < a; i++) out.push({ t: (c + i / a) * cycleSec, v: 'A' });
+                for (let i = 0; i < b; i++) out.push({ t: (c + i / b) * cycleSec, v: 'B' });
+            }
+            return out.sort((x, y) => x.t - y.t || (x.v < y.v ? -1 : 1));
         }
         const midiFreq = (midi, a4 = 440) => a4 * Math.pow(2, (midi - 69) / 12);
 
@@ -234,7 +254,7 @@
 
         const $ = (s) => document.querySelector(s);
         let tab = 'met';
-        document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { tab = b.dataset.t; document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-pressed', x === b)); document.querySelectorAll('.pane').forEach(p => { p.hidden = p.dataset.t !== tab; }); if (tab !== 'met') stopMet(); }; });
+        document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { tab = b.dataset.t; document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-pressed', x === b)); document.querySelectorAll('.pane').forEach(p => { p.hidden = p.dataset.t !== tab; }); if (tab !== 'met') stopMet(); if (tab !== 'poly') stopPoly(); else pinfo(); }; });
 
         // ---------- 節拍器 ----------
         let bpm = store.get('met_bpm', 100), running = false, nextAt = 0, beat = 0, sched = null, taps = [];
@@ -258,6 +278,34 @@
         $('#sig').onchange = () => { buildBeats(); beat = 0; }; $('#acc').onchange = buildBeats;
         $('#tap').onclick = () => { const t = performance.now(); if (taps.length && t - taps[taps.length - 1] > 2000) taps = []; taps.push(t); taps = taps.slice(-6); if (taps.length >= 2) setBpm(60000 / ((taps[taps.length - 1] - taps[0]) / (taps.length - 1))); };
         setBpm(typeof bpm === 'number' ? bpm : 100); buildBeats();
+
+        // ---------- 複節奏（AudioContext 時鐘排程：每次只排未來 0.2 秒內的音，節奏由音訊時鐘決定、不會漂移）----------
+        let pctx = null, pst = null;
+        const pnum = (id, d) => Math.min(16, Math.max(1, Math.round(+$(id).value) || d));
+        function pinfo() { const a = pnum('#pa', 3), b = pnum('#pb', 4), c = pnum('#pc', 4); $('#pinfo').textContent = `${a} 對 ${b}，循環 ${(c * 60 / bpm).toFixed(2)} 秒（${c} 拍 @ ${bpm} BPM）`; }
+        function pdots() { const a = pnum('#pa', 3), b = pnum('#pb', 4); $('#pdots').innerHTML = ['A', 'B'].map((v, r) => { const n = r ? b : a; return '<div style="display:flex;gap:8px;justify-content:center;margin:6px 0">' + Array.from({ length: n }, () => '<i style="width:18px;height:18px;border-radius:50%;background:var(--fill);display:inline-block"></i>').join('') + '</div>'; }).join(''); pinfo(); }
+        function pbeep(t, hi) { const o = pctx.createOscillator(), g = pctx.createGain(); o.type = hi ? 'triangle' : 'square'; o.frequency.value = hi ? 1320 : 330; o.connect(g); g.connect(pctx.destination); g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.07); o.start(t); o.stop(t + 0.08); }
+        function pfeed() {
+            const a = pst.a, b = pst.b, cyc = pst.cyc, now = pctx.currentTime;
+            while (pst.t0 + pst.n * cyc < now + 0.2) { const base = pst.t0 + pst.n * cyc; polyHits(a, b, cyc, 1).forEach(h => { pbeep(base + h.t, h.v === 'B'); pst.q.push({ at: base + h.t, v: h.v, i: Math.round(h.t / cyc * (h.v === 'A' ? a : b)) }); }); pst.n++; }
+        }
+        function pdraw() {
+            if (!pst) return; const now = pctx.currentTime;
+            while (pst.q.length && pst.q[0].at <= now) { const h = pst.q.shift(); const row = $('#pdots').children[h.v === 'A' ? 0 : 1]; if (row) [...row.children].forEach((d, k) => { d.style.background = k === h.i ? (h.v === 'A' ? 'var(--bad)' : 'var(--blue)') : 'var(--fill)'; }); }
+            pst.raf = requestAnimationFrame(pdraw);
+        }
+        function stopPoly() { if (pst) { clearInterval(pst.iv); cancelAnimationFrame(pst.raf); pst = null; } if (pctx) { pctx.close().catch(() => { }); pctx = null; } $('#pgo').textContent = '開始'; }
+        function startPoly() {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (!AC) { $('#pmsg').textContent = '這個瀏覽器不支援 Web Audio，無法發聲。'; return; }
+            pctx = new AC(); pctx.resume();
+            pst = { a: pnum('#pa', 3), b: pnum('#pb', 4), cyc: pnum('#pc', 4) * 60 / bpm, t0: pctx.currentTime + 0.1, n: 0, q: [], iv: 0, raf: 0 };
+            pst.iv = setInterval(pfeed, 50); pfeed(); pdraw(); $('#pgo').textContent = '停止'; $('#pmsg').textContent = '';
+        }
+        $('#pgo').onclick = () => (pst ? stopPoly() : startPoly());
+        ['#pa', '#pb', '#pc'].forEach(id => { $(id).onchange = () => { const was = !!pst; stopPoly(); pdots(); if (was) startPoly(); }; });
+        document.querySelectorAll('[data-p]').forEach(b => { b.onclick = () => { const [x, y] = b.dataset.p.split(','); $('#pa').value = x; $('#pb').value = y; $('#pa').onchange(); }; });
+        pdots();
 
         // ---------- 調音器 ----------
         $('#inst').replaceChildren(...Object.keys(INSTRUMENTS).map(k => new Option(k, k)));
@@ -290,7 +338,7 @@
             } catch (e) { $('#micMsg').textContent = e && e.name === 'NotAllowedError' ? '麥克風權限被拒絕，請在瀏覽器網址列允許後再試。' : '無法使用麥克風（需要 https 或 localhost，且裝置有麥克風）。'; stopMic(); }
         }
         $('#mic').onclick = () => (stream ? stopMic() : startMic());
-        window.addEventListener('pagehide', () => { stopMic(); stopMet(); });
+        window.addEventListener('pagehide', () => { stopMic(); stopMet(); stopPoly(); });
     </script>
 </body>
 

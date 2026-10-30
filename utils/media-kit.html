@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="影音小工具：影片轉音訊 WAV、本機媒體播放器（A-B 循環、變速、逐格、字幕、鏡像）、音樂視覺化、語音轉文字、YouTube 章節時間戳、GIF 逐格檢視、影片規格速查。全部在本機處理。">
+    <meta property="og:title" content="影音小工具" />
+    <meta property="og:description" content="影片轉音訊、媒體播放器、音樂視覺化、語音轉文字、章節時間戳、GIF 逐格、規格速查。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/media-kit.html" />
+    <title>影音小工具</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <script src="../shared/js/util.js"></script>
+    <style>
+        :root { --wrap-w: 720px; }
+        .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+        .row>button { flex: 1; min-width: 64px; padding-left: 8px; padding-right: 8px; white-space: nowrap; }
+        .row>label { display: flex; gap: 6px; align-items: center; }
+        .note { color: var(--muted); font-size: 14px; margin: 6px 0; }
+        .warn { border: 2px solid var(--bad); border-radius: var(--radius-sm); padding: 8px 12px; margin: 8px 0; }
+        .out { white-space: pre-wrap; word-break: break-word; background: var(--fill); border-radius: var(--radius-sm); padding: 10px 12px; min-height: 44px; }
+        video, #gifImg { width: 100%; max-height: 60vh; max-height: 60dvh; background: #000; border-radius: var(--radius-sm); display: block; }
+        #cue { min-height: 3em; text-align: center; font-weight: 600; white-space: pre-wrap; margin: 6px 0; }
+        canvas { width: 100%; aspect-ratio: 2/1; background: #000; border-radius: var(--radius-sm); display: block; }
+        #gifCv { max-height: 60vh; max-height: 60dvh; object-fit: contain; aspect-ratio: auto; }
+        textarea { width: 100%; min-height: 160px; box-sizing: border-box; }
+        input[type=range] { flex: 1; min-width: 120px; }
+        input[type=number] { width: 90px; }
+        .tbl { overflow-x: auto; }
+        .tbl table { border-collapse: collapse; width: 100%; font-size: 14px; }
+        .tbl th, .tbl td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+        [hidden] { display: none !important; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>影音小工具</h1>
+        <p class="sub">影片轉音訊、播放器、視覺化、語音轉文字、章節、GIF、規格速查。全部在本機，不上傳也不儲存。</p>
+
+        <div class="card">
+            <div class="tabs" id="tabs">
+                <button data-t="v2a">影片轉音訊</button><button data-t="play">播放器</button><button data-t="viz">音樂視覺化</button><button data-t="stt">語音轉文字</button><button data-t="chap">章節時間戳</button><button data-t="gif">GIF 逐格</button><button data-t="spec">規格速查</button>
+            </div>
+
+            <!-- 影片轉音訊 -->
+            <section data-p="v2a">
+                <input type="file" id="v2aFile" accept="video/*,audio/*">
+                <div class="row"><label><input type="checkbox" id="v2aMono"> 轉單聲道（檔案減半）</label></div>
+                <div class="row"><button class="primary" id="v2aGo" disabled>擷取並產生 WAV</button><button id="v2aDl" disabled>下載 WAV</button></div>
+                <p class="note" id="v2aInfo">選擇影片後會先估算記憶體。</p>
+                <audio id="v2aPlayer" controls hidden style="width:100%"></audio>
+            </section>
+
+            <!-- 播放器 -->
+            <section data-p="play" hidden>
+                <input type="file" id="plFile" accept="video/*,audio/*">
+                <video id="plV" controls playsinline></video>
+                <div id="cue"></div>
+                <div class="row"><button id="plA">設 A 點</button><button id="plB">設 B 點</button><button id="plAB" aria-pressed="false">A-B 循環</button><button id="plClr">清除</button></div>
+                <p class="note" id="plABt">A –　B –</p>
+                <div class="row"><label>速度 <input type="range" id="plRate" min="0.25" max="2" step="0.05" value="1"></label><b id="plRateT">1.00×</b><button id="plRate1">1×</button></div>
+                <div class="row"><button id="plPrev">◀ 逐格</button><button id="plNext">逐格 ▶</button><label>fps <input type="number" id="plFps" value="30" min="1" max="240"></label></div>
+                <p class="note">逐格是用 currentTime 前後移動 1/fps 秒（網頁無法精確讀出影片幀率，請自行填入 fps；實際畫面可能因關鍵格而差一格）。</p>
+                <div class="row"><button id="plMirror" aria-pressed="false">鏡像</button><label>字幕 <input type="file" id="plSub" accept=".srt,.vtt,text/vtt"></label></div>
+                <p class="note" id="plSubT"></p>
+            </section>
+
+            <!-- 音樂視覺化 -->
+            <section data-p="viz" hidden>
+                <input type="file" id="vzFile" accept="audio/*,video/*">
+                <audio id="vzA" controls style="width:100%;margin:8px 0"></audio>
+                <div class="row"><label>樣式
+                        <select id="vzStyle"><option value="bars">頻譜長條</option><option value="wave">波形</option><option value="circle">圓形頻譜</option><option value="mirror">鏡像長條</option></select></label></div>
+                <canvas id="vzCv"></canvas>
+                <p class="note">按播放後才會動（瀏覽器需要使用者手勢才能啟動音訊）。</p>
+            </section>
+
+            <!-- 語音轉文字 -->
+            <section data-p="stt" hidden>
+                <div id="sttInfo" class="note"></div>
+                <div id="sttCtl">
+                    <div class="row"><label>語言
+                            <select id="sttLang"><option value="zh-TW">國語（台灣）</option><option value="en-US">English (US)</option><option value="ja-JP">日本語</option><option value="zh-HK">粵語（香港）</option></select></label></div>
+                    <div class="row"><button class="primary" id="sttGo">開始辨識</button><button id="sttCopy">複製</button><button id="sttClr">清除</button></div>
+                    <div class="out" id="sttOut"></div>
+                </div>
+            </section>
+
+            <!-- 章節時間戳 -->
+            <section data-p="chap" hidden>
+                <p class="note">每行一個章節：時間 + 標題，例如 <code>0:00 開場</code>、<code>1:23 主題一</code>（也可用 <code>- </code> 開頭）。</p>
+                <textarea id="chIn" placeholder="0:00 開場&#10;1:30 第一章&#10;5:00 第二章"></textarea>
+                <div class="row"><label>影片長度（選填） <input type="text" id="chLen" placeholder="例 12:30" style="width:110px"></label></div>
+                <div id="chIssues"></div>
+                <div class="out" id="chOut"></div>
+                <div class="row"><button class="primary" id="chCopy">複製描述欄格式</button></div>
+                <p class="note">檢查規則依 YouTube 現行說明：第一個章節須是 00:00、至少 3 個章節、每章至少 10 秒、時間遞增；實際以 YouTube 為準。</p>
+            </section>
+
+            <!-- GIF -->
+            <section data-p="gif" hidden>
+                <input type="file" id="gifFile" accept="image/gif">
+                <p class="note" id="gifInfo"></p>
+                <img id="gifImg" alt="GIF 動畫" hidden>
+                <canvas id="gifCv" hidden></canvas>
+                <div class="row" id="gifCtl" hidden><button id="gifPrev">◀</button><input type="range" id="gifSl" min="0" max="0" value="0"><button id="gifNext">▶</button></div>
+                <p class="note" id="gifFr"></p>
+            </section>
+
+            <!-- 規格速查 -->
+            <section data-p="spec" hidden>
+                <div class="tbl"><table id="specTb"></table></div>
+                <p class="note">以上為常見範例建議值，各平台會調整，請以官方公告為準。</p>
+                <h3>比例與檔案大小</h3>
+                <div class="row"><label>寬 <input type="number" id="rW" value="1920"></label><label>高 <input type="number" id="rH" value="1080"></label><b id="rOut"></b></div>
+                <div class="row"><label>位元率 kbps <input type="number" id="sK" value="8000"></label><label>秒 <input type="number" id="sS" value="60"></label><b id="sOut"></b></div>
+            </section>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>七個處理影音檔的小功能放在同一頁。檔案只在你的瀏覽器處理，不上傳、不儲存任何資料（關掉頁面就沒了）。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>只想要影片的聲音：影片轉音訊，輸出 WAV。</li>
+            <li>練舞、練樂器、聽寫：播放器的 A-B 循環、變速、逐格、鏡像、字幕。</li>
+            <li>看音樂的頻譜；把講話轉成逐字稿；幫 YouTube 影片寫章節；逐格看 GIF；查各平台影片規格。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+            <li>影片轉音訊：選檔 → 看記憶體估算 → 「擷取並產生 WAV」→ 下載。檔案上限 500 MB，且解碼後估算超過 1 GB 會拒絕；手機請用短影片。有些格式（例如部分 mov / mkv）瀏覽器可能無法解碼。</li>
+            <li>播放器：選本機影音，播放中按「設 A 點」「設 B 點」再開啟 A-B 循環；速度滑桿 0.25–2×；字幕可載入 SRT / VTT。</li>
+            <li>音樂視覺化：選音檔、按播放，切換樣式。</li>
+            <li>語音轉文字：需要瀏覽器支援語音辨識（見下方提醒）。</li>
+            <li>章節時間戳：貼上清單，頁面檢查並產生描述欄格式。</li>
+            <li>GIF 逐格：需要支援 ImageDecoder 的瀏覽器；不支援時只能看動畫。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">章節：<br>0:00 開場<br>0:45 第一章<br>3:10 第二章 → 產生 00:00 開場 … 並通過檢查</div>
+        <h3>小提醒</h3>
+        <ul>
+            <li>語音轉文字：主要是 Chromium 系（Chrome、Edge）支援，Firefox 不支援；iOS Safari 的支援有限且不穩，不支援時只顯示說明。Chrome 的語音辨識會把聲音送到雲端服務，並非純本機。</li>
+            <li>逐格是時間步進，不是精確的幀控制。</li>
+            <li>不存任何資料，沒有需要清除或備份的東西。</li>
+            <li>規格速查是範例值，以各平台官方公告為準。</li>
+        </ul>
+    </template>
+
+    <script>
+        // --- pure ---
+        const P2 = (n) => String(n).padStart(2, '0');
+        // 影片轉音訊的限制與估算
+        const V2A_MAX_FILE = 500 * 1048576, V2A_MAX_DECODE = 1024 * 1048576;
+        function decodeEstimate(sec, sr, ch) { return { decodeBytes: sec * sr * ch * 4, wavBytes: sec * sr * ch * 2 }; }
+        // 取最多前兩軌；mono 時平均成一軌
+        function mixMono(chs) { const n = chs[0].length, o = new Float32Array(n); for (const c of chs) for (let i = 0; i < n; i++) o[i] += c[i] / chs.length; return [o]; }
+        // 16-bit PCM WAV（交錯）；回傳 ArrayBuffer
+        function wavEncode(chs, sr) {
+            const nc = Math.min(chs.length, 2), n = chs[0].length, dl = n * nc * 2, buf = new ArrayBuffer(44 + dl), v = new DataView(buf);
+            const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+            str(0, 'RIFF'); v.setUint32(4, 36 + dl, true); str(8, 'WAVE'); str(12, 'fmt '); v.setUint32(16, 16, true);
+            v.setUint16(20, 1, true); v.setUint16(22, nc, true); v.setUint32(24, sr, true); v.setUint32(28, sr * nc * 2, true); v.setUint16(32, nc * 2, true); v.setUint16(34, 16, true);
+            str(36, 'data'); v.setUint32(40, dl, true);
+            let o = 44;
+            for (let i = 0; i < n; i++) for (let c = 0; c < nc; c++) { const s = Math.max(-1, Math.min(1, chs[c][i])); v.setInt16(o, s < 0 ? s * 32768 : s * 32767, true); o += 2; }
+            return buf;
+        }
+        // 時間戳 'm:ss' / 'h:mm:ss' → 秒；失敗 NaN
+        function parseTs(s) {
+            const m = /^\s*(?:(\d+):)?(\d{1,3}):(\d{2})\s*$/.exec(String(s));
+            if (!m || +m[3] > 59 || (m[1] != null && +m[2] > 59)) return NaN;
+            return (+(m[1] || 0) * 60 + +m[2]) * 60 + +m[3];
+        }
+        function fmtTs(sec, hour) { sec = Math.max(0, Math.floor(sec)); const h = Math.floor(sec / 3600); return (h || hour ? P2(h) + ':' : '') + P2(Math.floor(sec / 60) % 60) + ':' + P2(sec % 60); }
+        // 章節清單：每行「時間 標題」；無法解析的行回傳 bad
+        function parseChapters(text) {
+            const list = [], bad = [];
+            for (const raw of String(text).split(/\r?\n/)) {
+                const line = raw.trim().replace(/^[-*•]\s*/, ''); if (!line) continue;
+                const m = /^((?:\d+:)?\d{1,3}:\d{2})\s+(.+)$/.exec(line), t = m ? parseTs(m[1]) : NaN;
+                if (Number.isNaN(t)) bad.push(raw.trim()); else list.push({ t, title: m[2].trim() });
+            }
+            return { list, bad };
+        }
+        // 依 YouTube 現行說明：首個 00:00、至少 3 個、每章至少 10 秒、遞增
+        function checkChapters(list, total) {
+            const e = [];
+            if (!list.length || list[0].t !== 0) e.push('第一個章節必須是 00:00');
+            if (list.length < 3) e.push('至少需要 3 個章節（目前 ' + list.length + '）');
+            for (let i = 1; i < list.length; i++) {
+                const d = list[i].t - list[i - 1].t;
+                if (d <= 0) e.push(`第 ${i + 1} 行（${fmtTs(list[i].t)}）沒有大於前一個時間`);
+                else if (d < 10) e.push(`第 ${i} 章只有 ${d} 秒，至少需要 10 秒`);
+            }
+            if (total != null && !Number.isNaN(total) && list.length) {
+                const last = list[list.length - 1]; if (last.t >= total) e.push('最後章節的時間超過影片長度'); else if (total - last.t < 10) e.push('最後一章不到 10 秒');
+            }
+            return e;
+        }
+        function chaptersText(list) { const h = list.some(c => c.t >= 3600); return list.map(c => fmtTs(c.t, h) + ' ' + c.title).join('\n'); }
+        // 字幕 SRT / VTT → [{s,e,t}]（秒）
+        function parseCues(text) {
+            const cues = [], lines = String(text).replace(/^﻿/, '').replace(/\r\n?/g, '\n').split('\n');
+            const T = '(?:\\d+:)?\\d+:\\d+(?:[.,]\\d+)?', re = new RegExp(`^\\s*(${T})\\s*-->\\s*(${T})`);
+            const sec = (x) => { const p = x.replace(',', '.').split(':').map(Number); return p.reduce((a, b) => a * 60 + b, 0); };
+            let cur = null;
+            for (const l of lines) {
+                const m = re.exec(l);
+                if (m) { cur = { s: sec(m[1]), e: sec(m[2]), t: [] }; cues.push(cur); }
+                else if (!l.trim()) cur = null;
+                else if (cur) cur.t.push(l.replace(/<[^>]*>/g, ''));
+            }
+            return cues.slice(0, 20000).map(c => ({ s: c.s, e: c.e, t: c.t.join('\n') }));
+        }
+        function activeCue(cues, t) { const c = cues.find(x => t >= x.s && t < x.e); return c ? c.t : ''; }
+        function gcd(a, b) { return b ? gcd(b, a % b) : a; }
+        function ratioOf(w, h) { w = Math.round(w); h = Math.round(h); if (!(w > 0 && h > 0)) return ''; const g = gcd(w, h); return `${w / g}:${h / g}`; }
+        function sizeMB(kbps, sec) { return kbps * 1000 / 8 * sec / 1048576; }
+        // 規格表（範例值；以官方為準）。r = 比例，w×h，kbps 為建議位元率文字
+        const SPECS = [
+            { name: 'YouTube 一般影片 1080p', r: '16:9', w: 1920, h: 1080, br: '約 8 Mbps（24–30fps）', note: '720p 約 5 Mbps、1440p 約 16 Mbps' },
+            { name: 'YouTube 一般影片 4K', r: '16:9', w: 3840, h: 2160, br: '約 35–45 Mbps（24–30fps）', note: '高幀率另需更高' },
+            { name: 'YouTube 一般影片 720p', r: '16:9', w: 1280, h: 720, br: '約 5 Mbps（24–30fps）', note: '' },
+            { name: 'YouTube Shorts', r: '9:16', w: 1080, h: 1920, br: '約 8 Mbps', note: '直式短影片，長度上限以官方為準' },
+            { name: 'Instagram 限時動態 / Reels', r: '9:16', w: 1080, h: 1920, br: '約 3.5–8 Mbps', note: '上下緣可能被介面遮住' },
+            { name: 'Instagram 動態（直式）', r: '4:5', w: 1080, h: 1350, br: '約 3.5–8 Mbps', note: '' },
+            { name: 'Instagram 動態（方形）', r: '1:1', w: 1080, h: 1080, br: '約 3.5–8 Mbps', note: '' },
+            { name: 'TikTok', r: '9:16', w: 1080, h: 1920, br: '約 3.5–8 Mbps', note: '' },
+            { name: 'Facebook 動態（橫式）', r: '16:9', w: 1920, h: 1080, br: '約 4–8 Mbps', note: '' },
+            { name: 'Twitch 直播 1080p', r: '16:9', w: 1920, h: 1080, br: '約 4.5–6 Mbps', note: '實際上限依帳號與官方建議' },
+            { name: 'Full HD 電視 / 通用', r: '16:9', w: 1920, h: 1080, br: '約 8–12 Mbps', note: '' },
+            { name: 'DCI 4K 影院', r: '256:135', w: 4096, h: 2160, br: '依編碼設定', note: '' }
+        ];
+        // --- /pure ---
+
+        const $ = (id) => document.getElementById(id);
+        const mb = (b) => (b / 1048576).toFixed(1) + ' MB';
+        const fileOf = (id) => $(id).files && $(id).files[0];
+        let tab = 'v2a';
+        function showTab(t) {
+            tab = t;
+            document.querySelectorAll('[data-p]').forEach(s => s.hidden = s.dataset.p !== t);
+            [...$('tabs').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.t === t));
+            if (t !== 'play') $('plV').pause();
+            if (t !== 'viz') $('vzA').pause();
+            if (t === 'stt') sttInit();
+        }
+        $('tabs').onclick = (e) => { if (e.target.dataset.t) showTab(e.target.dataset.t); };
+
+        // ---------- 影片轉音訊 ----------
+        let v2aDur = 0, v2aBlob = null, v2aName = 'audio', v2aUrl = '';
+        $('v2aFile').onchange = () => {
+            const f = fileOf('v2aFile'); $('v2aGo').disabled = true; $('v2aDl').disabled = true; v2aBlob = null; $('v2aPlayer').hidden = true;
+            if (!f) return;
+            v2aName = f.name.replace(/\.[^.]*$/, '') || 'audio';
+            if (f.size > V2A_MAX_FILE) { $('v2aInfo').innerHTML = `<span class="warn">檔案 ${mb(f.size)} 超過上限 ${mb(V2A_MAX_FILE)}，請先剪短或用其他軟體處理。</span>`; return; }
+            const m = document.createElement('video'), u = URL.createObjectURL(f);
+            m.preload = 'metadata';
+            m.onloadedmetadata = () => {
+                v2aDur = m.duration; URL.revokeObjectURL(u);
+                const est = decodeEstimate(v2aDur, 44100, 2);
+                if (!isFinite(v2aDur) || est.decodeBytes > V2A_MAX_DECODE) { $('v2aInfo').innerHTML = `<span class="warn">長度 ${Math.round(v2aDur)} 秒，解碼約需 ${mb(est.decodeBytes)} 記憶體，超過上限 ${mb(V2A_MAX_DECODE)}，無法處理。</span>`; return; }
+                $('v2aInfo').textContent = `長度約 ${fmtTs(v2aDur)}；解碼約需 ${mb(est.decodeBytes)} 記憶體，WAV 約 ${mb(est.wavBytes)}（單聲道減半）。手機記憶體小，請留意。`;
+                $('v2aGo').disabled = false;
+            };
+            m.onerror = () => { URL.revokeObjectURL(u); $('v2aInfo').innerHTML = '<span class="warn">瀏覽器無法讀取這個檔案（格式不支援）。</span>'; };
+            m.src = u;
+        };
+        $('v2aGo').onclick = async () => {
+            const f = fileOf('v2aFile'); if (!f) return;
+            $('v2aGo').disabled = true; $('v2aInfo').textContent = '解碼中…（大檔可能要幾十秒）';
+            try {
+                const ac = new OfflineAudioContext(1, 1, 44100);
+                const ab = await ac.decodeAudioData(await f.arrayBuffer());
+                let chs = []; for (let i = 0; i < Math.min(2, ab.numberOfChannels); i++) chs.push(ab.getChannelData(i));
+                if ($('v2aMono').checked) chs = mixMono(chs);
+                v2aBlob = new Blob([wavEncode(chs, ab.sampleRate)], { type: 'audio/wav' });
+                if (v2aUrl) URL.revokeObjectURL(v2aUrl);
+                v2aUrl = URL.createObjectURL(v2aBlob); $('v2aPlayer').src = v2aUrl; $('v2aPlayer').hidden = false;
+                $('v2aInfo').textContent = `完成：${fmtTs(ab.duration)}、${ab.sampleRate} Hz、${chs.length} 聲道、${mb(v2aBlob.size)}。`;
+                $('v2aDl').disabled = false;
+            } catch (e) { $('v2aInfo').innerHTML = '<span class="warn">解碼失敗：這個檔案沒有音軌，或瀏覽器不支援它的音訊編碼。</span>'; }
+            $('v2aGo').disabled = false;
+        };
+        $('v2aDl').onclick = () => v2aBlob && Util.download(v2aBlob, v2aName + '.wav');
+
+        // ---------- 播放器 ----------
+        const V = $('plV'); let A = null, B = null, cues = [], loopOn = false, plUrl = '';
+        const abText = () => { $('plABt').textContent = `A ${A == null ? '–' : fmtTs(A)}　B ${B == null ? '–' : fmtTs(B)}`; };
+        $('plFile').onchange = () => { const f = fileOf('plFile'); if (!f) return; if (plUrl) URL.revokeObjectURL(plUrl); plUrl = URL.createObjectURL(f); V.src = plUrl; A = B = null; abText(); };
+        $('plA').onclick = () => { A = V.currentTime; if (B != null && B <= A) B = null; abText(); };
+        $('plB').onclick = () => { if (V.currentTime > (A || 0)) { B = V.currentTime; abText(); } };
+        $('plAB').onclick = () => { loopOn = !loopOn; $('plAB').setAttribute('aria-pressed', loopOn); };
+        $('plClr').onclick = () => { A = B = null; loopOn = false; $('plAB').setAttribute('aria-pressed', false); abText(); };
+        setInterval(() => { if (loopOn && A != null && B != null && !V.paused && V.currentTime >= B) V.currentTime = A; }, 50);
+        const setRate = (r) => { V.playbackRate = r; V.preservesPitch = true; $('plRate').value = r; $('plRateT').textContent = Number(r).toFixed(2) + '×'; };
+        $('plRate').oninput = () => setRate(+$('plRate').value); $('plRate1').onclick = () => setRate(1);
+        const step = (d) => { V.pause(); const fps = Math.min(240, Math.max(1, +$('plFps').value || 30)); V.currentTime = Math.max(0, Math.min(V.duration || 0, V.currentTime + d / fps)); };
+        $('plPrev').onclick = () => step(-1); $('plNext').onclick = () => step(1);
+        $('plMirror').onclick = () => { const on = $('plMirror').getAttribute('aria-pressed') !== 'true'; $('plMirror').setAttribute('aria-pressed', on); V.style.transform = on ? 'scaleX(-1)' : ''; };
+        $('plSub').onchange = async () => {
+            const f = fileOf('plSub'); if (!f) return;
+            if (f.size > 5 * 1048576) { $('plSubT').textContent = '字幕檔過大（上限 5 MB）'; return; }
+            cues = parseCues(await f.text()); $('plSubT').textContent = cues.length ? `已載入 ${cues.length} 行字幕` : '找不到字幕，請確認是 SRT / VTT 格式（需 UTF-8）';
+        };
+        V.addEventListener('timeupdate', () => { $('cue').textContent = activeCue(cues, V.currentTime); });
+        V.addEventListener('seeked', () => { $('cue').textContent = activeCue(cues, V.currentTime); });
+
+        // ---------- 音樂視覺化 ----------
+        const VA = $('vzA'), cv = $('vzCv'), cx = cv.getContext('2d'); let an = null, ac2 = null, raf = 0, vzUrl = '';
+        $('vzFile').onchange = () => { const f = fileOf('vzFile'); if (!f) return; if (vzUrl) URL.revokeObjectURL(vzUrl); vzUrl = URL.createObjectURL(f); VA.src = vzUrl; };
+        VA.addEventListener('play', () => {
+            if (!ac2) {
+                const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+                ac2 = new AC(); an = ac2.createAnalyser(); an.fftSize = 2048; an.smoothingTimeConstant = 0.8;
+                ac2.createMediaElementSource(VA).connect(an); an.connect(ac2.destination);
+            }
+            if (ac2.state === 'suspended') ac2.resume();
+            cancelAnimationFrame(raf); draw();
+        });
+        function draw() {
+            const dpr = devicePixelRatio || 1, w = cv.width = Math.round(cv.clientWidth * dpr) || 300, h = cv.height = Math.round(w / 2), st = $('vzStyle').value;
+            const col = getComputedStyle(document.documentElement).getPropertyValue('--blue').trim() || '#4a9eff';
+            cx.clearRect(0, 0, w, h); cx.fillStyle = col; cx.strokeStyle = col; cx.lineWidth = 2 * dpr;
+            const f = new Uint8Array(an.frequencyBinCount), t = new Uint8Array(an.fftSize); an.getByteFrequencyData(f); an.getByteTimeDomainData(t);
+            const N = 64, bw = w / N;
+            if (st === 'bars' || st === 'mirror') for (let i = 0; i < N; i++) { const bh = f[Math.floor(i * i / N * 0.9) + 1] / 255 * h * (st === 'mirror' ? 0.5 : 1); if (st === 'bars') cx.fillRect(i * bw + 1, h - bh, bw - 2, bh); else cx.fillRect(i * bw + 1, h / 2 - bh, bw - 2, bh * 2); }
+            else if (st === 'wave') { cx.beginPath(); for (let i = 0; i < t.length; i += 4) { const x = i / t.length * w, y = t[i] / 255 * h; i ? cx.lineTo(x, y) : cx.moveTo(x, y); } cx.stroke(); }
+            else { const r0 = h * 0.22, mx = w / 2, my = h / 2; for (let i = 0; i < N; i++) { const a = i / N * Math.PI * 2, l = f[Math.floor(i * i / N * 0.9) + 1] / 255 * h * 0.3; cx.beginPath(); cx.moveTo(mx + Math.cos(a) * r0, my + Math.sin(a) * r0); cx.lineTo(mx + Math.cos(a) * (r0 + l), my + Math.sin(a) * (r0 + l)); cx.stroke(); } }
+            if (!VA.paused) raf = requestAnimationFrame(draw);
+        }
+
+        // ---------- 語音轉文字 ----------
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        let rec = null, finalT = '', listening = false;
+        function sttInit() {
+            if (!SR) {
+                $('sttCtl').hidden = true;
+                $('sttInfo').innerHTML = '<div class="warn">這個瀏覽器不支援語音辨識（Web Speech API）。請改用電腦或 Android 的 Chrome / Edge；Firefox 不支援，iOS 上的瀏覽器支援有限。</div>';
+                return;
+            }
+            $('sttInfo').innerHTML = (isIOS ? '<div class="warn">iOS 的語音辨識支援有限且不穩定，可能無法啟動或很快中斷；建議改用電腦或 Android 的 Chrome。</div>' : '') + '辨識通常會把聲音送到瀏覽器供應商的雲端服務（需要網路與麥克風權限）。';
+        }
+        const sttShow = (interim) => { $('sttOut').textContent = finalT + (interim || ''); };
+        $('sttGo').onclick = () => {
+            if (!SR) return;
+            if (listening) { rec.stop(); return; }
+            rec = new SR(); rec.lang = $('sttLang').value; rec.continuous = true; rec.interimResults = true;
+            rec.onresult = (e) => { let it = ''; for (let i = e.resultIndex; i < e.results.length; i++) { const r = e.results[i]; if (r.isFinal) finalT += r[0].transcript + '\n'; else it += r[0].transcript; } sttShow(it); };
+            rec.onerror = (e) => { $('sttInfo').innerHTML = `<div class="warn">辨識錯誤：${Util.esc(e.error || '未知')}（常見原因：未允許麥克風、沒有網路、不支援此語言）</div>`; };
+            rec.onend = () => { listening = false; $('sttGo').textContent = '開始辨識'; };
+            try { rec.start(); listening = true; $('sttGo').textContent = '停止'; } catch (e) { listening = false; }
+        };
+        $('sttCopy').onclick = () => Util.copyWithFeedback($('sttCopy'), $('sttOut').textContent);
+        $('sttClr').onclick = () => { finalT = ''; sttShow(''); };
+
+        // ---------- 章節 ----------
+        function chapUpdate() {
+            const { list, bad } = parseChapters($('chIn').value), lenTxt = $('chLen').value.trim(), total = lenTxt ? parseTs(lenTxt) : null;
+            const es = checkChapters(list, total);
+            if (lenTxt && Number.isNaN(total)) es.push('影片長度格式不正確（例 12:30）');
+            bad.forEach(b => es.push('無法解析：' + b));
+            $('chIssues').innerHTML = $('chIn').value.trim() ? (es.length ? '<div class="warn">' + es.map(Util.esc).join('<br>') + '</div>' : '<p class="note">檢查通過。</p>') : '';
+            $('chOut').textContent = chaptersText(list);
+        }
+        $('chIn').oninput = $('chLen').oninput = chapUpdate;
+        $('chCopy').onclick = () => Util.copyWithFeedback($('chCopy'), $('chOut').textContent);
+
+        // ---------- GIF ----------
+        let gifDec = null, gifN = 0, gifUrl = '', gifSeq = 0;
+        async function gifShow(i) {
+            if (!gifDec) return; const seq = ++gifSeq;
+            try {
+                const { image } = await gifDec.decode({ frameIndex: i });
+                if (seq !== gifSeq) { image.close(); return; }
+                const c = $('gifCv'); c.width = image.displayWidth; c.height = image.displayHeight; c.getContext('2d').drawImage(image, 0, 0);
+                $('gifFr').textContent = `第 ${i + 1} / ${gifN} 格　延遲 ${image.duration ? Math.round(image.duration / 1000) + ' ms' : '未知'}`; image.close();
+            } catch (e) { $('gifFr').textContent = '這一格解碼失敗'; }
+        }
+        $('gifFile').onchange = async () => {
+            const f = fileOf('gifFile'); gifSeq++; if (gifDec) { gifDec.close(); gifDec = null; }
+            ['gifImg', 'gifCv', 'gifCtl'].forEach(id => $(id).hidden = true); $('gifFr').textContent = ''; if (!f) return;
+            if (f.size > 30 * 1048576) { $('gifInfo').textContent = 'GIF 超過 30 MB 上限。'; return; }
+            if (gifUrl) URL.revokeObjectURL(gifUrl); gifUrl = URL.createObjectURL(f); $('gifImg').src = gifUrl;
+            if (!('ImageDecoder' in window)) { $('gifImg').hidden = false; $('gifInfo').textContent = '這個瀏覽器不支援 ImageDecoder，無法逐格；只能觀看動畫。（Chrome / Edge 支援；Safari、Firefox 目前依版本而定）'; return; }
+            try {
+                gifDec = new ImageDecoder({ data: await f.arrayBuffer(), type: 'image/gif' });
+                await gifDec.tracks.ready; gifN = Math.min(gifDec.tracks.selectedTrack.frameCount, 5000);
+                $('gifSl').max = gifN - 1; $('gifSl').value = 0; $('gifCv').hidden = false; $('gifCtl').hidden = false;
+                $('gifInfo').textContent = `共 ${gifN} 格。用滑桿或箭頭逐格查看。`; gifShow(0);
+            } catch (e) { gifDec = null; $('gifImg').hidden = false; $('gifInfo').textContent = '逐格解碼失敗，改為觀看動畫（檔案可能不是有效的 GIF）。'; }
+        };
+        const gifGo = (i) => { i = Math.max(0, Math.min(gifN - 1, i)); $('gifSl').value = i; gifShow(i); };
+        $('gifSl').oninput = () => gifGo(+$('gifSl').value);
+        $('gifPrev').onclick = () => gifGo(+$('gifSl').value - 1); $('gifNext').onclick = () => gifGo(+$('gifSl').value + 1);
+
+        // ---------- 規格 ----------
+        $('specTb').innerHTML = '<tr><th>平台 / 用途</th><th>比例</th><th>解析度</th><th>位元率（範例）</th><th>備註</th></tr>' + SPECS.map(s => `<tr><td>${Util.esc(s.name)}</td><td>${s.r}</td><td>${s.w}×${s.h}</td><td>${Util.esc(s.br)}</td><td>${Util.esc(s.note)}</td></tr>`).join('');
+        const calc = () => { $('rOut').textContent = ratioOf(+$('rW').value, +$('rH').value) || '請輸入正整數'; const s = sizeMB(+$('sK').value, +$('sS').value); $('sOut').textContent = s > 0 ? '≈ ' + s.toFixed(1) + ' MB' : ''; };
+        ['rW', 'rH', 'sK', 'sS'].forEach(id => $(id).oninput = calc); calc();
+
+        showTab('v2a');
+    </script>
+</body>
+
+</html>

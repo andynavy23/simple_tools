@@ -204,6 +204,15 @@
             <div id="cvd"></div>
         </div>
 
+        <div class="card" id="domCard">
+            <h2>圖片主色</h2>
+            <p class="note">選一張圖片，用 k-means 萃取主色與配色（只在這台裝置處理，不會上傳；取樣前會縮小）。</p>
+            <div class="row"><label class="sub" style="margin:0;flex:1 1 100%;min-width:0">圖片 <input type="file" id="domFile" accept="image/*" style="max-width:100%"></label></div>
+            <div class="row"><label for="domK" class="sub" style="margin:0">顏色數</label><select id="domK" aria-label="顏色數"><option>3</option><option>4</option><option selected>5</option><option>6</option><option>8</option></select><button class="sm" id="domCopy" hidden>複製全部 HEX</button></div>
+            <div id="domMsg" class="note"></div>
+            <div id="domOut"></div>
+        </div>
+
         <div class="card" id="cvdLab">
             <h2>色盲模擬（色票 / 圖片）</h2>
             <p class="note">貼上多個色碼，或選一張圖片（只在這台裝置處理，不會上傳；超過 1024px 會先縮小）。</p>
@@ -238,6 +247,7 @@
         <li>「對比度檢查」設定文字與背景，看比值與 AA / AAA 是否通過</li>
         <li>「色覺模擬」顯示四種色覺下的對比，比值太低要換色</li>
         <li>「色盲模擬」貼多個色碼或選圖片，同時看紅 / 綠 / 藍黃 / 全色盲與弱視（可拉嚴重度）；下方「配色診斷」會標出可能難以分辨的色票組合</li>
+        <li>「圖片主色」選圖片與顏色數，萃取主色與占比；點色塊複製、「設為主色」帶入上方；用固定種子，同一張圖每次結果相同</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">色盲模擬貼上 <b>#e53935 #43a047</b>（紅、綠），診斷會標出這組在紅 / 綠色盲下 ΔE 很小、可能難以分辨。<br>主色 <b>#0071e3</b> = rgb(0, 113, 227) = hsl(210, 100%, 45%)。<br>文字 #1d1d1f、背景 #ffffff 的對比度是 <b>16.83 : 1</b>，四項標準全部通過。</div>
@@ -248,11 +258,13 @@
         <li>色票庫最多存 100 色，滿了要先刪除才能再存；只存在你的瀏覽器</li>
         <li>色覺模擬是近似值，僅供參考（Machado 2009 模型，線性 RGB 空間）；弱視是依嚴重度內插的簡化版</li>
         <li>配色診斷用 CIE76 色差 ΔE：低於 10 視為「可能難以分辨」，色票最多 12 個；圖片與貼上的色碼不會儲存或上傳</li>
+        <li>圖片主色是近似值（縮小後取樣約 4000 點、RGB 空間 k-means）；圖片超過 20MB 會拒絕；結果不儲存、不上傳</li>
         </ul>
     </template>
 
     <script src="../shared/js/util.js"></script>
     <script>
+        const { seeded } = Util;
         // --- pure ---
         const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
@@ -425,6 +437,28 @@
             const c = typeof color === 'string' ? parseColor(color) : color;
             if (!c) return [];
             return twPalette().map((t, i) => ({ name: t.name, hex: t.hex, de: deltaE(c, t.rgb), i })).sort((a, b) => a.de - b.de || a.i - b.i).slice(0, Math.max(1, n)).map(({ i, ...o }) => o);
+        }
+        // 圖片主色：k-means（k-means++ 起點，固定種子可重現）。rgba 為 RGBA 位元組；最多等距取樣 maxSamples 點；回傳依占比由大到小的 [{r,g,b,share}]
+        function kmeans(rgba, k, seed = 1, maxSamples = 4000, iters = 12) {
+            const pts = [], total = rgba.length / 4, step = Math.max(1, Math.floor(total / maxSamples));
+            for (let i = 0; i < total; i += step) if (rgba[i * 4 + 3] >= 128) pts.push([rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]]);
+            if (!pts.length) return [];
+            k = Math.max(1, Math.min(k | 0, pts.length));
+            const rnd = seeded(seed), d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+            const cen = [pts[rnd.int(pts.length)].slice()];
+            while (cen.length < k) {
+                const ds = pts.map(p => Math.min(...cen.map(c => d2(p, c)))), sum = ds.reduce((a, b) => a + b, 0);
+                if (!sum) break;
+                let t = rnd() * sum, i = 0; while (i < ds.length - 1 && (t -= ds[i]) > 0) i++;
+                cen.push(pts[i].slice());
+            }
+            let cnt = [];
+            for (let it = 0; it < iters; it++) {
+                const sums = cen.map(() => [0, 0, 0]); cnt = cen.map(() => 0);
+                for (const p of pts) { let bi = 0, bd = Infinity; cen.forEach((c, i) => { const d = d2(p, c); if (d < bd) { bd = d; bi = i; } }); cnt[bi]++; for (let j = 0; j < 3; j++) sums[bi][j] += p[j]; }
+                cen.forEach((c, i) => { if (cnt[i]) for (let j = 0; j < 3; j++) c[j] = sums[i][j] / cnt[i]; });
+            }
+            return cen.map((c, i) => ({ r: Math.round(c[0]), g: Math.round(c[1]), b: Math.round(c[2]), share: cnt[i] / pts.length })).filter(c => c.share > 0).sort((a, b) => b.share - a.share);
         }
         // --- /pure ---
 
@@ -619,6 +653,39 @@
                 im.src = url;
             };
             run();
+        }
+        {
+            const out = $('#domOut'), msgEl = $('#domMsg');
+            let cols = [], cur = null;
+            const draw = () => {
+                $('#domCopy').hidden = !cols.length;
+                out.replaceChildren(...cols.map(c => {
+                    const hex = toHex(c), row = document.createElement('div'), sw = document.createElement('button'), info = document.createElement('span'), use = document.createElement('button');
+                    row.className = 'li val'; row.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+                    sw.style.cssText = 'width:44px;height:44px;border-radius:8px;border:1px solid var(--line);flex:none;padding:0;background:' + hex; sw.title = '點擊複製'; sw.setAttribute('aria-label', '複製 ' + hex);
+                    sw.onclick = () => Util.copyWithFeedback(sw, hex);
+                    info.style.cssText = 'flex:1 1 120px;min-width:0'; info.textContent = hex + '　' + (c.share * 100).toFixed(1) + '%';
+                    use.className = 'sm'; use.textContent = '設為主色'; use.onclick = () => { $('#color').value = hex; $('#picker').value = hex; $('#color').classList.remove('bad'); renderMain(); };
+                    row.append(sw, info, use); return row;
+                }));
+            };
+            const run = () => {
+                const { w, h } = fitSize(cur.naturalWidth, cur.naturalHeight, 128), cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+                const cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(cur, 0, 0, w, h);
+                try { cols = kmeans(cx.getImageData(0, 0, w, h).data, +$('#domK').value, 1); } catch (e) { cols = []; msgEl.textContent = '這張圖片無法讀取'; }
+                draw();
+            };
+            $('#domK').onchange = () => { if (cur) run(); };
+            $('#domCopy').onclick = (e) => Util.copyWithFeedback(e.target, cols.map(toHex).join(' '));
+            $('#domFile').onchange = (e) => {
+                const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+                if (!/^image\//.test(f.type)) { msgEl.textContent = '請選圖片檔'; return; }
+                if (f.size > 20 * 1024 * 1024) { msgEl.textContent = '圖片超過 20MB，請先縮小'; return; }
+                const u = URL.createObjectURL(f), im = new Image();
+                im.onload = () => { URL.revokeObjectURL(u); cur = im; msgEl.textContent = f.name.slice(0, 40) + '（' + im.naturalWidth + '×' + im.naturalHeight + '）'; run(); };
+                im.onerror = () => { URL.revokeObjectURL(u); msgEl.textContent = '圖片讀取失敗'; };
+                im.src = u;
+            };
         }
     </script>
 </body>

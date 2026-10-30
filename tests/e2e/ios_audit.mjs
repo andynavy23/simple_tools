@@ -54,7 +54,7 @@ async function worker() {
                 if (m.ov) issues.push(`${tag} html/body 設了 overflow:${m.ov}（頁面可能無法捲動）`);
                 if (m.clipped) issues.push(`${tag} 內容被切掉、捲不到：${m.clipped}`);
                 if (m.smallInputs.length && label.startsWith('Safari 工具列展開')) issues.push(`${tag} 輸入框字級 < 16px（iOS 聚焦時會自動放大頁面）：${m.smallInputs.join('；')}`);
-                if (m.blockers.length && m.docH > m.vh + 120 && !/(game-2048|snake|sketchpad|nonogram|draw-guess|art-relay|minesweeper|maze)/.test(rel)) issues.push(`${tag} 大面積 touch-action:none（手指在上面無法捲動頁面）：${m.blockers.join('；')}`);
+                if (m.blockers.length && m.docH > m.vh + 120 && !/(game-2048|snake|sketchpad|nonogram|draw-guess|art-relay|art-studio|minesweeper|maze)/.test(rel)) issues.push(`${tag} 大面積 touch-action:none（手指在上面無法捲動頁面）：${m.blockers.join('；')}`);
                 if (m.fixedBig.length) issues.push(`${tag} 大面積固定定位元素：${m.fixedBig.join('；')}`);
                 if (m.docH > m.vh + 12 && !m.ov) {      // 程式捲動只能驗證「文件確實可以捲」（行動版 WebKit 不支援滾輪與合成觸控）
                     await p.evaluate(() => scrollTo(0, 200)); const y = await p.evaluate(() => document.scrollingElement.scrollTop);

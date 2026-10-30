@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="EPUB 閱讀器：本機載入 EPUB 電子書，章節目錄、字級行距主題可調、記住閱讀進度，檔案不會上傳。">
+    <meta name="st-keys" content="epub_settings,epub_prog_*">
+    <title>EPUB 閱讀器</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root { --wrap-w: 760px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .row > label { display: flex; gap: 6px; align-items: center; }
+        .row select { flex: 1 1 160px; min-width: 0; }
+        #msg { margin: 8px 0 0; }
+        #msg.err { color: var(--bad); }
+        #reader { height: 65vh; height: 65dvh; overflow-y: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; padding: 14px 16px; border-radius: var(--radius-sm); background: var(--card); color: var(--text); border: 1px solid var(--line); overflow-wrap: anywhere; }
+        #reader.t-sepia { background: #f4ecd8; color: #433422; }
+        #reader.t-dark { background: #111; color: #ccc; }
+        #reader img { max-width: 100%; height: auto; }
+        #reader h1, #reader h2, #reader h3 { line-height: 1.3; }
+        #reader a { color: inherit; text-decoration: none; }
+        #nav { margin-top: 10px; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+        #nav span { text-align: center; flex: 1; }
+        .prog { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+        .prog span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>EPUB 閱讀器</h1>
+        <p class="sub">本機載入 EPUB，看目錄、調字級、記住讀到哪。書本內容不會上傳，也不會存進瀏覽器，只存閱讀進度。</p>
+
+        <div class="card">
+            <input type="file" id="file" accept=".epub,application/epub+zip" aria-label="選擇 EPUB 檔案">
+            <p class="muted" id="msg">選一個 EPUB 檔（上限 50MB）。</p>
+        </div>
+
+        <div id="book" hidden>
+            <div class="card">
+                <div class="row"><select id="toc" aria-label="章節目錄"></select></div>
+                <div class="row" style="margin-top:8px">
+                    <label>字級 <input type="range" id="size" min="14" max="30" step="1"></label>
+                    <label>行距 <input type="range" id="lh" min="1.3" max="2.4" step="0.1"></label>
+                    <label>主題 <select id="theme"><option value="">跟隨頁面</option><option value="sepia">米黃</option><option value="dark">夜間</option></select></label>
+                </div>
+                <div id="reader" tabindex="0" aria-live="polite"></div>
+                <div id="nav"><button id="prev">‹ 上一章</button><span class="muted" id="pos"></span><button id="next" class="primary">下一章 ›</button></div>
+            </div>
+        </div>
+
+        <div class="card" id="progCard" hidden>
+            <h2 style="margin-top:0">已記住的閱讀進度（<span id="progN">0</span>/50）</h2>
+            <div id="progList"></div>
+            <button class="sm" id="progClear" style="margin-top:8px">清除全部閱讀進度</button>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>在瀏覽器裡讀 EPUB 電子書的閱讀器。檔案只在本機解析，不會上傳；書本內容不會存起來，只記「這本書讀到第幾章、第幾成」。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>手邊有無 DRM 的 EPUB，想快速打開來讀。</li>
+        <li>同一本書下次再載入，會自動回到上次的位置。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>按「選擇檔案」挑一個 .epub。</li>
+        <li>用上方下拉選單跳章節，或按「上一章 / 下一章」。</li>
+        <li>拖曳滑桿調整字級與行距，主題可選跟隨頁面、米黃或夜間。</li>
+        <li>下方列出已記住進度的書，可單筆刪除或全部清除。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">載入《某某小說.epub》讀到第 5 章中段，關掉頁面。下次載入同一個檔案，自動跳到第 5 章中段。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>只支援未加密的 EPUB，單檔上限 50MB；解析失敗會顯示原因。</li>
+        <li>章節內的 script、外部圖片與外部連結都會被移除，只顯示書內圖片。</li>
+        <li>進度以「檔名 + 大小 + 內容雜湊」辨識同一本書，最多記 50 本，滿了會淘汰最久沒讀的一本。</li>
+        <li>「清除全部閱讀進度」會刪除所有書的進度，無法復原（字級等設定保留）。</li>
+        <li>進度只存在這個瀏覽器；可用右上角 💾 備份。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store } = Util;
+
+        // --- pure ---
+        const MAX_FILE = 50 * 1024 * 1024, MAX_ENTRY = 30 * 1024 * 1024, MAX_PROG = 50;
+        const u16 = (b, o) => b[o] | (b[o + 1] << 8), u32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
+        // 解析 ZIP 中央目錄；不支援 ZIP64 與加密
+        function zipEntries(b) {
+            if (!(b instanceof Uint8Array) || b.length < 22) throw new Error('不是有效的 EPUB（ZIP）檔');
+            let e = -1;
+            for (let i = b.length - 22; i >= Math.max(0, b.length - 22 - 65535); i--) if (u32(b, i) === 0x06054b50) { e = i; break; }
+            if (e < 0) throw new Error('不是有效的 EPUB（找不到 ZIP 目錄）');
+            const n = u16(b, e + 10), off = u32(b, e + 16);
+            if (n === 0xffff || off === 0xffffffff) throw new Error('不支援 ZIP64');
+            const out = [], dec = new TextDecoder();
+            let p = off;
+            for (let i = 0; i < n; i++) {
+                if (p + 46 > b.length || u32(b, p) !== 0x02014b50) throw new Error('ZIP 目錄損壞');
+                const nl = u16(b, p + 28), xl = u16(b, p + 30), cl = u16(b, p + 32);
+                if (p + 46 + nl > b.length) throw new Error('ZIP 目錄損壞');
+                out.push({ name: dec.decode(b.subarray(p + 46, p + 46 + nl)), flag: u16(b, p + 8), method: u16(b, p + 10), csize: u32(b, p + 20), usize: u32(b, p + 24), off: u32(b, p + 42) });
+                p += 46 + nl + xl + cl;
+            }
+            return out;
+        }
+        // 讀出一個項目的位元組（STORE 直接切；DEFLATE 用 DecompressionStream('deflate-raw')）
+        async function zipRead(b, en) {
+            if (en.flag & 1) throw new Error('檔案已加密（DRM），無法開啟');
+            if (en.usize > MAX_ENTRY) throw new Error('內部檔案太大：' + en.name);
+            const o = en.off;
+            if (o + 30 > b.length || u32(b, o) !== 0x04034b50) throw new Error('ZIP 資料損壞：' + en.name);
+            const s = o + 30 + u16(b, o + 26) + u16(b, o + 28), raw = b.subarray(s, s + en.csize);
+            if (s + en.csize > b.length) throw new Error('ZIP 資料不完整：' + en.name);
+            if (en.method === 0) return raw;
+            if (en.method !== 8) throw new Error('不支援的壓縮方式：' + en.method);
+            const rd = new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader(), parts = [];
+            let len = 0;
+            for (; ;) {
+                const { done, value } = await rd.read();
+                if (done) break;
+                len += value.length;
+                if (len > MAX_ENTRY) { rd.cancel(); throw new Error('解壓後太大：' + en.name); }
+                parts.push(value);
+            }
+            const r = new Uint8Array(len); let q = 0;
+            for (const x of parts) { r.set(x, q); q += x.length; }
+            return r;
+        }
+        const unxml = (s) => String(s).replace(/<[^>]*>/g, '').replace(/&(#x?[0-9a-f]+|amp|lt|gt|quot|apos);/gi, (m, g) => g[0] === '#' ? String.fromCodePoint(+(g[1].toLowerCase() === 'x' ? '0' + g.slice(1) : g.slice(1)) || 63) : { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }[g.toLowerCase()]).replace(/\s+/g, ' ').trim();
+        const attr = (tag, name) => { const m = new RegExp('(?:^|[\\s<])' + name + '\\s*=\\s*("([^"]*)"|\'([^\']*)\')', 'i').exec(tag); return m ? (m[2] ?? m[3]) : ''; };
+        const rootfilePath = (xml) => { const m = /<rootfile\b[^>]*>/i.exec(xml); return m ? attr(m[0], 'full-path') : ''; };
+        // 解析 href（相對於 base 檔案的路徑），去掉 # 片段並解碼
+        function resolvePath(base, href) {
+            href = String(href).split('#')[0];
+            try { href = decodeURIComponent(href); } catch (e) { /* 保持原樣 */ }
+            const parts = base.split('/').slice(0, -1);
+            for (const seg of href.split('/')) { if (seg === '..') parts.pop(); else if (seg && seg !== '.') parts.push(seg); }
+            return parts.join('/');
+        }
+        function parseOpf(xml) {
+            const manifest = {};
+            for (const m of xml.matchAll(/<item\b[^>]*>/gi)) { const id = attr(m[0], 'id'); if (id) manifest[id] = { href: attr(m[0], 'href'), type: attr(m[0], 'media-type'), props: attr(m[0], 'properties') }; }
+            const spine = [...xml.matchAll(/<itemref\b[^>]*>/gi)].map(m => attr(m[0], 'idref')).filter(id => manifest[id]);
+            const sp = /<spine\b[^>]*>/i.exec(xml), tm = /<dc:title\b[^>]*>([\s\S]*?)<\/dc:title>/i.exec(xml);
+            return { manifest, spine, title: tm ? unxml(tm[1]) : '', ncxId: sp ? attr(sp[0], 'toc') : '', navId: Object.keys(manifest).find(k => /\bnav\b/.test(manifest[k].props)) || '' };
+        }
+        // 目錄：回傳 [{label, href}]（href 未解析、可含 #片段）
+        function parseNcx(xml) { return [...xml.matchAll(/<navPoint\b[\s\S]*?<text[^>]*>([\s\S]*?)<\/text>[\s\S]*?<content\b[^>]*?src\s*=\s*"([^"]*)"/gi)].map(m => ({ label: unxml(m[1]), href: m[2] })); }
+        function parseNav(html) {
+            const m = /<nav\b[^>]*epub:type\s*=\s*"[^"]*\btoc\b[^"]*"[^>]*>([\s\S]*?)<\/nav>/i.exec(html);
+            return m ? [...m[1].matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)].map(a => ({ label: unxml(a[2]), href: attr(a[1], 'href') })).filter(x => x.href) : [];
+        }
+        // 把目錄對應到 spine 章節索引；沒有目錄時以「第 n 節」代替
+        function buildToc(spinePaths, tocItems, tocBase) {
+            const out = [], seen = new Set();
+            for (const t of tocItems) {
+                const i = spinePaths.indexOf(resolvePath(tocBase, t.href));
+                if (i >= 0 && t.label) { const k = i + '|' + t.label; if (!seen.has(k)) { seen.add(k); out.push({ label: t.label, idx: i }); } }
+            }
+            return out.length ? out : spinePaths.map((_, i) => ({ label: '第 ' + (i + 1) + ' 節', idx: i }));
+        }
+        // 進度驗證（還原的備份可能壞掉）與修剪
+        function validProg(p, nCh) {
+            if (!p || typeof p !== 'object') return null;
+            const ch = Number.isInteger(p.ch) && p.ch >= 0 && (nCh == null || p.ch < nCh) ? p.ch : 0;
+            return { name: typeof p.name === 'string' ? p.name.slice(0, 120) : '', ch, pos: Number.isFinite(p.pos) ? Math.min(1, Math.max(0, p.pos)) : 0, at: Number.isFinite(p.at) ? p.at : 0 };
+        }
+        // 超過上限時回傳要刪除的鍵（最久沒讀的先刪）
+        const pruneProg = (entries, max = MAX_PROG) => entries.length <= max ? [] : [...entries].sort((a, b) => b.at - a.at).slice(max).map(e => e.key);
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const PFX = 'epub_prog_';
+        let zip, entries, spine = [], toc = [], key = '', name = '', cur = 0, urls = [], token = 0;
+        const defs = { size: 18, lh: 1.8, theme: '' };
+        const rs = store.get('epub_settings', null), S = { ...defs };
+        if (rs && typeof rs === 'object') {
+            if (Number.isFinite(rs.size)) S.size = Math.min(30, Math.max(14, rs.size));
+            if (Number.isFinite(rs.lh)) S.lh = Math.min(2.4, Math.max(1.3, rs.lh));
+            if (['', 'sepia', 'dark'].includes(rs.theme)) S.theme = rs.theme;
+        }
+        const msg = (t, err) => { $('#msg').textContent = t; $('#msg').className = 'muted' + (err ? ' err' : ''); };
+
+        function applyStyle() {
+            const r = $('#reader');
+            r.style.fontSize = S.size + 'px'; r.style.lineHeight = S.lh; r.className = S.theme ? 't-' + S.theme : '';
+            $('#size').value = S.size; $('#lh').value = S.lh; $('#theme').value = S.theme;
+        }
+        const allProg = () => { const o = []; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith(PFX)) { const p = validProg(store.get(k, null)); if (p) o.push({ key: k, ...p }); } } return o; };
+        function saveProg() {
+            if (!key) return;
+            const r = $('#reader'), max = r.scrollHeight - r.clientHeight;
+            store.set(key, { name, ch: cur, pos: max > 0 ? r.scrollTop / max : 0, at: Date.now() });
+            for (const k of pruneProg(allProg())) localStorage.removeItem(k);
+            renderProg();
+        }
+        function renderProg() {
+            const l = allProg().sort((a, b) => b.at - a.at);
+            $('#progCard').hidden = !l.length; $('#progN').textContent = l.length;
+            $('#progList').replaceChildren(...l.map(p => {
+                const d = document.createElement('div'); d.className = 'prog';
+                const s = Object.assign(document.createElement('span'), { textContent: `${p.name || '（未命名）'}：第 ${p.ch + 1} 章 ${Math.round(p.pos * 100)}%` });
+                const b = Object.assign(document.createElement('button'), { textContent: '刪除', className: 'sm', onclick: () => { if (confirm(`刪除「${p.name}」的閱讀進度？無法復原。`)) { localStorage.removeItem(p.key); if (p.key === key) key = ''; renderProg(); } } });
+                d.append(s, b); return d;
+            }));
+        }
+
+        // 章節 HTML：用 DOMParser（不執行腳本）解析後移除 script / 樣式 / 外部資源；書內圖片轉成 blob URL
+        async function sanitize(html, path) {
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            doc.querySelectorAll('script,style,link,iframe,object,embed,form,video,audio,source,meta,base,svg,noscript').forEach(e => e.remove());
+            const byName = new Map(entries.map(e => [e.name, e]));
+            for (const e of doc.body.querySelectorAll('*')) {
+                for (const a of [...e.attributes]) if (/^on/i.test(a.name) || a.name === 'style' || a.name === 'srcset' || (a.name === 'href' && e.tagName !== 'A')) e.removeAttribute(a.name);
+                if (e.tagName === 'A') e.removeAttribute('href');
+            }
+            for (const img of doc.body.querySelectorAll('img')) {
+                const src = img.getAttribute('src') || '', en = /^[a-z][a-z0-9+.-]*:|^\/\//i.test(src) ? null : byName.get(resolvePath(path, src));
+                if (!en || en.usize > 5e6) { img.remove(); continue; }
+                try {
+                    const mt = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }[en.name.split('.').pop().toLowerCase()];
+                    if (!mt) { img.remove(); continue; }
+                    const u = URL.createObjectURL(new Blob([await zipRead(zip, en)], { type: mt })); urls.push(u); img.setAttribute('src', u);
+                } catch (e) { img.remove(); }
+            }
+            return doc.body;
+        }
+
+        async function show(i, pos = 0) {
+            const my = ++token;
+            cur = Math.min(Math.max(0, i), spine.length - 1);
+            urls.forEach(URL.revokeObjectURL); urls = [];
+            const r = $('#reader');
+            try {
+                const path = spine[cur], en = entries.find(e => e.name === path);
+                if (!en) throw new Error('找不到章節檔：' + path);
+                const body = await sanitize(new TextDecoder().decode(await zipRead(zip, en)), path);
+                if (my !== token) return;
+                r.replaceChildren(...body.childNodes);
+            } catch (e) { if (my !== token) return; r.textContent = '這一章無法顯示：' + e.message; }
+            const max = r.scrollHeight - r.clientHeight; r.scrollTop = max > 0 ? max * pos : 0;
+            $('#toc').value = String(Math.max(0, toc.findLastIndex(t => t.idx <= cur)));
+            $('#pos').textContent = `${cur + 1} / ${spine.length}`;
+            $('#prev').disabled = cur === 0; $('#next').disabled = cur >= spine.length - 1;
+            saveProg();
+        }
+
+        async function load(file) {
+            $('#book').hidden = true; key = '';
+            if (file.size > MAX_FILE) return msg('檔案超過 50MB 上限。', true);
+            msg('解析中…');
+            try {
+                const buf = await file.arrayBuffer(); zip = new Uint8Array(buf); entries = zipEntries(zip);
+                const get = async (p) => { const en = entries.find(e => e.name === p); if (!en) throw new Error('缺少檔案：' + p); return new TextDecoder().decode(await zipRead(zip, en)); };
+                const opfPath = rootfilePath(await get('META-INF/container.xml'));
+                if (!opfPath) throw new Error('container.xml 找不到 OPF 路徑');
+                const opf = parseOpf(await get(opfPath));
+                spine = opf.spine.map(id => resolvePath(opfPath, opf.manifest[id].href)).filter(p => entries.some(e => e.name === p));
+                if (!spine.length) throw new Error('這本書沒有可讀的章節');
+                let items = [], base = opfPath;
+                try {
+                    if (opf.navId) { base = resolvePath(opfPath, opf.manifest[opf.navId].href); items = parseNav(await get(base)); }
+                    if (!items.length && opf.ncxId && opf.manifest[opf.ncxId]) { base = resolvePath(opfPath, opf.manifest[opf.ncxId].href); items = parseNcx(await get(base)); }
+                } catch (e) { items = []; }
+                toc = buildToc(spine, items, base);
+                const h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].slice(0, 8).map(x => x.toString(16).padStart(2, '0')).join('');
+                name = (opf.title || file.name).slice(0, 120); key = PFX + h + '_' + file.size + '_' + file.name.replace(/[^\w.-]/g, '').slice(0, 30);
+                $('#toc').replaceChildren(...toc.map((t, i) => Object.assign(document.createElement('option'), { value: i, textContent: t.label.slice(0, 60) })));
+                $('#book').hidden = false; msg(`已載入：${name}（${spine.length} 節）`);
+                const p = validProg(store.get(key, null), spine.length);
+                await show(p ? p.ch : 0, p ? p.pos : 0);
+            } catch (e) { zip = null; msg('無法開啟這個檔案：' + e.message, true); }
+        }
+
+        $('#file').onchange = (e) => { const f = e.target.files[0]; if (f) load(f); };
+        $('#toc').onchange = () => show(toc[+$('#toc').value].idx);
+        $('#prev').onclick = () => show(cur - 1);
+        $('#next').onclick = () => show(cur + 1);
+        for (const id of ['size', 'lh', 'theme']) $('#' + id).oninput = () => { S.size = +$('#size').value; S.lh = +$('#lh').value; S.theme = $('#theme').value; applyStyle(); store.set('epub_settings', S); };
+        let t0 = 0; $('#reader').onscroll = () => { clearTimeout(t0); t0 = setTimeout(saveProg, 400); };
+        $('#progClear').onclick = () => { const l = allProg(); if (l.length && confirm(`刪除全部 ${l.length} 本書的閱讀進度？無法復原。`)) { l.forEach(p => localStorage.removeItem(p.key)); key = ''; renderProg(); } };
+        applyStyle(); renderProg();
+    </script>
+</body>
+
+</html>

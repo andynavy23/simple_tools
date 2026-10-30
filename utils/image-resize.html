@@ -79,7 +79,7 @@
 
         <div class="card">
             <label class="drop" id="drop" for="file" tabindex="0">點這裡選擇圖片，或把圖片拖進來<br><small>JPEG、PNG、WebP、GIF、BMP、AVIF（瀏覽器能開啟的格式）</small></label>
-            <input type="file" id="file" accept="image/*,.svg" hidden>
+            <input type="file" id="file" accept="image/*,.svg,.heic,.heif" hidden>
             <details style="margin-top:10px"><summary class="muted" style="cursor:pointer;padding:10px 0">或貼上 SVG 程式碼</summary>
                 <textarea id="svgText" spellcheck="false" placeholder="&lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 100 100&quot;&gt;…&lt;/svg&gt;" style="width:100%;min-height:90px;margin-top:8px;font:13px ui-monospace,monospace"></textarea>
                 <button class="sm" id="svgGo" style="margin-top:6px">用這段 SVG</button>
@@ -178,6 +178,7 @@
         → 處理後 1600 × 900，體積約縮小一半以上（實際依圖片內容而定）</div>
         <h3>小提醒</h3>
         <ul>
+        <li>HEIC（iPhone 預設照片格式）：只有 Safari 能直接開啟並轉成 JPEG / WebP / PNG（等於 HEIC 轉 JPG）；其他瀏覽器會顯示提示，本頁不內建 HEIC 解碼器。</li>
         <li>輸出為 JPEG 時，透明部分會填上「透明背景填色」選的顏色。</li>
         <li>重新編碼會移除 EXIF；GIF 動圖只會取第一格。</li>
         <li>太大的圖片（超過瀏覽器記憶體上限）可能處理失敗。</li>
@@ -192,6 +193,8 @@
         const { statRow, download } = Util;
 
         // --- pure ---
+        const isHeic = (f) => /heic|heif/i.test(f.type || '') || /\.(heic|heif)$/i.test(f.name || '');
+        const HEIC_MSG = '這個瀏覽器無法開啟 HEIC / HEIF（只有 Safari 可以原生解碼）。請改用 iPhone / Mac 的 Safari 開啟本頁，或先在手機「設定 > 相機 > 格式」改拍「最相容」，或匯出成 JPG 再選。';
         const MAX_DIM = 16384, MAX_PIXELS = 100e6;
         const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 
@@ -351,7 +354,7 @@
             showErr('');
             if (!file) return;
             if (file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)) { if (file.size > 5e6) return showErr('SVG 檔案太大（上限 5 MB）'); return loadSvg(await file.text(), file); }
-            if (!file.type.startsWith('image/')) return showErr('這不是圖片檔');
+            if (!file.type.startsWith('image/') && !isHeic(file)) return showErr('這不是圖片檔');
             try {
                 const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
                 if (!sizeOk(bmp.width, bmp.height)) { bmp.close(); return showErr('圖片太大（單邊上限 16384 像素、總像素上限 1 億）'); }
@@ -359,7 +362,7 @@
                 src = bmp; srcFile = file;
                 $('#panel').hidden = false; $('#maxw').value = Math.min(bmp.width, 1920); $('#maxh').value = '';
                 process();
-            } catch (e) { showErr('無法讀取這張圖片（格式不支援或檔案損毀）'); }
+            } catch (e) { showErr(isHeic(file) ? HEIC_MSG : '無法讀取這張圖片（格式不支援或檔案損毀）'); }
         }
 
         // SVG：用 <img> 載入（不會執行裡面的腳本）；向量圖可以輸出任意尺寸，所以預設輸出寬 1024 並允許放大

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="RSVP 閃讀：貼上文章，逐詞在同一位置閃現，可調速度；中文以標點與固定字數分段，不存任何資料。">
+    <title>RSVP 閃讀</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root { --wrap-w: 720px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .row > label { display: flex; gap: 6px; align-items: center; }
+        #src { width: 100%; box-sizing: border-box; min-height: 140px; resize: vertical; }
+        #stage { display: flex; align-items: center; justify-content: center; height: 30vw; min-height: 110px; max-height: 180px; margin: 12px 0; border-radius: var(--radius); background: var(--card); border: 1px solid var(--line); font-size: clamp(28px, 9vw, 52px); font-weight: 700; text-align: center; padding: 0 8px; overflow: hidden; white-space: nowrap; }
+        #stage b { color: var(--bad); }
+        progress { width: 100%; height: 10px; }
+        #msg { margin: 6px 0 0; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>RSVP 閃讀</h1>
+        <p class="sub">貼上文章，一次只閃一個詞，眼睛不用移動就能讀。不會存任何資料。</p>
+
+        <div class="card">
+            <textarea id="src" maxlength="200000" placeholder="在這裡貼上要閱讀的文章（上限 20 萬字）" aria-label="文章內容"></textarea>
+            <div class="row" style="margin-top:8px">
+                <label>速度 <input type="range" id="wpm" min="100" max="1000" step="25" value="300"> <span id="wpmV">300</span> 詞/分</label>
+                <label>中文每段 <select id="chunk"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select> 字</label>
+            </div>
+        </div>
+
+        <div id="stage" aria-live="off">按「開始」</div>
+        <progress id="bar" value="0" max="1"></progress>
+        <p class="muted" id="msg"></p>
+        <div class="row" style="margin-top:8px">
+            <button class="primary" id="go">開始</button><button id="back">倒退 10 詞</button><button id="reset">從頭</button>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>RSVP（快速序列視覺呈現）：把文章拆成一個個詞，依序在畫面同一處閃現，省去眼球移動，可用來練習速讀。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>想快速掃過一篇長文，或練習提高閱讀速度。</li>
+        <li>中英文都可以：英文逐字，中文依標點與固定字數分段。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>把文章貼進文字框。</li>
+        <li>用滑桿調速度（詞/分），中文可選每段 1–5 字。</li>
+        <li>按「開始」；再按一次暫停。「倒退 10 詞」重看剛才的、「從頭」重來。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">貼入「今天天氣很好，我們去公園散步。」，每段 3 字：依序閃出「今天天」「氣很好」「我們去」「公園散」「步」，逗號與句號後會多停一下。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>文章上限 20 萬字，超過會被截斷。</li>
+        <li>英文單字的紅色字母是視線落點的參考。長時間盯著快速閃動的字容易疲勞，請適時休息。</li>
+        <li>這個頁面不存任何資料，重新整理就清空。</li>
+        </ul>
+    </template>
+
+    <script>
+        // --- pure ---
+        const PAUSE = { '，': 1.5, '、': 1.5, '：': 1.5, '；': 1.8, '。': 2, '！': 2, '？': 2, '…': 2 };
+        const CJK = '\\u3400-\\u9fff\\uf900-\\ufaff', CP = '，。、；：！？「」『』（）…';
+        const TOKEN = new RegExp(`[${CJK}]+|[^\\s${CJK}${CP}]+|[${CP}]`, 'g');
+        // 回傳 [{t: 顯示文字, p: 停留倍數}]：英文逐字（句尾 / 逗號後多停）；中文依標點與每 n 字分段
+        function rsvpTokens(text, n = 3) {
+            n = Math.max(1, n | 0 || 3);
+            const out = [];
+            for (const [m] of String(text).matchAll(TOKEN)) {
+                if (new RegExp(`^[${CJK}]`).test(m)) { for (let i = 0; i < m.length; i += n) out.push({ t: m.slice(i, i + n), p: 1 }); }
+                else if (m in PAUSE) { if (out.length) out[out.length - 1].p = Math.max(out[out.length - 1].p, PAUSE[m]); }
+                else if (new RegExp(`^[${CP}]$`).test(m)) continue;
+                else out.push({ t: m, p: /[.!?]["')\]]*$/.test(m) ? 2 : /[,;:]["')\]]*$/.test(m) ? 1.5 : 1 });
+            }
+            return out;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let toks = [], i = 0, timer = 0, playing = false, built = '';
+        const show = () => {
+            const t = toks[i]; if (!t) return;
+            const s = $('#stage'); s.textContent = '';
+            if (/^[\x00-\x7f]+$/.test(t.t) && t.t.length > 2) { const k = Math.floor((t.t.length - 1) / 3); s.append(t.t.slice(0, k), Object.assign(document.createElement('b'), { textContent: t.t[k] }), t.t.slice(k + 1)); }
+            else s.textContent = t.t;
+            $('#bar').value = (i + 1) / toks.length; $('#msg').textContent = `${i + 1} / ${toks.length}`;
+        };
+        function build() {
+            const key = $('#src').value + '|' + $('#chunk').value;
+            if (key !== built) { toks = rsvpTokens($('#src').value, +$('#chunk').value); built = key; i = 0; }
+            return toks.length > 0;
+        }
+        function stop() { playing = false; clearTimeout(timer); $('#go').textContent = i >= toks.length - 1 && toks.length ? '再讀一次' : '繼續'; }
+        function tick() {
+            show();
+            if (i >= toks.length - 1) return stop();
+            timer = setTimeout(() => { i++; tick(); }, 60000 / +$('#wpm').value * toks[i].p);
+        }
+        $('#go').onclick = () => {
+            if (playing) { stop(); return; }
+            if (!build()) { $('#msg').textContent = '請先貼上文章'; return; }
+            if (i >= toks.length - 1) i = 0;
+            playing = true; $('#go').textContent = '暫停'; tick();
+        };
+        $('#back').onclick = () => { if (build()) { i = Math.max(0, i - 10); show(); if (playing) { clearTimeout(timer); tick(); } } };
+        $('#reset').onclick = () => { clearTimeout(timer); playing = false; built = ''; if (build()) show(); $('#go').textContent = '開始'; };
+        $('#wpm').oninput = () => { $('#wpmV').textContent = $('#wpm').value; };
+        $('#src').oninput = () => { if (playing) stop(); };
+    </script>
+</body>
+
+</html>

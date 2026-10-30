@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="卡片盒筆記：用 [[標題]] 把筆記卡互相連結，看反向連結、標籤、搜尋，可匯出 Markdown，資料只存在你的瀏覽器。">
+    <meta name="st-keys" content="zettel_cards">
+    <title>卡片盒筆記</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root { --wrap-w: 760px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .row input[type=search] { flex: 1 1 160px; min-width: 0; }
+        #edit input, #edit textarea { width: 100%; box-sizing: border-box; margin-bottom: 8px; }
+        #edit textarea { min-height: 180px; resize: vertical; }
+        #msg { margin: 6px 0 0; }
+        #msg.err { color: var(--bad); }
+        #preview { white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px; border-radius: var(--radius-sm); background: var(--fill); margin: 8px 0; }
+        #preview:empty { display: none; }
+        .lk { padding: 0 4px; border-radius: 6px; font-size: inherit; color: var(--blue); background: transparent; text-decoration: underline; }
+        .lk.miss { color: var(--bad); }
+        .list button.item { display: block; width: 100%; text-align: left; margin-bottom: 6px; border-radius: var(--radius-sm); overflow-wrap: anywhere; }
+        .list button.item[aria-pressed=true] { background: var(--blue); color: var(--on-blue); }
+        .list small { opacity: .75; }
+        .bl button { margin: 0 6px 6px 0; }
+        h3.s { margin: 12px 0 6px; font-size: 15px; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>卡片盒筆記</h1>
+        <p class="sub">一張卡一個想法，用 [[標題]] 連起來。資料只存在這個瀏覽器，換瀏覽器或清除網站資料會消失，重要的請匯出。</p>
+
+        <div class="card" id="edit" hidden>
+            <input id="title" maxlength="80" placeholder="卡片標題（不可重複）" aria-label="卡片標題">
+            <input id="tags" placeholder="標籤（空白或逗號分隔，例：#讀書 想法）" aria-label="標籤">
+            <textarea id="body" maxlength="20000" placeholder="內容。用 [[另一張卡的標題]] 連結" aria-label="內容"></textarea>
+            <div class="row"><button class="primary" id="save">儲存</button><button id="del">刪除</button><button id="close">關閉</button></div>
+            <p class="muted" id="msg"></p>
+            <div id="preview" aria-label="連結預覽"></div>
+            <div id="blWrap"><h3 class="s">反向連結（誰連到這張卡）</h3><div class="bl" id="bl"></div></div>
+        </div>
+
+        <div class="card">
+            <div class="row">
+                <input type="search" id="q" placeholder="搜尋標題、內容、標籤" aria-label="搜尋卡片">
+                <select id="tagSel" aria-label="依標籤篩選"></select>
+            </div>
+            <div class="row" style="margin-top:8px">
+                <button class="primary" id="add">新增卡片</button><button class="sm" id="export">匯出 Markdown</button><button class="sm" id="clear">清除全部</button>
+                <span class="muted" id="info"></span>
+            </div>
+            <div class="list" id="list" style="margin-top:10px"></div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>卡片盒筆記法（Zettelkasten）：每張卡寫一個想法，用 [[標題]] 把相關的卡連起來，每張卡下方會自動列出「誰連到我」的反向連結。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>讀書、研究時把想法拆成小卡，慢慢織成網。</li>
+        <li>想找「這個概念在哪些筆記被提到」。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>按「新增卡片」，填標題、標籤（可空白）與內容，按「儲存」。</li>
+        <li>內容裡寫 [[另一張卡的標題]] 就成為連結；預覽區點連結可跳過去，紅色的是還沒建立的卡，點一下就會建立。</li>
+        <li>上方搜尋可找標題 / 內容 / 標籤，也可用下拉選單依標籤篩選。</li>
+        <li>「匯出 Markdown」下載全部卡片（連結保留 [[ ]] 寫法）。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">卡片「複利」寫：參考 [[72 法則]]。再建立「72 法則」卡 → 它的反向連結會出現「複利」。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>最多 2000 張卡，每張內容最多 20000 字，標題最多 80 字（不分大小寫不可重複，不可含 [ ] 與換行）；滿了會拒絕新增並提示，不會自動刪舊卡。</li>
+        <li>改標題時，其他卡裡指向它的 [[ ]] 會一起更新。</li>
+        <li>刪除單張卡後，其他卡裡指向它的 [[標題]] 會變成純文字（保留標題字樣）；刪除前會確認，無法復原。</li>
+        <li>「清除全部」刪除所有卡片，無法復原。備份還原時壞掉的資料會自動修正或略過。</li>
+        <li>瀏覽器儲存空間滿了會提示儲存失敗，這次的修改不會保存。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, rnd, download, day } = Util;
+
+        // --- pure ---
+        const MAX_CARDS = 2000, MAX_BODY = 20000, MAX_TITLE = 80, MAX_TAGS = 10;
+        const kk = (t) => String(t).trim().toLowerCase();
+        const LINK = /\[\[([^\[\]\n]+?)\]\]/g;
+        const parseLinks = (body) => { const seen = new Set(), out = []; for (const m of String(body).matchAll(LINK)) { const t = m[1].trim(); if (t && !seen.has(kk(t))) { seen.add(kk(t)); out.push(t); } } return out; };
+        const parseTags = (s) => [...new Set(String(s).split(/[\s,，、]+/).map(t => t.replace(/^#+/, '').slice(0, 20)).filter(Boolean))].slice(0, MAX_TAGS);
+        // newT 為 null 時把連結還原成純文字
+        const relink = (body, oldT, newT) => body.replace(LINK, (m, t) => kk(t) !== kk(oldT) ? m : newT == null ? t.trim() : '[[' + newT + ']]');
+        const backlinks = (cards, id) => { const c = cards.find(x => x.id === id); return c ? cards.filter(x => x.id !== id && parseLinks(x.body).some(t => kk(t) === kk(c.title))) : []; };
+        function check(cards, id, f) {
+            const title = String(f.title || '').trim();
+            if (!title) return '請輸入標題';
+            if (title.length > MAX_TITLE) return `標題最多 ${MAX_TITLE} 字`;
+            if (/[\[\]\n\r]/.test(title)) return '標題不可含 [ ] 或換行';
+            if (cards.some(x => x.id !== id && kk(x.title) === kk(title))) return '已有同名的卡片';
+            if (typeof f.body !== 'string' || f.body.length > MAX_BODY) return `內容最多 ${MAX_BODY} 字`;
+            return '';
+        }
+        function addCard(cards, f) {
+            if (cards.length >= MAX_CARDS) return { err: `最多 ${MAX_CARDS} 張卡，請先刪除一些` };
+            const err = check(cards, '', f); if (err) return { err };
+            const card = { id: Date.now().toString(36) + rnd(1e9).toString(36), title: f.title.trim(), body: f.body, tags: parseTags((f.tags || []).join(' ')), at: Date.now() };
+            return { cards: [...cards, card], card };
+        }
+        function editCard(cards, id, f) {
+            const old = cards.find(x => x.id === id); if (!old) return { err: '找不到卡片' };
+            const err = check(cards, id, f); if (err) return { err };
+            const title = f.title.trim();
+            const next = cards.map(x => {
+                let body = x.id === id ? f.body : x.body;
+                if (old.title !== title) body = relink(body, old.title, title);
+                return x.id === id ? { ...x, title, body, tags: parseTags((f.tags || []).join(' ')), at: Date.now() } : body === x.body ? x : { ...x, body };
+            });
+            if (next.some(x => x.body.length > MAX_BODY)) return { err: '改名後有卡片超過字數上限，請先縮短內容' };
+            return { cards: next, card: next.find(x => x.id === id) };
+        }
+        const deleteCard = (cards, id) => { const c = cards.find(x => x.id === id); return c ? cards.filter(x => x.id !== id).map(x => { const b = relink(x.body, c.title, null); return b === x.body ? x : { ...x, body: b }; }) : cards; };
+        // 載入驗證：壞資料補預設值、同名加後綴、截斷到上限
+        function validCards(raw) {
+            const out = [], titles = new Set(), ids = new Set();
+            for (const r of Array.isArray(raw) ? raw : []) {
+                if (out.length >= MAX_CARDS) break;
+                if (!r || typeof r !== 'object' || typeof r.id !== 'string' || !r.id || ids.has(r.id) || typeof r.title !== 'string') continue;
+                let t = r.title.replace(/[\[\]\n\r]/g, ' ').trim().slice(0, MAX_TITLE); if (!t) continue;
+                for (let n = 2, b = t; titles.has(kk(t)); n++) t = b.slice(0, MAX_TITLE - 6) + ` (${n})`;
+                titles.add(kk(t)); ids.add(r.id);
+                out.push({ id: r.id, title: t, body: typeof r.body === 'string' ? r.body.slice(0, MAX_BODY) : '', tags: Array.isArray(r.tags) ? parseTags(r.tags.filter(x => typeof x === 'string').join(' ')) : [], at: Number.isFinite(r.at) ? r.at : 0 });
+            }
+            return out;
+        }
+        const searchCards = (cards, q, tag) => { q = q.trim().toLowerCase(); return cards.filter(c => (!tag || c.tags.includes(tag)) && (!q || (c.title + '\n' + c.body + '\n' + c.tags.join(' ')).toLowerCase().includes(q))); };
+        const exportMd = (cards) => `# 卡片盒筆記（${cards.length} 張）\n\n` + cards.map(c => `## ${c.title}\n\n` + (c.tags.length ? c.tags.map(t => '#' + t).join(' ') + '\n\n' : '') + c.body + '\n').join('\n---\n\n');
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        let cards = validCards(store.get('zettel_cards', [])), sel = null;     // sel：卡片 id、'new' 或 null
+        const cur = () => cards.find(c => c.id === sel);
+        const msg = (t, err) => { $('#msg').textContent = t; $('#msg').className = 'muted' + (err ? ' err' : ''); };
+        const form = () => ({ title: $('#title').value, tags: parseTags($('#tags').value), body: $('#body').value });
+        const dirty = () => { if (!sel) return false; const c = cur() || { title: '', tags: [], body: '' }, f = form(); return f.title !== c.title || f.body !== c.body || f.tags.join(' ') !== c.tags.join(' '); };
+        const guard = () => !dirty() || confirm('有未儲存的修改，要放棄嗎？');
+        // 寫入失敗時不更新記憶體資料，讓畫面與儲存一致
+        function commit(next) { if (!store.set('zettel_cards', next)) { msg('儲存失敗，這次修改沒有保存', true); return false; } cards = next; return true; }
+        const btn = (t, fn, cls = '') => Object.assign(document.createElement('button'), { textContent: t, className: cls, onclick: fn });
+
+        function open(id) {
+            if (id && id === sel) return;
+            if (id !== sel && !guard()) return;
+            sel = id; const c = cur();
+            $('#edit').hidden = !id; msg('');
+            if (!id) return render();
+            $('#title').value = c ? c.title : ''; $('#tags').value = c ? c.tags.map(t => '#' + t).join(' ') : ''; $('#body').value = c ? c.body : '';
+            $('#del').hidden = !c; $('#blWrap').hidden = !c;
+            render(); renderEdit();
+            $('#edit').scrollIntoView({ block: 'nearest' }); if (!c) $('#title').focus();
+        }
+        function renderEdit() {
+            const p = $('#preview'), body = $('#body').value, nodes = []; let last = 0;
+            for (const m of body.matchAll(LINK)) {
+                nodes.push(document.createTextNode(body.slice(last, m.index))); last = m.index + m[0].length;
+                const t = m[1].trim(), tgt = cards.find(c => kk(c.title) === kk(t));
+                nodes.push(btn(tgt ? t : t + '（未建立）', () => tgt ? open(tgt.id) : create(t), 'lk' + (tgt ? '' : ' miss')));
+            }
+            nodes.push(document.createTextNode(body.slice(last)));
+            p.replaceChildren(...(nodes.length > 1 ? nodes : []));
+            if (cur()) { const bl = backlinks(cards, sel); $('#bl').replaceChildren(...(bl.length ? bl.map(c => btn(c.title, () => open(c.id), 'sm')) : [Object.assign(document.createElement('span'), { className: 'muted', textContent: '還沒有卡片連到這張' })])); }
+        }
+        function create(title) {
+            if (!guard()) return;
+            const r = addCard(cards, { title, body: '', tags: [] });
+            if (r.err) return msg(r.err, true);
+            if (commit(r.cards)) { sel = null; open(r.card.id); }
+        }
+        function render() {
+            const tags = [...new Set(cards.flatMap(c => c.tags))].sort(), tv = $('#tagSel').value;
+            $('#tagSel').replaceChildren(Object.assign(document.createElement('option'), { value: '', textContent: '全部標籤' }), ...tags.map(t => Object.assign(document.createElement('option'), { value: t, textContent: '#' + t })));
+            $('#tagSel').value = tags.includes(tv) ? tv : '';
+            const q = $('#q').value, list = searchCards([...cards].sort((a, b) => b.at - a.at), q, $('#tagSel').value);
+            $('#info').textContent = `${cards.length} / ${MAX_CARDS} 張` + (q.trim() || $('#tagSel').value ? `，符合 ${list.length} 張` : '');
+            $('#list').replaceChildren(...list.map(c => {
+                const b = btn('', () => open(c.id), 'item'); b.setAttribute('aria-pressed', c.id === sel);
+                b.append(c.title, ...(c.tags.length ? [document.createElement('br'), Object.assign(document.createElement('small'), { textContent: c.tags.map(t => '#' + t).join(' ') })] : []));
+                return b;
+            }));
+        }
+
+        $('#add').onclick = () => { if (cards.length >= MAX_CARDS) return alert(`最多 ${MAX_CARDS} 張卡，請先刪除一些`); open(null); sel = 'new'; $('#edit').hidden = false; $('#title').value = $('#tags').value = $('#body').value = ''; $('#del').hidden = true; $('#blWrap').hidden = true; msg(''); render(); renderEdit(); $('#title').focus(); };
+        $('#save').onclick = () => {
+            const f = form(), r = sel === 'new' ? addCard(cards, f) : editCard(cards, sel, f);
+            if (r.err) return msg(r.err, true);
+            if (commit(r.cards)) { sel = r.card.id; $('#del').hidden = false; $('#blWrap').hidden = false; $('#title').value = r.card.title; $('#body').value = r.card.body; msg('已儲存'); render(); renderEdit(); }
+        };
+        $('#del').onclick = () => {
+            const c = cur(); if (!c) return;
+            const n = cards.filter(x => x.id !== c.id && parseLinks(x.body).some(t => kk(t) === kk(c.title))).length;
+            if (confirm(`刪除「${c.title}」？` + (n ? `其他 ${n} 張卡裡指向它的 [[連結]] 會變成純文字。` : '') + '無法復原。') && commit(deleteCard(cards, c.id))) { sel = null; $('#edit').hidden = true; render(); }
+        };
+        $('#close').onclick = () => open(null);
+        $('#body').oninput = renderEdit;
+        $('#q').oninput = $('#tagSel').onchange = render;
+        $('#export').onclick = () => { if (cards.length) download(new Blob([exportMd(cards)], { type: 'text/markdown;charset=utf-8' }), `zettel-${day.today()}.md`); };
+        $('#clear').onclick = () => { if (cards.length && confirm(`刪除全部 ${cards.length} 張卡片？無法復原。`) && commit([])) { sel = null; $('#edit').hidden = true; render(); } };
+        window.addEventListener('beforeunload', (e) => { if (dirty()) e.preventDefault(); });
+        render();
+    </script>
+</body>
+
+</html>

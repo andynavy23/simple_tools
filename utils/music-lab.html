@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="作曲與音響小工坊：和弦進行產生、隨機旋律、ABC 記譜播放、MIDI 檔檢視與播放、簡譜轉五線譜位置、BPM 延遲時間、房間共振、喇叭阻抗與功率，全部在瀏覽器本機運算。">
+    <meta property="og:title" content="作曲與音響小工坊" />
+    <meta property="og:description" content="和弦進行、隨機旋律、ABC / MIDI / 簡譜播放，加上延遲時間、房間共振與喇叭阻抗計算。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/music-lab.html" />
+    <meta name="st-keys" content="musiclab_opts">
+    <title>作曲與音響小工坊</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 720px;
+        }
+
+        label.f {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            margin: 10px 0 4px;
+        }
+
+        input.w,
+        select.w,
+        textarea.w {
+            width: 100%;
+        }
+
+        textarea.w {
+            min-height: 130px;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 4px 0 12px;
+        }
+
+        .grid2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0 10px;
+        }
+
+        .tw {
+            overflow-x: auto;
+            margin-top: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-variant-numeric: tabular-nums;
+        }
+
+        th,
+        td {
+            text-align: right;
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--fill);
+            white-space: nowrap;
+        }
+
+        th:first-child,
+        td:first-child {
+            text-align: left;
+        }
+
+        th {
+            color: var(--muted);
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .bad {
+            color: var(--bad);
+        }
+
+        .big {
+            font-size: 20px;
+            font-weight: 700;
+            line-height: 1.7;
+            word-break: break-word;
+        }
+
+        .jp {
+            font-size: 20px;
+            line-height: 1.9;
+            word-break: break-word;
+        }
+
+        .out {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>作曲與音響小工坊</h1>
+        <p class="sub">和弦、旋律、ABC / MIDI / 簡譜播放，與音響常用計算。聲音與檔案都只在本機處理。</p>
+
+        <div class="chips" id="tabs"></div>
+
+        <!-- 和弦進行 -->
+        <div class="card pane" data-t="chord">
+            <h2>和弦進行產生</h2>
+            <div class="grid2">
+                <div><label class="f" for="cKey">調（主音）</label><select class="w" id="cKey"></select></div>
+                <div><label class="f" for="cMode">大小調</label><select class="w" id="cMode"><option value="maj">大調</option><option value="min">小調</option></select></div>
+            </div>
+            <label class="f" for="cStyle">風格</label><select class="w" id="cStyle"></select>
+            <label class="f" for="cBpm">速度 BPM（每個和弦 4 拍）</label><input class="w" type="number" id="cBpm" value="90" min="40" max="220" inputmode="numeric">
+            <div class="big" id="cOut"></div>
+            <div class="muted" id="cRom"></div>
+            <div class="chips"><button class="primary play" id="cPlay">▶ 播放</button></div>
+        </div>
+
+        <!-- 隨機旋律 -->
+        <div class="card pane" data-t="melody" hidden>
+            <h2>隨機旋律</h2>
+            <div class="grid2">
+                <div><label class="f" for="mKey">調（主音）</label><select class="w" id="mKey"></select></div>
+                <div><label class="f" for="mScale">調式</label><select class="w" id="mScale"></select></div>
+                <div><label class="f" for="mRhythm">節奏型</label><select class="w" id="mRhythm"></select></div>
+                <div><label class="f" for="mBars">小節數（1–16，每小節 4 拍）</label><input class="w" type="number" id="mBars" value="4" min="1" max="16" inputmode="numeric"></div>
+            </div>
+            <div class="grid2">
+                <div><label class="f" for="mSeed">種子（相同種子產生相同旋律）</label><input class="w" type="text" id="mSeed" value="hello" maxlength="40"></div>
+                <div><label class="f" for="mBpm">速度 BPM</label><input class="w" type="number" id="mBpm" value="100" min="40" max="220" inputmode="numeric"></div>
+            </div>
+            <div class="chips"><button id="mDice">🎲 換一個種子</button><button class="primary play" id="mPlay">▶ 播放</button></div>
+            <div class="big out" id="mOut"></div>
+            <p class="note" id="mMsg"></p>
+        </div>
+
+        <!-- ABC -->
+        <div class="card pane" data-t="abc" hidden>
+            <h2>ABC 記譜播放</h2>
+            <label class="f" for="abc">ABC 記譜（支援子集：X T M L Q K 標頭；音符 A–G a–g、升降 ^ _ =、八度 ' ,、時值 2 /2 3/2、休止 z、小節線、> < 附點節奏、- 連結）</label>
+            <textarea class="w" id="abc" maxlength="20000" spellcheck="false"></textarea>
+            <div class="chips"><button class="primary play" id="aPlay">▶ 播放</button><button id="aSample">範例</button></div>
+            <p class="note bad out" id="aErr"></p>
+            <div class="muted" id="aInfo"></div>
+            <h3>簡譜（1 = 調號對應的大調主音）</h3>
+            <div class="jp" id="aJp"></div>
+        </div>
+
+        <!-- MIDI -->
+        <div class="card pane" data-t="midi" hidden>
+            <h2>MIDI 檔檢視與播放</h2>
+            <label class="f" for="mFile">選擇 .mid / .midi 檔（上限 2 MB，不會上傳）</label>
+            <input type="file" id="mFile" accept=".mid,.midi,audio/midi,audio/x-midi">
+            <p class="note bad out" id="fErr"></p>
+            <div class="out" id="fInfo"></div>
+            <div class="tw" id="fTbl"></div>
+            <div class="chips" style="margin-top:10px"><button class="primary play" id="fPlay" disabled>▶ 播放</button></div>
+        </div>
+
+        <!-- 簡譜 -->
+        <div class="card pane" data-t="jp" hidden>
+            <h2>簡譜轉音符與五線譜位置</h2>
+            <div class="grid2">
+                <div><label class="f" for="jKey">1 = （主音，1 的位置為第 4 八度）</label><select class="w" id="jKey"></select></div>
+                <div><label class="f" for="jBpm">速度 BPM（1 拍 = 四分音符）</label><input class="w" type="number" id="jBpm" value="100" min="40" max="220" inputmode="numeric"></div>
+            </div>
+            <label class="f" for="jText">簡譜（空白分隔：0 休止、1–7、#/b 升降、<code>'</code> 高八度、<code>,</code> 低八度、<code>_</code> 縮短一半、<code>.</code> 附點、單獨 <code>-</code> 延長一拍、<code>|</code> 小節線）</label>
+            <textarea class="w" id="jText" maxlength="5000" spellcheck="false"></textarea>
+            <div class="chips"><button class="primary play" id="jPlay">▶ 播放</button></div>
+            <p class="note bad out" id="jErr"></p>
+            <div class="tw" id="jTbl"></div>
+        </div>
+
+        <!-- 延遲 -->
+        <div class="card pane" data-t="delay" hidden>
+            <h2>BPM 延遲時間（delay / LFO）</h2>
+            <label class="f" for="dBpm">BPM</label><input class="w" type="number" id="dBpm" value="120" min="20" max="400" step="any" inputmode="decimal">
+            <div class="tw" id="dTbl"></div>
+            <p class="note">ms = 60000 ÷ BPM × 音符拍數；Hz = 1000 ÷ ms，LFO 速率可直接填 Hz。</p>
+        </div>
+
+        <!-- 房間共振 -->
+        <div class="card pane" data-t="room" hidden>
+            <h2>房間共振（軸向駐波）</h2>
+            <div class="grid2">
+                <div><label class="f" for="rL">長（公尺）</label><input class="w" type="number" id="rL" value="5" min="0.5" max="50" step="any" inputmode="decimal"></div>
+                <div><label class="f" for="rW">寬（公尺）</label><input class="w" type="number" id="rW" value="4" min="0.5" max="50" step="any" inputmode="decimal"></div>
+                <div><label class="f" for="rH">高（公尺）</label><input class="w" type="number" id="rH" value="2.6" min="0.5" max="50" step="any" inputmode="decimal"></div>
+                <div><label class="f" for="rC">聲速（m/s）</label><input class="w" type="number" id="rC" value="343" min="300" max="400" step="any" inputmode="decimal"></div>
+            </div>
+            <div class="chips"><button class="sm" id="rT">依氣溫換算聲速（°C）</button></div>
+            <div class="tw" id="rTbl"></div>
+            <p class="note" id="rNote"></p>
+        </div>
+
+        <!-- 喇叭 -->
+        <div class="card pane" data-t="spk" hidden>
+            <h2>喇叭阻抗與功率</h2>
+            <label class="f" for="sZ">喇叭阻抗（Ω，逗號分隔多顆）</label><input class="w" type="text" id="sZ" value="8,8" inputmode="decimal">
+            <label class="f" for="sCfg">接法</label><select class="w" id="sCfg"><option value="series">串聯</option><option value="parallel" selected>並聯</option></select>
+            <div class="grid2">
+                <div><label class="f" for="sAmp">擴大機額定功率（W）</label><input class="w" type="number" id="sAmp" value="100" min="0" step="any" inputmode="decimal"></div>
+                <div><label class="f" for="sRated">額定負載（Ω）</label><input class="w" type="number" id="sRated" value="8" min="0" step="any" inputmode="decimal"></div>
+                <div><label class="f" for="sSens">靈敏度（dB @ 1W / 1m）</label><input class="w" type="number" id="sSens" value="90" step="any" inputmode="decimal"></div>
+                <div><label class="f" for="sDist">聆聽距離（m）</label><input class="w" type="number" id="sDist" value="2" min="0.1" step="any" inputmode="decimal"></div>
+            </div>
+            <div class="out" id="sOut" style="margin-top:10px"></div>
+            <p class="note" id="sNote"></p>
+        </div>
+
+        <div class="card">
+            <button id="reset">清除記住的輸入</button>
+            <p class="note">只記住上次的分頁與各欄位輸入（在這台裝置的瀏覽器）；MIDI 檔不會儲存。一般參考估算，不能取代專業量測。</p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>作曲與音響的小工具合集：產生和弦進行與隨機旋律、用 ABC 或簡譜寫旋律並播放、檢視與播放 MIDI 檔，以及延遲時間、房間共振、喇叭阻抗與功率的計算。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>想找靈感：選調與風格看常見和弦進行，或用種子隨機生旋律。</li>
+        <li>把腦中的旋律用 ABC / 簡譜打出來試聽，並查它在五線譜的位置。</li>
+        <li>調 delay / 殘響的拍速、評估房間低頻駐波、接喇叭前算阻抗。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>上方選分頁；有「▶ 播放」的分頁需要按按鈕才會發聲（瀏覽器規定）。</li>
+        <li>和弦進行：選調、大小調與風格，按播放；和弦以級數（羅馬數字）定義，轉調自動換算。</li>
+        <li>隨機旋律：選調式、節奏型、小節數與種子；同樣的設定與種子一定得到同一段旋律，「換一個種子」重抽。</li>
+        <li>ABC：貼上或輸入 ABC，解析失敗會列出行號與原因；成功會顯示簡譜（1 = 調號對應的大調主音，點在數字上下表示高低八度，<code>_</code> 表示時值縮短，後面的 <code>-</code> 表示延長）。</li>
+        <li>MIDI：選檔後顯示格式、解析度、速度、拍號、各軌音符數與音域；可用簡易合成器播放（打擊樂聲道略過）。</li>
+        <li>簡譜：輸入空白分隔的簡譜，表格列出音名與五線譜（高音譜號）位置文字，也可播放。</li>
+        <li>延遲：輸入 BPM 得到各音符（附點、三連音）的 ms 與 Hz。</li>
+        <li>房間共振：輸入長寬高與聲速，得到各軸向的共振頻率。</li>
+        <li>喇叭：輸入阻抗與串並聯，得到總阻抗；再依擴大機額定功率估算實際功率、電壓與音壓。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">C 大調「流行」進行：C – G – Am – F
+5 公尺長的房間：第 1 階軸向共振 = 343 ÷ (2×5) = 34.3 Hz
+120 BPM：四分音符 500 ms（2 Hz）；附點八分 375 ms
+兩顆 8 Ω 並聯 = 4 Ω；串聯 = 16 Ω</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>只存「上次的分頁與各欄位輸入」（鍵 musiclab_opts，最多數 KB；ABC 與簡譜欄位各上限 20000 / 5000 字）；按頁尾「清除記住的輸入」會刪除並重新載入頁面（進行中的播放會停止）。資料壞掉或被改過會自動退回預設值；儲存空間不足會跳出共用提示。</li>
+        <li>ABC 只支援子集：沒有和弦 [CEG]、連音 (3、反覆記號與多聲部；Q:120 視為每分鐘 120 個四分音符。遇到不支援的符號會報行號。</li>
+        <li>MIDI 簡易播放：不分音色，一律用同一種合成波形；超過 20000 個音符只播前 20000 個；檔案上限 2 MB；不支援 SMPTE 時間格式。</li>
+        <li>房間共振只算三軸的軸向模態（最強、最重要的一類），不含切向 / 斜向模態與牆面吸音；實際以量測為準。聲速預設 343 m/s（約 20°C），可手動調或依氣溫換算（331.3 + 0.606×°C）。</li>
+        <li>音壓估算 = 靈敏度 + 10·log10(功率) − 20·log10(距離)，假設自由場、1 m 為參考點；房間反射會讓實際聽到的音量更大。功率估算把擴大機當理想電壓源（功率與負載阻抗成反比），實際擴大機有電流與保護限制，請以產品規格為準。</li>
+        <li>喇叭阻抗為標稱值，實際阻抗隨頻率變動；串並聯接線錯誤或負載低於擴大機最低阻抗可能損壞設備。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, seeded } = Util;
+
+        // --- pure ---
+        const NOTE_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+        const SHARP_NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+        const MAJOR = [0, 2, 4, 5, 7, 9, 11];
+
+        // ===== 和弦進行 =====
+        // 以大調級數（羅馬數字）定義：大寫 = 大三和弦、小寫 = 小三和弦；b / # 升降根音；尾碼 7 / maj7 / dim
+        const PROGS = [
+            { id: 'pop', mode: 'maj', name: '流行（I–V–vi–IV）', rom: 'I V vi IV' },
+            { id: 'royal', mode: 'maj', name: '王道（IV–V–iii–vi）', rom: 'IV V iii vi' },
+            { id: 'canon', mode: 'maj', name: '卡農（I–V–vi–iii–IV–I–IV–V）', rom: 'I V vi iii IV I IV V' },
+            { id: '50s', mode: 'maj', name: '50 年代（I–vi–IV–V）', rom: 'I vi IV V' },
+            { id: 'jazz', mode: 'maj', name: '爵士（ii7–V7–Imaj7–vi7）', rom: 'ii7 V7 Imaj7 vi7' },
+            { id: 'folk', mode: 'maj', name: '民謠（I–IV–V–I）', rom: 'I IV V I' },
+            { id: 'blues', mode: 'maj', name: '十二小節藍調', rom: 'I7 I7 I7 I7 IV7 IV7 I7 I7 V7 IV7 I7 V7' },
+            { id: 'minpop', mode: 'min', name: '小調流行（i–bVI–bIII–bVII）', rom: 'i bVI bIII bVII' },
+            { id: 'andal', mode: 'min', name: '安達魯西亞（i–bVII–bVI–V）', rom: 'i bVII bVI V' },
+            { id: 'minjazz', mode: 'min', name: '小調爵士（i7–iv7–bVII7–bIIImaj7）', rom: 'i7 iv7 bVII7 bIIImaj7' },
+            { id: 'minbasic', mode: 'min', name: '小調基本（i–iv–v–i）', rom: 'i iv v i' },
+        ];
+        const CHORD_IV = { '': [0, 4, 7], m: [0, 3, 7], 7: [0, 4, 7, 10], maj7: [0, 4, 7, 11], m7: [0, 3, 7, 10], dim: [0, 3, 6] };
+        const ROMANS = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii'];
+        // 羅馬數字 → { root: 相對主音半音數, q: 品質 }；格式錯誤回傳 null
+        function parseRoman(s) {
+            const m = /^([b#]?)(vii|vi|iv|v|iii|ii|i|VII|VI|IV|V|III|II|I)(maj7|7|dim)?$/.exec(String(s));
+            if (!m) return null;
+            const deg = ROMANS.indexOf(m[2].toLowerCase()), up = m[2] === m[2].toUpperCase();
+            let q = up ? '' : 'm';
+            if (m[3] === '7') q = up ? '7' : 'm7'; else if (m[3] === 'maj7') { if (!up) return null; q = 'maj7'; } else if (m[3] === 'dim') { if (up) return null; q = 'dim'; }
+            return { root: (MAJOR[deg] + (m[1] === 'b' ? -1 : m[1] === '#' ? 1 : 0) + 12) % 12, q };
+        }
+        // 產生和弦：回傳 [{ name, rom, bass, notes }]（MIDI 音高）
+        function chordProg(keyPc, progId) {
+            const p = PROGS.find(x => x.id === progId); if (!p) return [];
+            return p.rom.split(' ').map(r => {
+                const c = parseRoman(r), pc = (keyPc + c.root) % 12, base = 60 + pc - (pc >= 6 ? 12 : 0);
+                return { name: NOTE_NAMES[pc] + c.q, rom: r, bass: 36 + pc, notes: CHORD_IV[c.q].map(i => base + i) };
+            });
+        }
+
+        // ===== 隨機旋律 =====
+        const SCALES = {
+            major: ['大調（Ionian）', [0, 2, 4, 5, 7, 9, 11]], minor: ['自然小調（Aeolian）', [0, 2, 3, 5, 7, 8, 10]],
+            dorian: ['Dorian', [0, 2, 3, 5, 7, 9, 10]], phrygian: ['Phrygian', [0, 1, 3, 5, 7, 8, 10]], lydian: ['Lydian', [0, 2, 4, 6, 7, 9, 11]],
+            mixolydian: ['Mixolydian', [0, 2, 4, 5, 7, 9, 10]], majpent: ['大調五聲', [0, 2, 4, 7, 9]], minpent: ['小調五聲', [0, 3, 5, 7, 10]], blues: ['藍調', [0, 3, 5, 6, 7, 10]],
+        };
+        // 節奏型：每小節 4 拍的時值（拍）樣式；mixed 為每小節隨機挑一種
+        const RHYTHMS = {
+            quarter: ['四分音符', [[1, 1, 1, 1]]], eighth: ['八分音符', [[0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]]],
+            synco: ['切分', [[0.5, 1, 0.5, 1, 0.5, 0.5], [1, 0.5, 1, 0.5, 0.5, 0.5]]], dotted: ['附點', [[1.5, 0.5, 1.5, 0.5], [1.5, 0.5, 1, 1]]],
+            mixed: ['混合', [[1, 1, 1, 1], [0.5, 0.5, 1, 1, 1], [1, 0.5, 0.5, 2], [2, 1, 1], [0.5, 0.5, 0.5, 0.5, 1, 1], [1.5, 0.5, 2]]],
+        };
+        // 音階第 idx 級（可為負或超過一個八度）的 MIDI：中心 C4 = 60
+        function scaleMidi(keyPc, scale, idx) { const n = scale.length, o = Math.floor(idx / n), i = ((idx % n) + n) % n; return 60 + keyPc + o * 12 + scale[i]; }
+        // 產生旋律：[{ midi|null, beats }]；同種子同結果；最後一個音落在主音
+        function genMelody(seed, keyPc, scaleId, rhythmId, bars) {
+            const rnd = seeded(seed), sc = SCALES[scaleId][1], rh = RHYTHMS[rhythmId][1], out = [];
+            bars = Math.max(1, Math.min(16, Math.round(bars) || 4));
+            let idx = 0; const lo = -3, hi = sc.length + 3;
+            for (let b = 0; b < bars; b++) {
+                const pat = rh[rnd.int(rh.length)];
+                pat.forEach((d, k) => {
+                    const last = b === bars - 1 && k === pat.length - 1;
+                    if (last) idx = 0; else if (!(b === 0 && k === 0)) { const r = rnd(), step = r < 0.3 ? 1 : r < 0.6 ? -1 : r < 0.75 ? 2 : r < 0.9 ? -2 : (rnd() < 0.5 ? 3 : -3); idx = Math.max(lo, Math.min(hi, idx + step)); }
+                    const rest = !last && !(b === 0 && k === 0) && rnd() < 0.08;
+                    out.push({ midi: rest ? null : scaleMidi(keyPc, sc, idx), beats: d });
+                });
+            }
+            return out;
+        }
+
+        // ===== ABC =====
+        const LETTER_PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+        const MODE_SHIFT = { maj: 0, ion: 0, m: 9, min: 9, aeo: 9, dor: 2, phr: 4, lyd: 5, mix: 7, loc: 11 };
+        // 大調主音 pc → 升降記號數（正 = 升、負 = 降）
+        const FIFTHS = { 0: 0, 7: 1, 2: 2, 9: 3, 4: 4, 11: 5, 6: 6, 5: -1, 10: -2, 3: -3, 8: -4, 1: -5 };
+        const SHARP_ORDER = 'FCGDAEB', FLAT_ORDER = 'BEADGCF';
+        // 解析 K: 內容 → { tonic, rel（對應大調主音 pc）, acc: {字母: ±1} }；失敗回傳 null
+        function parseKey(s) {
+            const m = /^\s*([A-Ga-g])([#b]?)\s*(maj|major|ion|min|minor|m|aeo|dor|dorian|phr|lyd|mix|loc)?[a-z]*\s*$/.exec(String(s));
+            if (!m) return null;
+            const mode = (m[3] || 'maj').slice(0, 3).toLowerCase() === 'min' ? 'min' : (m[3] || 'maj').slice(0, 3).toLowerCase();
+            const shift = MODE_SHIFT[mode];
+            if (shift === undefined) return null;
+            const tonic = (LETTER_PC[m[1].toUpperCase()] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0) + 12) % 12, rel = (tonic - shift + 12) % 12, n = FIFTHS[rel], acc = {};
+            if (n > 0) for (let i = 0; i < n; i++) acc[SHARP_ORDER[i]] = 1; else for (let i = 0; i < -n; i++) acc[FLAT_ORDER[i]] = -1;
+            return { tonic, rel, acc };
+        }
+        // 簡譜字串：1..7 加高低八度點（組合附加符號）；時值：> 1 拍加「 -」，< 1 拍加底線 _，附點加 ·
+        function jianpuNote(midi, rel, beats) {
+            let s;
+            if (midi === null) s = '0';
+            else {
+                const d = ((midi - rel) % 12 + 12) % 12, oct = Math.floor((midi - (60 + rel)) / 12);
+                const nm = ['1', '#1', '2', 'b3', '3', '4', '#4', '5', 'b6', '6', 'b7', '7'][d];
+                s = nm + (oct > 0 ? '\u0307'.repeat(oct) : '\u0323'.repeat(-oct));
+            }
+            const b = +beats.toFixed(4);
+            if (Number.isInteger(b) && b >= 1) return s + ' -'.repeat(b - 1);
+            for (const base of [0.125, 0.25, 0.5, 1, 2]) { if (Math.abs(b - base) < 1e-4) return s + '_'.repeat(base >= 1 ? 0 : Math.round(Math.log2(1 / base))); if (Math.abs(b - base * 1.5) < 1e-4) return s + '_'.repeat(base >= 1 ? 0 : Math.round(Math.log2(1 / base))) + '·'; }
+            return s + `(${b}拍)`;
+        }
+        // 解析 ABC → { title, qpm, meter, key, notes:[{midi|null, beats, line}|{bar:true}], errors:[{line, msg}] }（line 從 1 起算）
+        function parseABC(text) {
+            const res = { title: '', qpm: 120, meter: [4, 4], key: null, notes: [], errors: [] };
+            const err = (line, msg) => res.errors.push({ line, msg });
+            let unit = null, keySet = false, acc = {}, prev = null, brokenNext = null, tie = false, count = 0;
+            const lines = String(text).split(/\r?\n/);
+            for (let li = 0; li < lines.length; li++) {
+                const ln = li + 1, raw = lines[li], t = raw.replace(/%.*$/, '').trim();
+                if (!t) continue;
+                const h = /^([A-Za-z]):\s*(.*)$/.exec(t);
+                if (h) {
+                    const k = h[1].toUpperCase(), v = h[2].trim();
+                    if (k === 'T') { if (!res.title) res.title = v; }
+                    else if (k === 'M') {
+                        if (v === 'C') res.meter = [4, 4]; else if (v === 'C|') res.meter = [2, 2]; else if (v.toLowerCase() === 'none') res.meter = [4, 4];
+                        else { const m = /^(\d+)\/(\d+)$/.exec(v); if (!m || +m[1] < 1 || +m[2] < 1) err(ln, `M: 拍號格式錯誤「${v}」（例：M:4/4、M:6/8、M:C）`); else res.meter = [+m[1], +m[2]]; }
+                    } else if (k === 'L') {
+                        const m = /^(\d+)\/(\d+)$/.exec(v); if (!m || +m[1] < 1 || +m[2] < 1) err(ln, `L: 預設音長格式錯誤「${v}」（例：L:1/8）`); else unit = +m[1] / +m[2];
+                    } else if (k === 'Q') {
+                        const m = /^(?:"[^"]*"\s*)?(?:(\d+)\/(\d+)\s*=\s*)?(\d+)\s*(?:"[^"]*")?$/.exec(v);
+                        if (!m || +m[3] < 20 || +m[3] > 400) err(ln, `Q: 速度格式錯誤或超出 20–400（例：Q:1/4=120）`); else res.qpm = m[1] ? +m[3] * (+m[1] / +m[2]) * 4 : +m[3];
+                    } else if (k === 'K') {
+                        const key = parseKey(v); if (!key) err(ln, `K: 調號不認得「${v}」（例：K:C、K:G、K:Am、K:Bb、K:Ddor）`); else { res.key = key; keySet = true; acc = {}; }
+                    }
+                    continue;
+                }
+                if (!keySet) { err(ln, '音符行之前要先有 K: 調號標頭'); keySet = true; res.key = parseKey('C'); }
+                if (unit === null) unit = res.meter[0] / res.meter[1] < 0.75 ? 1 / 16 : 1 / 8;
+                let i = 0; const key = res.key;
+                if (/^w:/i.test(t)) continue;
+                const ub = () => unit * 4;
+                while (i < t.length) {
+                    const ch = t[i];
+                    if (/\s/.test(ch) || ch === '(' || ch === ')' || ch === '\\') { i++; continue; }
+                    if (ch === '|' || ch === ':' || ch === ']') { res.notes.push({ bar: true }); acc = {}; i++; continue; }
+                    if (ch === '[') {
+                        if (/[A-Ga-gz^_=]/.test(t[i + 1] || '')) { err(ln, '不支援和弦 [..]（第 ' + (i + 1) + ' 字）'); i = t.length; break; }
+                        i++; while (/[\d,]/.test(t[i] || '')) i++; continue;
+                    }
+                    if (ch === '"') { const e = t.indexOf('"', i + 1); if (e < 0) { err(ln, '和弦名稱的引號沒有結尾'); break; } i = e + 1; continue; }
+                    if (ch === '!') { const e = t.indexOf('!', i + 1); if (e < 0) { err(ln, '裝飾符號 !..! 沒有結尾'); break; } i = e + 1; continue; }
+                    if (ch === '-') { tie = true; i++; continue; }
+                    if (ch === '>' || ch === '<') {
+                        if (!prev) { err(ln, `「${ch}」前面沒有音符（第 ${i + 1} 字）`); } else { brokenNext = ch; prev.beats *= ch === '>' ? 1.5 : 0.5; }
+                        i++; continue;
+                    }
+                    const start = i; let a = null;
+                    while ('^_='.includes(t[i] || '#')) { if (t[i] === '=') { a = 0; i++; } else { const c = t[i]; let n = 0; while (t[i] === c) { n++; i++; } a = (c === '^' ? 1 : -1) * n; } }
+                    const L = t[i]; let midi = null;
+                    if (L === 'z' || L === 'Z' || L === 'x') { if (a !== null) { err(ln, `休止符前不能有升降記號（第 ${start + 1} 字）`); } i++; }
+                    else if (L && /[A-Ga-g]/.test(L)) {
+                        i++; const up = L === L.toLowerCase(); let oct = up ? 1 : 0;
+                        while (t[i] === "'" || t[i] === ',') { oct += t[i] === "'" ? 1 : -1; i++; }
+                        const U = L.toUpperCase(), k = U + oct;
+                        if (a !== null) acc[k] = a;
+                        const alt = k in acc ? acc[k] : (key.acc[U] || 0);
+                        midi = 60 + LETTER_PC[U] + alt + oct * 12;
+                    } else { err(ln, `不支援或看不懂的符號「${t[i]}」（第 ${i + 1} 字）`); i++; continue; }
+                    let n = 1, d = 1;
+                    const dm = /^\d+/.exec(t.slice(i)); if (dm) { n = +dm[0]; i += dm[0].length; }
+                    while (t[i] === '/') { i++; const m2 = /^\d+/.exec(t.slice(i)); if (m2) { d *= +m2[0]; i += m2[0].length; } else d *= 2; }
+                    if (n < 1 || d < 1 || n > 64 || d > 64) { err(ln, `時值超出範圍（第 ${start + 1} 字）`); continue; }
+                    let beats = n / d * ub();
+                    if (brokenNext) { beats *= brokenNext === '>' ? 0.5 : 1.5; brokenNext = null; }
+                    if (++count > 5000) { err(ln, '音符超過 5000 個上限'); return res; }
+                    if (tie && prev && midi !== null && prev.midi === midi) { prev.beats += beats; tie = false; continue; }
+                    tie = false;
+                    prev = { midi, beats, line: ln }; res.notes.push(prev);
+                }
+            }
+            if (!res.notes.some(n => !n.bar)) err(1, '沒有可播放的音符');
+            if (!res.key && !res.errors.length) err(1, '缺少 K: 調號標頭');
+            return res;
+        }
+        // 音符清單 → 播放事件（秒）
+        function notesToEvents(notes, qpm) {
+            const out = []; let t = 0; const sp = 60 / qpm;
+            for (const n of notes) { if (n.bar) continue; if (n.midi !== null) out.push({ t, dur: n.beats * sp, notes: [n.midi] }); t += n.beats * sp; }
+            return out;
+        }
+
+        // ===== 簡譜輸入 =====
+        // 解析簡譜字串 → { notes:[{ midi|null, beats, tok, line }], errors:[{line,msg}] }；tonicPc 為 1 的音名（1 在第 4 八度）
+        function parseJianpu(text, tonicPc) {
+            const res = { notes: [], errors: [] };
+            String(text).split(/\r?\n/).forEach((raw, li) => {
+                const ln = li + 1;
+                for (const tok of raw.replace(/\|/g, ' ').split(/\s+/).filter(Boolean)) {
+                    if (tok === '-') { const p = res.notes[res.notes.length - 1]; if (p) p.beats += 1; else res.errors.push({ line: ln, msg: '「-」前面沒有音符' }); continue; }
+                    const m = /^([#b]?)([0-7])([',]*)(_*)(\.?)$/.exec(tok);
+                    if (!m) { res.errors.push({ line: ln, msg: `看不懂「${tok}」` }); continue; }
+                    if (m[2] === '0' && m[1]) { res.errors.push({ line: ln, msg: `休止符 0 不能加升降「${tok}」` }); continue; }
+                    let beats = Math.pow(0.5, m[4].length); if (m[5]) beats *= 1.5;
+                    let midi = null;
+                    if (m[2] !== '0') {
+                        const oct = (m[3].match(/'/g) || []).length - (m[3].match(/,/g) || []).length;
+                        midi = 60 + tonicPc + MAJOR[+m[2] - 1] + (m[1] === '#' ? 1 : m[1] === 'b' ? -1 : 0) + 12 * oct;
+                    }
+                    if (res.notes.length >= 5000) { res.errors.push({ line: ln, msg: '音符超過 5000 個上限' }); return; }
+                    res.notes.push({ midi, beats, tok, line: ln });
+                }
+            });
+            return res;
+        }
+        // MIDI 音高 → 高音譜表位置：{ name, step（0 = 第一線 E4）, pos }
+        function staffPos(midi) {
+            const pc = ((midi % 12) + 12) % 12, oct = Math.floor(midi / 12) - 1, black = [1, 3, 6, 8, 10].includes(pc), basePc = black ? pc - 1 : pc;
+            const letter = { 0: 0, 2: 1, 4: 2, 5: 3, 7: 4, 9: 5, 11: 6 }[basePc], step = oct * 7 + letter - 30;
+            let pos;
+            if (step >= 0 && step <= 8) pos = step % 2 === 0 ? `第 ${step / 2 + 1} 線` : `第 ${(step + 1) / 2} 間`;
+            else if (step === 9) pos = '第 5 線上方的間';
+            else if (step > 9) pos = step % 2 === 0 ? `上加 ${(step - 8) / 2} 線` : `上加 ${(step - 9) / 2} 線上方的間`;
+            else if (step === -1) pos = '第 1 線下方的間';
+            else pos = step % 2 === 0 ? `下加 ${-step / 2} 線` : `下加 ${(-step - 1) / 2} 線下方的間`;
+            return { name: SHARP_NAMES[pc] + oct, step, pos: pos + (black ? '（升記號）' : '') };
+        }
+
+        // ===== MIDI =====
+        const MAX_MIDI_BYTES = 2 * 1048576, MAX_MIDI_EVENTS = 300000, MAX_PLAY_NOTES = 20000;
+        // 解析標準 MIDI 檔（SMF）→ { format, ntrks, division, tracks:[{name, events, channels, notes:[{tick, dur, ch, note, vel}], endTick}], tempos:[{tick, us}], sig, errors[] }；不是 MIDI 回傳 { error }
+        function parseMidi(b) {
+            const u32 = (o) => ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0, u16 = (o) => (b[o] << 8) | b[o + 1];
+            const tag = (o) => String.fromCharCode(b[o], b[o + 1], b[o + 2], b[o + 3]);
+            if (b.length < 14 || tag(0) !== 'MThd') return { error: '不是標準 MIDI 檔（找不到 MThd 檔頭）' };
+            const hl = u32(4); if (hl < 6 || 8 + hl > b.length) return { error: 'MIDI 檔頭長度異常' };
+            const format = u16(8), ntrks = u16(10), division = u16(12);
+            if (division & 0x8000) return { error: '不支援 SMPTE 時間格式的 MIDI 檔' };
+            if (division === 0) return { error: 'MIDI 解析度（ticks / 四分音符）為 0，檔案異常' };
+            const res = { format, ntrks, division, tracks: [], tempos: [], sig: null, errors: [] };
+            let p = 8 + hl, total = 0;
+            while (p + 8 <= b.length) {
+                const id = tag(p), len = u32(p + 4); let q = p + 8; const end = Math.min(b.length, q + len);
+                if (q + len > b.length) res.errors.push(`第 ${res.tracks.length + 1} 個區塊長度超出檔案（可能被截斷）`);
+                if (id !== 'MTrk') { p = q + len; continue; }
+                const tr = { name: '', events: 0, channels: [], notes: [], endTick: 0 }, open = {}, chs = new Set();
+                let tick = 0, rs = 0, bad = false;
+                const vlq = () => { let v = 0; for (let k = 0; k < 4; k++) { if (q >= end) { bad = true; return 0; } const c = b[q++]; v = (v << 7) | (c & 0x7f); if (!(c & 0x80)) return v; } bad = true; return v; };
+                while (q < end && !bad) {
+                    tick += vlq(); if (bad) break;
+                    let st = b[q];
+                    if (st < 0x80) { if (!rs) { bad = true; break; } st = rs; } else q++;
+                    if (++total > MAX_MIDI_EVENTS) { res.errors.push('事件超過 30 萬個上限，後面的內容略過'); bad = true; break; }
+                    tr.events++;
+                    if (st === 0xff) {
+                        const type = b[q++], l = vlq(); if (bad || q + l > end) { bad = true; break; }
+                        if (type === 0x51 && l === 3) res.tempos.push({ tick, us: (b[q] << 16) | (b[q + 1] << 8) | b[q + 2] });
+                        else if (type === 0x58 && l >= 2 && !res.sig) res.sig = [b[q], 1 << b[q + 1]];
+                        else if (type === 0x03 && !tr.name) tr.name = String.fromCharCode(...b.slice(q, q + Math.min(l, 60)));
+                        q += l; if (type === 0x2f) break;
+                    } else if (st === 0xf0 || st === 0xf7) { const l = vlq(); q += l; rs = 0; }
+                    else {
+                        rs = st; const hi = st >> 4, ch = st & 15, two = hi !== 0xc && hi !== 0xd;
+                        if (q + (two ? 2 : 1) > end) { bad = true; break; }
+                        const d1 = b[q++], d2 = two ? b[q++] : 0;
+                        if (hi === 0x9 && d2 > 0) { chs.add(ch); (open[ch * 128 + d1] = open[ch * 128 + d1] || []).push({ tick, vel: d2 }); }
+                        else if (hi === 0x8 || (hi === 0x9 && d2 === 0)) { const s = open[ch * 128 + d1]; if (s && s.length) { const o = s.shift(); tr.notes.push({ tick: o.tick, dur: tick - o.tick, ch, note: d1, vel: o.vel }); } }
+                    }
+                }
+                if (bad && !res.errors.length) res.errors.push(`第 ${res.tracks.length + 1} 軌資料異常，已解析到可讀的部分`);
+                for (const k in open) for (const o of open[k]) tr.notes.push({ tick: o.tick, dur: Math.max(0, tick - o.tick), ch: Math.floor(k / 128), note: k % 128, vel: o.vel });
+                tr.notes.sort((x, y) => x.tick - y.tick); tr.endTick = tick; tr.channels = [...chs].sort((x, y) => x - y);
+                res.tracks.push(tr); p = end;
+            }
+            if (!res.tracks.length) return { error: '檔案裡沒有任何音軌（MTrk）' };
+            res.tempos.sort((x, y) => x.tick - y.tick);
+            return res;
+        }
+        // tick → 秒（依速度表；沒有速度事件時預設 120 BPM）
+        function tickSec(tempos, division, tick) {
+            let sec = 0, last = 0, us = 500000;
+            for (const t of tempos) { if (t.tick >= tick) break; sec += (t.tick - last) * us / division / 1e6; last = t.tick; us = t.us; }
+            return sec + (tick - last) * us / division / 1e6;
+        }
+        // MIDI 解析結果 → 播放事件（略過打擊樂聲道 10）；回傳 { events, truncated, seconds }
+        function midiEvents(m) {
+            const all = []; for (const tr of m.tracks) for (const n of tr.notes) if (n.ch !== 9) all.push(n);
+            all.sort((a, b) => a.tick - b.tick);
+            const use = all.slice(0, MAX_PLAY_NOTES), events = use.map(n => { const t = tickSec(m.tempos, m.division, n.tick); return { t, dur: Math.max(0.05, tickSec(m.tempos, m.division, n.tick + n.dur) - t), notes: [n.note], vel: n.vel / 127 }; });
+            const sec = m.tracks.reduce((mx, tr) => Math.max(mx, tickSec(m.tempos, m.division, tr.endTick)), 0);
+            return { events, truncated: all.length > use.length, seconds: sec };
+        }
+
+        // ===== 音響計算 =====
+        const NOTE_FRACS = [['1/1（全音符）', 4], ['1/2（二分）', 2], ['1/4（四分）', 1], ['1/8（八分）', 0.5], ['1/16（十六分）', 0.25], ['1/32（三十二分）', 0.125]];
+        // BPM → 各音符時值（毫秒）：直 / 附點 / 三連音
+        function delayTable(bpm) {
+            const q = 60000 / bpm;
+            return NOTE_FRACS.map(([name, b]) => ({ name, straight: q * b, dotted: q * b * 1.5, triplet: q * b * 2 / 3 }));
+        }
+        const msToHz = (ms) => 1000 / ms;
+        const soundSpeed = (tC) => 331.3 + 0.606 * tC;
+        // 三軸軸向駐波：f = n·c / (2L)，回傳依頻率排序 [{ f, dim, n }]
+        function roomModes(L, W, H, c = 343, nmax = 4) {
+            const out = [];
+            for (const [dim, len] of [['長', L], ['寬', W], ['高', H]]) for (let n = 1; n <= nmax; n++) out.push({ f: n * c / (2 * len), dim, n });
+            return out.sort((a, b) => a.f - b.f);
+        }
+        const zSeries = (zs) => zs.reduce((a, b) => a + b, 0);
+        const zParallel = (zs) => 1 / zs.reduce((a, b) => a + 1 / b, 0);
+        // 解析阻抗清單（逗號 / 空白分隔）；任何一個不是正數就回傳 null
+        function parseZs(s) { const a = String(s).split(/[\s,，、]+/).filter(Boolean).map(Number); return a.length && a.length <= 32 && a.every(x => isFinite(x) && x > 0) ? a : null; }
+        // 理想電壓源：額定功率 pRated @ zRated → 接 zLoad 時的功率（∝ 1/Z）
+        const ampPower = (pRated, zRated, zLoad) => pRated * zRated / zLoad;
+        const powerFromVolt = (v, z) => v * v / z;
+        const voltFromPower = (p, z) => Math.sqrt(p * z);
+        // 自由場音壓估算：靈敏度（1W/1m）+ 10log10(W) − 20log10(m)
+        const splEstimate = (sens, watts, dist) => sens + 10 * Math.log10(watts) - 20 * Math.log10(dist);
+
+        // ===== 記住的輸入 =====
+        const PERSIST = ['cKey', 'cMode', 'cStyle', 'cBpm', 'mKey', 'mScale', 'mRhythm', 'mBars', 'mSeed', 'mBpm', 'abc', 'jKey', 'jText', 'jBpm', 'dBpm', 'rL', 'rW', 'rH', 'rC', 'sZ', 'sCfg', 'sAmp', 'sRated', 'sSens', 'sDist'];
+        const TABS = [['chord', '和弦進行'], ['melody', '隨機旋律'], ['abc', 'ABC'], ['midi', 'MIDI'], ['jp', '簡譜'], ['delay', '延遲'], ['room', '房間共振'], ['spk', '喇叭']];
+        // 驗證載入的資料：回傳 { tab, v }，只保留已知欄位的字串（長度上限 20000）
+        function loadOpts(raw) {
+            const o = { tab: TABS[0][0], v: {} };
+            if (!raw || typeof raw !== 'object') return o;
+            if (TABS.some(t => t[0] === raw.tab)) o.tab = raw.tab;
+            if (raw.v && typeof raw.v === 'object') for (const k of PERSIST) if (typeof raw.v[k] === 'string' && raw.v[k].length <= 20000) o.v[k] = raw.v[k];
+            return o;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'musiclab_opts';
+        const SAMPLE_ABC = 'X:1\nT:小星星\nM:4/4\nL:1/4\nQ:1/4=100\nK:C\nC C G G | A A G2 | F F E E | D D C2 |\nG G F F | E E D2 | G G F F | E E D2 |\nC C G G | A A G2 | F F E E | D D C2 |]';
+        const SAMPLE_JP = "1 1 5 5 | 6 6 5 - | 4 4 3 3 | 2 2 1 - |\n5_ 6_ 5_ 4_ 3 1 | 2 5, 1 -";
+        let opts = loadOpts(store.get(KEY, null));
+
+        const keyOpts = () => NOTE_NAMES.map((n, i) => new Option(n, i));
+        ['#cKey', '#mKey', '#jKey'].forEach(id => $(id).replaceChildren(...keyOpts()));
+        $('#mScale').replaceChildren(...Object.entries(SCALES).map(([k, v]) => new Option(v[0], k)));
+        $('#mRhythm').replaceChildren(...Object.entries(RHYTHMS).map(([k, v]) => new Option(v[0], k)));
+        $('#abc').value = SAMPLE_ABC; $('#jText').value = SAMPLE_JP;
+        for (const [k, v] of Object.entries(opts.v)) { const el = $('#' + k); if (!el) continue; const old = el.value; el.value = v; if (el.tagName === 'SELECT' && el.value !== v) el.value = old; }
+        const saveOpts = () => { const v = {}; for (const k of PERSIST) v[k] = $('#' + k).value; store.set(KEY, { tab: opts.tab, v }); };
+
+        // ---- 播放（Web Audio；每 60ms 排未來 0.5 秒內的音，避免一次建立上萬個節點） ----
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx = null, cur = null;
+        function stopPlay() {
+            if (!cur) return;
+            clearInterval(cur.iv); try { cur.master.gain.cancelScheduledValues(0); cur.master.gain.value = 0; setTimeout(() => cur.master.disconnect(), 50); } catch (e) { }
+            cur.btn.textContent = '▶ 播放'; cur = null;
+        }
+        const midiHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+        function startPlay(btn, events, wave = 'triangle') {
+            if (cur && cur.btn === btn) { stopPlay(); return; }
+            stopPlay();
+            if (!AC) { alert('這個瀏覽器不支援 Web Audio，無法發聲。'); return; }
+            if (!events.length) return;
+            actx = actx || new AC(); actx.resume();
+            const master = actx.createGain(); master.gain.value = 0.5; master.connect(actx.destination);
+            const t0 = actx.currentTime + 0.1; let i = 0; const end = Math.max(...events.map(e => e.t + e.dur));
+            const voice = (e) => {
+                const g = actx.createGain(), at = t0 + e.t, vol = 0.25 * (e.vel || 0.8) / Math.sqrt(e.notes.length);
+                g.gain.setValueAtTime(0.0001, at); g.gain.linearRampToValueAtTime(vol, at + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, at + Math.max(0.05, e.dur));
+                g.connect(master);
+                for (const n of e.notes) { const o = actx.createOscillator(); o.type = wave; o.frequency.value = midiHz(n); o.connect(g); o.start(at); o.stop(at + Math.max(0.06, e.dur) + 0.02); }
+            };
+            cur = { btn, master, iv: 0 };
+            cur.iv = setInterval(() => {
+                while (i < events.length && t0 + events[i].t < actx.currentTime + 0.5) voice(events[i++]);
+                if (actx.currentTime > t0 + end + 0.1) stopPlay();
+            }, 60);
+            btn.textContent = '■ 停止';
+        }
+
+        // ---- 分頁 ----
+        function showTab(id) {
+            opts.tab = id; stopPlay();
+            document.querySelectorAll('.pane').forEach(p => { p.hidden = p.dataset.t !== id; });
+            document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.t === id)));
+        }
+        $('#tabs').replaceChildren(...TABS.map(([id, name]) => { const b = Object.assign(document.createElement('button'), { className: 'sm', textContent: name }); b.dataset.t = id; b.onclick = () => { showTab(id); saveOpts(); }; return b; }));
+
+        // ---- 和弦 ----
+        function fillStyles() { const mode = $('#cMode').value, old = $('#cStyle').value; $('#cStyle').replaceChildren(...PROGS.filter(p => p.mode === mode).map(p => new Option(p.name, p.id))); if ([...$('#cStyle').options].some(o => o.value === old)) $('#cStyle').value = old; }
+        let chordEv = [];
+        function renderChord() {
+            const ch = chordProg(+$('#cKey').value, $('#cStyle').value), bpm = Math.min(220, Math.max(40, +$('#cBpm').value || 90)), sp = 60 / bpm * 4;
+            $('#cOut').textContent = ch.map(c => c.name).join('  –  '); $('#cRom').textContent = ch.map(c => c.rom).join('  –  ');
+            chordEv = ch.map((c, k) => ({ t: k * sp, dur: sp * 0.95, notes: [c.bass, ...c.notes] }));
+        }
+        $('#cMode').addEventListener('change', () => { fillStyles(); renderChord(); });
+        ['#cKey', '#cStyle', '#cBpm'].forEach(id => $(id).addEventListener('input', renderChord));
+        $('#cPlay').onclick = () => { renderChord(); startPlay($('#cPlay'), chordEv, 'triangle'); };
+
+        // ---- 旋律 ----
+        let melEv = [];
+        function renderMelody() {
+            const bars = Math.min(16, Math.max(1, Math.round(+$('#mBars').value) || 4)), bpm = Math.min(220, Math.max(40, +$('#mBpm').value || 100));
+            const mel = genMelody($('#mSeed').value || 'seed', +$('#mKey').value, $('#mScale').value, $('#mRhythm').value, bars);
+            $('#mOut').textContent = mel.map(n => n.midi === null ? '休' : SHARP_NAMES[n.midi % 12] + (Math.floor(n.midi / 12) - 1)).join(' ');
+            $('#mMsg').textContent = `共 ${mel.length} 個音、${bars * 4} 拍；種子「${$('#mSeed').value || 'seed'}」。`;
+            melEv = notesToEvents(mel, bpm);
+        }
+        ['#mKey', '#mScale', '#mRhythm', '#mBars', '#mSeed', '#mBpm'].forEach(id => $(id).addEventListener('input', renderMelody));
+        $('#mDice').onclick = () => { $('#mSeed').value = Math.random().toString(36).slice(2, 8); renderMelody(); saveOpts(); };
+        $('#mPlay').onclick = () => { renderMelody(); startPlay($('#mPlay'), melEv, 'triangle'); };
+
+        // ---- ABC ----
+        let abcEv = [];
+        function renderAbc() {
+            const r = parseABC($('#abc').value);
+            $('#aErr').textContent = r.errors.map(e => `第 ${e.line} 行：${e.msg}`).join('\n');
+            const nn = r.notes.filter(n => !n.bar);
+            abcEv = r.errors.length ? [] : notesToEvents(r.notes, r.qpm);
+            const rel = r.key ? r.key.rel : 0;
+            $('#aInfo').textContent = (r.title ? `《${r.title}》 ` : '') + `${nn.length} 個音　拍號 ${r.meter.join('/')}　速度 ♩=${Math.round(r.qpm)}` + (r.key ? `　1 = ${NOTE_NAMES[rel]}` : '');
+            $('#aJp').textContent = r.errors.length ? '（修正錯誤後顯示）' : r.notes.map(n => n.bar ? '|' : jianpuNote(n.midi, rel, n.beats)).join(' ').replace(/(\| )+/g, '| ');
+            $('#aPlay').disabled = !!r.errors.length || !nn.length;
+        }
+        $('#abc').addEventListener('input', renderAbc);
+        $('#aSample').onclick = () => { $('#abc').value = SAMPLE_ABC; renderAbc(); saveOpts(); };
+        $('#aPlay').onclick = () => startPlay($('#aPlay'), abcEv, 'triangle');
+
+        // ---- MIDI ----
+        let midiEv = [];
+        $('#mFile').addEventListener('change', async () => {
+            stopPlay(); const f = $('#mFile').files[0]; $('#fErr').textContent = ''; $('#fInfo').textContent = ''; $('#fTbl').replaceChildren(); $('#fPlay').disabled = true; midiEv = [];
+            if (!f) return;
+            if (f.size > MAX_MIDI_BYTES) { $('#fErr').textContent = `檔案 ${(f.size / 1048576).toFixed(1)} MB 超過 2 MB 上限。`; return; }
+            let m;
+            try { m = parseMidi(new Uint8Array(await f.arrayBuffer())); } catch (e) { $('#fErr').textContent = '讀取或解析失敗：' + ((e && e.message) || e); return; }
+            if (m.error) { $('#fErr').textContent = m.error; return; }
+            const ev = midiEvents(m), tempo = m.tempos.length ? Math.round(60000000 / m.tempos[0].us) : 120, nn = m.tracks.reduce((s, t) => s + t.notes.length, 0);
+            $('#fErr').textContent = m.errors.join('\n');
+            $('#fInfo').textContent = `格式 ${m.format}　音軌 ${m.tracks.length}（檔頭宣告 ${m.ntrks}）　解析度 ${m.division} ticks/四分音符\n速度 ${tempo} BPM${m.tempos.length > 1 ? `（共 ${m.tempos.length} 次變速）` : ''}　拍號 ${m.sig ? m.sig.join('/') : '未標示'}\n音符 ${nn}　長度約 ${Math.floor(ev.seconds / 60)}:${String(Math.round(ev.seconds % 60)).padStart(2, '0')}` + (ev.truncated ? `\n注意：只播放前 ${MAX_PLAY_NOTES} 個音符` : '');
+            const t = document.createElement('table'); t.innerHTML = '<tr><th>軌</th><th>名稱</th><th>事件</th><th>音符</th><th>聲道</th><th>音域</th></tr>';
+            m.tracks.forEach((tr, i) => {
+                const ns = tr.notes.map(n => n.note), r = document.createElement('tr');
+                [i + 1, tr.name || '—', tr.events, tr.notes.length, tr.channels.map(c => c + 1).join(',') || '—', ns.length ? SHARP_NAMES[Math.min(...ns) % 12] + (Math.floor(Math.min(...ns) / 12) - 1) + '–' + SHARP_NAMES[Math.max(...ns) % 12] + (Math.floor(Math.max(...ns) / 12) - 1) : '—'].forEach(v => { const td = document.createElement('td'); td.textContent = v; r.appendChild(td); });
+                t.appendChild(r);
+            });
+            $('#fTbl').replaceChildren(t); midiEv = ev.events; $('#fPlay').disabled = !midiEv.length;
+        });
+        $('#fPlay').onclick = () => startPlay($('#fPlay'), midiEv, 'triangle');
+
+        // ---- 簡譜 ----
+        let jpEv = [];
+        function renderJp() {
+            const r = parseJianpu($('#jText').value, +$('#jKey').value), bpm = Math.min(220, Math.max(40, +$('#jBpm').value || 100));
+            $('#jErr').textContent = r.errors.map(e => `第 ${e.line} 行：${e.msg}`).join('\n');
+            const t = document.createElement('table'); t.innerHTML = '<tr><th>簡譜</th><th>音名</th><th>五線譜位置（高音譜號）</th></tr>';
+            for (const n of r.notes) {
+                const tr = document.createElement('tr'), sp = n.midi === null ? null : staffPos(n.midi);
+                [n.tok, sp ? sp.name : '休止', sp ? sp.pos : '—'].forEach((v, k) => { const td = document.createElement('td'); td.textContent = v; if (k === 2) td.style.textAlign = 'left'; tr.appendChild(td); });
+                t.appendChild(tr);
+            }
+            $('#jTbl').replaceChildren(r.notes.length ? t : document.createTextNode('')); jpEv = r.errors.length ? [] : notesToEvents(r.notes, bpm);
+            $('#jPlay').disabled = !jpEv.length;
+        }
+        ['#jText', '#jKey', '#jBpm'].forEach(id => $(id).addEventListener('input', renderJp));
+        $('#jPlay').onclick = () => startPlay($('#jPlay'), jpEv, 'triangle');
+
+        // ---- 延遲 ----
+        function renderDelay() {
+            const bpm = +$('#dBpm').value;
+            if (!(bpm >= 20 && bpm <= 400)) { $('#dTbl').textContent = 'BPM 請輸入 20 到 400。'; return; }
+            const t = document.createElement('table'); t.innerHTML = '<tr><th>音符</th><th>直（ms / Hz）</th><th>附點</th><th>三連音</th></tr>';
+            const f = (ms) => `${ms.toFixed(ms < 100 ? 2 : 1)} / ${msToHz(ms).toFixed(2)}`;
+            for (const r of delayTable(bpm)) { const tr = document.createElement('tr'); [r.name, f(r.straight), f(r.dotted), f(r.triplet)].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); }); t.appendChild(tr); }
+            $('#dTbl').replaceChildren(t);
+        }
+        $('#dBpm').addEventListener('input', renderDelay);
+
+        // ---- 房間 ----
+        function renderRoom() {
+            const L = +$('#rL').value, W = +$('#rW').value, H = +$('#rH').value, c = +$('#rC').value;
+            if (![L, W, H].every(x => x >= 0.5 && x <= 50) || !(c >= 300 && c <= 400)) { $('#rTbl').textContent = '尺寸請輸入 0.5–50 公尺，聲速 300–400 m/s。'; $('#rNote').textContent = ''; return; }
+            const t = document.createElement('table'); t.innerHTML = '<tr><th>階</th><th>長（Hz）</th><th>寬（Hz）</th><th>高（Hz）</th></tr>';
+            for (let n = 1; n <= 4; n++) { const tr = document.createElement('tr'); [n, n * c / (2 * L), n * c / (2 * W), n * c / (2 * H)].forEach((v, k) => { const td = document.createElement('td'); td.textContent = k ? v.toFixed(1) : v; tr.appendChild(td); }); t.appendChild(tr); }
+            $('#rTbl').replaceChildren(t);
+            const m = roomModes(L, W, H, c, 4), close = [];
+            for (let i = 1; i < m.length; i++) if (m[i].dim !== m[i - 1].dim && m[i].f - m[i - 1].f < Math.max(3, m[i].f * 0.05)) close.push(`${m[i - 1].f.toFixed(1)} 與 ${m[i].f.toFixed(1)} Hz`);
+            $('#rNote').textContent = `最低共振 ${m[0].f.toFixed(1)} Hz（${m[0].dim}）。` + (close.length ? `不同方向的共振靠得很近（相差 < 5%）：${close.slice(0, 4).join('、')}，低頻容易特別突出。` : '各方向共振沒有明顯重疊。') + ' 僅軸向模態、不含吸音，實際請以量測為準。';
+        }
+        ['#rL', '#rW', '#rH', '#rC'].forEach(id => $(id).addEventListener('input', renderRoom));
+        $('#rT').onclick = () => { const v = prompt('室溫（°C，-30 到 50）', '20'); const n = parseFloat(v); if (v !== null && n >= -30 && n <= 50) { $('#rC').value = soundSpeed(n).toFixed(1); renderRoom(); saveOpts(); } };
+
+        // ---- 喇叭 ----
+        function renderSpk() {
+            const zs = parseZs($('#sZ').value);
+            if (!zs) { $('#sOut').textContent = '阻抗請輸入正數，用逗號分隔（例：8,8,4）。'; $('#sNote').textContent = ''; return; }
+            const z = $('#sCfg').value === 'series' ? zSeries(zs) : zParallel(zs), lines = [`${zs.length} 顆${$('#sCfg').value === 'series' ? '串聯' : '並聯'}：總阻抗 ${+z.toFixed(3)} Ω`];
+            const pa = +$('#sAmp').value, zr = +$('#sRated').value, sens = +$('#sSens').value, d = +$('#sDist').value;
+            if (pa > 0 && zr > 0) {
+                const p = ampPower(pa, zr, z); lines.push(`擴大機 ${pa} W @ ${zr} Ω → 接 ${+z.toFixed(2)} Ω 約 ${+p.toFixed(1)} W（${+voltFromPower(p, z).toFixed(2)} V RMS）`);
+                if (isFinite(sens) && d > 0) lines.push(`估算音壓約 ${splEstimate(sens, p, d).toFixed(1)} dB SPL（距離 ${d} m）`);
+                if (z < zr * 0.5) lines.push('⚠ 負載阻抗低於額定的一半，擴大機可能過載或保護，請確認規格。');
+            } else lines.push('填入擴大機功率與額定負載可估算功率與音壓。');
+            $('#sOut').textContent = lines.join('\n');
+            $('#sNote').textContent = '理想電壓源估算：功率 ∝ 1/阻抗；每加倍功率約 +3 dB，距離每加倍約 −6 dB。';
+        }
+        ['#sZ', '#sCfg', '#sAmp', '#sRated', '#sSens', '#sDist'].forEach(id => $(id).addEventListener('input', renderSpk));
+
+        // ---- 初始化 ----
+        fillStyles(); if (opts.v.cStyle && [...$('#cStyle').options].some(o => o.value === opts.v.cStyle)) $('#cStyle').value = opts.v.cStyle;
+        renderChord(); renderMelody(); renderAbc(); renderJp(); renderDelay(); renderRoom(); renderSpk(); showTab(opts.tab);
+        document.querySelector('.wrap').addEventListener('input', saveOpts); document.querySelector('.wrap').addEventListener('change', saveOpts);
+        $('#reset').onclick = () => {
+            if (!confirm('要清除記住的分頁與輸入嗎？\n（無法復原；頁面會重新載入，進行中的播放會停止）')) return;
+            stopPlay(); try { localStorage.removeItem(KEY); } catch (e) { } location.reload();
+        };
+        addEventListener('pagehide', stopPlay);
+        document.addEventListener('visibilitychange', () => { if (document.hidden) stopPlay(); });
+    </script>
+</body>
+
+</html>

@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="QR Code 產生器：輸入文字或網址即時產生，可選容錯等級與大小，下載 PNG，並能產生 Code 128、EAN-13 與 Code 39 條碼（可下載 SVG），全部在本機完成。">
+    <meta name="description" content="QR Code 產生器：輸入文字或網址即時產生，可選容錯等級與大小，下載 PNG，中央可放 Logo 並檢查容錯，並能產生 Code 128、EAN-13 與 Code 39 條碼（可下載 SVG），全部在本機完成。">
     <meta property="og:title" content="QR Code 產生器" />
     <meta property="og:description" content="QR Code 與 Code 128 / EAN-13 / Code 39 條碼，可下載 PNG / SVG。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
@@ -61,6 +61,7 @@
         <div class="tabs" style="display:flex;gap:8px;margin-bottom:12px">
             <button data-t="qr" aria-pressed="true">QR Code</button>
             <button data-t="bar" aria-pressed="false">條碼</button>
+            <button data-t="logo" aria-pressed="false">Logo QR</button>
         </div>
 
         <div id="qrPane">
@@ -98,6 +99,23 @@
         </div>
         </div>
 
+        <div id="logoPane" hidden>
+            <div class="card">
+                <textarea id="lText" placeholder="例如：https://andynavy23.github.io/simple_tools/" aria-label="Logo QR 內容"></textarea>
+                <div class="row"><label for="lFile">Logo 圖片</label><input type="file" id="lFile" accept="image/*"></div>
+                <div class="row">
+                    <label for="lEcc">容錯</label>
+                    <select id="lEcc"><option value="L">L・7%</option><option value="M">M・15%</option><option value="Q">Q・25%</option><option value="H" selected>H・30%</option></select>
+                    <label for="lSize">Logo 邊長</label><input type="range" id="lSize" min="5" max="45" value="20" style="flex:1 1 100px"><b id="lSizeV">20%</b>
+                </div>
+                <p class="note" id="lInfo"></p>
+            </div>
+            <div class="card stage" id="lStage" hidden>
+                <canvas id="lQr" aria-label="含 Logo 的 QR Code"></canvas>
+                <div class="row"><button class="primary" id="lSave">下載 PNG</button></div>
+            </div>
+        </div>
+
         <div id="barPane" hidden>
             <div class="card">
                 <div class="row" style="margin-top:0">
@@ -132,6 +150,7 @@
         <li>QR Code：在輸入框填內容，選「容錯」（L 7%、M 15%、Q 25%、H 30%，越高越耐髒污但圖案越密）與「大小」，圖即時產生，按「下載 PNG」。</li>
         <li>條碼：切到「條碼」分頁，選「種類」，輸入內容，選「寬度」與「高度」，可勾或取消「顯示文字」。</li>
         <li>Code 128 可放英文、數字與符號；EAN-13 輸入 12 或 13 位數字，檢查碼會自動算出並驗證；Code 39 只能放大寫英文、數字、空白與 - . $ / + %（小寫自動轉大寫，起訖的 * 自動加上）。</li>
+        <li>Logo QR：切到「Logo QR」分頁，輸入內容、選一張 Logo 圖片、調整 Logo 邊長；畫面會算出 Logo 遮住的面積比，並對照容錯等級（L 7%、M 15%、Q 25%、H 30%）告訴你「足夠 / 勉強 / 不足」。建議容錯選 H。</li>
         <li>按「下載 PNG」存圖，或「下載 SVG」取得可無限放大的向量圖（印刷用）。</li>
         </ol>
         <h3>範例</h3>
@@ -144,6 +163,7 @@
         <li>內容愈長 QR Code 愈密，印太小可能掃不到；手機畫面上會自動縮放顯示，下載的圖仍是原尺寸。</li>
         <li>全部在本機產生，內容不會上傳。Wi-Fi 密碼與名片資料不會寫入瀏覽器儲存，重新整理就消失。</li>
         <li>範本裡的 \ ; , : " 等特殊字元會依規範自動跳脫；名片內容愈多 QR 愈密，超過容量會顯示錯誤。行事曆時間預設為「浮動時間」（不綁時區），勾選 UTC 則轉成世界標準時間。</li>
+        <li>Logo QR 的判定很保守：遮住面積不超過容錯率的一半才算「足夠」；超過容錯率一定掃不到。定位方塊（三個角）與中央以外的區域不要被蓋住，產生後請務必用手機實際掃描確認。Logo 圖片只在本機處理，不上傳；上限 5 MB。</li>
         <li>EAN-13 的商品條碼需向 GS1 申請，這裡只是產生圖案。</li>
         </ul>
     </template>
@@ -504,6 +524,15 @@
         }
         const QR_TPL = { wifi: wifiString, vcard: vcardString, tel: telString, sms: smsString, mail: mailString, geo: geoString, event: eventString, url: urlString };
         const utf8Len = (t) => new TextEncoder().encode(t).length;
+        // Logo QR：Logo 方塊（含白底）邊長占 QR 圖樣邊長的 sidePct%，遮住的面積比 = (邊長比)²
+        const ECC_RATE = { L: 0.07, M: 0.15, Q: 0.25, H: 0.30 };   // 標準容錯率（ISO/IEC 18004）
+        const logoCover = (sidePct) => { const r = Math.min(100, Math.max(0, Number(sidePct) || 0)) / 100; return r * r; };
+        // 保守判定：遮住面積 ≤ 容錯率一半 → 足夠（留一半給髒污與掃描誤差）；≤ 容錯率 → 勉強（理論上可救回、實際常掃不到）；其餘 → 不足
+        function logoVerdict(sidePct, ecc) {
+            const rate = ECC_RATE[ecc], cover = logoCover(sidePct);
+            if (!rate) throw new Error('未知的容錯等級');
+            return { cover, rate, level: cover <= rate / 2 ? 'ok' : cover <= rate ? 'warn' : 'bad' };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -528,6 +557,40 @@
                 $('#stage').hidden = true;
             }
         }
+
+        // ---------- Logo QR ----------
+        let logoImg = null;
+        function renderLogo() {
+            const text = $('#lText').value, ecc = $('#lEcc').value, side = +$('#lSize').value;
+            $('#lSizeV').textContent = side + '%';
+            $('#lStage').hidden = !text;
+            if (!text) { $('#lInfo').textContent = ''; return; }
+            try {
+                const qr = encode(text, ecc), sc = 8, b = 4, px = (qr.size + b * 2) * sc, cv = $('#lQr');
+                cv.width = cv.height = px;
+                const g = cv.getContext('2d');
+                g.fillStyle = '#fff'; g.fillRect(0, 0, px, px); g.fillStyle = '#000';
+                qr.modules.forEach((row, y) => row.forEach((on, x) => { if (on) g.fillRect((x + b) * sc, (y + b) * sc, sc, sc); }));
+                const box = qr.size * sc * side / 100, c = px / 2;
+                g.fillStyle = '#fff'; g.fillRect(c - box / 2, c - box / 2, box, box);
+                if (logoImg) { const k = Math.min(box * 0.9 / logoImg.width, box * 0.9 / logoImg.height); g.drawImage(logoImg, c - logoImg.width * k / 2, c - logoImg.height * k / 2, logoImg.width * k, logoImg.height * k); }
+                const v = logoVerdict(side, ecc);
+                const msg = { ok: '足夠', warn: '勉強（理論上救得回，實際容易掃不到，建議縮小 Logo 或提高容錯）', bad: '不足（Logo 蓋住的面積超過容錯能力，請縮小 Logo 或提高容錯）' }[v.level];
+                $('#lInfo').textContent = `Logo 遮住約 ${(v.cover * 100).toFixed(1)}% 面積，容錯 ${ecc} 為 ${Math.round(v.rate * 100)}%：${msg}。${logoImg ? '' : '（尚未選 Logo，只顯示白底預留區）'}`;
+                $('#lInfo').style.color = v.level === 'ok' ? 'var(--ok)' : v.level === 'bad' ? 'var(--bad)' : '';
+            } catch (e) { $('#lInfo').textContent = e.message; $('#lStage').hidden = true; }
+        }
+        $('#lFile').onchange = () => {
+            const f = $('#lFile').files[0]; logoImg = null;
+            if (!f) return renderLogo();
+            if (f.size > 5 * 1024 * 1024) { $('#lFile').value = ''; $('#lInfo').textContent = 'Logo 圖片請小於 5 MB'; return renderLogo(); }
+            const url = URL.createObjectURL(f), im = new Image();
+            im.onload = () => { logoImg = im; URL.revokeObjectURL(url); renderLogo(); };
+            im.onerror = () => { URL.revokeObjectURL(url); $('#lFile').value = ''; renderLogo(); $('#lInfo').textContent = '無法讀取這張圖片，請換 PNG / JPG / SVG'; };
+            im.src = url;
+        };
+        ['lText', 'lEcc', 'lSize'].forEach(id => { $('#' + id).oninput = $('#' + id).onchange = renderLogo; });
+        $('#lSave').onclick = () => $('#lQr').toBlob((blob) => Util.download(blob, 'logo-qrcode.png'));
 
         // ---------- 條碼 ----------
         let barSpec = null;
@@ -555,7 +618,7 @@
         ['bin', 'btype', 'bscale', 'btext', 'bh'].forEach(id => { $('#' + id).oninput = $('#' + id).onchange = renderBar; });
         $('#bsvg').onclick = () => { if (barSpec) Util.download(new Blob([barcodeSvg(barSpec.modules, { unit: barSpec.unit, height: barSpec.h, quiet: barSpec.quiet, label: barSpec.label, fontSize: Math.max(14, barSpec.unit * 5) })], { type: 'image/svg+xml' }), 'barcode.svg'); };
         $('#bsave').onclick = () => $('#bc').toBlob((blob) => Util.download(blob, 'barcode.png'));
-        document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-pressed', x === b)); $('#qrPane').hidden = b.dataset.t !== 'qr'; $('#barPane').hidden = b.dataset.t !== 'bar'; }; });
+        document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-pressed', x === b)); $('#qrPane').hidden = b.dataset.t !== 'qr'; $('#barPane').hidden = b.dataset.t !== 'bar'; $('#logoPane').hidden = b.dataset.t !== 'logo'; }; });
 
         // ---------- 範本表單（內容只留在記憶體，不寫 localStorage） ----------
         const TPL_FIELDS = {

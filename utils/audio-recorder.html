@@ -365,6 +365,30 @@
                     <button id="opSpeed">調速（會變音高）</button>
                 </div>
                 <p class="note">音量、正規化、反轉、調速：有選取就只動選取區，沒選取就動整段。</p>
+                <div class="lbl">變速不變調 / 變調不變速</div>
+                <div class="prow">
+                    <input type="number" id="tsF" value="1.25" min="0.5" max="2" step="0.05" aria-label="速度倍率（不變調）">
+                    <button id="opStretch">變速（音高不變）</button>
+                </div>
+                <div class="prow">
+                    <input type="number" id="pitSt" value="2" min="-12" max="12" step="1" aria-label="音高半音數">
+                    <button id="opPitch">變調（速度不變，半音）</button>
+                </div>
+                <p class="note">簡化版（WSOLA）：人聲與單音樂器尚可，倍率越極端、複雜音樂越容易出現迴音感或顫音；一次最多處理 10 分鐘。</p>
+                <div class="lbl">EQ 均衡器</div>
+                <div class="prow">
+                    <input type="number" id="eqHp" value="0" min="0" max="2000" step="10" aria-label="低切頻率 Hz（0 為關）" title="低切 Hz（0=關）">
+                    <input type="number" id="eqLp" value="0" min="0" max="20000" step="100" aria-label="高切頻率 Hz（0 為關）" title="高切 Hz（0=關）">
+                </div>
+                <div class="prow">
+                    <input type="number" id="eqLo" value="0" min="-12" max="12" step="1" aria-label="低頻 120Hz 增益 dB" title="低頻 120Hz dB">
+                    <input type="number" id="eqMid" value="0" min="-12" max="12" step="1" aria-label="中頻增益 dB" title="中頻 dB">
+                    <input type="number" id="eqMf" value="1000" min="100" max="8000" step="50" aria-label="中頻頻率 Hz" title="中頻 Hz">
+                    <input type="number" id="eqHi" value="0" min="-12" max="12" step="1" aria-label="高頻 6kHz 增益 dB" title="高頻 6kHz dB">
+                </div>
+                <p class="note">上排：低切 Hz、高切 Hz（0 = 關）。下排依序：低頻 120Hz dB、中頻 dB、中頻 Hz、高頻 6kHz dB（±12）。</p>
+                <div class="prow"><button id="opEq">套用 EQ</button></div>
+                <p class="note">EQ 直接改寫選取區（可復原）：想試聽就套用後按播放，不喜歡就復原；增益過大會削平尖峰。</p>
 
                 <div class="lbl">匯出</div>
                 <div class="prow" style="margin-top:0">
@@ -450,6 +474,7 @@
         <li>WAV 匯出可選取樣率（原始 / 44100 / 22050 / 16000 Hz）與單聲道；降取樣會損失高頻。檔案超過 400MB 會拒絕，請降取樣率或改單聲道。</li>
         <li>匯入的音檔取樣率以瀏覽器解碼結果為準（常為 44.1k 或 48k）；超過兩個聲道只取前兩個。</li>
         <li>限制：單檔 ≤ 100MB、長度 ≤ 30 分鐘（超過會拒絕並說明）；合併後也不能超過 30 分鐘；復原最多 20 步，記憶體吃緊時會較早丟掉最舊的步驟。</li>
+        <li>「變速不變調」「變調不變速」「EQ」是簡化版：自己實作的 WSOLA 時間伸縮與雙二階濾波器，非專業軟體等級（極端倍率或複雜音樂會有迴音感 / 顫音），一次最多處理 10 分鐘；不滿意就復原。</li>
         <li>調速是重新取樣，速度與音高一起變（0.5 倍變低沉、2 倍變尖）；調音量超過 0 dBFS 的尖峰會被限幅削平，避免爆音。</li>
         <li>錄音與剪輯結果只存在記憶體，不寫入任何本機儲存。有尚未下載的錄音或未匯出的編輯時，離開頁面前會提醒。錄音清單上限 20 段，滿了要先刪除才能再錄或加回；單次錄音 60 分鐘，下載 WAV 限 15 分鐘內的錄音（更長可「剪輯」成 30 分鐘內，或下載原格式）。</li>
         <li>格式依瀏覽器而定：Chrome / Edge / Firefox 多為 webm（opus），Safari（含 iPhone）為 mp4（存成 .m4a）；瀏覽器無法解碼的檔案會顯示訊息，請改用其他格式。</li>
@@ -582,6 +607,55 @@
             f = Math.min(2, Math.max(0.5, +f || 1)); const [x, y] = effRange(a, b, nOf(chs));
             return spliceCh(chs, x, y, sliceCh(chs, x, y).map(c => resampleLen(c, Math.max(1, Math.round(c.length / f)))));
         }
+        // 變速不變調（WSOLA）：f>1 變快變短、<1 變慢變長，音高不變；短於 4096 取樣的片段退回重取樣（音高會變）
+        function stretchCh(c, f) {
+            f = Math.min(4, Math.max(0.25, +f || 1)); const n = c.length, outN = Math.max(1, Math.round(n / f));
+            const W = 2048, H = W >> 1, S = 256;
+            if (n < W * 2) return resampleLen(c, outN);
+            const o = new Float32Array(outN + W), nw = new Float32Array(outN + W), win = new Float32Array(W);
+            for (let i = 0; i < W; i++) win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / W);
+            let prev = 0;
+            for (let k = 0; k * H < outN; k++) {
+                const outPos = k * H; let pos = Math.min(n - W, Math.round(outPos * f));
+                if (k > 0) {
+                    const tgt = prev + H; let best = -Infinity, bp = pos;
+                    if (tgt + H <= n) for (let p = Math.max(0, pos - S); p <= Math.min(n - W, pos + S); p += 2) {
+                        let r = 0; for (let i = 0; i < H; i += 4) r += c[p + i] * c[tgt + i];
+                        if (r > best) { best = r; bp = p; }
+                    }
+                    pos = bp;
+                }
+                for (let i = 0; i < W; i++) { o[outPos + i] += c[pos + i] * win[i]; nw[outPos + i] += win[i]; }
+                prev = pos;
+            }
+            const r = new Float32Array(outN);
+            for (let i = 0; i < outN; i++) r[i] = nw[i] > 1e-3 ? o[i] / nw[i] : 0;
+            return r;
+        }
+        // 變調不變速：先重取樣改音高（倍率 r = 2^(半音/12)），再變速拉回原長度；半音夾在 ±12
+        const pitchRatio = (st) => Math.pow(2, Math.min(12, Math.max(-12, +st || 0)) / 12);
+        const pitchCh = (c, st) => { const r = pitchRatio(st); return r === 1 ? c : stretchCh(resampleLen(c, Math.max(1, Math.round(c.length / r))), 1 / r); };
+        // RBJ biquad：type = hp / lp / low（低頻擱架）/ high（高頻擱架）/ peak；回傳 [b0,b1,b2,a1,a2]（已除以 a0）
+        function biquadCoef(type, fs, f0, gainDb = 0, q = 0.7071) {
+            f0 = Math.min(fs * 0.45, Math.max(10, f0)); const w = 2 * Math.PI * f0 / fs, cs = Math.cos(w), sn = Math.sin(w), al = sn / (2 * q), A = Math.pow(10, gainDb / 40);
+            let b0, b1, b2, a0, a1, a2;
+            if (type === 'hp') { b0 = (1 + cs) / 2; b1 = -(1 + cs); b2 = b0; a0 = 1 + al; a1 = -2 * cs; a2 = 1 - al; }
+            else if (type === 'lp') { b0 = (1 - cs) / 2; b1 = 1 - cs; b2 = b0; a0 = 1 + al; a1 = -2 * cs; a2 = 1 - al; }
+            else if (type === 'peak') { b0 = 1 + al * A; b1 = -2 * cs; b2 = 1 - al * A; a0 = 1 + al / A; a1 = -2 * cs; a2 = 1 - al / A; }
+            else {
+                const k = 2 * Math.sqrt(A) * al, s = type === 'low' ? 1 : -1;
+                b0 = A * ((A + 1) - s * (A - 1) * cs + k); b1 = s * 2 * A * ((A - 1) - s * (A + 1) * cs); b2 = A * ((A + 1) - s * (A - 1) * cs - k);
+                a0 = (A + 1) + s * (A - 1) * cs + k; a1 = -s * 2 * ((A - 1) + s * (A + 1) * cs); a2 = (A + 1) + s * (A - 1) * cs - k;
+            }
+            return [b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0];
+        }
+        function biquadRun(c, k) {
+            const o = new Float32Array(c.length); let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+            for (let i = 0; i < c.length; i++) { const x = c[i], y = k[0] * x + k[1] * x1 + k[2] * x2 - k[3] * y1 - k[4] * y2; o[i] = Math.max(-1, Math.min(1, y)); x2 = x1; x1 = x; y2 = y1; y1 = y; }
+            return o;
+        }
+        // 依序套用濾波器清單 [{type,f,g,q}]
+        const eqCh = (c, bands, sr) => bands.reduce((acc, b) => biquadRun(acc, biquadCoef(b.type, sr, b.f, b.g || 0, b.q || 0.7071)), c);
         // 依序串接：聲道數與取樣率以第一段為準
         function concatAudio(list) {
             if (!list.length) return { chs: [new Float32Array(0)], sr: 44100 };
@@ -897,6 +971,26 @@
             if (!r) { esay(`整段都低於 ${thr} dB，找不到聲音；請調高門檻（例如 -60）。`); return; }
             if (r[0] === 0 && r[1] === len()) { esay('首尾沒有低於門檻的靜音，沒有變動。'); return; }
             commit(sliceCh(ed.chs, r[0], r[1]), `已裁掉首尾靜音（門檻 ${thr} dB）`, [0, 0, 0]);
+        });
+        const rangeOp = (fn, msg) => {
+            const [a, b] = rng(), hadSel = ed.a < ed.b;
+            if ((b - a) / ed.sr > 600) { esay('這個功能一次最多處理 10 分鐘，請先選取較短的範圍。'); return; }
+            const piece = sliceCh(ed.chs, a, b).map(fn), nl = nOf(piece);
+            commit(spliceCh(ed.chs, a, b, piece), msg, hadSel ? [a, a + nl, ed.cur] : [0, 0, ed.cur]);
+        };
+        op('#opStretch', () => { const f = parseFloat($('#tsF').value); if (!(f >= 0.5 && f <= 2)) { esay('速度倍率請輸入 0.5 到 2。'); return; } rangeOp(c => stretchCh(c, f), `已調速 ${f} 倍（音高不變，簡化版演算法）`); });
+        op('#opPitch', () => { const st = parseFloat($('#pitSt').value); if (!(Math.abs(st) <= 12) || st === 0) { esay('半音數請輸入 -12 到 12（不含 0）。'); return; } rangeOp(c => pitchCh(c, st), `已變調 ${st > 0 ? '+' : ''}${st} 半音（速度不變，簡化版演算法）`); });
+        op('#opEq', () => {
+            const v = (id, lo, hi, d) => { const n = parseFloat($(id).value); return isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+            const hp = v('#eqHp', 0, 2000, 0), lp = v('#eqLp', 0, 20000, 0), bands = [];
+            if (hp > 0) bands.push({ type: 'hp', f: hp });
+            if (lp > 0) bands.push({ type: 'lp', f: lp });
+            const lo = v('#eqLo', -12, 12, 0), mid = v('#eqMid', -12, 12, 0), hi = v('#eqHi', -12, 12, 0);
+            if (lo) bands.push({ type: 'low', f: 120, g: lo });
+            if (mid) bands.push({ type: 'peak', f: v('#eqMf', 100, 8000, 1000), g: mid, q: 1 });
+            if (hi) bands.push({ type: 'high', f: 6000, g: hi });
+            if (!bands.length) { esay('所有 EQ 都是 0 / 關閉，沒有變動。'); return; }
+            const sr = ed.sr; rangeOp(c => eqCh(c, bands, sr), `已套用 EQ（${bands.length} 段）`);
         });
         op('#opSpeed', () => {
             const f = parseFloat($('#spd').value); if (!(f >= 0.5 && f <= 2)) { esay('速度倍率請輸入 0.5 到 2。'); return; }

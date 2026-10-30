@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="創作畫室：像素畫編輯器、逐格動畫 Flipbook（可匯出 GIF）、曼陀羅對稱繪圖、種子生成藝術、文字雲。全部在本機，不上傳。">
+    <meta property="og:title" content="創作畫室" />
+    <meta property="og:description" content="像素畫、逐格動畫、曼陀羅、生成藝術、文字雲。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/art-studio.html" />
+    <meta name="st-keys" content="artstudio_pixel,artstudio_flip">
+    <title>創作畫室</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 760px;
+        }
+
+        .tabs,
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .tabs button {
+            flex: 1 1 auto;
+            min-height: 44px;
+        }
+
+        canvas.cv {
+            width: 100%;
+            aspect-ratio: 1;
+            display: block;
+            border-radius: var(--radius-sm);
+            box-shadow: inset 0 0 0 1px var(--line);
+            touch-action: none;
+            cursor: crosshair;
+            image-rendering: pixelated;
+            background-color: #fff;
+            background-image: conic-gradient(#ddd 25%, transparent 0 50%, #ddd 0 75%, transparent 0);
+            background-size: 16px 16px;
+        }
+
+        canvas.flat {
+            background-image: none;
+            image-rendering: auto;
+        }
+
+        body.scrollmode canvas.cv {
+            touch-action: pan-y;
+        }
+
+        .sw {
+            width: 30px;
+            height: 30px;
+            min-height: 0;
+            border-radius: 6px;
+            padding: 0;
+            border: 3px solid transparent;
+            box-shadow: inset 0 0 0 1px var(--line);
+        }
+
+        .sw[aria-pressed=true] {
+            border-color: var(--text);
+        }
+
+        @media (pointer: coarse) {
+            .sw {
+                width: 44px;
+                height: 44px;
+            }
+        }
+
+        input[type=range] {
+            width: 120px;
+            accent-color: var(--blue);
+        }
+
+        input[type=color] {
+            width: 44px;
+            height: 36px;
+            padding: 0;
+            border: 0;
+            background: none;
+        }
+
+        .gal {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+            gap: 8px;
+        }
+
+        .gal>div {
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 6px;
+            font-size: 13px;
+        }
+
+        .gal canvas {
+            width: 100%;
+            aspect-ratio: 1;
+            display: block;
+            image-rendering: pixelated;
+            background: #fff;
+            border-radius: 4px;
+        }
+
+        .gal .row {
+            margin: 4px 0 0;
+            gap: 4px;
+        }
+
+        .strip {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding-bottom: 6px;
+            margin-bottom: 8px;
+        }
+
+        .strip button {
+            flex: none;
+            padding: 2px;
+            min-height: 0;
+            width: 52px;
+            height: 52px;
+            position: relative;
+        }
+
+        .strip canvas {
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+            background: #fff;
+            border-radius: 3px;
+            display: block;
+        }
+
+        .strip i {
+            position: absolute;
+            left: 3px;
+            bottom: 1px;
+            font-size: 10px;
+            font-style: normal;
+            color: #000;
+            background: #fffa;
+            padding: 0 2px;
+            border-radius: 3px;
+        }
+
+        input[type=text],
+        input[type=number],
+        select,
+        textarea {
+            max-width: 100%;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            box-sizing: border-box;
+        }
+
+        .note {
+            color: var(--muted);
+            font-size: 13px;
+            margin: 6px 0 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>創作畫室</h1>
+        <p class="sub">像素畫、逐格動畫、曼陀羅、生成藝術、文字雲。全部在本機完成，不會上傳。</p>
+
+        <div class="tabs" id="tabs">
+            <button data-t="pix" aria-pressed="true">像素畫</button>
+            <button data-t="flip" aria-pressed="false">動畫</button>
+            <button data-t="man" aria-pressed="false">曼陀羅</button>
+            <button data-t="gen" aria-pressed="false">生成藝術</button>
+            <button data-t="cloud" aria-pressed="false">文字雲</button>
+        </div>
+
+        <!-- 像素畫 -->
+        <section id="t-pix">
+            <div class="card">
+                <div class="row">
+                    <label class="muted" for="pSize">尺寸</label>
+                    <select id="pSize"></select>
+                    <input type="text" id="pName" maxlength="20" placeholder="作品名稱" aria-label="作品名稱" style="width:9em">
+                </div>
+                <div class="tb" id="pTb"></div>
+                <canvas class="cv" id="pCv" aria-label="像素畫布"></canvas>
+                <div class="row" style="margin-top:10px">
+                    <button class="primary sm" id="pSave">儲存作品</button>
+                    <button class="sm" id="pNew">新畫布</button>
+                    <label class="muted" for="pScale">匯出倍率</label>
+                    <select id="pScale"><option>1</option><option>4</option><option selected>8</option><option>16</option><option>32</option></select>
+                    <button class="sm" id="pPng">匯出 PNG</button>
+                </div>
+                <p class="note" id="pInfo"></p>
+            </div>
+            <div class="card">
+                <h3 style="margin-top:0">我的作品（最多 30 件）</h3>
+                <div class="gal" id="pGal"></div>
+                <div class="row" style="margin-top:10px"><button class="sm" id="pClear">清除全部作品</button></div>
+            </div>
+        </section>
+
+        <!-- 動畫 -->
+        <section id="t-flip" hidden>
+            <div class="card">
+                <div class="row">
+                    <label class="muted" for="fSize">尺寸</label>
+                    <select id="fSize"></select>
+                    <input type="text" id="fName" maxlength="20" placeholder="動畫名稱" aria-label="動畫名稱" style="width:9em">
+                </div>
+                <div class="strip" id="fStrip"></div>
+                <div class="row">
+                    <button class="sm" id="fAdd">＋空白格</button>
+                    <button class="sm" id="fDup">＋複製此格</button>
+                    <button class="sm" id="fDel">刪除此格</button>
+                    <label class="sm" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fOnion" checked>洋蔥皮</label>
+                </div>
+                <div class="tb" id="fTb"></div>
+                <canvas class="cv" id="fCv" aria-label="動畫畫布"></canvas>
+                <div class="row" style="margin-top:10px">
+                    <button class="primary sm" id="fPlay">播放</button>
+                    <label class="muted" for="fFps">速度</label>
+                    <input type="range" id="fFps" min="1" max="24" value="8"><span id="fFpsV">8 fps</span>
+                </div>
+                <div class="row">
+                    <button class="sm" id="fSave">儲存動畫</button>
+                    <button class="sm" id="fNew">新動畫</button>
+                    <label class="muted" for="fScale">倍率</label>
+                    <select id="fScale"><option>1</option><option>4</option><option selected>8</option><option>16</option></select>
+                    <button class="sm" id="fGif">匯出 GIF</button>
+                    <button class="sm" id="fSeq">PNG 序列</button>
+                    <button class="sm" id="fSheet">橫排精靈圖</button>
+                </div>
+                <p class="note" id="fInfo"></p>
+            </div>
+            <div class="card">
+                <h3 style="margin-top:0">我的動畫（最多 10 組，每組最多 60 格）</h3>
+                <div class="gal" id="fGal"></div>
+                <div class="row" style="margin-top:10px"><button class="sm" id="fClear">清除全部動畫</button></div>
+            </div>
+        </section>
+
+        <!-- 曼陀羅 -->
+        <section id="t-man" hidden>
+            <div class="card">
+                <div class="row">
+                    <label class="muted" for="mN">對稱數 <span id="mNV">8</span></label>
+                    <input type="range" id="mN" min="2" max="24" value="8">
+                    <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="mMir" checked>鏡像</label>
+                </div>
+                <div class="row">
+                    <input type="color" id="mCol" value="#ff7ab8" aria-label="筆色">
+                    <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="mRain">彩虹</label>
+                    <label class="muted" for="mW">粗細</label><input type="range" id="mW" min="1" max="14" value="3">
+                    <select id="mBg" aria-label="背景"><option value="#111111">深色背景</option><option value="#ffffff">白色背景</option></select>
+                </div>
+                <canvas class="cv flat" id="mCv" width="800" height="800" aria-label="曼陀羅畫布"></canvas>
+                <div class="row" style="margin-top:10px">
+                    <button class="sm" id="mUndo">復原</button>
+                    <button class="sm" id="mClear">清除</button>
+                    <button class="sm scr">手指：畫圖</button>
+                    <button class="primary sm" id="mPng">匯出圖片</button>
+                </div>
+                <p class="note">畫面只在本頁，不會儲存，離開就消失。</p>
+            </div>
+        </section>
+
+        <!-- 生成藝術 -->
+        <section id="t-gen" hidden>
+            <div class="card">
+                <div class="row">
+                    <label class="muted" for="gSeed">種子</label>
+                    <input type="text" id="gSeed" maxlength="40" value="hello" style="width:9em">
+                    <button class="sm" id="gRnd">換一個</button>
+                    <select id="gKind" aria-label="圖樣">
+                        <option value="circles">圓點</option>
+                        <option value="tri">三角拼貼</option>
+                        <option value="noise">噪聲雲</option>
+                        <option value="rings">同心環</option>
+                    </select>
+                </div>
+                <canvas class="cv flat" id="gCv" width="800" height="800" style="touch-action:auto;cursor:default" aria-label="生成圖"></canvas>
+                <div class="row" style="margin-top:10px"><button class="primary sm" id="gPng">匯出 PNG</button></div>
+                <p class="note">同一個種子與圖樣永遠產生同一張圖，把種子記下來就能重現。</p>
+            </div>
+        </section>
+
+        <!-- 文字雲 -->
+        <section id="t-cloud" hidden>
+            <div class="card">
+                <textarea id="cText" maxlength="20000" placeholder="貼上文章（最多 2 萬字）" aria-label="文章"></textarea>
+                <div class="row" style="margin-top:8px">
+                    <label class="muted" for="cN">中文切法</label>
+                    <select id="cN"><option value="1">單字</option><option value="2" selected>連續 2 字</option><option value="3">連續 3 字</option></select>
+                    <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="cStop" checked>略過常見虛字</label>
+                </div>
+                <div class="row">
+                    <label class="muted" for="cTop">詞數</label>
+                    <select id="cTop"><option>30</option><option selected>50</option><option>80</option></select>
+                    <select id="cBg" aria-label="背景"><option value="#ffffff">白底</option><option value="#161616">深底</option></select>
+                    <button class="primary sm" id="cGo">產生</button>
+                </div>
+                <canvas class="cv flat" id="cCv" width="800" height="600" style="aspect-ratio:4/3;touch-action:auto;cursor:default" aria-label="文字雲"></canvas>
+                <div class="row" style="margin-top:10px"><button class="sm" id="cPng">匯出 PNG</button></div>
+                <p class="note" id="cInfo">中文沒有真正的斷詞，只能用「單字／連續 2、3 字」的出現次數估計，會有不成詞的組合。英文依整個單字計數。</p>
+            </div>
+        </section>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>五個創作小工具合在一起：像素畫編輯器、逐格動畫（Flipbook）、曼陀羅對稱繪圖、種子生成藝術、文字雲。想自由塗鴉請用「簡易畫板」。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>畫頭像、圖示、遊戲小圖，或做幾格的小動畫（GIF）。</li>
+        <li>想隨手畫出漂亮的對稱圖案、做桌布或貼圖。</li>
+        <li>把一篇文章變成文字雲圖。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>像素畫：選尺寸（8–64）、顏色與工具（畫筆／橡皮擦／填色），可開左右、上下或四向鏡像；「復原」最多 50 步。「儲存作品」存到本機，「匯出 PNG」可選放大倍率。</li>
+        <li>動畫：每格是一張像素畫（尺寸 16–48）。「＋空白格」「＋複製此格」新增，開「洋蔥皮」可淡淡看到上一格；「播放」預覽並用滑桿調速度。可匯出 GIF、PNG 序列（逐張下載）或橫排精靈圖。</li>
+        <li>曼陀羅：用手指或滑鼠畫，筆畫會依對稱數複製成放射圖形。手指在畫布上只用來畫圖；要捲動頁面請按「手指：畫圖」切成「手指：捲動」，或從畫布外滑動。</li>
+        <li>生成藝術：輸入種子文字選圖樣，同種子同圖；「換一個」隨機種子。</li>
+        <li>文字雲：貼文章按「產生」，字越大代表出現越多次，排版不會重疊；放不下的詞會略過並提示。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">像素畫選 16×16，畫一顆愛心，倍率 16 匯出 → 256×256 的 PNG。動畫分頁畫 4 格揮手，速度 6 fps，匯出 GIF。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>像素畫與動畫只存在這台裝置的瀏覽器：像素畫最多 30 件、動畫最多 10 組（每組最多 60 格）；滿了會拒絕新增，請先刪掉舊的。刪除與「清除全部」都無法復原，會先確認。也可用右上角「💾」備份。</li>
+        <li>儲存時若同名作品是你開啟的那件，會覆蓋它；其餘一律新增。資料損壞或被改壞時，壞掉的項目會被略過。</li>
+        <li>曼陀羅、生成藝術、文字雲不儲存，離開頁面就消失，請先匯出。曼陀羅筆畫太多時最舊的會固定進底圖、無法復原。</li>
+        <li>中文文字雲只是詞頻估計，沒有真的分詞；不求精準。GIF 只有 16 色（含透明）。</li>
+        <li>PNG 序列會連續下載多個檔案，瀏覽器可能詢問是否允許；不想要可改用 GIF 或精靈圖。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        const PAL = ['transparent', '#000000', '#ffffff', '#7f7f7f', '#e53935', '#fb8c00', '#fdd835', '#43a047', '#00897b', '#1e88e5', '#3949ab', '#8e24aa', '#d81b60', '#6d4c41', '#f8bbd0', '#a5d6a7'];
+        const PIX_SIZES = [8, 16, 24, 32, 48, 64], FLIP_SIZES = [16, 24, 32, 48];
+        const MAX_PIX = 30, MAX_FLIP = 10, MAX_FRAMES = 60, MAX_FLIP_CELLS = 250000;
+
+        // 色盤索引字串 <-> Uint8Array（每格一個 16 進位字元）
+        function encGrid(g) { let s = ''; for (const v of g) s += (v & 15).toString(16); return s; }
+        function decGrid(s, w, h) {
+            if (typeof s !== 'string' || s.length !== w * h || /[^0-9a-f]/.test(s)) return null;
+            const g = new Uint8Array(w * h); for (let i = 0; i < s.length; i++) g[i] = parseInt(s[i], 16); return g;
+        }
+        // 4 連通填色，原地修改，回傳填了幾格
+        function floodFill(g, w, h, x, y, c) {
+            if (x < 0 || y < 0 || x >= w || y >= h) return 0;
+            const t = g[y * w + x]; if (t === c) return 0;
+            const st = [y * w + x]; let n = 0;
+            while (st.length) {
+                const p = st.pop(); if (g[p] !== t) continue;
+                g[p] = c; n++;
+                const px = p % w, py = (p - px) / w;
+                if (px > 0) st.push(p - 1); if (px < w - 1) st.push(p + 1);
+                if (py > 0) st.push(p - w); if (py < h - 1) st.push(p + w);
+            }
+            return n;
+        }
+        // 鏡像：mode none / h（左右）/ v（上下）/ both，回傳不重複的座標
+        function mirrorPts(x, y, w, h, mode) {
+            const a = [[x, y]];
+            if (mode === 'h' || mode === 'both') a.push([w - 1 - x, y]);
+            if (mode === 'v' || mode === 'both') a.push([x, h - 1 - y]);
+            if (mode === 'both') a.push([w - 1 - x, h - 1 - y]);
+            return a.filter((p, i) => a.findIndex(q => q[0] === p[0] && q[1] === p[1]) === i);
+        }
+        // 兩格之間的格子（Bresenham）
+        function lineCells(x0, y0, x1, y1) {
+            const out = [], dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+            let e = dx + dy;
+            for (; ;) {
+                out.push([x0, y0]); if (x0 === x1 && y0 === y1) break;
+                const e2 = 2 * e; if (e2 >= dy) { e += dy; x0 += sx; } if (e2 <= dx) { e += dx; y0 += sy; }
+            }
+            return out;
+        }
+        // 對稱：繞 (cx,cy) 旋轉 n 份，mirror 時再加上左右鏡像，共 n 或 2n 點（順序固定）
+        function symPts(x, y, cx, cy, n, mirror) {
+            const out = [], dx = x - cx, dy = y - cy;
+            for (let k = 0; k < n; k++) {
+                const a = 2 * Math.PI * k / n, c = Math.cos(a), s = Math.sin(a);
+                out.push([cx + dx * c - dy * s, cy + dx * s + dy * c]);
+                if (mirror) out.push([cx + -dx * c - dy * s, cy + -dx * s + dy * c]);
+            }
+            return out;
+        }
+        // 讀取驗證：壞資料丟掉、截到上限
+        function normPixel(raw) {
+            const a = raw && Array.isArray(raw.items) ? raw.items : [], out = [];
+            for (const it of a) {
+                if (out.length >= MAX_PIX) break;
+                if (!it || typeof it !== 'object' || !PIX_SIZES.includes(it.w) || !PIX_SIZES.includes(it.h) || !decGrid(it.d, it.w, it.h)) continue;
+                out.push({ id: String(it.id || '').slice(0, 30) || 'p' + out.length, name: String(it.name || '').slice(0, 20), w: it.w, h: it.h, d: it.d });
+            }
+            return out;
+        }
+        function normFlip(raw) {
+            const a = raw && Array.isArray(raw.items) ? raw.items : [], out = [];
+            for (const it of a) {
+                if (out.length >= MAX_FLIP) break;
+                if (!it || typeof it !== 'object' || !FLIP_SIZES.includes(it.w) || it.w !== it.h || !Array.isArray(it.frames)) continue;
+                const fr = it.frames.slice(0, MAX_FRAMES).filter(f => decGrid(f, it.w, it.h));
+                if (!fr.length) continue;
+                const fps = Math.min(24, Math.max(1, Math.round(Number(it.fps)) || 8));
+                out.push({ id: String(it.id || '').slice(0, 30) || 'f' + out.length, name: String(it.name || '').slice(0, 20), w: it.w, h: it.h, fps, frames: fr });
+            }
+            return out;
+        }
+
+        // GIF：LZW 編碼（可變碼長、滿 4096 清表）與寫入器
+        function lzwEncode(idx, min) {
+            const clear = 1 << min, eoi = clear + 1, out = [];
+            let cur = 0, nb = 0, size = min + 1, next = eoi + 1, dict = new Map();
+            const put = (c) => { cur |= c << nb; nb += size; while (nb >= 8) { out.push(cur & 255); cur >>>= 8; nb -= 8; } };
+            put(clear);
+            let p = idx[0];
+            for (let i = 1; i < idx.length; i++) {
+                const k = idx[i], key = (p << 8) | k, v = dict.get(key);
+                if (v !== undefined) { p = v; continue; }
+                put(p);
+                if (next < 4096) { dict.set(key, next++); if (next > (1 << size) && size < 12) size++; }
+                else { put(clear); dict = new Map(); next = eoi + 1; size = min + 1; }
+                p = k;
+            }
+            put(p); put(eoi);
+            if (nb > 0) out.push(cur & 255);
+            return out;
+        }
+        // frames: Uint8Array[]（色盤索引 0..15，0 為透明）；回傳 Uint8Array
+        function gifEncode(frames, w, h, palette, fps) {
+            const o = [], u16 = (n) => o.push(n & 255, (n >> 8) & 255);
+            for (const ch of 'GIF89a') o.push(ch.charCodeAt(0));
+            u16(w); u16(h); o.push(0xF3, 0, 0);
+            for (let i = 0; i < 16; i++) { const c = palette[i] || '#000000'; o.push(parseInt(c.slice(1, 3), 16) || 0, parseInt(c.slice(3, 5), 16) || 0, parseInt(c.slice(5, 7), 16) || 0); }
+            o.push(0x21, 0xFF, 11); for (const ch of 'NETSCAPE2.0') o.push(ch.charCodeAt(0)); o.push(3, 1, 0, 0, 0);
+            const delay = Math.max(2, Math.round(100 / fps));
+            for (const f of frames) {
+                o.push(0x21, 0xF9, 4, 0x09); u16(delay); o.push(0, 0);
+                o.push(0x2C); u16(0); u16(0); u16(w); u16(h); o.push(0, 4);
+                const d = lzwEncode(f, 4);
+                for (let i = 0; i < d.length; i += 255) { const n = Math.min(255, d.length - i); o.push(n); for (let j = 0; j < n; j++) o.push(d[i + j]); }
+                o.push(0);
+            }
+            o.push(0x3B);
+            return Uint8Array.from(o);
+        }
+
+        // 詞頻：英文整字；中文用單字 / 連續 n 字（非真正斷詞）
+        const EN_STOP = new Set('the an and or of to in is it that this for on with as be are was at by from not but you he she we they his her its our your'.split(' '));
+        const CN_STOP = '的了是在和與也就都而及著這那有我你他她它們不';
+        function wordFreq(text, o = {}) {
+            const n = [1, 2, 3].includes(o.cjk) ? o.cjk : 1, stop = o.stop !== false, m = new Map();
+            const add = (w) => m.set(w, (m.get(w) || 0) + 1);
+            for (const part of String(text).match(/[㐀-鿿]+|[A-Za-z][A-Za-z'’-]*/g) || []) {
+                if (/^[A-Za-z]/.test(part)) { const w = part.toLowerCase(); if (w.length > 1 && !(stop && EN_STOP.has(w))) add(w); }
+                else for (let i = 0; i + n <= part.length; i++) {
+                    const w = part.slice(i, i + n);
+                    if (stop && (CN_STOP.includes(w[0]) || CN_STOP.includes(w[n - 1]))) continue;
+                    add(w);
+                }
+            }
+            let a = [...m]; if (n > 1 && a.some(x => x[1] > 1)) a = a.filter(x => x[1] > 1 || !/[㐀-鿿]/.test(x[0]));
+            return a.sort((x, y) => y[1] - x[1] || (x[0] < y[0] ? -1 : 1)).slice(0, o.top || 50);
+        }
+        // 碰撞排版：水平文字，螺旋找位置，框與框（含邊距）不重疊；放不下先縮小再略過
+        function layoutCloud(words, W, H, measure, o = {}) {
+            const maxS = o.max || 72, minS = o.min || 14, pad = o.pad || 3, placed = [], skipped = [];
+            const hit = (a, b) => a.x < b.x + b.bw + pad && b.x < a.x + a.bw + pad && a.y < b.y + b.bh + pad && b.y < a.y + a.bh + pad;
+            const top = words.length ? words[0][1] : 1, low = words.length ? words[words.length - 1][1] : 1;
+            for (const [w, c] of words) {
+                let s = top === low ? (maxS + minS) / 2 : minS + (maxS - minS) * Math.sqrt((c - low) / (top - low)), done = false;
+                for (let tr = 0; tr < 8 && !done; tr++, s *= 0.85) {
+                    s = Math.max(8, Math.round(s));
+                    const bw = Math.ceil(measure(w, s)), bh = Math.round(s * 1.2);
+                    for (let t = 0; t < 320; t += 0.1) {
+                        const x = Math.round(W / 2 + 3 * t * Math.cos(t) - bw / 2), y = Math.round(H / 2 + 3 * t * Math.sin(t) * (H / W) - bh / 2);
+                        if (x < 0 || y < 0 || x + bw > W || y + bh > H) continue;
+                        const b = { w, c, s, x, y, bw, bh };
+                        if (!placed.some(p => hit(b, p))) { placed.push(b); done = true; break; }
+                    }
+                }
+                if (!done) skipped.push(w);
+            }
+            return { placed, skipped };
+        }
+
+        // 生成藝術：座標一律 0..1，同種子同圖樣必得同結果
+        function genArt(seed, kind) {
+            const r = Util.seeded(String(seed) + '|' + kind), hue = r.int(360), items = [];
+            const col = (dh, s, l, a = 1) => `hsla(${(hue + dh + 360) % 360},${s}%,${l}%,${a})`;
+            const pal = [0, 30, 150, 180, 210].map((d, i) => col(d, 60 + r.int(30), 40 + i * 8));
+            let bg = col(0, 30, 12);
+            if (kind === 'circles') {
+                bg = col(180, 35, 14);
+                for (let i = 0, n = 40 + r.int(40); i < n; i++) items.push({ t: 'c', x: r(), y: r(), r: 0.02 + r() * 0.13, col: col(r.int(5) * 40, 70, 45 + r.int(25), 0.5 + r() * 0.4) });
+            } else if (kind === 'tri') {
+                bg = col(0, 30, 95);
+                const n = 6 + r.int(5);
+                for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+                    const x0 = i / n, y0 = j / n, x1 = (i + 1) / n, y1 = (j + 1) / n, d = r.int(2);
+                    const a = d ? [[x0, y0], [x1, y0], [x0, y1]] : [[x0, y0], [x1, y1], [x0, y1]], b = d ? [[x1, y0], [x1, y1], [x0, y1]] : [[x0, y0], [x1, y0], [x1, y1]];
+                    items.push({ t: 'p', pts: a, col: pal[r.int(5)] }, { t: 'p', pts: b, col: pal[r.int(5)] });
+                }
+            } else if (kind === 'noise') {
+                const L = 6 + r.int(4), lat = Array.from({ length: (L + 1) * (L + 1) }, () => r()), N = 64, d = [];
+                const sm = (t) => t * t * (3 - 2 * t), at = (x, y) => lat[y * (L + 1) + x];
+                for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+                    const fx = i / N * L, fy = j / N * L, x = Math.floor(fx), y = Math.floor(fy), tx = sm(fx - x), ty = sm(fy - y);
+                    const v = (at(x, y) * (1 - tx) + at(x + 1, y) * tx) * (1 - ty) + (at(x, y + 1) * (1 - tx) + at(x + 1, y + 1) * tx) * ty;
+                    d.push(Math.min(7, Math.floor(v * 8)));
+                }
+                items.push({ t: 'g', n: N, d, cols: Array.from({ length: 8 }, (_, i) => col(i * 14, 65, 20 + i * 8)) });
+            } else {
+                bg = col(0, 25, 10);
+                const cx = 0.3 + r() * 0.4, cy = 0.3 + r() * 0.4;
+                for (let i = 0, n = 14 + r.int(10); i < n; i++) items.push({ t: 'ring', x: cx, y: cy, r: 0.03 + i * 0.045, w: 0.004 + r() * 0.02, col: pal[r.int(5)] });
+            }
+            return { bg, items };
+        }
+        // --- /pure ---
+
+        const $ = (id) => document.getElementById(id);
+        const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        const K_PIX = 'artstudio_pixel', K_FLIP = 'artstudio_flip';
+        const dl = (cv, name) => cv.toBlob(b => b ? Util.download(b, name) : alert('匯出失敗'), 'image/png');
+        let scrollMode = false;
+        document.querySelectorAll('.scr').forEach(b => b.onclick = () => {
+            scrollMode = !scrollMode; document.body.classList.toggle('scrollmode', scrollMode);
+            document.querySelectorAll('.scr').forEach(x => x.textContent = scrollMode ? '手指：捲動' : '手指：畫圖');
+        });
+
+        // ---------- 分頁 ----------
+        const hooks = {};
+        $('tabs').onclick = (e) => {
+            const t = e.target.closest('button[data-t]'); if (!t) return;
+            document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-pressed', b === t));
+            document.querySelectorAll('section').forEach(s => s.hidden = s.id !== 't-' + t.dataset.t);
+            if (hooks[t.dataset.t]) hooks[t.dataset.t]();
+        };
+
+        // ---------- 像素編輯器（像素畫與動畫共用）----------
+        function drawGrid(ctx, g, w, h, cell, alpha) {
+            ctx.globalAlpha = alpha;
+            for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const v = g[y * w + x]; if (v) { ctx.fillStyle = PAL[v]; ctx.fillRect(x * cell, y * cell, cell, cell); } }
+            ctx.globalAlpha = 1;
+        }
+        function thumb(cv, g, w, h) { cv.width = w; cv.height = h; const c = cv.getContext('2d'); c.clearRect(0, 0, w, h); drawGrid(c, g, w, h, 1, 1); }
+        function toCanvas(g, w, h, scale) {
+            const cv = document.createElement('canvas'); cv.width = w * scale; cv.height = h * scale;
+            drawGrid(cv.getContext('2d'), g, w, h, scale, 1); return cv;
+        }
+        function mkEditor(cv, tb, onChange) {
+            const ed = { cv, w: 16, h: 16, g: new Uint8Array(256), tool: 'pen', color: 1, mirror: 'none', undo: [], under: null, locked: false };
+            tb.innerHTML = '<div class="row"><button class="sm" data-tool="pen" aria-pressed="true">畫筆</button><button class="sm" data-tool="eraser" aria-pressed="false">橡皮擦</button><button class="sm" data-tool="fill" aria-pressed="false">填色</button>' +
+                '<select aria-label="鏡像"><option value="none">無鏡像</option><option value="h">左右</option><option value="v">上下</option><option value="both">四向</option></select>' +
+                '<button class="sm" data-u>復原</button><button class="sm" data-c>清空</button><button class="sm scr">手指：畫圖</button></div><div class="row" data-pal></div>';
+            const pal = tb.querySelector('[data-pal]');
+            PAL.forEach((c, i) => {
+                if (!i) return;
+                const b = document.createElement('button'); b.className = 'sw'; b.style.background = c; b.setAttribute('aria-label', '顏色 ' + i); b.setAttribute('aria-pressed', i === 1);
+                b.onclick = () => { ed.color = i; ed.tool = ed.tool === 'eraser' ? 'pen' : ed.tool; sync(); }; pal.appendChild(b);
+            });
+            const sync = () => {
+                tb.querySelectorAll('[data-tool]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tool === ed.tool));
+                pal.querySelectorAll('.sw').forEach((b, i) => b.setAttribute('aria-pressed', i + 1 === ed.color));
+            };
+            tb.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => { ed.tool = b.dataset.tool; sync(); });
+            tb.querySelector('select').onchange = (e) => ed.mirror = e.target.value;
+            const snap = () => { ed.undo.push(ed.g.slice()); if (ed.undo.length > 50) ed.undo.shift(); };
+            tb.querySelector('[data-u]').onclick = () => { const s = ed.undo.pop(); if (s) { ed.g.set(s); ed.render(); onChange(); } };
+            tb.querySelector('[data-c]').onclick = () => { if (ed.g.some(v => v)) { snap(); ed.g.fill(0); ed.render(); onChange(); } };
+            tb.querySelector('.scr').onclick = () => document.querySelector('#t-man .scr').click();
+            ed.setGrid = (w, h, g) => { ed.w = w; ed.h = h; ed.g = g; ed.undo = []; ed.render(); };
+            ed.render = () => {
+                const cell = Math.max(4, Math.floor(512 / ed.w)); cv.width = ed.w * cell; cv.height = ed.h * cell;
+                const c = cv.getContext('2d'); c.clearRect(0, 0, cv.width, cv.height);
+                if (ed.under) drawGrid(c, ed.under, ed.w, ed.h, cell, 0.3);
+                drawGrid(c, ed.g, ed.w, ed.h, cell, 1);
+                c.strokeStyle = 'rgba(128,128,128,.25)'; c.lineWidth = 1; c.beginPath();
+                for (let i = 1; i < ed.w; i++) { c.moveTo(i * cell + .5, 0); c.lineTo(i * cell + .5, cv.height); }
+                for (let i = 1; i < ed.h; i++) { c.moveTo(0, i * cell + .5); c.lineTo(cv.width, i * cell + .5); }
+                c.stroke();
+            };
+            const cellAt = (e) => { const r = cv.getBoundingClientRect(); return [Math.min(ed.w - 1, Math.max(0, Math.floor((e.clientX - r.left) / r.width * ed.w))), Math.min(ed.h - 1, Math.max(0, Math.floor((e.clientY - r.top) / r.height * ed.h)))]; };
+            const paint = (x, y) => { for (const [a, b] of mirrorPts(x, y, ed.w, ed.h, ed.mirror)) ed.g[b * ed.w + a] = ed.tool === 'eraser' ? 0 : ed.color; };
+            let last = null;
+            cv.onpointerdown = (e) => {
+                if (ed.locked) return; e.preventDefault(); cv.setPointerCapture(e.pointerId);
+                const [x, y] = cellAt(e); snap();
+                if (ed.tool === 'fill') { for (const [a, b] of mirrorPts(x, y, ed.w, ed.h, ed.mirror)) floodFill(ed.g, ed.w, ed.h, a, b, ed.color); last = null; }
+                else { paint(x, y); last = [x, y]; }
+                ed.render(); onChange();
+            };
+            cv.onpointermove = (e) => {
+                if (!last) return; const [x, y] = cellAt(e);
+                if (x === last[0] && y === last[1]) return;
+                for (const [a, b] of lineCells(last[0], last[1], x, y)) paint(a, b);
+                last = [x, y]; ed.render(); onChange();
+            };
+            cv.onpointerup = cv.onpointercancel = () => { last = null; };
+            return ed;
+        }
+
+        // ---------- 像素畫 ----------
+        PIX_SIZES.forEach(s => $('pSize').add(new Option(s + '×' + s, s, false, s === 16)));
+        const pe = mkEditor($('pCv'), $('pTb'), () => { });
+        let pWorks = normPixel(Util.store.get(K_PIX, null)), pCur = null;
+        pe.setGrid(16, 16, new Uint8Array(256));
+        $('pSize').onchange = () => {
+            const s = +$('pSize').value;
+            if (pe.g.some(v => v) && !confirm('換尺寸會清空目前的畫布（未儲存的內容會消失），確定嗎？')) { $('pSize').value = pe.w; return; }
+            pCur = null; pe.setGrid(s, s, new Uint8Array(s * s));
+        };
+        $('pNew').onclick = () => {
+            if (pe.g.some(v => v) && !confirm('開新畫布會清空目前未儲存的內容，確定嗎？')) return;
+            pCur = null; $('pName').value = ''; pe.setGrid(pe.w, pe.h, new Uint8Array(pe.w * pe.h));
+        };
+        function pRender() {
+            $('pInfo').textContent = `已存 ${pWorks.length} / ${MAX_PIX} 件` + (pCur ? '（編輯中的是已存作品，儲存會覆蓋它）' : '');
+            const gal = $('pGal'); gal.innerHTML = '';
+            if (!pWorks.length) gal.innerHTML = '<span class="muted">還沒有作品</span>';
+            for (const it of pWorks) {
+                const d = document.createElement('div');
+                d.innerHTML = '<canvas></canvas><div></div><div class="row"><button class="sm" data-o>開啟</button><button class="sm" data-e>PNG</button><button class="sm" data-d>刪除</button></div>';
+                thumb(d.querySelector('canvas'), decGrid(it.d, it.w, it.h), it.w, it.h);
+                d.children[1].textContent = (it.name || '未命名') + ' ' + it.w + '×' + it.h;
+                d.querySelector('[data-o]').onclick = () => { pCur = it.id; $('pName').value = it.name; $('pSize').value = it.w; pe.setGrid(it.w, it.h, decGrid(it.d, it.w, it.h)); scrollTo(0, 0); pRender(); };
+                d.querySelector('[data-e]').onclick = () => dl(toCanvas(decGrid(it.d, it.w, it.h), it.w, it.h, +$('pScale').value), (it.name || 'pixel') + '.png');
+                d.querySelector('[data-d]').onclick = () => {
+                    if (!confirm(`刪除「${it.name || '未命名'}」？無法復原。`)) return;
+                    pWorks = pWorks.filter(x => x.id !== it.id); if (pCur === it.id) pCur = null;
+                    Util.store.set(K_PIX, { items: pWorks }); pRender();
+                };
+                gal.appendChild(d);
+            }
+        }
+        $('pSave').onclick = () => {
+            const rec = { id: pCur || newId(), name: $('pName').value.trim().slice(0, 20), w: pe.w, h: pe.h, d: encGrid(pe.g) };
+            const i = pWorks.findIndex(x => x.id === pCur);
+            if (i < 0 && pWorks.length >= MAX_PIX) return alert(`作品已達上限 ${MAX_PIX} 件，請先刪除舊作品。`);
+            const next = i < 0 ? [...pWorks, rec] : pWorks.map(x => x.id === pCur ? rec : x);
+            if (!Util.store.set(K_PIX, { items: next })) return;
+            pWorks = next; pCur = rec.id; pRender();
+        };
+        $('pPng').onclick = () => dl(toCanvas(pe.g, pe.w, pe.h, +$('pScale').value), ($('pName').value.trim() || 'pixel') + '.png');
+        $('pClear').onclick = () => { if (pWorks.length && confirm(`刪除全部 ${pWorks.length} 件像素畫作品？無法復原。`)) { pWorks = []; pCur = null; Util.store.set(K_PIX, { items: [] }); pRender(); } };
+        pRender();
+
+        // ---------- 動畫 ----------
+        FLIP_SIZES.forEach(s => $('fSize').add(new Option(s + '×' + s, s, false, s === 16)));
+        const fe = mkEditor($('fCv'), $('fTb'), () => stripThumb(fb.cur));
+        let fWorks = normFlip(Util.store.get(K_FLIP, null)), fCur = null, fTimer = null;
+        const fb = { w: 16, frames: [new Uint8Array(256)], cur: 0, fps: 8 };
+        const fSetFrame = (i) => { fb.cur = i; fe.under = $('fOnion').checked && i > 0 ? fb.frames[i - 1] : null; fe.setGrid(fb.w, fb.w, fb.frames[i]); strip(); };
+        function stripThumb(i) { const c = $('fStrip').children[i]; if (c) thumb(c.querySelector('canvas'), fb.frames[i], fb.w, fb.w); }
+        function strip() {
+            const s = $('fStrip'); s.innerHTML = '';
+            fb.frames.forEach((g, i) => {
+                const b = document.createElement('button'); b.setAttribute('aria-pressed', i === fb.cur); b.setAttribute('aria-label', '第 ' + (i + 1) + ' 格');
+                b.innerHTML = '<canvas></canvas><i>' + (i + 1) + '</i>'; thumb(b.querySelector('canvas'), g, fb.w, fb.w);
+                b.onclick = () => { stopPlay(); fSetFrame(i); }; s.appendChild(b);
+            });
+            $('fInfo').textContent = `第 ${fb.cur + 1} / ${fb.frames.length} 格（最多 ${MAX_FRAMES}）；已存 ${fWorks.length} / ${MAX_FLIP} 組`;
+        }
+        function stopPlay() { if (fTimer) { clearTimeout(fTimer); fTimer = null; } fe.locked = false; $('fPlay').textContent = '播放'; fe.under = $('fOnion').checked && fb.cur > 0 ? fb.frames[fb.cur - 1] : null; fe.setGrid(fb.w, fb.w, fb.frames[fb.cur]); }
+        $('fPlay').onclick = () => {
+            if (fTimer) return stopPlay();
+            fe.locked = true; fe.under = null; $('fPlay').textContent = '停止'; let i = 0;
+            const step = () => { fe.setGrid(fb.w, fb.w, fb.frames[i % fb.frames.length]); i++; fTimer = setTimeout(step, 1000 / fb.fps); }; step();
+        };
+        $('fFps').oninput = (e) => { fb.fps = +e.target.value; $('fFpsV').textContent = fb.fps + ' fps'; };
+        $('fOnion').onchange = () => fSetFrame(fb.cur);
+        const addFrame = (copy) => {
+            if (fb.frames.length >= MAX_FRAMES) return alert(`最多 ${MAX_FRAMES} 格。`);
+            stopPlay(); fb.frames.splice(fb.cur + 1, 0, copy ? fb.frames[fb.cur].slice() : new Uint8Array(fb.w * fb.w)); fSetFrame(fb.cur + 1);
+        };
+        $('fAdd').onclick = () => addFrame(false); $('fDup').onclick = () => addFrame(true);
+        $('fDel').onclick = () => {
+            if (fb.frames.length < 2) return alert('至少要留一格。');
+            if (!confirm(`刪除第 ${fb.cur + 1} 格？無法復原。`)) return;
+            stopPlay(); fb.frames.splice(fb.cur, 1); fSetFrame(Math.min(fb.cur, fb.frames.length - 1));
+        };
+        const fReset = (w) => { stopPlay(); fCur = null; fb.w = w; fb.frames = [new Uint8Array(w * w)]; $('fSize').value = w; $('fName').value = ''; fSetFrame(0); };
+        $('fSize').onchange = () => {
+            if (fb.frames.some(g => g.some(v => v)) && !confirm('換尺寸會清空目前的動畫（未儲存的內容會消失），確定嗎？')) { $('fSize').value = fb.w; return; }
+            fReset(+$('fSize').value);
+        };
+        $('fNew').onclick = () => { if (!fb.frames.some(g => g.some(v => v)) || confirm('開新動畫會清空目前未儲存的內容，確定嗎？')) fReset(fb.w); };
+        function fRender() {
+            const gal = $('fGal'); gal.innerHTML = '';
+            if (!fWorks.length) gal.innerHTML = '<span class="muted">還沒有動畫</span>';
+            for (const it of fWorks) {
+                const d = document.createElement('div');
+                d.innerHTML = '<canvas></canvas><div></div><div class="row"><button class="sm" data-o>開啟</button><button class="sm" data-d>刪除</button></div>';
+                thumb(d.querySelector('canvas'), decGrid(it.frames[0], it.w, it.h), it.w, it.h);
+                d.children[1].textContent = `${it.name || '未命名'} ${it.frames.length} 格`;
+                d.querySelector('[data-o]').onclick = () => {
+                    stopPlay(); fCur = it.id; fb.w = it.w; fb.fps = it.fps; fb.frames = it.frames.map(f => decGrid(f, it.w, it.h));
+                    $('fSize').value = it.w; $('fName').value = it.name; $('fFps').value = it.fps; $('fFpsV').textContent = it.fps + ' fps'; fSetFrame(0); scrollTo(0, 0);
+                };
+                d.querySelector('[data-d]').onclick = () => {
+                    if (!confirm(`刪除動畫「${it.name || '未命名'}」？無法復原。`)) return;
+                    fWorks = fWorks.filter(x => x.id !== it.id); if (fCur === it.id) fCur = null;
+                    Util.store.set(K_FLIP, { items: fWorks }); fRender(); strip();
+                };
+                gal.appendChild(d);
+            }
+        }
+        $('fSave').onclick = () => {
+            stopPlay();
+            const rec = { id: fCur || newId(), name: $('fName').value.trim().slice(0, 20), w: fb.w, h: fb.w, fps: fb.fps, frames: fb.frames.map(encGrid) };
+            const i = fWorks.findIndex(x => x.id === fCur);
+            if (i < 0 && fWorks.length >= MAX_FLIP) return alert(`動畫已達上限 ${MAX_FLIP} 組，請先刪除舊的。`);
+            if (rec.frames.length * fb.w * fb.w > MAX_FLIP_CELLS) return alert('這組動畫太大，無法儲存。');
+            const next = i < 0 ? [...fWorks, rec] : fWorks.map(x => x.id === fCur ? rec : x);
+            if (!Util.store.set(K_FLIP, { items: next })) return;
+            fWorks = next; fCur = rec.id; fRender(); strip();
+        };
+        $('fClear').onclick = () => { if (fWorks.length && confirm(`刪除全部 ${fWorks.length} 組動畫？無法復原。`)) { fWorks = []; fCur = null; Util.store.set(K_FLIP, { items: [] }); fRender(); strip(); } };
+        const fName = () => $('fName').value.trim() || 'flipbook';
+        $('fGif').onclick = () => {
+            stopPlay(); const sc = +$('fScale').value, w = fb.w * sc;
+            const frames = fb.frames.map(g => { const o = new Uint8Array(w * w); for (let y = 0; y < w; y++) for (let x = 0; x < w; x++) o[y * w + x] = g[Math.floor(y / sc) * fb.w + Math.floor(x / sc)]; return o; });
+            Util.download(new Blob([gifEncode(frames, w, w, PAL, fb.fps)], { type: 'image/gif' }), fName() + '.gif');
+        };
+        $('fSheet').onclick = () => {
+            const sc = +$('fScale').value, n = fb.frames.length, cv = document.createElement('canvas'); cv.width = fb.w * sc * n; cv.height = fb.w * sc;
+            if (cv.width > 16000) return alert('精靈圖太寬，請降低倍率。');
+            const c = cv.getContext('2d'); fb.frames.forEach((g, i) => { c.save(); c.translate(i * fb.w * sc, 0); drawGrid(c, g, fb.w, fb.w, sc, 1); c.restore(); });
+            dl(cv, fName() + '-sheet.png');
+        };
+        $('fSeq').onclick = async () => {
+            if (!confirm(`將連續下載 ${fb.frames.length} 個 PNG 檔，確定嗎？`)) return;
+            for (let i = 0; i < fb.frames.length; i++) { dl(toCanvas(fb.frames[i], fb.w, fb.w, +$('fScale').value), `${fName()}-${String(i + 1).padStart(2, '0')}.png`); await new Promise(r => setTimeout(r, 250)); }
+        };
+        fSetFrame(0); fRender();
+        hooks.flip = () => { fe.render(); };
+        hooks.pix = () => { pe.render(); };
+
+        // ---------- 曼陀羅 ----------
+        const mc = $('mCv'), mx = mc.getContext('2d'), base = document.createElement('canvas');
+        base.width = base.height = 800; const bx = base.getContext('2d');
+        let strokes = [], sNo = 0, drawing = null;
+        const mCfg = () => ({ n: +$('mN').value, mir: $('mMir').checked });
+        function seg(ctx, a, b, col, w, cfg) {
+            const pa = symPts(a[0], a[1], 400, 400, cfg.n, cfg.mir), pb = symPts(b[0], b[1], 400, 400, cfg.n, cfg.mir);
+            ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineCap = ctx.lineJoin = 'round';
+            ctx.beginPath(); pa.forEach((p, i) => { ctx.moveTo(p[0], p[1]); ctx.lineTo(pb[i][0], pb[i][1]); }); ctx.stroke();
+        }
+        function stroke(ctx, s) { for (let i = 1; i < s.pts.length; i++) seg(ctx, s.pts[i - 1], s.pts[i], s.col, s.w, s.cfg); if (s.pts.length === 1) seg(ctx, s.pts[0], s.pts[0], s.col, s.w, s.cfg); }
+        function mRedraw() { mx.fillStyle = $('mBg').value; mx.fillRect(0, 0, 800, 800); mx.drawImage(base, 0, 0); strokes.forEach(s => stroke(mx, s)); }
+        const mPt = (e) => { const r = mc.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * 800, (e.clientY - r.top) / r.height * 800]; };
+        mc.onpointerdown = (e) => {
+            e.preventDefault(); mc.setPointerCapture(e.pointerId);
+            drawing = { pts: [mPt(e)], col: $('mRain').checked ? `hsl(${(sNo++ * 37) % 360},85%,60%)` : $('mCol').value, w: +$('mW').value, cfg: mCfg() };
+            strokes.push(drawing); stroke(mx, drawing);
+        };
+        mc.onpointermove = (e) => {
+            if (!drawing) return; const p = mPt(e), a = drawing.pts[drawing.pts.length - 1];
+            if (drawing.pts.length < 4000) { drawing.pts.push(p); seg(mx, a, p, drawing.col, drawing.w, drawing.cfg); }
+        };
+        mc.onpointerup = mc.onpointercancel = () => {
+            drawing = null;
+            if (strokes.length > 150) { strokes.splice(0, 50).forEach(s => stroke(bx, s)); }
+        };
+        $('mN').oninput = () => $('mNV').textContent = $('mN').value;
+        $('mBg').onchange = mRedraw;
+        $('mUndo').onclick = () => { strokes.pop(); mRedraw(); };
+        $('mClear').onclick = () => { if ((strokes.length || sNo) && confirm('清除整張曼陀羅？無法復原。')) { strokes = []; bx.clearRect(0, 0, 800, 800); mRedraw(); } };
+        $('mPng').onclick = () => dl(mc, 'mandala.png');
+        mRedraw();
+
+        // ---------- 生成藝術 ----------
+        const gc = $('gCv'), gx = gc.getContext('2d');
+        function gDraw() {
+            const S = 800, art = genArt($('gSeed').value, $('gKind').value);
+            gx.fillStyle = art.bg; gx.fillRect(0, 0, S, S);
+            for (const it of art.items) {
+                gx.fillStyle = gx.strokeStyle = it.col;
+                if (it.t === 'c') { gx.beginPath(); gx.arc(it.x * S, it.y * S, it.r * S, 0, 7); gx.fill(); }
+                else if (it.t === 'p') { gx.beginPath(); it.pts.forEach((p, i) => i ? gx.lineTo(p[0] * S, p[1] * S) : gx.moveTo(p[0] * S, p[1] * S)); gx.closePath(); gx.fill(); gx.lineWidth = 1; gx.stroke(); }
+                else if (it.t === 'ring') { gx.lineWidth = it.w * S; gx.beginPath(); gx.arc(it.x * S, it.y * S, it.r * S, 0, 7); gx.stroke(); }
+                else if (it.t === 'g') { const c = S / it.n; it.d.forEach((v, i) => { gx.fillStyle = it.cols[v]; gx.fillRect((i % it.n) * c, Math.floor(i / it.n) * c, c + 1, c + 1); }); }
+            }
+        }
+        $('gSeed').oninput = gDraw; $('gKind').onchange = gDraw;
+        $('gRnd').onclick = () => { $('gSeed').value = Math.random().toString(36).slice(2, 8); gDraw(); };
+        $('gPng').onclick = () => dl(gc, 'art-' + $('gKind').value + '-' + ($('gSeed').value.replace(/[^\w-]/g, '').slice(0, 20) || 'seed') + '.png');
+        hooks.gen = gDraw;
+
+        // ---------- 文字雲 ----------
+        const cc = $('cCv'), cx2 = cc.getContext('2d'), CCOL = ['#e53935', '#fb8c00', '#43a047', '#1e88e5', '#8e24aa', '#00897b', '#d81b60'];
+        const FONT = (s) => `700 ${s}px "Noto Sans TC","Microsoft JhengHei",sans-serif`;
+        $('cGo').onclick = () => {
+            const text = $('cText').value, bg = $('cBg').value;
+            cx2.fillStyle = bg; cx2.fillRect(0, 0, 800, 600);
+            const words = wordFreq(text, { cjk: +$('cN').value, stop: $('cStop').checked, top: +$('cTop').value });
+            if (!words.length) { $('cInfo').textContent = '沒有可用的詞：請貼上文章（至少要有中文或英文單字）。'; return; }
+            const { placed, skipped } = layoutCloud(words, 800, 600, (w, s) => { cx2.font = FONT(s); return cx2.measureText(w).width; });
+            cx2.textBaseline = 'middle';
+            placed.forEach((p, i) => { cx2.font = FONT(p.s); cx2.fillStyle = CCOL[i % CCOL.length]; cx2.fillText(p.w, p.x, p.y + p.bh / 2); });
+            $('cInfo').textContent = `共 ${placed.length} 個詞` + (skipped.length ? `，${skipped.length} 個放不下已略過` : '') + '。中文只是依單字／連續字數估計，不是真正斷詞。';
+        };
+        $('cPng').onclick = () => dl(cc, 'wordcloud.png');
+        { const bg = $('cBg'); cx2.fillStyle = bg.value; cx2.fillRect(0, 0, 800, 600); }
+    </script>
+</body>
+
+</html>

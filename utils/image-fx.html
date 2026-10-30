@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="圖片特效工坊：濾鏡調整、底片風、素描、色調分離、轉 ASCII、前後對比滑桿、漸層桌布、照片日期水印，全程在瀏覽器完成，圖片不會上傳。">
+    <meta property="og:title" content="圖片特效工坊" />
+    <meta property="og:description" content="本機濾鏡、底片風、素描、ASCII、對比滑桿、漸層桌布與日期水印，圖片不上傳。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/image-fx.html" />
+    <title>圖片特效工坊</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root { --wrap-w: 720px; }
+        .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+        .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+        .row > label { color: var(--muted); font-size: 14px; display: flex; gap: 8px; align-items: center; flex: 1 1 200px; min-width: 0; }
+        .row input[type=range] { flex: 1 1 120px; min-width: 0; accent-color: var(--blue); }
+        .row input[type=number] { width: 100px; }
+        .row output { min-width: 3em; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+        .row input[type=file] { max-width: 100%; }
+        canvas { max-width: 100%; height: auto; display: block; margin: 0 auto; border-radius: var(--radius-sm); }
+        pre.ascii { margin: 0; padding: 8px; overflow: auto; max-height: 60vh; max-height: 60dvh; background: #fff; color: #000; line-height: 1; font-family: "Courier New", monospace; border-radius: var(--radius-sm); border: 1px solid var(--line); white-space: pre; }
+        #stage { position: relative; touch-action: pan-y; user-select: none; -webkit-user-select: none; line-height: 0; }
+        #stage canvas { width: 100%; }
+        #cB { position: absolute; left: 0; top: 0; }
+        #bar { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1px; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .4); pointer-events: none; }
+        #msg { color: var(--bad); }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>圖片特效工坊</h1>
+        <p class="sub">濾鏡、底片風、素描、ASCII、對比滑桿、漸層桌布、日期水印，全在本機處理。</p>
+        <div class="chips" id="tabs"></div>
+
+        <div class="card" id="srcCard">
+            <div class="row"><label>圖片 <input type="file" id="file" accept="image/*"></label></div>
+            <div class="note" id="info">選一張圖片（上限 30 MB / 5000 萬像素；處理時最長邊縮到 2000px）。</div>
+        </div>
+        <div class="note" id="msg" role="alert"></div>
+
+        <div class="card" id="ctlCard"><div id="ctl"></div></div>
+
+        <div class="card" id="fxOut">
+            <canvas id="cv" width="1" height="1"></canvas>
+            <div class="row" style="margin-top:10px"><button id="orig" class="sm" aria-pressed="false">看原圖</button><button id="reset" class="sm">重設</button><button id="rand" class="sm" hidden>隨機漸層</button><button id="save" class="primary">下載 PNG</button></div>
+        </div>
+
+        <div class="card" id="ascOut" hidden>
+            <pre class="ascii" id="pre"></pre>
+            <div class="row" style="margin-top:10px"><button id="ascCopy">複製文字</button><button id="ascSave" class="primary">存成圖片</button></div>
+        </div>
+
+        <div class="card" id="cmpOut" hidden>
+            <div class="row"><label>圖 A（左） <input type="file" id="fA" accept="image/*"></label><label>圖 B（右） <input type="file" id="fB" accept="image/*"></label></div>
+            <div id="stage"><canvas id="cA" width="1" height="1"></canvas><canvas id="cB" width="1" height="1"></canvas><div id="bar"></div></div>
+            <input type="range" id="pos" min="0" max="100" value="50" style="width:100%;accent-color:var(--blue);margin-top:10px" aria-label="分割位置">
+            <div class="row"><button id="cmpSave" class="primary">下載並排圖</button></div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>一個頁面裝了八種圖片小特效：濾鏡調整、底片風、素描、色調分離、轉 ASCII、前後對比滑桿、漸層桌布、照片日期水印。圖片只在這台裝置處理，不會上傳。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>修一下亮度、對比、飽和，或做黑白、模糊、銳化</li>
+        <li>想要底片、褪色、Lomo 暗角的復古感，或素描、海報色塊效果</li>
+        <li>把圖片轉成字元畫貼到聊天或文章</li>
+        <li>比較修圖前後、壓縮前後，做成並排圖</li>
+        <li>需要一張指定尺寸的漸層手機桌布</li>
+        <li>在照片角落加上相機風格的日期</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>上方選分頁；除了「對比」與「漸層」，都先選一張圖片</li>
+        <li>拉滑桿即時預覽，「看原圖」可切換對照，「重設」回預設值，「下載 PNG」匯出</li>
+        <li>底片風：選預設後仍可微調顆粒、暈邊、強度</li>
+        <li>ASCII：調寬度（字元數）與字元集，可複製文字或存成圖片；「反相」適合深色背景</li>
+        <li>對比：選圖 A、圖 B，拖曳畫面或滑桿比較；圖 B 會裁成與圖 A 同比例；可下載並排圖</li>
+        <li>漸層：選尺寸（手機 / 桌機常見解析度或自訂）、顏色、角度、雜訊，按「隨機漸層」換一組</li>
+        <li>日期水印：JPEG 會自動讀拍攝日期，沒有就手動選日期；選角落、大小、顏色與格式</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">色調分離色階數 4：每個顏色只剩 4 階（0 / 85 / 170 / 255），像海報。<br>漸層桌布選 1170×2532 並按「隨機漸層」，下載後設成 iPhone 桌布。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>不存任何資料，重新整理就回到預設；沒有備份或清除的必要</li>
+        <li>圖片超過 30 MB 或 5000 萬像素會被拒絕；處理與匯出的最長邊是 2000px（對比並排圖每張 1600px），不是原圖解析度</li>
+        <li>漸層尺寸上限 8000px 且總像素 ≤ 1600 萬（iOS 畫布上限）；常見手機解析度請以裝置實際規格為準</li>
+        <li>素描與底片效果是近似演算法，結果因圖而異；底片顆粒用固定種子，同一張圖每次相同</li>
+        <li>EXIF 日期只支援 JPEG；被社群軟體處理過的圖通常沒有，請手動輸入</li>
+        <li>預覽縮小處理，匯出以較大尺寸重算，模糊程度可能略有差異</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { seeded } = Util;
+        // --- pure ---
+        const MAX_BYTES = 30 * 1024 * 1024, MAX_PIXELS = 50e6, WORK = 2000, PREV = 800;
+        const sizeOk = (w, h) => w > 0 && h > 0 && w * h <= MAX_PIXELS;
+        const fit = (w, h, max) => { const k = Math.min(1, max / Math.max(w, h, 1)); return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) }; };
+        const gray = (r, g, b) => 0.299 * r + 0.587 * g + 0.114 * b;
+
+        // 色調分離：每個色版量化成 n 階（2–256），d 為 RGBA，原地修改
+        function posterize(d, n) {
+            n = Math.max(2, Math.min(256, n | 0)); const s = n - 1;
+            for (let i = 0; i < d.length; i += 4) for (let c = 0; c < 3; c++) d[i + c] = Math.round(Math.round(d[i + c] / 255 * s) * 255 / s);
+        }
+        function grayify(d) { for (let i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = gray(d[i], d[i + 1], d[i + 2]); }
+
+        // 3×3 卷積（邊緣取最近像素），回傳新陣列；k 為 9 個係數
+        const KERNELS = { id: [0, 0, 0, 0, 1, 0, 0, 0, 0], blur: [1, 2, 1, 2, 4, 2, 1, 2, 1].map(v => v / 16), sharpen: [0, -1, 0, -1, 5, -1, 0, -1, 0], edge: [-1, -1, -1, -1, 8, -1, -1, -1, -1] };
+        function convolve(d, w, h, k) {
+            const o = new Uint8ClampedArray(d.length);
+            for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+                const p = (y * w + x) * 4;
+                for (let c = 0; c < 3; c++) {
+                    let s = 0;
+                    for (let j = -1; j <= 1; j++) { const yy = Math.min(h - 1, Math.max(0, y + j)); for (let i = -1; i <= 1; i++) s += d[(yy * w + Math.min(w - 1, Math.max(0, x + i))) * 4 + c] * k[(j + 1) * 3 + i + 1]; }
+                    o[p + c] = s;
+                }
+                o[p + 3] = d[p + 3];
+            }
+            return o;
+        }
+        // 模糊：[1,2,1]/4 水平 + 垂直，重複 n 次，原地修改
+        function blurPasses(d, w, h, n) {
+            const t = new Float32Array(d.length);
+            for (let r = 0; r < n; r++) {
+                for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const a = (y * w + Math.max(0, x - 1)) * 4, b = (y * w + x) * 4, c = (y * w + Math.min(w - 1, x + 1)) * 4; for (let k = 0; k < 3; k++) t[b + k] = (d[a + k] + 2 * d[b + k] + d[c + k]) / 4; }
+                for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const a = (Math.max(0, y - 1) * w + x) * 4, b = (y * w + x) * 4, c = (Math.min(h - 1, y + 1) * w + x) * 4; for (let k = 0; k < 3; k++) d[b + k] = (t[a + k] + 2 * t[b + k] + t[c + k]) / 4; }
+            }
+        }
+        // 濾鏡調整：亮度 / 對比 / 飽和 (-100–100)、色相 (-180–180)、灰階 / 銳化 (0–100)、模糊（次數）
+        function adjust(d, w, h, p) {
+            const { bri = 0, con = 0, sat = 0, hue = 0, gray: gm0 = 0, blur = 0, sharp = 0 } = p;
+            const c8 = con * 2.55, cf = (259 * (c8 + 255)) / (255 * (259 - c8)), s = 1 + sat / 100, gm = gm0 / 100, B = bri * 2.55;
+            const a = hue * Math.PI / 180, co = Math.cos(a), si = Math.sin(a);
+            const M = [0.213 + co * 0.787 - si * 0.213, 0.715 - co * 0.715 - si * 0.715, 0.072 - co * 0.072 + si * 0.928,
+                0.213 - co * 0.213 + si * 0.143, 0.715 + co * 0.285 + si * 0.140, 0.072 - co * 0.072 - si * 0.283,
+                0.213 - co * 0.213 - si * 0.787, 0.715 - co * 0.715 + si * 0.715, 0.072 + co * 0.928 + si * 0.072];
+            for (let i = 0; i < d.length; i += 4) {
+                let r = (d[i] + B - 128) * cf + 128, g = (d[i + 1] + B - 128) * cf + 128, b = (d[i + 2] + B - 128) * cf + 128;
+                const r2 = r * M[0] + g * M[1] + b * M[2], g2 = r * M[3] + g * M[4] + b * M[5], b2 = r * M[6] + g * M[7] + b * M[8];
+                const L = gray(r2, g2, b2);
+                r = L + (r2 - L) * s; g = L + (g2 - L) * s; b = L + (b2 - L) * s;
+                const L2 = gray(r, g, b);
+                d[i] = r + (L2 - r) * gm; d[i + 1] = g + (L2 - g) * gm; d[i + 2] = b + (L2 - b) * gm;
+            }
+            if (blur > 0) blurPasses(d, w, h, blur);
+            if (sharp > 0) { const o = convolve(d, w, h, KERNELS.sharpen), k = sharp / 100; for (let i = 0; i < d.length; i++) if (i % 4 !== 3) d[i] = d[i] + (o[i] - d[i]) * k; }
+        }
+
+        // 底片風預設：色調增益、對比、飽和、褪色（抬黑）、顆粒與暈邊的預設值
+        const FILMS = {
+            warm: { n: '暖黃復古', gain: [1.08, 1.0, 0.88], con: 1.05, sat: 1.05, fade: 14, grain: 30, vig: 35 },
+            cool: { n: '冷青底片', gain: [0.9, 1.0, 1.1], con: 1.08, sat: 0.95, fade: 10, grain: 35, vig: 40 },
+            faded: { n: '褪色老照片', gain: [1.05, 1.0, 0.92], con: 0.85, sat: 0.7, fade: 35, grain: 25, vig: 30 },
+            bw: { n: '黑白高反差', gain: [1, 1, 1], con: 1.3, sat: 0, fade: 6, grain: 45, vig: 35 },
+            cross: { n: '交叉沖洗', gain: [0.95, 1.05, 1.15], con: 1.15, sat: 1.3, fade: 8, grain: 25, vig: 30 },
+            lomo: { n: 'Lomo 暗角', gain: [1.05, 1.0, 0.95], con: 1.2, sat: 1.35, fade: 0, grain: 20, vig: 75 }
+        };
+        function film(d, w, h, pr, o = {}) {
+            const { grain = pr.grain, vig = pr.vig, amt = 100, seed = 1 } = o, rnd = seeded(seed), cx = (w - 1) / 2, cy = (h - 1) / 2, md = Math.max(1, cx * cx + cy * cy), m = amt / 100;
+            for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+                const i = (y * w + x) * 4, f = 1 - (vig / 100) * (((x - cx) ** 2 + (y - cy) ** 2) / md), n = (rnd() - 0.5) * grain * 2.55, v = [0, 0, 0];
+                for (let c = 0; c < 3; c++) v[c] = ((d[i + c] - 128) * pr.con + 128) * pr.gain[c];
+                const L = gray(v[0], v[1], v[2]);
+                for (let c = 0; c < 3; c++) {
+                    let t = L + (v[c] - L) * pr.sat;
+                    t = (pr.fade + t * (1 - pr.fade / 255)) * f + n;
+                    d[i + c] = d[i + c] + (t - d[i + c]) * m;
+                }
+            }
+        }
+
+        // Sobel 邊緣強度（gr 為灰階 Float32Array）
+        function sobelMag(gr, w, h) {
+            const o = new Float32Array(w * h), at = (x, y) => gr[Math.min(h - 1, Math.max(0, y)) * w + Math.min(w - 1, Math.max(0, x))];
+            for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+                const gx = -at(x - 1, y - 1) - 2 * at(x - 1, y) - at(x - 1, y + 1) + at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1);
+                const gy = -at(x - 1, y - 1) - 2 * at(x, y - 1) - at(x + 1, y - 1) + at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1);
+                o[y * w + x] = Math.hypot(gx, gy);
+            }
+            return o;
+        }
+        // 素描：色彩減淡（灰階 ÷ 反相後模糊）× 反相邊緣線；平坦區域 = 白紙。color = true 保留原色
+        function sketch(d, w, h, { gain = 120, soft = 3, color = false } = {}) {
+            const n = w * h, g = new Float32Array(n), inv = new Uint8ClampedArray(n * 4);
+            for (let i = 0; i < n; i++) { g[i] = gray(d[i * 4], d[i * 4 + 1], d[i * 4 + 2]); inv[i * 4] = inv[i * 4 + 1] = inv[i * 4 + 2] = 255 - g[i]; inv[i * 4 + 3] = 255; }
+            blurPasses(inv, w, h, Math.max(1, soft));
+            const mag = sobelMag(g, w, h);
+            for (let i = 0; i < n; i++) {
+                const dodge = Math.min(255, (g[i] + 1) * 255 / (256 - inv[i * 4])), edge = 255 - Math.min(255, mag[i] * gain / 100), v = dodge * edge / 255, p = i * 4;
+                for (let c = 0; c < 3; c++) d[p + c] = color ? d[p + c] * v / 255 : v;
+            }
+        }
+
+        // ASCII：字元集由淺到深（亮處用靠前的字元，如空白）；每格取平均亮度；字元高約為寬的 2 倍
+        const RAMPS = { simple: ' .:-=+*#%@', detail: ' .^",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$', block: ' ░▒▓█' };
+        function asciiArt(d, w, h, cols, ramp, inv = false) {
+            const rs = Array.from(ramp), n = rs.length, cw = w / cols, rows = Math.max(1, Math.round(h / cw / 2)), ch = h / rows;
+            let out = '';
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const x0 = Math.floor(c * cw), x1 = Math.max(x0 + 1, Math.floor((c + 1) * cw)), y0 = Math.floor(r * ch), y1 = Math.max(y0 + 1, Math.floor((r + 1) * ch));
+                    let s = 0, k = 0;
+                    for (let y = y0; y < Math.min(h, y1); y++) for (let x = x0; x < Math.min(w, x1); x++) { const p = (y * w + x) * 4; s += gray(d[p], d[p + 1], d[p + 2]); k++; }
+                    const l = k ? s / k / 255 : 1;
+                    out += rs[Math.round((inv ? l : 1 - l) * (n - 1))];
+                }
+                out += '\n';
+            }
+            return out;
+        }
+
+        // EXIF 日期：從 JPEG 位元組找 DateTimeOriginal(0x9003) → Digitized(0x9004) → DateTime(0x0132)；失敗回傳 ''
+        function exifDate(b) {
+            try {
+                if (b[0] !== 0xFF || b[1] !== 0xD8) return '';
+                let o = 2;
+                while (o + 4 < b.length) {
+                    if (b[o] !== 0xFF) { o++; continue; }
+                    const m = b[o + 1];
+                    if (m === 0xD8 || m === 0x01 || (m >= 0xD0 && m <= 0xD7)) { o += 2; continue; }
+                    if (m === 0xDA || m === 0xD9) break;
+                    const len = (b[o + 2] << 8) | b[o + 3];
+                    if (m === 0xE1 && b[o + 4] === 0x45 && b[o + 5] === 0x78 && b[o + 6] === 0x69 && b[o + 7] === 0x66) return tiffDate(b, o + 10);
+                    o += 2 + len;
+                }
+            } catch (e) { }
+            return '';
+        }
+        function tiffDate(b, base) {
+            const le = b[base] === 0x49, dv = new DataView(b.buffer, b.byteOffset, b.length);
+            const r16 = (p) => dv.getUint16(p, le), r32 = (p) => dv.getUint32(p, le);
+            const ifd = (off) => { const m = {}, n = Math.min(r16(base + off), 200); for (let i = 0; i < n; i++) { const e = base + off + 2 + i * 12; m[r16(e)] = { cnt: r32(e + 4), vo: r32(e + 8), type: r16(e + 2) }; } return m; };
+            const str = (e) => { if (!e || e.type !== 2 || e.cnt < 11 || e.cnt > 64) return ''; let t = ''; for (let i = 0; i < e.cnt - 1; i++) t += String.fromCharCode(b[base + e.vo + i]); return t; };
+            const i0 = ifd(r32(base + 4)), ex = i0[0x8769] ? ifd(i0[0x8769].vo) : {};
+            for (const e of [ex[0x9003], ex[0x9004], i0[0x0132]]) { const s = str(e); if (parseDate(s)) return s; }
+            return '';
+        }
+        // 「2024:05:03 14:22:10」「2024-05-03」「2024/5/3」→ {y,m,d}；不合法回傳 null
+        function parseDate(s) {
+            const m = /^(\d{4})[:\-\/.](\d{1,2})[:\-\/.](\d{1,2})/.exec(String(s ?? '').trim());
+            if (!m) return null;
+            const y = +m[1], mo = +m[2], d = +m[3];
+            if (y < 1900 || mo < 1 || mo > 12 || d < 1 || d > new Date(Date.UTC(y, mo, 0)).getUTCDate()) return null;
+            return { y, m: mo, d };
+        }
+        function fmtStamp({ y, m, d }, f) {
+            const mm = String(m).padStart(2, '0'), dd = String(d).padStart(2, '0');
+            return f === 'slash' ? `${y}/${mm}/${dd}` : f === 'short' ? `'${String(y).slice(2)} ${mm} ${dd}` : f === 'cn' ? `${y}年${m}月${d}日` : `${y}.${mm}.${dd}`;
+        }
+
+        // 漸層：CSS 角度（0=由下往上、90=由左往右、180=由上往下）→ 畫布起訖點，使角落剛好貼齊
+        function gradLine(w, h, deg) {
+            const a = deg * Math.PI / 180, dx = Math.sin(a), dy = -Math.cos(a), L = Math.abs(w * dx) + Math.abs(h * dy), cx = w / 2, cy = h / 2;
+            return { x0: cx - dx * L / 2, y0: cy - dy * L / 2, x1: cx + dx * L / 2, y1: cy + dy * L / 2 };
+        }
+        function hslHex(h, s, l) {
+            h = ((h % 360) + 360) % 360; s /= 100; l /= 100;
+            const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l), f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+            return '#' + [f(0), f(8), f(4)].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
+        }
+        function randomGradient(seed) {
+            const r = seeded(seed), h = r() * 360, s = 60 + r() * 30;
+            return { c1: hslHex(h, s, 50 + r() * 15), c2: hslHex(h + 40 + r() * 100, s, 45 + r() * 15), c3: hslHex(h + 160 + r() * 100, s, 50 + r() * 15), angle: Math.floor(r() * 36) * 10 };
+        }
+        function addNoise(d, amt, seed = 1) {
+            if (amt <= 0) return;
+            const r = seeded(seed), k = amt * 2.55;
+            for (let i = 0; i < d.length; i += 4) { const n = (r() - 0.5) * k; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+        }
+        const gradSizeOk = (w, h) => Number.isInteger(w) && Number.isInteger(h) && w >= 64 && h >= 64 && w <= 8000 && h <= 8000 && w * h <= 16e6;
+        // 取 src 中置中裁切、鋪滿 dw×dh 所需的來源矩形
+        function coverRect(sw, sh, dw, dh) {
+            const k = Math.max(dw / sw, dh / sh), cw = dw / k, ch = dh / k;
+            return { sx: (sw - cw) / 2, sy: (sh - ch) / 2, sw: cw, sh: ch };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const el = (t, p = {}, ...k) => { const e = Object.assign(document.createElement(t), p); e.append(...k); return e; };
+
+        // 控制項：s 滑桿 [id,標籤,min,max,預設] / o 下拉 / c 色彩 / k 勾選 / d 日期 / n 數字
+        const SIZES = [['1170x2532', 'iPhone 1170×2532'], ['1290x2796', 'iPhone Pro Max 1290×2796'], ['1080x2400', 'Android 1080×2400'], ['1440x3120', 'Android 1440×3120'], ['2048x2732', 'iPad 2048×2732'], ['1920x1080', '桌機 1920×1080'], ['2560x1440', '桌機 2560×1440'], ['3840x2160', '桌機 3840×2160'], ['custom', '自訂']];
+        const TABS = {
+            adjust: { n: '濾鏡', img: 1, ctl: [['s', 'bri', '亮度', -100, 100, 0], ['s', 'con', '對比', -100, 100, 0], ['s', 'sat', '飽和', -100, 100, 0], ['s', 'hue', '色相', -180, 180, 0], ['s', 'gray', '灰階', 0, 100, 0], ['s', 'blur', '模糊', 0, 10, 0], ['s', 'sharp', '銳化', 0, 100, 0]] },
+            film: { n: '底片風', img: 1, ctl: [['o', 'preset', '預設', Object.entries(FILMS).map(([k, v]) => [k, v.n]), 'warm'], ['s', 'grain', '顆粒', 0, 100, FILMS.warm.grain], ['s', 'vig', '暈邊', 0, 100, FILMS.warm.vig], ['s', 'amt', '強度', 0, 100, 100]] },
+            sketch: { n: '素描', img: 1, ctl: [['s', 'gain', '線條強度', 0, 300, 120], ['s', 'soft', '柔化', 1, 10, 3], ['k', 'color', '保留原色', false]] },
+            poster: { n: '色調分離', img: 1, ctl: [['s', 'lv', '色階數', 2, 16, 4], ['k', 'gray', '先轉灰階', false]] },
+            ascii: { n: 'ASCII', img: 1, ctl: [['s', 'cols', '寬度（字元）', 20, 200, 80], ['o', 'ramp', '字元集', [['simple', '簡易'], ['detail', '細緻'], ['block', '方塊']], 'simple'], ['k', 'inv', '反相（深色背景用）', false]] },
+            compare: { n: '對比', ctl: [] },
+            grad: { n: '漸層桌布', ctl: [['o', 'size', '尺寸', SIZES, '1170x2532'], ['n', 'w', '自訂寬', 64, 8000, 1080], ['n', 'h', '自訂高', 64, 8000, 1920], ['c', 'c1', '顏色 1', '#5b86e5'], ['c', 'c2', '顏色 2', '#36d1dc'], ['c', 'c3', '顏色 3', '#ff6ec7'], ['k', 'use3', '使用第三色', false], ['s', 'angle', '角度', 0, 360, 160], ['s', 'noise', '雜訊', 0, 40, 6]] },
+            mark: { n: '日期水印', img: 1, ctl: [['d', 'date', '日期', ''], ['o', 'pos', '位置', [['br', '右下'], ['bl', '左下'], ['tr', '右上'], ['tl', '左上']], 'br'], ['s', 'size', '大小 %', 2, 12, 4], ['o', 'fmt', '格式', [['dot', '2024.05.03'], ['slash', '2024/05/03'], ['short', "'24 05 03"], ['cn', '2024年5月3日']], 'dot'], ['o', 'color', '顏色', [['#ff9f1a', '相機橘'], ['#ffffff', '白'], ['#ffe14d', '黃'], ['#ff4d4d', '紅']], '#ff9f1a']] }
+        };
+        const V = Object.fromEntries(Object.entries(TABS).map(([k, t]) => [k, Object.fromEntries(t.ctl.map(c => [c[1], c[0] === 's' ? c[5] : c[0] === 'o' ? c[4] : c[0] === 'n' ? c[5] : c[3]]))]));
+        const DEF = JSON.parse(JSON.stringify(V));
+        let tab = 'adjust', img = null, exifStr = '', origOn = false, seed = 1, raf = 0;
+        const imgA = { c: null }, imgB = { c: null };
+
+        const msg = (t) => { $('#msg').textContent = t || ''; };
+
+        function readImg(file, max) {
+            return new Promise((ok, no) => {
+                if (!/^image\//.test(file.type)) return no(new Error('請選圖片檔'));
+                if (file.size > MAX_BYTES) return no(new Error('檔案超過 30 MB'));
+                const url = URL.createObjectURL(file), im = new Image();
+                im.onload = () => {
+                    URL.revokeObjectURL(url);
+                    if (!sizeOk(im.naturalWidth, im.naturalHeight)) return no(new Error(`圖片 ${im.naturalWidth}×${im.naturalHeight} 像素太多（上限 5000 萬）`));
+                    const { w, h } = fit(im.naturalWidth, im.naturalHeight, max), c = el('canvas', { width: w, height: h });
+                    c.getContext('2d').drawImage(im, 0, 0, w, h); ok({ c, nw: im.naturalWidth, nh: im.naturalHeight });
+                };
+                im.onerror = () => { URL.revokeObjectURL(url); no(new Error('圖片讀取失敗（格式不支援或檔案損壞）')); };
+                im.src = url;
+            });
+        }
+
+        const PROC = {
+            adjust: (d, w, h, v, k) => adjust(d, w, h, { ...v, blur: v.blur ? Math.max(1, Math.min(30, Math.round(v.blur * k))) : 0 }),
+            film: (d, w, h, v) => film(d, w, h, FILMS[v.preset] || FILMS.warm, { grain: v.grain, vig: v.vig, amt: v.amt, seed: 1 }),
+            sketch: (d, w, h, v, k) => sketch(d, w, h, { gain: v.gain, soft: Math.max(1, Math.round(v.soft * k)), color: v.color }),
+            poster: (d, w, h, v) => { if (v.gray) grayify(d); posterize(d, v.lv); }
+        };
+
+        function stamp(cx, w, h, v) {
+            const dt = parseDate(v.date); if (!dt) return false;
+            const t = fmtStamp(dt, v.fmt), fs = Math.max(10, Math.round(w * v.size / 100)), pad = fs * 0.8;
+            cx.font = `bold ${fs}px "Courier New", monospace`;
+            const tw = cx.measureText(t).width;
+            cx.fillStyle = v.color; cx.shadowColor = 'rgba(0,0,0,.5)'; cx.shadowBlur = fs * 0.25;
+            cx.fillText(t, v.pos[1] === 'r' ? w - pad - tw : pad, v.pos[0] === 'b' ? h - pad : pad + fs);
+            return true;
+        }
+
+        function drawGrad(w, h, v, noiseSeed) {
+            const c = el('canvas', { width: w, height: h }), cx = c.getContext('2d', { willReadFrequently: true }), l = gradLine(w, h, v.angle), g = cx.createLinearGradient(l.x0, l.y0, l.x1, l.y1);
+            g.addColorStop(0, v.c1); if (v.use3) g.addColorStop(0.5, v.c3); g.addColorStop(1, v.c2);
+            cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+            if (v.noise > 0) { const id = cx.getImageData(0, 0, w, h); addNoise(id.data, v.noise, noiseSeed); cx.putImageData(id, 0, 0); }
+            return c;
+        }
+        function gradDims() {
+            const v = V.grad, [w, h] = v.size === 'custom' ? [v.w, v.h] : v.size.split('x').map(Number);
+            return gradSizeOk(w, h) ? { w, h } : null;
+        }
+
+        // 產生處理後的畫布；max = 最長邊
+        function makeCanvas(max, original) {
+            if (tab === 'grad') {
+                const d = gradDims(); if (!d) return null;
+                const f = fit(d.w, d.h, max); return drawGrad(f.w, f.h, V.grad, 1);
+            }
+            const { w, h } = fit(img.width, img.height, max), c = el('canvas', { width: w, height: h }), cx = c.getContext('2d', { willReadFrequently: true });
+            cx.drawImage(img, 0, 0, w, h);
+            if (original) return c;
+            if (tab === 'mark') { if (!stamp(cx, w, h, V.mark)) msg('請選擇日期'); return c; }
+            const id = cx.getImageData(0, 0, w, h);
+            PROC[tab](id.data, w, h, V[tab], w / PREV); cx.putImageData(id, 0, 0);
+            return c;
+        }
+
+        function show(c) {
+            const cv = $('#cv'); cv.width = c.width; cv.height = c.height; cv.getContext('2d').drawImage(c, 0, 0);
+        }
+
+        function render() {
+            raf = 0; msg('');
+            const t = TABS[tab], isCmp = tab === 'compare', isAsc = tab === 'ascii';
+            $('#srcCard').hidden = !t.img; $('#ctlCard').hidden = !t.ctl.length;
+            $('#fxOut').hidden = isCmp || isAsc || (t.img && !img); $('#ascOut').hidden = !isAsc || !img; $('#cmpOut').hidden = !isCmp;
+            $('#orig').hidden = !t.img; $('#rand').hidden = tab !== 'grad';
+            $('#reset').hidden = !t.ctl.length;
+            if (isCmp) return renderCmp();
+            if (t.img && !img) { msg('請先選一張圖片'); return; }
+            if (isAsc) {
+                const { w, h } = fit(img.width, img.height, 400), c = el('canvas', { width: w, height: h }), cx = c.getContext('2d', { willReadFrequently: true });
+                cx.drawImage(img, 0, 0, w, h);
+                const v = V.ascii, pre = $('#pre');
+                pre.textContent = asciiArt(cx.getImageData(0, 0, w, h).data, w, h, v.cols, RAMPS[v.ramp], v.inv);
+                pre.style.fontSize = Math.max(3, Math.min(10, Math.floor(340 / (v.cols * 0.6)))) + 'px';
+                return;
+            }
+            if (tab === 'grad' && !gradDims()) { msg('尺寸要在 64–8000 之間（整數），且總像素 ≤ 1600 萬'); $('#fxOut').hidden = true; return; }
+            show(makeCanvas(PREV, origOn));
+        }
+        const sched = () => { if (!raf) raf = requestAnimationFrame(render); };
+
+        function renderCmp() {
+            const A = imgA.c, B = imgB.c, cA = $('#cA'), cB = $('#cB');
+            for (const c of [cA, cB]) c.hidden = !A;
+            $('#bar').hidden = !A; $('#cmpSave').disabled = !(A && B);
+            if (!A) return;
+            cA.width = cB.width = A.width; cA.height = cB.height = A.height;
+            cA.getContext('2d').drawImage(A, 0, 0);
+            const bx = cB.getContext('2d'); bx.clearRect(0, 0, A.width, A.height);
+            if (B) { const r = coverRect(B.width, B.height, A.width, A.height); bx.drawImage(B, r.sx, r.sy, r.sw, r.sh, 0, 0, A.width, A.height); }
+            setPos($('#pos').value);
+        }
+        function setPos(p) {
+            p = Math.max(0, Math.min(100, +p)); $('#pos').value = p;
+            $('#cB').style.clipPath = `inset(0 0 0 ${p}%)`; $('#bar').style.left = p + '%';
+        }
+
+        function buildCtl() {
+            const box = $('#ctl'), v = V[tab]; box.replaceChildren();
+            for (const [type, id, label, a, b, c] of TABS[tab].ctl) {
+                if (tab === 'grad' && (id === 'w' || id === 'h') && v.size !== 'custom') continue;
+                if (tab === 'grad' && id === 'c3' && !v.use3) continue;
+                const row = el('div', { className: 'row' }), lab = el('label', {}, label + ' ');
+                let inp, out;
+                if (type === 's') { inp = el('input', { type: 'range', min: a, max: b, value: v[id] }); out = el('output', { textContent: v[id] }); lab.append(inp, out); }
+                else if (type === 'o') { inp = el('select'); for (const [k, t] of a) inp.append(el('option', { value: k, textContent: t })); inp.value = v[id]; lab.append(inp); }
+                else if (type === 'n') { inp = el('input', { type: 'number', min: a, max: b, value: v[id], inputMode: 'numeric' }); lab.append(inp); }
+                else if (type === 'k') { inp = el('input', { type: 'checkbox', checked: v[id] }); lab.prepend(inp); }
+                else if (type === 'c') { inp = el('input', { type: 'color', value: v[id] }); lab.append(inp); }
+                else { inp = el('input', { type: 'date', value: v[id] }); lab.append(inp); }
+                inp.setAttribute('aria-label', label);
+                inp.oninput = inp.onchange = () => {
+                    const val = type === 's' || type === 'n' ? Number(inp.value) : type === 'k' ? inp.checked : inp.value;
+                    v[id] = val; if (out) out.textContent = val;
+                    if (tab === 'film' && id === 'preset') { v.grain = FILMS[val].grain; v.vig = FILMS[val].vig; buildCtl(); }
+                    else if (tab === 'grad' && (id === 'size' || id === 'use3')) buildCtl();
+                    sched();
+                };
+                row.append(lab); box.append(row);
+            }
+        }
+
+        function setTab(t) {
+            tab = t; origOn = false; $('#orig').setAttribute('aria-pressed', 'false');
+            for (const b of $('#tabs').children) b.setAttribute('aria-pressed', String(b.dataset.t === t));
+            buildCtl(); render();
+        }
+        $('#tabs').replaceChildren(...Object.entries(TABS).map(([k, t]) => { const b = el('button', { className: 'sm', textContent: t.n }); b.dataset.t = k; b.onclick = () => setTab(k); return b; }));
+
+        $('#file').onchange = async (e) => {
+            const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+            try {
+                const r = await readImg(f, WORK); img = r.c;
+                exifStr = ''; try { exifStr = exifDate(new Uint8Array(await f.slice(0, 262144).arrayBuffer())); } catch (_) { }
+                const dt = parseDate(exifStr); if (dt) V.mark.date = `${dt.y}-${String(dt.m).padStart(2, '0')}-${String(dt.d).padStart(2, '0')}`;
+                $('#info').textContent = `${f.name.slice(0, 40)}（${r.nw}×${r.nh}，處理尺寸 ${img.width}×${img.height}）` + (dt ? `；EXIF 日期 ${exifStr}` : '；沒有 EXIF 日期');
+                if (tab === 'mark') buildCtl();
+                render();
+            } catch (err) { msg(err.message); }
+        };
+        async function cmpLoad(e, slot) {
+            const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+            try { slot.c = (await readImg(f, 1600)).c; render(); } catch (err) { msg(err.message); }
+        }
+        $('#fA').onchange = (e) => cmpLoad(e, imgA); $('#fB').onchange = (e) => cmpLoad(e, imgB);
+        $('#pos').oninput = (e) => setPos(e.target.value);
+        const drag = (e) => { const r = $('#stage').getBoundingClientRect(); setPos((e.clientX - r.left) / r.width * 100); };
+        $('#stage').onpointerdown = (e) => { $('#stage').setPointerCapture(e.pointerId); drag(e); };
+        $('#stage').onpointermove = (e) => { if ($('#stage').hasPointerCapture(e.pointerId)) drag(e); };
+
+        $('#orig').onclick = () => { origOn = !origOn; $('#orig').setAttribute('aria-pressed', String(origOn)); render(); };
+        $('#reset').onclick = () => { Object.assign(V[tab], JSON.parse(JSON.stringify(DEF[tab]))); buildCtl(); render(); };
+        $('#rand').onclick = () => { seed = Math.floor(Math.random() * 1e9); Object.assign(V.grad, randomGradient(seed), { use3: true }); buildCtl(); render(); };
+
+        function saveCanvas(c, name) {
+            if (!c) return;
+            c.toBlob((b) => b ? Util.download(b, name) : msg('匯出失敗（畫面太大？）'), 'image/png');
+        }
+        $('#save').onclick = () => {
+            if (tab === 'grad') { const d = gradDims(); if (d) saveCanvas(drawGrad(d.w, d.h, V.grad, 1), `gradient-${d.w}x${d.h}.png`); return; }
+            saveCanvas(makeCanvas(WORK, false), `image-fx-${tab}.png`);
+        };
+        $('#cmpSave').onclick = () => {
+            const A = imgA.c; if (!A || !imgB.c) return;
+            const c = el('canvas', { width: A.width * 2, height: A.height }), cx = c.getContext('2d'), r = coverRect(imgB.c.width, imgB.c.height, A.width, A.height);
+            cx.drawImage(A, 0, 0); cx.drawImage(imgB.c, r.sx, r.sy, r.sw, r.sh, A.width, 0, A.width, A.height);
+            saveCanvas(c, 'compare.png');
+        };
+        $('#ascCopy').onclick = (e) => Util.copyWithFeedback(e.target, $('#pre').textContent);
+        $('#ascSave').onclick = () => {
+            const lines = $('#pre').textContent.split('\n'); lines.pop();
+            const fs = 10, c = el('canvas'), cx = c.getContext('2d');
+            cx.font = `${fs}px "Courier New", monospace`;
+            const cw = cx.measureText('M').width;
+            c.width = Math.ceil(cw * Math.max(...lines.map(l => Array.from(l).length)) + 20); c.height = lines.length * fs + 20;
+            cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height); cx.fillStyle = '#000'; cx.font = `${fs}px "Courier New", monospace`; cx.textBaseline = 'top';
+            lines.forEach((l, i) => cx.fillText(l, 10, 10 + i * fs));
+            saveCanvas(c, 'ascii.png');
+        };
+
+        setTab('adjust');
+    </script>
+</body>
+
+</html>

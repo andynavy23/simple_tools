@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="攝影與影片計算：縮時、慢動作、檔案大小、直播頻寬、色溫、ND 濾鏡、星軌、曝光三要素、景深超焦距、分鏡表與打光配置簡圖。">
+    <meta property="og:title" content="攝影與影片計算" />
+    <meta property="og:description" content="縮時、慢動作、ND、星軌、曝光、景深、分鏡表與打光簡圖。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/photo-calc.html" />
+    <meta name="st-keys" content="photoc_opts,photoc_shots,photoc_light">
+    <title>攝影與影片計算</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        label.f {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            margin: 10px 0 4px;
+        }
+
+        input.w,
+        select.w {
+            width: 100%;
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 4px 0 12px;
+        }
+
+        .tw {
+            overflow-x: auto;
+            margin-top: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-variant-numeric: tabular-nums;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        th {
+            color: var(--muted);
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .bad {
+            color: var(--bad);
+        }
+
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin: 8px 0;
+        }
+
+        .row>input,
+        .row>select {
+            flex: 1 1 90px;
+            min-width: 0;
+        }
+
+        #cv {
+            display: block;
+            width: 100%;
+            aspect-ratio: 1;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            touch-action: pan-y;
+        }
+
+        #cv.drag {
+            touch-action: none;
+        }
+
+        @media print {
+            body>:not(.wrap) {
+                display: none !important;
+            }
+
+            .wrap>:not(#shotsCard) {
+                display: none !important;
+            }
+
+            #shotsCard button,
+            #shotsCard .row,
+            #shotsCard .note {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>攝影與影片計算</h1>
+        <p class="sub">縮時、慢動作、ND、星軌、曝光、景深；另有分鏡表與打光簡圖。僅供參考。</p>
+
+        <div class="chips" id="tabs"></div>
+
+        <div class="card" id="formCard">
+            <div id="form"></div>
+            <p class="note bad" id="err"></p>
+        </div>
+
+        <div class="card" id="outCard">
+            <h2>結果</h2>
+            <div id="res"></div>
+            <div class="tw" id="tbl"></div>
+            <p class="note" id="note"></p>
+            <button id="copy" class="primary">複製結果</button>
+        </div>
+
+        <div class="card" id="shotsCard" hidden>
+            <h2>分鏡表</h2>
+            <div class="row">
+                <input id="sNo" placeholder="鏡號" maxlength="8" aria-label="鏡號" style="flex:0 0 80px">
+                <select id="sSize" aria-label="景別"></select>
+                <select id="sMove" aria-label="運鏡"></select>
+            </div>
+            <div class="row">
+                <input id="sNote" placeholder="備註（內容、台詞、器材…）" maxlength="100" aria-label="備註">
+                <button id="sAdd" class="primary">新增一列</button>
+            </div>
+            <p class="note bad" id="sMsg"></p>
+            <div class="tw" id="sTbl"></div>
+            <p class="note" id="sCount"></p>
+            <button id="sCopy" class="sm">匯出文字（複製）</button>
+            <button id="sPrint" class="sm">列印</button>
+            <button id="sClear" class="sm">清除分鏡表</button>
+        </div>
+
+        <div class="card" id="lightCard" hidden>
+            <h2>打光配置簡圖</h2>
+            <p class="note">俯視圖：上方是背景、下方是相機側。先按下面的按鈕加元素，再開「拖曳模式」移動。</p>
+            <div class="row" id="lAddRow"></div>
+            <div class="row">
+                <button id="lDrag" class="sm" aria-pressed="false">拖曳模式：關（可捲動頁面）</button>
+            </div>
+            <canvas id="cv" width="800" height="800" aria-label="打光配置簡圖"></canvas>
+            <p class="note bad" id="lMsg"></p>
+            <div id="lList"></div>
+            <button id="lPng" class="sm">匯出 PNG</button>
+            <button id="lClear" class="sm">清除燈位圖</button>
+        </div>
+
+        <div class="card">
+            <button id="reset">清除記住的輸入</button>
+            <p class="note">計算分頁只記住上次的分頁與數字輸入（這台裝置）；分鏡表與燈位圖另存，各自有清除按鈕。所有數值為估算，請以實際器材與現場為準。</p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>攝影與影片常用的小計算放在同一頁：縮時、慢動作、影片檔案大小、直播頻寬、色溫、ND 濾鏡、星軌 500 / NPF 法則、曝光三要素、景深與超焦距，外加分鏡表與打光配置簡圖。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>拍縮時前要算間隔與張數；拍慢動作要選幀率。</li>
+            <li>出門前算 ND 濾鏡要拉長到幾秒、星空最長能曝光幾秒。</li>
+            <li>寫分鏡、畫燈位給劇組或自己備忘。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+            <li>點上方分頁，填欄位，結果即時更新；按「複製結果」帶走。</li>
+            <li>快門可輸入 <kbd>1/125</kbd>、<kbd>0.5</kbd> 或 <kbd>2"</kbd>；檔案長度可輸入 <kbd>mm:ss</kbd>。</li>
+            <li>分鏡表：填鏡號、景別、運鏡、備註後按「新增一列」，可匯出文字或列印。</li>
+            <li>燈位圖：按按鈕加元素，開「拖曳模式」後用手指 / 滑鼠拖到位置；平常保持關閉才能捲動頁面。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">縮時：間隔 5 秒、播放 24 fps、成片 10 秒 → 240 張、拍 20 分鐘
+慢動作：120 fps 拍、24 fps 播 → 5 倍慢
+ND：ND8 = 3 格；ND1000 約 10 格；1/125 秒 + ND1000 → 約 8 秒
+曝光：f/8、1/125、ISO 100 改 f/5.6 → 約 1/250
+景深：50 mm、f/8、全幅（CoC 0.030 mm）→ 超焦距約 10.5 m</div>
+        <h3>小提醒</h3>
+        <ul>
+            <li>星軌 500 法則偏寬鬆，高畫素機身請看 NPF；兩者都是估算，誤差可能 ±30% 以上，實拍放大檢查。</li>
+            <li>直播頻寬、色溫對照為常見範例值，各平台規定不同，請以官方公告為準。</li>
+            <li>景深依 CoC 假設而定，不同觀看尺寸結果會不同；ND 標稱值與實際透光有誤差。</li>
+            <li>資料：計算分頁只存上次輸入（可清除、壞資料還原預設）；分鏡表最多 200 列、燈位圖最多 20 個元素，滿了會拒絕新增並提示，不會刪舊的。分鏡表可單列刪除或整份清除，燈位圖可單個刪除或整張清除；載入時會驗證並截斷。可用右上角 💾 備份。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store } = Util;
+
+        // --- pure ---
+        const fmtNum = (n, d = 1) => Number.isFinite(n) ? String(+n.toFixed(d)) : '—';
+        const parseNum = (s) => { const t = String(s == null ? '' : s).trim(); return /^\d+(\.\d+)?$|^\.\d+$/.test(t) ? Number(t) : NaN; };
+        function parseTime(s) {
+            const t = String(s == null ? '' : s).trim().replace(/：/g, ':');
+            if (!t) return NaN;
+            if (!t.includes(':')) return /^\d+(\.\d+)?$/.test(t) ? Number(t) : NaN;
+            const p = t.split(':');
+            if (p.length > 3 || p.some(x => !/^\d+(\.\d+)?$/.test(x))) return NaN;
+            const n = p.map(Number);
+            if (n.slice(1).some(x => x >= 60)) return NaN;
+            return n.reduce((a, x) => a * 60 + x, 0);
+        }
+        // 快門：1/125、0.5、2"、2s、2 → 秒；不合法 NaN
+        function parseShutter(s) {
+            const t = String(s == null ? '' : s).trim().replace(/["”″s秒]$/i, '');
+            const m = /^1\s*\/\s*(\d+(\.\d+)?)$/.exec(t);
+            if (m) return m[1] > 0 ? 1 / Number(m[1]) : NaN;
+            const v = parseNum(t);
+            return v > 0 ? v : NaN;
+        }
+        function fmtShutter(sec) {
+            if (!(sec > 0) || !Number.isFinite(sec)) return '—';
+            if (sec < 0.95) return '1/' + Math.round(1 / sec);
+            if (sec < 60) return fmtNum(sec, 1) + ' 秒';
+            const t = Math.round(sec), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), r = t % 60;
+            return [h && h + ' 小時', m && m + ' 分', (r || !(h || m)) && r + ' 秒'].filter(Boolean).join(' ');
+        }
+        function fmtDur(sec) {
+            if (!Number.isFinite(sec) || sec < 0) return '—';
+            const t = Math.round(sec), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = t % 60;
+            return [h && h + ' 小時', m && m + ' 分', (s || !(h || m)) && s + ' 秒'].filter(Boolean).join(' ');
+        }
+
+        // ===== 縮時：mode out = 已知成片秒數；shoot = 已知拍攝分鐘；frames = 已知張數 =====
+        function tlCalc(mode, interval, fps, val) {
+            if (!(interval >= .1 && interval <= 86400 && fps >= 1 && fps <= 240 && val > 0 && val <= 1e6)) return { err: '間隔 0.1 秒以上、播放幀率 1–240、數值需為正數' };
+            let frames, shootSec, outSec;
+            if (mode === 'out') { outSec = val; frames = Math.ceil(val * fps - 1e-9); shootSec = frames * interval; }
+            else if (mode === 'shoot') { shootSec = val * 60; frames = Math.floor(shootSec / interval + 1e-9); outSec = frames / fps; }
+            else if (mode === 'frames') { frames = Math.round(val); outSec = frames / fps; shootSec = frames * interval; }
+            else return { err: '未知模式' };
+            if (frames < 1 || frames > 1e6) return { err: '張數需介於 1–1,000,000' };
+            return { frames, shootSec, outSec };
+        }
+
+        // ===== 慢動作：speed = 拍攝 fps → 倍數；need = 想要倍數 → 需拍攝 fps =====
+        function slowCalc(mode, play, a) {
+            if (!(play >= 1 && play <= 240 && a > 0 && a <= 100000)) return { err: '幀率與倍數需為正數（播放 1–240 fps）' };
+            if (mode === 'speed') return { shoot: a, factor: a / play, shutter: 1 / (2 * a) };
+            if (mode === 'need') return { shoot: play * a, factor: a, shutter: 1 / (2 * play * a) };
+            return { err: '未知模式' };
+        }
+
+        // ===== 影片檔案大小：位元組 = (視訊 + 音訊 bps) × 秒 ÷ 8（1 MB = 10^6 byte）=====
+        function sizeCalc(vMbps, aKbps, sec) {
+            if (!(vMbps >= 0 && vMbps <= 1000 && aKbps >= 0 && aKbps <= 5000 && sec > 0 && sec <= 864000 && vMbps + aKbps > 0)) return { err: '位元率或長度不合理' };
+            const bytes = (vMbps * 1e6 + aKbps * 1e3) * sec / 8;
+            return { bytes, perMin: bytes / sec * 60 };
+        }
+        function rateCalc(sizeMB, aKbps, sec) {
+            if (!(sizeMB > 0 && sizeMB <= 1e7 && aKbps >= 0 && aKbps <= 5000 && sec > 0 && sec <= 864000)) return { err: '大小或長度不合理' };
+            const v = sizeMB * 8e6 / sec - aKbps * 1e3;
+            if (v <= 0) return { err: '檔案太小，連音訊都放不下' };
+            return { vMbps: v / 1e6, totalMbps: sizeMB * 8 / sec };
+        }
+        const fmtBytes = (b) => b >= 1e9 ? fmtNum(b / 1e9, 2) + ' GB' : fmtNum(b / 1e6, 1) + ' MB';
+
+        // ===== 直播頻寬（常見建議值，範例）=====
+        // [高度上限, 30fps kbps, 60fps kbps]
+        const STREAM_TIERS = [[360, 1000, 1500], [480, 1500, 2500], [720, 3000, 4500], [1080, 5000, 8000], [1440, 10000, 16000], [2160, 20000, 30000]];
+        function streamBw(w, h, fps) {
+            if (!(w >= 160 && w <= 7680 && h >= 90 && h <= 4320 && fps >= 1 && fps <= 120)) return { err: '解析度或幀率不合理' };
+            const t = STREAM_TIERS.find(x => Math.min(w, h) <= x[0]);
+            if (!t) return { err: '最高支援到 4K（2160p）' };
+            const k = fps <= 30 ? t[1] : fps >= 60 ? t[2] : t[1] + (t[2] - t[1]) * (fps - 30) / 30;
+            const audio = 160;
+            return { tier: t[0], video: Math.round(k), audio, uploadMbps: (k + audio) * 1.5 / 1000 };
+        }
+
+        // ===== 色溫 =====
+        const KELVIN = [
+            [1800, '燭光', '很橘；白平衡設 2000–3000K 校正'],
+            [2700, '傳統鎢絲燈 / 暖白 LED', '偏橘黃；白平衡設約 2700K'],
+            [3200, '攝影鎢絲燈（3200K 標準）', '攝影燈、舊式電影燈標準值'],
+            [4000, '冷白日光燈 / 日出後不久', '偏綠黃；日光燈多需微調綠 / 洋紅'],
+            [5000, 'D50 / 早晚日光', '印刷看稿標準光源近似值'],
+            [5600, '正午日光 / 閃燈', '日光標準；多數閃燈約 5600K'],
+            [6500, '陰天 / D65', '螢幕標準白點；陰天可設約 6500K'],
+            [7500, '陰影處（晴天）', '偏藍；白平衡設 7500K 左右校暖'],
+            [10000, '晴朗藍天下的陰影', '很藍；需強烈校暖']
+        ];
+        function kelvinInfo(k) {
+            if (!(k >= 1000 && k <= 40000)) return { err: '色溫請輸入 1000–40000 K' };
+            const near = KELVIN.reduce((a, x) => Math.abs(x[0] - k) < Math.abs(a[0] - k) ? x : a);
+            return { mired: 1e6 / k, near, tone: k < 4500 ? '偏暖（橘）' : k > 6000 ? '偏冷（藍）' : '接近中性' };
+        }
+
+        // ===== ND 濾鏡 =====
+        // mode nd = ND 值（ND8）；stop = 格數；dens = 密度（ND 0.9 = 3 格）
+        function ndCalc(mode, v, baseSec) {
+            if (!(v > 0 && v <= 1e7 && baseSec > 0 && baseSec <= 3600)) return { err: '濾鏡值或基準快門不合理' };
+            let stops;
+            if (mode === 'nd') { if (v < 1) return { err: 'ND 值需 ≥ 1' }; stops = Math.log2(v); }
+            else if (mode === 'stop') stops = v;
+            else if (mode === 'dens') stops = v / Math.log10(2);
+            else return { err: '未知模式' };
+            if (stops > 40) return { err: '格數過大' };
+            return { stops, nd: 2 ** stops, dens: stops * Math.log10(2), sec: baseSec * 2 ** stops };
+        }
+
+        // ===== 星軌：500 法則 / NPF（簡化版）=====
+        // 500 法則：秒 = 500 ÷ (焦距 × 裁切係數)；NPF：秒 = (35 × 光圈 + 30 × 像素間距µm) ÷ 焦距（實際焦距）
+        function starCalc(focal, crop, ap, pitch) {
+            if (!(focal >= 4 && focal <= 1200 && crop >= 1 && crop <= 6 && ap >= .7 && ap <= 32 && pitch >= 1 && pitch <= 20)) return { err: '焦距、裁切係數、光圈或像素間距不合理' };
+            return { r500: 500 / (focal * crop), npf: (35 * ap + 30 * pitch) / focal };
+        }
+
+        // ===== 曝光三要素 =====
+        // 曝光量 ∝ 秒 × ISO ÷ 光圈²；EV100 = log2(N² ÷ t) − log2(ISO ÷ 100)
+        function expCalc(n1, t1, iso1, n2, iso2) {
+            if (!(n1 >= .7 && n1 <= 64 && n2 >= .7 && n2 <= 64 && t1 > 0 && t1 <= 3600 && iso1 >= 6 && iso1 <= 1e6 && iso2 >= 6 && iso2 <= 1e6)) return { err: '光圈 0.7–64、ISO 6–1,000,000、快門需合理' };
+            const ev = Math.log2(n1 * n1 / t1) - Math.log2(iso1 / 100);
+            const t2 = t1 * iso1 * n2 * n2 / (iso2 * n1 * n1);
+            return { ev, ev1: Math.log2(n1 * n1 / t1), t2, stops: Math.log2(t2 / t1) };
+        }
+
+        // ===== 景深與超焦距（f、c 為 mm，s 為 m）=====
+        function dofCalc(f, n, sM, c) {
+            if (!(f >= 4 && f <= 1200 && n >= .7 && n <= 64 && c > 0 && c <= .1 && sM > 0 && sM <= 1e5)) return { err: '焦距、光圈、距離或 CoC 不合理' };
+            const s = sM * 1000;
+            if (s <= f) return { err: '對焦距離需大於焦距' };
+            const H = f * f / (n * c) + f;
+            const near = s * (H - f) / (H + s - 2 * f);
+            const far = s < H ? s * (H - f) / (H - s) : Infinity;
+            return { H: H / 1000, near: near / 1000, far: far / 1000, depth: (far - near) / 1000, hyperNear: H / 2000 };
+        }
+        const COC = [['0.030', '全幅（0.030 mm）'], ['0.020', 'APS-C（0.020 mm）'], ['0.015', 'M4/3（0.015 mm）'], ['0.011', '1 吋（0.011 mm）']];
+
+        // ===== 分頁定義：[id, 名稱, 欄位[key, 標籤, kind(n/s), 預設, 選項]] =====
+        const TABS = [
+            ['tl', '縮時', [['mode', '已知', 's', 'out', [['out', '成片秒數'], ['shoot', '拍攝時間（分鐘）'], ['frames', '張數']]], ['val', '數值（依上方：秒 / 分鐘 / 張）', 'n', '10'], ['int', '拍攝間隔（秒）', 'n', '5'], ['fps', '播放幀率（fps）', 'n', '24']]],
+            ['slow', '慢動作', [['mode', '想知道', 's', 'speed', [['speed', '拍攝幀率 → 慢幾倍'], ['need', '想慢幾倍 → 需拍幾 fps']]], ['a', '數值（依上方：拍攝 fps / 倍數）', 'n', '120'], ['play', '播放幀率（fps）', 'n', '24']]],
+            ['size', '檔案大小', [['mode', '想知道', 's', 'size', [['size', '位元率 → 檔案大小'], ['rate', '檔案大小 → 位元率']]], ['v', '視訊位元率（Mbps，大小模式用）', 'n', '8'], ['mb', '目標檔案大小（MB，位元率模式用）', 'n', '500'], ['a', '音訊位元率（kbps）', 'n', '128'], ['t', '長度（mm:ss 或 h:mm:ss）', 'n', '10:00']]],
+            ['stream', '直播頻寬', [['w', '寬（像素）', 'n', '1920'], ['h', '高（像素）', 'n', '1080'], ['fps', '幀率（fps）', 'n', '30']]],
+            ['kelvin', '色溫', [['k', '色溫（K）', 'n', '5600']]],
+            ['nd', 'ND 濾鏡', [['mode', '濾鏡表示法', 's', 'nd', [['nd', 'ND 值（ND8、ND1000）'], ['stop', '格數（stop）'], ['dens', '密度（ND 0.9）']]], ['v', '數值', 'n', '1000'], ['base', '未加濾鏡的快門（1/125、0.5）', 'n', '1/125']]],
+            ['star', '星軌', [['f', '鏡頭焦距（mm，實際值）', 'n', '24'], ['crop', '感光元件', 's', '1', [['1', '全幅（×1）'], ['1.5', 'APS-C（×1.5）'], ['1.6', 'Canon APS-C（×1.6）'], ['2', 'M4/3（×2）']]], ['ap', '光圈（f 值）', 'n', '2.8'], ['pitch', '像素間距（µm，NPF 用）', 'n', '4.3']]],
+            ['exp', '曝光', [['n1', '原光圈（f 值）', 'n', '8'], ['t1', '原快門', 'n', '1/125'], ['i1', '原 ISO', 'n', '100'], ['n2', '新光圈（f 值）', 'n', '5.6'], ['i2', '新 ISO', 'n', '100']]],
+            ['dof', '景深', [['f', '焦距（mm）', 'n', '50'], ['n', '光圈（f 值）', 'n', '8'], ['s', '對焦距離（公尺）', 'n', '3'], ['sen', '感光元件', 's', '0.030', COC], ['coc', '自訂 CoC（mm，留空用上方）', 'n', '']]],
+            ['shots', '分鏡表', []],
+            ['light', '燈位圖', []]
+        ];
+        const TAB_IDS = TABS.map(t => t[0]);
+        const PANELS = ['shots', 'light'];
+        const DEF = { tab: 'tl', v: {} };
+        TABS.forEach(([id, , fs]) => fs.forEach(f => { DEF.v[id + '_' + f[0]] = f[3]; }));
+        // 讀取記住的輸入：只認已知欄位、字串、長度上限；選單值必須是選項之一；壞資料回預設
+        function loadOpts(raw, def = DEF, tabIds = TAB_IDS, tabs = TABS) {
+            const o = { tab: def.tab, v: Object.assign({}, def.v) };
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return o;
+            if (tabIds.includes(raw.tab)) o.tab = raw.tab;
+            if (raw.v && typeof raw.v === 'object' && !Array.isArray(raw.v)) {
+                for (const [id, , fs] of tabs) for (const f of fs) {
+                    const x = raw.v[id + '_' + f[0]];
+                    if (typeof x !== 'string' || x.length > 40) continue;
+                    if (f[2] === 's' && !f[4].some(p => p[0] === x)) continue;
+                    o.v[id + '_' + f[0]] = x;
+                }
+            }
+            return o;
+        }
+
+        // ===== 分鏡表 =====
+        const SHOT_MAX = 200;
+        const SIZES = ['大遠景', '遠景', '全景', '中景', '中近景', '近景', '特寫', '大特寫', '過肩', '主觀'];
+        const MOVES = ['固定', '推', '拉', '搖', '移', '跟', '升降', '手持', '環繞', '變焦'];
+        const clip = (x, n) => (typeof x === 'string' ? x : '').replace(/[\r\n]+/g, ' ').trim().slice(0, n);
+        function loadShots(raw) {
+            const out = [], seen = new Set();
+            if (!Array.isArray(raw)) return out;
+            for (const r of raw) {
+                if (out.length >= SHOT_MAX) break;
+                if (!r || typeof r !== 'object' || !Number.isInteger(r.id) || r.id < 1 || seen.has(r.id)) continue;
+                seen.add(r.id);
+                out.push({ id: r.id, no: clip(r.no, 8), size: clip(r.size, 8), move: clip(r.move, 8), note: clip(r.note, 100) });
+            }
+            return out;
+        }
+        function addShot(list, no, size, move, note) {
+            if (list.length >= SHOT_MAX) return { err: `分鏡表已滿（${SHOT_MAX} 列），請先刪除不要的列` };
+            const id = list.reduce((m, x) => Math.max(m, x.id), 0) + 1;
+            return { list: [...list, { id, no: clip(no, 8), size: clip(size, 8), move: clip(move, 8), note: clip(note, 100) }] };
+        }
+        const delShot = (list, id) => list.filter(x => x.id !== id);
+        // 下一個建議鏡號：最後一列的數字 + 1
+        function nextNo(list) {
+            const m = list.length && /^(\D*)(\d+)$/.exec(list[list.length - 1].no);
+            return m ? m[1] + String(+m[2] + 1).padStart(m[2].length, '0') : String(list.length + 1);
+        }
+        const shotsText = (list) => ['鏡號\t景別\t運鏡\t備註', ...list.map(x => [x.no, x.size, x.move, x.note].join('\t'))].join('\n');
+
+        // ===== 燈位圖 =====
+        const LIGHT_MAX = 20;
+        const LTYPES = { subject: '主角', cam: '相機', key: '主燈', fill: '補光', rim: '輪廓光', bg: '背景燈' };
+        const LDEF = { subject: [.5, .5], cam: [.5, .88], key: [.25, .72], fill: [.78, .72], rim: [.5, .12], bg: [.2, .2] };
+        const clamp01 = (v) => Math.min(.97, Math.max(.03, v));
+        function loadLight(raw) {
+            const out = [], seen = new Set();
+            if (!Array.isArray(raw)) return out;
+            for (const r of raw) {
+                if (out.length >= LIGHT_MAX) break;
+                if (!r || typeof r !== 'object' || !Number.isInteger(r.id) || r.id < 1 || seen.has(r.id) || !LTYPES[r.t] || !Number.isFinite(r.x) || !Number.isFinite(r.y)) continue;
+                seen.add(r.id);
+                out.push({ id: r.id, t: r.t, x: clamp01(r.x), y: clamp01(r.y) });
+            }
+            return out;
+        }
+        function addLight(list, t) {
+            if (!LTYPES[t]) return { err: '未知的元素' };
+            if (list.length >= LIGHT_MAX) return { err: `元素已達上限（${LIGHT_MAX} 個），請先刪除不要的` };
+            const id = list.reduce((m, x) => Math.max(m, x.id), 0) + 1, n = list.filter(x => x.t === t).length;
+            return { list: [...list, { id, t, x: clamp01(LDEF[t][0] + .04 * n), y: clamp01(LDEF[t][1] + .04 * n) }] };
+        }
+        const delLight = (list, id) => list.filter(x => x.id !== id);
+        // 命中測試：回傳半徑 r（0–1 座標）內最上層（最後加入）元素的 id，沒有回 0
+        function pickLight(list, x, y, r = .06) {
+            for (let i = list.length - 1; i >= 0; i--) if (Math.hypot(list[i].x - x, list[i].y - y) <= r) return list[i].id;
+            return 0;
+        }
+        function moveLight(list, id, x, y) { return list.map(e => e.id === id ? { ...e, x: clamp01(x), y: clamp01(y) } : e); }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'photoc_opts', KS = 'photoc_shots', KL = 'photoc_light';
+        let o = loadOpts(store.get(KEY, null));
+        let shots = loadShots(store.get(KS, null)), lights = loadLight(store.get(KL, null));
+        const V = (k) => o.v[o.tab + '_' + k];
+        const N = (k) => parseNum(V(k));
+        const save = () => store.set(KEY, o);
+        const R = (k, v) => [k, v];
+
+        const CALC = {
+            tl() {
+                const r = tlCalc(V('mode'), N('int'), N('fps'), N('val')); if (r.err) return r;
+                return { rows: [R('張數', r.frames + ' 張'), R('拍攝總時間', fmtDur(r.shootSec)), R('成片長度', fmtDur(r.outSec) + `（${fmtNum(r.outSec, 1)} 秒）`)], note: '成片 = 張數 ÷ 播放幀率；拍攝時間 = 張數 × 間隔。記得預留記憶卡容量與電量，並讓快門時間小於間隔。' };
+            },
+            slow() {
+                const r = slowCalc(V('mode'), N('play'), N('a')); if (r.err) return r;
+                return { rows: [R('拍攝幀率', fmtNum(r.shoot, 1) + ' fps'), R('慢動作倍數', '× ' + fmtNum(r.factor, 2) + ' 慢'), R('現實 1 秒會播', fmtNum(r.factor, 2) + ' 秒'), R('建議快門（180° 規則）', fmtShutter(r.shutter))], note: '倍數 = 拍攝 fps ÷ 播放 fps。高幀率需要更多光線，快門建議為 1/(2×拍攝 fps)。' };
+            },
+            size() {
+                const t = parseTime(V('t'));
+                if (V('mode') === 'rate') {
+                    const r = rateCalc(N('mb'), N('a'), t); if (r.err) return r;
+                    return { rows: [R('可用視訊位元率', fmtNum(r.vMbps, 2) + ' Mbps'), R('含音訊總位元率', fmtNum(r.totalMbps, 2) + ' Mbps')], note: '1 MB = 10^6 byte；未計容器 / 字幕開銷（約 1–3%）。' };
+                }
+                const r = sizeCalc(N('v'), N('a'), t); if (r.err) return r;
+                return { rows: [R('檔案大小', fmtBytes(r.bytes)), R('每分鐘', fmtBytes(r.perMin))], note: '範例：8 Mbps、60 秒 ≈ 60 MB。可變位元率（VBR）實際檔案會有出入；1 MB = 10^6 byte。' };
+            },
+            stream() {
+                const r = streamBw(N('w'), N('h'), N('fps')); if (r.err) return r;
+                return { rows: [R('對應畫質等級', r.tier + 'p'), R('建議視訊位元率', r.video + ' kbps'), R('音訊', r.audio + ' kbps'), R('建議上傳頻寬', '≥ ' + fmtNum(r.uploadMbps, 1) + ' Mbps')], note: '範例：1080p30 約 5000 kbps，上傳建議 ≥ 約 8 Mbps（總位元率 × 1.5 留餘裕）。各平台建議值不同（例如部分平台上限較低），請以官方公告為準，並實測上傳速度。' };
+            },
+            kelvin() {
+                const r = kelvinInfo(N('k')); if (r.err) return r;
+                return { rows: [R('色調', r.tone), R('最接近的光源', `${r.near[1]}（${r.near[0]}K）`), R('建議', r.near[2]), R('Mired', fmtNum(r.mired, 0))], head: ['K', '光源', '說明'], table: KELVIN.map(x => [x[0], x[1], x[2]]), note: '對照為常見範例值；實際光源因品牌與老化有差。Mired 方便計算色溫濾片的偏移量。' };
+            },
+            nd() {
+                const r = ndCalc(V('mode'), N('v'), parseShutter(V('base'))); if (r.err) return r;
+                return { rows: [R('格數（stop）', fmtNum(r.stops, 2)), R('ND 值', fmtNum(r.nd, r.nd < 100 ? 1 : 0)), R('密度', fmtNum(r.dens, 2)), R('加濾鏡後快門', fmtShutter(r.sec))], note: 'ND8 = 3 格；ND1000 標稱 10 格（精確 9.97 格，1024 倍）。每加一格曝光時間加倍。長曝光記得關防震、用腳架，並注意互易律失效與偏色。' };
+            },
+            star() {
+                const r = starCalc(N('f'), +V('crop'), N('ap'), N('pitch')); if (r.err) return r;
+                return { rows: [R('500 法則', fmtNum(r.r500, 1) + ' 秒'), R('NPF 法則（簡化）', fmtNum(r.npf, 1) + ' 秒'), R('建議', '取較短者：' + fmtNum(Math.min(r.r500, r.npf), 1) + ' 秒')], note: '500 法則 = 500 ÷ (焦距 × 裁切係數)，對高畫素機身偏寬鬆；NPF 簡化版 = (35 × 光圈 + 30 × 像素間距µm) ÷ 焦距，不含赤緯修正。兩者誤差可能 ±30% 以上，實拍放大檢查星點是否拖尾。' };
+            },
+            exp() {
+                const r = expCalc(N('n1'), parseShutter(V('t1')), N('i1'), N('n2'), N('i2')); if (r.err) return r;
+                return { rows: [R('原曝光 EV（ISO 100 基準）', fmtNum(r.ev, 2)), R('等效快門', fmtShutter(r.t2)), R('快門變化', (r.stops >= 0 ? '+' : '') + fmtNum(r.stops, 2) + ' 格')], note: 'EV = log2(光圈² ÷ 秒) − log2(ISO ÷ 100)。範例：f/16、1/100 秒、ISO 100 ≈ EV 14.6（晴天 Sunny 16）。快門為計算值，請選最接近的刻度。' };
+            },
+            dof() {
+                const c = V('coc') ? N('coc') : parseNum(V('sen')), r = dofCalc(N('f'), N('n'), N('s'), c); if (r.err) return r;
+                const m = (x) => Number.isFinite(x) ? fmtNum(x, 2) + ' m' : '無限遠';
+                return { rows: [R('超焦距', fmtNum(r.H, 2) + ' m'), R('清晰範圍', `${m(r.near)} – ${m(r.far)}`), R('景深', Number.isFinite(r.depth) ? fmtNum(r.depth, 2) + ' m' : '無限'), R('對焦在超焦距時', `${fmtNum(r.hyperNear, 2)} m 到無限遠`)], note: 'H = f² ÷ (N × c) + f。範例：50 mm、f/8、c = 0.030 mm → H ≈ 10.47 m。CoC 為假設值，放大觀看時請用更小的值。' };
+            }
+        };
+
+        let last = '';
+        function render() {
+            const panel = PANELS.includes(o.tab);
+            $('#formCard').hidden = $('#outCard').hidden = panel;
+            $('#shotsCard').hidden = o.tab !== 'shots'; $('#lightCard').hidden = o.tab !== 'light';
+            if (panel) { if (o.tab === 'shots') drawShots(); else drawLight(); return; }
+            const r = CALC[o.tab](), res = $('#res'), tb = $('#tbl');
+            res.replaceChildren(); tb.replaceChildren(); $('#err').textContent = r.err || ''; $('#note').textContent = '';
+            $('#copy').hidden = !!r.err;
+            if (r.err) { last = ''; res.append(Util.statRow('請輸入完整資料', '—')); return; }
+            r.rows.forEach(([k, v]) => res.append(Util.statRow(k, String(v))));
+            if (r.table) {
+                const t = document.createElement('table'), h = t.createTHead().insertRow();
+                r.head.forEach(x => h.appendChild(Object.assign(document.createElement('th'), { textContent: x })));
+                const b = t.createTBody(); r.table.forEach(row => { const tr = b.insertRow(); row.forEach(c => tr.insertCell().textContent = c); });
+                tb.append(t);
+            }
+            $('#note').textContent = r.note || '';
+            last = TABS.find(t => t[0] === o.tab)[1] + '\n' + r.rows.map(x => x.join('：')).join('\n') + '\n\n' + (r.note || '');
+        }
+        function buildForm() {
+            $('#tabs').replaceChildren(...TABS.map(([id, name]) => { const b = Object.assign(document.createElement('button'), { className: 'sm', textContent: name }); b.setAttribute('aria-pressed', String(id === o.tab)); b.onclick = () => { o.tab = id; save(); buildForm(); render(); }; return b; }));
+            const f = $('#form'); f.replaceChildren();
+            TABS.find(t => t[0] === o.tab)[2].forEach(([k, label, kind, , opts]) => {
+                const id = 'f_' + k, lb = Object.assign(document.createElement('label'), { className: 'f', textContent: label, htmlFor: id });
+                const el = document.createElement(kind === 's' ? 'select' : 'input');
+                el.id = id; el.className = 'w'; el.setAttribute('aria-label', label);
+                if (kind === 's') opts.forEach(([v, n]) => el.append(new Option(n, v)));
+                else { el.inputMode = 'text'; el.autocomplete = 'off'; }
+                el.value = V(k);
+                el.addEventListener('input', () => { o.v[o.tab + '_' + k] = el.value; save(); render(); });
+                f.append(lb, el);
+            });
+        }
+        $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), last);
+        $('#reset').onclick = () => {
+            if (!confirm('要清除記住的輸入並還原預設嗎？（只影響計算分頁，不影響分鏡表與燈位圖；無法復原）')) return;
+            try { localStorage.removeItem(KEY); } catch (e) { }
+            o = loadOpts(null); buildForm(); render();
+        };
+
+        // ---- 分鏡表 UI ----
+        SIZES.forEach(s => $('#sSize').append(new Option(s, s))); MOVES.forEach(s => $('#sMove').append(new Option(s, s)));
+        const saveShots = () => store.set(KS, shots);
+        function drawShots() {
+            $('#sNo').placeholder = '鏡號 ' + nextNo(shots);
+            $('#sCount').textContent = `共 ${shots.length} / ${SHOT_MAX} 列`;
+            const box = $('#sTbl'); box.replaceChildren();
+            if (!shots.length) return;
+            const t = document.createElement('table'), h = t.createTHead().insertRow();
+            ['鏡號', '景別', '運鏡', '備註', ''].forEach(x => h.appendChild(Object.assign(document.createElement('th'), { textContent: x })));
+            const b = t.createTBody();
+            shots.forEach(s => {
+                const tr = b.insertRow(); [s.no, s.size, s.move, s.note].forEach(c => tr.insertCell().textContent = c);
+                const btn = Object.assign(document.createElement('button'), { className: 'sm', textContent: '刪除' });
+                btn.setAttribute('aria-label', '刪除鏡號 ' + s.no);
+                btn.onclick = () => { shots = delShot(shots, s.id); saveShots(); drawShots(); };
+                tr.insertCell().append(btn);
+            });
+            box.append(t);
+        }
+        $('#sAdd').onclick = () => {
+            const r = addShot(shots, $('#sNo').value || nextNo(shots), $('#sSize').value, $('#sMove').value, $('#sNote').value);
+            $('#sMsg').textContent = r.err || ''; if (r.err) return;
+            shots = r.list; saveShots(); $('#sNo').value = ''; $('#sNote').value = ''; drawShots();
+        };
+        $('#sCopy').onclick = () => Util.copyWithFeedback($('#sCopy'), shotsText(shots));
+        $('#sPrint').onclick = () => window.print();
+        $('#sClear').onclick = () => {
+            if (!shots.length || !confirm('要清除整份分鏡表（' + shots.length + ' 列）嗎？無法復原。')) return;
+            shots = []; try { localStorage.removeItem(KS); } catch (e) { } drawShots();
+        };
+
+        // ---- 燈位圖 UI ----
+        const cv = $('#cv'), ctx = cv.getContext('2d');
+        let dragId = 0, dragMode = false;
+        const saveLights = () => store.set(KL, lights);
+        function drawLight() {
+            const cs = getComputedStyle(document.documentElement), col = (n, d) => cs.getPropertyValue(n).trim() || d;
+            const W = cv.width, text = col('--text', '#222'), line = col('--line', '#999'), muted = col('--muted', '#777');
+            ctx.clearRect(0, 0, W, W); ctx.fillStyle = col('--card', '#fff'); ctx.fillRect(0, 0, W, W);
+            ctx.strokeStyle = line; ctx.lineWidth = 2; ctx.strokeRect(1, 1, W - 2, W - 2);
+            ctx.font = '28px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = muted; ctx.fillText('背景', W / 2, 36); ctx.fillText('相機側', W / 2, W - 14);
+            const subj = lights.find(e => e.t === 'subject');
+            if (subj) { ctx.setLineDash([10, 8]); ctx.strokeStyle = muted; ctx.lineWidth = 2; lights.filter(e => ['key', 'fill', 'rim', 'bg'].includes(e.t)).forEach(e => { ctx.beginPath(); ctx.moveTo(e.x * W, e.y * W); ctx.lineTo(subj.x * W, subj.y * W); ctx.stroke(); }); ctx.setLineDash([]); }
+            lights.forEach(e => {
+                const x = e.x * W, y = e.y * W; ctx.beginPath();
+                if (e.t === 'subject') { ctx.arc(x, y, 34, 0, 7); ctx.fillStyle = '#4a90d9'; }
+                else if (e.t === 'cam') { ctx.moveTo(x, y - 32); ctx.lineTo(x + 30, y + 24); ctx.lineTo(x - 30, y + 24); ctx.closePath(); ctx.fillStyle = '#555'; }
+                else { ctx.rect(x - 28, y - 28, 56, 56); ctx.fillStyle = '#f2b632'; }
+                ctx.fill(); ctx.lineWidth = e.id === dragId ? 6 : 2; ctx.strokeStyle = e.id === dragId ? text : '#333'; ctx.stroke();
+                ctx.fillStyle = text; ctx.font = '26px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(LTYPES[e.t], x, y + 62);
+            });
+            const box = $('#lList'); box.replaceChildren();
+            $('#lMsg').textContent = '';
+            lights.forEach(e => {
+                const d = document.createElement('div'); d.className = 'row';
+                const b = Object.assign(document.createElement('button'), { className: 'sm', textContent: '刪除' });
+                b.setAttribute('aria-label', '刪除 ' + LTYPES[e.t]);
+                b.onclick = () => { lights = delLight(lights, e.id); saveLights(); drawLight(); };
+                d.append(Object.assign(document.createElement('span'), { textContent: `${LTYPES[e.t]} #${e.id}` }), b); box.append(d);
+            });
+        }
+        $('#lAddRow').replaceChildren(...Object.entries(LTYPES).map(([t, n]) => {
+            const b = Object.assign(document.createElement('button'), { className: 'sm', textContent: '＋' + n });
+            b.onclick = () => { const r = addLight(lights, t); if (r.err) { $('#lMsg').textContent = r.err; return; } lights = r.list; saveLights(); drawLight(); };
+            return b;
+        }));
+        $('#lDrag').onclick = () => {
+            dragMode = !dragMode; cv.classList.toggle('drag', dragMode);
+            $('#lDrag').setAttribute('aria-pressed', String(dragMode));
+            $('#lDrag').textContent = dragMode ? '拖曳模式：開（畫布上無法捲動頁面）' : '拖曳模式：關（可捲動頁面）';
+        };
+        const pos = (ev) => { const r = cv.getBoundingClientRect(); return [(ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height]; };
+        cv.addEventListener('pointerdown', (ev) => { if (!dragMode) return; dragId = pickLight(lights, ...pos(ev)); if (dragId) cv.setPointerCapture(ev.pointerId); drawLight(); });
+        cv.addEventListener('pointermove', (ev) => { if (!dragMode || !dragId) return; lights = moveLight(lights, dragId, ...pos(ev)); drawLight(); });
+        const endDrag = () => { if (dragId) { dragId = 0; saveLights(); drawLight(); } };
+        cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
+        $('#lPng').onclick = () => cv.toBlob(b => b && Util.download(b, 'lighting.png'), 'image/png');
+        $('#lClear').onclick = () => {
+            if (!lights.length || !confirm('要清除整張燈位圖（' + lights.length + ' 個元素）嗎？無法復原。')) return;
+            lights = []; try { localStorage.removeItem(KL); } catch (e) { } drawLight();
+        };
+        matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => o.tab === 'light' && drawLight());
+        new MutationObserver(() => o.tab === 'light' && drawLight()).observe(document.documentElement, { attributes: true });
+
+        buildForm(); render();
+    </script>
+</body>
+
+</html>
