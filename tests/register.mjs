@@ -1,6 +1,6 @@
 // 把新工具 / 擴充頁登錄到 index.html、README.md、TOOLS.md，並從 IDEAS.md 刪掉已完成的點子。
 //   node tests/register.mjs temp_reg_*.json      （規格檔由各批次代理寫在 repo 根目錄的 temp_reg_<代號>.json，temp_* 已 gitignore）
-// 規格：{ tools: [{href, cat, topic, icons[], c1, c2, title, desc, tags, kw, feature, keys, conn}],
+// 規格：{ tools: [{href, cat, topic, icons[], ic（選用：首頁線條圖示名，須在 index.html 的 ICONS 內）, c1, c2, title, desc, tags, kw, feature, keys, conn}],
 //        updates: [{href, feature, desc, keys[]}],      // 擴充既有頁：追加到卡片說明 / README / TOOLS 功能欄，keys 補進 TOOLS 的資料鍵欄
 //        ideas: [編號…] }                                // 已完成的 IDEAS.md 編號
 import fs from 'fs';
@@ -35,7 +35,7 @@ for (const cat of Object.keys(ANCHOR)) {
     let cards = '';
     for (const t of tools.filter(x => x.cat === cat)) {
         const store = t.keys && t.keys !== '—' ? ' data-store="1"' : '';
-        cards += `            <a class="card" href="${t.href}" data-cat="${t.cat}" data-topic="${t.topic}" data-kw="${t.kw}" data-added="${today}"${store}>\n                <div class="icon" style="--c1:${t.c1};--c2:${t.c2}">${used[t.href]}</div>\n                <div>\n                    <h2>${t.title}</h2>\n                    <p>${t.desc}</p>\n                    <div class="tags">${t.tags}</div>\n                </div>\n            </a>\n\n`;
+        cards += `            <a class="card" href="${t.href}" data-cat="${t.cat}" data-topic="${t.topic}"${t.ic ? ` data-ic="${t.ic}"` : ''} data-kw="${t.kw}" data-added="${today}"${store}>\n                <div class="icon" style="--c1:${t.c1};--c2:${t.c2}">${used[t.href]}</div>\n                <div>\n                    <h2>${t.title}</h2>\n                    <p>${t.desc}</p>\n                    <div class="tags">${t.tags}</div>\n                </div>\n            </a>\n\n`;
     }
     if (!cards) continue;
     const a = `            <a class="card" href="${ANCHOR[cat]}"`;

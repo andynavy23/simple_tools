@@ -128,6 +128,14 @@ const top = (q, n = 3) => search(P, tokens(q)).slice(0, n).map(i => items[i].hre
     ok('f1 home: every card has data-kw / data-added / data-store');
 }
 
+{ // ---------- 線條圖示 ----------
+    const names = new Set([...html.match(/const ICONS = \{([\s\S]*?)\n        \};/)[1].matchAll(/^\s+(\w+): '/gm)].map(x => x[1]));
+    assert.ok(names.size >= 50, 'ICONS 至少 50 個');
+    const bad = [...html.matchAll(/<a class="card"[^>]*? data-ic="([^"]*)"/g)].map(x => x[1]).filter(n => !names.has(n));
+    assert.deepEqual(bad, [], 'data-ic 不在 ICONS：' + bad);
+    ok('f1 home: every data-ic exists in ICONS');
+}
+
 { // ---------- PWA 檔案 ----------
     const sw = read('sw.js'), ver = sw.match(/const CACHE_VERSION = '([^']+)'/)[1];
     assert.ok(html.includes(`const SW_CACHE = 'st-${ver}'`), 'index.html 的 SW_CACHE 要和 sw.js 的 CACHE_VERSION 一致');

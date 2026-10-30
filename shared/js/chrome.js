@@ -3,7 +3,7 @@
  * 使用：放在 <head>、theme.css 之後（要在畫面繪製前執行，才不會閃一下預設外觀）：
  *   <script src="../shared/js/chrome.js"></script>
  * 說明內容：頁面裡放一個 <template id="help">…</template>，內容用 <h3> 分段（這是什麼 / 什麼時候用 / 怎麼用 / 範例 / 小提醒），
- *   可用 <ul> <ol> <p> <kbd> 與 <div class="eg">（範例框）。有這個 template 才會出現「？」按鈕；第一次進入該頁會自動彈出一次。
+ *   可用 <ul> <ol> <p> <kbd> 與 <div class="eg">（範例框）。有這個 template 才會出現「？」按鈕；不會自動彈出，使用者自己點開。
  * 設定存在 localStorage：st_style（apple / neon / paper / forest / pixel）、st_mode（auto / light / dark）、st_help_seen。
  * 資料備份：頁面若有寫入 localStorage，必須在 <head> 宣告 <meta name="st-keys" content="鍵1,鍵2,前綴_*">（動態鍵用 * 結尾的前綴；
  *   首頁用 content="*" 代表全站）。有宣告就會出現「💾」按鈕，可匯出 / 載入 JSON 備份（換瀏覽器、清除網站資料前先匯出）。
@@ -108,6 +108,13 @@
 .st-data .st-msg.ok{color:var(--ok)}
 .st-help footer label{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
 @media (max-width:600px){.st-help{width:100vw;max-width:100vw;max-height:92vh;max-height:92dvh;margin:auto auto 0;border-bottom-left-radius:0;border-bottom-right-radius:0}}
+.st-bar button{width:auto;min-width:38px;padding:0 10px;gap:6px;display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+.st-help header b{font-family:var(--head-font);font-size:18px}
+.st-bar svg{width:19px;height:19px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.st-bar .st-lb{display:none}
+@media (min-width:601px){.st-bar .st-lb{display:inline}}
+.st-res{position:fixed;left:50%;bottom:max(16px,calc(env(safe-area-inset-bottom) + 10px));transform:translateX(-50%);z-index:45;padding:8px 16px;min-height:0;border-radius:999px;background:var(--text);color:var(--bg);border:0;font-size:14px;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+@media (max-width:600px){.st-scroll{position:relative;display:flex!important;flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}.st-scroll::-webkit-scrollbar{display:none}.st-scroll>button{flex:none!important;white-space:nowrap}}
 `;
 
     function el(tag, attrs, ...kids) {
@@ -150,11 +157,10 @@
         }
         const title = (document.querySelector('h1') || document.querySelector('title') || {}).textContent || document.title;
         const close = el('button', { type: 'button', 'aria-label': '關閉說明', text: '✕' }); close.onclick = () => dlg.close();
-        const done = el('button', { type: 'button', class: 'primary', text: '知道了' }); done.onclick = () => dlg.close();
         dlg.replaceChildren(
             el('header', null, el('b', { id: 'st-help-title', text: title.trim() + ' 使用說明' }), close),
             el('div', { class: 'st-body' }, t.content.cloneNode(true)),
-            el('footer', null, el('span', { class: 'muted', style: 'font-size:13px', text: '右上角「？」可以再次開啟' }), done),
+            el('footer', null, el('span', { class: 'muted', style: 'font-size:13px', text: '右上角「？」可以再次開啟' })),
         );
         const seen = get('st_help_seen', {}); seen[location.pathname] = 1; set('st_help_seen', seen);
         if (!dlg.open) dlg.showModal();
@@ -229,21 +235,46 @@
         if (!ddlg.open) ddlg.showModal();
     }
 
+    const ICON = {
+        save: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>',
+        help: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg>',
+        theme: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.8 1.5-1.8-.3-1 .3-1.9 1.4-1.9H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7.5" r="1"/><circle cx="14.5" cy="7.5" r="1"/></svg>',
+    };
+
+    // 多分頁頁面：6 個以上的分頁鈕在手機改成單列橫向捲動，並把目前分頁捲到可見處；結果在螢幕下方時浮出「↓ 看結果」
+    let rb = null, rh = null, tick = 0;
+    function enhance() {
+        tick = 0;
+        document.querySelectorAll('.tabs,.chips,#tabs,[role=tablist]').forEach((t) => {
+            const many = t.querySelectorAll(':scope>button').length >= 6;
+            t.classList.toggle('st-scroll', many);
+            const a = many && t.querySelector(':scope>button[aria-pressed=true],:scope>button[aria-selected=true],:scope>button.on,:scope>button.active,:scope>button.sel');
+            if (a && t.scrollWidth > t.clientWidth) { const want = a.offsetLeft - (t.clientWidth - a.offsetWidth) / 2; if (Math.abs(t.scrollLeft - want) > 8) t.scrollLeft = want; }
+        });
+        const h = matchMedia('(max-width:600px)').matches && [...document.querySelectorAll('h2')].find((x) => /^(計算)?結果$/.test(x.textContent.trim()) && x.offsetParent);
+        if (h && !rb) { rb = el('button', { type: 'button', class: 'st-res', text: '↓ 看結果' }); rb.onclick = () => rh && rh.scrollIntoView({ behavior: 'smooth', block: 'start' }); document.body.append(rb); }
+        rh = h || null;
+        document.querySelectorAll('h2').forEach((x) => { if (/^(計算)?結果$/.test(x.textContent.trim())) { const c = x.closest('.card'); if (c) c.classList.add('st-result'); } });
+        if (rb) rb.hidden = !h || h.getBoundingClientRect().top < innerHeight - 140;
+    }
+    const later = () => { if (!tick) tick = requestAnimationFrame(enhance); };
+
     function init() {
         const s = document.createElement('style'); s.textContent = CSS; document.head.append(s);
         const themed = !!getComputedStyle(root).getPropertyValue('--card').trim();      // 沒用 theme.css 的頁面（楓之谷風格等）只提供說明按鈕
         if (!themed) s.textContent += '.st-bar,.st-panel,.st-help{--card:#fff;--text:#1d1d1f;--muted:#6e6e73;--fill:rgba(118,118,128,.14);--line:rgba(0,0,0,.12);--blue:#0071e3;--on-blue:#fff;--bg:#f5f5f7;--radius:16px;--radius-sm:10px;--btn-radius:980px;--font:system-ui,sans-serif;--head-font:system-ui,sans-serif;--head-weight:700}.st-help .primary{background:var(--blue);color:#fff}';
         bar = el('div', { class: 'st-bar' });
-        if (metaKeys()) { const d = el('button', { type: 'button', class: 'st-databtn', 'aria-label': '資料備份與還原', title: '資料備份與還原', text: '💾' }); d.onclick = () => openData(); bar.append(d); }
-        if (tpl()) { const h = el('button', { type: 'button', class: 'st-helpbtn', 'aria-label': '使用說明', title: '使用說明', text: '？' }); h.onclick = () => openHelp(false); bar.append(h); }
-        const th = el('button', { type: 'button', class: 'st-theme', 'aria-label': '外觀：風格與明暗', title: '外觀', 'aria-expanded': 'false', text: '🎨' }); th.onclick = () => togglePanel();
+        if (metaKeys()) { const d = el('button', { type: 'button', class: 'st-databtn', 'aria-label': '資料備份與還原', title: '資料備份與還原' }); d.innerHTML = ICON.save + '<span class="st-lb">備份</span>'; d.onclick = () => openData(); bar.append(d); }
+        if (!root.lang) root.lang = 'zh-TW';
+        if (tpl()) { const h = el('button', { type: 'button', class: 'st-helpbtn', 'aria-label': '使用說明', title: '使用說明' }); h.innerHTML = ICON.help + '<span class="st-lb">說明</span>'; h.onclick = () => openHelp(false); bar.append(h); }
+        const th = el('button', { type: 'button', class: 'st-theme', 'aria-label': '外觀：風格與明暗', title: '外觀', 'aria-expanded': 'false' }); th.innerHTML = ICON.theme + '<span class="st-lb">外觀</span>'; th.onclick = () => togglePanel();
         if (themed) bar.append(th);
         panel = el('div', { class: 'st-panel', hidden: '' });
         document.body.append(bar, panel);
         document.addEventListener('click', (e) => { if (!panel.hidden && !panel.contains(e.target) && !th.contains(e.target)) togglePanel(false); });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) togglePanel(false); });
-        // 第一次進入自動彈出一次；自動化測試（webdriver）與帶房號的邀請連結（#...）不彈，以免擋住操作
-        if (tpl() && !navigator.webdriver && !location.hash && !get('st_help_seen', {})[location.pathname]) setTimeout(() => openHelp(true), 500);
+        new MutationObserver(later).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-pressed', 'aria-selected', 'class'] });
+        addEventListener('scroll', later, { passive: true }); addEventListener('resize', later); later();
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 
