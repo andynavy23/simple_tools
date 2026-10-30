@@ -175,14 +175,20 @@ await until(H.page, () => room.players[2] && !room.players[2].connected);
 const C2 = await makePage();
 await setVal(C2.page, '#nick', '小丙'); await setVal(C2.page, '#joinId', rid); await click(C2.page, '加入');
 await until(C2.page, () => cur && cur.v.kind === 'spy' && cur.v.me === 2);
-// 有人不同意 → 指控失敗；時間到 → 全員投票
 const hostSpy = spySeat === 0;
-await H.page.evaluate(() => goCtl({ t: 'timeup', force: true }));
 const live2 = { 0: H.page, 1: B.page, 2: C2.page };
-for (const p of Object.values(live2)) await until(p, () => cur.v.phase === 'final');
-for (const [s, p] of Object.entries(live2)) await p.evaluate((t) => go({ t: 'fvote', target: t }), (+s + 1) % 3);
-for (const p of Object.values(live2)) await until(p, () => cur.v.phase === 'reveal');
-await until(B.page, () => document.querySelector('.okmark') && document.querySelector('.okmark').textContent.includes('✓'));
+if (spySeat === 2) {
+    // 離線的小丙剛好是間諜：依設計「間諜離線，這局作廢」直接揭曉，不會進入全員投票（原本固定假設小丙不是間諜，所以約 1/3 機率失敗）
+    for (const p of Object.values(live2)) await until(p, () => cur.v.phase === 'reveal');
+    assert.ok(await B.page.evaluate(() => JSON.stringify(cur.v).includes('作廢')), '間諜離線要標示這局作廢');
+} else {
+    // 時間到 → 全員投票
+    await H.page.evaluate(() => goCtl({ t: 'timeup', force: true }));
+    for (const p of Object.values(live2)) await until(p, () => cur.v.phase === 'final');
+    for (const [s, p] of Object.entries(live2)) await p.evaluate((t) => go({ t: 'fvote', target: t }), (+s + 1) % 3);
+    for (const p of Object.values(live2)) await until(p, () => cur.v.phase === 'reveal');
+    await until(B.page, () => document.querySelector('.okmark') && document.querySelector('.okmark').textContent.includes('✓'));
+}
 // 房主離開
 await H.page.close();
 await until(B.page, () => !document.querySelector('#closed').hidden);
