@@ -16,6 +16,7 @@
 (function () {
     'use strict';
 
+    const CHROME_SRC = typeof document !== 'undefined' && document.currentScript ? document.currentScript.src : '';
     // ---------- 備份 / 還原（純函式，tests 會在 node 載入）----------
     const KEY_OK = /^[^\u0000-\u001f]{1,200}$/;
     // spec：鍵名清單；'*' = 全部；'前綴*' = 該前綴開頭的所有鍵。回傳 (key) => 是否屬於這個範圍
@@ -45,7 +46,25 @@
         return { ok: true, items, skipped, scope: typeof o.scope === 'string' ? o.scope.slice(0, 80) : '', exportedAt: typeof o.exportedAt === 'string' ? o.exportedAt.slice(0, 40) : '' };
     }
     const fmtBytes = (n) => (n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(1) + ' MB');
-    if (typeof document === 'undefined') { if (typeof module !== 'undefined') module.exports = { matcher, buildBackup, parseBackup, fmtBytes }; return; }
+    // 載入備份前的差異：items 為 parseBackup 的 items。回傳 { add:[{k,size}], over:[{k,old,size}], same:[k] }（over = 同名但內容不同，會被覆蓋）
+    function diffBackup(items, storage) {
+        const add = [], over = [], same = [];
+        for (const [k, v] of Object.entries(items)) {
+            const cur = storage.getItem(k);
+            if (cur === null || cur === undefined) add.push({ k, size: k.length + v.length });
+            else if (cur === v) same.push(k);
+            else over.push({ k, old: k.length + cur.length, size: k.length + v.length });
+        }
+        return { add, over, same };
+    }
+    // 是否該提醒備份：有資料、沒關掉、沒在延後期內、且從沒備份過或距上次備份超過 days 天。last / snoozeUntil 為 ISO 字串或毫秒，無則 null
+    function backupDue({ now, last, snoozeUntil, off, dataCount, days = 14 }) {
+        const ms = (x) => { const t = typeof x === 'number' ? x : Date.parse(x); return Number.isFinite(t) ? t : null; };
+        if (off || !(dataCount > 0)) return false;
+        const sn = ms(snoozeUntil); if (sn !== null && now < sn) return false;
+        const l = ms(last); return l === null || now - l > days * 86400000;
+    }
+    if (typeof document === 'undefined') { if (typeof module !== 'undefined') module.exports = { matcher, buildBackup, parseBackup, fmtBytes, diffBackup, backupDue }; return; }
 
     const STYLES = [
         ['apple', '墨線', '#c23d17', '#f3f0e8'],
@@ -105,6 +124,9 @@
 .st-toast.bad{background:var(--bad);color:#fff}
 .st-data p{margin:8px 0}
 .st-data .st-btns{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.st-prev{margin:8px 0}
+.st-difflist{margin:6px 0;padding-left:20px;font-size:13px;max-height:200px;overflow:auto}
+.st-difflist code{font:12px ui-monospace,Menlo,Consolas,monospace;overflow-wrap:anywhere}
 .st-data .st-msg{min-height:1.4em;font-size:14px;margin:8px 0 0}
 .st-data .st-msg.bad{color:var(--bad)}
 .st-data .st-msg.ok{color:var(--ok)}
@@ -205,7 +227,9 @@
             const a = el('a', { href: URL.createObjectURL(new Blob([JSON.stringify(b, null, 1)], { type: 'application/json' })), download: `simple-tools-${all ? 'all' : scope.replace(/\.html$/, '').replace(/\//g, '-')}-${stamp}.json` });
             document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
             say(`已匯出 ${Object.keys(b.data).length} 項資料。請把檔案收好，之後在新的瀏覽器「載入備份」即可還原。`, 'ok');
+            if (all) try { localStorage.setItem('st_last_backup', new Date().toISOString()); } catch (e) { /* 只是提醒用的時間戳 */ }
         };
+        const prev = el('div', { class: 'st-prev' });
         imp.onclick = () => file.click();
         file.onchange = async () => {
             const f = file.files[0]; file.value = ''; if (!f) return;
@@ -214,11 +238,23 @@
             if (!r.ok) { say(r.error, 'bad'); return; }
             const n = Object.keys(r.items).length;
             if (!n) { say('這個備份裡沒有屬於這裡的資料' + (r.skipped ? `（略過 ${r.skipped} 項其他工具的資料）` : '') + '。', 'bad'); return; }
-            const when = r.exportedAt ? `（備份時間 ${r.exportedAt.slice(0, 16).replace('T', ' ')}）` : '';
-            if (!confirm(`要載入 ${n} 項資料嗎？${when}\n同名的資料會被備份內容覆蓋，無法復原。` + (r.skipped ? `\n（另有 ${r.skipped} 項不屬於這裡，會略過）` : ''))) { say('已取消。'); return; }
-            try { for (const [k, v] of Object.entries(r.items)) localStorage.setItem(k, v); }
-            catch (e) { say('寫入失敗（瀏覽器儲存空間不足或被封鎖）：' + e.message, 'bad'); return; }
-            say(`已還原 ${n} 項資料，即將重新載入…`, 'ok'); setTimeout(() => location.reload(), 900);
+            // 先列出差異（新增 / 會覆蓋 / 內容相同），確認後才寫入
+            const d = diffBackup(r.items, localStorage), when = r.exportedAt ? `備份時間 ${r.exportedAt.slice(0, 16).replace('T', ' ')}` : '';
+            const row = (k, t) => el('li', null, el('code', { text: k }), el('span', { class: 'muted', text: ' ' + t }));
+            const MAXROWS = 12, rows = [...d.over.map(x => row(x.k, `覆蓋（${fmtBytes(x.old)} → ${fmtBytes(x.size)}）`)), ...d.add.map(x => row(x.k, `新增（${fmtBytes(x.size)}）`))];
+            const go = el('button', { type: 'button', class: 'primary', text: d.over.length ? `確認載入（覆蓋 ${d.over.length} 項）` : '確認載入' }), no = el('button', { type: 'button', text: '取消' });
+            const writable = d.add.length + d.over.length;
+            no.onclick = () => { prev.replaceChildren(); say('已取消。'); };
+            go.onclick = () => {
+                try { for (const [k, v] of Object.entries(r.items)) if (localStorage.getItem(k) !== v) localStorage.setItem(k, v); }
+                catch (e) { say('寫入失敗（瀏覽器儲存空間不足或被封鎖）：' + e.message, 'bad'); return; }
+                prev.replaceChildren(); say(`已還原 ${writable} 項資料，即將重新載入…`, 'ok'); setTimeout(() => location.reload(), 900);
+            };
+            say('');
+            prev.replaceChildren(
+                el('p', { text: `備份裡有 ${n} 項屬於這裡的資料${when ? '（' + when + '）' : ''}：新增 ${d.add.length} 項、會覆蓋 ${d.over.length} 項、內容相同 ${d.same.length} 項（不會動）。覆蓋後無法復原${r.skipped ? `；另有 ${r.skipped} 項不屬於這裡，會略過` : ''}。` }),
+                rows.length ? el('ul', { class: 'st-difflist' }, ...rows.slice(0, MAXROWS), ...(rows.length > MAXROWS ? [el('li', { class: 'muted', text: `…還有 ${rows.length - MAXROWS} 項` })] : [])) : el('p', { class: 'muted', text: '所有資料都和目前相同，不需要載入。' }),
+                el('div', { class: 'st-btns' }, ...(writable ? [go] : []), no));
         };
         const close = el('button', { type: 'button', 'aria-label': '關閉', text: '✕' }); close.onclick = () => ddlg.close();
         const done = el('button', { type: 'button', class: 'primary', text: '關閉' }); done.onclick = () => ddlg.close();
@@ -229,7 +265,7 @@
                 el('p', { text: all ? '這個工具箱裡每個工具各自存了資料（記帳、待辦、日記、遊戲最佳紀錄、外觀設定、我的最愛……），都只留在這個瀏覽器。這裡可以把「全部工具」的資料一次存成一個檔案，換手機、換電腦或重灌前匯出一次就好，不用一個一個工具備份（每個工具右上角的 💾 則只備份那一個工具）。' : '這個工具的資料只存在這個瀏覽器。換瀏覽器、換手機或清除網站資料之前，請先匯出備份。' }),
                 info,
                 el('div', { class: 'st-btns' }, exp, imp, file),
-                msg,
+                msg, prev,
                 el('h3', { text: '怎麼搬到新的瀏覽器？' }),
                 el('ol', null, el('li', { text: '在舊的瀏覽器按「匯出備份」，得到一個 .json 檔。' }), el('li', { text: '把檔案傳到新的裝置（雲端硬碟、通訊軟體、隨身碟都可以）。' }), el('li', { text: '在新的瀏覽器開同一個頁面，按「載入備份」選那個檔案。' })),
                 el('p', { class: 'muted', style: 'font-size:13px', text: '備份檔是純文字，裡面可能有你的個人紀錄，請自己保管。載入時只會寫入屬於這裡的資料。' })),
@@ -287,10 +323,14 @@
         document.body.append(bar, panel);
         document.addEventListener('click', (e) => { if (!panel.hidden && !panel.contains(e.target) && !th.contains(e.target)) togglePanel(false); });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) togglePanel(false); });
+        // 快速搜尋：在工具頁按 Ctrl/Cmd+K 回到首頁並聚焦搜尋框（首頁自己處理這個快捷鍵）
+        if (!document.querySelector('#q[type=search]') && CHROME_SRC) addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); try { sessionStorage.setItem('st_focus_search', '1'); } catch (err) { /* 沒有也只是不自動聚焦 */ } location.href = new URL('../../index.html', CHROME_SRC).href; }
+        });
         new MutationObserver(later).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-pressed', 'aria-selected', 'class'] });
         addEventListener('scroll', later, { passive: true }); addEventListener('resize', later); later();
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 
-    window.Chrome = { STYLES, MODES, openHelp, openData, toast, storageFailed, matcher, buildBackup, parseBackup, get style() { return style; }, get mode() { return mode; }, setStyle(v) { style = v; set('st_style', v); apply(true); }, setMode(v) { mode = v; set('st_mode', v); apply(true); } };
+    window.Chrome = { STYLES, MODES, openHelp, openData, backupDue, diffBackup, toast, storageFailed, matcher, buildBackup, parseBackup, get style() { return style; }, get mode() { return mode; }, setStyle(v) { style = v; set('st_style', v); apply(true); }, setMode(v) { mode = v; set('st_mode', v); apply(true); } };
 })();

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="1A2B 猜數字：電腦出題你來猜、你出題讓電腦猜，或連線和朋友互猜對方的密碼；可選 3–5 位、是否允許重複數字，記錄最少步數。">
+    <meta property="og:title" content="1A2B 猜數字" />
+    <meta property="og:description" content="猜密碼、看 A 和 B 提示；單機、對電腦或連線互猜。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/guess-ab.html" />
+    <meta name="st-keys" content="ab_best_*">
+    <title>1A2B 猜數字</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>1A2B：對方暗藏一組數字密碼（預設 4 位、數字不重複），你每猜一次會得到提示：<b>A</b> = 數字和位置都對，<b>B</b> = 數字對但位置不對。看提示推理，越少次猜中越厲害。可單機，也可連線和朋友互猜。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>一個人想動腦、練習邏輯推理（電腦出題）。</li>
+        <li>想知道「怎樣猜最有效率」（讓電腦來猜你的密碼）。</li>
+        <li>和朋友各出一題互相猜，先猜中對方的人贏。</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+        <li>上方選<b>位數</b>（3–5）與<b>數字可否重複</b>。</li>
+        <li><b>我來猜</b>：電腦暗藏密碼，輸入猜測按「猜」，歷史列表會列出每次的 xAyB；猜中顯示步數，並記錄這個設定的最少步數。</li>
+        <li><b>電腦來猜</b>：你想好一組密碼輸入（輸入框會遮住），按「開始」，電腦開始猜。電腦<b>不會作弊</b>：它只拿得到每次猜測的 xAyB 提示，跟你猜時看到的資訊一模一樣；它每次只從「還符合所有提示」的組合裡，選能把可能性切得最平均的那個猜。4 位不重複最多 7 步內一定猜中。</li>
+        <li><b>連線互猜</b>：輸入暱稱建立房間，把邀請連結傳給朋友。房主選好位數後按「開始」，雙方各自設定自己的密碼，之後輪流猜對方的密碼，先猜中的人贏（先手隨機）。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">答案 1234，猜 1243 → 2A2B（1、2 位置都對；4、3 數字對但位置錯）。猜 5678 → 0A0B（四個數字都沒出現）。</div>
+        <h3>連線規則與限制</h3>
+        <ul>
+        <li>房主負責驗證：檢查每次猜測是否合法、輪到誰、並計算提示，成員無法自己改結果。</li>
+        <li>你設定密碼後，房主端會保管它（需要由房主計分），所以<b>房主看得到對方的密碼</b>，請在朋友之間玩。開始時雙方都會收到「密碼 + 隨機鹽」的 SHA-256 承諾，遊戲結束揭露密碼，雙方會自動重新核對承諾與每一次提示，確認房主沒有中途換答案。</li>
+        <li>對手斷線後有 60 秒可以用同一個暱稱重新加入，逾時視為放棄，另一方獲勝。房主離開則遊戲結束。</li>
+        <li>雙方合計猜滿 80 次仍沒人猜中算平手。連線只限 2 人。</li>
+        </ul>
+        <h3>小提醒</h3>
+        <ul>
+        <li>每個「位數 + 是否重複」設定各記一筆最少步數，存在這台裝置，最多只有 6 筆；可按頁面下方「清除最佳紀錄」刪除（無法復原；頁面會重新載入，進行中的這一局會結束）。</li>
+        <li>最佳紀錄資料損壞時載入會忽略。電腦與連線的對局都不儲存。</li>
+        <li>密碼可以 0 開頭，例如 0123。</li>
+        </ul>
+    </template>
+    <style>
+        :root { --wrap-w: 480px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .row input { flex: 1 1 130px; }
+        .seg { display: flex; gap: 6px; margin: 6px 0 12px; }
+        .seg button { flex: 1; padding-left: 4px; padding-right: 4px; }
+        .code { text-align: center; letter-spacing: .3em; font-variant-numeric: tabular-nums; font-weight: 800; }
+        .st { text-align: center; font-weight: 700; min-height: 1.6em; margin: 10px 0; }
+        .hist { max-height: 260px; overflow: auto; margin-top: 8px; }
+        .hist .li b { font-variant-numeric: tabular-nums; letter-spacing: .15em; }
+        .pl.turn { border-color: var(--blue); }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>1A2B 猜數字</h1>
+        <p class="sub">A = 位置和數字都對、B = 數字對位置錯。單機、對電腦，或連線和朋友互猜。</p>
+        <div class="card">
+            <div class="row">
+                <label>位數 <select id="len"><option>3</option><option selected>4</option><option>5</option></select></label>
+                <label>數字 <select id="dup"><option value="0" selected>不重複</option><option value="1">可重複</option></select></label>
+            </div>
+            <div class="seg" id="modes"><button data-m="me" aria-pressed="true">我來猜</button><button data-m="ai" aria-pressed="false">電腦來猜</button><button data-m="net" aria-pressed="false">連線互猜</button></div>
+
+            <div id="pMe">
+                <div class="row"><input id="gMe" class="code" inputmode="numeric" maxlength="5" autocomplete="off" aria-label="你的猜測"><button class="primary" id="goMe">猜</button><button id="newMe">新一局</button></div>
+                <div class="st" id="stMe" role="status"></div>
+                <div class="hist" id="hMe"></div>
+                <div class="muted" id="bestMe" style="text-align:center"></div>
+            </div>
+
+            <div id="pAi" hidden>
+                <div class="row"><input id="sAi" class="code" type="password" inputmode="numeric" maxlength="5" autocomplete="off" aria-label="你的密碼"><button class="primary" id="goAi">開始</button></div>
+                <div class="st" id="stAi" role="status">想好一組密碼輸入，電腦會只靠提示來猜</div>
+                <div class="hist" id="hAi"></div>
+            </div>
+
+            <div id="pNet" hidden>
+                <div id="netMenu">
+                    <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+                    <div class="row" style="margin-top:8px"><button class="primary" id="hostBtn">建立房間</button><input id="joinId" placeholder="貼上房號" aria-label="房號"><button id="joinBtn">加入</button></div>
+                    <p class="note" id="netMsg"></p>
+                </div>
+                <div id="netGame" hidden>
+                    <div class="players" id="board"></div>
+                    <div class="st" id="stNet" role="status"></div>
+                    <div class="row" id="rowSet" hidden><input id="sNet" class="code" type="password" inputmode="numeric" maxlength="5" autocomplete="off" aria-label="你的密碼"><button class="primary" id="setBtn">確定密碼</button></div>
+                    <div class="row" id="rowGuess" hidden><input id="gNet" class="code" inputmode="numeric" maxlength="5" autocomplete="off" aria-label="你的猜測"><button class="primary" id="goNet">猜</button></div>
+                    <div class="hist" id="hNet"></div>
+                    <div class="row" style="margin-top:10px;justify-content:center">
+                        <button id="copyInvite" hidden>複製邀請連結</button><button class="primary" id="startBtn" hidden>開始</button><button class="primary" id="again" hidden>再來一局</button><button id="leave">離開</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <button class="sm" id="clearBest">清除最佳紀錄</button>
+    </div>
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <script>
+        const { rnd, shuffle, sha256, randomHex } = Util;
+        // --- pure ---
+        const MAX_HIST = 80;
+
+        const validCode = (s, len, dup) => typeof s === 'string' && s.length === len && /^\d+$/.test(s) && (dup || new Set(s).size === len);
+
+        // 評分：A = 數字與位置都對；B = 數字對位置錯（重複數字也正確：只在「沒有 A 的位置」比對次數）
+        function score(secret, guess) {
+            let a = 0, b = 0; const cs = Array(10).fill(0), cg = Array(10).fill(0);
+            for (let i = 0; i < secret.length; i++) { if (secret[i] === guess[i]) a++; else { cs[+secret[i]]++; cg[+guess[i]]++; } }
+            for (let d = 0; d < 10; d++) b += Math.min(cs[d], cg[d]);
+            return { a, b };
+        }
+
+        function allCodes(len, dup) {
+            const out = [];
+            (function go(p) { if (p.length === len) { out.push(p); return; } for (let d = 0; d < 10; d++) if (dup || !p.includes(d)) go(p + d); })('');
+            return out;
+        }
+
+        const filterCands = (cands, g, a, b) => cands.filter(c => { const r = score(c, g); return r.a === a && r.b === b; });
+
+        // 電腦的第一手：不重複用 0123…；可重複用前半 0 後半 1（例如 0011）
+        const firstGuess = (len, dup) => (dup ? '0'.repeat(len >> 1) + '1'.repeat(len - (len >> 1)) : '0123456789'.slice(0, len));
+
+        // 電腦猜：只看「還符合所有提示的候選」；從候選（候選少、位數 <= 4 時也包含非候選）中挑「最壞情況剩最少」的猜測
+        // （minimax，平手比分佈平方和，再平手優先選候選以便直接猜中），完全不知道答案
+        // ponytail: 候選超過 POOL 個時只從等距取樣的 POOL 個裡挑猜測（仍逐一評分全部候選），換取速度
+        const POOL = 400;
+        function aiGuess(cands, len, dup, isFirst) {
+            if (isFirst) return firstGuess(len, dup);
+            if (cands.length <= 2) return cands[0];
+            const step = Math.max(1, Math.floor(cands.length / POOL)), W = len + 1, pool = [];
+            for (let i = 0; i < cands.length; i += step) pool.push(cands[i]);
+            if (cands.length <= 500 && len <= 4) { const seen = new Set(pool); for (const c of allCodes(len, dup)) if (!seen.has(c)) pool.push(c); }
+            let best = null, bw = Infinity, bs = Infinity;
+            for (const g of pool) {
+                const cnt = new Map();
+                for (const c of cands) { const r = score(c, g), k = r.a * W + r.b; cnt.set(k, (cnt.get(k) || 0) + 1); }
+                let w = 0, sq = 0; for (const v of cnt.values()) { if (v > w) w = v; sq += v * v; }
+                if (w < bw || (w === bw && sq < bs)) { best = g; bw = w; bs = sq; }
+            }
+            return best;
+        }
+
+        // 核對房主揭露的結果：每一筆提示都符合揭露的密碼
+        function verifyHist(secrets, hist) {
+            return hist.every(h => { const r = score(secrets[1 - h.p], h.g); return r.a === h.a && r.b === h.b; });
+        }
+
+        // 成員端檢查房主送來的狀態
+        function validNetState(s) {
+            const str = (v, n) => typeof v === 'string' && v.length <= n, int = Number.isInteger;
+            return !!s && ['lobby', 'set', 'play', 'over'].includes(s.phase) && int(s.len) && s.len >= 3 && s.len <= 5 && typeof s.dup === 'boolean'
+                && Array.isArray(s.names) && s.names.length <= 2 && s.names.every(n => str(n, 12))
+                && Array.isArray(s.active) && s.active.length <= 2 && s.active.every(b => typeof b === 'boolean')
+                && Array.isArray(s.set) && s.set.length === 2 && s.set.every(b => typeof b === 'boolean')
+                && Array.isArray(s.wins) && s.wins.length === 2 && s.wins.every(int)
+                && Array.isArray(s.commits) && s.commits.length <= 2 && s.commits.every(c => str(c, 64))
+                && int(s.turn) && int(s.winner) && str(s.why, 40)
+                && Array.isArray(s.hist) && s.hist.length <= MAX_HIST && s.hist.every(h => h && (h.p === 0 || h.p === 1) && str(h.g, 5) && int(h.a) && int(h.b))
+                && (s.reveal === null || (Array.isArray(s.reveal.secrets) && s.reveal.secrets.length === 2 && s.reveal.secrets.every(x => str(x, 5)) && Array.isArray(s.reveal.salts) && s.reveal.salts.length === 2 && s.reveal.salts.every(x => str(x, 40))));
+        }
+        // 最佳紀錄一律驗證
+        const cleanBest = (v) => (Number.isInteger(v) && v >= 1 && v <= 9999 ? v : 0);
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const cfg = () => ({ len: +$('#len').value, dup: $('#dup').value === '1' });
+        const bestKey = () => { const c = cfg(); return `ab_best_${c.len}${c.dup ? 'u' : 'd'}`; };
+        const histRow = (i, g, a, b, who) => `<div class="li"><span>${who ? who + ' ' : ''}第 ${i} 次　<b>${Util.esc(g)}</b></span><b>${a}A${b}B</b></div>`;
+        const setHtml = (el, h) => { $(el).innerHTML = h; };
+
+        // ---------- 我來猜 ----------
+        let me = null;
+        function showBest() { const b = cleanBest(Util.store.get(bestKey(), 0)); $('#bestMe').textContent = b ? `這個設定最少步數：${b} 步` : '這個設定還沒有紀錄'; }
+        function newMe() {
+            const c = cfg(), pool = allCodes(c.len, c.dup);
+            me = { ...c, secret: pool[rnd(pool.length)], hist: [], over: false };
+            $('#gMe').maxLength = c.len; $('#gMe').value = ''; setHtml('#hMe', ''); $('#stMe').textContent = `電腦想好了 ${c.len} 位密碼${c.dup ? '' : '（數字不重複）'}`; showBest();
+        }
+        function guessMe() {
+            if (!me || me.over) return;
+            const g = $('#gMe').value.trim();
+            if (!validCode(g, me.len, me.dup)) { $('#stMe').textContent = `請輸入 ${me.len} 位數字${me.dup ? '' : '，且不能重複'}`; return; }
+            const r = score(me.secret, g); me.hist.push({ g, ...r }); $('#gMe').value = '';
+            setHtml('#hMe', me.hist.map((h, i) => histRow(i + 1, h.g, h.a, h.b)).reverse().join(''));
+            if (r.a === me.len) {
+                me.over = true; const n = me.hist.length, k = bestKey(), old = cleanBest(Util.store.get(k, 0));
+                let t = `🎉 猜中了！共 ${n} 步`;
+                if (!old || n < old) { Util.store.set(k, n); t += '，新的最少步數！'; }
+                $('#stMe').textContent = t; showBest();
+            } else $('#stMe').textContent = `${r.a}A${r.b}B`;
+        }
+
+        // ---------- 電腦來猜 ----------
+        let ai = null, aiT = 0;
+        function startAi() {
+            clearTimeout(aiT); const c = cfg(), s = $('#sAi').value.trim();
+            if (!validCode(s, c.len, c.dup)) { $('#stAi').textContent = `請輸入 ${c.len} 位數字${c.dup ? '' : '，且不能重複'}`; return; }
+            ai = { ...c, secret: s, cands: allCodes(c.len, c.dup), hist: [], over: false };
+            setHtml('#hAi', ''); $('#stAi').textContent = '電腦思考中…'; aiT = setTimeout(stepAi, 400);
+        }
+        function stepAi() {
+            if (!ai || ai.over) return;
+            // 電腦只看 cands（由提示過濾而來），secret 只用來算每次的 xAyB 提示（跟人猜時拿到的資訊一樣）
+            const g = aiGuess(ai.cands, ai.len, ai.dup, ai.hist.length === 0), r = score(ai.secret, g);
+            ai.hist.push({ g, ...r }); setHtml('#hAi', ai.hist.map((h, i) => histRow(i + 1, h.g, h.a, h.b)).reverse().join(''));
+            if (r.a === ai.len) { ai.over = true; $('#stAi').textContent = `🤖 電腦第 ${ai.hist.length} 步猜中了`; return; }
+            ai.cands = filterCands(ai.cands, g, r.a, r.b);
+            if (!ai.cands.length || ai.hist.length >= MAX_HIST) { ai.over = true; $('#stAi').textContent = '沒有符合的答案了'; return; }
+            $('#stAi').textContent = `電腦還剩 ${ai.cands.length} 種可能…`; aiT = setTimeout(stepAi, 600);
+        }
+
+        // ---------- 連線（房主制） ----------
+        let room = null, isHost = false, my = -1, V = null, hostId = '', mySecret = '', verified = '';
+        const H = { phase: 'lobby', len: 4, dup: false, secrets: [null, null], salts: [], commits: [], turn: 0, hist: [], winner: -1, why: '', wins: [0, 0], graceT: 0 };
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const act = () => [0, 1].map(i => !!(room.players[i] && room.players[i].connected));
+        function pub() {
+            return {
+                phase: H.phase, len: H.len, dup: H.dup, names: room.players.map(p => p.nick), active: act().slice(0, room.players.length),
+                set: [H.secrets[0] !== null, H.secrets[1] !== null], wins: H.wins, commits: H.commits, turn: H.turn, hist: H.hist, winner: H.winner, why: H.why,
+                reveal: H.phase === 'over' ? { secrets: H.secrets.map(s => s || ''), salts: H.salts } : null,
+            };
+        }
+        function push() { V = pub(); renderNet(); room.broadcast({ t: 'STATE', s: V }); }
+
+        function hostStart() {
+            if (H.phase !== 'lobby' || room.players.length < 2 || !act()[1]) return;
+            room.keepSlots = true; Object.assign(H, { phase: 'set', secrets: [null, null], salts: [], commits: [], hist: [], winner: -1, why: '' }); mySecret = ''; push();
+        }
+        async function setSecret(from, s) {
+            if (H.phase !== 'set' || H.secrets[from] !== null || !validCode(s, H.len, H.dup)) return from === 0 ? null : room.sendTo(from, { t: 'ERR', m: '密碼格式不符' });
+            H.secrets[from] = s;
+            if (H.secrets[0] !== null && H.secrets[1] !== null) {
+                H.salts = [randomHex(8), randomHex(8)];
+                H.commits = await Promise.all([0, 1].map(i => sha256(H.salts[i] + ':' + H.secrets[i])));
+                H.phase = 'play'; H.turn = rnd(2);
+            }
+            push();
+        }
+        function finish(winner, why) {
+            if (H.phase === 'over') return; clearTimeout(H.graceT); H.phase = 'over'; H.winner = winner; H.why = why;
+            if (winner >= 0) H.wins[winner]++;
+            push();
+        }
+        function doGuess(from, g) {
+            const a = act();
+            if (H.phase !== 'play' || from !== H.turn || !a[0] || !a[1] || !validCode(g, H.len, H.dup)) return from === 0 ? null : room.sendTo(from, { t: 'ERR', m: '現在不能猜，或格式不符' });
+            const r = score(H.secrets[1 - from], g); H.hist.push({ p: from, g, ...r });
+            if (r.a === H.len) return finish(from, '猜中對方的密碼');
+            if (H.hist.length >= MAX_HIST) return finish(-1, '猜滿 80 次，平手');
+            H.turn = 1 - from; push();
+        }
+
+        const onNetError = (err, message) => { if (V || isHost) return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } };
+        const readNick = () => { const n = $('#nick').value.trim(); if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; } return n; };
+
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: 2,
+                onReady(r) { isHost = true; my = 0; hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id); push(); },
+                canJoin: (n) => (H.phase !== 'lobby' && !room.players.some(p => !p.connected && p.nick === n) ? '遊戲已經開始' : null),
+                onJoin: () => { clearTimeout(H.graceT); push(); },
+                onLeave() {
+                    if (H.phase === 'set') { H.phase = 'lobby'; room.keepSlots = false; room.prune(); return push(); }
+                    if (H.phase === 'play') { clearTimeout(H.graceT); H.graceT = setTimeout(() => finish(0, '對手離線逾時'), 60000); }
+                    if (H.phase === 'lobby') room.prune();
+                    push();
+                },
+                onMessage(p, d) {
+                    if (!d) return;
+                    if (d.t === 'SECRET') setSecret(p.index, d.s); else if (d.t === 'GUESS') doGuess(p.index, d.g);
+                },
+                onError: onNetError,
+            });
+        }
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim(); if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…'); hostId = id;
+            room = P2PRoom.join(id, {
+                nick,
+                onRoster(players, me) { my = me; },
+                onMessage(d) {
+                    if (!d) return;
+                    if (d.t === 'STATE' && validNetState(d.s)) { V = d.s; renderNet(); } else if (d.t === 'ERR' && typeof d.m === 'string') $('#stNet').textContent = d.m.slice(0, 40);
+                },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (V) { alert('房主已離開，遊戲結束'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+
+        async function verify(s) {
+            if (!s.reveal) return;
+            const rv = s.reveal; if (!rv.secrets[0] || !rv.secrets[1]) { verified = '（有人未設定密碼，無須核對）'; return; }
+            const hs = await Promise.all([0, 1].map(i => sha256(rv.salts[i] + ':' + rv.secrets[i])));
+            const good = hs[0] === s.commits[0] && hs[1] === s.commits[1] && verifyHist(rv.secrets, s.hist);
+            verified = good ? '✅ 核對通過：密碼與開局承諾相符，每次提示都正確' : '⚠ 核對失敗：房主的結果與承諾不符';
+            if (V === s) renderNet();
+        }
+        function renderNet() {
+            if (!V) return;
+            $('#netMenu').hidden = true; $('#netGame').hidden = false;
+            const s = V, over = s.phase === 'over', mine = s.phase === 'play' && s.turn === my && s.active[0] && s.active[1];
+            $('#board').replaceChildren(...s.names.map((x, i) => Object.assign(document.createElement('div'), {
+                className: 'pl' + (s.phase === 'play' && s.turn === i ? ' turn' : '') + (s.active[i] ? '' : ' off'),
+                textContent: `${s.phase === 'play' && s.turn === i ? '👉 ' : ''}${x}${i === 0 ? ' 👑' : ''}${i === my ? '（我）' : ''}　勝 ${s.wins[i]}`,
+            })));
+            let t = '';
+            if (s.phase === 'lobby') t = s.names.length < 2 ? '等待朋友加入…（把邀請連結傳給朋友）' : isHost ? '人到齊了，選好位數按「開始」' : '等待房主開始…';
+            else if (s.phase === 'set') t = s.set[my] ? '等待對方設定密碼…' : `請設定你的 ${s.len} 位密碼${s.dup ? '' : '（數字不重複）'}`;
+            else if (s.phase === 'play') t = !(s.active[0] && s.active[1]) ? '對手離線，等待重新加入（逾時 60 秒判負）' : mine ? '輪到你猜了' : `等待 ${s.names[s.turn]} 猜…`;
+            else t = s.winner < 0 ? s.why : `${s.winner === my ? '🎉 你贏了' : '💥 ' + s.names[s.winner] + ' 贏了'}：${s.why}`;
+            $('#stNet').textContent = t;
+            $('#rowSet').hidden = !(s.phase === 'set' && !s.set[my]);
+            $('#rowGuess').hidden = s.phase !== 'play'; $('#gNet').disabled = $('#goNet').disabled = !mine; $('#gNet').maxLength = s.len; $('#sNet').maxLength = s.len;
+            const who = (p) => (p === my ? '我' : s.names[p]);
+            let h = s.hist.map((x, i) => histRow(i + 1, x.g, x.a, x.b, who(x.p))).reverse().join('');
+            if (over && s.reveal) {
+                h = `<div class="li"><span>密碼揭露</span><b>${s.names.map((n, i) => Util.esc(n) + ' ' + Util.esc(s.reveal.secrets[i] || '—')).join('　')}</b></div><div class="li"><span id="vf">${Util.esc(verified || '核對中…')}</span></div>` + h;
+                if (!verified) verify(s);
+            } else verified = '';
+            setHtml('#hNet', h);
+            $('#copyInvite').hidden = !(isHost && s.phase === 'lobby'); $('#startBtn').hidden = !(isHost && s.phase === 'lobby'); $('#startBtn').disabled = !(s.names.length === 2 && s.active[1]);
+            $('#again').hidden = !(isHost && over);
+            $('#len').disabled = $('#dup').disabled = !!room && !(isHost && s.phase === 'lobby');
+            if (!isHost) { $('#len').value = s.len; $('#dup').value = s.dup ? '1' : '0'; }
+        }
+        function sendSecret() {
+            const s = $('#sNet').value.trim();
+            if (!V || !validCode(s, V.len, V.dup)) { $('#stNet').textContent = `請輸入 ${V ? V.len : ''} 位數字${V && V.dup ? '' : '，且不能重複'}`; return; }
+            mySecret = s; $('#sNet').value = '';
+            if (isHost) setSecret(0, s); else room.send({ t: 'SECRET', s });
+        }
+        function sendGuess() {
+            const g = $('#gNet').value.trim();
+            if (!V || !validCode(g, V.len, V.dup)) { $('#stNet').textContent = `請輸入 ${V ? V.len : ''} 位數字${V && V.dup ? '' : '，且不能重複'}`; return; }
+            $('#gNet').value = '';
+            if (isHost) doGuess(0, g); else room.send({ t: 'GUESS', g });
+        }
+
+        // ---------- 介面 ----------
+        $('#modes').onclick = (e) => {
+            const b = e.target.closest('button'); if (!b) return;
+            for (const x of $('#modes').children) x.setAttribute('aria-pressed', x === b);
+            ['me', 'ai', 'net'].forEach(m => { $('#p' + m[0].toUpperCase() + m.slice(1)).hidden = m !== b.dataset.m; });
+            if (b.dataset.m === 'me') newMe();
+        };
+        const resetCfg = () => { clearTimeout(aiT); ai = null; setHtml('#hAi', ''); $('#stAi').textContent = '想好一組密碼輸入，電腦會只靠提示來猜'; $('#sAi').maxLength = cfg().len; newMe(); if (isHost && V && V.phase === 'lobby') { H.len = cfg().len; H.dup = cfg().dup; push(); } };
+        $('#len').onchange = $('#dup').onchange = resetCfg;
+        $('#goMe').onclick = guessMe; $('#newMe').onclick = newMe; $('#gMe').onkeydown = (e) => { if (e.key === 'Enter') guessMe(); };
+        $('#goAi').onclick = startAi; $('#sAi').onkeydown = (e) => { if (e.key === 'Enter') startAi(); };
+        $('#hostBtn').onclick = () => { H.len = cfg().len; H.dup = cfg().dup; hostRoom(); };
+        $('#joinBtn').onclick = joinRoom;
+        $('#startBtn').onclick = hostStart;
+        $('#setBtn').onclick = sendSecret; $('#sNet').onkeydown = (e) => { if (e.key === 'Enter') sendSecret(); };
+        $('#goNet').onclick = sendGuess; $('#gNet').onkeydown = (e) => { if (e.key === 'Enter') sendGuess(); };
+        $('#again').onclick = () => { room.keepSlots = false; room.prune(); H.phase = 'lobby'; H.hist = []; H.winner = -1; H.secrets = [null, null]; H.commits = []; push(); };
+        $('#leave').onclick = () => location.reload();
+        $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
+        $('#clearBest').onclick = () => {
+            if (!confirm('清除所有 1A2B 最佳紀錄？無法復原。頁面會重新載入，進行中的這一局會結束。')) return;
+            try { Object.keys(localStorage).filter(k => k.startsWith('ab_best_')).forEach(k => localStorage.removeItem(k)); } catch (e) { }
+            location.reload();
+        };
+        if (P2PRoom.roomFromUrl()) { $('#joinId').value = P2PRoom.roomFromUrl(); $('#modes button[data-m=net]').click(); }
+        $('#sAi').maxLength = cfg().len; newMe();
+    </script>
+</body>
+
+</html>

@@ -199,6 +199,8 @@
 | [手作工坊](utils/craft-kit.html) | 工具 | 八分頁：3D 列印成本與報價、編織密度與針數（含針數循環）、拼豆與十字繡圖案轉換（載入圖片、可編輯通用範例色板、用量表、匯出 PNG / 列印，圖片 20 MB / 1600 萬像素、4–150 格）、一維裁切 first-fit-decreasing（標示啟發式、附下限）、蠟燭配比（香精 6–10%）、手工皂 NaOH 皂化（8 種常見油 SAP，需以專業計算機核對；安全提醒）、16 種針法圖例。只存上次輸入。抽查：SAP 值與針法說明。 |
 | [Artale 計算機](game-assist/artale-calc.html) | 遊戲輔助 | 三分頁計算機：捲軸期望值（成功率×價格、損毀重買、各把握度張數）、經驗效率（還差幾次／幾小時／預計完成時間）、抽卡機率（軟硬保底、UP、大保底、各把握度抽數與花費）；不內建遊戲數值，合併自 scroll-calculator / exp-calculator / gacha-calculator |
 | [資料庫指令產生器](utils/db-query.html) | 工具 | 三分頁：SQL（MySQL / PostgreSQL / SQLite / SQL Server 的 SELECT / INSERT / UPDATE / DELETE / 建表 / 索引，含參數化與程式碼，另有 SQL 格式化與 DDL 關聯圖 / 轉型別）、MongoDB（find / aggregate / update / delete / createIndex，mongosh / Node / Python / Compass 四種輸出）、Redis 與 Elasticsearch（Redis 指令含時間複雜度與警告、ES 查詢 DSL / curl / Kibana）；只在本機產生，記住各分頁上次選項與上次分頁 |
+| [24 點](mini-games/twenty-four.html) | 小遊戲 | 四張牌（1–13）湊 24：自寫算式解析（不用 eval，以有理數運算避免浮點誤差）、提示、無解判斷、每日挑戰（Util.seeded + 台灣時間）；統計單鍵 tf24_stats（大小固定、載入驗證、可清除）；單機 |
+| [1A2B 猜數字](mini-games/guess-ab.html) | 小遊戲 | 三種模式：我來猜、電腦來猜（minimax，3 / 4 位不重複已用全部答案驗證，4 位最多 7 步）、連線 2 人互猜（房主驗證每次猜測與回饋；答案用 SHA-256 加鹽承諾並於結束核對；房主看得到成員密碼，help 有說明）；斷線 60 秒內同暱稱可重連；3–5 位、可選是否重複；最佳步數 ab_best_*（最多 6 筆，可清除） |
 | [摸魚閱讀器](reading/stealth-reader.html) | 閱讀 | 本機載入 txt 小說，偽裝 ERP 後台、老闆鍵、進度記憶（開發中） |
 
 ## 使用

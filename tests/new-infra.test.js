@@ -34,3 +34,27 @@ const fake = (obj) => { const keys = Object.keys(obj); return { length: keys.len
     assert.equal(fmtBytes(500), '500 B'); assert.equal(fmtBytes(2048), '2.0 KB'); assert.equal(fmtBytes(3 * 1048576), '3.0 MB');
     ok('backup: parseBackup validation / roundtrip / hostile input');
 }
+
+// 備份差異預覽與備份提醒（chrome.js 的純函式）
+{
+    const { diffBackup, backupDue } = require('../shared/js/chrome.js');
+    const store = (o) => ({ getItem: (k) => (k in o ? o[k] : null) });
+    const d = diffBackup({ a: '1', b: '22', c: 'new' }, store({ a: '1', b: 'x' }));
+    assert.deepEqual(d.same, ['a']);
+    assert.deepEqual(d.over, [{ k: 'b', old: 2, size: 3 }]);                         // 'b'+'x' = 2、'b'+'22' = 3
+    assert.deepEqual(d.add, [{ k: 'c', size: 4 }]);
+    assert.deepEqual(diffBackup({}, store({ a: '1' })), { add: [], over: [], same: [] });
+    const DAY = 86400000, now = Date.UTC(2026, 10, 1);
+    const due = (o) => backupDue({ now, dataCount: 5, ...o });
+    assert.equal(due({ last: null }), true);                                          // 沒備份過
+    assert.equal(due({ last: new Date(now - 15 * DAY).toISOString() }), true);
+    assert.equal(due({ last: new Date(now - 14 * DAY).toISOString() }), false);       // 剛好 14 天不提醒
+    assert.equal(due({ last: new Date(now - 1 * DAY).toISOString() }), false);
+    assert.equal(due({ last: null, dataCount: 0 }), false);                           // 沒資料不提醒
+    assert.equal(due({ last: null, off: true }), false);
+    assert.equal(due({ last: null, snoozeUntil: now + DAY }), false);                 // 延後中
+    assert.equal(due({ last: null, snoozeUntil: now - 1 }), true);                    // 延後過期
+    assert.equal(due({ last: 'garbage' }), true);                                     // 壞時間戳當作沒備份
+    assert.equal(due({ last: null, days: 3 }), true); assert.equal(due({ last: new Date(now - 2 * DAY).toISOString(), days: 3 }), false);
+    ok('backup: diffBackup preview / backupDue reminder rules');
+}

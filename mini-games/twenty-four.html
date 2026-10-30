@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="24 點：四張牌（1–13）用加減乘除湊出 24，內建解法驗證、提示、無解題判斷，每日挑戰與連續天數統計，單機離線可玩。">
+    <meta property="og:title" content="24 點" />
+    <meta property="og:description" content="四張牌加減乘除湊 24，有提示、每日挑戰與連續天數。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/twenty-four.html" />
+    <meta name="st-keys" content="tf24_stats">
+    <title>24 點</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>24 點：給你四張牌（1–13），每張都要用一次，用加、減、乘、除與括號算出 24。單機遊戲，不用連線。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>練心算、動動腦，或想比較「今天的題目」誰先解開。</li>
+        <li>不確定某組牌有沒有解時，可以用「提示」看一個解法。</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+        <li>依序點牌與運算符號（＋ － × ÷ 和括號）組成算式，每張牌只能用一次，按「＝ 檢查」。</li>
+        <li><b>隨機題</b>：從 1–13 隨機抽四張，約四分之一的組合其實無解；你覺得無解就按「無解」，系統會告訴你對不對。</li>
+        <li><b>每日挑戰</b>：全站同一天同一題（以台灣時間換日），一定有解。當天解開就累計連續天數。</li>
+        <li>「提示」會顯示一個解法；用過提示的這題不計入最佳時間與每日連續。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">3、3、8、8 → 8 ÷ (3 － 8 ÷ 3) ＝ 24（要用到分數，很多人卡在這題）。<br>1、1、1、1 → 無解。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>算式用精確的分數計算，不會有小數誤差；除以 0 會被判錯誤。</li>
+        <li>統計（解開題數、最快時間、每日連續天數）只存在這台裝置，大小固定、不會越存越多；可按頁面下方「清除統計」刪除（無法復原）。</li>
+        <li>統計資料壞掉或被改過時，載入會自動修正成合理的預設值。</li>
+        </ul>
+    </template>
+    <style>
+        :root { --wrap-w: 480px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .seg { display: flex; gap: 6px; margin: 6px 0 12px; }
+        .seg button { flex: 1; padding-left: 4px; padding-right: 4px; }
+        #cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 8px 0; }
+        #cards button { aspect-ratio: 3 / 4; font-size: 28px; font-weight: 800; padding: 0; }
+        #cards button:disabled { opacity: .35; }
+        #expr { min-height: 56px; border-radius: var(--radius-sm); background: var(--fill); padding: 10px 12px; font-size: 24px; font-variant-numeric: tabular-nums; word-break: break-all; display: flex; align-items: center; }
+        #expr:empty::before { content: '點牌與符號組成算式'; font-size: 16px; color: var(--muted); }
+        #ops { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 8px 0; }
+        #ops button { padding: 0; font-size: 22px; }
+        #status { min-height: 1.6em; font-weight: 700; margin: 8px 0; text-align: center; }
+        #status.ok { color: var(--ok); }
+        #status.bad { color: var(--bad); }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>24 點</h1>
+        <p class="sub">四張牌用加減乘除湊出 24，每張都要用一次。</p>
+        <div class="card">
+            <div class="seg" id="modes"><button data-m="r" aria-pressed="true">隨機題</button><button data-m="d" aria-pressed="false">每日挑戰</button></div>
+            <div id="dinfo" class="muted" hidden></div>
+            <div id="cards"></div>
+            <div id="expr" aria-live="polite"></div>
+            <div id="ops">
+                <button data-o="(">(</button><button data-o=")">)</button><button data-o="+">＋</button><button data-o="-">－</button><button data-o="*">×</button><button data-o="/">÷</button>
+            </div>
+            <div class="row">
+                <button id="back">⌫ 退一格</button><button id="clr">清除</button>
+                <button class="primary" id="chk" style="flex:1">＝ 檢查</button>
+            </div>
+            <div id="status" role="status"></div>
+            <div class="row" style="justify-content:center">
+                <button id="hint">提示</button><button id="none">無解</button><button id="next">換一題</button>
+            </div>
+        </div>
+        <div class="card" id="statBox"></div>
+        <button class="sm" id="clearStats">清除統計</button>
+    </div>
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { day } = Util;
+        // --- pure ---
+        // 有理數 [分子, 分母]，分母恆正，約分；全程整數運算，沒有浮點誤差
+        const gcd = (a, b) => { a = Math.abs(a); b = Math.abs(b); while (b) [a, b] = [b, a % b]; return a || 1; };
+        const fr = (n, d = 1) => { if (d < 0) { n = -n; d = -d; } const g = gcd(n, d); return [n / g, d / g]; };
+        const FOP = {
+            '+': (x, y) => fr(x[0] * y[1] + y[0] * x[1], x[1] * y[1]),
+            '-': (x, y) => fr(x[0] * y[1] - y[0] * x[1], x[1] * y[1]),
+            '*': (x, y) => fr(x[0] * y[0], x[1] * y[1]),
+            '/': (x, y) => (y[0] === 0 ? null : fr(x[0] * y[1], x[1] * y[0])),
+        };
+        const show = (s) => s.replace(/\*/g, '×').replace(/\//g, '÷').replace(/-/g, '−');
+
+        // 枚舉所有運算順序找出湊 24 的算式；回傳字串（ASCII 運算符，含括號）或 null（無解）
+        function solve24(nums) {
+            const go = (items) => {
+                if (items.length === 1) return items[0].v[0] === 24 && items[0].v[1] === 1 ? items[0].s : null;
+                for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+                    const rest = items.filter((_, k) => k !== i && k !== j), A = items[i], B = items[j];
+                    for (const [x, y] of [[A, B], [B, A]]) for (const op of '+-*/') {
+                        if ((op === '+' || op === '*') && x === B) continue;     // 交換律：只試一個方向
+                        const v = FOP[op](x.v, y.v); if (!v) continue;
+                        const r = go([...rest, { v, s: `(${x.s}${op}${y.s})` }]); if (r) return r;
+                    }
+                }
+                return null;
+            };
+            const r = go(nums.map(n => ({ v: [n, 1], s: String(n) })));
+            return r ? r.slice(1, -1) : null;
+        }
+
+        // 安全的算式解析（不用 eval）：整數、+ - * / ( )，也接受 × ÷ −；回傳 { ok, value:[n,d], nums } 或 { ok:false, err }
+        function parseExpr(str) {
+            const src = String(str).replace(/×/g, '*').replace(/÷/g, '/').replace(/[−–]/g, '-');
+            const toks = src.match(/\d+|[-+*/()]|\s+|./g) || [], T = toks.filter(t => !/^\s+$/.test(t));
+            const nums = []; let p = 0, bad = '';
+            const peek = () => T[p];
+            function atom() {
+                const t = T[p++];
+                if (t === undefined) { bad = bad || '算式不完整'; return [0, 1]; }
+                if (/^\d+$/.test(t)) { if (t.length > 2) bad = bad || '數字太大'; nums.push(+t); return [+t, 1]; }
+                if (t === '(') { const v = expr(); if (T[p++] !== ')') bad = bad || '括號沒有配對'; return v; }
+                bad = bad || '算式格式不對'; return [0, 1];
+            }
+            function term() { let v = atom(); while (peek() === '*' || peek() === '/') { const o = T[p++], w = atom(); v = FOP[o](v, w) || (bad = bad || '不能除以 0', [0, 1]); } return v; }
+            function expr() { let v = term(); while (peek() === '+' || peek() === '-') { const o = T[p++], w = term(); v = FOP[o](v, w); } return v; }
+            if (!T.length) return { ok: false, err: '還沒有算式' };
+            const value = expr();
+            if (!bad && p < T.length) bad = '算式格式不對';
+            return bad ? { ok: false, err: bad } : { ok: true, value, nums };
+        }
+
+        // 檢查算式：恰好用到四張牌各一次，且結果為 24
+        function check24(str, cards) {
+            const r = parseExpr(str);
+            if (!r.ok) return { ok: false, msg: r.err };
+            if ([...r.nums].sort((a, b) => a - b).join() !== [...cards].sort((a, b) => a - b).join()) return { ok: false, msg: '每張牌都要用一次，而且只能用一次' };
+            const [n, d] = r.value;
+            return n === 24 && d === 1 ? { ok: true, msg: '正確！' } : { ok: false, msg: `結果是 ${d === 1 ? n : n + '/' + d}，不是 24` };
+        }
+
+        // 台灣時間（UTC+8）的今天；每日挑戰：同一天同一題，一定有解
+        const twDay = (ms = Date.now()) => new Date(ms + 8 * 3600e3).toISOString().slice(0, 10);
+        function dailyCards(date) {
+            const r = Util.seeded('tf24_' + date);
+            for (; ;) { const c = [0, 0, 0, 0].map(() => r.int(13) + 1); if (solve24(c)) return c; }
+        }
+
+        // 統計：{ n 解開題數, best 最快秒數(0=無), d:{ last 最近完成每日挑戰的日期, streak 連續天數, best 最長連續 } }；載入一律驗證
+        const DATE_RE = /^\d{4}-\d{2}-\d{2}$/, CAP = 1e6;
+        const posInt = (v) => (Number.isInteger(v) && v >= 0 && v <= CAP ? v : 0);
+        function cleanStats(s) {
+            s = s && typeof s === 'object' ? s : {}; const d = s.d && typeof s.d === 'object' ? s.d : {};
+            const streak = posInt(d.streak);
+            return { n: posInt(s.n), best: Number.isInteger(s.best) && s.best > 0 && s.best < 86400 ? s.best : 0,
+                d: { last: typeof d.last === 'string' && DATE_RE.test(d.last) ? d.last : '', streak, best: Math.max(streak, posInt(d.best)) } };
+        }
+        // 完成今天的每日挑戰：昨天有完成就 +1，否則從 1 開始；同一天重複完成不再計
+        function bumpDaily(d, today) {
+            if (d.last === today) return d;
+            const streak = d.last && d.last === day.shift(today, -1) ? d.streak + 1 : 1;
+            return { last: today, streak, best: Math.max(d.best, streak) };
+        }
+        // 目前顯示的連續天數：最近完成日不是今天或昨天就已中斷
+        const liveStreak = (d, today) => (d.last === today || (d.last && d.last === day.shift(today, -1)) ? d.streak : 0);
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s), KEY = 'tf24_stats';
+        let mode = 'r', cards = [], tok = [], t0 = 0, hinted = false, done = false, stats = cleanStats(Util.store.get(KEY, null));
+
+        const fmt = (n) => (n ? n + ' 秒' : '—');
+        function renderStats() {
+            const today = twDay();
+            $('#statBox').innerHTML = [['解開題數', stats.n], ['最快時間（沒用提示）', fmt(stats.best)], ['每日挑戰連續', liveStreak(stats.d, today) + ' 天'], ['最長連續', stats.d.best + ' 天']]
+                .map(([a, b]) => `<div class="li stat"><span>${a}</span><b>${b}</b></div>`).join('');
+            $('#dinfo').hidden = mode !== 'd';
+            $('#dinfo').textContent = stats.d.last === today ? '今天的每日挑戰已完成，可再練習（不重複計算）' : '今天的每日挑戰還沒完成';
+            $('#none').hidden = mode === 'd';
+        }
+        function render() {
+            const used = new Set(tok.filter(t => t.i >= 0).map(t => t.i));
+            $('#cards').replaceChildren(...cards.map((c, i) => Object.assign(document.createElement('button'), { textContent: c, disabled: used.has(i) || done, onclick: () => { tok.push({ t: String(c), i }); render(); } })));
+            $('#expr').textContent = show(tok.map(t => t.t).join(' '));
+            document.querySelectorAll('#ops button, #chk, #back, #clr').forEach(b => { b.disabled = done; });
+        }
+        function say(t, cls = '') { $('#status').textContent = t; $('#status').className = cls; }
+        function newPuzzle() {
+            cards = mode === 'd' ? dailyCards(twDay()) : [0, 0, 0, 0].map(() => Util.rnd(13) + 1);
+            tok = []; hinted = false; done = false; t0 = Date.now(); say(''); render(); renderStats();
+        }
+        function solved() {
+            done = true; const sec = Math.max(1, Math.round((Date.now() - t0) / 1000)), today = twDay();
+            let msg = '🎉 答對了！';
+            if (!hinted) {
+                stats.n++; if (!stats.best || sec < stats.best) stats.best = sec;
+                if (mode === 'd') { const before = stats.d.last; stats.d = bumpDaily(stats.d, today); if (before !== today) msg += `每日挑戰連續 ${stats.d.streak} 天`; }
+                Util.store.set(KEY, stats);
+            } else msg += '（用了提示，不計入統計）';
+            say(`${msg}　用時 ${sec} 秒`, 'ok'); render(); renderStats();
+        }
+
+        $('#modes').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; mode = b.dataset.m; for (const x of $('#modes').children) x.setAttribute('aria-pressed', x === b); newPuzzle(); };
+        $('#ops').onclick = (e) => { const b = e.target.closest('button'); if (b && !done) { tok.push({ t: b.dataset.o, i: -1 }); render(); } };
+        $('#back').onclick = () => { tok.pop(); say(''); render(); };
+        $('#clr').onclick = () => { tok = []; say(''); render(); };
+        $('#chk').onclick = () => { const r = check24(tok.map(t => t.t).join(' '), cards); if (r.ok) solved(); else say(r.msg, 'bad'); };
+        $('#hint').onclick = () => { if (done) { const s = solve24(cards); say(s ? '解法：' + show(s) : '這題無解'); return; } hinted = true; const s = solve24(cards); say(s ? '提示：' + show(s) + ' ＝ 24' : '這題無解！', ''); };
+        $('#none').onclick = () => {
+            if (done) return;
+            if (solve24(cards)) say('這題其實有解，再想想（或按提示）', 'bad');
+            else { done = true; say('答對了，這題確實無解！', 'ok'); render(); }
+        };
+        $('#next').onclick = newPuzzle;
+        $('#clearStats').onclick = () => {
+            if (!confirm('清除所有 24 點統計（解開題數、最快時間、每日連續天數）？無法復原。')) return;
+            try { localStorage.removeItem(KEY); } catch (e) { }
+            stats = cleanStats(null); renderStats();
+        };
+        newPuzzle();
+    </script>
+</body>
+
+</html>
