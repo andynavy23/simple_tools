@@ -13,7 +13,7 @@ import { spawn } from 'child_process';
 const dir = import.meta.dirname, e2eDir = path.join(dir, 'e2e');
 const args = process.argv.slice(2), flags = args.filter(a => a.startsWith('--')), frags = args.filter(a => !a.startsWith('--'));
 const TAIL = 14, QUIET = flags.includes('--all') || flags.includes('--quiet'), SERIAL = flags.includes('--serial');
-const CPUS = os.cpus().length, SHARDS = SERIAL ? 1 : Math.max(2, Math.min(6, CPUS >> 1)), E2E_JOBS = SERIAL ? 1 : Math.max(1, Math.min(4, CPUS >> 2));
+const CPUS = os.cpus().length, SHARDS = SERIAL ? 1 : Math.max(2, Math.min(6, CPUS >> 1)), E2E_JOBS = SERIAL ? 1 : Math.max(1, Math.min(3, CPUS >> 2));
 
 function run(file, extra = [], env = {}, retry = false) {
     return new Promise((resolve) => {
@@ -26,7 +26,10 @@ function run(file, extra = [], env = {}, retry = false) {
             if (done) return; done = true; clearTimeout(timer);
             const secs = ((Date.now() - t0) / 1000).toFixed(1);
             if (code === 0) { if (!QUIET) console.log(`ok   ${name} (${secs}s)`); return resolve(true); }
-            if (retry) { console.log(`RETRY ${name}（並行時失敗，單獨重跑一次）`); return resolve(run(file, extra, env, false).then((ok2) => { if (ok2) console.log(`FLAKY ${name}：重跑通過，並行負載下可能計時不穩`); return ok2; })); }
+            if (retry) {
+                const first = (out.split('\n').find(l => /Error|Timeout|EPERM|ProtocolError/i.test(l)) || out.trim().split('\n').pop() || '').trim().slice(0, 140);
+                return resolve(run(file, extra, env, false).then((ok2) => { if (ok2) console.log(`FLAKY ${name}：重跑通過（並行負載下偶發，第一次：${first}）`); return ok2; }));
+            }
             console.log(`FAIL ${name} (${secs}s)\n  ` + out.trim().split('\n').filter(l => !/^ok /.test(l)).slice(-TAIL).join('\n  '));
             resolve(false);
         };

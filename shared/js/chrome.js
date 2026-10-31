@@ -284,6 +284,7 @@
     };
     const ICON = {
         save: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>',
+        home: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-6h4v6"/></svg>',
         help: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg>',
         theme: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.8 1.5-1.8-.3-1 .3-1.9 1.4-1.9H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7.5" r="1"/><circle cx="14.5" cy="7.5" r="1"/></svg>',
     };
@@ -311,6 +312,11 @@
         const themed = !!getComputedStyle(root).getPropertyValue('--card').trim();      // 沒用 theme.css 的頁面（楓之谷風格等）只提供說明按鈕
         if (!themed) s.textContent += '.st-bar,.st-panel,.st-help{--card:#fff;--text:#1d1d1f;--muted:#6e6e73;--fill:rgba(118,118,128,.14);--line:rgba(0,0,0,.12);--blue:#0071e3;--on-blue:#fff;--bg:#f5f5f7;--radius:16px;--radius-sm:10px;--btn-radius:980px;--font:system-ui,sans-serif;--head-font:system-ui,sans-serif;--head-weight:700}.st-help .primary{background:var(--blue);color:#fff}';
         bar = el('div', { class: 'st-bar' });
+        // 沒有「回工具箱」連結的頁面（楓之谷風格等獨立風格頁）：按鈕列最前面加一顆「工具箱」鈕；偽裝用的頁面可加 <meta name="st-home" content="off"> 關掉
+        if (CHROME_SRC && !document.querySelector('meta[name=st-home][content=off]') && ![...document.querySelectorAll('a[href]')].some((a) => /(^|\/)index\.html(#.*)?$/.test(a.getAttribute('href')))) {
+            const hb = el('button', { type: 'button', class: 'st-homebtn', 'aria-label': '回工具箱', title: '回工具箱' }); hb.innerHTML = ICON.home + '<span class="st-lb">工具箱</span>';
+            hb.onclick = () => { location.href = new URL('../../index.html', CHROME_SRC).href; }; bar.append(hb);
+        }
         if (metaKeys()) { const d = el('button', { type: 'button', class: 'st-databtn', 'aria-label': '資料備份與還原', title: '資料備份與還原' }); d.innerHTML = ICON.save + '<span class="st-lb">備份</span>'; d.onclick = () => openData(); bar.append(d); }
         if (!root.lang) root.lang = 'zh-TW';
         // 免責聲明：頁面加 <meta name="st-disclaimer" content="health|food|pet|finance|travel|craft">，頁尾統一顯示「僅供參考、本站不負責」（health|food|pet|finance|travel|craft|general）
