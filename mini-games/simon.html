@@ -10,7 +10,7 @@
     <meta property="og:description" content="記住顏色與聲音的順序，挑戰最高關卡。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/simon.html" />
-    <meta name="st-keys" content="simon_best">
+    <meta name="st-keys" content="simon_best,simon_digit_*">
     <title>記憶序列 Simon</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -67,6 +67,31 @@
             cursor: default;
         }
 
+        #dShow {
+            text-align: center;
+            font-size: 64px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            min-height: 1.6em;
+            line-height: 1.6;
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            margin-bottom: 10px;
+        }
+
+        #dShow.hint {
+            font-size: 20px;
+            color: var(--muted);
+        }
+
+        #dMsg {
+            text-align: center;
+            font-weight: 700;
+            min-height: 1.6em;
+            margin-top: 10px;
+        }
+
         #msg {
             text-align: center;
             font-weight: 700;
@@ -83,6 +108,12 @@
         <h1>記憶序列 Simon</h1>
         <p class="sub">看完整段順序再照著按。也可以用鍵盤 1 2 3 4（或 Q W A S）。</p>
 
+        <div class="top" id="modes">
+            <button class="primary" data-m="color" aria-pressed="true">色塊</button>
+            <button data-m="digit" aria-pressed="false">數字記憶</button>
+        </div>
+
+        <div id="colorGame">
         <div class="top">
             <div class="score"><small>目前關卡</small><b id="level">0</b></div>
             <div class="score"><small>最高關卡</small><b id="best">0</b></div>
@@ -91,6 +122,27 @@
 
         <div id="msg" role="status" aria-live="polite"></div>
         <div id="pads"></div>
+        </div>
+
+        <div id="digitGame" hidden>
+            <select id="dMode" aria-label="模式" style="width:100%;margin-bottom:10px">
+                <option value="digit">數字（照順序輸入）</option>
+                <option value="rev">數字（倒背）</option>
+                <option value="alpha">字母（照順序輸入）</option>
+            </select>
+            <div class="top">
+                <div class="score"><small>目前長度</small><b id="dLen">0</b></div>
+                <div class="score"><small>機會</small><b id="dLife">2</b></div>
+                <div class="score"><small>最佳長度</small><b id="dBest">0</b></div>
+            </div>
+            <div id="dShow" aria-live="polite">按「開始」</div>
+            <div id="dIn" hidden>
+                <input type="text" id="dAns" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="你的答案" style="width:100%">
+                <button class="primary" id="dOk" style="width:100%;margin-top:8px">確認</button>
+            </div>
+            <div id="dMsg" role="status" aria-live="polite"></div>
+            <button class="primary" id="dStart" style="width:100%;margin-top:8px">開始</button>
+        </div>
         <button class="sm" id="clearBest" style="margin-top:12px">清除最佳紀錄</button>
     </div>
 
@@ -109,6 +161,13 @@
         <li>全部答對就進下一關，序列多一個，而且越後面播放越快。</li>
         <li>按錯就結束，可按「再來一次」。</li>
         </ol>
+        <h3>數字記憶廣度（上方切到「數字記憶」）</h3>
+        <ol>
+        <li>選模式：數字照順序、數字倒背、字母照順序，按「開始」。</li>
+        <li>符號一個一個出現（每個 0.8 秒），消失後在輸入框打出來，按「確認」或 Enter；空白與逗號會被忽略。</li>
+        <li>從 3 個開始，答對就加長 1 個（上限 30）；答錯有 2 次機會，用完結束，答錯時會換同長度的新一組。</li>
+        </ol>
+        <div class="eg">最佳長度 = 最長答對的長度，三種模式各自記錄。</div>
         <h3>計分</h3>
         <div class="eg">以「撐過的關卡數」計：第 5 關按錯，成績是 4 關。畫面上方顯示目前關卡與最高關卡。</div>
         <h3>小提醒</h3>
@@ -116,7 +175,7 @@
         <li>序列播放時色塊不能點，請等「換你了」。</li>
         <li>聲音需要手機沒有靜音才聽得到，不開聲音也能玩。</li>
         <li>四個顏色位置固定：左上綠、右上紅、左下黃、右下藍。</li>
-            <li>最佳紀錄存在這台裝置；想重來可按頁面下方的「清除最佳紀錄」（只清這個遊戲，無法復原；頁面會重新載入，進行中的這一局會結束）。</li>
+            <li>最佳紀錄（色塊關卡、三種數字模式的最長長度，共 4 筆）存在這台裝置；想重來可按頁面下方的「清除最佳紀錄」（只清這個遊戲，無法復原；頁面會重新載入，進行中的這一局會結束）。</li>
 </ul>
     </template>
 
@@ -136,6 +195,26 @@
 
         // 第 n 關每個音的間隔（毫秒），越後面越快
         const stepMs = (level) => Math.max(260, 620 - level * 22);
+
+        // ===== 數字記憶廣度 =====
+        const DIGIT_MAX = 30;   // 長度上限（達到即通關）
+        const DIGIT_MODES = {
+            digit: { pool: '0123456789', rev: false },
+            rev: { pool: '0123456789', rev: true },
+            alpha: { pool: 'ABCDEFGHJKLMNPRSTUVWXYZ', rev: false },
+        };
+        // 產生長度 len 的序列（相鄰不重複，方便閱讀）
+        function digitSeq(len, mode, rand) {
+            const p = DIGIT_MODES[mode].pool, s = [];
+            while (s.length < len) { const c = p[rand(p.length)]; if (c !== s[s.length - 1]) s.push(c); }
+            return s;
+        }
+        // 正確答案字串（倒背模式要反過來）
+        const digitExpect = (seq, mode) => (DIGIT_MODES[mode].rev ? [...seq].reverse() : seq).join('');
+        // 判定：忽略空白、逗號、大小寫
+        const digitJudge = (seq, mode, ans) => String(ans).toUpperCase().replace(/[\s,，、-]/g, '') === digitExpect(seq, mode);
+        // 最佳長度：驗證舊值（備份還原可能是壞資料），夾在 0..DIGIT_MAX
+        const digitBest = (old, len) => Math.min(DIGIT_MAX, Math.max(Math.floor(Number(old)) || 0, len));
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -206,13 +285,72 @@
             next();
         };
 
+        // ===== 數字記憶廣度（每個符號顯示 0.6 秒 + 空白 0.2 秒 = 0.8 秒） =====
+        let dSeq = [], dLen = 3, dLife = 2, dRun = 0, dOkLen = 0;
+        const dKey = () => 'simon_digit_' + $('#dMode').value;
+        const dShow = (t, hint) => { $('#dShow').textContent = t; $('#dShow').classList.toggle('hint', !!hint); };
+        const dBestShow = () => { $('#dBest').textContent = digitBest(store.get(dKey(), 0), 0); };
+        function dStats() { $('#dLen').textContent = dLen; $('#dLife').textContent = dLife; }
+        async function dRound() {
+            const run = dRun;
+            $('#dIn').hidden = true; $('#dStart').hidden = true; $('#dMsg').textContent = ''; dStats();
+            dSeq = digitSeq(dLen, $('#dMode').value, rnd);
+            dShow('準備…', true); await wait(900);
+            for (const c of dSeq) {
+                if (run !== dRun) return;
+                dShow(c); await wait(600); dShow(''); await wait(200);
+            }
+            if (run !== dRun) return;
+            dShow($('#dMode').value === 'rev' ? '請倒著輸入' : '請輸入', true);
+            $('#dIn').hidden = false; $('#dAns').value = ''; $('#dAns').focus();
+        }
+        function dEnd(msg) {
+            dRun++; $('#dIn').hidden = true; $('#dStart').hidden = false; $('#dStart').textContent = '再來一次';
+            dShow(''); $('#dMsg').textContent = msg; dStats();
+        }
+        function dSubmit() {
+            if ($('#dIn').hidden) return;
+            const mode = $('#dMode').value;
+            if (digitJudge(dSeq, mode, $('#dAns').value)) {
+                dOkLen = dLen;
+                const prev = digitBest(store.get(dKey(), 0), 0);
+                if (dOkLen > prev) { store.set(dKey(), digitBest(prev, dOkLen)); dBestShow(); }
+                if (dLen >= DIGIT_MAX) return dEnd('太強了，達到長度上限 ' + DIGIT_MAX + '！');
+                dLen++; $('#dMsg').textContent = '答對了！'; dRound();
+            } else {
+                dLife--;
+                const ans = digitExpect(dSeq, mode).split('').join(' ');
+                if (dLife <= 0) return dEnd(`答錯了，正確是 ${ans}。遊戲結束，最長答對 ${dOkLen}。`);
+                $('#dMsg').textContent = `答錯了，正確是 ${ans}。還剩 ${dLife} 次機會，換一組同長度。`;
+                dStats(); $('#dIn').hidden = true; dShow(ans, true); const r = ++dRun;
+                setTimeout(() => { if (r === dRun) dRound(); }, 1800);
+            }
+        }
+        function dStart() {
+            dRun++; dLen = 3; dLife = 2; dOkLen = 0; dRound();
+        }
+        $('#dStart').onclick = dStart;
+        $('#dOk').onclick = dSubmit;
+        $('#dAns').onkeydown = (e) => { if (e.key === 'Enter') dSubmit(); };
+        $('#dMode').onchange = () => { dRun++; $('#dIn').hidden = true; $('#dStart').hidden = false; $('#dStart').textContent = '開始'; dShow('按「開始」', true); $('#dMsg').textContent = ''; dLen = 3; dLife = 2; dStats(); dBestShow(); };
+        $('#modes').onclick = (e) => {
+            const m = e.target.dataset && e.target.dataset.m;
+            if (!m) return;
+            [...$('#modes').children].forEach(b => { const on = b.dataset.m === m; b.setAttribute('aria-pressed', on); b.classList.toggle('primary', on); });
+            if (m === 'digit') { accepting = false; playing = false; pads.forEach(p => { p.disabled = true; }); $('#start').disabled = false; $('#start').textContent = '開始'; $('#msg').textContent = ''; }
+            else { dRun++; }
+            $('#colorGame').hidden = m !== 'color'; $('#digitGame').hidden = m !== 'digit';
+        };
+        dShow('按「開始」', true); dStats(); dBestShow();
+
         addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || $('#colorGame').hidden) return;
             if (e.ctrlKey || e.metaKey || e.altKey) return;
             const i = PADS.findIndex(p => p.key.includes(e.key.toLowerCase()));
             if (i >= 0) press(i);
         });
     </script>
-<script>document.getElementById('clearBest').onclick=()=>{if(!confirm('清除這個遊戲的所有最佳紀錄？無法復原。頁面會重新載入，正在進行的這一局會結束。'))return;try{const p=['simon_best'];Object.keys(localStorage).filter(k=>p.some(x=>k.startsWith(x))).forEach(k=>localStorage.removeItem(k));}catch(e){}location.reload();};</script>
+<script>document.getElementById('clearBest').onclick=()=>{if(!confirm('清除這個遊戲的所有最佳紀錄？無法復原。頁面會重新載入，正在進行的這一局會結束。'))return;try{const p=['simon_best','simon_digit_'];Object.keys(localStorage).filter(k=>p.some(x=>k.startsWith(x))).forEach(k=>localStorage.removeItem(k));}catch(e){}location.reload();};</script>
 </body>
 
 </html>

@@ -43,7 +43,7 @@ async function pool(tasks, n) {
     return res;
 }
 const list = (d, re) => fs.readdirSync(d).filter(f => re.test(f)).map(f => path.join(d, f));
-const E2E_SKIP = /^(lib|ios_audit|smoke|visual_audit|storage_fuzz)\.mjs$/;
+const E2E_SKIP = /^(lib|ios_audit|smoke|visual_audit|storage_fuzz|tabs_overflow)\.mjs$/;
 const e2eFiles = () => list(e2eDir, /\.mjs$/).filter(f => !E2E_SKIP.test(path.basename(f)));
 // 單元：shared、tools.test.js 主體（ST_NO_SOLO=1 跳過 solo-* / new-*）、以及 solo-* / new-* 分成 SHARDS 份並行
 const unitTasks = () => [

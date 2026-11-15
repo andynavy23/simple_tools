@@ -274,6 +274,7 @@
         小型犬 3 歲 ≈ 人類 28 歲（約略換算）</div>
         <h3>小提醒</h3>
         <ul>
+        <li>體重趨勢圖下方：以最新一筆為基準，近 30 天變化 ≥ 10% 或近一週 ≥ 5% 會提示「建議諮詢獸醫」；只是簡單比例提醒，不是診斷。體重記錄可單筆編輯 / 刪除（刪寵物會一併刪除）。</li>
         <li>非獸醫建議：年齡換算只是約略參考（1 歲約 15、2 歲約 24，之後狗依體型每年加 4 / 5 / 6 歲，貓每年加 4 歲），疫苗驅蟲頻率請依獸醫指示。</li>
         <li>資料只存在這個瀏覽器，清除網站資料會消失；右上角「💾」可匯出備份。</li>
         <li>最多 20 隻寵物、3000 筆記錄，滿了要先刪除才能新增，不會默默刪舊的。</li>
@@ -405,6 +406,16 @@
             }).sort((a, b) => a.due < b.due ? -1 : a.due > b.due ? 1 : a.id < b.id ? -1 : 1);
         }
         const weightSeries = (d, pid) => d.events.filter(e => e.pid === pid && e.type === '體重').sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1).map(e => ({ date: e.date, kg: e.val }));
+        // 體重異常：以最新一筆為基準，30 天窗內第一筆 → 最新 變化 ≥ 10%，或 7 天窗內 ≥ 5%（窗內至少 2 筆）；回傳 { pct30, pct7, alert, reasons }（pct 為 null 表示資料不足）
+        function weightAlert(ws) {
+            const out = { pct30: null, pct7: null, alert: false, reasons: [] };
+            if (!Array.isArray(ws) || ws.length < 2) return out;
+            const last = ws[ws.length - 1], pct = (win) => { const f = ws.find(w => day.between(w.date, last.date) <= win && w !== last); return f && f.kg > 0 ? (last.kg - f.kg) / f.kg * 100 : null; };
+            out.pct30 = pct(30); out.pct7 = pct(7);
+            if (out.pct30 !== null && Math.abs(out.pct30) >= 10) out.reasons.push(`近 30 天${out.pct30 > 0 ? '增加' : '減少'} ${Math.abs(out.pct30).toFixed(1)}%`);
+            if (out.pct7 !== null && Math.abs(out.pct7) >= 5) out.reasons.push(`近一週${out.pct7 > 0 ? '增加' : '減少'} ${Math.abs(out.pct7).toFixed(1)}%`);
+            out.alert = out.reasons.length > 0; return out;
+        }
         // 貓砂：存檢查 → { d, err }；清除 = 設回 null
         function checkLit(r) {
             const num = (k) => (String(r[k] ?? '').trim() === '' ? NaN : Number(r[k]));
@@ -533,6 +544,7 @@
                 drawChart(ws);
                 const last = ws[ws.length - 1].kg, first = ws[0].kg;
                 say('#wMsg', ws.length === 1 ? `目前 ${last} 公斤（再記幾筆就能看到趨勢）` : `最新 ${last} 公斤，比第一筆（${ws[0].date}）${last >= first ? '增加' : '減少'} ${Math.abs(last - first).toFixed(2)} 公斤；共 ${ws.length} 筆`);
+                const wa = weightAlert(ws); if (wa.alert) $('#wMsg').textContent += `。⚠ ${wa.reasons.join('、')}，建議諮詢獸醫（本頁不是獸醫建議）`;
             }
 
             const f = $('#typeFilter').value, all = data.events.filter(e => e.pid === cur && (!f || e.type === f)).sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? 1 : -1);
@@ -580,6 +592,7 @@
         ['#e_type', '#e_date', '#e_cyc', '#e_cu'].forEach(q => { $(q).oninput = typeUi; });
         $('#typeFilter').onchange = () => { showAll = false; render(); };
         addEventListener('resize', () => { if (cur && !$('#wCard').hidden) drawChart(weightSeries(data, cur)); });
+        addEventListener('st-themechange', () => { if (cur && !$('#wCard').hidden) drawChart(weightSeries(data, cur)); });
         new MutationObserver(() => { if (cur && !$('#wCard').hidden) drawChart(weightSeries(data, cur)); }).observe(document.documentElement, { attributes: true });
         $('#csv').onclick = () => {
             if (!data.events.length) { say('#dataMsg', '還沒有記錄可以匯出'); return; }

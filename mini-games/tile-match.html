@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="連連看與麻將消除：兩種配對消除遊戲，連連看最多兩個轉角連線，麻將消除有 7 種多層牌堆、保證可解、提示與悔棋。">
+    <meta property="og:title" content="連連看 / 麻將消除" />
+    <meta property="og:description" content="連連看與麻將消除（Mahjong Solitaire）配對消除，單機、記錄最快時間。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/tile-match.html" />
+    <meta name="st-keys" content="tilem_best">
+    <title>連連看 / 麻將消除</title>
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>兩種配對消除遊戲放在一起：<b>連連看</b>（兩張相同的牌，用最多兩個轉角的線連起來就消除）和<b>麻將消除</b>（多層牌堆，挑出「沒被壓住、左右至少一邊空」的相同牌消除）。全部單機，不需連線。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>想放鬆、打發幾分鐘</li>
+        <li>想挑戰最快清盤時間</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+        <li>上方切換「連連看 / 麻將消除」（切換會重新開始一局）</li>
+        <li><b>連連看</b>：點一張牌（高亮），再點另一張相同的牌。兩張之間若能用最多三段直線（兩個轉角）連起來、路徑不經過其他牌就消除；路徑可以繞過盤面外圍的空地。難度決定盤面大小與圖案種類，圖案可選麻將牌或表情符號</li>
+        <li>連連看沒有可消的牌時會自動洗牌並提示；也可以隨時按「洗牌」</li>
+        <li><b>麻將消除</b>：選牌堆布局。只有「上方沒有牌」且「左邊或右邊至少一側是空的」的牌才可選（亮色），被壓住的牌是暗色。點兩張相同的可選牌消除；四張花牌（梅蘭竹菊）可互相配對，四張季節牌（春夏秋冬）可互相配對</li>
+        <li>發牌由完成盤面倒推，保證一開始有解；但隨著你的選擇仍可能走進死局。無可消的牌時會提示，按「洗牌」（把剩下的牌重新保證可解地排一次）或「重來」</li>
+        <li>「提示」會高亮一對可消的牌；「悔棋」可退回上一對（洗牌後悔棋紀錄清空）；「放大」可放大牌堆再在框內滑動</li>
+        <li>勾選「每日挑戰」：當天（台灣時間）所有人拿到同一副牌；每日挑戰不記錄最佳時間</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">連連看：兩張 🍎 在同一列，中間隔著一張牌，但可以往上走到盤面外圍、橫過去再往下，轉了 2 個彎就能連到，所以可以消除。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>最佳時間以「模式＋難度 / 牌堆」分開記錄在本機（鍵 <code>tilem_best</code>），最多 60 筆，滿了不會再新增並會提示；每日挑戰不記錄。想重來按頁面下方「清除最佳紀錄」（只清這個遊戲，無法復原）。</li>
+        <li>用提示或悔棋仍會記錄時間，想拚最快請盡量少用。</li>
+        <li>牌堆太小看不清時，按「放大」。</li>
+        </ul>
+    </template>
+
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root { --wrap-w: 720px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+        .row:last-child { margin-bottom: 0; }
+        #modeBar .seg { flex: 1 1 0; }
+        .muted { color: var(--muted); font-size: 14px; }
+        .stat { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-variant-numeric: tabular-nums; margin-bottom: 8px; }
+        #wrapBoard { overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--fill); }
+        #board { display: block; margin: 0 auto; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+        #board.lk { max-width: 480px; }
+        .t { cursor: pointer; }
+        .t rect.top { fill: var(--card); stroke: var(--line); stroke-width: .6; }
+        .t rect.side { fill: var(--line); }
+        .t.off { opacity: .45; cursor: default; }
+        .t.sel rect.top { stroke: var(--blue); stroke-width: 1.4; fill: var(--fill); }
+        .t.hint rect.top { stroke: var(--ok); stroke-width: 1.4; }
+        .t text { text-anchor: middle; pointer-events: none; font-weight: 700; fill: var(--text); }
+        .c0 { fill: var(--bad) !important; }
+        .c1 { fill: var(--ok) !important; }
+        .c2 { fill: var(--blue) !important; }
+        #line { stroke: var(--blue); stroke-width: 1.4; fill: none; stroke-linejoin: round; pointer-events: none; }
+        #msg { min-height: 1.5em; margin-top: 8px; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>連連看 / 麻將消除</h1>
+        <p class="sub">點兩張相同的牌消除。連連看比連線，麻將消除比取牌順序。</p>
+
+        <div class="card">
+            <div class="row" id="modeBar">
+                <button class="seg" data-mode="lk" aria-pressed="true">連連看</button>
+                <button class="seg" data-mode="mj" aria-pressed="false">麻將消除</button>
+            </div>
+            <div class="row" id="lkOpt">
+                <label class="muted" for="diff">難度</label>
+                <select id="diff">
+                    <option value="easy">簡單 6×6（9 種）</option>
+                    <option value="normal" selected>普通 8×8（16 種）</option>
+                    <option value="hard">困難 10×10（25 種）</option>
+                </select>
+                <label class="muted" for="style">圖案</label>
+                <select id="style">
+                    <option value="mj">麻將牌</option>
+                    <option value="emoji">表情符號</option>
+                </select>
+            </div>
+            <div class="row" id="mjOpt" hidden>
+                <label class="muted" for="layout">牌堆</label>
+                <select id="layout"></select>
+            </div>
+            <div class="row">
+                <label><input type="checkbox" id="daily"> 每日挑戰</label>
+                <button class="primary" id="start">開始 / 重來</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="stat"><span id="time">時間 0:00</span><span id="left"></span><span id="best"></span></div>
+            <div id="wrapBoard"><svg id="board" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="牌盤"></svg></div>
+            <div class="row" style="margin-top:10px">
+                <button id="hintBtn">提示</button>
+                <button id="shuffleBtn">洗牌</button>
+                <button id="undoBtn" hidden>悔棋</button>
+                <button id="zoomBtn" hidden>放大</button>
+            </div>
+            <div id="msg" class="muted" aria-live="polite"></div>
+        </div>
+        <button class="sm" id="clearBest">清除最佳紀錄</button>
+    </div>
+
+    <script>
+        const { store } = Util;
+
+        // --- pure ---
+        const shufR = (a, r) => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = r.int(i + 1);[b[i], b[j]] = [b[j], b[i]]; } return b; };
+        const twDay = (ms) => new Date(ms + 8 * 3600e3).toISOString().slice(0, 10);
+
+        // ===== 連連看 =====
+        // g：長 W*H 的陣列（0＝空地，>0＝牌），盤面外圈（含在 W*H 內）一定是空地。
+        // 回傳連線的轉折點列（含兩端，≤ 4 點＝最多 2 個轉角）；連不起來回傳 null
+        function llLink(g, W, H, a, b) {
+            if (a === b || !g[a] || g[a] !== g[b]) return null;
+            const st = [[1, 0], [-1, 0], [0, 1], [0, -1]], best = new Array(W * H * 4).fill(9);
+            let q = [{ p: a, d: -1, t: 0, path: [a] }];
+            while (q.length) {
+                const nq = [];
+                for (const s of q) {
+                    for (let d = 0; d < 4; d++) {
+                        const t = s.t + (s.d >= 0 && s.d !== d ? 1 : 0);
+                        if (t > 2) continue;
+                        let x = (s.p % W) + st[d][0], y = ((s.p / W) | 0) + st[d][1];
+                        for (; x >= 0 && x < W && y >= 0 && y < H; x += st[d][0], y += st[d][1]) {
+                            const p = y * W + x, path = s.d === d ? [...s.path.slice(0, -1), p] : [...s.path, p];
+                            if (p === b) return path;
+                            if (g[p]) break;
+                            if (best[p * 4 + d] > t) { best[p * 4 + d] = t; nq.push({ p, d, t, path }); }
+                        }
+                    }
+                }
+                q = nq;
+            }
+            return null;
+        }
+        // 找一對可消的牌：{a, b, path} 或 null
+        function llHint(g, W, H) {
+            const by = {};
+            for (let i = 0; i < g.length; i++) if (g[i]) (by[g[i]] = by[g[i]] || []).push(i);
+            for (const k in by) { const l = by[k]; for (let i = 0; i < l.length; i++) for (let j = i + 1; j < l.length; j++) { const path = llLink(g, W, H, l[i], l[j]); if (path) return { a: l[i], b: l[j], path }; } }
+            return null;
+        }
+        // 把剩下的牌重新洗過（至少要有一對可消，試到 200 次），回傳是否成功
+        function llShuffle(g, W, H, r) {
+            const idx = []; for (let i = 0; i < g.length; i++) if (g[i]) idx.push(i);
+            const vals = idx.map(i => g[i]);
+            for (let n = 0; n < 200; n++) {
+                const s = shufR(vals, r); idx.forEach((p, i) => { g[p] = s[i]; });
+                if (!idx.length || llHint(g, W, H)) return true;
+            }
+            return false;
+        }
+        // n×n 的盤面（外加一圈空地），共 kinds 種圖案、每種等量；n*n 必須能被 kinds 整除且每種為偶數張
+        function llDeal(n, kinds, r) {
+            const W = n + 2, per = n * n / kinds, g = new Array(W * W).fill(0), tiles = [];
+            for (let k = 1; k <= kinds; k++) for (let i = 0; i < per; i++) tiles.push(k);
+            const s = shufR(tiles, r); let c = 0;
+            for (let y = 1; y <= n; y++) for (let x = 1; x <= n; x++) g[y * W + x] = s[c++];
+            llShuffle(g, W, W, r);
+            return g;
+        }
+        const LL_LEVELS = { easy: [6, 9], normal: [8, 16], hard: [10, 25] };
+
+        // ===== 麻將消除 =====
+        // 牌種：0-8 萬、9-17 條、18-26 筒、27-30 東南西北、31-33 中發白、34-37 花（梅蘭竹菊，互配）、38-41 季（春夏秋冬，互配）
+        const mjGroup = (k) => k >= 38 ? 'S' : k >= 34 ? 'F' : k;
+        const mjMatch = (a, b) => mjGroup(a) === mjGroup(b);
+        // 牌面文字：[上, 下, 顏色(0 紅 1 綠 2 藍 3 一般)]
+        function mjLabel(k) {
+            if (k < 27) { const s = (k / 9) | 0, n = k % 9; return [s === 0 ? '一二三四五六七八九'[n] : String(n + 1), '萬條筒'[s], s === 0 ? 0 : s === 1 ? 1 : 2]; }
+            if (k < 31) return ['東南西北'[k - 27], '', 3];
+            if (k < 34) return ['中發白'[k - 31], '', k - 31];
+            if (k < 38) return ['梅蘭竹菊'[k - 34], '', 1];
+            return ['春夏秋冬'[k - 38], '', 0];
+        }
+        // 牌堆：[層 z, 欄 c, 列 r, 寬 w, 高 h] 的矩形（每格＝一張牌；上層的牌座標與下層同格）
+        const MJ_LAYOUTS = [
+            { name: '金字塔', rects: [[0, 0, 0, 10, 6], [1, 1, 1, 8, 4], [2, 2, 2, 6, 2]] },
+            { name: '烏龜', rects: [[0, 2, 0, 8, 1], [0, 1, 1, 10, 1], [0, 0, 2, 12, 2], [0, 1, 4, 10, 1], [0, 2, 5, 8, 1], [1, 3, 1, 6, 4], [2, 4, 2, 4, 2], [3, 5, 2, 2, 2], [4, 5, 2, 2, 1]] },
+            { name: '城堡', rects: [[0, 0, 0, 12, 1], [0, 0, 4, 12, 1], [0, 0, 1, 1, 3], [0, 11, 1, 1, 3], [0, 2, 2, 8, 1], [1, 0, 0, 1, 1], [1, 11, 0, 1, 1], [1, 0, 4, 1, 1], [1, 11, 4, 1, 1], [1, 1, 0, 10, 1], [1, 1, 4, 10, 1], [2, 0, 0, 1, 1], [2, 11, 0, 1, 1], [2, 0, 4, 1, 1], [2, 11, 4, 1, 1], [2, 4, 0, 4, 1], [2, 4, 4, 4, 1]] },
+            { name: '階梯', rects: [[0, 0, 0, 12, 3], [1, 2, 0, 10, 3], [2, 4, 0, 8, 3], [3, 6, 0, 6, 3]] },
+            { name: '雙塔', rects: [[0, 0, 0, 4, 6], [1, 1, 0, 2, 6], [2, 1, 1, 2, 4], [0, 8, 0, 4, 6], [1, 9, 0, 2, 6], [2, 9, 1, 2, 4], [0, 4, 2, 4, 2], [1, 5, 2, 2, 2]] },
+            { name: '十字', rects: [[0, 0, 2, 12, 3], [0, 4, 0, 4, 2], [0, 4, 5, 4, 2], [1, 2, 2, 8, 3], [1, 5, 0, 2, 2], [1, 5, 5, 2, 2], [2, 4, 2, 4, 3], [3, 5, 3, 2, 1]] },
+            { name: '草原（入門）', rects: [[0, 0, 0, 12, 4], [1, 3, 1, 6, 2]] },
+        ];
+        // 展開成座標（x、y 以半張牌為 1 單位，所以一張牌佔 2×2）；奇數張時去掉最高層最後一張
+        function mjParse(rects) {
+            const t = [];
+            for (const [z, c, r, w, h] of rects) for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) t.push({ x: (c + i) * 2, y: (r + j) * 2, z });
+            t.sort((a, b) => a.z - b.z || a.y - b.y || a.x - b.x);
+            if (t.length % 2) t.pop();
+            return t;
+        }
+        // 第 i 張可選：還在、上方沒牌、左或右至少一側沒有牌
+        function mjFree(L, alive, i) {
+            if (!alive[i]) return false;
+            const a = L[i]; let l = false, r = false;
+            for (let j = 0; j < L.length; j++) {
+                if (j === i || !alive[j]) continue;
+                const b = L[j], dx = b.x - a.x;
+                if (Math.abs(b.y - a.y) >= 2) continue;
+                if (b.z > a.z && Math.abs(dx) < 2) return false;
+                if (b.z === a.z) { if (dx < 0 && dx >= -2) l = true; else if (dx > 0 && dx <= 2) r = true; }
+            }
+            return !l || !r;
+        }
+        // 所有可消的牌對 [i, j]
+        function mjMoves(L, kinds, alive) {
+            const fr = []; for (let i = 0; i < L.length; i++) if (mjFree(L, alive, i)) fr.push(i);
+            const out = [];
+            for (let a = 0; a < fr.length; a++) for (let b = a + 1; b < fr.length; b++) if (mjMatch(kinds[fr[a]], kinds[fr[b]])) out.push([fr[a], fr[b]]);
+            return out;
+        }
+        // 所有「牌對種類」：34 種牌各 2 對 + 花 2 對 + 季 2 對 = 72 對（144 張）
+        function mjPool() {
+            const p = [];
+            for (let k = 0; k < 34; k++) p.push([k, k], [k, k]);
+            p.push([34, 35], [36, 37], [38, 39], [40, 41]);
+            return p;
+        }
+        // 從剩下的牌湊回牌對（花、季各自在群組內兩兩配）
+        function mjPairsOf(kinds, alive) {
+            const grp = {};
+            for (let i = 0; i < kinds.length; i++) if (alive[i]) (grp[mjGroup(kinds[i])] = grp[mjGroup(kinds[i])] || []).push(kinds[i]);
+            const out = [];
+            for (const g in grp) for (let i = 0; i + 1 < grp[g].length; i += 2) out.push([grp[g][i], grp[g][i + 1]]);
+            return out;
+        }
+        // 保證可解的發牌：由完成盤面倒推——每次從「目前可選」的牌隨機挑兩張當成一對、拿走，依序放回就是一個解。
+        // pairs 的數量必須 = alive 張數 / 2。回傳 { kinds, order: [[i,j]...] }（order 就是一個解），卡住（只剩一張可選）就重試，失敗回傳 null
+        function mjDeal(L, alive, pairs, r) {
+            for (let tries = 0; tries < 300; tries++) {
+                const al = [...alive], kinds = new Array(L.length).fill(-1), order = [];
+                let ok = true;
+                for (const [ka, kb] of shufR(pairs, r)) {
+                    const fr = []; for (let i = 0; i < L.length; i++) if (mjFree(L, al, i)) fr.push(i);
+                    if (fr.length < 2) { ok = false; break; }
+                    const i = fr.splice(r.int(fr.length), 1)[0], j = fr[r.int(fr.length)];
+                    kinds[i] = ka; kinds[j] = kb; al[i] = al[j] = false; order.push([i, j]);
+                }
+                if (ok) return { kinds, order };
+            }
+            return null;
+        }
+        // 新的一局：回傳 { L, kinds, alive, order }
+        function mjNew(layoutIdx, r) {
+            const L = mjParse(MJ_LAYOUTS[layoutIdx].rects), alive = L.map(() => true);
+            const d = mjDeal(L, alive, shufR(mjPool(), r).slice(0, L.length / 2), r);
+            return d && { L, kinds: d.kinds, alive, order: d.order };
+        }
+        // 無可消的牌（還有牌剩下）
+        const mjStuck = (L, kinds, alive) => alive.some(Boolean) && !mjMoves(L, kinds, alive).length;
+        // 最佳紀錄驗證：只收 lk_easy|normal|hard、mj_<牌堆編號> 的正有限數（秒），最多 60 筆
+        function cleanBest(o) {
+            const out = {}; let n = 0;
+            if (!o || typeof o !== 'object' || Array.isArray(o)) return out;
+            for (const k of Object.keys(o)) {
+                if (n >= 60) break;
+                if (/^(lk_(easy|normal|hard)|mj_\d)$/.test(k) && typeof o[k] === 'number' && isFinite(o[k]) && o[k] > 0 && o[k] < 1e7) { out[k] = Math.round(o[k]); n++; }
+            }
+            return out;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const RR = { int: (n) => Util.rnd(n) };
+        const EMOJI = ['🍎', '🍌', '🍇', '🍓', '🍉', '🍑', '🍋', '🥝', '🍒', '🥕', '🌽', '🍄', '🌸', '🌻', '🌵', '🍀', '⭐', '🌙', '☀️', '⚡', '🔥', '💧', '❄️', '🎈', '🎁'];
+        const SVGNS = 'http://www.w3.org/2000/svg';
+        let mode = 'lk', G = null, timer = null, t0 = 0, sel = -1, hint = null, line = null, zoom = 1, done = false, best = cleanBest(store.get('tilem_best', {})), daily = false, dkey = '';
+
+        const fmt = (s) => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+        const say = (t) => { $('#msg').textContent = t; };
+        const recKey = () => mode === 'lk' ? 'lk_' + $('#diff').value : 'mj_' + (daily ? 0 : +$('#layout').value);
+
+        function showStats() {
+            const bk = recKey();
+            $('#best').textContent = daily ? '每日挑戰（不記錄）' : '最佳 ' + (best[bk] ? fmt(best[bk]) : '—');
+            $('#left').textContent = G ? '剩 ' + (mode === 'lk' ? G.g.filter(Boolean).length : G.alive.filter(Boolean).length) + ' 張' : '';
+            $('#time').textContent = '時間 ' + fmt(G && t0 ? Math.floor(((done ? G.end : Date.now()) - t0) / 1000) : 0);
+        }
+        function setMode(m) {
+            mode = m;
+            document.querySelectorAll('#modeBar .seg').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === m));
+            $('#lkOpt').hidden = m !== 'lk'; $('#mjOpt').hidden = m !== 'mj';
+            $('#undoBtn').hidden = $('#zoomBtn').hidden = m !== 'mj';
+            newGame();
+        }
+        function newGame() {
+            clearInterval(timer); sel = -1; hint = null; line = null; done = false; zoom = 1; G = null;
+            daily = $('#daily').checked; dkey = twDay(Date.now());
+            if (mode === 'lk') {
+                const [n, k] = LL_LEVELS[$('#diff').value];
+                const r = daily ? Util.seeded('tilem-lk-' + dkey + $('#diff').value) : RR;
+                const g = llDeal(n, k, r);
+                G = { g, W: n + 2, n, k };
+                say('點一張牌，再點另一張相同的牌。');
+            } else {
+                const li = daily ? Util.seeded('tilem-mjl-' + dkey).int(MJ_LAYOUTS.length) : +$('#layout').value;
+                if (daily) $('#layout').value = li;
+                const r = daily ? Util.seeded('tilem-mj-' + dkey) : RR;
+                const g = mjNew(li, r);
+                if (!g) { say('發牌失敗，請再按一次「重來」。'); render(); return; }
+                G = { ...g, hist: [], li, shuffles: 0 };
+                say('點兩張相同的亮色牌（沒被壓住、左右至少一邊空）。');
+            }
+            t0 = Date.now(); timer = setInterval(showStats, 500);
+            render(); showStats();
+        }
+
+        // ----- 畫面 -----
+        const NS = (tag, attrs, html) => { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (html != null) e.innerHTML = html; return e; };
+        // 在 (x,y) 起、邊長 s 的方格內畫牌面
+        function face(g, k, x, y, s, sty) {
+            if (sty === 'emoji') { g.appendChild(NS('text', { x: x + s / 2, y: y + s * .68, 'font-size': s * .62 }, EMOJI[k - 1])); return; }
+            const [a, b, c] = mjLabel(k - 1), cl = 'c' + c;
+            if (b) { g.appendChild(NS('text', { x: x + s / 2, y: y + s * .5, 'font-size': s * .46, class: cl }, a)); g.appendChild(NS('text', { x: x + s / 2, y: y + s * .86, 'font-size': s * .36, class: cl }, b)); }
+            else g.appendChild(NS('text', { x: x + s / 2, y: y + s * .7, 'font-size': s * .6, class: cl }, a));
+        }
+        function render() {
+            const sv = $('#board'); sv.replaceChildren(); sv.setAttribute('class', mode);
+            $('#undoBtn').disabled = !G || !G.hist || !G.hist.length;
+            if (!G) return;
+            if (mode === 'lk') {
+                const { g, W } = G, sty = $('#style').value;
+                sv.setAttribute('viewBox', `0 0 ${W * 10} ${W * 10}`); sv.style.width = '100%';
+                g.forEach((k, i) => {
+                    if (!k) return;
+                    const x = (i % W) * 10, y = ((i / W) | 0) * 10;
+                    const e = NS('g', { class: 't' + (i === sel ? ' sel' : '') + (hint && (hint.a === i || hint.b === i) ? ' hint' : ''), 'data-i': i });
+                    e.appendChild(NS('rect', { class: 'top', x: x + .6, y: y + .6, width: 8.8, height: 8.8, rx: 1.6 }));
+                    face(e, k, x, y, 10, sty); sv.appendChild(e);
+                });
+                if (line) sv.appendChild(NS('polyline', { id: 'line', points: line.map(p => ((p % W) * 10 + 5) + ',' + (((p / W) | 0) * 10 + 5)).join(' ') }));
+            } else {
+                const { L, kinds, alive } = G, mx = Math.max(...L.map(t => t.x)) + 2, my = Math.max(...L.map(t => t.y)) + 2, mz = Math.max(...L.map(t => t.z));
+                const U = 10, D = 1.6, w = mx * U / 2 + mz * D + 2, h = my * U / 2 + mz * D + 2;
+                sv.setAttribute('viewBox', `0 0 ${w} ${h}`); sv.style.width = (100 * zoom) + '%';
+                L.forEach((t, i) => {
+                    if (!alive[i]) return;
+                    const f = mjFree(L, alive, i), x = t.x * U / 2 + (mz - t.z) * D + 1, y = t.y * U / 2 + (mz - t.z) * D + 1, s = U - 0.5;
+                    const e = NS('g', { class: 't' + (f ? '' : ' off') + (i === sel ? ' sel' : '') + (hint && (hint.a === i || hint.b === i) ? ' hint' : ''), 'data-i': i });
+                    e.appendChild(NS('rect', { class: 'side', x: x + D * .6, y: y + D * .6, width: s, height: s, rx: 1.4 }));
+                    e.appendChild(NS('rect', { class: 'top', x, y, width: s, height: s, rx: 1.4 }));
+                    face(e, kinds[i] + 1, x, y, s, 'mj'); sv.appendChild(e);
+                });
+            }
+            $('#zoomBtn').textContent = zoom > 1 ? '縮小' : '放大';
+        }
+
+        function finish() {
+            done = true; G.end = Date.now(); clearInterval(timer);
+            const sec = Math.max(1, Math.round((G.end - t0) / 1000)), bk = recKey();
+            let extra = '';
+            if (daily) extra = '（每日挑戰不記錄）';
+            else if (!best[bk]) {
+                if (Object.keys(best).length >= 60) extra = '（最佳紀錄已滿 60 筆，沒有新增，請先清除）';
+                else { best[bk] = sec; store.set('tilem_best', best); extra = '（第一次記錄）'; }
+            } else if (sec < best[bk]) { best[bk] = sec; store.set('tilem_best', best); extra = '（新紀錄！）'; }
+            say('🎉 全部消除！用時 ' + fmt(sec) + extra); showStats();
+        }
+        function afterMove() {
+            hint = null; sel = -1;
+            if (mode === 'lk') {
+                const { g, W } = G;
+                if (!g.some(Boolean)) { render(); return finish(); }
+                if (!llHint(g, W, W)) { llShuffle(g, W, W, RR); say('沒有可消的牌，已自動洗牌。'); }
+            } else {
+                if (!G.alive.some(Boolean)) { render(); return finish(); }
+                if (mjStuck(G.L, G.kinds, G.alive)) say('沒有可消的牌了！按「洗牌」或「重來」。');
+            }
+            render(); showStats();
+        }
+        $('#board').addEventListener('click', (ev) => {
+            const e = ev.target.closest('[data-i]');
+            if (!e || !G || done) return;
+            const i = +e.dataset.i; hint = null;
+            if (mode === 'lk') {
+                if (sel < 0 || sel === i) { sel = sel === i ? -1 : i; return render(); }
+                const path = llLink(G.g, G.W, G.W, sel, i);
+                if (!path) { sel = i; say('連不起來（最多兩個轉角、不能穿過其他牌）。'); return render(); }
+                G.g[sel] = G.g[i] = 0; line = path; say('');
+                const gg = G; render(); line = null;
+                setTimeout(() => { if (G === gg) afterMove(); }, 220);
+            } else {
+                if (!mjFree(G.L, G.alive, i)) { say('這張被壓住，或左右兩邊都有牌。'); return; }
+                if (sel < 0 || sel === i) { sel = sel === i ? -1 : i; return render(); }
+                if (!mjMatch(G.kinds[sel], G.kinds[i])) { sel = i; say('兩張不一樣。'); return render(); }
+                G.alive[sel] = G.alive[i] = false; G.hist.push([sel, i]); say('');
+                afterMove();
+            }
+        });
+        $('#hintBtn').onclick = () => {
+            if (!G || done) return;
+            const h = mode === 'lk' ? llHint(G.g, G.W, G.W) : (() => { const m = mjMoves(G.L, G.kinds, G.alive)[0]; return m && { a: m[0], b: m[1] }; })();
+            if (!h) { say('沒有可消的牌，請洗牌。'); return; }
+            hint = h; sel = -1; say('已標出一對可消的牌。'); render();
+        };
+        $('#shuffleBtn').onclick = () => {
+            if (!G || done) return;
+            hint = null; sel = -1;
+            if (mode === 'lk') { llShuffle(G.g, G.W, G.W, RR); say('已洗牌。'); }
+            else {
+                const d = mjDeal(G.L, G.alive, mjPairsOf(G.kinds, G.alive), RR);
+                if (!d) { say('洗牌失敗，再按一次。'); return; }
+                G.alive.forEach((a, i) => { if (a) G.kinds[i] = d.kinds[i]; });
+                G.hist = []; G.shuffles++; say('已洗牌（保證可解），悔棋紀錄已清空。');
+            }
+            render();
+        };
+        $('#undoBtn').onclick = () => {
+            if (!G || done || !G.hist.length) return;
+            const [a, b] = G.hist.pop(); G.alive[a] = G.alive[b] = true; hint = null; sel = -1; say('已悔棋。'); render(); showStats();
+        };
+        $('#zoomBtn').onclick = () => { zoom = zoom > 1 ? 1 : 1.8; render(); };
+        $('#start').onclick = newGame;
+        $('#daily').onchange = newGame; $('#diff').onchange = newGame; $('#style').onchange = () => render(); $('#layout').onchange = () => { $('#daily').checked = false; newGame(); };
+        document.querySelectorAll('#modeBar .seg').forEach(b => { b.onclick = () => setMode(b.dataset.mode); });
+        $('#clearBest').onclick = () => {
+            if (!confirm('清除這個遊戲的所有最佳紀錄？無法復原。')) return;
+            best = {}; try { localStorage.removeItem('tilem_best'); } catch (e) { }
+            showStats(); say('已清除最佳紀錄。');
+        };
+        $('#layout').innerHTML = MJ_LAYOUTS.map((l, i) => `<option value="${i}">${l.name}（${mjParse(l.rects).length} 張）</option>`).join('');
+        newGame();
+    </script>
+</body>
+
+</html>

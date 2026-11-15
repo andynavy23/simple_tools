@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="文字轉視覺輸出：程式碼截圖美化（視窗框、漸層背景、語法上色、匯出 PNG）與 ASCII Art 文字（5 套點陣字型），全部在本機處理。">
+    <meta property="og:title" content="程式碼截圖與 ASCII 文字" />
+    <meta property="og:description" content="貼程式碼產生漂亮截圖，或把文字變成 ASCII Art。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/text-art.html" />
+    <title>程式碼截圖與 ASCII 文字</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 720px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .tabs button {
+            flex: 1 1 auto;
+        }
+
+        textarea {
+            min-height: 180px;
+            resize: vertical;
+            font: 15px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+
+        .opts {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px 12px;
+            margin-top: 10px;
+        }
+
+        .opts label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 44px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .opts input[type="text"] {
+            width: 140px;
+        }
+
+        .opts input[type="range"] {
+            width: 110px;
+        }
+
+        .btns {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        #shotView {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            background: repeating-conic-gradient(var(--fill) 0 25%, transparent 0 50%) 0 0 / 16px 16px;
+        }
+
+        #asciiOut {
+            margin: 0;
+            padding: 10px;
+            overflow: auto;
+            max-height: 60vh;
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            font: 12px/1.15 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            white-space: pre;
+        }
+
+        .note {
+            color: var(--muted);
+            font-size: 13px;
+            margin: 8px 0 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>程式碼截圖與 ASCII 文字</h1>
+        <p class="sub">把程式碼做成帶視窗框與背景的漂亮圖片，或把文字變成 ASCII Art。全部在你的瀏覽器內完成，不存資料。</p>
+
+        <div class="tabs" role="tablist">
+            <button id="tabShot" aria-pressed="true">程式碼截圖</button>
+            <button id="tabAscii" aria-pressed="false">ASCII 文字</button>
+        </div>
+
+        <div id="paneShot">
+            <div class="card">
+                <textarea id="code" maxlength="20000" spellcheck="false" aria-label="程式碼" placeholder="貼上程式碼…（上限 2 萬字、500 行）">function greet(name) {
+  // say hello
+  return `Hello, ${name}!`;
+}
+console.log(greet("world"), 42);</textarea>
+                <div class="opts">
+                    <label>語言 <select id="lang"></select></label>
+                    <label>主題 <select id="theme"></select></label>
+                    <label>背景 <select id="bg"></select></label>
+                    <label id="bgColorWrap" hidden>顏色 <input type="color" id="bgColor" value="#6366f1"></label>
+                    <label>視窗 <select id="frame">
+                            <option value="mac">macOS 三顆點</option>
+                            <option value="min">簡約</option>
+                            <option value="none">無標題列</option>
+                        </select></label>
+                    <label>檔名 <input type="text" id="fname" maxlength="40" placeholder="app.js"></label>
+                    <label><input type="checkbox" id="ln" checked> 行號</label>
+                    <label><input type="checkbox" id="shadow" checked> 陰影</label>
+                </div>
+                <div class="opts">
+                    <label>字級 <input type="range" id="fs" min="11" max="24" value="15"><span id="fsV"></span></label>
+                    <label>邊距 <input type="range" id="pad" min="0" max="96" value="48"><span id="padV"></span></label>
+                    <label>圓角 <input type="range" id="rad" min="0" max="24" value="12"><span id="radV"></span></label>
+                    <label>寬度 <input type="range" id="wid" min="360" max="1200" step="20" value="760"><span id="widV"></span></label>
+                </div>
+            </div>
+            <div class="card">
+                <h2>結果</h2>
+                <canvas id="shotView" width="10" height="10"></canvas>
+                <p class="note" id="shotMsg"></p>
+                <div class="btns">
+                    <button class="primary" id="shotPng">下載 PNG（2×）</button>
+                    <button id="shotCopy">複製圖片</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="paneAscii" hidden>
+            <div class="card">
+                <textarea id="atext" maxlength="300" style="min-height:80px" aria-label="要轉換的文字">Hello 123</textarea>
+                <div class="opts">
+                    <label>字型 <select id="afont"></select></label>
+                    <label>對齊 <select id="aalign">
+                            <option value="left">靠左</option>
+                            <option value="center">置中</option>
+                            <option value="right">靠右</option>
+                        </select></label>
+                    <label>字距 <input type="range" id="aspace" min="0" max="4" value="1"><span id="aspaceV"></span></label>
+                    <label>換行寬度 <input type="range" id="awrap" min="0" max="120" step="5" value="0"><span id="awrapV"></span></label>
+                </div>
+            </div>
+            <div class="card">
+                <h2>結果</h2>
+                <pre id="asciiOut"></pre>
+                <div class="btns">
+                    <button class="primary" id="aCopy">複製</button>
+                    <button id="aTxt">存成 TXT</button>
+                    <button id="aPng">存成 PNG</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>兩個「文字變圖」的小工具：<b>程式碼截圖</b>把程式碼做成帶視窗框、背景與語法顏色的圖片；<b>ASCII 文字</b>把英文數字變成用符號拼出來的大字。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>要把程式碼貼到簡報、社群、文章，想要比純截圖好看。</li>
+            <li>想在 README、終端機開場、程式註解做醒目的大字標題。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+            <li>程式碼截圖：貼上程式碼，語言可自動偵測或手動指定；調主題、背景、視窗、字級、邊距、圓角、寬度；按「下載 PNG」或「複製圖片」。</li>
+            <li>ASCII 文字：輸入文字，選字型、對齊、字距與換行寬度（0 = 不換行），再複製或存成 TXT / PNG。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">輸入 <code>Hi</code>、字型 Banner：會得到 7 行高的 # 點陣大字。</div>
+        <h3>小提醒</h3>
+        <ul>
+            <li>語法上色是簡易規則，極少見的寫法可能上錯色；不影響程式碼內容。</li>
+            <li>程式碼上限 2 萬字、500 行；太長或太寬導致圖片超過瀏覽器畫布上限時，會自動改 1× 或提示無法匯出。</li>
+            <li>ASCII 字型涵蓋英文字母（不分大小寫）、數字與常見符號，中文與未收錄字元會顯示成「?」；Small 與 Pixel 字型符號較少。</li>
+            <li>「複製圖片」需要瀏覽器支援剪貼簿圖片（部分瀏覽器不支援，改用下載）。</li>
+            <li>本頁不儲存任何資料，關掉頁面就清空，沒有需要備份或清除的內容。圖片轉 ASCII 請用「圖片特效工坊」。</li>
+        </ul>
+    </template>
+
+    <script>
+        // --- pure ---
+        const SQ = String.raw`'(?:\\.|[^'\\\n])*'?`, DQ = String.raw`"(?:\\.|[^"\\\n])*"?`;
+        const BT = String.raw`\x60(?:\\[\s\S]|[^\x60\\])*\x60?`;
+        const LC = String.raw`//[^\n]*`, HC = String.raw`#[^\n]*`, DC = String.raw`--[^\n]*`, BC = String.raw`/\*[\s\S]*?(?:\*/|$)`;
+        const NUM = String.raw`\b\d[\w.]*`, WORD = String.raw`[A-Za-z_$][\w$]*`;
+        const JSK = 'break case catch class const continue debugger default delete do else export extends finally for function if import in instanceof let new of return static super switch this throw try var void while with yield async await from true false null undefined';
+        const LANG_DEFS = {
+            js: { n: 'JavaScript', kw: JSK, p: [['com', LC], ['com', BC], ['str', BT], ['str', DQ], ['str', SQ]] },
+            ts: { n: 'TypeScript', kw: JSK + ' interface type enum implements private public protected readonly abstract namespace declare as keyof string number boolean any never unknown', p: [['com', LC], ['com', BC], ['str', BT], ['str', DQ], ['str', SQ]] },
+            python: { n: 'Python', kw: 'and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield True False None self', p: [['com', HC], ['str', String.raw`"""[\s\S]*?(?:"""|$)`], ['str', String.raw`'''[\s\S]*?(?:'''|$)`], ['str', DQ], ['str', SQ]] },
+            html: { n: 'HTML', kw: '', p: [['com', String.raw`<!--[\s\S]*?(?:-->|$)`], ['kw', String.raw`</?[A-Za-z][\w-]*`], ['str', DQ], ['str', SQ]] },
+            css: { n: 'CSS', kw: 'important inherit initial none auto', word: String.raw`-?[A-Za-z_][\w-]*`, num: String.raw`#[0-9a-fA-F]{3,8}\b|\b\d[\w.%]*`, p: [['com', BC], ['kw', String.raw`@[\w-]+`], ['str', DQ], ['str', SQ]] },
+            json: { n: 'JSON', kw: 'true false null', p: [['fn', String.raw`"(?:\\.|[^"\\\n])*"(?=\s*:)`], ['str', DQ]] },
+            sql: { n: 'SQL', ci: 1, kw: 'select from where insert into values update set delete create table alter drop index join inner left right outer on group by order having limit offset as and or not null is in like between distinct union all case when then else end primary key foreign references default count sum avg min max asc desc', p: [['com', DC], ['com', BC], ['str', SQ], ['str', DQ]] },
+            bash: { n: 'Bash', kw: 'if then else elif fi for while do done case esac in function return exit echo cd ls export local set unset source sudo git npm rm cp mv mkdir cat grep true false', p: [['com', HC], ['fn', String.raw`\$\{?\w+\}?`], ['str', DQ], ['str', SQ]] },
+            java: { n: 'Java', kw: 'abstract boolean break byte case catch char class const continue default do double else enum extends final finally float for if implements import instanceof int interface long new package private protected public return short static super switch this throw throws try void volatile while true false null String var', p: [['com', LC], ['com', BC], ['str', DQ], ['str', SQ]] },
+            c: { n: 'C', kw: 'auto break case char const continue default do double else enum extern float for goto if inline int long register return short signed sizeof static struct switch typedef union unsigned void volatile while NULL true false bool', p: [['com', LC], ['com', BC], ['kw', String.raw`#\w+`], ['str', DQ], ['str', SQ]] },
+            text: { n: '純文字' }
+        };
+        for (const d of Object.values(LANG_DEFS)) {
+            if (!d.p) continue;
+            const ps = d.p.concat([['num', d.num || NUM], ['word', d.word || WORD], ['id', String.raw`[\s\S]`]]);
+            d.types = ps.map((x) => x[0]);
+            d.re = new RegExp(ps.map((x) => '(' + x[1] + ')').join('|'), 'g');
+            d.set = new Set(d.kw.split(' ').filter(Boolean).map((w) => (d.ci ? w.toLowerCase() : w)));
+        }
+        // 切成 [型別, 文字]；型別 kw/str/com/num/fn/id，串接起來等於原文
+        function tokenize(code, lang) {
+            const d = LANG_DEFS[lang], out = [];
+            const push = (t, s) => { const l = out[out.length - 1]; if (l && l[0] === t) l[1] += s; else out.push([t, s]); };
+            if (!d || !d.re) { if (code) out.push(['id', code]); return out; }
+            const re = d.re; re.lastIndex = 0;
+            let m;
+            while ((m = re.exec(code))) {
+                let i = 1; while (m[i] === undefined) i++;
+                let t = d.types[i - 1];
+                if (t === 'word') t = d.set.has(d.ci ? m[0].toLowerCase() : m[0]) ? 'kw' : code[re.lastIndex] === '(' ? 'fn' : 'id';
+                push(t, m[0]);
+            }
+            return out;
+        }
+        function detectLang(code) {
+            const c = code.trim();
+            if (!c) return 'text';
+            if (/^[\[{]/.test(c)) { try { JSON.parse(c); return 'json'; } catch (e) { } }
+            if (/^<(!doctype|html|head|body|div|span|script|style|p|a|ul|section|\w+[^>]*>)/i.test(c)) return 'html';
+            if (/^#!.*\b(ba)?sh\b|^\s*(sudo|apt|npm|git|curl|echo|cd|mkdir|chmod)\s/m.test(c)) return 'bash';
+            if (/\b(select\s[\s\S]+\sfrom|insert\s+into|delete\s+from|create\s+table|update\s+\w+\s+set)\b/i.test(c)) return 'sql';
+            if (/^\s*(def\s+\w+\(|from\s+\w+\s+import|import\s+\w+\s*$|elif\s|print\()/m.test(c) || /\bself\b/.test(c) && /:\s*$/m.test(c)) return 'python';
+            if (/^\s*#include\b|\bint\s+main\s*\(/m.test(c)) return 'c';
+            if (/System\.out|\b(public|private)\s+(static\s+)?(class|void|int|String)\b/.test(c)) return 'java';
+            if (!/\b(function|=>|const|let|var)\b/.test(c) && /^\s*[.#@]?[\w\s,.#:>*-]+\{\s*[\w-]+\s*:[^;{}]+;/m.test(c)) return 'css';
+            if (/\binterface\s+\w+|:\s*(string|number|boolean|any)\b/.test(c)) return 'ts';
+            return 'js';
+        }
+        // 把 token 依換行切成多行；每行再依欄數折行
+        function splitLines(tokens) {
+            const lines = [[]];
+            for (const [t, s] of tokens) {
+                s.split('\n').forEach((part, i) => { if (i) lines.push([]); if (part) lines[lines.length - 1].push([t, part]); });
+            }
+            return lines;
+        }
+        function wrapLine(line, cols) {
+            cols = Math.max(1, cols | 0);
+            const out = [[]]; let len = 0;
+            for (const [t, s0] of line) {
+                let s = s0;
+                while (s) {
+                    if (len >= cols) { out.push([]); len = 0; }
+                    const p = s.slice(0, cols - len);
+                    out[out.length - 1].push([t, p]); len += p.length; s = s.slice(p.length);
+                }
+            }
+            return out;
+        }
+        // 圖片尺寸：回傳可用倍率 2 / 1 / 0（0 = 超過畫布上限）
+        function fitScale(w, h) {
+            const ok = (s) => w * s <= 8000 && h * s <= 8000 && w * h * s * s <= 16e6;
+            return ok(2) ? 2 : ok(1) ? 1 : 0;
+        }
+        // ---- ASCII 字型：兩份點陣資料（5×7、3×5），每個字型由資料算出，保證列寬一致 ----
+        const BM57 = `A .###./#...#/#...#/#####/#...#/#...#/#...#
+B ####./#...#/#...#/####./#...#/#...#/####.
+C .###./#...#/#..../#..../#..../#...#/.###.
+D ####./#...#/#...#/#...#/#...#/#...#/####.
+E #####/#..../#..../####./#..../#..../#####
+F #####/#..../#..../####./#..../#..../#....
+G .###./#...#/#..../#.###/#...#/#...#/.###.
+H #...#/#...#/#...#/#####/#...#/#...#/#...#
+I .###./..#../..#../..#../..#../..#../.###.
+J ..###/...#./...#./...#./...#./#..#./.##..
+K #...#/#..#./#.#../##.../#.#../#..#./#...#
+L #..../#..../#..../#..../#..../#..../#####
+M #...#/##.##/#.#.#/#.#.#/#...#/#...#/#...#
+N #...#/##..#/#.#.#/#..##/#...#/#...#/#...#
+O .###./#...#/#...#/#...#/#...#/#...#/.###.
+P ####./#...#/#...#/####./#..../#..../#....
+Q .###./#...#/#...#/#...#/#.#.#/#..#./.##.#
+R ####./#...#/#...#/####./#.#../#..#./#...#
+S .####/#..../#..../.###./....#/....#/####.
+T #####/..#../..#../..#../..#../..#../..#..
+U #...#/#...#/#...#/#...#/#...#/#...#/.###.
+V #...#/#...#/#...#/#...#/#...#/.#.#./..#..
+W #...#/#...#/#...#/#.#.#/#.#.#/##.##/#...#
+X #...#/#...#/.#.#./..#../.#.#./#...#/#...#
+Y #...#/#...#/.#.#./..#../..#../..#../..#..
+Z #####/....#/...#./..#../.#.../#..../#####
+0 .###./#...#/#..##/#.#.#/##..#/#...#/.###.
+1 ..#../.##../..#../..#../..#../..#../.###.
+2 .###./#...#/....#/...#./..#../.#.../#####
+3 ####./....#/....#/.###./....#/....#/####.
+4 ...#./..##./.#.#./#..#./#####/...#./...#.
+5 #####/#..../####./....#/....#/#...#/.###.
+6 ..##./.#.../#..../####./#...#/#...#/.###.
+7 #####/....#/...#./..#../.#.../.#.../.#...
+8 .###./#...#/#...#/.###./#...#/#...#/.###.
+9 .###./#...#/#...#/.####/....#/...#./.##..
+! ..#../..#../..#../..#../..#../...../..#..
+? .###./#...#/....#/...#./..#../...../..#..
+. ...../...../...../...../...../.##../.##..
+, ...../...../...../...../.##../..#../.#...
+: ...../.##../.##../...../.##../.##../.....
+; ...../.##../.##../...../.##../..#../.#...
+- ...../...../...../#####/...../...../.....
++ ...../..#../..#../#####/..#../..#../.....
+= ...../...../#####/...../#####/...../.....
+_ ...../...../...../...../...../...../#####
+/ ....#/....#/...#./..#../.#.../#..../#....
+\\ #..../#..../.#.../..#../...#./....#/....#
+( ...#./..#../.#.../.#.../.#.../..#../...#.
+) .#.../..#../...#./...#./...#./..#../.#...
+' ..#../..#../.#.../...../...../...../.....
+" .#.#./.#.#./...../...../...../...../.....
+* ...../#.#.#/.###./#####/.###./#.#.#/.....
+# .#.#./.#.#./#####/.#.#./#####/.#.#./.#.#.
+@ .###./#...#/....#/.##.#/#.#.#/#.#.#/.###.
+& .##../#..#./#.#../.#.../#.#.#/#..#./.##.#
+% ##..#/##..#/...#./..#../.#.../#..##/#..##
+< ...#./..#../.#.../#..../.#.../..#../...#.
+> .#.../..#../...#./....#/...#./..#../.#...
+$ ..#../.####/#.#../.###./..#.#/####./..#..
+[ .###./.#.../.#.../.#.../.#.../.#.../.###.
+] .###./...#./...#./...#./...#./...#./.###.
+| ..#../..#../..#../..#../..#../..#../..#..
+~ ...../...../.#.../#.#.#/...#./...../.....
+^ ..#../.#.#./#...#/...../...../...../.....`;
+        const BM35 = `A ###/#.#/###/#.#/#.#
+B ##./#.#/##./#.#/##.
+C ###/#../#../#../###
+D ##./#.#/#.#/#.#/##.
+E ###/#../##./#../###
+F ###/#../##./#../#..
+G ###/#../#.#/#.#/###
+H #.#/#.#/###/#.#/#.#
+I ###/.#./.#./.#./###
+J ..#/..#/..#/#.#/###
+K #.#/#.#/##./#.#/#.#
+L #../#../#../#../###
+M #.#/###/###/#.#/#.#
+N ##./#.#/#.#/#.#/#.#
+O ###/#.#/#.#/#.#/###
+P ###/#.#/###/#../#..
+Q ###/#.#/#.#/###/..#
+R ##./#.#/##./#.#/#.#
+S ###/#../###/..#/###
+T ###/.#./.#./.#./.#.
+U #.#/#.#/#.#/#.#/###
+V #.#/#.#/#.#/#.#/.#.
+W #.#/#.#/###/###/#.#
+X #.#/#.#/.#./#.#/#.#
+Y #.#/#.#/.#./.#./.#.
+Z ###/..#/.#./#../###
+0 ###/#.#/#.#/#.#/###
+1 .#./##./.#./.#./###
+2 ###/..#/###/#../###
+3 ###/..#/###/..#/###
+4 #.#/#.#/###/..#/..#
+5 ###/#../###/..#/###
+6 ###/#../###/#.#/###
+7 ###/..#/..#/..#/..#
+8 ###/#.#/###/#.#/###
+9 ###/#.#/###/..#/###
+! .#./.#./.#./.../.#.
+? ###/..#/.#./.../.#.
+. .../.../.../.../.#.
+, .../.../.../.#./#..
+: .../.#./.../.#./...
+; .../.#./.../.#./#..
+- .../.../###/.../...
++ .../.#./###/.#./...
+= .../###/.../###/...
+_ .../.../.../.../###
+/ ..#/..#/.#./#../#..
+( .#./#../#../#../.#.
+) .#./..#/..#/..#/.#.
+' .#./.#./.../.../...
+* .../#.#/.#./#.#/...
+# #.#/###/#.#/###/#.#
+@ .##/#.#/###/#../.##`;
+        const parseBM = (src, w, h) => {
+            const bm = {};
+            for (const ln of src.split('\n')) bm[ln[0]] = ln.slice(2).split('/');
+            bm[' '] = Array(h).fill('.'.repeat(w));
+            return bm;
+        };
+        const BMS = { '57': parseBM(BM57, 5, 7), '35': parseBM(BM35, 3, 5) };
+        // src 點陣；on 實心字元；rep 每格重複次數；half 用 ▀▄█ 兩列併一列
+        const FONTS = {
+            banner: { n: 'Banner 點陣（7 行）', src: '57', on: '#', rep: 1 },
+            block: { n: 'Block 方塊（7 行）', src: '57', on: '█', rep: 2 },
+            pixel: { n: 'Pixel 像素（5 行）', src: '35', on: '█', rep: 2 },
+            half: { n: 'Half 半格（4 行）', src: '57', half: 1 },
+            small: { n: 'Small 迷你（3 行）', src: '35', half: 1 }
+        };
+        const glyphCache = {};
+        function glyph(font, ch) {
+            const f = FONTS[font], bm = BMS[f.src], c = ch.toUpperCase(), key = font + c;
+            if (glyphCache[key]) return glyphCache[key];
+            const rows = bm[c] || bm['?'];
+            let out;
+            if (f.half) {
+                const w = rows[0].length; out = [];
+                for (let i = 0; i < rows.length; i += 2) {
+                    const t = rows[i], b = rows[i + 1] || '.'.repeat(w);
+                    out.push([...t].map((x, j) => ' ▀▄█'[(x === '#' ? 1 : 0) + (b[j] === '#' ? 2 : 0)]).join(''));
+                }
+            } else out = rows.map((r) => [...r].map((x) => (x === '#' ? f.on : ' ').repeat(f.rep)).join(''));
+            return (glyphCache[key] = out);
+        }
+        function asciiLayout(text, font, o = {}) {
+            const sp = Math.max(0, o.spacing ?? 1), width = o.width | 0, align = o.align || 'left';
+            const h = glyph(font, '?').length;
+            const meas = (a) => a.reduce((s, c) => s + glyph(font, c)[0].length, 0) + sp * Math.max(0, a.length - 1);
+            const fits = (a) => width <= 0 || meas(a) <= width;
+            const blocks = [];
+            for (const line of text.split('\n')) {
+                if (width <= 0) { blocks.push([...line]); continue; }
+                let cur = [];
+                for (const word of line.split(' ')) {
+                    let wc = [...word];
+                    if (cur.length) {
+                        const cand = cur.concat(' ', wc);
+                        if (fits(cand)) { cur = cand; continue; }
+                        blocks.push(cur); cur = [];
+                    }
+                    while (!fits(wc) && wc.length > 1) {
+                        let k = 1; while (k < wc.length - 1 && fits(wc.slice(0, k + 1))) k++;
+                        blocks.push(wc.slice(0, k)); wc = wc.slice(k);
+                    }
+                    cur = wc;
+                }
+                blocks.push(cur);
+            }
+            const maxW = width > 0 ? width : Math.max(0, ...blocks.map(meas));
+            const out = [];
+            for (const b of blocks) {
+                const pad = align === 'center' ? Math.floor((maxW - meas(b)) / 2) : align === 'right' ? maxW - meas(b) : 0;
+                for (let r = 0; r < h; r++) out.push((' '.repeat(Math.max(0, pad)) + b.map((c) => glyph(font, c)[r]).join(' '.repeat(sp))).replace(/\s+$/, ''));
+            }
+            return out.join('\n');
+        }
+        // --- /pure ---
+
+        (function () {
+            const $ = (s) => document.querySelector(s);
+            const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace';
+            const THEMES = {
+                night: { n: '深夜（暗）', bg: '#1e1e2e', bar: '#181825', fg: '#cdd6f4', ln: '#6c7086', com: '#6c7086', kw: '#cba6f7', str: '#a6e3a1', num: '#fab387', fn: '#89b4fa' },
+                dracula: { n: '吸血鬼（暗）', bg: '#282a36', bar: '#21222c', fg: '#f8f8f2', ln: '#6272a4', com: '#6272a4', kw: '#ff79c6', str: '#f1fa8c', num: '#bd93f9', fn: '#50fa7b' },
+                ocean: { n: '深海（暗）', bg: '#0f2233', bar: '#0a1824', fg: '#d6e4f0', ln: '#5a7a94', com: '#5a7a94', kw: '#5ccfe6', str: '#bae67e', num: '#ffae57', fn: '#73d0ff' },
+                paper: { n: '紙張（亮）', bg: '#fbf8f1', bar: '#efe9db', fg: '#3b3a36', ln: '#a8a395', com: '#9a9484', kw: '#b4322a', str: '#2f7d4f', num: '#b86a00', fn: '#1d5fa8' },
+                snow: { n: '雪白（亮）', bg: '#ffffff', bar: '#f0f1f3', fg: '#24292f', ln: '#9aa0a6', com: '#6e7781', kw: '#cf222e', str: '#0a3069', num: '#0550ae', fn: '#8250df' },
+                sand: { n: '沙丘（亮）', bg: '#f6efe0', bar: '#ebe1cb', fg: '#43392b', ln: '#a99b82', com: '#8f8369', kw: '#a3412a', str: '#4d6b2f', num: '#9c5b00', fn: '#2c5d82' }
+            };
+            const BGS = {
+                sunset: ['日落', '#ff7e5f', '#feb47b'], ocean: ['海洋', '#2193b0', '#6dd5ed'], violet: ['紫羅蘭', '#8e2de2', '#4a00e0'],
+                forest: ['森林', '#11998e', '#38ef7d'], candy: ['糖果', '#ee9ca7', '#ffdde1'], dark: ['夜空', '#232526', '#414345'],
+                solid: ['純色'], none: ['透明']
+            };
+            const fill = (sel, obj, label) => { for (const k in obj) sel.add(new Option(label(obj[k]), k)); };
+            const langSel = $('#lang'); langSel.add(new Option('自動偵測', 'auto')); fill(langSel, LANG_DEFS, (d) => d.n);
+            fill($('#theme'), THEMES, (t) => t.n); fill($('#bg'), BGS, (b) => b[0]); fill($('#afont'), FONTS, (f) => f.n);
+
+            const rr = (c, x, y, w, h, r) => { r = Math.min(r, w / 2, h / 2); c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); };
+
+            function opts() {
+                return { code: $('#code').value.replace(/\r/g, '').replace(/\t/g, '    '), lang: langSel.value, theme: THEMES[$('#theme').value], bg: $('#bg').value, bgColor: $('#bgColor').value, frame: $('#frame').value, name: $('#fname').value, ln: $('#ln').checked, shadow: $('#shadow').checked, fs: +$('#fs').value, pad: +$('#pad').value, rad: +$('#rad').value, W: +$('#wid').value };
+            }
+            // 畫到 canvas：scale 倍率；回傳 {w,h}（CSS px）
+            function draw(cv, o, scale, measureOnly) {
+                const c = cv.getContext('2d'), th = o.theme, fs = o.fs, lh = Math.round(fs * 1.6), inner = 20;
+                c.font = fs + 'px ' + MONO;
+                const cw = c.measureText('M').width;
+                const lang = o.lang === 'auto' ? detectLang(o.code) : o.lang;
+                const src = splitLines(tokenize(o.code, lang));
+                const gutter = o.ln ? String(src.length).length * cw + 16 : 0;
+                const winW = o.W - 2 * o.pad, cols = Math.max(8, Math.floor((winW - 2 * inner - gutter) / cw));
+                const vis = [];
+                src.forEach((l, i) => wrapLine(l, cols).forEach((t, k) => vis.push({ n: k ? '' : i + 1, t })));
+                const barH = o.frame === 'none' ? 0 : 40, winH = barH + vis.length * lh + 2 * inner;
+                const W = o.W, H = winH + 2 * o.pad;
+                if (measureOnly) return { w: W, h: H };
+                cv.width = W * scale; cv.height = H * scale;
+                c.setTransform(scale, 0, 0, scale, 0, 0); c.clearRect(0, 0, W, H);
+                if (o.bg === 'solid') { c.fillStyle = o.bgColor; c.fillRect(0, 0, W, H); }
+                else if (o.bg !== 'none') { const g = c.createLinearGradient(0, 0, W, H); g.addColorStop(0, BGS[o.bg][1]); g.addColorStop(1, BGS[o.bg][2]); c.fillStyle = g; c.fillRect(0, 0, W, H); }
+                const x0 = o.pad, y0 = o.pad;
+                c.save();
+                if (o.shadow && o.pad > 0) { c.shadowColor = 'rgba(0,0,0,.45)'; c.shadowBlur = 40; c.shadowOffsetY = 16; }
+                c.fillStyle = th.bg; rr(c, x0, y0, winW, winH, o.rad); c.fill(); c.restore();
+                c.save(); rr(c, x0, y0, winW, winH, o.rad); c.clip();
+                if (barH) {
+                    c.fillStyle = th.bar; c.fillRect(x0, y0, winW, barH);
+                    if (o.frame === 'mac') ['#ff5f57', '#febc2e', '#28c840'].forEach((col, i) => { c.fillStyle = col; c.beginPath(); c.arc(x0 + 22 + i * 20, y0 + barH / 2, 6, 0, 7); c.fill(); });
+                    if (o.name) { c.font = '13px system-ui, sans-serif'; c.fillStyle = th.ln; c.textBaseline = 'middle'; c.textAlign = o.frame === 'mac' ? 'center' : 'left'; c.fillText(o.name, o.frame === 'mac' ? x0 + winW / 2 : x0 + inner, y0 + barH / 2 + 1); }
+                }
+                c.font = fs + 'px ' + MONO; c.textBaseline = 'alphabetic'; c.textAlign = 'left';
+                vis.forEach((v, i) => {
+                    const y = y0 + barH + inner + i * lh + lh / 2 + fs * 0.35;
+                    if (o.ln && v.n) { c.fillStyle = th.ln; c.textAlign = 'right'; c.fillText(String(v.n), x0 + inner + gutter - 12, y); c.textAlign = 'left'; }
+                    let x = x0 + inner + gutter;
+                    for (const [t, s] of v.t) { c.fillStyle = t === 'id' ? th.fg : th[t]; c.fillText(s, x, y); x += c.measureText(s).width; }
+                });
+                c.restore();
+                return { w: W, h: H };
+            }
+
+            const view = $('#shotView'), msg = $('#shotMsg');
+            let lastOk = false;
+            function renderShot() {
+                const o = opts();
+                $('#bgColorWrap').hidden = o.bg !== 'solid';
+                const lines = o.code.split('\n').length;
+                if (lines > 500) { lastOk = false; msg.textContent = '超過 500 行，請縮短程式碼。'; return; }
+                const { w, h } = draw(view, o, 1, true);
+                if (!fitScale(w, h)) { lastOk = false; msg.textContent = '圖片太大（上限 8000px / 1600 萬像素），請減少行數或縮小寬度、字級。'; return; }
+                draw(view, o, 1); lastOk = true;
+                msg.textContent = `${w}×${h} px（匯出 ${fitScale(w, h)}×，語言：${LANG_DEFS[o.lang === 'auto' ? detectLang(o.code) : o.lang].n}）`;
+            }
+            function shotBlob() {
+                if (!lastOk) return Promise.resolve(null);
+                const o = opts(), { w, h } = draw(view, o, 1, true), cv = document.createElement('canvas');
+                draw(cv, o, fitScale(w, h));
+                return new Promise((r) => cv.toBlob(r, 'image/png'));
+            }
+            $('#shotPng').onclick = async () => { const b = await shotBlob(); if (b) Util.download(b, 'code.png'); };
+            if (!(navigator.clipboard && window.ClipboardItem)) $('#shotCopy').hidden = true;
+            $('#shotCopy').onclick = async () => {
+                const b = await shotBlob(); if (!b) return;
+                try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]); msg.textContent = '已複製圖片'; } catch (e) { msg.textContent = '複製失敗，請改用下載。'; }
+            };
+            const bind = (id, fmt) => { const el = $('#' + id), s = $('#' + id + 'V'); const f = () => { if (s) s.textContent = fmt(el.value); }; el.addEventListener('input', f); f(); };
+            bind('fs', (v) => v + 'px'); bind('pad', (v) => v + 'px'); bind('rad', (v) => v + 'px'); bind('wid', (v) => v + 'px');
+            bind('aspace', (v) => v); bind('awrap', (v) => (+v ? v + ' 欄' : '不換行'));
+            for (const id of ['code', 'lang', 'theme', 'bg', 'bgColor', 'frame', 'fname', 'ln', 'shadow', 'fs', 'pad', 'rad', 'wid']) $('#' + id).addEventListener('input', renderShot);
+            window.addEventListener('st-themechange', renderShot);
+
+            // ---- ASCII ----
+            let art = '';
+            function renderAscii() {
+                art = asciiLayout($('#atext').value, $('#afont').value, { spacing: +$('#aspace').value, align: $('#aalign').value, width: +$('#awrap').value });
+                $('#asciiOut').textContent = art;
+            }
+            for (const id of ['atext', 'afont', 'aalign', 'aspace', 'awrap']) $('#' + id).addEventListener('input', renderAscii);
+            $('#aCopy').onclick = () => Util.copyWithFeedback($('#aCopy'), art);
+            $('#aTxt').onclick = () => { if (art) Util.download(new Blob([art], { type: 'text/plain;charset=utf-8' }), 'ascii-art.txt'); };
+            $('#aPng').onclick = () => {
+                if (!art) return;
+                const lines = art.split('\n'), fs = 16, lh = Math.round(fs * 1.15), cv = document.createElement('canvas'), c = cv.getContext('2d');
+                c.font = fs + 'px ' + MONO;
+                const w = Math.ceil(Math.max(...lines.map((l) => c.measureText(l).width))) + 32, h = lines.length * lh + 32, s = fitScale(w, h);
+                if (!s) { alert('文字太大，無法存成 PNG，請改存 TXT。'); return; }
+                cv.width = w * s; cv.height = h * s; c.scale(s, s);
+                c.fillStyle = '#fff'; c.fillRect(0, 0, w, h); c.fillStyle = '#111'; c.font = fs + 'px ' + MONO; c.textBaseline = 'top';
+                lines.forEach((l, i) => c.fillText(l, 16, 16 + i * lh));
+                cv.toBlob((b) => Util.download(b, 'ascii-art.png'), 'image/png');
+            };
+
+            // ---- 分頁 ----
+            const show = (a) => { $('#paneShot').hidden = a; $('#paneAscii').hidden = !a; $('#tabShot').setAttribute('aria-pressed', !a); $('#tabAscii').setAttribute('aria-pressed', a); };
+            $('#tabShot').onclick = () => show(false); $('#tabAscii').onclick = () => show(true);
+            renderShot(); renderAscii();
+        })();
+    </script>
+</body>
+
+</html>

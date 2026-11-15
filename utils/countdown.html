@@ -171,6 +171,13 @@
             <p class="note" id="qMsg"></p>
         </div>
 
+        <div class="card" id="festCard">
+            <h2>節慶倒數</h2>
+            <p class="note" style="margin-top:0">內建農曆新年、元宵、清明、端午、中秋、重陽、冬至與常見國曆節日，一鍵加入下方倒數清單。清明 / 冬至用通行公式推算，可能差 ±1 日。</p>
+            <div id="festList"></div>
+            <p class="note" id="festMsg"></p>
+        </div>
+
         <div class="card" id="list"></div>
         <div style="text-align:center"><button class="sm" id="ics">匯出成行事曆檔（.ics）</button></div>
     </div>
@@ -192,6 +199,7 @@
         <li>列表依距離排序，每筆右邊的 × 可以刪除</li>
         <li>每筆展開「清單」可新增項目（Enter）、勾選完成，或按「加入旅行行李範本」「加入行前待辦範本」一次補上常用項目</li>
         <li>按「匯出成行事曆檔（.ics）」可匯入手機或電腦的行事曆</li>
+        <li>「節慶倒數」列出下一個農曆新年、元宵、清明、端午、中秋、重陽、冬至與國曆節日（元旦、情人節、母親節、父親節 8/8、萬聖節、聖誕節、跨年）及距今天數，按「加入倒數」就放進清單（國曆固定日期會設成每年重複）</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">假設今天是 2026-10-03，新增「聖誕節」、日期 2026-12-25：列表顯示「還有 83 天」。勾選「每年重複」後，過了 12/25 會自動算下一次。<br>今日倒數 09:00～18:00，在中午 12:00 看會顯示 06:00:00。</div>
@@ -201,6 +209,7 @@
         <li>每年重複的 2/29 在非閏年算 2/28</li>
         <li>戒除計數：在「戒除計數」填名稱、起算日與每天花費（0 也可），會在下方列表顯示已持續天數（起算日當天為 0 天，每過一天加 1）、估算省下的金額與下一個里程碑；起算日若在未來則照一般倒數。復發要重來可展開該筆的「清單」按「重新起算（今天）」，不要了按 × 刪除。非醫療建議。</li>
         <li>旅遊倒數：新增旅行出發日，展開「清單」可「加入旅行行李範本」與「加入行前待辦範本」，一邊倒數一邊勾選。</li>
+        <li>節慶日期由瀏覽器內建農曆換算，清明 / 冬至是公式推算（±1 日）；同名同日不會重複加入，已加入的節慶刪除請在下方清單按 ×，滿 200 個會拒絕新增</li>
         <li>清單每個日期最多 60 項，同名項目不會重複加入；日期最多 200 個，過期的請按 × 刪除</li>
         </ul>
     </template>
@@ -317,6 +326,60 @@
             const ms = q.next === null ? '' : ` ・ 下個里程碑 ${q.next} 天（還有 ${q.toNext} 天）`;
             return { kind: 'today', days: q.days, big: q.days, label: '已持續', sub: `${e.date} 起算 ・ 省下約 NT$ ${q.saved.toLocaleString('zh-TW')}${ms}`, sort: 1e9 - q.days, text: q.days + ' 天' };
         }
+
+        // ---------- 節慶：農曆用 Intl 換算、清明 / 冬至用通行公式（±1 日）、國曆節日用規則 ----------
+        // 農曆年 ry 內，一次掃完 ry-01-01 ~ ry-12-31，回傳 { 'm-d': 國曆日期 }（只收平月）；Intl 不支援回傳 {}
+        function lunarFestDates(ry, wanted) {
+            const out = {};
+            try {
+                const f = new Intl.DateTimeFormat('zh-u-ca-chinese', { timeZone: 'UTC', year: 'numeric', month: 'numeric', day: 'numeric' });
+                for (let n = daysBetween('1970-01-01', ymd({ y: ry, m: 1, d: 1 })), end = n + 366; n < end; n++) {
+                    const ps = f.formatToParts(new Date(n * 864e5 + 432e5)), g = (t) => (ps.find(p => p.type === t) || {}).value, mon = String(g('month'));
+                    if (+g('relatedYear') !== ry || /^[闰閏]/.test(mon)) continue;
+                    const key = ({ 正: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10, 十一: 11, 十二: 12 }[mon.replace(/月$/, '')] || parseInt(mon, 10)) + '-' + g('day');
+                    if (wanted.includes(key) && !out[key]) out[key] = day.shift('1970-01-01', n);
+                }
+            } catch (e) { return {}; }
+            return out;
+        }
+        // 清明（4 月）/ 冬至（12 月）的通行公式：[Y×0.2422 + C] − 閏年數（Y 為年份後兩位，適用 2001–2099，誤差 ±1 日）
+        const solarTermDay = (y, C) => { const k = y % 100; return Math.floor(k * 0.2422 + C) - Math.floor((k - 1) / 4); };
+        const nthWeekday = (y, m, wd, n) => { const first = (wd + 7 - new Date(Date.UTC(y, m - 1, 1)).getUTCDay()) % 7; return 1 + first + (n - 1) * 7; };
+        // [名稱, 類型, 參數, 每年重複?]：lunar 參數 'm-d'；solar 參數 [m, d]
+        const FESTIVALS = [
+            ['元旦', 'solar', [1, 1], true], ['農曆新年', 'lunar', '1-1'], ['元宵節', 'lunar', '1-15'], ['情人節', 'solar', [2, 14], true], ['清明', 'qm'],
+            ['母親節', 'mother'], ['端午節', 'lunar', '5-5'], ['父親節（台灣 8/8）', 'solar', [8, 8], true], ['中秋節', 'lunar', '8-15'], ['重陽節', 'lunar', '9-9'],
+            ['萬聖節', 'solar', [10, 31], true], ['冬至', 'dz'], ['聖誕節', 'solar', [12, 25], true], ['跨年', 'solar', [12, 31], true],
+        ];
+        // 某一年所有節慶的國曆日期：[{ name, date, approx, yearly }]（農曆節慶查不到時略過）
+        function festivalsOfYear(y) {
+            const lun = lunarFestDates(y, FESTIVALS.filter(f => f[1] === 'lunar').map(f => f[2])), out = [];
+            for (const [name, type, arg, yearly] of FESTIVALS) {
+                let date = null, approx = false;
+                if (type === 'solar') date = ymd({ y, m: arg[0], d: arg[1] });
+                else if (type === 'lunar') date = lun[arg] || null;
+                else if (type === 'qm') { date = ymd({ y, m: 4, d: solarTermDay(y, 4.81) }); approx = true; }
+                else if (type === 'dz') { date = ymd({ y, m: 12, d: solarTermDay(y, 21.94) }); approx = true; }
+                else if (type === 'mother') date = ymd({ y, m: 5, d: nthWeekday(y, 5, 0, 2) });
+                if (date) out.push({ name, date, approx, yearly: !!yearly });
+            }
+            return out;
+        }
+        // 今天（含）起每個節慶的下一次，依日期排序，附 days
+        function nextFestivals(today) {
+            const y = parseYMD(today).y, all = [...festivalsOfYear(y), ...festivalsOfYear(y + 1)], seen = new Set(), out = [];
+            for (const f of all.sort((a, b) => daysBetween(b.date, a.date))) {
+                const d = daysBetween(today, f.date);
+                if (d < 0 || seen.has(f.name)) continue;
+                seen.add(f.name); out.push({ ...f, days: d });
+            }
+            return out;
+        }
+        // 把節慶加入倒數清單：同名同日已存在或達上限就原樣回傳；回傳 { events, added }
+        function addFestival(events, f, max = 200) {
+            if (events.length >= max || events.some(e => e.name === f.name && e.date === f.date)) return { events, added: false };
+            return { events: [...events, { name: f.name, date: f.date, yearly: f.yearly, items: [] }], added: true };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -360,6 +423,7 @@
         }
 
         function render() {
+            renderFest();
             const box = $('#list');
             box.replaceChildren();
             if (!events.length) { box.append(Object.assign(document.createElement('div'), { className: 'muted', textContent: '還沒有任何日期，從上面新增一個吧' })); return; }
@@ -425,6 +489,22 @@
 
         $('#ics').onclick = () => { if (!events.length) { $('#msg').textContent = '還沒有日期可以匯出'; return; } Util.download(new Blob([buildICS(events, new Date().toISOString())], { type: 'text/calendar;charset=utf-8' }), 'countdown.ics'); };
         $('#name').onkeydown = (e) => { if (e.key === 'Enter') $('#add').click(); };
+        function renderFest() {
+            const fl = nextFestivals(todayStr());
+            $('#festList').replaceChildren(...fl.map(f => {
+                const have = events.some(e => e.name === f.name && e.date === f.date);
+                const b = Object.assign(document.createElement('button'), { className: 'sm', textContent: have ? '已加入' : '加入倒數', disabled: have });
+                b.onclick = () => {
+                    const r = addFestival(events, f, MAX_EVENTS);
+                    if (!r.added) { $('#festMsg').textContent = `最多 ${MAX_EVENTS} 個日期，請先刪除不用的`; return; }
+                    events = r.events; $('#festMsg').textContent = ''; save(); render();
+                };
+                const info = Object.assign(document.createElement('div'), { style: 'min-width:0;flex:1' });
+                info.append(Object.assign(document.createElement('b'), { textContent: f.name }), Object.assign(document.createElement('div'), { className: 'note', textContent: `${f.date}${f.approx ? '（±1 日）' : ''} ・ ${f.days === 0 ? '就是今天' : f.days + ' 天後'}` }));
+                const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;align-items:center;border-top:1px solid var(--line);padding:6px 0';
+                row.append(info, b); return row;
+            }));
+        }
         render();
     </script>
 </body>

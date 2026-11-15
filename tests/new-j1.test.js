@@ -87,7 +87,7 @@ const { load, ok, near } = require('./_load');
     near(e.taxCg, 0); near(e.net, 3e5);
     e = B.esop(50, 30, 100, 20, NaN, 0); assert.ok(e.underwater && e.taxEx === 0 && e.paperNet < 0);
     assert.strictEqual(B.esop(10, 50, 0, 20, NaN, 0), null); assert.strictEqual(B.esop(10, 50, 1, 120, NaN, 0), null);
-    assert.strictEqual(B.normOpts({ tab: 3 }, []).tab, 3); assert.strictEqual(B.normOpts({ tab: 4 }, []).tab, 0);
+    assert.strictEqual(B.normOpts({ tab: 3 }, []).tab, 3); assert.strictEqual(B.normOpts({ tab: 5 }, []).tab, 0);
     ok('j1 biz-calc: 新創股權');
 }
 

@@ -1,4 +1,4 @@
-// arcade（迷你街機）：六款遊戲可開始 / 操作 / 結束、最高分存取與壞資料、每日種子、頁面隱藏暫停、reduced-motion、手機版面
+// arcade（迷你街機）：八款遊戲可開始 / 操作 / 結束、最高分存取與壞資料、每日種子、頁面隱藏暫停、reduced-motion、手機版面
 import assert from 'assert';
 import { launchEdge, openPage } from './lib.mjs';
 const browser = await launchEdge();
@@ -17,7 +17,7 @@ await ev(() => localStorage.clear()); await page.reload({ waitUntil: 'load' });
 
 // 版面
 await noScroll('選單');
-assert.strictEqual(await ev(() => document.querySelectorAll('#tabs button').length), 6);
+assert.strictEqual(await ev(() => document.querySelectorAll('#tabs button').length), 8);
 assert.ok(await ev(() => [...document.querySelectorAll('select,input:not([type=checkbox]),textarea')].every(e => parseFloat(getComputedStyle(e).fontSize) >= 16)), '輸入字級');
 assert.ok(await ev(() => document.querySelector('#cv').getBoundingClientRect().width <= innerWidth), 'canvas 溢出');
 assert.strictEqual(await cvScroll(), 'auto', '選單時 canvas 不鎖手勢');

@@ -14,9 +14,20 @@ try {
         assert.deepEqual(errors, [], rel);
         await page.close();
     }
-    for (const rel of ['utils/sport-calc.html', 'game-assist/artale-calc.html', 'reading/stealth-reader.html']) {
+    // 有「‹ 工具箱」連結的一般工具頁也要有固定鈕：頁面捲到下方後鈕仍在視窗內（fixed），點了回首頁
+    for (const rel of ['utils/sport-calc.html', 'game-assist/artale-calc.html', 'fun/todo.html']) {
         const { page } = await openPage(browser, rel);
-        assert.equal(await page.evaluate(() => document.querySelectorAll('.st-homebtn').length), 0, rel + ' 不應再多一顆');
+        assert.equal(await page.evaluate(() => document.querySelectorAll('.st-homebtn').length), 1, rel + ' 應有一顆固定的工具箱鈕');
+        await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight)); await new Promise(r => setTimeout(r, 150));
+        const y = await page.evaluate(() => document.querySelector('.st-homebtn').getBoundingClientRect().top);
+        assert.ok(y >= 0 && y < 60, rel + ' 捲到底後按鈕要仍在上方：' + y);
+        await Promise.all([page.waitForNavigation(), page.evaluate(() => document.querySelector('.st-homebtn').click())]);
+        assert.ok(/index\.html(#.*)?$/.test(page.url()), rel + ' 點了要回首頁');
+        await page.close();
+    }
+    for (const rel of ['index.html', 'reading/stealth-reader.html']) {
+        const { page } = await openPage(browser, rel);
+        assert.equal(await page.evaluate(() => document.querySelectorAll('.st-homebtn').length), 0, rel + ' 不應有工具箱鈕');
         await page.close();
     }
     console.log('home-button ok');

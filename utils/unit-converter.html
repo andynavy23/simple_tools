@@ -66,6 +66,14 @@
             <p class="note">以上方「數值 + 單位」當作毛重，乘上純度後依你輸入的純金單價估算價值。牌價請自行查詢（銀樓、銀行黃金存摺或國際金價換算）；實際買賣另有工資、買賣價差與手續費，飾金不等於金條，僅供估算。</p>
         </div>
 
+        <div class="card" id="paper" hidden>
+            <h2>紙張尺寸</h2>
+            <select id="pp" aria-label="紙張"></select>
+            <div id="ppout" style="margin-top:8px"></div>
+            <button class="sm" id="ppcopy" style="margin-top:8px">複製尺寸</button>
+            <p class="note">單位為成品紙張（短邊 × 長邊）；像素 = 毫米 ÷ 25.4 × DPI 四捨五入。A / B / C 系列每級對折（短邊取整數、無條件捨去），面積比相鄰級約 1 : 2。ISO B 與日本 JIS B 不同，買紙與印刷前請確認是哪一種。</p>
+        </div>
+
         <div class="card" id="out"></div>
     </div>
 
@@ -80,7 +88,8 @@
         </ul>
         <h3>怎麼用</h3>
         <ol>
-        <li>點上方分類：長度、重量、黃金、面積、體積、速度、資料量、烹飪、溫度、匯率。</li>
+        <li>點上方分類：長度、重量、黃金、面積、體積、速度、資料量、烹飪、溫度、匯率、紙張尺寸。</li>
+        <li>紙張尺寸：選紙張（A0–A10、ISO B / 日本 JIS B、C 信封、美規 Letter / Legal、名片、相片、證件照），顯示毫米 / 公分 / 英寸、72–600 DPI 的像素與面積比，可複製。</li>
         <li>黃金：換算錢 / 台兩 / 公克 / 台斤 / 金衡盎司（troy），並可選純度、填純金單價（每錢或每公克）估算價值。</li>
         <li>在輸入框填數值，並選右邊的單位。</li>
         <li>下方列出所有單位的結果，你選的單位會以強調色標示。</li>
@@ -95,6 +104,7 @@
         <li>烹飪換算是一般舀法的近似值，實際依品牌與緊實度而不同。</li>
         <li>匯率需要網路，會快取 6 小時；離線時顯示快取並註明；僅供參考，不是實際交易價。</li>
         <li>黃金的換算係數是固定值（1 台兩 = 37.5 公克、1 金衡盎司 = 31.1034768 公克；注意一般「盎司」是 28.35 公克，金衡盎司才是貴金屬用的）；價值要自己輸入單價，本頁不提供即時金價，且不含工資與買賣價差。</li>
+        <li>紙張尺寸是標準名目尺寸；ISO B 與 JIS B 大小不同（B4 ISO 250×353、JIS 257×364）；相片 L / 2L 在各店可能略有出入。這個類別不存任何資料。</li>
         <li>極大或極小的數字會用科學記號顯示。</li>
         </ul>
     </template>
@@ -136,10 +146,39 @@
             return { pure, pureQian: pure / 3.75, value: pure * perGram, perGram, perQian: perGram * 3.75 };
         }
 
+        // 紙張：[短邊, 長邊] mm。A / B / C 系列只給 0 號，其餘依「長邊對折、短邊無條件捨去」產生
+        function seriesDims(s, l, n = 11) {
+            const r = [];
+            for (let i = 0; i < n; i++) { r.push([s, l]); [s, l] = [Math.floor(l / 2), s]; }
+            return r;
+        }
+        const PAPER_GROUPS = [['A', 'A 系列（ISO 216）', [841, 1189]], ['B', 'B 系列（ISO 216）', [1000, 1414]], ['JB', 'B 系列（日本 JIS）', [1030, 1456]], ['C', 'C 系列（信封，ISO 269）', [917, 1297]]];
+        const PAPERS = [
+            ...PAPER_GROUPS.flatMap(([g, gn, d]) => seriesDims(...d).map(([w, h], i) => ({ g: gn, name: (g === 'JB' ? 'JIS B' : g) + i, w, h }))),
+            { g: '信封', name: 'DL 信封', w: 110, h: 220 },
+            { g: '美規', name: 'Letter（8.5×11 in）', w: 215.9, h: 279.4 }, { g: '美規', name: 'Legal（8.5×14 in）', w: 215.9, h: 355.6 },
+            { g: '美規', name: 'Tabloid / Ledger（11×17 in）', w: 279.4, h: 431.8 }, { g: '美規', name: 'Executive（7.25×10.5 in）', w: 184.15, h: 266.7 }, { g: '美規', name: 'Statement（5.5×8.5 in）', w: 139.7, h: 215.9 },
+            { g: '名片與相片', name: '名片（台灣常見 90×54）', w: 54, h: 90 }, { g: '名片與相片', name: '名片（美規 3.5×2 in）', w: 50.8, h: 88.9 },
+            { g: '名片與相片', name: '相片 L（3R，89×127）', w: 89, h: 127 }, { g: '名片與相片', name: '相片 2L（5R，127×178）', w: 127, h: 178 },
+            { g: '名片與相片', name: '相片 4×6 in', w: 101.6, h: 152.4 }, { g: '名片與相片', name: '相片 5×7 in', w: 127, h: 177.8 }, { g: '名片與相片', name: '相片 8×10 in', w: 203.2, h: 254 },
+            { g: '名片與相片', name: '證件照 1 吋（28×35）', w: 28, h: 35 }, { g: '名片與相片', name: '證件照 2 吋（35×45）', w: 35, h: 45 },
+        ];
+        const PAPER_DPI = [72, 96, 150, 300, 600];
+        const paperPx = (mm, dpi) => Math.round(mm / 25.4 * dpi);
+        const paperArea = (p) => p.w * p.h;
+        // 回傳顯示列 [標籤, 值]
+        function paperRows(p, ref) {
+            const f = (x, d) => Number(x.toFixed(d)).toLocaleString('zh-TW');
+            return [['毫米', `${f(p.w, 2)} × ${f(p.h, 2)} mm`], ['公分', `${f(p.w / 10, 3)} × ${f(p.h / 10, 3)} cm`], ['英寸', `${f(p.w / 25.4, 3)} × ${f(p.h / 25.4, 3)} in`],
+                ...PAPER_DPI.map(d => [`${d} DPI`, `${paperPx(p.w, d).toLocaleString('zh-TW')} × ${paperPx(p.h, d).toLocaleString('zh-TW')} px`]),
+                ['面積', `${f(paperArea(p) / 1e6, 4)} m²・為 ${ref.name} 的 ${f(paperArea(p) / paperArea(ref), 3)} 倍`]];
+        }
+
         function unitsOf(cat) {
             if (cat === '烹飪') return [...Object.keys(COOK_VOL), ...Object.keys(COOK_MASS)];
             if (cat === '溫度') return Object.keys(TEMP);
             if (cat === '匯率') return Object.keys(CURRENCIES);
+            if (cat === '紙張尺寸') return [];
             return Object.keys(CATS[cat]);
         }
 
@@ -172,7 +211,7 @@
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
-        const ALL = [...Object.keys(CATS), '烹飪', '溫度', '匯率'];
+        const ALL = [...Object.keys(CATS), '烹飪', '溫度', '匯率', '紙張尺寸'];
         let cat = '長度', fx = null, fxLoading = false; // fx: { rates, time, stale } | null
 
         async function loadRates() {
@@ -221,6 +260,12 @@
                 a.textContent = 'Rates By Exchange Rate API';
                 note.append(`匯率更新時間：${new Date(fx.time).toLocaleString('zh-TW')}${fx.stale ? '（離線快取，可能不是最新）' : ''} ・ `, a, '。匯率僅供參考，不代表實際交易價格。');
             }
+            if (cat === '紙張尺寸') {
+                const p = PAPERS[+$('#pp').value], rows = paperRows(p, PAPERS.find(x => x.name === 'A4'));
+                $('#ppout').replaceChildren(...rows.map(r => Util.statRow(r[0], r[1])));
+                $('#ppcopy').onclick = (e) => Util.copyWithFeedback(e.target, [p.name, ...rows.map(r => `${r[0]}：${r[1]}`)].join('\n'));
+                return;
+            }
             const v = parseFloat($('#val').value);
             if (isNaN(v)) { out.textContent = '請輸入數字'; return; }
             const from = $('#from').value;
@@ -237,6 +282,7 @@
             cat = c;
             document.querySelectorAll('#cats button').forEach(b => b.setAttribute('aria-pressed', b.textContent === c));
             fillUnits(); $('#ing').hidden = c !== '烹飪'; $('#gold').hidden = c !== '黃金';
+            const pp = c === '紙張尺寸'; $('#paper').hidden = !pp; $('#out').hidden = pp; document.querySelector('.in').hidden = pp;
             if (c === '匯率' && !fx && !fxLoading) {
                 fxLoading = true;
                 loadRates().then(r => { fx = r; fxLoading = false; if (cat === '匯率') render(); });
@@ -255,6 +301,7 @@
         $('#purity').onchange = $('#gper').onchange = $('#gprice').oninput = render;
         $('#ing').replaceChildren(...Object.keys(INGREDIENTS).map(k => new Option(k, k)));
         $('#ing').onchange = render;
+        { let g = '', og; for (const [i, p] of PAPERS.entries()) { if (p.g !== g) { g = p.g; og = document.createElement('optgroup'); og.label = g; $('#pp').append(og); } og.append(new Option(p.name, i)); } $('#pp').value = PAPERS.findIndex(x => x.name === 'A4'); $('#pp').onchange = render; }
         $('#val').oninput = render;
         $('#from').onchange = render;
         setCat('長度');

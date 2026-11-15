@@ -137,6 +137,18 @@
         </div>
 
         <div class="card">
+            <h2>睡眠週期計算</h2>
+            <p class="note">一個睡眠週期約 90 分鐘，睡滿整數個週期醒來比較不昏沉。不會儲存任何資料。個體差異大，僅供參考。</p>
+            <div class="row">
+                <div class="f"><label for="cwake">想幾點起床</label><input type="time" id="cwake" value="07:00"></div>
+                <div class="f"><label for="cbed">打算幾點入睡</label><input type="time" id="cbed" value="23:30"></div>
+                <div class="f"><label for="clat">入睡所需（分鐘，0–60）</label><input type="number" id="clat" min="0" max="60" step="1" value="15" inputmode="numeric"></div>
+            </div>
+            <div class="row seg"><button class="sm" id="cWake">算建議入睡時刻</button><button class="sm" id="cBed">算建議起床時刻</button><button class="sm" id="cNow">現在睡 → 起床時刻</button></div>
+            <div id="cout" aria-live="polite"></div>
+        </div>
+
+        <div class="card">
             <h2>統計</h2>
             <div class="row seg" role="group" aria-label="統計區間">
                 <button class="sm" data-n="7" aria-pressed="true">近 7 天</button>
@@ -180,6 +192,7 @@
         <li>選「睡眠品質」1–5、可寫備註，按「記錄」。同一個起床日期只留一筆，再記一次會詢問是否覆蓋。</li>
         <li>「統計」可切換近 7 / 14 / 30 天；「目標睡眠時數」可調 5–12 小時，用來算睡眠債與長條圖警示色。</li>
         <li>歷史紀錄每筆可「編輯」或「刪除」。</li>
+        <li>「睡眠週期計算」不存資料：填「想幾點起床」按「算建議入睡時刻」（列出 4–6 個週期）；填「打算幾點入睡」按「算建議起床時刻」；「現在睡」用現在時間算起床時刻。「入睡所需」預設 15 分鐘，可調 0–60。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">23:30 入睡、06:30 起床 → 睡 7 小時
@@ -256,6 +269,12 @@
             const by = new Map(recs.map(e => [e.d, e]));
             return Array.from({ length: n }, (_, i) => { const d = day.shift(today, i - n + 1), e = by.get(d); return { d, mins: e ? durMin(e.d, e.bt, e.wt) : null }; });
         }
+        // 睡眠週期：90 分鐘 × 4–6 次；mode 'bed'：給起床時刻 ref（分鐘）→ 建議入睡；'wake'：給入睡時刻 ref → 建議起床。lat = 入睡所需分鐘
+        const CYCLE = 90;
+        function cyclePlan(mode, ref, lat) {
+            const l = Number.isFinite(lat) ? Math.min(60, Math.max(0, Math.round(lat))) : 15, r = Number.isFinite(ref) ? ref : 0;
+            return (mode === 'bed' ? [6, 5, 4] : [4, 5, 6]).map(c => ({ cycles: c, mins: (((mode === 'bed' ? r - c * CYCLE - l : r + l + c * CYCLE) % 1440) + 1440) % 1440, sleepMin: c * CYCLE }));
+        }
         const pruneOlder = (recs, today) => recs.filter(e => e.d >= day.shift(today, -365));
         const hm = (m) => `${Math.floor(Math.abs(m) / 60)} 小時 ${Math.round(Math.abs(m) % 60)} 分`;
         // --- /pure ---
@@ -309,6 +328,17 @@
         $('#more').onclick = () => { shown += 30; render(); };
         $('#delOld').onclick = () => { const keep = pruneOlder(recs, today()), n = recs.length - keep.length; if (n && confirm(`刪除一年前（${day.shift(today(), -365)} 之前）的 ${n} 筆睡眠紀錄？無法復原。`)) { recs = keep; stopEdit(); saveLog(); render(); } };
         $('#delAll').onclick = () => { if (recs.length && confirm(`清除全部 ${recs.length} 筆睡眠紀錄並重設目標時數？無法復原。`)) { recs = []; goal = 8; stopEdit(); saveLog(); saveGoal(); render(); } };
+
+        // 睡眠週期計算（不存資料）
+        function showCycle(mode, ref) {
+            const lat = parseInt($('#clat').value, 10), box = $('#cout');
+            if (!Number.isFinite(ref)) { box.replaceChildren(el('p', { className: 'muted', textContent: '請先填時間' })); return; }
+            box.replaceChildren(el('p', { className: 'note', textContent: mode === 'bed' ? '建議最晚入睡時刻（含入睡所需時間）：' : '建議起床時刻：' }), ...cyclePlan(mode, ref, lat).map(p => statRow(fmtMin(p.mins), `${p.cycles} 個週期・睡 ${hm(p.sleepMin)}`, p.cycles === 5 ? 'ok' : '')));
+        }
+        const tm = (id) => (TIME_RE.test($(id).value) ? toMin($(id).value) : NaN);
+        $('#cWake').onclick = () => showCycle('bed', tm('#cwake'));
+        $('#cBed').onclick = () => showCycle('wake', tm('#cbed'));
+        $('#cNow').onclick = () => { const n = new Date(); showCycle('wake', n.getHours() * 60 + n.getMinutes()); };
 
         $('#wd').value = today(); render();
     </script>

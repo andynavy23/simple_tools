@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="關卡益智：推箱子（32 關）與塞車遊戲 Rush Hour（30 關），單機、無限悔棋、步數紀錄、提示。">
+    <meta property="og:title" content="關卡益智" />
+    <meta property="og:description" content="推箱子與塞車遊戲，內建由易到難的關卡，記錄每關最佳步數。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/level-puzzles.html" />
+    <meta name="st-keys" content="lvlp_progress">
+    <title>關卡益智</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <script src="../shared/js/util.js"></script>
+    <style>
+        :root {
+            --wrap-w: 520px;
+        }
+
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin: 8px 0;
+        }
+
+        .lv {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+            gap: 6px;
+        }
+
+        .lv button {
+            padding: 4px 0;
+            line-height: 1.2;
+            font-size: 15px;
+        }
+
+        .lv button small {
+            display: block;
+            font-size: 11px;
+            color: var(--muted);
+        }
+
+        .lv button.cur {
+            outline: 2px solid var(--blue);
+        }
+
+        .lv button.done small {
+            color: var(--ok);
+        }
+
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+            font-size: 15px;
+            margin: 6px 0;
+        }
+
+        #msg {
+            min-height: 1.5em;
+            margin: 6px 0;
+            font-weight: 600;
+        }
+
+        #msg.win {
+            color: var(--ok);
+        }
+
+        .board {
+            container-type: inline-size;
+            margin: 8px auto;
+            width: 100%;
+            max-width: 440px;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* 推箱子 */
+        #sk {
+            display: grid;
+            gap: 2px;
+        }
+
+        #sk div {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            background: var(--fill);
+            font-size: 6cqw;
+            line-height: 1;
+        }
+
+        #sk .v {
+            background: transparent;
+        }
+
+        #sk .w {
+            background: var(--text);
+            opacity: .75;
+        }
+
+        #sk .g::after {
+            content: "";
+            width: 36%;
+            aspect-ratio: 1;
+            border: 2px solid var(--bad);
+            border-radius: 50%;
+        }
+
+        #sk .b::after {
+            content: "";
+            width: 76%;
+            aspect-ratio: 1;
+            background: #c98a3b;
+            border: 2px solid #7a4e12;
+            border-radius: 3px;
+        }
+
+        #sk .b.g::after {
+            background: #5aa469;
+            border-color: #2d6a3b;
+            border-radius: 3px;
+        }
+
+        #sk .p::before {
+            content: "🙂";
+            position: absolute;
+        }
+
+        #sk .p {
+            position: relative;
+        }
+
+        .pad {
+            display: grid;
+            grid-template-columns: repeat(3, 64px);
+            gap: 6px;
+            justify-content: center;
+            margin: 8px 0;
+        }
+
+        .pad button {
+            height: 56px;
+            font-size: 22px;
+            padding: 0;
+        }
+
+        /* 塞車 */
+        #rh {
+            position: relative;
+            aspect-ratio: 1;
+            display: grid;
+            grid-template: repeat(6, 1fr) / repeat(6, 1fr);
+            gap: 2px;
+            background: var(--line);
+            border: 2px solid var(--line);
+            border-radius: var(--radius-sm);
+        }
+
+        #rh i {
+            background: var(--card);
+        }
+
+        #rh i.tgt {
+            background: color-mix(in srgb, var(--blue) 35%, var(--card));
+        }
+
+        #rh b {
+            position: absolute;
+            margin: 2px;
+            border-radius: 8px;
+            border: 2px solid rgba(0, 0, 0, .35);
+            box-sizing: border-box;
+            transition: left .12s, top .12s;
+        }
+
+        #rh b.sel {
+            outline: 3px solid var(--blue);
+            outline-offset: 1px;
+            z-index: 2;
+        }
+
+        .exit {
+            text-align: right;
+            font-size: 13px;
+            color: var(--muted);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <h1>關卡益智</h1>
+        <div class="tabs" id="tabs"><button data-g="s" class="on">推箱子</button><button data-g="r">塞車遊戲</button></div>
+        <div class="card">
+            <h2 id="gname"></h2>
+            <div class="lv" id="lv"></div>
+        </div>
+        <div class="card">
+            <div class="stat" id="stat"></div>
+            <div id="msg"></div>
+            <div class="board"><div id="sk"></div><div id="rhw" hidden><div id="rh"></div><div class="exit">紅車開到右側出口 →</div></div></div>
+            <div class="pad" id="pad"><span></span><button data-d="u" aria-label="上">↑</button><span></span><button data-d="l" aria-label="左">←</button><button data-d="d" aria-label="下">↓</button><button data-d="r" aria-label="右">→</button></div>
+            <div class="row">
+                <button id="undo">↶ 悔棋</button>
+                <button id="reset">↺ 重來</button>
+                <button id="hint">💡 提示</button>
+                <button id="next" hidden>下一關 →</button>
+            </div>
+        </div>
+        <div class="card">
+            <button id="clear">清除全部進度</button>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>兩款經典關卡益智：<b>推箱子</b>（32 關）與<b>塞車遊戲</b>（Rush Hour，30 關），由易到難，單機，記錄每關最佳成績。更多小謎題（華容道、孔明棋…）在「經典益智」。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>想靜下來動腦十分鐘。</li>
+            <li>想挑戰自己能不能用更少步數過關。</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+            <li>上方切換遊戲，點關卡數字選關（有 ✓ 或 ★ 表示已過關）。</li>
+            <li><b>推箱子</b>：把所有箱子推到紅圈目標上。只能推、不能拉，一次只能推一個。點盤面上走得到的空格會自動走過去；也可用下方方向鍵或鍵盤方向鍵 / WASD。</li>
+            <li><b>塞車</b>：點一台車選取（藍框），再點它同一條線上的空格，車會直接開過去（不論移動幾格都算一步）。把紅車開到右側出口。</li>
+            <li>悔棋沒有次數限制；重來會回到關卡起點。塞車的提示會選出下一步最佳移動並標出目的地。</li>
+        </ol>
+        <h3>計分</h3>
+        <div class="eg">推箱子記「步數 / 推數」，步數越少越好。塞車顯示「最少 N 步」：≤ 最少 = ★★★，≤ 1.5 倍 = ★★，其餘 ★。</div>
+        <h3>小提醒</h3>
+        <ul>
+            <li>成績存在這個瀏覽器（lvlp_progress），可用右上角「💾」備份；最多 62 筆（每關一筆）。</li>
+            <li>只有破紀錄才會覆寫；「清除全部進度」會刪掉兩款遊戲所有紀錄且無法復原。壞掉的資料載入時會自動忽略；儲存空間不足時會提示。</li>
+            <li>點「清除全部進度」前會先確認。</li>
+        </ul>
+    </template>
+
+    <script>
+        // --- pure ---
+        const SOK = [
+            { m: "########|#     .#|## .$  #|#  $ # #|##@    #|########", s: 'rUUluRRRdL' },
+            { m: "########|#  .@  #|#  $   #|##  $. #|# .$   #|########", s: 'drddlLuUdR' },
+            { m: "#######|#     #|#   # #|# $ . #|#   $.#|# #   #|#  # @#|#######", s: 'ullulluRRdR' },
+            { m: "########|#  # @ #|#.     #|#  .  ##|#$ $ # #|#      #|########", s: 'ddlddlUdllUU' },
+            { m: "########|#  $ . #|#      #|##.@ $ #|#      #|########", s: 'uluRRdrrdLLL' },
+            { m: "#######|# @#  #|#.    #|#  $  #|# $.# #|#     #|#  #  #|#######", s: 'drDllddrUUruL' },
+            { m: "########|#      #|#      #|# @ . $#|#      #|#   $ .#|#      #|########", s: 'urrrrDDlddlUU' },
+            { m: "########|# .    #|## $   #|# $    #|#  .   #|#    @ #|#      #|########", s: 'uuulLddlluRUrD' },
+            { m: "#######|#  .  #|# #@  #|#  $  #|# $ $.#|#.    #|##    #|#######", s: 'DDRdLLUluRdrUU' },
+            { m: "#######|#  . @#|#    ##|# $#  #|#  $. #|#######", s: 'ldlllddrRlUUluR' },
+            { m: "#######|#.    #|#.$@ $#|#$  # #|#    .#|#######", s: 'ddllUrUruLrrrDD' },
+            { m: "#######|#  @  #|#.    #|# $ $##|##    #|# .  ##|#     #|#######", s: 'dddrUluurrdLLLDD' },
+            { m: "########|#      #|## $   #|#      #|#. @.$ #|########", s: 'urrrdLLLLuuRurDD' },
+            { m: "#######|# $ . #|#   ..#|### $ #|#     #|##   $#|# @   #|#######", s: 'rrrUUUdlUlulluRR' },
+            { m: "#######|## @  #|# . # #|#.$ $ #|#  #  #|#######", s: 'dllddrUruurrddLLL' },
+            { m: "########|#  #  .#|#  # $ #|# # $ @#|#.$.   #|########", s: 'dlllLruRuRDrUddLL' },
+            { m: "#######|#. .. #|#$$.$ #|#  $$ #|#  . @#|#######", s: 'llUUddrruLUlDllUR' },
+            { m: "#######|#.#  .#|#  $  #|# $  ##|#  $. #|#   @ #|#     #|#######", s: 'uulLdRllUUrRdrUluR' },
+            { m: "########|#  @#. #|#$. $$ #|#  #   #|#  #$  #|#   .  #|#.     #|########", s: 'llDDDDrrrUruULLrDD' },
+            { m: "########|#. @#  #|#  $   #|#   #  #|#  $   #|# .    #|########", s: 'lddrDrdLurruulLLdlU' },
+            { m: "########|#.     #|## $  .#|##     #|# $   @#|#      #|#  $.  #|########", s: 'dlllldRulUUURuLdrRR' },
+            { m: "########|##.$   #|#   $  #|# .$ # #|##.   .#|# $ # ##|##  @ ##|########", s: 'llUruruLuRuLdrRurDD' },
+            { m: "#######|# ## @#|#     #|# $$  #|#    .#|# #  .#|#######", s: 'dlllDRRurDDulllldRRR' },
+            { m: "#######|#@$.  #|#   $ #|#   . #|# $##.#|#  $. #|#######", s: 'RddlddrRlUluRRuRurDD' },
+            { m: "########|##  . ##|#. # # #|#  # $ #|#@  $  #|#      #|########", s: 'drrrruruLdLUUddLLdlUU' },
+            { m: "#######|#.   .#|# $$# #|#   .$#|##.$@ #|#######", s: 'LulluurrDLdlUdrRdrrUU' },
+            { m: "#######|#    ##|#   $ #|#.#$@ #|#    .#|#######", s: 'ruLLDuulldddrRRuulLulD' },
+            { m: "########|# $ .# #|#  ##. #|# $$ .##|#.$ @  #|# ##   #|########", s: 'lLURRdrUlllluuRRlDldRRR' },
+            { m: "#######|#   # #|# #$ .#|#     #|#  $ $#|# ..# #|# $ .@#|#######", s: 'uUUdlLulDuluurrDDDllddRR' },
+            { m: "#######|# @   #|#. $$ #|#.  # #|## $ .#|#######", s: 'rDurrdLLLulDrddRRlUluurrdLL' },
+            { m: "#######|#   @ #|#  #$ #|#.#   #|#.  $ #|#  ## #|#.  $ #|#######", s: 'DrddLLLdlUrrrruulDrdLLLrrrddLLL' },
+            { m: "########|#  #   #|#.##   #|#  . # #|# $ $  #|###    #|##    @#|########", s: 'uulLulDulldRRRddlUUdrrruLLuLLrrddlUllU' }
+        ];
+        const RH = [
+            { b: '...FF.CCC..BAAG.DB..G.D.HH..D..EE...', n: 4 },
+            { b: 'GG..........AA...EDF...EDF...E..CCBB', n: 4 },
+            { b: 'EGG...E..IIHAA.B.H.DJB.HKDJ.CCK.FF..', n: 5 },
+            { b: 'B..GGGB.CCF.AA..F.E.JJF.EH.II.EH.DDD', n: 5 },
+            { b: '.H.DI..HLDIGAALD.GKCJJE.KCB.EF..B.EF', n: 6 },
+            { b: 'F.....F.GB..AAGBCE....CEDD..C.....HH', n: 6 },
+            { b: 'C.KFFJC.KBBJAAI..J..IHH.E..DDDEGG.LL', n: 7 },
+            { b: 'JHH...J.BGL.AABGL.F.KKEEF..CCCIIIDD.', n: 8 },
+            { b: 'IIFFF....DB.AA.DBH.CC..HK.E.JJK.EGGG', n: 8 },
+            { b: 'II.FF.BBDDDHAAG..HLKG..JLKEECJ.K..C.', n: 9 },
+            { b: '..EE..GGKBB.AAK.DFJHCCDFJH.IDFJ..ILL', n: 9 },
+            { b: '.BCCC..BI..FAAIDJFH.KDJFHEK.J..EKGG.', n: 10 },
+            { b: '..IIBB...DEFAA.DEF.G....JGHHKKJ...CC', n: 10 },
+            { b: '...BJJ..IBDGAAI.DGEFF.D.EKHHHL.KCC.L', n: 11 },
+            { b: '..EMMMJJEDD.AAEC..BK.CG.BKFFGLIIHH.L', n: 11 },
+            { b: 'K..DDCK.BLLCAABEHF...EHF..G.JFIIG.J.', n: 12 },
+            { b: 'DDD..H.CCE.HAAGE.I..GE.IJFF...J..BBB', n: 13 },
+            { b: 'JKKG.FJ..G.FAAI.BH.EI.BH.ELDC.MMLDC.', n: 13 },
+            { b: 'DL.BBIDLFF.IAAJ.G.KKJ.G...EHHH..ECCC', n: 14 },
+            { b: '..ICC...IEF.AABEF...BG.HD.BGKHDJJJKH', n: 14 },
+            { b: '.CC.KKGG..F.AA..F.H.DDF.HIEBBBHIEJJ.', n: 15 },
+            { b: 'J.KKBFJLLDBFAAGD..IIG.C.EEE.C...HHH.', n: 16 },
+            { b: 'EGG.JJE.LLL.AAHD..KKHD.IBBCCCI..FFFI', n: 16 },
+            { b: 'JCCBB.JHHIKKAADI....D..E.GGG.EFFFLLE', n: 17 },
+            { b: 'K.DI..K.DICCAA..JMHHF.JM.LFBBG.LEEEG', n: 17 },
+            { b: '...BBBKKC..LAACD.LF.CDHHFEEEGJ.II.GJ', n: 18 },
+            { b: '.JJ..F..DEEFAADKH.CCCKHB.G.IIB.GLL..', n: 19 },
+            { b: 'MMMK..HHEK.DAAE..DGG.B.JICCBFJI.LLF.', n: 21 },
+            { b: 'LLLJJ.GGK..DAAKECDBHHEC.BFF.C...II..', n: 22 },
+            { b: '.EECCI.....IAA.G.IHHFGBBD.FK..D.FKJJ', n: 29 }
+        ];
+        const DIRS = { u: [-1, 0], d: [1, 0], l: [0, -1], r: [0, 1] };
+        // 推箱子：# 牆 @ 玩家 + 玩家在目標 $ 箱子 * 箱子在目標 . 目標；列以 | 分隔
+        function sokParse(m) {
+            const rows = m.split('|'), H = rows.length, W = Math.max(...rows.map(r => r.length));
+            const L = { W, H, wall: [], goal: [] }, S = { p: -1, b: [] };
+            for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+                const ch = rows[r][c] || '#', i = r * W + c;
+                L.wall[i] = ch === '#'; L.goal[i] = ch === '.' || ch === '*' || ch === '+';
+                if (ch === '@' || ch === '+') S.p = i;
+                if (ch === '$' || ch === '*') S.b.push(i);
+            }
+            return { L, S };
+        }
+        // 走一步；回傳新狀態（含 push 是否推了箱子）或 null
+        function sokMove(L, S, d) {
+            const [dr, dc] = DIRS[d], r = Math.floor(S.p / L.W), c = S.p % L.W, nr = r + dr, nc = c + dc;
+            if (nr < 0 || nc < 0 || nr >= L.H || nc >= L.W) return null;
+            const np = nr * L.W + nc; if (L.wall[np]) return null;
+            const bi = S.b.indexOf(np); let b = S.b, push = false;
+            if (bi >= 0) {
+                const r2 = nr + dr, c2 = nc + dc; if (r2 < 0 || c2 < 0 || r2 >= L.H || c2 >= L.W) return null;
+                const bp = r2 * L.W + c2; if (L.wall[bp] || S.b.includes(bp)) return null;
+                b = S.b.slice(); b[bi] = bp; push = true;
+            }
+            return { p: np, b, push };
+        }
+        const sokWon = (L, S) => S.b.every(i => L.goal[i]);
+        // 不推箱子走到 target 的路徑（方向字串），找不到回 null
+        function sokWalk(L, S, target) {
+            if (S.p === target) return '';
+            if (L.wall[target] || S.b.includes(target)) return null;
+            const prev = new Map([[S.p, null]]); let q = [S.p];
+            while (q.length) {
+                const nq = [];
+                for (const x of q) for (const d of 'udlr') {
+                    const [dr, dc] = DIRS[d], r = Math.floor(x / L.W), c = x % L.W, nr = r + dr, nc = c + dc;
+                    if (nr < 0 || nc < 0 || nr >= L.H || nc >= L.W) continue;
+                    const y = nr * L.W + nc; if (L.wall[y] || S.b.includes(y) || prev.has(y)) continue;
+                    prev.set(y, [x, d]); if (y === target) { let s = ''; for (let k = y; prev.get(k); k = prev.get(k)[0]) s = prev.get(k)[1] + s; return s; }
+                    nq.push(y);
+                }
+                q = nq;
+            }
+            return null;
+        }
+        // 依解答字串重播（大寫 = 推箱子）；回傳 { S, moves, pushes } 或 null
+        function sokReplay(L, S, sol) {
+            let moves = 0, pushes = 0;
+            for (const ch of sol) {
+                const n = sokMove(L, S, ch.toLowerCase()); if (!n) return null;
+                S = n; moves++; if (n.push) pushes++;
+            }
+            return { S, moves, pushes };
+        }
+        // 塞車：6×6 共 36 字，. 空格、A 紅車（第 3 列橫向）、其他字母為其他車
+        function rhParse(s) {
+            const cells = {};
+            for (let i = 0; i < 36; i++) if (s[i] !== '.') (cells[s[i]] = cells[s[i]] || []).push(i);
+            const cars = Object.keys(cells).sort().map(id => { const a = cells[id]; return { id, r: Math.floor(a[0] / 6), c: a[0] % 6, len: a.length, h: a[1] === a[0] + 1 }; });
+            return { cars, pos: cars.map(c => c.h ? c.c : c.r) };
+        }
+        function rhOcc(cars, pos) {
+            const o = new Array(36).fill(-1);
+            cars.forEach((c, i) => { for (let k = 0; k < c.len; k++) o[c.h ? c.r * 6 + pos[i] + k : (pos[i] + k) * 6 + c.c] = i; });
+            return o;
+        }
+        // 把第 i 台車開到 np（沿線，路徑要暢通）；回傳新 pos 或 null
+        function rhMove(cars, pos, i, np) {
+            const c = cars[i], cur = pos[i];
+            if (!Number.isInteger(np) || np === cur || np < 0 || np + c.len > 6) return null;
+            const o = rhOcc(cars, pos), lo = np < cur ? np : cur + c.len, hi = np < cur ? cur - 1 : np + c.len - 1;
+            for (let k = lo; k <= hi; k++) if (o[c.h ? c.r * 6 + k : k * 6 + c.c] !== -1) return null;
+            const n = pos.slice(); n[i] = np; return n;
+        }
+        const rhWon = (cars, pos) => pos[cars.findIndex(c => c.id === 'A')] === 4;
+        // BFS：回傳最短移動序列 [{i, np}]（已過關為 []），無解 null
+        function rhSolve(cars, pos) {
+            const seen = new Map([[pos.join(), null]]); let q = [pos];
+            while (q.length) {
+                const nq = [];
+                for (const ps of q) {
+                    if (rhWon(cars, ps)) { const out = []; let k = ps.join(); while (seen.get(k)) { const e = seen.get(k); out.unshift(e.m); k = e.k; } return out; }
+                    const o = rhOcc(cars, ps), k0 = ps.join();
+                    cars.forEach((c, i) => {
+                        for (const dir of [-1, 1]) for (let k = 1; k < 6; k++) {
+                            const np = ps[i] + dir * k, edge = dir < 0 ? np : ps[i] + c.len - 1 + k;
+                            if (np < 0 || np + c.len > 6 || o[c.h ? c.r * 6 + edge : edge * 6 + c.c] !== -1) break;
+                            const n2 = ps.slice(); n2[i] = np; const kk = n2.join();
+                            if (!seen.has(kk)) { seen.set(kk, { k: k0, m: { i, np } }); nq.push(n2); }
+                        }
+                    });
+                }
+                q = nq;
+            }
+            return null;
+        }
+        const rhStars = (steps, min) => steps <= min ? 3 : steps <= min * 1.5 ? 2 : 1;
+        // 進度：{ s: { 關卡索引: [步數, 推數] }, r: { 關卡索引: 步數 } }，載入時驗證並限制在關卡數內
+        function cleanProgress(raw) {
+            const out = { s: {}, r: {} }, pi = (v) => Number.isInteger(v) && v > 0 && v < 1e6;
+            if (!raw || typeof raw !== 'object') return out;
+            if (raw.s && typeof raw.s === 'object') for (let i = 0; i < SOK.length; i++) { const v = raw.s[i]; if (Array.isArray(v) && pi(v[0]) && Number.isInteger(v[1]) && v[1] >= 0 && v[1] < 1e6) out.s[i] = [v[0], v[1]]; }
+            if (raw.r && typeof raw.r === 'object') for (let i = 0; i < RH.length; i++) if (pi(raw.r[i])) out.r[i] = raw.r[i];
+            return out;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s), KEY = 'lvlp_progress';
+        let P = cleanProgress(Util.store.get(KEY, null)), g = 's', cur = { s: 0, r: 0 };
+        const save = () => Util.store.set(KEY, P);
+        // 目前局面
+        let L, S, hist, moves, pushes, done, rcars, rpos, sel, tgt;
+        const say = (t, win) => { $('#msg').textContent = t; $('#msg').className = win ? 'win' : ''; };
+
+        function load() {
+            const i = cur[g]; hist = []; moves = 0; pushes = 0; done = false; sel = -1; tgt = -1; say('');
+            if (g === 's') { const o = sokParse(SOK[i].m); L = o.L; S = o.S; }
+            else { const o = rhParse(RH[i].b); rcars = o.cars; rpos = o.pos; }
+            $('#next').hidden = true; draw();
+        }
+        function stars(i) { const v = P.r[i]; return v ? '★'.repeat(rhStars(v, RH[i].n)) : ''; }
+        function draw() {
+            const n = g === 's' ? SOK.length : RH.length, i = cur[g];
+            $('#tabs').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.g === g));
+            $('#gname').textContent = g === 's' ? '推箱子：選關' : '塞車遊戲：選關';
+            $('#lv').innerHTML = Array.from({ length: n }, (_, k) => {
+                const d = g === 's' ? P.s[k] : P.r[k];
+                return `<button data-k="${k}" class="${k === i ? 'cur' : ''} ${d ? 'done' : ''}">${k + 1}<small>${d ? (g === 's' ? '✓' : stars(k)) : '·'}</small></button>`;
+            }).join('');
+            $('#sk').hidden = g !== 's'; $('#rhw').hidden = g !== 'r'; $('#pad').hidden = g !== 's';
+            $('#hint').hidden = g !== 'r'; $('#undo').disabled = !hist.length;
+            const best = g === 's' ? (P.s[i] ? `最佳 ${P.s[i][0]} 步 / ${P.s[i][1]} 推` : '尚無紀錄') : `最少 ${RH[i].n} 步・${P.r[i] ? '最佳 ' + P.r[i] + ' 步 ' + stars(i) : '尚無紀錄'}`;
+            $('#stat').innerHTML = `<span>第 ${i + 1} / ${n} 關</span><span>${g === 's' ? `步數 ${moves}・推 ${pushes}` : `步數 ${moves}`}</span><span>${best}</span>`;
+            g === 's' ? drawS() : drawR();
+        }
+        function drawS() {
+            const el = $('#sk'); el.style.gridTemplateColumns = `repeat(${L.W},1fr)`;
+            let h = '';
+            for (let k = 0; k < L.W * L.H; k++) h += `<div data-i="${k}" class="${L.wall[k] ? 'w' : ''} ${L.goal[k] ? 'g' : ''} ${S.b.includes(k) ? 'b' : ''} ${S.p === k ? 'p' : ''}"></div>`;
+            el.innerHTML = h;
+        }
+        const COL = (id) => id === 'A' ? 'var(--bad)' : `hsl(${(id.charCodeAt(0) * 47) % 360} 55% 58%)`;
+        function drawR() {
+            const el = $('#rh'), u = 100 / 6;
+            let h = '';
+            for (let k = 0; k < 36; k++) h += `<i data-i="${k}" class="${k === tgt ? 'tgt' : ''}"></i>`;
+            rcars.forEach((c, i) => {
+                const r = c.h ? c.r : rpos[i], cc = c.h ? rpos[i] : c.c;
+                h += `<b data-c="${i}" class="${i === sel ? 'sel' : ''}" style="left:${cc * u}%;top:${r * u}%;width:calc(${(c.h ? c.len : 1) * u}% - 4px);height:calc(${(c.h ? 1 : c.len) * u}% - 4px);background:${COL(c.id)}"></b>`;
+            });
+            el.innerHTML = h;
+        }
+        function win() {
+            done = true; $('#next').hidden = cur[g] >= (g === 's' ? SOK.length : RH.length) - 1; const i = cur[g];
+            if (g === 's') {
+                const o = P.s[i]; if (!o || moves < o[0] || (moves === o[0] && pushes < o[1])) { P.s[i] = [moves, pushes]; save(); }
+                say(`過關！${moves} 步、${pushes} 推。`, true);
+            } else {
+                if (!P.r[i] || moves < P.r[i]) { P.r[i] = moves; save(); }
+                say(`過關！${moves} 步（最少 ${RH[i].n} 步）${'★'.repeat(rhStars(moves, RH[i].n))}`, true);
+            }
+            draw();
+        }
+        // 推箱子：依方向字串依序走，整段算一次悔棋
+        function sokGo(path) {
+            if (done || !path) return;
+            const before = { S, moves, pushes }; let any = false;
+            for (const d of path) {
+                const n = sokMove(L, S, d); if (!n) break;
+                S = n; moves++; if (n.push) pushes++; any = true;
+                if (sokWon(L, S)) break;
+            }
+            if (!any) return;
+            hist.push(before); sokWon(L, S) ? win() : draw();
+        }
+        $('#tabs').onclick = (e) => { const b = e.target.closest('button'); if (b) { g = b.dataset.g; load(); } };
+        $('#lv').onclick = (e) => { const b = e.target.closest('button'); if (b) { cur[g] = +b.dataset.k; load(); } };
+        $('#pad').onclick = (e) => { const b = e.target.closest('button'); if (b) sokGo(b.dataset.d); };
+        $('#sk').onclick = (e) => { const c = e.target.closest('[data-i]'); if (c && !done) sokGo(sokWalk(L, S, +c.dataset.i)); };
+        document.addEventListener('keydown', (e) => {
+            const d = { ArrowUp: 'u', ArrowDown: 'd', ArrowLeft: 'l', ArrowRight: 'r', w: 'u', s: 'd', a: 'l', d: 'r' }[e.key];
+            if (g !== 's' || !d || e.ctrlKey || e.metaKey || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+            e.preventDefault(); sokGo(d);
+        });
+        $('#rh').onclick = (e) => {
+            if (done) return;
+            const car = e.target.closest('[data-c]'), cell = e.target.closest('[data-i]');
+            if (car) { sel = sel === +car.dataset.c ? -1 : +car.dataset.c; tgt = -1; return drawR(); }
+            if (!cell || sel < 0) return;
+            const c = rcars[sel], i = +cell.dataset.i, r = Math.floor(i / 6), cc = i % 6;
+            if (c.h ? r !== c.r : cc !== c.c) return;
+            const t = c.h ? cc : r, np = t < rpos[sel] ? t : t - c.len + 1 > rpos[sel] ? t - c.len + 1 : null; // 點在車前方 → 車頭到該格；點在車後方 → 車尾到該格
+            const n = np === null ? null : rhMove(rcars, rpos, sel, np);
+            if (!n) return say('這裡開不過去。');
+            hist.push({ rpos, moves }); rpos = n; moves++; tgt = -1; say('');
+            rhWon(rcars, rpos) ? win() : draw();
+        };
+        $('#undo').onclick = () => {
+            if (!hist.length) return; const h = hist.pop(); done = false; say(''); $('#next').hidden = true; sel = -1; tgt = -1;
+            if (g === 's') { S = h.S; moves = h.moves; pushes = h.pushes; } else { rpos = h.rpos; moves = h.moves; }
+            draw();
+        };
+        $('#reset').onclick = load;
+        $('#next').onclick = () => { cur[g]++; load(); };
+        $('#hint').onclick = () => {
+            if (done) return; const s = rhSolve(rcars, rpos); if (!s || !s.length) return say('無解或已過關。');
+            const m = s[0], c = rcars[m.i]; sel = m.i; tgt = c.h ? c.r * 6 + m.np + (m.np > rpos[m.i] ? c.len - 1 : 0) : (m.np + (m.np > rpos[m.i] ? c.len - 1 : 0)) * 6 + c.c;
+            say(`提示：還要 ${s.length} 步以內，先移動藍框的車。`); drawR();
+        };
+        $('#clear').onclick = () => {
+            if (!confirm('清除推箱子與塞車遊戲的所有關卡紀錄？無法復原。')) return;
+            P = { s: {}, r: {} }; save(); load();
+        };
+        load();
+    </script>
+</body>
+
+</html>

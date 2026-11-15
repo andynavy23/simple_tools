@@ -10,7 +10,7 @@
     <meta property="og:description" content="多人多局計分，自動累計與排名。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/scoreboard.html" />
-    <meta name="st-keys" content="score_state">
+    <meta name="st-keys" content="score_state,score_counter">
     <title>計分板</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -97,6 +97,78 @@
         .rank .first {
             background: color-mix(in srgb, #ffd60a 40%, var(--fill));
         }
+
+        .cgrp {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--fill);
+        }
+
+        .cgrp .nm {
+            font-weight: 700;
+        }
+
+        .cgrp .nm small {
+            color: var(--muted);
+            font-weight: 400;
+        }
+
+        .cgrp .cn {
+            font-size: 44px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            text-align: center;
+            min-width: 90px;
+        }
+
+        .cgrp .acts {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: 1fr 2fr auto auto;
+            gap: 8px;
+        }
+
+        .cgrp .acts button {
+            min-height: 56px;
+            font-size: 22px;
+        }
+
+        .bsc {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .bsc button {
+            min-height: 150px;
+            font-size: 72px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            line-height: 1.1;
+        }
+
+        .bsc button small {
+            display: block;
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .bsc button.srv {
+            outline: 3px solid var(--ok);
+        }
+
+        .binfo {
+            margin-top: 10px;
+            line-height: 1.7;
+        }
+
+        .binfo .alert {
+            color: var(--ok);
+            font-weight: 800;
+        }
     </style>
 </head>
 
@@ -106,6 +178,31 @@
         <h1>計分板</h1>
         <p class="sub">加入玩家、每局輸入分數，自動累計與排名。資料只存在這個瀏覽器。</p>
 
+        <div class="card"><div class="tabs" role="tablist"><button data-m="board" aria-pressed="true">計分板</button><button data-m="count" aria-pressed="false">計數器</button><button data-m="bad" aria-pressed="false">羽球</button></div></div>
+
+        <div id="m-count" hidden>
+            <div class="card">
+                <h2>計數器</h2>
+                <div id="cgroups"></div>
+                <div class="row" style="margin-top:12px"><input type="text" id="cname" maxlength="12" placeholder="新組名稱（如：男生、女生）" aria-label="新組名稱"><button id="cadd">新增一組</button></div>
+                <div class="row"><label><input type="checkbox" id="csound"> 音效</label><label><input type="checkbox" id="cvib"> 震動</label></div>
+                <div class="row"><b>總數 <span id="ctotal">0</span></b><button class="sm" id="creset">全部歸零</button><button class="sm" id="cclear">清除所有組別</button></div>
+            </div>
+        </div>
+
+        <div id="m-bad" hidden>
+            <div class="card">
+                <h2>羽球計分</h2>
+                <div class="row"><button class="sm" id="bSingle" aria-pressed="true">單打</button><button class="sm" id="bDouble" aria-pressed="false">雙打</button></div>
+                <div class="row"><input type="text" id="bn0" maxlength="12" value="甲" aria-label="甲方名稱"><input type="text" id="bn1" maxlength="12" value="乙" aria-label="乙方名稱"></div>
+                <div class="row"><label>先發球方 <select id="bfirst"></select></label></div>
+                <div class="bsc" id="bsc"><button class="primary" id="bp0"></button><button class="primary" id="bp1"></button></div>
+                <div class="binfo" id="binfo"></div>
+                <div class="row" style="margin-top:10px"><button class="sm" id="bundo">悔棋一步</button><button class="sm" id="bnew">新比賽</button></div>
+            </div>
+        </div>
+
+        <div id="m-board">
         <div class="card">
             <h2>排名</h2>
             <div class="rank" id="rank"></div>
@@ -120,6 +217,7 @@
             <div class="row"><input type="text" id="pname" maxlength="12" placeholder="玩家名稱" aria-label="玩家名稱"><button id="padd">加入玩家</button></div>
             <div id="people" class="row"></div>
             <div class="row"><button class="sm" id="copy">複製成績表</button><button class="sm" id="reset">全部重來</button></div>
+        </div>
         </div>
     </div>
 
@@ -139,6 +237,19 @@
         <li>分數越低越好的遊戲請勾選對應選項。</li>
         <li>「複製成績表」可貼到聊天室；玩家名稱旁的 ✕ 可移除玩家。</li>
         </ol>
+        <h3>計數器（上方切換）</h3>
+        <ul>
+        <li>人數清點、次數統計用：每組一個大數字，按「＋1」「−1」；「新增一組」可命名（最多 12 組，滿了會拒絕新增）；每組顯示佔總數的百分比，下方是總數。</li>
+        <li>可勾「音效」「震動」回饋（預設關閉，手機是否震動視瀏覽器而定）。每組可「歸零」或 ✕ 刪除；「全部歸零」與「清除所有組別」會先確認，無法復原。</li>
+        <li>只記住上次的組別與數值（鍵 score_counter，可用右上角備份）；數值範圍 0–99999。</li>
+        </ul>
+        <h3>羽球（上方切換）</h3>
+        <ul>
+        <li>單打 / 雙打，21 分制：每球得分（每球得分制），領先 2 分才贏一局，打到 29 平時先拿到 30 分者勝；三戰兩勝。按得分方的大按鈕加分，🏸 外框為發球方（得分者下一球發球）。</li>
+        <li>發球區：發球方分數偶數從右半場發、奇數從左半場發（單打、雙打相同；雙打得分時由同一位發球員與同伴換位）。</li>
+        <li>換邊提示：每局結束換邊；第 3 局任一方先拿到 11 分也要換邊。「悔棋一步」可回上一分；「新比賽」會先確認。</li>
+        <li>羽球比分只存在記憶體，重新整理會消失。</li>
+        </ul>
         <h3>範例</h3>
         <div class="eg">玩家小明、小華、小美。第 1 局 10、8、5，第 2 局 6、9、7 → 合計 16、17、12，小華第 1 名。勾「分數越低越好」則小美第 1。</div>
         <h3>小提醒</h3>
@@ -179,6 +290,40 @@
             const t = totals(st), rk = ranks(t, st.low), order = t.map((_, i) => i).sort((a, b) => rk[a] - rk[b]);
             return [`共 ${st.rounds.length} 局${st.low ? '（分數低者勝）' : ''}`, ...order.map(i => `${rk[i]}. ${st.players[i]}　${t[i]}`)].join('\n');
         }
+
+        // 計數器：{ groups: [{ id, name, n }], sound, vib }；最多 12 組，數值 0–99999
+        const CNT_MAX = 12, CNT_CAP = 99999;
+        const defCounter = () => ({ groups: [{ id: 1, name: '計數', n: 0 }], sound: false, vib: false });
+        function validCounter(raw) {
+            if (!raw || !Array.isArray(raw.groups)) return defCounter();
+            const seen = new Set(), groups = [];
+            for (const g of raw.groups) {
+                if (groups.length >= CNT_MAX || !g || typeof g.name !== 'string') continue;
+                let id = Number.isInteger(g.id) && g.id > 0 ? g.id : 0; while (!id || seen.has(id)) id = (id || 0) + 1 + groups.length; seen.add(id);
+                const n = Number.isFinite(g.n) ? Math.min(CNT_CAP, Math.max(0, Math.round(g.n))) : 0;
+                groups.push({ id, name: g.name.trim().slice(0, 12) || '計數', n });
+            }
+            return { groups, sound: raw.sound === true, vib: raw.vib === true };
+        }
+        const cntAdd = (c, id, d) => ({ ...c, groups: c.groups.map(g => g.id === id ? { ...g, n: Math.min(CNT_CAP, Math.max(0, g.n + d)) } : g) });
+        const cntTotal = (c) => c.groups.reduce((a, g) => a + g.n, 0);
+        const cntPct = (c, g) => { const t = cntTotal(c); return t ? Math.round(g.n / t * 100) : 0; };
+        const cntNewGroup = (c, name) => { const nm = (name || '').trim().slice(0, 12); if (!nm || c.groups.length >= CNT_MAX) return c; return { ...c, groups: [...c.groups, { id: Math.max(0, ...c.groups.map(g => g.id)) + 1, name: nm, n: 0 }] }; };
+
+        // 羽球：log = 每一球得分方（0 / 1）的陣列；全部狀態由重播得出。21 分制、領先 2 分、30 分封頂、三戰兩勝
+        const badGameDone = (a, b) => { const m = Math.max(a, b); return (m >= 21 && Math.abs(a - b) >= 2) || m >= 30; };
+        const badCourt = (score) => (score % 2 === 0 ? '右' : '左');
+        function badReplay(log, first = 0) {
+            const games = []; let cur = [0, 0], srv = first, note = null, over = false;
+            const wins = () => [0, 1].map(s => games.filter(g => g[s] > g[1 - s]).length);
+            for (const w of log) {
+                if (over) break;
+                note = null; cur = cur.slice(); cur[w]++; srv = w;
+                if (badGameDone(cur[0], cur[1])) { games.push(cur); cur = [0, 0]; const ws = wins(); over = ws[0] === 2 || ws[1] === 2; note = over ? 'over' : 'game'; }
+                else if (games.length === 2 && cur[w] === 11 && cur[1 - w] < 11) note = 'mid';
+            }
+            return { games, cur, srv, wins: wins(), over, note, court: badCourt(cur[srv]) };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -217,6 +362,61 @@
         $('#copy').onclick = () => Util.copyWithFeedback($('#copy'), toText(S));
         $('#reset').onclick = () => { if (confirm('清除所有玩家與分數？')) { S = { players: [], rounds: [], low: false }; save(); render(); } };
         render();
+
+        // ---------- 模式切換 ----------
+        document.querySelectorAll('[data-m]').forEach(b => { b.onclick = () => { document.querySelectorAll('[data-m]').forEach(x => x.setAttribute('aria-pressed', x === b)); ['board', 'count', 'bad'].forEach(m => { $('#m-' + m).hidden = m !== b.dataset.m; }); }; });
+
+        // ---------- 計數器 ----------
+        let C = validCounter(store.get('score_counter', null));
+        const saveC = () => store.set('score_counter', C);
+        function feedback() { if (C.sound) Util.tone(660, 60, { vol: 0.1 }); if (C.vib && navigator.vibrate) { try { navigator.vibrate(20); } catch (e) { } } }
+        function renderC() {
+            $('#csound').checked = C.sound; $('#cvib').checked = C.vib; $('#ctotal').textContent = cntTotal(C);
+            $('#cgroups').replaceChildren(...C.groups.map(g => {
+                const d = document.createElement('div'); d.className = 'cgrp';
+                const nm = document.createElement('div'); nm.className = 'nm'; nm.append(g.name + ' ', Object.assign(document.createElement('small'), { textContent: cntPct(C, g) + '%' }));
+                const cn = Object.assign(document.createElement('div'), { className: 'cn', textContent: g.n });
+                const acts = document.createElement('div'); acts.className = 'acts';
+                const mk = (t, label, fn, cls = '') => { const b = Object.assign(document.createElement('button'), { textContent: t, className: cls }); b.setAttribute('aria-label', label + ' ' + g.name); b.onclick = fn; return b; };
+                acts.append(mk('−1', '減一', () => { C = cntAdd(C, g.id, -1); saveC(); renderC(); feedback(); }), mk('+1', '加一', () => { C = cntAdd(C, g.id, 1); saveC(); renderC(); feedback(); }, 'primary'),
+                    mk('歸零', '歸零', () => { C = { ...C, groups: C.groups.map(x => x.id === g.id ? { ...x, n: 0 } : x) }; saveC(); renderC(); }, 'sm'),
+                    mk('✕', '刪除', () => { if (confirm(`刪除「${g.name}」這一組？無法復原。`)) { C = { ...C, groups: C.groups.filter(x => x.id !== g.id) }; saveC(); renderC(); } }, 'sm'));
+                d.append(nm, cn, acts); return d;
+            }));
+        }
+        $('#cadd').onclick = () => { if (C.groups.length >= CNT_MAX) { alert(`最多 ${CNT_MAX} 組，請先刪除不用的組別`); return; } const n = $('#cname').value.trim(); if (!n) { $('#cname').focus(); return; } C = cntNewGroup(C, n); saveC(); $('#cname').value = ''; renderC(); };
+        $('#cname').onkeydown = (e) => { if (e.key === 'Enter' && !e.isComposing) $('#cadd').click(); };
+        $('#csound').onchange = () => { C = { ...C, sound: $('#csound').checked }; saveC(); };
+        $('#cvib').onchange = () => { C = { ...C, vib: $('#cvib').checked }; saveC(); };
+        $('#creset').onclick = () => { if (confirm('所有組別的數字歸零？無法復原。')) { C = { ...C, groups: C.groups.map(g => ({ ...g, n: 0 })) }; saveC(); renderC(); } };
+        $('#cclear').onclick = () => { if (confirm('刪除所有組別與數字，回到預設一組？無法復原。')) { C = defCounter(); saveC(); renderC(); } };
+        renderC();
+
+        // ---------- 羽球 ----------
+        const B = { dbl: false, first: 0, log: [] };
+        const bname = (s) => $('#bn' + s).value.trim() || (s ? '乙' : '甲');
+        function renderB() {
+            const r = badReplay(B.log, B.first);
+            $('#bSingle').setAttribute('aria-pressed', !B.dbl); $('#bDouble').setAttribute('aria-pressed', B.dbl);
+            $('#bfirst').replaceChildren(...[0, 1].map(s => Object.assign(document.createElement('option'), { value: s, textContent: bname(s), selected: s === B.first }))); $('#bfirst').disabled = B.log.length > 0;
+            [0, 1].forEach(s => { const b = $('#bp' + s); b.replaceChildren(String(r.cur[s]), Object.assign(document.createElement('small'), { textContent: (s === r.srv && !r.over ? '🏸 ' : '') + bname(s) + '　贏 ' + r.wins[s] + ' 局' })); b.classList.toggle('srv', s === r.srv && !r.over); b.disabled = r.over; });
+            const lines = [];
+            if (r.games.length) lines.push('各局：' + r.games.map(g => g.join(':')).join('　'));
+            if (r.over) lines.push(`<span class="alert">比賽結束：${Util.esc(bname(r.wins[0] === 2 ? 0 : 1))} 以 ${r.wins[0]}:${r.wins[1]} 獲勝</span>`);
+            else {
+                lines.push(`第 ${r.games.length + 1} 局　${Util.esc(bname(r.srv))} 發球，從${r.court}半場發（${r.cur[r.srv]} 分，${r.cur[r.srv] % 2 ? '奇' : '偶'}數）${B.dbl ? '；雙打由該隊在該半場的人發球' : ''}`);
+                if (r.note === 'game') lines.push('<span class="alert">這局結束：雙方換邊，由剛得分的一方發球</span>');
+                if (r.note === 'mid') lines.push('<span class="alert">決勝局到 11 分：雙方換邊</span>');
+            }
+            $('#binfo').innerHTML = lines.join('<br>');
+            $('#bundo').disabled = !B.log.length;
+        }
+        [0, 1].forEach(s => { $('#bp' + s).onclick = () => { if (B.log.length >= 200) return; B.log.push(s); renderB(); }; $('#bn' + s).oninput = renderB; });
+        $('#bSingle').onclick = () => { B.dbl = false; renderB(); }; $('#bDouble').onclick = () => { B.dbl = true; renderB(); };
+        $('#bfirst').onchange = () => { B.first = +$('#bfirst').value; renderB(); };
+        $('#bundo').onclick = () => { B.log.pop(); renderB(); };
+        $('#bnew').onclick = () => { if (!B.log.length || confirm('結束目前比賽並重新開始？')) { B.log = []; renderB(); } };
+        renderB();
     </script>
 </body>
 

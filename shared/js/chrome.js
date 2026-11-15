@@ -64,7 +64,35 @@
         const sn = ms(snoozeUntil); if (sn !== null && now < sn) return false;
         const l = ms(last); return l === null || now - l > days * 86400000;
     }
-    if (typeof document === 'undefined') { if (typeof module !== 'undefined') module.exports = { matcher, buildBackup, parseBackup, fmtBytes, diffBackup, backupDue }; return; }
+    // ---- 備份加密（可選）：密碼經 PBKDF2-SHA256 導出 AES-256-GCM 金鑰；輸出 { app, v:1, enc:{alg,kdf,iter,salt,iv}, ct }，ct 為 base64 的密文（含 GCM 驗證標籤）----
+    const subtle = () => (typeof crypto !== 'undefined' && crypto.subtle) || require('crypto').webcrypto.subtle;
+    const rnd = (n) => { const u = new Uint8Array(n); (typeof crypto !== 'undefined' && crypto.getRandomValues ? crypto : require('crypto').webcrypto).getRandomValues(u); return u; };
+    const b64 = (u8) => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return (typeof btoa === 'function' ? btoa(s) : Buffer.from(s, 'binary').toString('base64')); };
+    const unb64 = (t) => { const s = typeof atob === 'function' ? atob(t) : Buffer.from(t, 'base64').toString('binary'); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; };
+    const PBKDF2_ITER = 250000;
+    async function deriveKey(password, salt, iter) {
+        const base = await subtle().importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
+        return subtle().deriveKey({ name: 'PBKDF2', salt, iterations: iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    }
+    async function encryptBackup(text, password) {
+        if (typeof password !== 'string' || password.length < 4) throw new Error('密碼至少 4 個字');
+        const salt = rnd(16), iv = rnd(12), key = await deriveKey(password, salt, PBKDF2_ITER);
+        const ct = new Uint8Array(await subtle().encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(text)));
+        return JSON.stringify({ app: 'simple_tools', v: 1, enc: { alg: 'AES-GCM', kdf: 'PBKDF2-SHA256', iter: PBKDF2_ITER, salt: b64(salt), iv: b64(iv) }, ct: b64(ct) });
+    }
+    // 是否為加密備份（只看外殼，不解密）
+    const isEncryptedBackup = (text) => { try { const o = JSON.parse(text); return !!(o && o.app === 'simple_tools' && o.enc && typeof o.ct === 'string'); } catch (e) { return false; } };
+    // 解密：成功回傳原本的備份文字；密碼錯或檔案被改過一律丟「密碼不對或檔案已損毀」
+    async function decryptBackup(text, password) {
+        let o; try { o = JSON.parse(text); } catch (e) { throw new Error('這不是有效的備份檔'); }
+        const e = o && o.enc; if (!e || e.alg !== 'AES-GCM' || e.kdf !== 'PBKDF2-SHA256' || typeof o.ct !== 'string') throw new Error('不支援的加密格式');
+        const iter = Number(e.iter); if (!Number.isInteger(iter) || iter < 10000 || iter > 5000000) throw new Error('不支援的加密格式');
+        try {
+            const key = await deriveKey(String(password), unb64(e.salt), iter);
+            return new TextDecoder().decode(await subtle().decrypt({ name: 'AES-GCM', iv: unb64(e.iv) }, key, unb64(o.ct)));
+        } catch (err) { throw new Error('密碼不對或檔案已損毀'); }
+    }
+    if (typeof document === 'undefined') { if (typeof module !== 'undefined') module.exports = { matcher, buildBackup, parseBackup, fmtBytes, diffBackup, backupDue, encryptBackup, decryptBackup, isEncryptedBackup }; return; }
 
     const STYLES = [
         ['apple', '墨線', '#c23d17', '#f3f0e8'],
@@ -74,6 +102,8 @@
         ['pixel', '像素', '#e63946', '#f1e5c3'],
     ];
     const MODES = [['auto', '自動'], ['light', '淺色'], ['dark', '深色']];
+    const FONTS = [['s', '小', .92], ['m', '中', 1], ['l', '大', 1.12], ['xl', '特大', 1.28]];            // 字級：用 body 的 zoom 等比放大（版面會跟著重排，像瀏覽器縮放）
+    const CONTRASTS = [['std', '標準'], ['high', '高對比']];
     const root = document.documentElement;
     const get = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v === null ? d : v; } catch (e) { return d; } };
     const set = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 無痕或被封鎖：這次有效就好 */ } };
@@ -81,11 +111,18 @@
 
     let style = get('st_style', 'apple'); if (!STYLES.some(s => s[0] === style)) style = 'apple';
     let mode = get('st_mode', 'auto'); if (!MODES.some(m => m[0] === mode)) mode = 'auto';
+    let font = get('st_font', 'm'); if (!FONTS.some(f => f[0] === font)) font = 'm';
+    let contrast = get('st_contrast', 'std'); if (!CONTRASTS.some(c => c[0] === contrast)) contrast = 'std';
+    const fontStyle = document.createElement('style');       // 一開始就注入，避免載入後才放大造成閃一下
+    fontStyle.textContent = FONTS.filter(f => f[2] !== 1).map(f => `:root[data-ui-font=${f[0]}] body{zoom:${f[2]}}:root[data-ui-font=${f[0]}] .st-bar,:root[data-ui-font=${f[0]}] .st-panel,:root[data-ui-font=${f[0]}] .st-toast{zoom:${(1 / f[2]).toFixed(4)}}`).join('');       // 右上角按鈕列、外觀面板與提示訊息不跟著放大（用反向 zoom 抵銷）
+    document.head.append(fontStyle);
 
     function apply(notify) {
         const dark = mode === 'dark' || (mode === 'auto' && mq && mq.matches);
         root.setAttribute('data-ui-style', style);
         root.setAttribute('data-ui-mode', dark ? 'dark' : 'light');
+        root.setAttribute('data-ui-font', font);
+        if (contrast === 'high') root.setAttribute('data-ui-contrast', 'high'); else root.removeAttribute('data-ui-contrast');
         let meta = document.querySelector('meta[name=theme-color]');
         if (!meta) { meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.append(meta); }
         requestAnimationFrame(() => { meta.content = getComputedStyle(root).getPropertyValue('--bg').trim() || '#f5f5f7'; });
@@ -102,6 +139,8 @@
 .st-panel h4{margin:0 0 8px;font:var(--head-weight) 13px/1.3 var(--head-font);color:var(--muted)}
 .st-panel .st-row{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:14px}
 .st-panel .st-row.m{grid-template-columns:repeat(3,1fr);margin-bottom:0}
+.st-panel .st-row.f{grid-template-columns:repeat(4,1fr);margin-bottom:0}
+.st-panel .st-row.c{grid-template-columns:repeat(2,1fr)}
 .st-sw{display:grid;gap:4px;justify-items:center;padding:6px 2px;min-height:0;font-size:12px;border-radius:var(--radius-sm);background:var(--fill);color:var(--text);border:2px solid transparent}
 .st-sw i{display:block;width:26px;height:26px;border-radius:50%;border:2px solid var(--line);background:linear-gradient(135deg,var(--a) 50%,var(--b) 50%)}
 .st-sw[aria-pressed=true]{background:var(--fill);color:var(--text);border-color:var(--blue)}
@@ -124,6 +163,8 @@
 .st-toast.bad{background:var(--bad);color:#fff}
 .st-data p{margin:8px 0}
 .st-data .st-btns{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.st-enc{display:flex;gap:8px;align-items:center;font-size:14px;margin:8px 0 4px}
+.st-data input[type=password]{width:100%;margin:4px 0}
 .st-prev{margin:8px 0}
 .st-difflist{margin:6px 0;padding-left:20px;font-size:13px;max-height:200px;overflow:auto}
 .st-difflist code{font:12px ui-monospace,Menlo,Consolas,monospace;overflow-wrap:anywhere}
@@ -162,6 +203,18 @@
             el('div', { class: 'st-row m' }, ...MODES.map(([id, name]) => {
                 const b = el('button', { class: 'st-md', type: 'button', 'aria-pressed': String(id === mode), text: name });
                 b.onclick = () => { mode = id; set('st_mode', id); apply(true); renderPanel(); };
+                return b;
+            })),
+            el('h4', { text: '字級', style: 'margin-top:14px' }),
+            el('div', { class: 'st-row f' }, ...FONTS.map(([id, name]) => {
+                const b = el('button', { class: 'st-md', type: 'button', 'aria-pressed': String(id === font), text: name });
+                b.onclick = () => { font = id; set('st_font', id); apply(true); renderPanel(); };
+                return b;
+            })),
+            el('h4', { text: '對比', style: 'margin-top:14px' }),
+            el('div', { class: 'st-row m c' }, ...CONTRASTS.map(([id, name]) => {
+                const b = el('button', { class: 'st-md', type: 'button', 'aria-pressed': String(id === contrast), text: name });
+                b.onclick = () => { contrast = id; set('st_contrast', id); apply(true); renderPanel(); };
                 return b;
             })),
         );
@@ -220,13 +273,17 @@
         const file = el('input', { type: 'file', accept: '.json,application/json', hidden: '', 'aria-label': '選擇備份檔' });
         const exp = el('button', { type: 'button', class: 'primary', text: '匯出備份' });
         const imp = el('button', { type: 'button', text: '載入備份' });
-        exp.onclick = () => {
+        const encChk = el('input', { type: 'checkbox', id: 'st-enc-chk' }), encPw = el('input', { type: 'password', id: 'st-enc-pw', placeholder: '密碼（至少 4 個字）', autocomplete: 'new-password', 'aria-label': '備份加密密碼', hidden: '' });
+        encChk.onchange = () => { encPw.hidden = !encChk.checked; if (encChk.checked) encPw.focus(); };
+        exp.onclick = async () => {
             const b = buildBackup(match, localStorage, scope);
             if (!Object.keys(b.data).length) { say('目前沒有資料可以匯出。', 'bad'); return; }
             const d = new Date(), stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-            const a = el('a', { href: URL.createObjectURL(new Blob([JSON.stringify(b, null, 1)], { type: 'application/json' })), download: `simple-tools-${all ? 'all' : scope.replace(/\.html$/, '').replace(/\//g, '-')}-${stamp}.json` });
+            let body = JSON.stringify(b, null, 1);
+            if (encChk.checked) { try { body = await encryptBackup(body, encPw.value); } catch (e) { say(e.message, 'bad'); return; } }
+            const a = el('a', { href: URL.createObjectURL(new Blob([body], { type: 'application/json' })), download: `simple-tools-${all ? 'all' : scope.replace(/\.html$/, '').replace(/\//g, '-')}-${stamp}${encChk.checked ? '-enc' : ''}.json` });
             document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-            say(`已匯出 ${Object.keys(b.data).length} 項資料。請把檔案收好，之後在新的瀏覽器「載入備份」即可還原。`, 'ok');
+            say(`已匯出 ${Object.keys(b.data).length} 項資料${encChk.checked ? '（已加密，忘記密碼就無法還原）' : ''}。請把檔案收好，之後在新的瀏覽器「載入備份」即可還原。`, 'ok');
             if (all) try { localStorage.setItem('st_last_backup', new Date().toISOString()); } catch (e) { /* 只是提醒用的時間戳 */ }
         };
         const prev = el('div', { class: 'st-prev' });
@@ -234,7 +291,17 @@
         file.onchange = async () => {
             const f = file.files[0]; file.value = ''; if (!f) return;
             if (f.size > 6000000) { say('檔案太大，不像是備份檔。', 'bad'); return; }
-            const r = parseBackup(await f.text(), match);
+            const text = await f.text();
+            if (!isEncryptedBackup(text)) { restore(text); return; }
+            // 加密備份：先要密碼，解密成功才進入同一套差異預覽流程
+            const pw = el('input', { type: 'password', placeholder: '備份密碼', autocomplete: 'current-password', 'aria-label': '備份密碼' });
+            const go = el('button', { type: 'button', class: 'primary', text: '解密' }), no = el('button', { type: 'button', text: '取消' });
+            no.onclick = () => { prev.replaceChildren(); say('已取消。'); };
+            go.onclick = async () => { try { const t = await decryptBackup(text, pw.value); prev.replaceChildren(); say(''); restore(t); } catch (e) { say(e.message, 'bad'); } };
+            say(''); prev.replaceChildren(el('p', { text: '這個備份有加密，請輸入密碼：' }), pw, el('div', { class: 'st-btns' }, go, no)); pw.focus();
+        };
+        const restore = (text) => {
+            const r = parseBackup(text, match);
             if (!r.ok) { say(r.error, 'bad'); return; }
             const n = Object.keys(r.items).length;
             if (!n) { say('這個備份裡沒有屬於這裡的資料' + (r.skipped ? `（略過 ${r.skipped} 項其他工具的資料）` : '') + '。', 'bad'); return; }
@@ -264,6 +331,7 @@
             el('div', { class: 'st-body' },
                 el('p', { text: all ? '這個工具箱裡每個工具各自存了資料（記帳、待辦、日記、遊戲最佳紀錄、外觀設定、我的最愛……），都只留在這個瀏覽器。這裡可以把「全部工具」的資料一次存成一個檔案，換手機、換電腦或重灌前匯出一次就好，不用一個一個工具備份（每個工具右上角的 💾 則只備份那一個工具）。' : '這個工具的資料只存在這個瀏覽器。換瀏覽器、換手機或清除網站資料之前，請先匯出備份。' }),
                 info,
+                el('label', { class: 'st-enc' }, encChk, ' 匯出時用密碼加密（AES-256；忘記密碼無法還原）'), encPw,
                 el('div', { class: 'st-btns' }, exp, imp, file),
                 msg, prev,
                 el('h3', { text: '怎麼搬到新的瀏覽器？' }),
@@ -281,6 +349,7 @@
         travel: '規定與數值可能變動，僅供參考，請以官方公告為準；本站不對使用結果負責。',
         craft: '僅供一般參考，操作與配方請自行確認安全；本站不對使用結果負責。',
         general: '僅供一般參考，數值多為經驗值或粗估；本站不對使用結果負責。',
+        life: '僅供一般參考，不構成醫療、獸醫或法律建議；緊急狀況請就醫、撥打 119，遇詐騙請撥 165；本站不對使用結果負責。',
     };
     const ICON = {
         save: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>',
@@ -312,8 +381,8 @@
         const themed = !!getComputedStyle(root).getPropertyValue('--card').trim();      // 沒用 theme.css 的頁面（楓之谷風格等）只提供說明按鈕
         if (!themed) s.textContent += '.st-bar,.st-panel,.st-help{--card:#fff;--text:#1d1d1f;--muted:#6e6e73;--fill:rgba(118,118,128,.14);--line:rgba(0,0,0,.12);--blue:#0071e3;--on-blue:#fff;--bg:#f5f5f7;--radius:16px;--radius-sm:10px;--btn-radius:980px;--font:system-ui,sans-serif;--head-font:system-ui,sans-serif;--head-weight:700}.st-help .primary{background:var(--blue);color:#fff}';
         bar = el('div', { class: 'st-bar' });
-        // 沒有「回工具箱」連結的頁面（楓之谷風格等獨立風格頁）：按鈕列最前面加一顆「工具箱」鈕；偽裝用的頁面可加 <meta name="st-home" content="off"> 關掉
-        if (CHROME_SRC && !document.querySelector('meta[name=st-home][content=off]') && ![...document.querySelectorAll('a[href]')].some((a) => /(^|\/)index\.html(#.*)?$/.test(a.getAttribute('href')))) {
+        // 所有工具頁：固定在右上角按鈕列最前面的「工具箱」鈕（頁面內的「‹ 工具箱」連結會隨頁面捲走）；首頁自己不需要，偽裝用的頁面可加 <meta name="st-home" content="off"> 關掉
+        if (CHROME_SRC && !document.querySelector('#q[type=search]') && !document.querySelector('meta[name=st-home][content=off]')) {
             const hb = el('button', { type: 'button', class: 'st-homebtn', 'aria-label': '回工具箱', title: '回工具箱' }); hb.innerHTML = ICON.home + '<span class="st-lb">工具箱</span>';
             hb.onclick = () => { location.href = new URL('../../index.html', CHROME_SRC).href; }; bar.append(hb);
         }
@@ -338,5 +407,5 @@
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 
-    window.Chrome = { STYLES, MODES, openHelp, openData, backupDue, diffBackup, toast, storageFailed, matcher, buildBackup, parseBackup, get style() { return style; }, get mode() { return mode; }, setStyle(v) { style = v; set('st_style', v); apply(true); }, setMode(v) { mode = v; set('st_mode', v); apply(true); } };
+    window.Chrome = { STYLES, MODES, openHelp, openData, backupDue, diffBackup, toast, storageFailed, matcher, buildBackup, parseBackup, get style() { return style; }, get mode() { return mode; }, setStyle(v) { style = v; set('st_style', v); apply(true); }, setMode(v) { mode = v; set('st_mode', v); apply(true); }, setFont(v) { if (FONTS.some(f => f[0] === v)) { font = v; set('st_font', v); apply(true); } }, setContrast(v) { if (CONTRASTS.some(c => c[0] === v)) { contrast = v; set('st_contrast', v); apply(true); } } };
 })();

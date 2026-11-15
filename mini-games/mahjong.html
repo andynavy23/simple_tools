@@ -1,0 +1,1306 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="台灣 16 張麻將：單機對 3 位電腦或和朋友連線，含吃碰槓胡、補花、莊家連莊與台數結算；另附算台計算機，可輸入手牌自動算最高台。">
+    <meta property="og:title" content="麻將（台灣 16 張）" />
+    <meta property="og:description" content="台灣麻將：單機對電腦或連線 4 人對戰，附算台計算機。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/mahjong.html" />
+    <meta name="st-keys" content="mj_opts,mj_stats,mj_tai">
+    <title>麻將（台灣 16 張）</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>台灣 16 張麻將：144 張牌（含 8 張花），每人 16 張，胡牌時 17 張 = 5 組面子 + 1 對將。兩個分頁：<b>對局</b>（單機對 3 位電腦，或最多 4 位真人連線）與<b>算台計算機</b>（輸入手牌自動算最高台與金額，也可以純勾選）。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>想打一局台灣麻將：單機不用連網；和朋友則房主建房傳連結，空位電腦補。</li>
+            <li>實體牌桌上吵台數：用計算機輸入手牌，看每一台怎麼來；或勾選牌型直接加總。</li>
+        </ul>
+        <h3>單機怎麼玩</h3>
+        <ol>
+            <li>選電腦程度與圈數，按「開始單機」。簡單：打孤張、能胡就胡，不吃不碰。普通：以向聽數（離聽牌還差幾步）最小化出牌，會吃碰、避開明顯危險的牌（對手已碰吃兩組以上時），不偷看你的牌。</li>
+            <li>輪到你時<b>點一張牌選起來，再點一次（或按「打出」）出牌</b>。別人打出牌時，下方會出現「胡 / 槓 / 碰 / 吃 / 過」按鈕，只有真的能做的才會出現。</li>
+            <li>可自摸、暗槓（手上 4 張）、加槓（已碰的牌又摸到第 4 張）。</li>
+            <li>補花全自動：摸到花牌會亮出並從牌尾補一張。每局結束顯示台數明細與輸贏金額，莊家贏或流局連莊，否則換下家當莊。</li>
+        </ol>
+        <h3>連線怎麼玩</h3>
+        <ol>
+            <li>輸入暱稱，按「建立房間」，複製邀請連結給朋友；朋友開連結、輸入暱稱、按「加入」。最多 4 位真人，房主隨時可開始，空位由電腦補。</li>
+            <li>牌牆與每個人的暗牌只在房主端，手牌只會私下傳給本人；房主負責驗證每個動作是否合法，多人同時想要同一張時依「胡 &gt; 碰 / 槓 &gt; 吃」，多人同時胡由離放槍者最近的一位（逆時針）取得。</li>
+            <li>開局時房主會公布牌牆的 SHA-256 加鹽承諾，局末公開牌牆與鹽，大家的畫面會自動核對「與開局一致」。</li>
+            <li>可設定每手倒數（逾時自動打出剛摸的牌 / 過牌）；斷線的座位由電腦託管，用同暱稱重新加入可拿回手牌。房主離開則牌局結束。</li>
+        </ol>
+        <h3>規則重點</h3>
+        <ul>
+            <li><b>吃</b>只能吃上家（上一位出牌的人）的牌，且只能吃萬 / 筒 / 條的順子；<b>碰、明槓</b>任何人的牌都可以。</li>
+            <li>流局：牌牆剩 16 張（牌尾保留）時沒人胡就流局，莊家連莊。</li>
+            <li>結算：自摸＝三家各付 底 + 台數×每台；點炮＝只有放槍者付。莊家贏、或輸家是莊家時，該筆再加「莊家 + 連莊」的台數。</li>
+            <li>其餘特殊：搶槓、槓上開花、海底撈月、河底撈魚、天胡 / 地胡 / 人胡、八仙過海（集滿 8 張花直接胡）、七搶一（別人有 7 張花、你補到第 8 張，由 7 張那位胡）。沒有七對子。</li>
+        </ul>
+        <h3>算台計算機</h3>
+        <ol>
+            <li>「手牌自動判斷」：輸入牌，例如 <code>123m 456p 789s 11z</code>（m 萬、p 筒、s 條、z 字：1–7 = 東南西北中發白，h 花：1–8 = 春夏秋冬梅蘭菊竹）。吃 / 碰 / 明槓用方括號 <code>[123p] [444m] [1111s]</code>，暗槓用圓括號 <code>(1111z)</code>。手上要湊滿「17 張 − 3×副露組數」張，並選好胡的那張；程式窮舉所有面子拆法，取台數最高的一種。</li>
+            <li>「手動勾選」：不輸入牌，直接勾選牌型，數量類（花牌、連莊）填數字。</li>
+            <li>「金額與台數表」可改底、每台金額，也可逐項修改台數；各地規則不同，<b>數值可調</b>。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">清一色自摸：<code>123m 456m 789m 234m 567m 55m</code>，勾「自摸」→ 不求人 3 + 清一色 8（+ 平胡 / 獨聽依聽法），每家付「底 + 台×每台」。<br>已碰兩組：<code>11m 234p 567p 789s [444m] [555s]</code>，胡的那張在下拉選單挑（預設是最後輸入的那張）。</div>
+        <h3>算台說明（預設值）</h3>
+        <ul>
+            <li>疊加：除下列「包含」外，各項相加。不求人 = 門清 + 自摸（不再另計）；大 / 小三元已含三元牌；大 / 小四喜已含門風 / 圈風；清一色不再計混一色；四暗刻、五暗刻、三暗刻只取最高一種。</li>
+            <li>平胡：全順子、將牌不是字牌、無花、兩面聽。獨聽：只聽一張牌（單吊、嵌張、邊張）。全求：5 組都吃碰槓出去（沒有暗槓），只靠最後一張胡將牌。點炮胡進來的刻子算明刻，不算暗刻。</li>
+            <li>嚦咕各地定義不同，只在計算機提供手動勾選，對局不自動計。</li>
+        </ul>
+        <h3>小提醒</h3>
+        <ul>
+            <li>台數規則因地區而異，數值可調；本頁僅供參考，實際以你們牌桌的規則為準。</li>
+            <li>本機資料：<code>mj_opts</code>（底 / 台 / 圈數 / 電腦程度 / 倒數）、<code>mj_tai</code>（自訂台數表）、<code>mj_stats</code>（戰績，只有固定幾個數字，不會越存越多）。「重設設定」「還原台數表」「清除戰績」都會先確認、無法復原；右上角「💾」可備份。壞掉或被改過的資料載入時會自動補回預設 / 夾回合理範圍。</li>
+            <li>連線對局不存牌局內容；關掉頁面進行中的局就消失。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        :root {
+            --wrap-w: 720px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row input[type=text],
+        .row input:not([type]) {
+            flex: 1 1 130px;
+        }
+
+        .row label,
+        .grid label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 36px;
+        }
+
+        .row input[type=number] {
+            width: 84px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .tabs button {
+            flex: 1 1 0;
+        }
+
+        details {
+            margin: 8px 0 4px;
+        }
+
+        summary {
+            cursor: pointer;
+            padding: 10px 0;
+            font-weight: 700;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 4px;
+        }
+
+        .taiEd {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 4px 10px;
+            align-items: center;
+            margin: 8px 0;
+        }
+
+        .taiEd input {
+            width: 72px;
+        }
+
+        .mrows label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 40px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .mrows label span:first-of-type {
+            flex: 1 1 auto;
+        }
+
+        .mrows input[type=number] {
+            width: 70px;
+        }
+
+        .out b.tot {
+            font-size: 1.25em;
+        }
+
+        textarea#cHand,
+        input#cHand {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .eg2 {
+            font-size: 13px;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        .chip {
+            padding: 4px 10px;
+            font-size: 13px;
+        }
+
+        /* 麻將牌：象牙色牌面是牌的專屬色，數字 / 花色字色依牌種 */
+        .mt {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            width: 22px;
+            height: 31px;
+            min-width: 0;
+            min-height: 0;
+            padding: 0;
+            font: inherit;
+            font-weight: 800;
+            font-size: 14px;
+            line-height: 1;
+            background: #f6f1de;
+            color: #222;
+            border: 1px solid #9b8f6a;
+            border-radius: 4px;
+            box-shadow: 0 1px 0 #b9ad87;
+        }
+
+        .mt i {
+            font-style: normal;
+            font-size: 9px;
+            font-weight: 700;
+            color: #444;
+            margin-top: 2px;
+        }
+
+        .mt.w b {
+            color: #b3261e;
+        }
+
+        .mt.p b {
+            color: #1f4fa3;
+        }
+
+        .mt.s b {
+            color: #1b7a3d;
+        }
+
+        .mt.hr b {
+            color: #b3261e;
+        }
+
+        .mt.hg b {
+            color: #1b7a3d;
+        }
+
+        .mt.f b {
+            color: #a05a00;
+        }
+
+        .mt.sm {
+            width: 17px;
+            height: 24px;
+            font-size: 11px;
+        }
+
+        .mt.sm i {
+            display: none;
+        }
+
+        .ts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            align-items: center;
+        }
+
+        .grp {
+            display: inline-flex;
+            gap: 1px;
+            margin-right: 6px;
+        }
+
+        #opps {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .opp {
+            flex: 1 1 0;
+            min-width: 0;
+            padding: 6px 4px;
+            border-radius: var(--radius-sm);
+            background: var(--fill);
+            font-size: 13px;
+            text-align: center;
+            border: 2px solid transparent;
+            line-height: 1.35;
+        }
+
+        .opp b {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .opp.turn {
+            border-color: var(--ok);
+        }
+
+        .opp.off {
+            opacity: .6;
+        }
+
+        .opp .ts {
+            justify-content: center;
+            margin-top: 3px;
+        }
+
+        #info {
+            text-align: center;
+            font-size: 14px;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .river {
+            display: flex;
+            gap: 6px;
+            align-items: flex-start;
+            padding: 4px 0;
+            border-bottom: 1px dashed var(--line);
+            min-height: 32px;
+        }
+
+        .river>span:first-child {
+            flex: 0 0 56px;
+            font-size: 12px;
+            color: var(--muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .river .ts {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .mt.last {
+            outline: 2px solid var(--bad);
+        }
+
+        .status {
+            text-align: center;
+            font-weight: 700;
+            font-size: 17px;
+            min-height: 1.5em;
+            margin: 8px 0 2px;
+        }
+
+        #timer,
+        #logline {
+            text-align: center;
+            font-size: 14px;
+            color: var(--muted);
+            min-height: 1.3em;
+        }
+
+        #timer.hot {
+            color: var(--bad);
+            font-weight: 700;
+        }
+
+        #mine {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 8px;
+            align-items: center;
+            min-height: 36px;
+            margin-top: 6px;
+        }
+
+        #hand {
+            display: flex;
+            gap: 2px;
+            justify-content: center;
+            padding-top: 16px;
+            min-height: 70px;
+        }
+
+        #hand .mt {
+            flex: 1 1 0;
+            width: auto;
+            max-width: 34px;
+            height: 52px;
+            font-size: 15px;
+        }
+
+        #hand .mt i {
+            font-size: 10px;
+        }
+
+        #hand .mt.dr {
+            margin-left: 8px;
+        }
+
+        #hand .mt.sel {
+            transform: translateY(-14px);
+            box-shadow: 0 0 0 2px var(--blue), 0 4px 8px rgba(0, 0, 0, .35);
+        }
+
+        .acts {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 10px 0 6px;
+            min-height: 44px;
+        }
+
+        .acts button {
+            flex: 1 1 70px;
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+
+        #score,
+        #stats {
+            font-size: 13px;
+            color: var(--muted);
+            text-align: center;
+            line-height: 1.6;
+        }
+
+        #result h3 {
+            margin: 4px 0 8px;
+        }
+
+        #result .hands>div {
+            margin: 6px 0;
+            font-size: 13px;
+        }
+
+        #verify {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        @media (max-width: 350px) {
+            #hand .mt {
+                font-size: 12px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .mt {
+                transition: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>麻將（台灣 16 張）</h1>
+        <p class="sub">單機對電腦或連線 4 人，含算台計算機。台數規則因地區而異，數值可調。</p>
+
+        <div class="tabs" id="mainTabs"><button data-t="play" aria-pressed="true">對局</button><button data-t="calc" aria-pressed="false">算台計算機</button></div>
+
+        <div class="card" id="setCard">
+            <details id="setBox">
+                <summary>金額與台數表（對局與計算機共用）</summary>
+                <div class="row">
+                    <label>底 <input type="number" id="oBase" min="0" max="9999" inputmode="numeric"></label>
+                    <label>每台 <input type="number" id="oUnit" min="0" max="999" inputmode="numeric"></label>
+                </div>
+                <div class="row"><button class="sm" data-preset="50,20">50 / 20</button><button class="sm" data-preset="30,10">30 / 10</button></div>
+                <p class="note">台數表：改完立即生效（0 = 不計這一項）。</p>
+                <div class="taiEd" id="taiEd"></div>
+                <div class="row"><button class="sm" id="taiReset">還原台數表預設</button><button class="sm" id="optReset">重設全部設定</button></div>
+            </details>
+        </div>
+
+        <section id="pPlay">
+            <div class="card" id="menu">
+                <h2>單機：和電腦玩</h2>
+                <div class="row">
+                    <label>電腦 <select id="soloLevel"><option value="0">簡單</option><option value="1">普通</option></select></label>
+                    <label>圈數 <select id="rRounds"><option value="1">東風圈（4 莊）</option><option value="2">東南兩圈</option><option value="4">全莊（4 圈）</option></select></label>
+                </div>
+                <div class="row"><button class="primary" id="soloBtn">開始單機</button></div>
+                <h2 style="margin-top:18px">和朋友連線</h2>
+                <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+                <div class="row">
+                    <label>每手倒數 <select id="rTimer"><option value="0">不限時</option><option value="30">30 秒</option><option value="60">60 秒</option></select></label>
+                </div>
+                <div class="row">
+                    <button class="primary" id="hostBtn">建立房間</button>
+                    <input id="joinId" placeholder="貼上房號" aria-label="房號">
+                    <button id="joinBtn">加入</button>
+                </div>
+                <p class="note" id="netMsg"></p>
+                <div id="stats"></div>
+                <div class="row" style="justify-content:center"><button class="sm" id="statsClear">清除戰績</button></div>
+            </div>
+
+            <div class="card" id="lobby" hidden>
+                <h2>等待玩家</h2>
+                <div id="lobbyPlayers"></div>
+                <div class="row" style="margin-top:12px">
+                    <button id="copyInvite" hidden>複製邀請連結</button>
+                    <button class="primary" id="startBtn" hidden>開始（空位由電腦補）</button>
+                    <button id="lobbyLeave">離開</button>
+                </div>
+                <p class="note" id="lobbyHint"></p>
+            </div>
+
+            <div class="card" id="game" hidden>
+                <div id="info"></div>
+                <div id="opps"></div>
+                <div id="rivers"></div>
+                <div class="status" id="status" role="status"></div>
+                <div id="logline"></div>
+                <div id="timer"></div>
+                <div id="mine"></div>
+                <div id="hand" aria-label="我的手牌"></div>
+                <div class="acts" id="acts"></div>
+                <div id="score"></div>
+                <div id="result" hidden></div>
+                <div class="row" style="justify-content:center;margin-top:10px">
+                    <button class="primary" id="nextBtn" hidden>下一局</button>
+                    <button id="leave">離開</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="pCalc" hidden>
+            <div class="card">
+                <h2>算台計算機</h2>
+                <div class="tabs" id="calcTabs"><button data-m="auto" aria-pressed="true">手牌自動判斷</button><button data-m="manual" aria-pressed="false">手動勾選</button></div>
+                <div id="cAuto">
+                    <input id="cHand" placeholder="例：123m 456m 789m 345s 55p 234p" aria-label="手牌" autocomplete="off" autocapitalize="off" spellcheck="false">
+                    <p class="eg2">m 萬、p 筒、s 條、z 字（1–7 東南西北中發白）、h 花（1–8）；吃碰明槓 [123p] [444m] [1111s]、暗槓 (1111z)。<br>範例：<button class="chip sm" data-ex="123m456m789m345s55p234p">平胡</button> <button class="chip sm" data-ex="222m555p888s44z[777s][111z]">碰碰胡</button> <button class="chip sm" data-ex="111m234m567m99m[123m][789m]12h">清一色</button> <button class="chip sm" data-ex="111z222z333z444z55m[123p]3h">大四喜</button></p>
+                    <div class="row">
+                        <label>胡的那張 <select id="cWin"></select></label>
+                        <label><input type="checkbox" id="cZimo"> 自摸</label>
+                        <label><input type="checkbox" id="cDealer"> 莊家</label>
+                    </div>
+                    <div class="row">
+                        <label>連莊 <input type="number" id="cStreak" min="0" max="99" value="0" inputmode="numeric"></label>
+                        <label>圈風 <select id="cRound"><option value="0">東</option><option value="1">南</option><option value="2">西</option><option value="3">北</option></select></label>
+                        <label>門風 <select id="cSeat"><option value="0">東</option><option value="1">南</option><option value="2">西</option><option value="3">北</option></select></label>
+                    </div>
+                    <div class="grid" id="cFlags"></div>
+                </div>
+                <div id="cManual" hidden>
+                    <div class="mrows" id="mRows"></div>
+                    <div class="row" style="margin-top:8px"><label><input type="checkbox" id="mZimo"> 自摸（付款方式）</label></div>
+                </div>
+            </div>
+            <div class="card out" id="cOutCard">
+                <h2>結果</h2>
+                <div id="cOut"></div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // --- pure ---
+        // 牌 = 種類編號 0..41：0–8 萬、9–17 筒、18–26 條、27–30 東南西北、31–33 中發白、34–41 花（春夏秋冬梅蘭菊竹）。一副 144 張（0..33 各 4 張 + 8 張花）
+        const NUMC = ['一', '二', '三', '四', '五', '六', '七', '八', '九'], HON = ['東', '南', '西', '北', '中', '發', '白'], FLW = ['春', '夏', '秋', '冬', '梅', '蘭', '菊', '竹'];
+        const tileName = (k) => k < 9 ? NUMC[k] + '萬' : k < 18 ? (k - 8) + '筒' : k < 27 ? (k - 17) + '條' : k < 34 ? HON[k - 27] : FLW[k - 34];
+        const validKind = (k) => Number.isInteger(k) && k >= 0 && k < 42;
+        const isFlower = (k) => k >= 34, isHonor = (k) => k >= 27 && k < 34;
+        const suitOf = (k) => k < 27 ? (k / 9 | 0) : 3;
+        const WINDS = ['東', '南', '西', '北'];
+        const newWall = (shuf) => shuf(Array.from({ length: 144 }, (_, i) => i < 136 ? i >> 2 : 34 + i - 136));
+        const toCounts = (arr) => { const c = new Array(34).fill(0); for (const k of arr) if (k < 34) c[k]++; return c; };
+
+        // 胡牌拆解：c = 34 種牌的張數（只含手上的牌）、nSets = 還需要幾組面子（5 - 已吃碰槓的組數）。回傳所有「1 對將 + nSets 組面子」的拆法 [{ pair, sets:[{t:'seq'|'tri',k}] }]
+        function decompose(c, nSets) {
+            const out = [], a = c.slice();
+            if (a.reduce((s, x) => s + x, 0) !== 3 * nSets + 2) return out;
+            const cur = [];
+            const go = (i, pair) => {
+                while (i < 34 && !a[i]) i++;
+                if (i >= 34) { out.push({ pair, sets: cur.slice() }); return; }
+                if (a[i] >= 3) { a[i] -= 3; cur.push({ t: 'tri', k: i }); go(i, pair); cur.pop(); a[i] += 3; }
+                if (i < 27 && i % 9 <= 6 && a[i + 1] && a[i + 2]) { a[i]--; a[i + 1]--; a[i + 2]--; cur.push({ t: 'seq', k: i }); go(i, pair); cur.pop(); a[i]++; a[i + 1]++; a[i + 2]++; }
+            };
+            for (let p = 0; p < 34; p++) if (a[p] >= 2) { a[p] -= 2; go(0, p); a[p] += 2; }
+            return out;
+        }
+        const isWin = (c, nSets) => decompose(c, nSets).length > 0;
+        // 聽牌：手上 3n+1 張時，再摸到哪些牌就胡
+        function waitsOf(c, nSets) {
+            const w = [], a = c.slice();
+            for (let k = 0; k < 34; k++) { if (a[k] >= 4) continue; a[k]++; if (isWin(a, nSets)) w.push(k); a[k]--; }
+            return w;
+        }
+        // 向聽數：c = 手上的牌張數、melds = 已吃碰槓的組數。-1 = 已胡；0 = 聽牌。標準算法：2×需要面子數 − 2×完成面子 − 搭子 − 將牌
+        function shanten(c, melds = 0) {
+            const a = c.slice(), need = 5 - melds; let best = 99;
+            const go = (i, m, t, p) => {
+                while (i < 34 && !a[i]) i++;
+                if (i >= 34) { const s = 2 * need - 2 * m - Math.min(t, need - m) - p; if (s < best) best = s; return; }
+                if (a[i] >= 3) { a[i] -= 3; go(i, m + 1, t, p); a[i] += 3; }
+                if (i < 27 && i % 9 <= 6 && a[i + 1] && a[i + 2]) { a[i]--; a[i + 1]--; a[i + 2]--; go(i, m + 1, t, p); a[i]++; a[i + 1]++; a[i + 2]++; }
+                if (a[i] >= 2) { a[i] -= 2; if (!p) go(i, m, t, 1); go(i, m, t + 1, p); a[i] += 2; }
+                if (i < 27 && i % 9 <= 7 && a[i + 1]) { a[i]--; a[i + 1]--; go(i, m, t + 1, p); a[i]++; a[i + 1]++; }
+                if (i < 27 && i % 9 <= 6 && a[i + 2]) { a[i]--; a[i + 2]--; go(i, m, t + 1, p); a[i]++; a[i + 2]++; }
+                a[i]--; go(i, m, t, p); a[i]++;
+            };
+            go(0, 0, 0, 0);
+            return best;
+        }
+
+        // ---------- 台數表（數值可調）----------
+        const TAI_DEF = [
+            ['dealer', '莊家', 1], ['lian', '連莊（連 N 拉 N，每次）', 2],
+            ['zimo', '自摸', 1], ['menqing', '門清', 1], ['buqiuren', '不求人（門清自摸，不另計門清、自摸）', 3],
+            ['pinghu', '平胡（全順子、無字無花、兩面聽）', 2], ['pengpeng', '碰碰胡', 4],
+            ['hunyise', '混一色', 4], ['qingyise', '清一色', 8], ['ziyise', '字一色', 16],
+            ['xsy', '小三元', 4], ['dsy', '大三元', 8], ['xsx', '小四喜', 8], ['dsx', '大四喜', 16],
+            ['sananke', '三暗刻', 2], ['sianke', '四暗刻', 5], ['wuanke', '五暗刻', 8],
+            ['quanqiu', '全求', 2], ['duanyao', '斷么', 1], ['dutin', '獨聽（只聽一張）', 1],
+            ['menfeng', '門風牌', 1], ['quanfeng', '圈風牌', 1], ['sanyuan', '三元牌（每副）', 1],
+            ['hua', '花牌（本位花，每張）', 1], ['huagang', '花槓（春夏秋冬或梅蘭菊竹集滿）', 2], ['baxian', '八仙過海（集滿 8 張花）', 8], ['qiqiang', '七搶一', 8],
+            ['haidi', '海底撈月', 1], ['hedi', '河底撈魚', 1], ['gangshang', '槓上開花', 1], ['qianggang', '搶槓', 1],
+            ['lili', '嚦咕（依各地定義，手動勾選）', 1],
+            ['tianhu', '天胡', 16], ['dihu', '地胡', 16], ['renhu', '人胡', 8],
+        ].map(([id, name, tai]) => ({ id, name, tai }));
+        const TAI_NAME = Object.fromEntries(TAI_DEF.map(x => [x.id, x.name]));
+        const defaultTai = () => Object.fromEntries(TAI_DEF.map(x => [x.id, x.tai]));
+        // 載入驗證：缺欄位 / 型別不對 / 超出 0–99 都補回預設
+        const cleanTai = (o) => {
+            const t = defaultTai();
+            if (o && typeof o === 'object' && !Array.isArray(o)) for (const id of Object.keys(t)) { const v = o[id]; if (Number.isInteger(v) && v >= 0 && v <= 99) t[id] = v; }
+            return t;
+        };
+        const cleanOpts = (o) => {
+            o = o && typeof o === 'object' ? o : {};
+            const int = (v, lo, hi, d) => Number.isInteger(v) && v >= lo && v <= hi ? v : d;
+            return { base: int(o.base, 0, 9999, 50), unit: int(o.unit, 0, 999, 20), rounds: [1, 2, 4].includes(o.rounds) ? o.rounds : 1, timer: [0, 30, 60].includes(o.timer) ? o.timer : 0, level: o.level === 0 ? 0 : 1 };
+        };
+        const STAT_KEYS = ['matches', 'rounds', 'wins', 'zimo', 'lose', 'best', 'money'];
+        const cleanStats = (o) => {
+            o = o && typeof o === 'object' ? o : {}; const r = {};
+            STAT_KEYS.forEach(k => { const v = o[k]; r[k] = Number.isInteger(v) ? Math.max(k === 'money' ? -1e9 : 0, Math.min(1e9, v)) : 0; });
+            return r;
+        };
+
+        // ---------- 手牌輸入記法：123m 456p 789s 11z（z：1–7 = 東南西北中發白）、5h（花 1–8）；[444m] 碰、[123p] 吃、[1111s] 明槓、(1111z) 暗槓 ----------
+        function parseTiles(s) {
+            const out = []; let ds = [];
+            for (const ch of s) {
+                if (/\s/.test(ch)) continue;
+                if (ch >= '1' && ch <= '9') ds.push(+ch);
+                else if (ch === 'm' || ch === 'p' || ch === 's') { if (!ds.length) return null; ds.forEach(d => out.push((ch === 'm' ? 0 : ch === 'p' ? 9 : 18) + d - 1)); ds = []; }
+                else if (ch === 'z') { if (!ds.length || ds.some(d => d > 7)) return null; ds.forEach(d => out.push(27 + d - 1)); ds = []; }
+                else if (ch === 'h') { if (!ds.length) return null; ds.forEach(d => out.push(34 + d - 1)); ds = []; }
+                else return null;
+            }
+            return ds.length ? null : out;
+        }
+        function parseHand(str) {
+            const res = { concealed: [], melds: [], flowers: [], error: '' }, re = /\[([^\]]*)\]|\(([^)]*)\)|([^[\]()]+)/g;
+            let m;
+            while ((m = re.exec(String(str || '').slice(0, 200)))) {
+                const src = m[1] ?? m[2] ?? m[3], ts = parseTiles(src);
+                if (!ts) { res.error = `看不懂「${src.trim()}」`; return res; }
+                if (m[3] !== undefined) { ts.forEach(k => (isFlower(k) ? res.flowers : res.concealed).push(k)); continue; }
+                const s = ts.slice().sort((a, b) => a - b);
+                if (ts.some(isFlower)) { res.error = '花牌不能放在括號裡'; return res; }
+                if (s.length === 4 && s.every(k => k === s[0])) res.melds.push({ t: m[2] !== undefined ? 'ankan' : 'kan', k: s[0] });
+                else if (m[2] !== undefined) { res.error = '暗槓要寫 4 張相同的牌：(1111z)'; return res; }
+                else if (s.length === 3 && s.every(k => k === s[0])) res.melds.push({ t: 'pon', k: s[0] });
+                else if (s.length === 3 && s[0] < 27 && s[1] === s[0] + 1 && s[2] === s[0] + 2 && suitOf(s[0]) === suitOf(s[2])) res.melds.push({ t: 'chi', k: s[0] });
+                else { res.error = `「${src.trim()}」不是合法的吃 / 碰 / 槓`; return res; }
+            }
+            return res;
+        }
+
+        // ---------- 算台 ----------
+        // ctx = { concealed:[種類…]（手上的牌，含胡的那張）, melds:[{t:'chi'|'pon'|'kan'|'ankan',k}], flowers:[花…], win:胡的那張種類 / -1, zimo, seat:0–3（東南西北）, round:0–3, dealer, streak, flags:{haidi,hedi,gangshang,qianggang,tianhu,dihu,renhu,lili,qiqiang} }
+        function flowerItems(ctx, add) {
+            const fl = [...new Set((ctx.flowers || []).filter(f => Number.isInteger(f) && f >= 34 && f < 42))], seat = (ctx.seat | 0) & 3;
+            add('hua', fl.filter(f => f === 34 + seat || f === 38 + seat).length);
+            if (fl.length === 8) add('baxian');
+            else { if ([34, 35, 36, 37].every(f => fl.includes(f))) add('huagang'); if ([38, 39, 40, 41].every(f => fl.includes(f))) add('huagang'); }
+            return fl;
+        }
+        const FLAG_IDS = ['haidi', 'hedi', 'gangshang', 'qianggang', 'tianhu', 'dihu', 'renhu', 'lili', 'qiqiang'];
+        function scoreDecomp(ctx, d, T, wc) {
+            const items = [], melds = ctx.melds || [], seat = (ctx.seat | 0) & 3, round = (ctx.round | 0) & 3;
+            const add = (id, n = 1) => { if (T[id] > 0 && n > 0) items.push({ id, name: TAI_NAME[id], tai: T[id] * n }); };
+            const sets = melds.map(m => ({ t: m.t === 'chi' ? 'seq' : 'tri', k: m.k, open: m.t !== 'ankan' })).concat(d.sets.map(s => ({ t: s.t, k: s.k, open: false })));
+            if (!ctx.zimo && ctx.win >= 0) { const s = sets.slice(melds.length).find(x => x.t === 'tri' && x.k === ctx.win); if (s) s.open = true; }   // 點炮胡進來的刻子算明刻
+            const menqing = melds.every(m => m.t === 'ankan');
+            if (menqing && ctx.zimo) add('buqiuren'); else { if (menqing) add('menqing'); if (ctx.zimo) add('zimo'); }
+            const tri = sets.filter(s => s.t === 'tri'), ank = tri.filter(s => !s.open).length;
+            if (ank === 5) add('wuanke'); else if (ank === 4) add('sianke'); else if (ank === 3) add('sananke');
+            if (tri.length === 5) add('pengpeng');
+            if (sets.every(s => s.t === 'seq') && d.pair < 27 && !(ctx.flowers || []).length && d.sets.some(s => (s.k === ctx.win && s.k % 9 <= 5) || (s.k + 2 === ctx.win && s.k % 9 >= 1))) add('pinghu');
+            if (melds.length === 5 && melds.every(m => m.t !== 'ankan')) add('quanqiu');
+            const tiles = [d.pair, ...sets.flatMap(s => s.t === 'seq' ? [s.k, s.k + 2] : [s.k])];
+            if (tiles.every(k => k < 27 && k % 9 >= 1 && k % 9 <= 7)) add('duanyao');
+            const suits = new Set(tiles.map(suitOf)), hasH = suits.has(3); suits.delete(3);
+            if (suits.size === 0) add('ziyise'); else if (suits.size === 1) add(hasH ? 'hunyise' : 'qingyise');
+            const dr = tri.filter(s => s.k >= 31 && s.k <= 33).length;
+            if (dr === 3) add('dsy'); else if (dr === 2 && d.pair >= 31 && d.pair <= 33) add('xsy'); else add('sanyuan', dr);
+            const ws = tri.filter(s => s.k >= 27 && s.k <= 30);
+            if (ws.length === 4) add('dsx'); else if (ws.length === 3 && d.pair >= 27 && d.pair <= 30) add('xsx');
+            else ws.forEach(s => { if (s.k === 27 + seat) add('menfeng'); if (s.k === 27 + round) add('quanfeng'); });
+            flowerItems(ctx, add);
+            FLAG_IDS.forEach(id => { if (ctx.flags && ctx.flags[id]) add(id); });
+            if (wc === 1) add('dutin');
+            if (ctx.dealer) { add('dealer'); add('lian', Math.max(0, ctx.streak | 0)); }
+            return { tai: items.reduce((s, x) => s + x.tai, 0), items, d };
+        }
+        // 回傳最高台的算法 { tai, items, d } ；不是胡牌 / 張數或牌數不對回傳 null
+        function analyze(ctx, T = defaultTai()) {
+            const melds = ctx.melds || [], n = 5 - melds.length, cs = ctx.concealed || [];
+            if (n < 0 || cs.length !== 3 * n + 2 || !cs.every(k => Number.isInteger(k) && k >= 0 && k < 34)) return null;
+            const c = toCounts(cs), u = c.slice();
+            for (const m of melds) { if (!(m.k >= 0 && m.k < 34)) return null; if (m.t === 'chi') { if (m.k >= 27 || m.k % 9 > 6) return null; u[m.k]++; u[m.k + 1]++; u[m.k + 2]++; } else u[m.k] += m.t === 'pon' ? 3 : 4; }
+            if (u.some(x => x > 4)) return null;
+            const ds = decompose(c, n); if (!ds.length) return null;
+            let wc = -1;
+            if (ctx.win >= 0 && c[ctx.win] > 0) { const c2 = c.slice(); c2[ctx.win]--; wc = waitsOf(c2, n).length; }
+            let best = null;
+            for (const d of ds) { const r = scoreDecomp(ctx, d, T, wc); if (!best || r.tai > best.tai) best = r; }
+            return best;
+        }
+        // 花牌直接胡（八仙過海 / 七搶一）：不看手牌
+        function analyzeFlowerWin(ctx, T = defaultTai()) {
+            const items = [], add = (id, n = 1) => { if (T[id] > 0 && n > 0) items.push({ id, name: TAI_NAME[id], tai: T[id] * n }); };
+            const fl = flowerItems(ctx, add); if (ctx.flags && ctx.flags.qiqiang && fl.length === 7) add('qiqiang');
+            if (ctx.dealer) { add('dealer'); add('lian', Math.max(0, ctx.streak | 0)); }
+            return { tai: items.reduce((s, x) => s + x.tai, 0), items, d: null };
+        }
+        // 結算：w 胡牌者、from 放槍者（-1 = 自摸，三家都付）、tai 不含莊家 / 連莊的台數；輸家若是莊家（或贏家是莊家）再加「莊 + 連莊」台
+        function settle(w, from, tai, dealer, streak, o, T) {
+            const dt = T.dealer + T.lian * streak, out = [0, 0, 0, 0];
+            for (let q = 0; q < 4; q++) {
+                if (q === w || (from >= 0 && q !== from)) continue;
+                const amt = o.base + (tai + (w === dealer || q === dealer ? dt : 0)) * o.unit;
+                out[q] -= amt; out[w] += amt;
+            }
+            return out;
+        }
+
+        // ---------- 牌局規則引擎 ----------
+        // 牌局 g：wall（牌牆，前端摸牌、後端補牌）、hands / melds / flowers / rivers 各 4 家、phase（discard 等出牌 | claim 等吃碰槓胡 | qiang 等搶槓 | over）、turn、drawn（剛摸的牌，無 = -1）、last（最後打出的牌 {p,k}）、claims（各家回應）
+        const seatWind = (g, p) => (p - g.dealer + 4) & 3, roundWind = (g) => (g.rot >> 2) & 3;
+        const sortHand = (g, p) => g.hands[p].sort((a, b) => a - b);
+        const removeOne = (arr, k) => { const i = arr.indexOf(k); if (i < 0) return false; arr.splice(i, 1); return true; };
+        function newMatch(o) { return { o: cleanOpts(o), dealer: 0, streak: 0, rot: 0, scores: [0, 0, 0, 0], over: false }; }
+        function newRound(m, T, shuf = Util.shuffle) {
+            const wall = newWall(shuf);
+            const g = { wall, wall0: wall.slice(), dealer: m.dealer, streak: m.streak, rot: m.rot, o: m.o, T, hands: [[], [], [], []], melds: [[], [], [], []], flowers: [[], [], [], []], rivers: [[], [], [], []], phase: 'discard', turn: m.dealer, drawn: -1, last: null, claims: null, qiang: null, noCall: true, draws: [0, 0, 0, 0], discards: 0, afterKan: false, result: null, log: '' };
+            for (let p = 0; p < 4; p++) g.hands[p] = wall.splice(0, 16);
+            for (let i = 0; i < 4 && !g.result; i++) replaceFlowers(g, (g.dealer + i) & 3);
+            if (!g.result) drawFor(g, g.dealer, false);
+            return g;
+        }
+        function replaceFlowers(g, p) {
+            let f;
+            while (!g.result && (f = g.hands[p].find(isFlower)) !== undefined) {
+                removeOne(g.hands[p], f); revealFlower(g, p, f);
+                if (g.result) return;
+                const t = g.wall.pop(); if (t === undefined) { endDraw(g); return; }
+                g.hands[p].push(t);
+            }
+            sortHand(g, p);
+        }
+        const endDraw = (g) => { g.phase = 'over'; g.claims = null; g.qiang = null; g.result = { type: 'draw' }; g.log = '流局'; };
+        // 補花後立刻判斷：集滿 8 張花（八仙過海）或別人已有 7 張而你補到第 8 張（七搶一，由 7 張那位胡牌、補花的人放槍）
+        function revealFlower(g, p, f) {
+            g.flowers[p].push(f);
+            if (g.flowers[p].length === 8) return finishFlowerWin(g, p, -1);
+            for (let q = 0; q < 4; q++) if (q !== p && g.flowers[q].length === 7 && !g.flowers[q].includes(f)) return finishFlowerWin(g, q, p, true);
+        }
+        function finishFlowerWin(g, w, from, qi = false) {
+            const ctx = { flowers: g.flowers[w], seat: seatWind(g, w), flags: { qiqiang: qi } }, a = analyzeFlowerWin(ctx, g.T);
+            g.phase = 'over'; g.claims = null; g.qiang = null; g.log = qi ? '七搶一' : '八仙過海';
+            g.result = { type: 'win', w, from, k: -1, tai: a.tai, items: a.items, deltas: settle(w, from, a.tai, g.dealer, g.streak, g.o, g.T), how: g.log };
+        }
+        // 摸一張（back = 從牌尾補牌）；遇到花牌就亮出再補。牌摸完回傳 -1 並流局
+        function drawFor(g, p, back) {
+            let t = back ? g.wall.pop() : g.wall.shift();
+            while (t !== undefined && isFlower(t)) { revealFlower(g, p, t); if (g.result) return -1; t = g.wall.pop(); }
+            if (t === undefined) { endDraw(g); return -1; }
+            g.hands[p].push(t); sortHand(g, p);
+            g.drawn = t; g.turn = p; g.phase = 'discard'; g.afterKan = !!back; if (!back) g.draws[p]++;
+            return t;
+        }
+        // 輪到下一家摸牌：牌牆只剩 16 張（牌尾保留）就流局
+        function advance(g, p) { g.claims = null; if (g.wall.length <= 16) { endDraw(g); return; } drawFor(g, p, false); }
+
+        const nSetsOf = (g, p) => 5 - g.melds[p].length;
+        const canZimo = (g, p) => g.phase === 'discard' && g.turn === p && g.drawn >= 0 && isWin(toCounts(g.hands[p]), nSetsOf(g, p));
+        // 輪到我時能暗槓 / 加槓的牌
+        function selfKans(g, p) {
+            if (g.phase !== 'discard' || g.turn !== p || g.drawn < 0 || g.wall.length < 1) return { ankan: [], jia: [] };
+            const c = toCounts(g.hands[p]);
+            return { ankan: c.map((x, k) => x === 4 ? k : -1).filter(k => k >= 0), jia: g.melds[p].filter(m => m.t === 'pon' && c[m.k] > 0).map(m => m.k) };
+        }
+        function doDiscard(g, p, k) {
+            if (g.phase !== 'discard' || g.turn !== p || g.hands[p].length % 3 !== 2 || !Number.isInteger(k) || !removeOne(g.hands[p], k)) return false;
+            g.rivers[p].push(k); g.last = { p, k }; g.drawn = -1; g.afterKan = false; g.discards++; g.log = '打出 ' + tileName(k);
+            g.phase = 'claim'; g.claims = [null, null, null, null];
+            for (let q = 0; q < 4; q++) { const o = claimOpts(g, q); if (q === p || !(o.hu || o.pon || o.kan || o.chi.length)) g.claims[q] = { t: 'pass' }; }
+            if (g.claims.every(Boolean)) resolveClaims(g);
+            return true;
+        }
+        // 別人打出牌後，q 能做什麼：胡 / 碰 / 槓 / 吃（只能吃上家，chi = 順子最小那張的清單）
+        function claimOpts(g, q) {
+            const o = { hu: false, pon: false, kan: false, chi: [] };
+            if (g.phase !== 'claim' || !g.last || g.last.p === q) return o;
+            const { p, k } = g.last, c = toCounts(g.hands[q]);
+            c[k]++; o.hu = isWin(c, nSetsOf(g, q)); c[k]--;
+            if (c[k] >= 2) o.pon = true; if (c[k] >= 3) o.kan = true;
+            if (((p + 1) & 3) === q && k < 27) for (let a = k - 2; a <= k; a++) if (a >= 0 && a % 9 <= 6 && suitOf(a) === suitOf(k) && [a, a + 1, a + 2].every(x => x === k || c[x] > 0)) o.chi.push(a);
+            return o;
+        }
+        const claimPending = (g) => g.claims ? g.claims.map((c, q) => c ? -1 : q).filter(q => q >= 0) : [];
+        // 回應吃碰槓胡：r = { t:'pass'|'hu'|'pon'|'kan'|'chi', k?（chi 順子最小那張）}；非法回傳 false。全部回應完會自動結算（胡 > 碰槓 > 吃）
+        function respond(g, q, r) {
+            if (!r || typeof r !== 'object' || !g.claims || g.claims[q] !== null) return false;
+            if (g.phase === 'qiang') { if (r.t === 'hu' && !qiangOpts(g, q)) return false; else if (r.t !== 'hu' && r.t !== 'pass') return false; g.claims[q] = { t: r.t }; if (g.claims.every(Boolean)) resolveQiang(g); return true; }
+            if (g.phase !== 'claim') return false;
+            const o = claimOpts(g, q);
+            if (r.t === 'pass') g.claims[q] = { t: 'pass' };
+            else if (r.t === 'hu' && o.hu) g.claims[q] = { t: 'hu' };
+            else if (r.t === 'pon' && o.pon) g.claims[q] = { t: 'pon' };
+            else if (r.t === 'kan' && o.kan) g.claims[q] = { t: 'kan' };
+            else if (r.t === 'chi' && o.chi.includes(r.k)) g.claims[q] = { t: 'chi', k: r.k };
+            else return false;
+            if (g.claims.every(Boolean)) resolveClaims(g);
+            return true;
+        }
+        function resolveClaims(g) {
+            const { p, k } = g.last, order = [1, 2, 3].map(i => (p + i) & 3), by = (f) => order.find(q => f(g.claims[q]));
+            const hu = by(c => c.t === 'hu');
+            if (hu !== undefined) { finishWin(g, hu, p, k, {}); return; }
+            const q = by(c => c.t === 'pon' || c.t === 'kan') ?? by(c => c.t === 'chi');
+            if (q === undefined) { advance(g, (p + 1) & 3); return; }
+            const c = g.claims[q], h = g.hands[q]; g.rivers[p].pop(); g.claims = null; g.noCall = false;
+            if (c.t === 'chi') { [c.k, c.k + 1, c.k + 2].forEach(x => { if (x !== k) removeOne(h, x); }); g.melds[q].push({ t: 'chi', k: c.k, from: p, tile: k }); }
+            else { const n = c.t === 'pon' ? 2 : 3; for (let i = 0; i < n; i++) removeOne(h, k); g.melds[q].push({ t: c.t, k, from: p }); }
+            g.log = ({ chi: '吃', pon: '碰', kan: '槓' })[c.t] + ' ' + tileName(k);
+            g.phase = 'discard'; g.turn = q; g.drawn = -1; g.afterKan = false;
+            if (c.t === 'kan') drawFor(g, q, true);
+        }
+        function finishWin(g, w, from, k, fl) {
+            const zimo = from < 0, hand = g.hands[w].slice(); if (!zimo) hand.push(k);
+            const flags = { ...fl };
+            if (zimo) { flags.haidi = !g.afterKan && g.wall.length === 16; flags.gangshang = g.afterKan; flags.tianhu = w === g.dealer && g.draws[w] === 1 && g.noCall && g.discards === 0; flags.dihu = w !== g.dealer && g.draws[w] === 1 && g.noCall && !g.afterKan; }
+            else { flags.hedi = !fl.qianggang && g.wall.length === 16; flags.renhu = g.noCall && g.draws[w] === 0 && !fl.qianggang; }
+            const ctx = { concealed: hand, melds: g.melds[w], flowers: g.flowers[w], win: k, zimo, seat: seatWind(g, w), round: roundWind(g), dealer: false, streak: 0, flags };
+            const a = analyze(ctx, g.T); if (!a) return false;
+            g.phase = 'over'; g.claims = null; g.qiang = null; g.log = zimo ? '自摸' : '胡牌';
+            g.hands[w] = hand.sort((x, y) => x - y);
+            g.result = { type: 'win', w, from, k, tai: a.tai, items: a.items, deltas: settle(w, from, a.tai, g.dealer, g.streak, g.o, g.T), how: g.log };
+            return true;
+        }
+        const doZimo = (g, p) => canZimo(g, p) && finishWin(g, p, -1, g.drawn, {});
+        function doAnkan(g, p, k) {
+            if (!selfKans(g, p).ankan.includes(k)) return false;
+            for (let i = 0; i < 4; i++) removeOne(g.hands[p], k);
+            g.melds[p].push({ t: 'ankan', k }); g.noCall = false; g.log = '暗槓 ' + tileName(k); drawFor(g, p, true); return true;
+        }
+        const qiangOpts = (g, q) => { const c = toCounts(g.hands[q]); c[g.qiang.k]++; return q !== g.qiang.p && isWin(c, nSetsOf(g, q)); };
+        // 加槓：先給其他人搶槓的機會
+        function doJia(g, p, k) {
+            if (!selfKans(g, p).jia.includes(k)) return false;
+            removeOne(g.hands[p], k); g.qiang = { p, k }; g.phase = 'qiang'; g.drawn = -1; g.log = '加槓 ' + tileName(k);
+            g.claims = [0, 1, 2, 3].map(q => q === p || !qiangOpts(g, q) ? { t: 'pass' } : null);
+            if (g.claims.every(Boolean)) resolveQiang(g);
+            return true;
+        }
+        function resolveQiang(g) {
+            const { p, k } = g.qiang, w = [1, 2, 3].map(i => (p + i) & 3).find(q => g.claims[q].t === 'hu');
+            if (w !== undefined) return finishWin(g, w, p, k, { qianggang: true });
+            g.melds[p].find(m => m.t === 'pon' && m.k === k).t = 'kan'; g.noCall = false; g.claims = null; g.qiang = null; g.phase = 'discard'; g.turn = p;
+            drawFor(g, p, true);
+        }
+        // 玩家動作的統一入口（房主驗證一切）：{t:'discard',k} {t:'zimo'} {t:'ankan',k} {t:'jia',k} {t:'claim', r:{…}}
+        function act(g, p, d) {
+            if (!g || g.phase === 'over' || !d || typeof d !== 'object' || !(p >= 0 && p < 4)) return false;
+            if (d.t === 'discard') return doDiscard(g, p, d.k);
+            if (d.t === 'zimo') return doZimo(g, p);
+            if (d.t === 'ankan') return doAnkan(g, p, d.k);
+            if (d.t === 'jia') return doJia(g, p, d.k);
+            if (d.t === 'claim') return respond(g, p, d.r);
+            return false;
+        }
+        // 下一局：贏的人是莊家（或流局）→ 連莊；否則換下家當莊。回傳 m（全部圈數打完時 m.over = true）
+        function nextRound(m, g) {
+            const r = g.result; if (!r) return m;
+            for (let i = 0; i < 4; i++) m.scores[i] += r.type === 'win' ? r.deltas[i] : 0;
+            if (r.type === 'win' && r.w !== m.dealer) { m.dealer = (m.dealer + 1) & 3; m.rot++; m.streak = 0; } else m.streak++;
+            if (m.rot >= 4 * m.o.rounds) m.over = true;
+            return m;
+        }
+
+        // ---------- 電腦玩家：只看自己的手牌與公開資訊（牌河、副露、花、牌牆張數），不偷看別人 ----------
+        const yakuHonor = (g, p, k) => k >= 31 || k === 27 + seatWind(g, p) || k === 27 + roundWind(g);
+        // 單張價值（越低越該先打）：有同伴（對子 / 鄰張）價值高，字牌若是有台的字牌多給一點
+        function keepScore(c, k, g, p) {
+            let s = c[k] * 6; if (k >= 27) return s + (g && yakuHonor(g, p, k) ? 1.5 : 0);
+            const r = k % 9;
+            if (r > 0) s += c[k - 1] * 3; if (r > 1) s += c[k - 2] * 1.5; if (r < 8) s += c[k + 1] * 3; if (r < 7) s += c[k + 2] * 1.5;
+            return s - Math.abs(r - 4) * 0.15;
+        }
+        const visible = (g, p, k) => { let n = g.hands[p].filter(x => x === k).length; for (let q = 0; q < 4; q++) { n += g.rivers[q].filter(x => x === k).length; g.melds[q].forEach(m => { if (m.k === k && m.t !== 'chi') n += m.t === 'pon' ? 3 : 4; else if (m.t === 'chi' && m.k <= k && k <= m.k + 2) n++; }); } return n; };
+        // 放槍風險：只看「已經碰吃兩組以上」的對手（明顯在聽牌）；對手自己打過的牌最安全
+        function danger(g, p, k) {
+            let d = 0;
+            for (let q = 0; q < 4; q++) {
+                if (q === p || g.melds[q].length < 2 || g.rivers[q].includes(k)) continue;
+                const base = k >= 27 ? (visible(g, p, k) >= 3 ? 0.5 : 2) : [2, 3, 4, 4, 4, 4, 4, 3, 2][k % 9];
+                d += base * (g.melds[q].length - 1);
+            }
+            return d;
+        }
+        const bestAfter = (c, m) => { let b = 99; for (let k = 0; k < 34; k++) if (c[k] > 0) { c[k]--; b = Math.min(b, shanten(c, m)); c[k]++; } return b; };
+        // 輪到 p 出牌時的決定。level 0 簡單：能胡就胡，否則打孤張；1 普通：向聽數最小化、避開明顯危險牌、安全時才暗槓 / 加槓
+        function cpuAct(g, p, level, rand = Math.random) {
+            if (canZimo(g, p)) return { t: 'zimo' };
+            const h = g.hands[p], c = toCounts(h), m = g.melds[p].length;
+            if (level >= 1) {
+                const sk = selfKans(g, p), s0 = shanten(c, m);
+                for (const k of sk.ankan) { c[k] -= 4; const s1 = shanten(c, m + 1); c[k] += 4; if (s1 <= s0 + 1) return { t: 'ankan', k }; }
+                for (const k of sk.jia) { c[k]--; const s1 = shanten(c, m); c[k]++; if (s1 <= s0) return { t: 'jia', k }; }
+            }
+            const cand = [...new Set(h.filter(k => k < 34))];
+            if (level === 0) return { t: 'discard', k: cand.map(k => [keepScore(c, k, null, p) + rand() * 0.8, k]).sort((a, b) => a[0] - b[0])[0][1] };
+            const rows = cand.map(k => { c[k]--; const s = shanten(c, m); c[k]++; return { k, s, d: danger(g, p, k), v: keepScore(c, k, g, p) }; });
+            const minS = Math.min(...rows.map(r => r.s)), threat = rows.some(r => r.d > 0);
+            const pool = rows.filter(r => r.s === minS || (threat && minS >= 2 && r.s <= minS + 1));
+            pool.forEach(r => { r.key = r.v + r.d * (minS >= 2 ? 2.2 : 0.9) + (r.s - minS) * 6 + rand() * 0.3; });
+            return { t: 'discard', k: pool.sort((a, b) => a.key - b.key)[0].k };
+        }
+        // 別人打牌 / 加槓後，電腦 q 的回應
+        function cpuClaim(g, q, level) {
+            if (g.phase === 'qiang') return { t: qiangOpts(g, q) ? 'hu' : 'pass' };
+            const o = claimOpts(g, q);
+            if (o.hu) return { t: 'hu' };
+            if (level < 1) return { t: 'pass' };
+            const k = g.last.k, c = toCounts(g.hands[q]), m = g.melds[q].length, s0 = shanten(c, m);
+            if (o.pon) {
+                c[k] -= 2; const s1 = bestAfter(c, m + 1); c[k] += 2;
+                if (s1 < s0 || (yakuHonor(g, q, k) && s1 <= s0)) return { t: 'pon' };
+            }
+            for (const a of o.chi) {
+                [a, a + 1, a + 2].forEach(x => { if (x !== k) c[x]--; }); const s1 = bestAfter(c, m + 1); [a, a + 1, a + 2].forEach(x => { if (x !== k) c[x]++; });
+                if (s1 < s0 && (m >= 1 || s0 <= 1)) return { t: 'chi', k: a };
+            }
+            return { t: 'pass' };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const show = (id, on) => { $(id).hidden = !on; };
+        let opts = cleanOpts(Util.store.get('mj_opts', null)), T = cleanTai(Util.store.get('mj_tai', null)), stats = cleanStats(Util.store.get('mj_stats', null));
+        const saveOpts = () => Util.store.set('mj_opts', opts), saveTai = () => Util.store.set('mj_tai', T), saveStats = () => Util.store.set('mj_stats', stats);
+
+        // ---------- 設定 / 台數表 ----------
+        function fillOpts() {
+            $('#oBase').value = opts.base; $('#oUnit').value = opts.unit; $('#soloLevel').value = opts.level; $('#rRounds').value = opts.rounds; $('#rTimer').value = opts.timer;
+        }
+        function readOpts() {
+            const n = (id) => { const v = parseInt($(id).value, 10); return Number.isFinite(v) ? v : NaN; };
+            opts = cleanOpts({ base: n('#oBase'), unit: n('#oUnit'), rounds: +$('#rRounds').value, timer: +$('#rTimer').value, level: +$('#soloLevel').value });
+            saveOpts(); calc();
+        }
+        function renderTaiEditor() {
+            $('#taiEd').replaceChildren(...TAI_DEF.flatMap(x => {
+                const l = document.createElement('label'), i = document.createElement('input');
+                l.textContent = x.name; i.type = 'number'; i.min = 0; i.max = 99; i.value = T[x.id]; i.inputMode = 'numeric'; i.dataset.id = x.id; i.setAttribute('aria-label', x.name);
+                return [l, i];
+            }));
+        }
+        $('#taiEd').addEventListener('change', (e) => {
+            const i = e.target.closest('input[data-id]'); if (!i) return;
+            const v = parseInt(i.value, 10); T[i.dataset.id] = Number.isInteger(v) && v >= 0 && v <= 99 ? v : defaultTai()[i.dataset.id]; i.value = T[i.dataset.id];
+            saveTai(); renderManual(); calc();
+        });
+        ['#oBase', '#oUnit', '#soloLevel', '#rRounds', '#rTimer'].forEach(s => $(s).addEventListener('change', readOpts));
+        document.querySelectorAll('[data-preset]').forEach(b => { b.onclick = () => { const [x, y] = b.dataset.preset.split(','); $('#oBase').value = x; $('#oUnit').value = y; readOpts(); }; });
+        $('#taiReset').onclick = () => { if (!confirm('把台數表全部還原成預設值？（只影響台數表，無法復原）')) return; T = defaultTai(); saveTai(); renderTaiEditor(); renderManual(); calc(); };
+        $('#optReset').onclick = () => { if (!confirm('重設底 / 每台 / 圈數 / 電腦程度 / 倒數 為預設值？（不影響台數表與戰績，無法復原）')) return; opts = cleanOpts(null); saveOpts(); fillOpts(); calc(); };
+        function renderStats() {
+            const s = stats;
+            $('#stats').textContent = s.rounds ? `戰績　${s.matches} 場 · ${s.rounds} 局　胡 ${s.wins}（自摸 ${s.zimo}）· 放槍 ${s.lose} · 最高 ${s.best} 台 · 累計 ${s.money > 0 ? '+' : ''}${s.money}` : '戰績：還沒有紀錄';
+            $('#statsClear').disabled = !s.rounds;
+        }
+        $('#statsClear').onclick = () => { if (!confirm('清除所有戰績？（無法復原）')) return; stats = cleanStats(null); saveStats(); renderStats(); };
+
+        // ---------- 分頁 ----------
+        function seg(box, attr, fn) {
+            box.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || !box.contains(b)) return; box.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); fn(b.dataset[attr]); });
+        }
+        const syncSet = () => { $('#setCard').hidden = $('#pCalc').hidden && $('#menu').hidden; };
+        seg($('#mainTabs'), 't', (t) => { show('#pPlay', t === 'play'); show('#pCalc', t === 'calc'); syncSet(); if (t === 'calc') calc(); });
+        seg($('#calcTabs'), 'm', (m) => { show('#cAuto', m === 'auto'); show('#cManual', m === 'manual'); calc(); });
+
+        // ---------- 算台計算機 ----------
+        const FLAG_UI = [['haidi', '海底撈月（最後一張自摸）'], ['hedi', '河底撈魚（最後一張點炮）'], ['gangshang', '槓上開花'], ['qianggang', '搶槓'], ['tianhu', '天胡'], ['dihu', '地胡'], ['renhu', '人胡'], ['lili', '嚦咕'], ['qiqiang', '七搶一（花）']];
+        $('#cFlags').replaceChildren(...FLAG_UI.map(([id, n]) => { const l = document.createElement('label'); l.innerHTML = `<input type="checkbox" data-flag="${id}"> ${n}`; return l; }));
+        function amountRows(out, tai, zimo) {
+            const per = opts.base + tai * opts.unit;
+            out.append(Util.statRow('台數合計', tai + ' 台', 'tot'));
+            out.append(Util.statRow(zimo ? '自摸：每家付' : '點炮：放槍者付', String(per)));
+            if (zimo) out.append(Util.statRow('自摸：三家合計', String(per * 3)));
+            const n = document.createElement('p'); n.className = 'note'; n.textContent = `金額 = 底 ${opts.base} + ${tai} 台 × ${opts.unit}。若輸的人是莊家（而贏的不是），那一筆再加「莊家 + 連莊」的台數。`; out.append(n);
+        }
+        function itemRows(out, items) { items.forEach(x => out.append(Util.statRow(x.name, '+' + x.tai))); if (!items.length) { const p = document.createElement('p'); p.className = 'note'; p.textContent = '沒有任何台數（無台胡牌，只有底）'; out.append(p); } }
+        let cWinSel = -1;
+        function calcAuto(out) {
+            const p = parseHand($('#cHand').value);
+            const kinds = [...new Set(p.concealed)].sort((a, b) => a - b);
+            const keep = kinds.includes(cWinSel) ? cWinSel : p.concealed.length ? p.concealed[p.concealed.length - 1] : -1;
+            const sel = $('#cWin'); sel.replaceChildren(...kinds.map(k => Object.assign(document.createElement('option'), { value: k, textContent: tileName(k) }))); if (keep >= 0) sel.value = keep; cWinSel = keep;
+            const msg = (t) => { const e = document.createElement('p'); e.className = 'note'; e.textContent = t; out.append(e); };
+            if (p.error) return msg(p.error);
+            const flags = {}; document.querySelectorAll('[data-flag]').forEach(c => { flags[c.dataset.flag] = c.checked; });
+            const ctx = { concealed: p.concealed, melds: p.melds, flowers: p.flowers, win: keep, zimo: $('#cZimo').checked, seat: +$('#cSeat').value, round: +$('#cRound').value, dealer: $('#cDealer').checked, streak: Math.max(0, Math.min(99, parseInt($('#cStreak').value, 10) || 0)), flags };
+            const need = 3 * (5 - p.melds.length) + 2;
+            if (!p.concealed.length && !p.melds.length && p.flowers.length) { if (p.flowers.length === 8 || (p.flowers.length === 7 && flags.qiqiang)) { const r = analyzeFlowerWin(ctx, T); itemRows(out, r.items); amountRows(out, r.tai, ctx.zimo); return; } return msg('只輸入花牌：集滿 8 張（八仙過海），或 7 張並勾「七搶一」才會直接胡'); }
+            if (!p.concealed.length && !p.melds.length) return msg('請輸入手牌');
+            if (p.melds.length > 5) return msg('吃碰槓最多 5 組');
+            if (p.concealed.length !== need) return msg(`手上要 ${need} 張（17 − 3×副露 ${p.melds.length} 組），目前 ${p.concealed.length} 張`);
+            const r = analyze(ctx, T);
+            if (!r) { const c = toCounts(p.concealed); return msg(c.some(x => x > 4) ? '同一種牌最多 4 張' : `還沒胡牌（向聽數 ${shanten(c, p.melds.length)}：離聽牌還差 ${Math.max(0, shanten(c, p.melds.length))} 步）`); }
+            const hd = document.createElement('p'); hd.textContent = '拆法：' + r.d.sets.map(s => s.t === 'seq' ? tileName(s.k) + '-' + tileName(s.k + 2) : tileName(s.k) + '×3').join('　') + '　將 ' + tileName(r.d.pair) + (p.melds.length ? '　副露 ' + p.melds.map(m => ({ chi: '吃', pon: '碰', kan: '槓', ankan: '暗槓' })[m.t] + tileName(m.k)).join(' ') : ''); out.append(hd);
+            itemRows(out, r.items); amountRows(out, r.tai, ctx.zimo);
+        }
+        const MANUAL_COUNT = { hua: 8, lian: 99 };
+        function renderManual() {
+            const keep = {}; document.querySelectorAll('#mRows [data-id]').forEach(i => { keep[i.dataset.id] = i.type === 'checkbox' ? i.checked : i.value; });
+            $('#mRows').replaceChildren(...TAI_DEF.map(x => {
+                const l = document.createElement('label'), cnt = x.id in MANUAL_COUNT;
+                l.innerHTML = `<span></span><span class="muted"></span>${cnt ? `<input type="number" min="0" max="${MANUAL_COUNT[x.id]}" value="0" data-id="${x.id}" inputmode="numeric">` : `<input type="checkbox" data-id="${x.id}">`}`;
+                l.children[0].textContent = x.name; l.children[1].textContent = (T[x.id]) + ' 台' + (cnt ? '／次' : '');
+                const i = l.querySelector('input'); if (keep[x.id] !== undefined) { if (i.type === 'checkbox') i.checked = keep[x.id]; else i.value = keep[x.id]; }
+                return l;
+            }));
+        }
+        $('#mRows').addEventListener('input', () => calc());
+        function calcManual(out) {
+            const items = [];
+            document.querySelectorAll('#mRows [data-id]').forEach(i => {
+                const id = i.dataset.id, n = i.type === 'checkbox' ? (i.checked ? 1 : 0) : Math.max(0, Math.min(MANUAL_COUNT[id], parseInt(i.value, 10) || 0));
+                if (n > 0 && T[id] > 0) items.push({ name: TAI_NAME[id] + (n > 1 ? ' ×' + n : ''), tai: T[id] * n });
+            });
+            const tai = items.reduce((s, x) => s + x.tai, 0);
+            itemRows(out, items); amountRows(out, tai, $('#mZimo').checked);
+        }
+        function calc() {
+            if ($('#pCalc').hidden) return;
+            const out = $('#cOut'); out.replaceChildren();
+            if (!$('#cManual').hidden) calcManual(out); else calcAuto(out);
+        }
+        ['#cHand', '#cWin', '#cZimo', '#cDealer', '#cStreak', '#cRound', '#cSeat', '#cFlags'].forEach(s => $(s).addEventListener('input', () => { if (s === '#cWin') cWinSel = +$('#cWin').value; calc(); }));
+        $('#cWin').addEventListener('change', () => { cWinSel = +$('#cWin').value; calc(); });
+        $('#cAuto').addEventListener('click', (e) => { const b = e.target.closest('[data-ex]'); if (b) { $('#cHand').value = b.dataset.ex; cWinSel = -1; calc(); } });
+        $('#mZimo').addEventListener('input', calc);
+
+        // ---------- 牌的畫面 ----------
+        function tileEl(k, cls = '', tag = 'span') {
+            const e = document.createElement(tag); e.className = 'mt ' + (k < 9 ? 'w' : k < 18 ? 'p' : k < 27 ? 's' : k === 31 ? 'hr' : k === 32 ? 'hg' : k >= 34 ? 'f' : '') + ' ' + cls;
+            const top = k < 9 ? NUMC[k] : k < 18 ? String(k - 8) : k < 27 ? String(k - 17) : k < 34 ? HON[k - 27] : FLW[k - 34], bot = k < 9 ? '萬' : k < 18 ? '筒' : k < 27 ? '條' : k >= 34 ? '花' : '';
+            e.innerHTML = `<b>${top}</b>${bot ? `<i>${bot}</i>` : ''}`; e.setAttribute('aria-label', tileName(k)); return e;
+        }
+        const meldKinds = (m) => m.t === 'chi' ? [m.k, m.k + 1, m.k + 2] : m.t === 'pon' ? [m.k, m.k, m.k] : [m.k, m.k, m.k, m.k];
+        const tilesRow = (ks, cls) => { const d = document.createElement('div'); d.className = 'ts'; ks.forEach(k => d.append(tileEl(k, cls))); return d; };
+        function meldsEl(list, cls) { const frag = []; list.forEach(m => { const g = document.createElement('span'); g.className = 'grp'; meldKinds(m).forEach(k => g.append(tileEl(k, cls))); frag.push(g); }); return frag; }
+
+        // ---------- 牌局：房主 / 單機（共用同一份 G）----------
+        let room = null, isHost = false, my = -1, hostId = '', V = null, ME = { hand: [], drawn: -1, opts: {} }, G = null, M = null, solo = false, roundNo = 0, step = 0;
+        let cpuT = 0, dlT = 0, deadline = 0, dlKey = '', sel = -1, flash = '', lastCounted = -1, leaving = false, busy = false;
+        addEventListener('pagehide', () => { leaving = true; }); addEventListener('pageshow', () => { leaving = false; });
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const readNick = () => { const n = $('#nick').value.trim(); if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; } return n; };
+        const connKey = 'mj_conn';
+        const clearConn = () => { try { sessionStorage.removeItem(connKey); } catch (e) { } };
+        const humanN = () => room ? room.players.length : 1;
+        const seatNames = () => [0, 1, 2, 3].map(s => s < humanN() ? (room ? room.players[s].nick : '你') : '電腦' + (s - humanN() + 1));
+        const autoSeat = (s) => s >= humanN() || (room ? !room.players[s].connected : false);
+        const timerOn = () => !!(room && opts.timer > 0 && G && G.phase !== 'over' && (G.phase === 'discard' ? !autoSeat(G.turn) : claimPending(G).some(q => !autoSeat(q))));
+
+        function buildView() {
+            const names = seatNames(), r = G && G.result;
+            return {
+                phase: !G ? 'lobby' : G.phase === 'over' ? 'over' : 'play', names, auto: [0, 1, 2, 3].map(autoSeat), scores: M ? M.scores.slice() : [0, 0, 0, 0],
+                dealer: G ? G.dealer : 0, streak: G ? G.streak : 0, rot: G ? G.rot : 0, nd: M ? M.dealer : 0, ns: M ? M.streak : 0, mo: !!(M && M.over), no: roundNo, o: opts,
+                gphase: G ? G.phase : 'discard', turn: G ? G.turn : 0, wall: G ? G.wall.length : 0, counts: G ? G.hands.map(h => h.length) : [0, 0, 0, 0],
+                melds: G ? G.melds : [[], [], [], []], flowers: G ? G.flowers : [[], [], [], []], rivers: G ? G.rivers : [[], [], [], []], last: G && G.last ? { p: G.last.p, k: G.last.k } : null,
+                pending: G ? claimPending(G) : [], log: G ? G.log : '', tl: timerOn() ? Math.max(1, Math.ceil((deadline - Date.now()) / 1000)) : 0,
+                result: r ? { type: r.type, w: r.w ?? -1, from: r.from ?? -1, k: r.k ?? -1, tai: r.tai || 0, items: (r.items || []).map(x => ({ name: x.name, tai: x.tai })), deltas: r.deltas || [0, 0, 0, 0], how: r.how || '', hands: G.hands.map(h => h.slice()) } : null,
+                commit: G && G.commit ? G.commit : '', reveal: r && G.salt ? { salt: G.salt, wall: G.wall0 } : null,
+            };
+        }
+        function meFor(p) {
+            if (!G) return { hand: [], drawn: -1, opts: {} };
+            const o = {};
+            if (G.phase === 'discard' && G.turn === p) { o.zimo = canZimo(G, p); Object.assign(o, selfKans(G, p)); }
+            else if (G.phase === 'claim' && claimPending(G).includes(p)) Object.assign(o, claimOpts(G, p));
+            else if (G.phase === 'qiang' && claimPending(G).includes(p)) o.hu = true;
+            return { hand: G.hands[p].slice(), drawn: G.phase === 'discard' && G.turn === p ? G.drawn : -1, opts: o };
+        }
+        function push() {
+            step++;
+            if (G && G.phase === 'over' && !G.counted) { G.counted = true; nextRound(M, G); }
+            if (timerOn()) { const k = String(step); if (k !== dlKey) { dlKey = k; deadline = Date.now() + opts.timer * 1000; } }
+            V = buildView(); V.tt = Date.now(); ME = meFor(my);
+            render();
+            if (room) { room.broadcast({ t: 'V', s: V }); room.players.forEach((p, i) => { if (i !== my && p.connected) room.sendTo(i, { t: 'ME', m: meFor(i) }); }); }
+            schedule();
+        }
+        async function startRound() {
+            if (busy) return; busy = true;
+            try {
+                if (room) room.keepSlots = true;
+                const g = newRound(M, T); g.no = ++roundNo; sel = -1; flash = ''; dlKey = '';
+                if (room) { g.salt = Util.randomHex(8); try { g.commit = await Util.sha256(g.salt + ':' + g.wall0.join(',')); } catch (e) { g.commit = ''; g.salt = ''; } }
+                G = g; push();
+            } finally { busy = false; }
+        }
+        function startMatch() { M = newMatch(opts); G = null; roundNo = 0; startRound(); }
+        const tell = (p, msg) => { if (p === my) { flash = msg; render(); } else if (room) room.sendTo(p, { t: 'ERR', msg }); };
+        function hostAct(p, a) {
+            if (!G || G.phase === 'over') return;
+            if (!act(G, p, a)) return tell(p, '這個動作不合法，或還沒輪到你');
+            flash = ''; push();
+        }
+        const wait = (a, b) => { const d = window.mjDelay || [a, b]; return d[0] + (d[1] ? Util.rnd(d[1] + 1) : 0); };   // window.mjDelay：e2e 用來加速電腦
+        function schedule() {
+            clearTimeout(cpuT); clearTimeout(dlT);
+            if (!G || G.phase === 'over') return;
+            const st = step, same = () => G && step === st && G.phase !== 'over';
+            if (G.phase === 'discard') {
+                const p = G.turn;
+                if (autoSeat(p)) cpuT = setTimeout(() => { if (!same()) return; if (!act(G, p, cpuAct(G, p, opts.level))) act(G, p, { t: 'discard', k: G.hands[p][G.hands[p].length - 1] }); push(); }, wait(550, 450));
+                else if (timerOn()) dlT = setTimeout(() => { if (!same()) return; act(G, p, { t: 'discard', k: G.drawn >= 0 ? G.drawn : G.hands[p][G.hands[p].length - 1] }); push(); }, Math.max(0, deadline - Date.now()));
+            } else {
+                const cpus = claimPending(G).filter(autoSeat);
+                if (cpus.length) cpuT = setTimeout(() => { if (!same()) return; for (const q of cpus) { if (G.phase === 'over' || !claimPending(G).includes(q)) continue; if (!act(G, q, { t: 'claim', r: cpuClaim(G, q, opts.level) })) act(G, q, { t: 'claim', r: { t: 'pass' } }); } push(); }, wait(450, 250));
+                else if (timerOn()) dlT = setTimeout(() => { if (!same()) return; claimPending(G).forEach(q => { if (G.claims && G.claims[q] === null) act(G, q, { t: 'claim', r: { t: 'pass' } }); }); push(); }, Math.max(0, deadline - Date.now()));
+            }
+        }
+
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            readOpts(); solo = false; enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: 4,
+                onReady(r) { isHost = true; my = 0; hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id); M = null; G = null; push(); },
+                canJoin: (n) => (!G || room.players.some(p => !p.connected && p.nick === n)) ? null : '遊戲進行中，只有原本的玩家能重新加入',
+                onJoin: () => push(), onLeave: () => push(),
+                onMessage(p, d) { if (d && d.t === 'ACT') hostAct(p.index, d.a); },
+                onError: onNetError,
+            });
+        }
+        function onNetError(err, message) { if (V || isHost) return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } }
+
+        // 成員端只信任通過驗證的房主訊息
+        const kindsOk = (a, max, lo, hi) => Array.isArray(a) && a.length <= max && a.every(k => Number.isInteger(k) && k >= lo && k < hi);
+        const arr4 = (a, f) => Array.isArray(a) && a.length === 4 && a.every(f);
+        const intIn = (n, lo, hi) => Number.isInteger(n) && n >= lo && n <= hi;
+        function validView(s) {
+            try {
+                if (!s || typeof s !== 'object' || !['lobby', 'play', 'over'].includes(s.phase)) return false;
+                if (!arr4(s.names, x => typeof x === 'string' && x.length <= 12) || !arr4(s.auto, x => typeof x === 'boolean') || !arr4(s.scores, x => intIn(x, -1e9, 1e9))) return false;
+                if (!intIn(s.dealer, 0, 3) || !intIn(s.streak, 0, 99) || !intIn(s.rot, 0, 99) || !intIn(s.nd, 0, 3) || !intIn(s.ns, 0, 99) || !intIn(s.no, 0, 1e6) || typeof s.mo !== 'boolean') return false;
+                if (s.phase === 'lobby') return true;
+                if (!['discard', 'claim', 'qiang', 'over'].includes(s.gphase) || !intIn(s.turn, 0, 3) || !intIn(s.wall, 0, 144) || !arr4(s.counts, x => intIn(x, 0, 17)) || !intIn(s.tl, 0, 999)) return false;
+                if (!arr4(s.melds, a => Array.isArray(a) && a.length <= 5 && a.every(m => m && ['chi', 'pon', 'kan', 'ankan'].includes(m.t) && intIn(m.k, 0, 33)))) return false;
+                if (!arr4(s.flowers, a => kindsOk(a, 8, 34, 42)) || !arr4(s.rivers, a => kindsOk(a, 60, 0, 34))) return false;
+                if (s.last !== null && !(s.last && intIn(s.last.p, 0, 3) && intIn(s.last.k, 0, 33))) return false;
+                if (!kindsOk(s.pending, 4, 0, 4) || typeof s.log !== 'string' || s.log.length > 40 || typeof s.commit !== 'string' || s.commit.length > 80) return false;
+                if (s.result !== null) {
+                    const r = s.result; if (!r || !['win', 'draw'].includes(r.type) || !intIn(r.w, -1, 3) || !intIn(r.from, -1, 3) || !intIn(r.tai, 0, 9999) || !arr4(r.deltas, x => intIn(x, -1e9, 1e9)) || typeof r.how !== 'string' || r.how.length > 20) return false;
+                    if (!Array.isArray(r.items) || r.items.length > 40 || !r.items.every(x => x && typeof x.name === 'string' && x.name.length <= 40 && intIn(x.tai, 0, 9999))) return false;
+                    if (!arr4(r.hands, a => kindsOk(a, 17, 0, 34))) return false;
+                }
+                if (s.reveal !== null && !(s.reveal && typeof s.reveal.salt === 'string' && s.reveal.salt.length <= 40 && kindsOk(s.reveal.wall, 144, 0, 42))) return false;
+                return true;
+            } catch (e) { return false; }
+        }
+        const validMe = (m) => m && typeof m === 'object' && kindsOk(m.hand, 17, 0, 34) && intIn(m.drawn, -1, 33) && m.opts && typeof m.opts === 'object' && kindsOk(m.opts.ankan || [], 4, 0, 34) && kindsOk(m.opts.jia || [], 4, 0, 34) && kindsOk(m.opts.chi || [], 3, 0, 34);
+
+        function joinRoom(auto) {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…'); hostId = id;
+            room = P2PRoom.join(id, {
+                nick,
+                onJoined() { try { sessionStorage.setItem(connKey, JSON.stringify({ id, nick })); } catch (e) { } },
+                onRoster(players, me) {
+                    my = me;
+                    if (!V) { V = { phase: 'lobby', names: [0, 1, 2, 3].map(i => players[i] ? players[i].nick : '電腦' + (i - players.length + 1)), auto: [0, 1, 2, 3].map(i => !players[i] || !players[i].connected), scores: [0, 0, 0, 0], dealer: 0, streak: 0, rot: 0, nd: 0, ns: 0, mo: false, no: 0, o: cleanOpts(null) }; render(); }
+                },
+                onMessage(d) {
+                    if (!d || typeof d.t !== 'string') return;
+                    if (d.t === 'V' && validView(d.s)) { d.s.o = cleanOpts(d.s.o); d.s.tt = Date.now(); if (d.s.phase === 'lobby') { ME = { hand: [], drawn: -1, opts: {} }; sel = -1; } V = d.s; flash = ''; render(); }
+                    else if (d.t === 'ME' && validMe(d.m)) { ME = { hand: d.m.hand.slice(), drawn: d.m.drawn, opts: d.m.opts }; render(); }
+                    else if (d.t === 'ERR' && typeof d.msg === 'string') { flash = d.msg.slice(0, 30); render(); }
+                },
+                onRejected(reason) {
+                    if (auto && auto.n > 0 && /暱稱已有人使用/.test(reason)) { netMsg('重新連線中…'); setTimeout(() => joinRoom({ n: auto.n - 1 }), 1500); return; }
+                    clearConn(); netMsg(reason); enableNet(true); room = null;
+                },
+                onClose() { if (V && !leaving) { clearConn(); alert('房主已離開'); location.reload(); } },
+                onError(err, message) { if (auto && auto.n > 0 && !V) { netMsg('重新連線中…'); setTimeout(() => joinRoom({ n: auto.n - 1 }), 2000); return; } onNetError(err, message); },
+            });
+        }
+        function startSolo() { readOpts(); solo = true; isHost = true; my = 0; room = null; startMatch(); }
+
+        // ---------- 動作 ----------
+        const send = (a) => { if (isHost) hostAct(my, a); else if (room) room.send({ t: 'ACT', a }); };
+        const mustDiscard = () => V && V.gphase === 'discard' && V.turn === my && ME.hand.length % 3 === 2;
+        const handList = () => { const h = ME.hand.slice(); let dr = -1; if (ME.drawn >= 0 && mustDiscard()) { const i = h.indexOf(ME.drawn); if (i >= 0) { h.splice(i, 1); dr = ME.drawn; } } return { h, dr }; };
+        function discardSel() { const { h, dr } = handList(), all = dr >= 0 ? h.concat(dr) : h; if (mustDiscard() && sel >= 0 && sel < all.length) { const k = all[sel]; sel = -1; send({ t: 'discard', k }); } }
+
+        // ---------- 畫面 ----------
+        const nm = (i) => V.names[i] + (i === my && V.names[i] !== '你' ? '（你）' : '');
+        function render() {
+            if (!V) return;
+            if (V.phase === 'lobby') {
+                show('#menu', false); show('#lobby', true); show('#game', false); syncSet();
+                $('#lobbyPlayers').replaceChildren(...V.names.map((x, i) => Object.assign(document.createElement('div'), { className: 'li', textContent: i < humanN() ? x + (i === 0 ? ' 👑' : '') + (i === my ? '（我）' : '') : x + '（電腦）' })));
+                show('#copyInvite', isHost); show('#startBtn', isHost);
+                $('#lobbyHint').textContent = isHost ? '把邀請連結傳給朋友（最多 4 位真人）；隨時可以開始，空位由電腦補。' : '等待房主開始…';
+                return;
+            }
+            show('#menu', false); show('#lobby', false); show('#game', true); syncSet();
+            const over = V.phase === 'over', slots = [1, 2, 3].map(k => (my + k) % 4), sw = (p) => WINDS[(p - V.dealer + 4) & 3];
+            $('#info').textContent = over ? `本局結束　${WINDS[(V.rot >> 2) & 3]}風圈` : `${WINDS[(V.rot >> 2) & 3]}風圈 · 莊 ${V.names[V.dealer]}${V.streak ? ' 連' + V.streak : ''} · 牌牆剩 ${V.wall}`;
+            $('#opps').replaceChildren(...slots.map(s => {
+                const d = document.createElement('div'); d.className = 'opp' + (s === V.turn && !over ? ' turn' : '') + (V.auto[s] && s < humanN() ? ' off' : '');
+                d.innerHTML = `<b>${Util.esc(V.names[s])}${V.auto[s] && s < humanN() ? '（託管）' : ''}${s === V.dealer ? ' 莊' : ''}</b>${sw(s)} · ${V.counts[s]} 張 · 花 ${V.flowers[s].length}`;
+                const mm = document.createElement('div'); mm.className = 'ts'; meldsEl(V.melds[s], 'sm').forEach(x => mm.append(x)); d.append(mm); return d;
+            }));
+            $('#rivers').replaceChildren(...[my, ...slots].map(s => {
+                const r = document.createElement('div'); r.className = 'river'; const l = document.createElement('span'); l.textContent = s === my ? '我' : V.names[s]; const ts = document.createElement('div'); ts.className = 'ts';
+                V.rivers[s].forEach((k, i) => ts.append(tileEl(k, 'sm' + (V.last && V.last.p === s && V.gphase === 'claim' && i === V.rivers[s].length - 1 ? ' last' : ''))));
+                r.append(l, ts); return r;
+            }));
+            const mine = [...meldsEl(V.melds[my], ''), ...V.flowers[my].map(k => tileEl(k, 'sm'))]; $('#mine').replaceChildren(...(mine.length ? mine : [document.createTextNode('（尚無副露 / 花牌）')]));
+            const { h, dr } = handList(), md = mustDiscard(); if (sel >= h.length + (dr >= 0 ? 1 : 0)) sel = -1;
+            $('#hand').replaceChildren(...h.concat(dr >= 0 ? [dr] : []).map((k, i) => { const b = tileEl(k, (i === sel ? 'sel ' : '') + (i === h.length && dr >= 0 ? 'dr' : ''), 'button'); b.onclick = () => { if (!V || V.phase !== 'play') return; if (sel === i && md) discardSel(); else { sel = i; render(); } }; return b; }));
+            const pend = V.pending.includes(my);
+            $('#status').textContent = flash || (over ? (V.result && V.result.type === 'win' ? `🏆 ${nm(V.result.w)} ${V.result.how}！` : '流局') : md ? '輪到你：打出一張牌' : V.gphase === 'claim' ? `${nm(V.last.p)} 打出 ${tileName(V.last.k)}${pend ? '：你要吃碰槓胡嗎？' : '　等待回應…'}` : V.gphase === 'qiang' ? `${V.log}：${pend ? '你要搶槓胡嗎？' : '等待回應…'}` : `輪到 ${V.names[V.turn]}${V.auto[V.turn] ? ' 思考中…' : ''}`);
+            $('#logline').textContent = over ? '' : V.log;
+            $('#score').textContent = '累計　' + V.names.map((n, i) => `${i === my ? '你' : n} ${V.scores[i] > 0 ? '+' : ''}${V.scores[i]}`).join('　');
+            renderActs(md, pend); renderResult(over); tick();
+            show('#nextBtn', isHost && over); $('#nextBtn').textContent = V.mo ? '再開一場' : '下一局（' + V.names[V.nd] + ' 當莊' + (V.ns ? ' 連' + V.ns : '') + '）';
+            countRound();
+        }
+        function renderActs(md, pend) {
+            const a = $('#acts'); a.replaceChildren();
+            const add = (txt, fn, cls) => { const b = document.createElement('button'); b.textContent = txt; if (cls) b.className = cls; b.onclick = fn; a.append(b); return b; };
+            if (V.phase !== 'play') return;
+            const o = ME.opts || {};
+            if (V.gphase === 'discard' && V.turn === my) {
+                if (o.zimo) add('自摸 胡', () => send({ t: 'zimo' }), 'primary');
+                (o.ankan || []).forEach(k => add('暗槓 ' + tileName(k), () => send({ t: 'ankan', k })));
+                (o.jia || []).forEach(k => add('加槓 ' + tileName(k), () => send({ t: 'jia', k })));
+                add('打出', discardSel, 'primary').disabled = !md || sel < 0;
+            } else if (pend) {
+                const r = (t, k) => () => send({ t: 'claim', r: { t, k } });
+                if (o.hu) add('胡', r('hu'), 'primary');
+                if (o.kan) add('槓', r('kan'));
+                if (o.pon) add('碰', r('pon'));
+                (o.chi || []).forEach(k => add('吃 ' + tileName(k) + tileName(k + 1) + tileName(k + 2), r('chi', k)));
+                add('過', r('pass'));
+            }
+        }
+        async function verifyWall() {
+            const e = $('#verify'); if (!e || !V.reveal || !V.commit) return;
+            try {
+                const okHash = (await Util.sha256(V.reveal.salt + ':' + V.reveal.wall.join(','))) === V.commit, c = new Array(42).fill(0); V.reveal.wall.forEach(k => { c[k]++; });
+                const okSet = V.reveal.wall.length === 144 && c.every((x, k) => x === (k < 34 ? 4 : 1));
+                e.textContent = okHash && okSet ? '牌牆核對：✓ 與開局承諾一致，且是完整 144 張' : '牌牆核對：✗ 與開局承諾不符！';
+            } catch (err) { e.textContent = '牌牆核對：此環境不支援雜湊'; }
+        }
+        function renderResult(over) {
+            const box = $('#result'); box.hidden = !over || !V.result; if (box.hidden) return;
+            if (box.dataset.no === String(V.no) && box.dataset.rev === String(!!V.reveal)) return;
+            box.dataset.no = V.no; box.dataset.rev = String(!!V.reveal);
+            const r = V.result; box.replaceChildren();
+            const h = document.createElement('h3'); h.textContent = r.type === 'win' ? `${nm(r.w)} ${r.how}${r.from >= 0 ? '（' + nm(r.from) + ' 放槍）' : ''}　${r.tai} 台` : '流局：牌牆剩 16 張，莊家連莊'; box.append(h);
+            if (r.type === 'win') { r.items.forEach(x => box.append(Util.statRow(x.name, '+' + x.tai))); }
+            const dl = document.createElement('div'); dl.className = 'hands';
+            V.names.forEach((n, i) => { const d = document.createElement('div'); d.append(Object.assign(document.createElement('b'), { textContent: `${i === my ? '你' : n} ${r.deltas[i] > 0 ? '+' : ''}${r.deltas[i]}　` })); const row = tilesRow(r.hands[i], 'sm'); row.style.display = 'inline-flex'; d.append(row, ...meldsEl(V.melds[i], 'sm')); dl.append(d); });
+            const v = document.createElement('p'); v.id = 'verify'; box.append(dl, v); verifyWall();
+        }
+        function countRound() {
+            if (!V || V.phase !== 'over' || !V.result || lastCounted === V.no) return;
+            lastCounted = V.no; const r = V.result; stats.rounds++;
+            if (r.type === 'win') { if (r.w === my) { stats.wins++; if (r.from < 0) stats.zimo++; stats.best = Math.max(stats.best, r.tai); } if (r.from === my) stats.lose++; stats.money += r.deltas[my]; }
+            if (V.mo) stats.matches++;
+            stats = cleanStats(stats); saveStats(); renderStats();
+        }
+        function tick() {
+            const t = $('#timer'); if (!V || V.phase !== 'play' || !V.tl) { t.textContent = ''; t.className = ''; return; }
+            const left = Math.max(0, V.tl - Math.floor((Date.now() - V.tt) / 1000));
+            t.textContent = `⏱ 剩 ${left} 秒（逾時自動${V.gphase === 'discard' ? '打出剛摸的牌' : '過'}）`; t.className = left <= 10 ? 'hot' : '';
+        }
+        setInterval(tick, 500);
+
+        $('#soloBtn').onclick = startSolo; $('#hostBtn').onclick = hostRoom; $('#joinBtn').onclick = () => joinRoom(); $('#startBtn').onclick = startMatch;
+        $('#nextBtn').onclick = () => { if (M.over) startMatch(); else startRound(); };
+        $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
+        const leave = () => { clearConn(); location.reload(); };
+        $('#leave').onclick = leave; $('#lobbyLeave').onclick = leave;
+
+        fillOpts(); renderTaiEditor(); renderManual(); renderStats();
+        if (P2PRoom.roomFromUrl()) {
+            $('#joinId').value = P2PRoom.roomFromUrl();
+            try { const c = JSON.parse(sessionStorage.getItem(connKey) || 'null'); if (c && c.id === P2PRoom.roomFromUrl() && P2PRoom.validNick(c.nick)) { $('#nick').value = c.nick; joinRoom({ n: 6 }); } } catch (e) { }
+        }
+    </script>
+</body>
+
+</html>

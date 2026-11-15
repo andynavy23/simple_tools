@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <meta name="description" content="投票 / 搶答：房主出題，大家用手機即時作答，長條圖顯示結果；測驗模式有計分與排行榜。">
+    <meta name="description" content="投票 / 搶答 / 約時間：房主出題，大家用手機即時作答，長條圖顯示結果；測驗模式有計分與排行榜；約時間模式彙整大家可行的時段。">
     <meta property="og:title" content="投票 / 搶答" />
     <meta property="og:description" content="房主出題，大家即時投票或搶答，長條圖顯示結果。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
@@ -39,11 +39,20 @@
         <li>主持人出題後按「開始作答」；成員點選項作答。投票可改選並即時看到結果；測驗只能答一次，答對依快慢給分，結束後公布正解與排行榜。</li>
         <li>主持人不能投票；時間到會自動結束，也可按「結束並公布」。</li>
         </ol>
+        <h3>約時間投票</h3>
+        <ol>
+        <li>主持人輸入暱稱，按「約時間：建立房間」，加入多個候選時段（日期 + 起訖時間，最多 30 個），按「開始收集」後再複製邀請連結傳給朋友（開始後時段不能再改）。</li>
+        <li>朋友用同一個「加入作答」進房，對每個時段選「可以 / 勉強 / 不行」，隨時可改；主持人也能自己勾選。</li>
+        <li>結果依「可以×2＋勉強」由高到低排序，標出每個時段各答案人數與「不行」的人；主持人按「結束投票」後鎖定，可複製結果文字。</li>
+        <li>單機：按「約時間：同機傳遞」，建好時段後一支手機輪流傳遞，每人輸入自己的暱稱、勾選，再按「換下一位」；同名會覆蓋原本的答案。</li>
+        </ol>
         <h3>範例</h3>
-        <div class="eg">單人：題目「午餐吃什麼」，選項 拉麵 / 便當 / 漢堡，模擬投票者 5 人 → 約 3 秒內 5 張票陸續落在三個選項，再自己點「便當」，總人數變成 6。
+        <div class="eg">約時間：候選 3/1 19:00–21:00、3/2 14:00–16:00；小明「可以 / 不行」、小華「可以 / 勉強」→ 3/1 排第一（可以 2），3/2 顯示「不行：小明」。
+        單人：題目「午餐吃什麼」，選項 拉麵 / 便當 / 漢堡，模擬投票者 5 人 → 約 3 秒內 5 張票陸續落在三個選項，再自己點「便當」，總人數變成 6。
         測驗：「2+3=?」選項 4 / 5 / 6，正解選 5，限時 30 秒；第 6 秒答對 → 100 + 50×(1−6/30) = 140 分。</div>
         <h3>小提醒</h3>
         <ul>
+        <li>約時間不存任何資料，關掉頁面就消失；暱稱不可重複，最多 30 位投票者。</li>
         <li>單人版完全不連線，離線也能用；模擬投票者只用於投票模式。</li>
         <li>連線版需要 P2P 連線，主持人離開房間就結束；手機請保持螢幕開啟。</li>
         <li>測驗進行中不顯示票數，避免被別人影響。</li>
@@ -137,6 +146,12 @@
             background: color-mix(in srgb, var(--ok) 35%, transparent);
         }
 
+        .sv { display: flex; gap: 6px; margin-bottom: 4px; }
+        .sv button { flex: 1; padding: 8px 4px; }
+        .sv button.mine { outline: 3px solid var(--blue); }
+        .slotT { font-weight: 700; margin: 10px 0 4px; }
+        .rk { padding: 8px 0; border-bottom: 1px solid var(--line); }
+        .rk small { display: block; color: var(--muted); }
         #status {
             text-align: center;
             color: var(--muted);
@@ -170,6 +185,9 @@
                 <input id="joinId" placeholder="貼上房號" aria-label="房號">
                 <button id="joinBtn">加入作答</button>
             </div>
+            <h2>約時間投票</h2>
+            <div class="row"><button class="primary" id="schedHostBtn">約時間：建立房間</button><button id="schedSoloBtn">約時間：同機傳遞</button></div>
+            <p class="note">房主建立候選時段，大家勾選可以 / 勉強 / 不行，彙整出最佳時段（加入用上面的暱稱與房號）。</p>
             <p class="note" id="netMsg"></p>
         </div>
 
@@ -201,6 +219,25 @@
                 <div id="choices"></div>
                 <div id="status" role="status" aria-live="polite"></div>
                 <div id="board"></div>
+            </div>
+            <div id="sched" hidden>
+                <div class="card" id="sEdit" hidden>
+                    <h2>候選時段（<span id="sN">0</span>/30）</h2>
+                    <div class="row"><input type="date" id="sDate" aria-label="日期"><input type="time" id="sStart" value="19:00" aria-label="開始"><input type="time" id="sEnd" value="21:00" aria-label="結束"><button id="sAdd">加入時段</button></div>
+                    <div id="sList"></div>
+                    <div class="row"><button class="primary" id="sOpen">開始收集</button></div>
+                </div>
+                <div class="card" id="sVote">
+                    <div class="meta"><span id="sWho"></span><span id="sCount"></span></div>
+                    <div class="row" id="sNameRow" hidden><input id="sName" maxlength="10" placeholder="這位的暱稱" aria-label="這位的暱稱"><button class="sm" id="sNext">換下一位</button></div>
+                    <div id="sSlots"></div>
+                    <div id="sStatus" role="status" aria-live="polite"></div>
+                </div>
+                <div class="card" id="sRes">
+                    <h2>結果</h2>
+                    <div id="sRank"></div>
+                    <div class="row"><button class="sm" id="sClose">結束投票</button><button class="sm" id="sCopy">複製結果文字</button><button class="sm" id="sInvite">複製邀請連結</button></div>
+                </div>
             </div>
             <div class="row" style="justify-content:center"><button id="leave">離開</button></div>
         </div>
@@ -252,6 +289,51 @@
                 return weights.length - 1;
             });
         }
+        // 約時間：可以=2 勉強=1 不行=0，未答=null
+        const MAX_SLOTS = 30, MAX_VOTERS = 30, SCHED_LABEL = ['不行', '勉強', '可以'];
+        const okDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s + 'T00:00:00Z')) && new Date(s + 'T00:00:00Z').toISOString().slice(0, 10) === s;
+        const okTime = (s) => typeof s === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+        const validSlot = (x) => !!x && okDate(x.d) && okTime(x.s) && okTime(x.e) && x.s < x.e;
+        function slotError(slots, x) {
+            if (!validSlot(x)) return '日期或時間不正確（結束要晚於開始）';
+            if (slots.length >= MAX_SLOTS) return '最多 ' + MAX_SLOTS + ' 個時段';
+            if (slots.some(y => y.d === x.d && y.s === x.s && y.e === x.e)) return '這個時段已經有了';
+            return '';
+        }
+        // 房主端驗證並記錄一票：只能投給存在的時段、每人每時段一票（重投覆蓋）、投票者上限
+        function schedVote(st, nick, slot, v) {
+            if (st.phase !== 'open' || typeof nick !== 'string' || !nick || nick.length > 10) return false;
+            if (!Number.isInteger(slot) || slot < 0 || slot >= st.slots.length || ![0, 1, 2].includes(v)) return false;
+            let b = st.ballots.get(nick);
+            if (!b) { if (st.ballots.size >= MAX_VOTERS) return false; b = new Array(st.slots.length).fill(null); st.ballots.set(nick, b); }
+            b[slot] = v; return true;
+        }
+        function tallySched(slots, ballots) {
+            return slots.map((_, i) => {
+                const r = { y: 0, m: 0, n: 0, who: [] };
+                ballots.forEach((b, nick) => { if (b[i] === 2) r.y++; else if (b[i] === 1) r.m++; else if (b[i] === 0) { r.n++; r.who.push(nick); } });
+                return r;
+            });
+        }
+        // 排序：可以×2＋勉強 高者優先，其次可以多、不行少，再依時間先後
+        function rankSched(slots, tally) {
+            return slots.map((_, i) => i).sort((a, b) => (tally[b].y * 2 + tally[b].m) - (tally[a].y * 2 + tally[a].m) || tally[b].y - tally[a].y || tally[a].n - tally[b].n
+                || (slots[a].d + slots[a].s).localeCompare(slots[b].d + slots[b].s) || a - b);
+        }
+        const slotLabel = (x) => x.d + '（' + '日一二三四五六'[new Date(x.d + 'T00:00:00Z').getUTCDay()] + '）' + x.s + '–' + x.e;
+        function schedText(slots, tally, order, voted) {
+            return ['約時間結果（' + voted + ' 人回覆）'].concat(order.map((i, r) => {
+                const t = tally[i];
+                return (r + 1) + '. ' + slotLabel(slots[i]) + '：可以 ' + t.y + '、勉強 ' + t.m + '、不行 ' + t.n + (t.who.length ? '（不能：' + t.who.join('、') + '）' : '');
+            })).join('\n');
+        }
+        const validBallot = (v) => Array.isArray(v) && v.length <= MAX_SLOTS && v.every(x => x === null || x === 0 || x === 1 || x === 2);
+        function validSState(s) {
+            const n = s && Array.isArray(s.slots) ? s.slots.length : -1, int = (x) => Number.isInteger(x) && x >= 0;
+            return !!s && ['setup', 'open', 'closed'].includes(s.phase) && n >= 0 && n <= MAX_SLOTS && s.slots.every(validSlot)
+                && Array.isArray(s.tally) && s.tally.length === n && s.tally.every(t => t && int(t.y) && int(t.m) && int(t.n) && Array.isArray(t.who) && t.who.length <= MAX_VOTERS && t.who.every(w => typeof w === 'string' && w.length <= 10))
+                && Array.isArray(s.order) && s.order.length === n && s.order.every(i => Number.isInteger(i) && i >= 0 && i < n) && int(s.people) && int(s.voted);
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -259,8 +341,9 @@
         let room = null, isHost = false, solo = false, simTimers = [], soloTotal = 0, soloBest = +(function () { try { return localStorage.getItem('livepoll_solo_best'); } catch (e) { return 0; } })() || 0, hostId = '', S = null, myVote = -1, myQid = -1;
         const H = { sim: 0, qid: 0, phase: 'idle', mode: 'poll', q: '', opts: [], correct: -1, limit: 0, endsAt: 0, openAt: 0, votes: new Map(), scores: new Map(), timer: null };
 
+        let SS = null, SH = null, myBal = [], myNick = '', schedHost = false;
         const netMsg = (t) => { $('#netMsg').textContent = t; };
-        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick', '#schedHostBtn', '#schedSoloBtn'].forEach(s => { $(s).disabled = !on; });
         function readNick() {
             const n = $('#nick').value.trim();
             if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; }
@@ -343,17 +426,28 @@
         }
 
         // ---------- 連線 ----------
-        function onNetError(err, message) { if (S) return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } }
+        function onNetError(err, message) { if (S || SS) return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } }
 
-        function hostRoom() {
+        function hostRoom(sched) {
             const nick = readNick(); if (!nick) return;
+            schedHost = !!sched; myNick = nick;
             enableNet(false); netMsg('連線中…');
             room = P2PRoom.host({
                 nick, maxPlayers: 30,
-                onReady(r) { isHost = true; hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id); S = publicState(); enterRoom(); },
-                onJoin(p) { room.sendTo(p.index, { t: 'STATE', s: publicState() }); push(); },
-                onLeave() { push(); },
-                onMessage(p, d) { if (d && d.t === 'VOTE') onVote(p, d); },
+                onReady(r) {
+                    isHost = true; hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id);
+                    if (schedHost) { SH = { phase: 'setup', slots: [], ballots: new Map() }; $('#menu').hidden = true; $('#room').hidden = false; showSched(); spush(); return; }
+                    S = publicState(); enterRoom();
+                },
+                onJoin(p) {
+                    if (schedHost) { const b = SH.ballots.get(p.nick); if (b) room.sendTo(p.index, { t: 'SYOU', v: b }); spush(); return; }
+                    room.sendTo(p.index, { t: 'STATE', s: publicState() }); push();
+                },
+                onLeave() { if (schedHost) spush(); else push(); },
+                onMessage(p, d) {
+                    if (schedHost) { if (d && d.t === 'SVOTE' && schedVote(SH, p.nick, d.slot, d.v)) { room.sendTo(p.index, { t: 'SYOU', v: SH.ballots.get(p.nick) }); spush(); } return; }
+                    if (d && d.t === 'VOTE') onVote(p, d);
+                },
                 onError: onNetError,
             });
         }
@@ -368,11 +462,13 @@
                 onJoined() { S = { qid: 0, phase: 'idle', mode: 'poll', q: '', opts: [], counts: null, answered: 0, total: 0, ms: -1, correct: -1, board: [], at: Date.now() }; enterRoom(); },
                 onMessage(d) {
                     if (!d || typeof d.t !== 'string') return;
-                    if (d.t === 'STATE' && validState(d.s)) { S = d.s; S.at = Date.now(); if (S.qid !== myQid) { myQid = S.qid; myVote = -1; } render(); }
+                    if (d.t === 'SSTATE' && validSState(d.s)) { SS = d.s; showSched(); renderSched(); }
+                    else if (d.t === 'SYOU' && validBallot(d.v)) { myBal = d.v; renderSched(); }
+                    else if (d.t === 'STATE' && validState(d.s)) { S = d.s; S.at = Date.now(); if (S.qid !== myQid) { myQid = S.qid; myVote = -1; } render(); }
                     else if (d.t === 'YOU' && Number.isInteger(d.opt) && d.qid === S.qid) { myVote = d.opt; render(); }
                 },
                 onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
-                onClose() { if (S) { alert('房主已離開'); location.reload(); } },
+                onClose() { if (S || SS) { alert('房主已離開'); location.reload(); } },
                 onError: onNetError,
             });
         }
@@ -413,6 +509,73 @@
         }
         setInterval(() => { if (S && S.phase === 'open' && S.ms >= 0) render(); }, 500);
 
+        // ---------- 約時間 ----------
+        function showSched() { $('#editor').hidden = true; $('#view').hidden = true; $('#sched').hidden = false; }
+        function spush() {
+            const t = tallySched(SH.slots, SH.ballots);
+            SS = { phase: SH.phase, slots: SH.slots, tally: t, order: rankSched(SH.slots, t), people: solo ? SH.ballots.size : room.players.filter(p => p.connected).length, voted: SH.ballots.size };
+            myBal = SH.ballots.get(solo ? $('#sName').value.trim() : myNick) || [];
+            renderSched();
+            if (room) room.broadcast({ t: 'SSTATE', s: SS });
+        }
+        function castVote(slot, v) {
+            if (solo || isHost) {
+                const n = solo ? $('#sName').value.trim() : myNick;
+                if (!P2PRoom.validNick(n)) { alert('請先輸入這位的暱稱（中英數 1–10 字）'); return; }
+                if (!schedVote(SH, n, slot, v)) { alert('無法投票（人數已達 ' + MAX_VOTERS + ' 人或投票已結束）'); return; }
+                spush();
+            } else if (room && SS && SS.phase === 'open') { myBal[slot] = v; room.send({ t: 'SVOTE', slot, v }); renderSched(); }
+        }
+        function renderSched() {
+            const s = SS; if (!s) return;
+            const adm = isHost || solo, open = s.phase === 'open';
+            $('#sEdit').hidden = !(adm && s.phase === 'setup');
+            $('#sVote').hidden = adm && s.phase === 'setup';
+            $('#sRes').hidden = s.phase === 'setup' || !s.slots.length;
+            $('#sNameRow').hidden = !solo; $('#sInvite').hidden = solo || !isHost; $('#sClose').hidden = !adm || !open;
+            $('#sWho').textContent = solo ? '約時間（同機傳遞）' : isHost ? '你是主持人' : '約時間';
+            $('#sCount').textContent = `${s.voted} 人已回覆` + (solo ? '' : ` / ${s.people} 人在線`);
+            $('#sN').textContent = s.slots.length;
+            $('#sList').replaceChildren(...s.slots.map((x, i) => {
+                const d = document.createElement('div'); d.className = 'opt';
+                const t = Object.assign(document.createElement('span'), { textContent: slotLabel(x) }); t.style.flex = '1';
+                const b = Object.assign(document.createElement('button'), { textContent: '✕', title: '刪除', className: 'sm' }); b.setAttribute('aria-label', '刪除時段');
+                b.onclick = () => { if (SH.phase !== 'setup') return; SH.slots.splice(i, 1); spush(); };
+                d.append(t, b); return d;
+            }));
+            $('#sSlots').replaceChildren(...s.slots.flatMap((x, i) => {
+                const t = Object.assign(document.createElement('div'), { className: 'slotT', textContent: slotLabel(x) });
+                const row = document.createElement('div'); row.className = 'sv';
+                [2, 1, 0].forEach(v => {
+                    const b = Object.assign(document.createElement('button'), { textContent: SCHED_LABEL[v] });
+                    b.className = myBal[i] === v ? 'mine' : ''; b.disabled = !open;
+                    b.onclick = () => castVote(i, v); row.append(b);
+                });
+                return [t, row];
+            }));
+            $('#sStatus').textContent = s.phase === 'setup' ? '等待主持人建立時段…' : s.phase === 'closed' ? '投票已結束' : (solo ? '輸入暱稱後逐一勾選，完成按「換下一位」' : '請逐一勾選，隨時可以修改');
+            $('#sRank').replaceChildren(...s.order.map((i, r) => {
+                const t = s.tally[i], d = document.createElement('div'); d.className = 'rk';
+                d.append(Object.assign(document.createElement('b'), { textContent: `${r + 1}. ${slotLabel(s.slots[i])}${r === 0 && s.voted ? '　★ 最佳' : ''}` }),
+                    Object.assign(document.createElement('small'), { textContent: `可以 ${t.y}・勉強 ${t.m}・不行 ${t.n}` + (t.who.length ? `（不能：${t.who.join('、')}）` : '') }));
+                return d;
+            }));
+        }
+        $('#sAdd').onclick = () => {
+            const x = { d: $('#sDate').value, s: $('#sStart').value, e: $('#sEnd').value }, err = slotError(SH.slots, x);
+            if (err) { alert(err); return; }
+            SH.slots.push(x); SH.slots.sort((a, b) => (a.d + a.s + a.e).localeCompare(b.d + b.s + b.e)); spush();
+        };
+        $('#sOpen').onclick = () => { if (!SH.slots.length) { alert('請先加入至少一個時段'); return; } SH.phase = 'open'; spush(); };
+        $('#sClose').onclick = () => { if (!confirm('結束投票後不能再修改，確定？')) return; SH.phase = 'closed'; spush(); };
+        $('#sCopy').onclick = () => { const txt = schedText(SS.slots, SS.tally, SS.order, SS.voted); Util.copyWithFeedback($('#sCopy'), txt, () => prompt('請手動複製：', txt)); };
+        $('#sInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#sInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
+        $('#sNext').onclick = () => { $('#sName').value = ''; spush(); };
+        $('#sName').oninput = () => { myBal = SH.ballots.get($('#sName').value.trim()) || []; renderSched(); };
+        $('#schedHostBtn').onclick = () => hostRoom(true);
+        $('#schedSoloBtn').onclick = () => { solo = true; SH = { phase: 'setup', slots: [], ballots: new Map() }; $('#menu').hidden = true; $('#room').hidden = false; showSched(); spush(); };
+        $('#sDate').value = Util.day.today();
+
         // 編輯器：6 個選項，測驗模式時才顯示「正解」單選鈕
         function buildEditor() {
             $('#optIn').replaceChildren(...Array.from({ length: MAX_OPTS }, (_, i) => {
@@ -426,7 +589,7 @@
         }
         $('#mode').onchange = () => document.querySelectorAll('#optIn input[type=radio]').forEach(r => { r.hidden = $('#mode').value !== 'quiz'; });
 
-        $('#hostBtn').onclick = hostRoom;
+        $('#hostBtn').onclick = () => hostRoom(false);
         $('#joinBtn').onclick = joinRoom;
         $('#openBtn').onclick = openQuestion;
         $('#closeBtn').onclick = closeQuestion;

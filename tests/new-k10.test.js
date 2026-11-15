@@ -141,7 +141,7 @@ const ctx = () => ({ rand: rnd, now, salt: () => 'abcd1234' });
     [0, 1, 2].forEach(i => m.act(G, i, { t: 'fvote', target: (i + 1) % 3 }, ctx())); assert.strictEqual(G.res.winner, 'spy');   // 平手間諜贏
     G = mk('spy', 3, { rounds: '1' }); m.nextRound(G, ctx()); m.setAbsent(G, G.spy === 0 ? 1 : 0, true, ctx()); assert.strictEqual(G.phase, 'play'); m.setAbsent(G, G.spy, true, ctx()); assert.ok(G.res.skip);
     // 各人數開局不丟例外
-    for (const k of Object.keys(m.KINDS)) for (let n = m.KINDS[k].min; n <= 12; n++) { const g = mk(k, n); m.nextRound(g, ctx()); for (let s = 0; s < n; s++) JSON.stringify(m.view(g, s, now)); assert.ok(m.validView(JSON.parse(JSON.stringify(m.view(g, 0, now))))); }
+    for (const k of Object.keys(m.KINDS)) for (let n = m.KINDS[k].min; n <= (m.KINDS[k].max || 12); n++) { const g = mk(k, n); m.nextRound(g, ctx()); for (let s = 0; s < n; s++) JSON.stringify(m.view(g, s, now)); assert.ok(m.validView(JSON.parse(JSON.stringify(m.view(g, 0, now))))); }
     assert.ok(!m.validView(null) && !m.validView({ kind: 'x' }));
     // 單機名單
     assert.ok(m.soloSetup('a\nb', 'truths').names.length === 2); assert.ok(m.soloSetup('a', 'truths').err); assert.ok(m.soloSetup('a,a', 'truths').err);

@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="飛行棋：2–4 人，每人 4 架飛機，擲到指定點數起飛、擊落對手、精確進終點。可單機對電腦、同機輪流或連線，規則可調。">
+    <meta property="og:title" content="飛行棋" />
+    <meta property="og:description" content="2–4 人飛行棋，擲骰由房主負責、每一步都驗證，可電腦補位。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/ludo.html" />
+    <meta name="st-keys" content="ludo_opts,ludo_stats">
+    <title>飛行棋</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>飛行棋（Ludo）：2–4 人，每人 4 架飛機，最先讓 4 架飛機全部進終點的人獲勝。可<b>單機對電腦</b>、<b>同一支手機輪流</b>，或<b>連線</b>和朋友玩（電腦可補位）。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>一個人打發時間：開單機，對 1–3 個電腦。</li>
+        <li>和家人在同一台裝置輪流玩，或約朋友線上玩一局。</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+        <li>輪到你時按「擲骰」。擲到<b>起飛點數</b>（預設 6，可改 5）才能把基地的飛機放上起點。</li>
+        <li>擲出 6 可以再擲一次。選項「連擲三次 6」開啟時，連續第 3 個 6 作廢，而且這回合最後走過的那架飛機被打回基地。</li>
+        <li>點盤面上發亮的飛機（或按下方的按鈕）決定走哪一架；沒有任何合法步時自動換人。</li>
+        <li>走到有對手飛機的格子就把它<b>擊落回基地</b>。起點格與每色起點往前第 8 格（★）是安全格，不會被擊落。</li>
+        <li>走完一圈進入自己顏色的終點通道，要<b>剛好</b>走到中央才算進終點；點數太大不能走（開啟「反彈」則多出來的點數會倒退）。</li>
+        </ol>
+        <h3>可調規則</h3>
+        <ul>
+        <li><b>疊子</b>：同色 2 架以上疊在一般格時形成堡壘，對手不能停在那一格（可以越過），也無法擊落。</li>
+        <li><b>反彈</b>：進終點點數過大時，超出的點數往回走。</li>
+        <li><b>計時</b>：每一步限時，逾時由電腦代打；斷線的玩家也由電腦代打，同暱稱可重連回來。</li>
+        </ul>
+        <h3>連線</h3>
+        <ol>
+        <li>輸入暱稱、按「建立房間」，把邀請連結傳給朋友（最多 4 人）；「總人數」大於真人數時，空位由電腦補上。</li>
+        <li>骰子由房主擲，每一步都由房主驗證，不能作弊；遊戲中途不能加入，但斷線者可用同暱稱回來。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">起飛點數 6：擲到 3 且飛機都在基地 → 沒有合法步，自動換人；擲到 6 → 飛機起飛，並且再擲一次。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>電腦只看公開的盤面；簡單＝隨機合法步，普通＝優先進終點 / 擊落 / 起飛並避開被擊落。</li>
+        <li>規則設定存在本機（<code>ludo_opts</code>）。戰績（場數、勝場、擊落數與最近 20 場）存在 <code>ludo_stats</code>，最近 20 場滿了會淘汰最舊的；可按「清除戰績」刪除，無法復原。同機輪流不計戰績。</li>
+        <li>資料損壞時會自動回到預設值；儲存失敗時會顯示提示。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        :root { --wrap-w: 560px; }
+
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+        .row input { flex: 1 1 130px; }
+        .chk { display: flex; gap: 6px; align-items: center; min-height: 44px; }
+        .chk input { width: 20px; height: 20px; }
+        .status { text-align: center; font-weight: 700; min-height: 2.8em; margin: 8px 0; }
+        #chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-bottom: 8px; }
+        .opp { padding: 4px 10px; border-radius: var(--radius-sm); background: var(--fill); font-size: 14px; border: 2px solid transparent; }
+        .opp.turn { border-color: var(--ok); }
+        .opp.off { opacity: .55; }
+        .dotc { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: -2px; }
+        #board { width: 100%; max-width: 480px; aspect-ratio: 1; display: block; margin: 0 auto; }
+        .pc { transition: transform .3s; }
+        .pc .hit { display: none; }
+        .pc text { font-size: .5px; font-weight: 800; fill: #fff; stroke: rgba(0, 0, 0, .55); stroke-width: .06; paint-order: stroke; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+        .pc.can { cursor: pointer; }
+        .pc.can .hit { display: inline; }
+        .pc.can .body { stroke: var(--text); stroke-width: .14; animation: pul .8s infinite alternate; }
+        @keyframes pul { to { stroke-width: .03; } }
+        @media (prefers-reduced-motion: reduce) { .pc { transition: none; } .pc.can .body { animation: none; } }
+        #die { font-size: 18px; min-height: 52px; }
+        #dieFace { font-size: 30px; vertical-align: -4px; }
+        #pcBtns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 8px; }
+        .rl { font-size: 13px; color: var(--muted); }
+        .recent { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>飛行棋</h1>
+        <p class="sub">擲到指定點數起飛，擊落對手，剛好進終點。可單機、同機輪流或連線，電腦補位。</p>
+
+        <div class="card" id="menu">
+            <h2>規則與人數</h2>
+            <div class="fgrid">
+                <div><label for="total">總人數</label><select id="total"><option>2</option><option>3</option><option selected>4</option></select></div>
+                <div><label for="need">起飛點數</label><select id="need"><option value="6">6</option><option value="5">5</option></select></div>
+                <div><label for="timer">每步限時</label><select id="timer"><option value="0">不限時</option><option value="15">15 秒</option><option value="30">30 秒</option><option value="60">60 秒</option></select></div>
+                <div><label for="lvl">電腦強度</label><select id="lvl"><option value="0">簡單</option><option value="1" selected>普通</option></select></div>
+            </div>
+            <label class="chk"><input type="checkbox" id="triple">連續三次 6：作廢並讓最後走的飛機回基地</label>
+            <label class="chk"><input type="checkbox" id="stack">疊子：同色 2 架以上擋住對手、不被擊落</label>
+            <label class="chk"><input type="checkbox" id="bounce">進終點點數過大時反彈</label>
+            <h2 style="margin-top:14px">單機</h2>
+            <div class="row">
+                <button class="primary" id="soloBtn">對電腦</button>
+                <button id="hotBtn">同機輪流（真人）</button>
+            </div>
+            <h2 style="margin-top:14px">和朋友連線</h2>
+            <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+            <div class="row">
+                <button class="primary" id="hostBtn">建立房間</button>
+                <input id="joinId" placeholder="貼上房號" aria-label="房號">
+                <button id="joinBtn">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+        </div>
+
+        <div class="card" id="lobby" hidden>
+            <h2>等待玩家</h2>
+            <div class="players" id="lobbyPlayers"></div>
+            <div class="row" style="margin-top:12px">
+                <button id="copyInvite" hidden>複製邀請連結</button>
+                <button class="primary" id="startBtn" hidden>開始</button>
+                <button id="lobbyLeave">離開</button>
+            </div>
+            <p class="note" id="lobbyHint"></p>
+        </div>
+
+        <div class="card" id="game" hidden>
+            <div id="chips"></div>
+            <svg id="board" viewBox="0 0 15 15" role="img" aria-label="飛行棋盤"></svg>
+            <div class="status" id="status" role="status"></div>
+            <div id="pcBtns"></div>
+            <div class="row" style="justify-content:center">
+                <button class="primary" id="die"><span id="dieFace">🎲</span> 擲骰</button>
+                <button class="primary" id="again" hidden>再來一局</button>
+                <button id="leave">離開</button>
+            </div>
+        </div>
+
+        <div class="card" id="statsCard">
+            <h2>戰績</h2>
+            <div id="statsBox" class="note" style="margin-top:0"></div>
+            <div class="row" style="margin-top:10px"><button id="clearStats">清除戰績</button></div>
+        </div>
+    </div>
+
+    <script>
+        // --- pure ---
+        // 棋盤：15×15 格，ring 為 52 格環形主道（順時針），每色起點 = 13 × 色號。座標都是 [欄, 列]（格子編號，中心 +0.5）
+        const RING = [[1, 6], [2, 6], [3, 6], [4, 6], [5, 6], [6, 5], [6, 4], [6, 3], [6, 2], [6, 1], [6, 0], [7, 0], [8, 0],
+        [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [9, 6], [10, 6], [11, 6], [12, 6], [13, 6], [14, 6], [14, 7], [14, 8],
+        [13, 8], [12, 8], [11, 8], [10, 8], [9, 8], [8, 9], [8, 10], [8, 11], [8, 12], [8, 13], [8, 14], [7, 14], [6, 14],
+        [6, 13], [6, 12], [6, 11], [6, 10], [6, 9], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8], [0, 7], [0, 6]];
+        const LANE = [[[1, 7], [2, 7], [3, 7], [4, 7], [5, 7]], [[7, 1], [7, 2], [7, 3], [7, 4], [7, 5]], [[13, 7], [12, 7], [11, 7], [10, 7], [9, 7]], [[7, 13], [7, 12], [7, 11], [7, 10], [7, 9]]];
+        const GOALXY = [[6.75, 7.5], [7.5, 6.75], [8.25, 7.5], [7.5, 8.25]];       // 各色終點（中央三角形內），已是中心座標
+        const BASE_ORG = [[0, 0], [9, 0], [9, 9], [0, 9]];                          // 各色基地 6×6 的左上角
+        const COLN = ['紅', '綠', '黃', '藍'];
+        const GOAL = 56;                                                            // 位置：-1 基地、0..50 主道（相對起點）、51..55 終點通道、56 終點
+        const absOf = (c, pos) => pos >= 0 && pos <= 50 ? (13 * c + pos) % 52 : -1;
+        const isSafe = (a) => a % 13 === 0 || a % 13 === 8;                         // 各色起點與起點後第 8 格
+        // 回傳位置的畫面座標（中心座標）；k 是第幾架（基地位置用）
+        function cellXY(c, pos, k) {
+            if (pos === -1) { const o = BASE_ORG[c]; return [o[0] + 1.5 + (k % 2) * 3, o[1] + 1.5 + (k >> 1) * 3]; }
+            if (pos === GOAL) return GOALXY[c];
+            const t = pos <= 50 ? RING[(13 * c + pos) % 52] : LANE[c][pos - 51];
+            return [t[0] + .5, t[1] + .5];
+        }
+        const DEF = { need: 6, triple: true, stack: true, bounce: false, timer: 0, total: 4, lvl: 1 };
+        function cleanOpts(o) {
+            o = o && typeof o === 'object' ? o : {};
+            const pick = (v, list, d) => list.includes(v) ? v : d;
+            return { need: pick(o.need, [5, 6], 6), triple: typeof o.triple === 'boolean' ? o.triple : true, stack: typeof o.stack === 'boolean' ? o.stack : true, bounce: o.bounce === true, timer: pick(o.timer, [0, 15, 30, 60], 0), total: pick(o.total, [2, 3, 4], 4), lvl: pick(o.lvl, [0, 1], 1) };
+        }
+        function newGame(n, opts) {
+            const colors = n === 2 ? [0, 2] : [0, 1, 2, 3].slice(0, n);
+            return { n, colors, pos: colors.map(() => [-1, -1, -1, -1]), turn: 0, roll: null, lastRoll: 0, sixes: 0, last: -1, winner: -1, caps: colors.map(() => 0), opts: cleanOpts(opts), log: '開始！' };
+        }
+        // 第 i 架飛機擲 roll 點後的目的地；不可走回傳 -1（不含疊子阻擋）
+        function destOf(g, p, i, roll) {
+            const pos = g.pos[p][i];
+            if (pos === GOAL) return -1;
+            if (pos === -1) return roll === g.opts.need ? 0 : -1;
+            let np = pos + roll;
+            if (np > GOAL) { if (!g.opts.bounce) return -1; np = 2 * GOAL - np; }
+            return np;
+        }
+        // 對手在 a 格上的飛機 [[q, j]...]（只算主道）
+        const foesAt = (g, p, a) => { const r = []; g.pos.forEach((ps, q) => { if (q !== p) ps.forEach((x, j) => { if (absOf(g.colors[q], x) === a) r.push([q, j]); }); }); return r; };
+        // 疊子規則：一般格上有對手同色 2 架以上 → 不能停
+        function blocked(g, p, np) {
+            if (!g.opts.stack) return false;
+            const a = absOf(g.colors[p], np); if (a < 0 || isSafe(a)) return false;
+            const cnt = {}; for (const [q] of foesAt(g, p, a)) { cnt[q] = (cnt[q] || 0) + 1; if (cnt[q] >= 2) return true; }
+            return false;
+        }
+        // 落點會擊落誰（安全格不會）
+        const capList = (g, p, np) => { const a = absOf(g.colors[p], np); return a < 0 || isSafe(a) ? [] : foesAt(g, p, a); };
+        function legalMoves(g, p, roll = g.roll) {
+            if (!(roll >= 1 && roll <= 6)) return [];
+            return [0, 1, 2, 3].filter(i => { const np = destOf(g, p, i, roll); return np >= 0 && !blocked(g, p, np); });
+        }
+        const nextTurn = (g) => { g.turn = (g.turn + 1) % g.n; g.sixes = 0; g.last = -1; g.roll = null; };
+        // 擲骰（值由房主給）：換人、起飛判斷與三連 6 都在這裡處理。回傳是否合法
+        function rollDice(g, p, v) {
+            if (g.winner >= 0 || p !== g.turn || g.roll !== null || !Number.isInteger(v) || v < 1 || v > 6) return false;
+            const L = COLN[g.colors[p]];
+            g.lastRoll = v;
+            if (v === 6) {
+                g.sixes++;
+                if (g.opts.triple && g.sixes >= 3) {
+                    const l = g.last, back = l >= 0 && g.pos[p][l] >= 0 && g.pos[p][l] < GOAL;
+                    if (back) g.pos[p][l] = -1;
+                    g.log = `${L}連擲三次 6，作廢${back ? `，飛機 ${l + 1} 回基地` : ''}`; nextTurn(g); return true;
+                }
+            }
+            if (!legalMoves(g, p, v).length) { g.log = `${L}擲出 ${v}，沒有可走的飛機`; if (v !== 6) nextTurn(g); return true; }
+            g.roll = v; g.log = `${L}擲出 ${v}`; return true;
+        }
+        // 走一步：驗證合法、擊落、勝負、換人（擲 6 再擲一次）
+        function applyMove(g, p, i) {
+            if (g.winner >= 0 || p !== g.turn || g.roll === null || !Number.isInteger(i) || i < 0 || i > 3) return false;
+            const np = destOf(g, p, i, g.roll); if (np < 0 || blocked(g, p, np)) return false;
+            const roll = g.roll, from = g.pos[p][i], L = COLN[g.colors[p]], cap = capList(g, p, np);
+            g.pos[p][i] = np; g.last = i; g.roll = null; g.caps[p] += cap.length;
+            for (const [q, j] of cap) g.pos[q][j] = -1;
+            g.log = `${L}${from === -1 ? '飛機 ' + (i + 1) + ' 起飛' : np === GOAL ? '飛機 ' + (i + 1) + ' 進終點' : '飛機 ' + (i + 1) + ' 前進 ' + roll}` + (cap.length ? `，擊落${cap.map(([q]) => COLN[g.colors[q]]).join('、')}` : '');
+            if (g.pos[p].every(x => x === GOAL)) { g.winner = p; g.log += '，獲勝！'; return true; }
+            if (roll !== 6) nextTurn(g);
+            return true;
+        }
+        // 電腦：lvl 0 隨機合法步；1 優先進終點 / 擊落 / 起飛，避開被擊落。只看公開盤面
+        const threatened = (g, p, a) => a >= 0 && !isSafe(a) && g.pos.some((ps, q) => q !== p && ps.some(x => { const b = absOf(g.colors[q], x); return b >= 0 && (a - b + 52) % 52 >= 1 && (a - b + 52) % 52 <= 6; }));
+        function cpuMove(g, p, lvl, rand = Math.random) {
+            if (g.roll === null) return { t: 'ROLL' };
+            const legal = legalMoves(g, p); if (!legal.length) return { t: 'ROLL' };
+            let best = legal[0], bs = -Infinity;
+            for (const i of legal) {
+                const np = destOf(g, p, i, g.roll), pos = g.pos[p][i], c = g.colors[p];
+                let sc = rand();
+                if (lvl >= 1) {
+                    sc *= .5; sc += np * .1;
+                    if (np === GOAL) sc += 100;
+                    sc += capList(g, p, np).length * 60;
+                    if (pos === -1) sc += 40;
+                    if (np >= 51 && pos < 51) sc += 20;
+                    const was = threatened(g, p, absOf(c, pos)), now = threatened(g, p, absOf(c, np));
+                    if (now) sc -= 35; if (was && !now) sc += 25;
+                }
+                if (sc > bs) { bs = sc; best = i; }
+            }
+            return { t: 'MOVE', i: best };
+        }
+        const isInt = (x, a, b) => Number.isInteger(x) && x >= a && x <= b;
+        // 成員端驗證房主送來的公開狀態
+        function validPublic(s) {
+            if (!s || !['lobby', 'play', 'over'].includes(s.phase) || !Array.isArray(s.names) || s.names.length > 4 || !s.names.every(x => typeof x === 'string' && x.length <= 12)
+                || !Array.isArray(s.active) || s.active.length !== s.names.length || typeof s.log !== 'string' || s.log.length > 80) return false;
+            if (s.phase === 'lobby') return true;
+            const n = s.names.length;
+            return n >= 2 && Array.isArray(s.colors) && s.colors.length === n && s.colors.every(c => isInt(c, 0, 3)) && new Set(s.colors).size === n
+                && Array.isArray(s.pos) && s.pos.length === n && s.pos.every(ps => Array.isArray(ps) && ps.length === 4 && ps.every(x => isInt(x, -1, GOAL)))
+                && isInt(s.turn, 0, n - 1) && (s.roll === null || isInt(s.roll, 1, 6)) && isInt(s.lastRoll, 0, 6) && isInt(s.winner, -1, n - 1)
+                && Array.isArray(s.caps) && s.caps.length === n && s.caps.every(x => isInt(x, 0, 9999)) && Array.isArray(s.bots) && s.bots.length === n && isInt(s.tleft, 0, 60)
+                && !!s.opts && JSON.stringify(cleanOpts(s.opts)) === JSON.stringify(s.opts);
+        }
+        // 戰績：場數 / 勝場 / 擊落 + 最近 20 場（滿了淘汰最舊）
+        const REC_MAX = 20;
+        function cleanStats(s) {
+            s = s && typeof s === 'object' ? s : {};
+            const n = (x) => Number.isInteger(x) && x >= 0 ? Math.min(x, 999999) : 0;
+            const recent = (Array.isArray(s.recent) ? s.recent : []).filter(r => r && typeof r === 'object' && typeof r.d === 'string' && isInt(r.n, 2, 4) && typeof r.w === 'boolean' && isInt(r.c, 0, 9999)).slice(-REC_MAX).map(r => ({ d: r.d.slice(0, 10), n: r.n, w: r.w, c: r.c }));
+            return { games: n(s.games), wins: n(s.wins), caps: n(s.caps), recent };
+        }
+        function addResult(s, rec) {
+            s = cleanStats(s);
+            s.games = Math.min(s.games + 1, 999999); s.wins = Math.min(s.wins + (rec.w ? 1 : 0), 999999); s.caps = Math.min(s.caps + rec.c, 999999);
+            s.recent.push({ d: rec.d, n: rec.n, w: rec.w, c: rec.c }); if (s.recent.length > REC_MAX) s.recent.shift();
+            return s;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const show = (id, on) => { $(id).hidden = !on; };
+        const FACES = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'], COLS = ['#e5484d', '#30a46c', '#f5b800', '#3e63dd'];
+        let room = null, isHost = false, my = -1, hostId = '', V = null, G = null, phase = 'lobby', solo = null, nH = 1, names = [], T = 0, tEnd = 0, flash = '', recorded = false, built = '', opts = cleanOpts(Util.store.get('ludo_opts', null));
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const readNick = () => { const n = $('#nick').value.trim(); if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; } return n; };
+
+        // ---------- 設定 ----------
+        function readOpts() {
+            opts = cleanOpts({ need: +$('#need').value, triple: $('#triple').checked, stack: $('#stack').checked, bounce: $('#bounce').checked, timer: +$('#timer').value, total: +$('#total').value, lvl: +$('#lvl').value });
+            Util.store.set('ludo_opts', opts);
+        }
+        function showOpts() { $('#need').value = opts.need; $('#triple').checked = opts.triple; $('#stack').checked = opts.stack; $('#bounce').checked = opts.bounce; $('#timer').value = opts.timer; $('#total').value = opts.total; $('#lvl').value = opts.lvl; }
+
+        // ---------- 戰績 ----------
+        function showStats() {
+            const s = cleanStats(Util.store.get('ludo_stats', null));
+            $('#statsBox').innerHTML = s.games ? `共 ${s.games} 場，勝 ${s.wins} 場（${Math.round(s.wins * 100 / s.games)}%），擊落 ${s.caps} 次。<div class="recent">最近：${s.recent.slice().reverse().map(r => `${r.d.slice(5)} ${r.n} 人${r.w ? '勝' : '敗'}`).join('、')}</div>` : '還沒有紀錄（單機對電腦與連線會計入，同機輪流不計）。';
+        }
+        $('#clearStats').onclick = () => { if (!confirm('清除所有戰績（場數、勝場、擊落數與最近紀錄）？無法復原。')) return; try { localStorage.removeItem('ludo_stats'); } catch (e) { } showStats(); };
+        function record() {
+            if (recorded || !V || V.phase !== 'over' || my < 0 || (solo && solo.hot)) return;
+            recorded = true;
+            Util.store.set('ludo_stats', addResult(Util.store.get('ludo_stats', null), { d: Util.day.today(), n: V.names.length, w: V.winner === my, c: V.caps[my] || 0 }));
+            showStats();
+        }
+
+        // ---------- 房主 / 單機引擎（同一套） ----------
+        const isBot = (p) => p >= nH || (!!room && !(room.players[p] && room.players[p].connected));
+        function publicState() {
+            if (!G) return { phase: 'lobby', names: room ? room.players.map(p => p.nick) : [], active: room ? room.players.map(p => p.connected) : [], log: '' };
+            const human = G.turn < nH && !isBot(G.turn) && phase === 'play' && G.opts.timer > 0;
+            return { phase, names, active: names.map((_, p) => !isBot(p)), colors: G.colors, pos: G.pos, turn: G.turn, roll: G.roll, lastRoll: G.lastRoll, winner: G.winner, caps: G.caps, opts: G.opts, log: G.log, bots: names.map((_, p) => isBot(p)), tleft: human ? Math.max(0, Math.round((tEnd - Date.now()) / 1000)) : 0 };
+        }
+        function push() {
+            clearTimeout(T);
+            if (G && G.winner >= 0) phase = 'over';
+            if (G && phase === 'play' && !isBot(G.turn) && G.opts.timer > 0) tEnd = Date.now() + G.opts.timer * 1000;
+            V = publicState(); render();
+            if (room) room.broadcast({ t: 'STATE', s: V });
+            drive();
+        }
+        function drive() {
+            if (!G || phase !== 'play') return;
+            const p = G.turn;
+            if (isBot(p)) T = setTimeout(() => botAct(p, p >= nH ? G.opts.lvl : 1), 600 + Util.rnd(400));
+            else if (G.opts.timer > 0) T = setTimeout(() => botAct(p, 1), G.opts.timer * 1000);
+        }
+        const botAct = (p, lvl) => { if (G && phase === 'play' && p === G.turn) hostAct(p, cpuMove(G, p, lvl)); };
+        function hostAct(p, d) {
+            if (!G || phase !== 'play' || !d || typeof d !== 'object') return;
+            const ok = d.t === 'ROLL' ? rollDice(G, p, 1 + Util.rnd(6)) : d.t === 'MOVE' ? applyMove(G, p, d.i) : false;
+            if (ok) { flash = ''; push(); } else if (p === my || solo) { flash = '這步不行'; render(); } else if (room) room.sendTo(p, { t: 'ERR', msg: '這步不行' });
+        }
+        function begin(total, humans, nm) {
+            readOpts(); G = newGame(total, opts); nH = humans; names = nm; phase = 'play'; recorded = false; flash = ''; built = ''; push();
+        }
+        function startSolo(hot) {
+            readOpts(); solo = { hot }; isHost = true; my = 0; const n = opts.total;
+            begin(n, hot ? n : 1, Array.from({ length: n }, (_, i) => hot ? '玩家' + (i + 1) : i ? '電腦' + i : '玩家'));
+        }
+        function startOnline() {
+            readOpts(); room.keepSlots = true;
+            const hs = room.players.length, total = Math.max(hs, opts.total);
+            begin(total, hs, Array.from({ length: total }, (_, i) => i < hs ? room.players[i].nick : '電腦' + (i - hs + 1)));
+        }
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: 4,
+                onReady(r) { isHost = true; my = 0; hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id); push(); },
+                canJoin: (n) => phase === 'play' && !room.players.some(p => !p.connected && p.nick === n) ? '遊戲已經開始，只有斷線的玩家能用同暱稱回來' : null,
+                onJoin: () => push(), onLeave() { push(); },
+                onMessage(p, d) { hostAct(p.index, d); },
+                onError: onNetError,
+            });
+        }
+        function onNetError(err, message) { if (V || isHost) return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } }
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…'); hostId = id;
+            room = P2PRoom.join(id, {
+                nick,
+                onRoster(players, me) { my = me; if (!V) { V = { phase: 'lobby', names: players.map(p => p.nick), active: players.map(p => p.connected), log: '' }; render(); } },
+                onMessage(d) {
+                    if (!d || typeof d.t !== 'string') return;
+                    if (d.t === 'STATE' && validPublic(d.s)) { if (d.s.phase === 'play' && V && V.phase !== 'play') recorded = false; V = d.s; flash = ''; tEnd = Date.now() + d.s.tleft * 1000; render(); }
+                    else if (d.t === 'ERR' && typeof d.msg === 'string') { flash = d.msg.slice(0, 30); render(); }
+                },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (V) { alert('房主已離開'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+        // 玩家動作：房主 / 單機直接處理，成員送給房主
+        function act(d) { if (!room || isHost) hostAct(G && solo && solo.hot ? G.turn : my, d); else room.send(d); }
+        const mine = () => !!V && V.phase === 'play' && !V.bots[V.turn] && (solo && solo.hot ? true : V.turn === my);
+
+        // ---------- 畫面 ----------
+        const NS = 'http://www.w3.org/2000/svg';
+        function buildBoard() {
+            let h = '';
+            for (let c = 0; c < 4; c++) {
+                const o = BASE_ORG[c];
+                h += `<rect x="${o[0]}" y="${o[1]}" width="6" height="6" fill="${COLS[c]}" fill-opacity=".22" stroke="${COLS[c]}" stroke-width=".08"/>`;
+                for (let k = 0; k < 4; k++) { const [x, y] = cellXY(c, -1, k); h += `<circle cx="${x}" cy="${y}" r=".6" fill="var(--card)" stroke="${COLS[c]}" stroke-width=".06"/>`; }
+            }
+            RING.forEach(([x, y], a) => { const c = a % 13 === 0 ? a / 13 : -1; h += `<rect x="${x}" y="${y}" width="1" height="1" fill="${c >= 0 ? COLS[c] : 'var(--card)'}" fill-opacity="${c >= 0 ? .75 : 1}" stroke="var(--line)" stroke-width=".05"/>`; if (a % 13 === 8) h += `<text x="${x + .5}" y="${y + .5}" font-size=".7" text-anchor="middle" dominant-baseline="central" fill="var(--muted)">★</text>`; });
+            LANE.forEach((l, c) => l.forEach(([x, y]) => { h += `<rect x="${x}" y="${y}" width="1" height="1" fill="${COLS[c]}" fill-opacity=".45" stroke="var(--line)" stroke-width=".05"/>`; }));
+            h += `<polygon points="6,6 6,9 7.5,7.5" fill="${COLS[0]}"/><polygon points="6,6 9,6 7.5,7.5" fill="${COLS[1]}"/><polygon points="9,6 9,9 7.5,7.5" fill="${COLS[2]}"/><polygon points="6,9 9,9 7.5,7.5" fill="${COLS[3]}"/>`;
+            $('#board').innerHTML = h;
+        }
+        function buildPieces() {
+            const g = $('#board'); g.querySelectorAll('.pc').forEach(e => e.remove());
+            V.colors.forEach((c, q) => { for (let i = 0; i < 4; i++) {
+                const e = document.createElementNS(NS, 'g'); e.setAttribute('class', 'pc'); e.id = `pc${q}_${i}`;
+                e.innerHTML = `<circle class="body" r=".42" fill="${COLS[c]}" stroke="#fff" stroke-width=".07"/><text>${i + 1}</text><circle class="hit" r=".62" fill="transparent"/>`;
+                e.addEventListener('click', () => { if (e.classList.contains('can')) act({ t: 'MOVE', i }); });
+                g.appendChild(e);
+            } });
+            built = V.colors.join();
+        }
+        function render() {
+            if (!V) return;
+            if (V.phase === 'lobby') {
+                show('#menu', false); show('#lobby', true); show('#game', false); show('#statsCard', false);
+                $('#lobbyPlayers').replaceChildren(...V.names.map((x, i) => Object.assign(document.createElement('div'), { className: 'pl' + (V.active[i] ? '' : ' off'), textContent: x + (i === 0 ? ' 👑' : '') + (i === my ? '（我）' : '') })));
+                show('#copyInvite', isHost); show('#startBtn', isHost);
+                $('#startBtn').textContent = V.names.length >= opts.total ? '開始' : `開始（空位 ${opts.total - V.names.length} 個由電腦補）`;
+                $('#lobbyHint').textContent = isHost ? '把邀請連結傳給朋友；人到了就能開始，總人數與規則用首頁設定。' : '等待房主開始…'; return;
+            }
+            show('#menu', false); show('#lobby', false); show('#game', true); show('#statsCard', false);
+            if (!$('#board').firstChild) buildBoard();
+            if (built !== V.colors.join()) buildPieces();
+            const over = V.phase === 'over', myTurn = mine(), legal = myTurn && V.roll !== null ? legalMoves(V, V.turn) : [];
+            // 棋子位置（同格的飛機錯開）
+            const items = []; V.colors.forEach((c, q) => V.pos[q].forEach((p, i) => { const [x, y] = cellXY(c, p, i); items.push({ q, i, x, y, k: p === -1 ? '' : x + ',' + y }); }));
+            for (const it of items) {
+                const same = it.k ? items.filter(o => o.k === it.k) : [it], idx = same.indexOf(it), dx = (idx - (same.length - 1) / 2) * .28;
+                const e = document.getElementById(`pc${it.q}_${it.i}`);
+                e.style.transform = `translate(${it.x + dx}px,${it.y}px)`;
+                e.classList.toggle('can', myTurn && it.q === V.turn && legal.includes(it.i));
+                if (it.q === V.turn && legal.includes(it.i)) e.parentNode.appendChild(e);
+            }
+            $('#chips').replaceChildren(...V.names.map((nm, q) => { const fin = V.pos[q].filter(x => x === GOAL).length, home = V.pos[q].filter(x => x === -1).length;
+                return Object.assign(document.createElement('div'), { className: 'opp' + (q === V.turn && !over ? ' turn' : '') + (V.bots[q] ? ' off' : ''), innerHTML: `<span class="dotc" style="background:${COLS[V.colors[q]]}"></span> ${Util.esc(nm)}${q === my && !(solo && solo.hot) ? '（我）' : ''}${V.bots[q] ? ' 🤖' : ''}<span class="rl"> 基地${home}・終點${fin}</span>` }); }));
+            $('#pcBtns').replaceChildren(...legal.map(i => {
+                const np = destOf(V, V.turn, i, V.roll), cp = capList(V, V.turn, np).length, b = document.createElement('button');
+                b.textContent = `飛機 ${i + 1}：${V.pos[V.turn][i] === -1 ? '起飛' : np === GOAL ? '進終點' : '前進'}${cp ? '・擊落' : ''}`; b.onclick = () => act({ t: 'MOVE', i }); return b; }));
+            $('#die').disabled = !myTurn || V.roll !== null; $('#dieFace').textContent = V.lastRoll ? FACES[V.lastRoll] : '🎲';
+            show('#again', isHost && over); $('#die').hidden = over;
+            const who = V.names[V.turn] || '';
+            const left = V.tleft > 0 && !over ? `（剩 ${Math.max(0, Math.round((tEnd - Date.now()) / 1000))} 秒）` : '';
+            $('#status').textContent = flash || (over ? `🏆 ${V.names[V.winner]}${V.winner === my ? '（你）' : ''} 獲勝！（${V.log}）` : (myTurn ? (V.roll === null ? '輪到你擲骰' : '請選一架飛機') : `輪到 ${who}${V.bots[V.turn] ? '（電腦）' : ''}`) + left + (V.log ? `\n${V.log}` : ''));
+            $('#status').style.whiteSpace = 'pre-line';
+            record();
+        }
+        setInterval(() => { if (V && V.phase === 'play' && V.tleft > 0) render(); }, 1000);
+
+        $('#soloBtn').onclick = () => startSolo(false); $('#hotBtn').onclick = () => startSolo(true);
+        $('#hostBtn').onclick = () => { readOpts(); hostRoom(); }; $('#joinBtn').onclick = joinRoom; $('#startBtn').onclick = startOnline;
+        $('#die').onclick = () => act({ t: 'ROLL' });
+        $('#again').onclick = () => { if (solo) return startSolo(solo.hot); clearTimeout(T); phase = 'lobby'; G = null; room.keepSlots = false; room.prune(); built = ''; $('#board').replaceChildren(); push(); };
+        $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
+        $('#leave').onclick = $('#lobbyLeave').onclick = () => location.reload();
+        document.querySelectorAll('#menu select, #menu input[type=checkbox]').forEach(e => { e.onchange = readOpts; });
+        showOpts(); showStats();
+        if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+    </script>
+</body>
+
+</html>

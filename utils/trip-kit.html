@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="旅行行程：多趟行程規劃表（時間軸、預算、文字 / ICS 匯出）、停車位置記錄與計時費率試算、景點順序排序（最近鄰 + 2-opt，少量景點求精確最佳）。">
+    <meta property="og:title" content="旅行行程（規劃表 / 停車記錄 / 景點排序）" />
+    <meta property="og:description" content="行程時間軸與預算、記住停車位置與費用、景點最短路線排序。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/trip-kit.html" />
+    <meta name="st-keys" content="trip_plans,trip_parking">
+    <meta name="st-disclaimer" content="travel">
+    <title>旅行行程</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>旅行用的三個小工具：「行程」規劃多趟旅行的每日時間軸與預算；「停車」記住車停在哪、停多久、大約多少錢；「路線」把一堆景點排成較短的走訪順序。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>出發前排行程、算預算，分享給同行的人（複製文字或匯出 ICS 匯入手機行事曆）。</li>
+        <li>停在陌生的大停車場，怕回來找不到車或忘了計時。</li>
+        <li>一天想逛好幾個景點，不知道先去哪個比較順路。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>「行程」：先建立一趟旅行（名稱、日期範圍、幣別文字、ICS 時區），再選日期新增項目（時間、地點、交通、預算、備註）。每天依時間排序，顯示每日與整趟預算。可「複製行程單」或「匯出 ICS」。</li>
+        <li>「停車」：填樓層 / 區域 / 車位 / 備註；按「取得目前位置」會用瀏覽器定位並顯示精度（沒有定位就手動貼「緯度,經度」）；可選一張照片（會壓縮成小縮圖）。按「開始停車」後計時，並依費率估算費用；「導航回車」開地圖；「結束停車」會清除目前紀錄。</li>
+        <li>「路線」：每行貼「名稱,緯度,經度」（最多 15 個），選起點與是否回到起點，按「排序」。可把結果加到某趟行程的某一天。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">台北車站,25.0478,121.5170<br>台中車站,24.1369,120.6850<br>高雄車站,22.6394,120.3022<br>以台北為起點、不回起點：台北 → 台中 → 高雄，直線約 135 + 約 150 公里。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>路線距離是「直線距離」（Haversine），沒有考慮實際路況與營業時間，僅供參考；景點在 9 個以內會算出精確最短，超過則用較快的近似法（最近鄰 + 2-opt），結果不一定是最短。</li>
+        <li>停車費率試算是簡化模型：停車時間在免費分鐘內免費；超過後每小時（不足一小時以一小時計）收費，每個 24 小時有上限（填 0 代表不設上限）。實際收費以停車場為準。</li>
+        <li>資料存在這台裝置：行程最多 20 趟、每趟最多 300 個項目、每筆文字 ≤ 200 字，滿了要先刪除才能新增；可單筆刪除項目 / 整趟旅行，或「清除全部行程」。</li>
+        <li>停車只保留「目前一筆」加「最近 10 筆歷史」，歷史超過 10 筆時會自動淘汰最舊的（歷史不含照片）；可單筆刪除歷史、清除歷史或清除全部停車資料。照片只存壓縮後 ≤ 60KB 的縮圖，壓不到就拒絕並提示。</li>
+        <li>定位需要你按按鈕並同意瀏覽器授權，精度可能有數十公尺以上誤差，室內與地下停車場常常不準。ICS 時間依你選的時區換算；以上都存在本機，載入時會驗證，壞資料自動忽略。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <style>
+        :root { --wrap-w: 720px; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+        .row label { color: var(--muted); font-size: 14px; }
+        .row input[type=text], .row input[type=number], .row select { flex: 1 1 120px; min-width: 0; }
+        .row textarea { width: 100%; box-sizing: border-box; }
+        .big { font-size: 22px; font-weight: 700; }
+        .tag { color: var(--muted); font-size: 13px; }
+        .day { margin-top: 12px; }
+        .day h3 { margin: 0 0 4px; font-size: 16px; }
+        .it { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--line); }
+        .it .t { min-width: 48px; color: var(--muted); font-variant-numeric: tabular-nums; }
+        .it .b { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+        .it small { display: block; color: var(--muted); }
+        .photo { max-width: 100%; max-height: 220px; border-radius: var(--radius-sm); border: 1px solid var(--line); }
+        a.btnlink { display: inline-block; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--btn-radius, var(--radius-sm)); color: var(--text); text-decoration: none; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>旅行行程</h1>
+        <p class="sub">行程規劃、停車位置記錄、景點順序排序。距離為直線距離、費用為估算，僅供參考。</p>
+
+        <div class="card">
+            <div class="tabs" role="tablist">
+                <button data-t="plan" aria-pressed="true">行程</button>
+                <button data-t="park" aria-pressed="false">停車</button>
+                <button data-t="route" aria-pressed="false">路線</button>
+            </div>
+
+            <!-- ===== 行程 ===== -->
+            <div class="pane" data-t="plan">
+                <div class="row"><select id="tripSel" aria-label="選擇旅行"></select><button class="sm" id="tripDel">刪除此趟</button><button class="sm" id="tripAll">清除全部行程</button></div>
+                <details id="newTrip">
+                    <summary>新增一趟旅行（<span id="tripN">0</span>/20）</summary>
+                    <div class="row"><input type="text" id="tName" maxlength="40" placeholder="旅行名稱" aria-label="旅行名稱"></div>
+                    <div class="row"><input type="date" id="tStart" aria-label="開始日期"><input type="date" id="tEnd" aria-label="結束日期"></div>
+                    <div class="row"><input type="text" id="tCur" maxlength="8" value="NT$" aria-label="幣別文字"><button class="primary" id="tAdd">建立</button></div>
+                </details>
+                <div id="planBody"></div>
+            </div>
+
+            <!-- ===== 停車 ===== -->
+            <div class="pane" data-t="park" hidden>
+                <div id="parkBody"></div>
+            </div>
+
+            <!-- ===== 路線 ===== -->
+            <div class="pane" data-t="route" hidden>
+                <div class="row"><textarea id="rIn" rows="6" placeholder="名稱,緯度,經度（每行一個，最多 15 個）" aria-label="景點清單"></textarea></div>
+                <div class="row"><button class="sm" id="rEg">填入範例</button><span class="tag" id="rInfo"></span></div>
+                <div class="row"><label for="rStart">起點</label><select id="rStart"></select><label><input type="checkbox" id="rBack"> 回到起點</label></div>
+                <div class="row"><button class="primary" id="rGo">排序</button></div>
+                <div id="rOut"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (() => {
+        // --- pure ---
+        const MAX_TRIPS = 20, MAX_ITEMS = 300, MAX_TXT = 200, MAX_SPAN = 60, MAX_HIST = 10, MAX_PHOTO = 60000, MAX_PTS = 15, EXACT_N = 9;
+        const MODES = ['步行', '捷運 / 火車', '公車', '開車', '機車 / 腳踏車', '飛機', '船', '其他'];
+        const str = (v, n) => (typeof v === 'string' ? v : '').slice(0, n);
+        const num = (v, lo, hi, d) => { v = typeof v === 'number' ? v : (typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN); return Number.isFinite(v) && v >= lo && v <= hi ? v : d; };
+        const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        const validDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(s + 'T00:00:00Z').toISOString().slice(0, 10) === s;
+        const validTime = (s) => typeof s === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+        const dayList = (a, b) => {
+            if (!validDate(a) || !validDate(b) || b < a) return [];
+            const out = []; let t = Date.parse(a + 'T00:00:00Z');
+            while (out.length <= MAX_SPAN) { const s = new Date(t).toISOString().slice(0, 10); out.push(s); if (s >= b) break; t += 864e5; }
+            return out.length > MAX_SPAN ? [] : out;
+        };
+        const WD = ['日', '一', '二', '三', '四', '五', '六'];
+        const wday = (s) => WD[new Date(s + 'T00:00:00Z').getUTCDay()];
+
+        // 行程資料驗證（還原 / 壞資料都走這裡）
+        const cleanItem = (r) => {
+            if (!r || typeof r !== 'object') return null;
+            if (!validDate(r.date)) return null;
+            const place = str(r.place, MAX_TXT).trim();
+            if (!place) return null;
+            return { id: str(r.id, 40) || uid(), date: r.date, time: validTime(r.time) ? r.time : '', place, note: str(r.note, MAX_TXT), mode: MODES.includes(r.mode) ? r.mode : '', cost: num(r.cost, 0, 1e9, 0) };
+        };
+        const cleanTrips = (raw) => {
+            if (!Array.isArray(raw)) return [];
+            const out = [];
+            for (const r of raw) {
+                if (out.length >= MAX_TRIPS) break;
+                if (!r || typeof r !== 'object' || !dayList(r.start, r.end).length) continue;
+                const items = (Array.isArray(r.items) ? r.items : []).map(cleanItem).filter(Boolean).slice(0, MAX_ITEMS);
+                out.push({ id: str(r.id, 40) || uid(), name: str(r.name, 40).trim() || '旅行', start: r.start, end: r.end, cur: str(r.cur, 8), tz: num(r.tz, -12, 14, 8), items });
+            }
+            return out;
+        };
+        const sortItems = (items) => items.map((x, i) => [x, i]).sort((a, b) => (a[0].date < b[0].date ? -1 : a[0].date > b[0].date ? 1 : a[0].time < b[0].time ? -1 : a[0].time > b[0].time ? 1 : a[1] - b[1])).map(p => p[0]);
+        const budget = (trip) => {
+            const byDay = {}; let total = 0;
+            for (const it of trip.items) { byDay[it.date] = (byDay[it.date] || 0) + it.cost; total += it.cost; }
+            return { byDay, total };
+        };
+        const money = (n) => (Math.round(n * 100) / 100).toLocaleString('en-US');
+        const tripText = (trip) => {
+            const b = budget(trip), c = trip.cur ? trip.cur + ' ' : '';
+            const L = [`【${trip.name}】${trip.start}～${trip.end}`];
+            for (const d of dayList(trip.start, trip.end)) {
+                const its = sortItems(trip.items.filter(x => x.date === d));
+                if (!its.length) continue;
+                L.push('', `${d}（${wday(d)}）` + (b.byDay[d] ? `　小計 ${c}${money(b.byDay[d])}` : ''));
+                for (const it of its) L.push(`  ${it.time || '全天'}　${it.place}` + (it.mode ? `（${it.mode}）` : '') + (it.cost ? `　${c}${money(it.cost)}` : '') + (it.note ? `　${it.note}` : ''));
+            }
+            L.push('', `預算合計：${c}${money(b.total)}`);
+            return L.join('\n');
+        };
+
+        // ICS：跳脫反斜線 / 分號 / 逗號 / 換行
+        const icsEsc = (s) => String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r\n|\r|\n/g, '\\n');
+        const icsFold = (line) => (line.match(/[\s\S]{1,70}/gu) || ['']).join('\r\n ');
+        const icsUtc = (date, time, tz, plusMin = 0) => {
+            const [y, m, d] = date.split('-').map(Number), [hh, mm] = time.split(':').map(Number);
+            return new Date(Date.UTC(y, m - 1, d, hh, mm) - tz * 3600e3 + plusMin * 60e3).toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+        };
+        const icsBuild = (trip, tz, now) => {
+            const stamp = new Date(now).toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+            const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//simple_tools//trip-kit//ZH', 'CALSCALE:GREGORIAN'];
+            for (const it of sortItems(trip.items)) {
+                L.push('BEGIN:VEVENT', `UID:${it.id}@trip-kit`, `DTSTAMP:${stamp}`);
+                if (it.time) L.push(`DTSTART:${icsUtc(it.date, it.time, tz)}`, `DTEND:${icsUtc(it.date, it.time, tz, 60)}`);
+                else L.push(`DTSTART;VALUE=DATE:${it.date.replace(/-/g, '')}`, `DTEND;VALUE=DATE:${new Date(Date.parse(it.date + 'T00:00:00Z') + 864e5).toISOString().slice(0, 10).replace(/-/g, '')}`);
+                L.push('SUMMARY:' + icsEsc(it.place));
+                const desc = [it.mode, it.cost ? `${trip.cur}${it.cost}` : '', it.note].filter(Boolean).join('\n');
+                if (desc) L.push('DESCRIPTION:' + icsEsc(desc));
+                L.push('END:VEVENT');
+            }
+            L.push('END:VCALENDAR');
+            return L.map(icsFold).join('\r\n') + '\r\n';
+        };
+
+        // 停車
+        const parkFee = (mins, { rate = 0, cap = 0, free = 0 } = {}) => {
+            if (!(mins > 0) || mins <= free) return 0;
+            const full = cap > 0 ? cap : 24 * rate;
+            const days = Math.floor(mins / 1440), rem = mins - days * 1440;
+            let f = Math.ceil(rem / 60) * rate; if (cap > 0) f = Math.min(f, cap);
+            return days * full + f;
+        };
+        const fmtDur = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 3600)} 小時 ${Math.floor(s % 3600 / 60)} 分 ${s % 60} 秒`; };
+        const okPhoto = (p) => typeof p === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(p) && p.length <= MAX_PHOTO;
+        const cleanSpot = (r, withPhoto) => {
+            if (!r || typeof r !== 'object' || !(r.t > 0) || !Number.isFinite(r.t)) return null;
+            const lat = num(r.lat, -90, 90, null), lng = num(r.lng, -180, 180, null), ok = lat !== null && lng !== null;
+            const o = { id: str(r.id, 40) || uid(), floor: str(r.floor, 40), zone: str(r.zone, 40), slot: str(r.slot, 40), note: str(r.note, MAX_TXT), lat: ok ? lat : null, lng: ok ? lng : null, acc: num(r.acc, 0, 1e6, null), t: r.t };
+            if (withPhoto) o.photo = okPhoto(r.photo) ? r.photo : '';
+            else { o.end = num(r.end, o.t, 1e15, o.t); o.fee = num(r.fee, 0, 1e9, 0); }
+            return o;
+        };
+        const cleanPark = (raw) => {
+            const r = raw && typeof raw === 'object' ? raw : {}, c = r.cfg && typeof r.cfg === 'object' ? r.cfg : {};
+            return {
+                cur: cleanSpot(r.cur, true),
+                hist: (Array.isArray(r.hist) ? r.hist : []).map(x => cleanSpot(x, false)).filter(Boolean).slice(0, MAX_HIST),
+                cfg: { rate: num(c.rate, 0, 1e5, 30), cap: num(c.cap, 0, 1e6, 0), free: num(c.free, 0, 1440, 0) },
+            };
+        };
+        const parseLatLng = (s) => {
+            const m = String(s).trim().match(/^(-?\d+(?:\.\d+)?)\s*[,，\s]\s*(-?\d+(?:\.\d+)?)$/);
+            if (!m) return null;
+            const lat = +m[1], lng = +m[2];
+            return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 ? { lat, lng } : null;
+        };
+        const mapUrl = (lat, lng) => `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+
+        // 路線
+        const hav = (a, b) => {
+            const R = 6371.0088, r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
+            const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) ** 2;
+            return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+        };
+        const parsePts = (text) => {
+            const pts = [], bad = [];
+            for (const raw of String(text).split(/\r?\n/)) {
+                const line = raw.trim(); if (!line) continue;
+                const p = line.split(/\s*[,，\t]\s*/);
+                const lat = Number(p[p.length - 2]), lng = Number(p[p.length - 1]), name = p.slice(0, -2).join(',').trim().slice(0, 40);
+                if (p.length < 3 || !name || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || p[p.length - 2] === '' || p[p.length - 1] === '') { bad.push(line); continue; }
+                if (pts.length < MAX_PTS) pts.push({ name, lat, lng }); else bad.push(line);
+            }
+            return { pts, bad };
+        };
+        const pathLen = (order, D, back) => {
+            let s = 0; for (let i = 1; i < order.length; i++) s += D[order[i - 1]][order[i]];
+            return back && order.length > 1 ? s + D[order[order.length - 1]][order[0]] : s;
+        };
+        const tspHeur = (D, back) => {
+            const n = D.length, seen = new Set([0]); let order = [0];
+            while (order.length < n) {
+                const last = order[order.length - 1]; let b = -1;
+                for (let j = 0; j < n; j++) if (!seen.has(j) && (b < 0 || D[last][j] < D[last][b])) b = j;
+                seen.add(b); order.push(b);
+            }
+            let best = pathLen(order, D, back), improved = true;
+            while (improved) {
+                improved = false;
+                for (let i = 1; i < n - 1; i++) for (let j = i + 1; j < n; j++) {
+                    const c = order.slice(0, i).concat(order.slice(i, j + 1).reverse(), order.slice(j + 1)), l = pathLen(c, D, back);
+                    if (l < best - 1e-9) { order = c; best = l; improved = true; }
+                }
+            }
+            return order;
+        };
+        const tspExact = (D, back) => {  // 分支限界；起點固定在 0，n ≤ 9 約數萬種順序
+            const n = D.length; let best = Infinity, bo = [0];
+            const go = (order, used, len) => {
+                if (len >= best) return;
+                if (order.length === n) { const t = back ? len + D[order[n - 1]][0] : len; if (t < best) { best = t; bo = order.slice(); } return; }
+                const last = order[order.length - 1];
+                for (let j = 1; j < n; j++) if (!(used & (1 << j))) { order.push(j); go(order, used | (1 << j), len + D[last][j]); order.pop(); }
+            };
+            go([0], 1, 0);
+            return bo;
+        };
+        // pts[0] 為起點；回傳依序的景點索引、各段距離與總距離
+        const solveRoute = (pts, back) => {
+            const D = pts.map(a => pts.map(b => hav(a, b))), exact = pts.length <= EXACT_N;
+            const order = pts.length < 3 ? pts.map((_, i) => i) : exact ? tspExact(D, back) : tspHeur(D, back);
+            const legs = []; for (let i = 1; i < order.length; i++) legs.push(D[order[i - 1]][order[i]]);
+            if (back && order.length > 1) legs.push(D[order[order.length - 1]][order[0]]);
+            return { order, legs, total: legs.reduce((a, b) => a + b, 0), exact, D };
+        };
+        // --- /pure ---
+
+        const $ = (id) => document.getElementById(id), esc = Util.esc, store = Util.store;
+        let trips = cleanTrips(store.get('trip_plans', [])), sel = trips[0] ? trips[0].id : '';
+        let park = cleanPark(store.get('trip_parking', null)), timer = 0, routeRes = null;
+        const saveTrips = () => store.set('trip_plans', trips);
+        const savePark = () => store.set('trip_parking', park);
+        const curTrip = () => trips.find(t => t.id === sel) || null;
+
+        // ---- 分頁 ----
+        document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+            document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-pressed', x === b));
+            document.querySelectorAll('.pane').forEach(p => p.hidden = p.dataset.t !== b.dataset.t);
+            clearInterval(timer); if (b.dataset.t === 'park') { renderPark(); }
+        });
+
+        // ---- 行程 ----
+        function renderPlan() {
+            $('tripN').textContent = trips.length;
+            $('tripSel').innerHTML = trips.map(t => `<option value="${esc(t.id)}"${t.id === sel ? ' selected' : ''}>${esc(t.name)}（${t.start}～${t.end}）</option>`).join('') || '<option value="">（尚無旅行）</option>';
+            $('tripDel').disabled = !trips.length; $('tripAll').disabled = !trips.length;
+            const t = curTrip(), body = $('planBody');
+            if (!t) { body.innerHTML = '<p class="tag">先在上方「新增一趟旅行」建立行程。</p>'; return; }
+            const days = dayList(t.start, t.end), b = budget(t), c = t.cur ? t.cur + ' ' : '';
+            const tzOpts = [8, 9, 7, 0, 1, 10, -5, -8].map(z => `<option value="${z}"${z === t.tz ? ' selected' : ''}>UTC${z >= 0 ? '+' : ''}${z}</option>`).join('');
+            let h = `<h2>新增項目（${t.items.length}/${MAX_ITEMS}）</h2>
+              <div class="row"><select id="iDate" aria-label="日期">${days.map(d => `<option value="${d}">${d}（${wday(d)}）</option>`).join('')}</select><input type="time" id="iTime" aria-label="時間"></div>
+              <div class="row"><input type="text" id="iPlace" maxlength="${MAX_TXT}" placeholder="地點 / 事項" aria-label="地點"><select id="iMode" aria-label="交通方式"><option value="">交通（選填）</option>${MODES.map(m => `<option>${m}</option>`).join('')}</select></div>
+              <div class="row"><input type="number" id="iCost" min="0" step="any" inputmode="decimal" placeholder="預算金額" aria-label="預算"><input type="text" id="iNote" maxlength="${MAX_TXT}" placeholder="備註" aria-label="備註"></div>
+              <div class="row"><button class="primary" id="iAdd">加入</button></div>
+              <div class="big">預算合計 ${esc(c)}${money(b.total)}</div>`;
+            for (const d of days) {
+                const its = sortItems(t.items.filter(x => x.date === d));
+                h += `<div class="day"><h3>${d}（${wday(d)}）${b.byDay[d] ? `<span class="tag">　小計 ${esc(c)}${money(b.byDay[d])}</span>` : ''}</h3>` +
+                    (its.map(it => `<div class="it"><span class="t">${it.time || '全天'}</span><span class="b">${esc(it.place)}${it.mode ? ` <span class="tag">${esc(it.mode)}</span>` : ''}${it.cost ? ` <b>${esc(c)}${money(it.cost)}</b>` : ''}${it.note ? `<small>${esc(it.note)}</small>` : ''}</span><button class="sm" data-del="${esc(it.id)}" aria-label="刪除">刪</button></div>`).join('') || '<div class="tag">（空）</div>') + '</div>';
+            }
+            h += `<div class="row" style="margin-top:14px"><button class="sm" id="pCopy">複製行程單</button><select id="pTz" aria-label="ICS 時區">${tzOpts}</select><button class="sm" id="pIcs">匯出 ICS</button></div>`;
+            body.innerHTML = h;
+            $('iAdd').onclick = addItem;
+            $('pCopy').onclick = (e) => Util.copyWithFeedback(e.target, tripText(t));
+            $('pIcs').onclick = () => {
+                t.tz = Number($('pTz').value); saveTrips();
+                if (!t.items.length) return alert('這趟還沒有項目');
+                Util.download(new Blob([icsBuild(t, t.tz, Date.now())], { type: 'text/calendar' }), t.name.replace(/[\\/:*?"<>|]/g, '_') + '.ics');
+            };
+            body.querySelectorAll('[data-del]').forEach(x => x.onclick = () => { t.items = t.items.filter(i => i.id !== x.dataset.del); saveTrips(); renderPlan(); });
+        }
+        function addItem() {
+            const t = curTrip(); if (!t) return;
+            if (t.items.length >= MAX_ITEMS) return alert(`這趟已達 ${MAX_ITEMS} 個項目上限，請先刪除一些`);
+            const it = cleanItem({ id: uid(), date: $('iDate').value, time: $('iTime').value, place: $('iPlace').value, note: $('iNote').value, mode: $('iMode').value, cost: $('iCost').value });
+            if (!it) return alert('請填地點（日期要在旅行範圍內）');
+            t.items.push(it); saveTrips(); renderPlan();
+        }
+        $('tripSel').onchange = () => { sel = $('tripSel').value; renderPlan(); };
+        $('tAdd').onclick = () => {
+            if (trips.length >= MAX_TRIPS) return alert(`最多 ${MAX_TRIPS} 趟旅行，請先刪除舊的`);
+            const t = cleanTrips([{ id: uid(), name: $('tName').value, start: $('tStart').value, end: $('tEnd').value, cur: $('tCur').value, tz: 8, items: [] }])[0];
+            if (!t) return alert(`請選擇正確的日期範圍（結束不早於開始，最長 ${MAX_SPAN} 天）`);
+            trips.push(t); sel = t.id; saveTrips(); $('tName').value = ''; $('newTrip').open = false; renderPlan(); renderRouteTrips();
+        };
+        $('tripDel').onclick = () => {
+            const t = curTrip(); if (!t || !confirm(`刪除「${t.name}」與其 ${t.items.length} 個項目？無法復原。`)) return;
+            trips = trips.filter(x => x !== t); sel = trips[0] ? trips[0].id : ''; saveTrips(); renderPlan(); renderRouteTrips();
+        };
+        $('tripAll').onclick = () => {
+            if (!confirm('清除全部旅行與行程項目？無法復原（不會動到停車資料）。')) return;
+            trips = []; sel = ''; saveTrips(); renderPlan(); renderRouteTrips();
+        };
+
+        // ---- 停車 ----
+        function compress(file) {  // 縮成 JPEG 縮圖，目標 ≤ 60KB；失敗回傳 null
+            return new Promise((res) => {
+                const img = new Image(), url = URL.createObjectURL(file);
+                img.onerror = () => { URL.revokeObjectURL(url); res(null); };
+                img.onload = () => {
+                    URL.revokeObjectURL(url);
+                    for (let side = 480; side >= 160; side -= 80) {
+                        const k = Math.min(1, side / Math.max(img.width, img.height)), c = document.createElement('canvas');
+                        c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+                        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+                        for (const q of [0.7, 0.5, 0.35]) { const u = c.toDataURL('image/jpeg', q); if (okPhoto(u)) return res(u); }
+                    }
+                    res(null);
+                };
+                img.src = url;
+            });
+        }
+        let draft = { photo: '', lat: null, lng: null, acc: null };
+        function renderPark() {
+            clearInterval(timer);
+            const b = $('parkBody'), cf = park.cfg;
+            const cfgHtml = `<h2>費率試算</h2><div class="row"><label for="cRate">每小時</label><input type="number" id="cRate" min="0" step="any" inputmode="decimal" value="${cf.rate}"><label for="cCap">每日上限</label><input type="number" id="cCap" min="0" step="any" inputmode="decimal" value="${cf.cap}"><label for="cFree">免費分鐘</label><input type="number" id="cFree" min="0" max="1440" value="${cf.free}"></div><div class="tag">不足一小時以一小時計；上限 0 = 不設；停車時間在免費分鐘內不收費。</div>`;
+            const hist = park.hist.map(h => `<div class="it"><span class="b">${esc([h.floor, h.zone, h.slot].filter(Boolean).join(' ') || '（未填位置）')}<small>${new Date(h.t).toLocaleString()} → 停 ${Math.round((h.end - h.t) / 60000)} 分，估 ${money(h.fee)}${h.note ? '　' + esc(h.note) : ''}</small></span><button class="sm" data-hdel="${esc(h.id)}" aria-label="刪除">刪</button></div>`).join('');
+            const histBlock = `<h2>歷史（最近 ${MAX_HIST} 筆，超過會淘汰最舊的）</h2>${hist || '<div class="tag">（沒有）</div>'}<div class="row" style="margin-top:8px"><button class="sm" id="hClear">清除歷史</button><button class="sm" id="pAll">清除全部停車資料</button></div>`;
+            const c = park.cur;
+            if (c) {
+                const loc = c.lat !== null ? `<div class="tag">座標 ${c.lat}, ${c.lng}${c.acc !== null ? `（精度約 ±${Math.round(c.acc)} 公尺）` : '（手動輸入）'}</div><div class="row"><a class="btnlink" target="_blank" rel="noopener" href="${mapUrl(c.lat, c.lng)}">Google 地圖導航回車</a><a class="btnlink" href="geo:${c.lat},${c.lng}?q=${c.lat},${c.lng}">用地圖 App 開啟</a></div>` : '<div class="tag">沒有座標，無法導航。</div>';
+                b.innerHTML = `<div class="big">${esc([c.floor, c.zone, c.slot].filter(Boolean).join(' ') || '已記錄停車')}</div>${c.note ? `<div>${esc(c.note)}</div>` : ''}
+                  <div class="tag">開始 ${new Date(c.t).toLocaleString()}</div><div class="big" id="elapsed"></div><div id="feeNow"></div>${loc}
+                  ${c.photo ? `<img class="photo" alt="停車照片" src="${c.photo}">` : ''}
+                  <div class="row" style="margin-top:10px"><button class="primary" id="pEnd">結束停車（清除目前紀錄）</button></div>${cfgHtml}${histBlock}`;
+                const tick = () => { const m = (Date.now() - c.t) / 60000; $('elapsed').textContent = fmtDur(Date.now() - c.t); $('feeNow').textContent = `估算費用：${money(parkFee(m, park.cfg))}`; };
+                tick(); timer = setInterval(tick, 1000);
+                $('pEnd').onclick = () => {
+                    if (!confirm('結束停車？目前這筆（含照片）會被清除，只在歷史留下簡要紀錄。')) return;
+                    const end = Date.now(), { photo, ...rest } = c;
+                    park.hist.unshift({ ...rest, end, fee: parkFee((end - c.t) / 60000, park.cfg) }); park.hist = park.hist.slice(0, MAX_HIST); park.cur = null; savePark(); renderPark();
+                };
+            } else {
+                b.innerHTML = `<h2>記住停車位置</h2>
+                  <div class="row"><input type="text" id="pFloor" maxlength="40" placeholder="樓層（B2）" aria-label="樓層"><input type="text" id="pZone" maxlength="40" placeholder="區域（C 區）" aria-label="區域"><input type="text" id="pSlot" maxlength="40" placeholder="車位號碼" aria-label="車位"></div>
+                  <div class="row"><input type="text" id="pNote" maxlength="${MAX_TXT}" placeholder="備註" aria-label="備註"></div>
+                  <div class="row"><button class="sm" id="pGeo">取得目前位置</button><input type="text" id="pLL" placeholder="或貼「緯度,經度」" aria-label="經緯度"></div><div class="tag" id="pGeoMsg"></div>
+                  <div class="row"><label for="pPhoto">照片（選填，壓縮成 ≤ 60KB 縮圖）</label><input type="file" id="pPhoto" accept="image/*"></div><div class="tag" id="pPhotoMsg"></div>
+                  <div class="row"><button class="primary" id="pStart">開始停車</button></div>${cfgHtml}${histBlock}`;
+                draft = { photo: '', lat: null, lng: null, acc: null };
+                $('pGeo').onclick = () => {
+                    if (!navigator.geolocation) { $('pGeoMsg').textContent = '這個瀏覽器不支援定位，請手動貼經緯度。'; return; }
+                    $('pGeoMsg').textContent = '定位中…';
+                    navigator.geolocation.getCurrentPosition(p => {
+                        draft.lat = +p.coords.latitude.toFixed(6); draft.lng = +p.coords.longitude.toFixed(6); draft.acc = p.coords.accuracy;
+                        $('pLL').value = draft.lat + ',' + draft.lng; $('pGeoMsg').textContent = `已取得，精度約 ±${Math.round(p.coords.accuracy)} 公尺（室內 / 地下常不準）`;
+                    }, e => { $('pGeoMsg').textContent = '無法定位（' + (e.code === 1 ? '未授權' : '訊號或逾時') + '），請手動貼經緯度。'; }, { enableHighAccuracy: true, timeout: 15000 });
+                };
+                $('pPhoto').onchange = async () => {
+                    const f = $('pPhoto').files[0]; draft.photo = ''; if (!f) { $('pPhotoMsg').textContent = ''; return; }
+                    const u = await compress(f);
+                    if (u) { draft.photo = u; $('pPhotoMsg').textContent = `縮圖約 ${Math.round(u.length / 1024)}KB，已就緒`; }
+                    else { $('pPhoto').value = ''; $('pPhotoMsg').textContent = '照片壓縮後仍超過 60KB 或無法讀取，已拒絕；請改拍位置標示牌或不附照片。'; }
+                };
+                $('pStart').onclick = () => {
+                    let { lat, lng, acc } = draft; const ll = $('pLL').value.trim();
+                    if (ll) { const p = parseLatLng(ll); if (!p) return alert('經緯度格式要像 25.0478,121.5170'); if (p.lat !== lat || p.lng !== lng) acc = null; lat = p.lat; lng = p.lng; }
+                    const s = cleanSpot({ id: uid(), floor: $('pFloor').value, zone: $('pZone').value, slot: $('pSlot').value, note: $('pNote').value, lat, lng, acc, t: Date.now(), photo: draft.photo }, true);
+                    park.cur = s; if (!savePark()) { park.cur = null; return alert('儲存失敗（空間不足？）；可先不附照片或清除歷史再試。'); } renderPark();
+                };
+            }
+            const cfgSave = () => { park.cfg = cleanPark({ cfg: { rate: $('cRate').value, cap: $('cCap').value, free: $('cFree').value } }).cfg; savePark(); };
+            ['cRate', 'cCap', 'cFree'].forEach(i => $(i).onchange = () => { cfgSave(); if (park.cur) renderPark(); });
+            b.querySelectorAll('[data-hdel]').forEach(x => x.onclick = () => { park.hist = park.hist.filter(h => h.id !== x.dataset.hdel); savePark(); renderPark(); });
+            $('hClear').onclick = () => { if (confirm('清除全部停車歷史？無法復原。')) { park.hist = []; savePark(); renderPark(); } };
+            $('pAll').onclick = () => { if (confirm('清除全部停車資料（目前停車、歷史、費率設定）？無法復原。')) { park = cleanPark(null); savePark(); renderPark(); } };
+        }
+
+        // ---- 路線 ----
+        const EG = '台北車站,25.0478,121.5170\n台中車站,24.1369,120.6850\n高雄車站,22.6394,120.3022\n新竹車站,24.8016,120.9715\n嘉義車站,23.4789,120.4412';
+        function syncPts() {
+            const { pts, bad } = parsePts($('rIn').value), cur = $('rStart').value;
+            $('rInfo').textContent = `${pts.length} 個景點` + (bad.length ? `，${bad.length} 行無法解析或超過 ${MAX_PTS} 個` : '');
+            $('rStart').innerHTML = pts.map((p, i) => `<option value="${i}"${String(i) === cur ? ' selected' : ''}>${esc(p.name)}</option>`).join('');
+            return pts;
+        }
+        $('rIn').oninput = syncPts; $('rEg').onclick = () => { $('rIn').value = EG; syncPts(); };
+        $('rGo').onclick = () => {
+            const pts = syncPts(); if (pts.length < 2) { $('rOut').innerHTML = '<p class="tag">至少要 2 個景點。</p>'; return; }
+            const s = Number($('rStart').value) || 0, ps = [pts[s], ...pts.filter((_, i) => i !== s)], back = $('rBack').checked;
+            const r = solveRoute(ps, back), names = r.order.map(i => ps[i].name);
+            routeRes = { names, legs: r.legs, back };
+            const text = names.map((n, i) => `${i + 1}. ${n}` + (r.legs[i] != null && (i < names.length - 1 || back) ? `　→ ${r.legs[i].toFixed(1)} km` : '')).join('\n') + `\n總距離約 ${r.total.toFixed(1)} 公里（直線）`;
+            routeRes.text = text;
+            $('rOut').innerHTML = `<div class="big">總距離約 ${r.total.toFixed(1)} 公里</div><div class="tag">${r.exact ? '精確最短（景點 ≤ 9）' : '近似解（最近鄰 + 2-opt，不一定最短）'}；直線距離，未考慮實際路況。</div>` +
+                names.map((n, i) => `<div class="it"><span class="t">${i + 1}</span><span class="b">${esc(n)}${r.legs[i] != null && (i < names.length - 1 || back) ? `<small>→ ${i < names.length - 1 ? esc(names[i + 1]) : '回到 ' + esc(names[0])}：${r.legs[i].toFixed(1)} km</small>` : ''}</span></div>`).join('') +
+                `<div class="row" style="margin-top:10px"><button class="sm" id="rCopy">複製結果</button></div><h2>加入行程</h2><div class="row"><select id="rTrip" aria-label="旅行"></select><select id="rDay" aria-label="日期"></select><button class="sm" id="rAddT">加入</button></div>`;
+            $('rCopy').onclick = (e) => Util.copyWithFeedback(e.target, text);
+            renderRouteTrips();
+            $('rTrip').onchange = fillDays;
+            $('rAddT').onclick = () => {
+                const t = trips.find(x => x.id === $('rTrip').value); if (!t) return alert('先在「行程」分頁建立一趟旅行');
+                if (t.items.length + names.length > MAX_ITEMS) return alert(`會超過每趟 ${MAX_ITEMS} 個項目上限`);
+                names.forEach((n, i) => { const it = cleanItem({ id: uid(), date: $('rDay').value, place: n, note: r.legs[i] != null && i < names.length - 1 ? `下一站 ${r.legs[i].toFixed(1)} km（直線）` : '' }); if (it) t.items.push(it); });
+                sel = t.id; saveTrips(); renderPlan(); alert('已加入（沒有時間的項目會排在當天最前面）');
+            };
+        };
+        function fillDays() { const t = trips.find(x => x.id === ($('rTrip') || {}).value); if ($('rDay')) $('rDay').innerHTML = t ? dayList(t.start, t.end).map(d => `<option value="${d}">${d}</option>`).join('') : ''; }
+        function renderRouteTrips() { if (!$('rTrip')) return; $('rTrip').innerHTML = trips.map(t => `<option value="${esc(t.id)}"${t.id === sel ? ' selected' : ''}>${esc(t.name)}</option>`).join(''); fillDays(); }
+
+        renderPlan();
+        window.addEventListener('pagehide', () => clearInterval(timer));
+    })();
+    </script>
+</body>
+
+</html>

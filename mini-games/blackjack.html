@@ -10,6 +10,7 @@
     <meta property="og:description" content="多人一起對莊家的 21 點，籌碼累計。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/blackjack.html" />
+    <meta name="st-keys" content="blackjack_drill">
     <title>21 點</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -40,13 +41,20 @@
         <li>前兩張就是 21（A + 10 點牌）是 Blackjack，賠 1.5 倍；莊家也 Blackjack 則平手。</li>
         <li>加倍：只能在前兩張牌、且籌碼夠兩倍時用，下注變兩倍、只再拿一張。</li>
         </ul>
+        <h3>基本策略練習</h3>
+        <ul>
+        <li>在選單按「開始策略練習」：每手給你兩張牌與莊家明牌，選「要牌 / 停牌 / 加倍 / 分牌 / 投降」，立刻告訴你對錯與正確答案。</li>
+        <li>策略表為通行的基本策略：8 副牌、莊家軟 17 停牌、分牌後可加倍。勾「允許投降」時，硬 16 對莊 9 / 10 / A 與硬 15 對莊 10 投降，否則一律要牌；加倍不行時的軟牌備案（例如軟 18）已併入答案。</li>
+        <li>正確率分「總體 / 硬牌 / 軟牌（有 A 當 11）/ 對子」，存在本機（鍵 blackjack_drill，可用右上角備份），固定四個欄位、每欄次數上限 99999，滿了會提示先清除；「清除練習紀錄」會先確認，無法復原。</li>
+        <li>基本策略只是長期期望值最佳的玩法，不保證單局贏。</li>
+        </ul>
         <h3>範例</h3>
         <div class="eg">下注 50，你拿 K + 7 = 17 停牌；莊家 6 + 10 + 8 = 24 爆牌 → 你贏 +50，籌碼 550。<br>若你一開始就是 A + K（Blackjack）而莊家不是 → +75。</div>
         <h3>小提醒</h3>
         <ul>
         <li>籌碼用完就出局；單機時你出局牌局就結束。</li>
-        <li>沒有分牌與保險，這是簡化版。</li>
-        <li>發牌、要牌、莊家翻牌、爆牌與勝負都有短短的動畫，純視覺、不會延後你的操作或牌局節奏；系統設定「減少動態效果」時會自動關閉。</li>
+        <li>正式牌局沒有分牌、投降與保險，這是簡化版；分牌與投降只出現在「基本策略練習」。</li>
+        <li>莊家右側的疊牌是牌堆，發牌、要牌（連線時別人要牌也看得到）、莊家翻牌、爆牌與勝負都有短短的動畫，牌會從牌堆飛出，純視覺、不會延後你的操作或牌局節奏；系統設定「減少動態效果」時會自動關閉。</li>
         </ul>
     </template>
 
@@ -141,7 +149,34 @@
             min-height: 0;
         }
 
+        /* 牌堆：疊牌圖案，也是發牌 / 抽牌飛行動畫的起點 */
+        .dealrow {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .dealrow .cards {
+            flex: 1;
+        }
+
+        .pile {
+            flex: none;
+            width: 44px;
+            height: 62px;
+            margin: 0 6px 6px 0;
+            border-radius: 7px;
+            background: repeating-linear-gradient(45deg, #1d4ed8, #1d4ed8 5px, #3b82f6 5px, #3b82f6 10px);
+            box-shadow: 2px 2px 0 #1e3a8a, 4px 4px 0 #3b82f6, 6px 6px 0 #1e3a8a, 0 2px 4px rgba(0, 0, 0, .35);
+        }
+
         @media (max-width: 480px) {
+            .pile {
+                width: 38px;
+                height: 54px;
+            }
+
             .card-c {
                 width: 38px;
                 height: 54px;
@@ -241,6 +276,19 @@
                 <button id="joinBtn">加入</button>
             </div>
             <p class="note" id="netMsg"></p>
+            <h2 style="margin-top:18px">基本策略練習</h2>
+            <div class="row"><button id="drillBtn">開始策略練習</button></div>
+        </div>
+
+        <div class="card" id="drill" hidden>
+            <h2>基本策略練習</h2>
+            <div class="seat"><h3><span>莊家明牌</span></h3><div class="cards" id="dUp"></div></div>
+            <div class="seat"><h3><span>你的牌</span><span class="tot" id="dTot"></span></h3><div class="cards" id="dHand"></div></div>
+            <div class="row" id="dAct"></div>
+            <div id="dMsg" role="status" aria-live="polite" style="min-height:3em;font-weight:700"></div>
+            <div class="row"><button class="primary" id="dNext" hidden>下一手</button><label><input type="checkbox" id="dSurr" checked> 允許投降</label></div>
+            <p class="note" id="dStat"></p>
+            <div class="row"><button class="sm" id="dClear">清除練習紀錄</button><button class="sm" id="dBack">返回</button></div>
         </div>
 
         <div class="card" id="lobby" hidden>
@@ -255,7 +303,7 @@
 
         <div id="game" hidden>
             <div class="table">
-                <div class="seat" id="dealer"><h3><span>莊家</span><span class="tot" id="dealerTot"></span></h3><div class="cards" id="dealerCards"></div></div>
+                <div class="seat" id="dealer"><h3><span>莊家</span><span class="tot" id="dealerTot"></span></h3><div class="dealrow"><div class="cards" id="dealerCards"></div><div class="pile" id="deckPile" aria-hidden="true" title="牌堆"></div></div></div>
                 <div id="seats"></div>
             </div>
             <div id="status" role="status" aria-live="polite"></div>
@@ -271,7 +319,7 @@
     </div>
 
     <script>
-        const { shuffle } = Util;
+        const { shuffle, store } = Util;
 
         // --- pure ---
         const MAX_PLAYERS = 6, START_CHIPS = 500, BETS = [10, 25, 50, 100], ACT_MS = 30000;
@@ -351,6 +399,40 @@
             }
             return out;
         }
+
+        // 基本策略表（8 副牌、莊家 S17、可分牌後加倍 DAS）。每列 10 格 = 莊家明牌 2,3,4,5,6,7,8,9,10,A
+        // H 要牌 S 停牌 D 加倍（不行則要牌）T 加倍（不行則停牌）P 分牌 R 投降（不允許則要牌）
+        const STRAT_HARD = { 8: 'HHHHHHHHHH', 9: 'HDDDDHHHHH', 10: 'DDDDDDDDHH', 11: 'DDDDDDDDDH', 12: 'HHSSSHHHHH', 13: 'SSSSSHHHHH', 14: 'SSSSSHHHHH', 15: 'SSSSSHHHRH', 16: 'SSSSSHHRRR', 17: 'SSSSSSSSSS' };
+        const STRAT_SOFT = { 13: 'HHHDDHHHHH', 14: 'HHHDDHHHHH', 15: 'HHDDDHHHHH', 16: 'HHDDDHHHHH', 17: 'HDDDDHHHHH', 18: 'STTTTSSHHH', 19: 'SSSSSSSSSS' };
+        const STRAT_PAIR = { 11: 'PPPPPPPPPP', 10: 'SSSSSSSSSS', 9: 'PPPPPSPPSS', 8: 'PPPPPPPPPP', 7: 'PPPPPPHHHH', 6: 'PPPPPHHHHH', 4: 'HHHPPHHHHH', 3: 'PPPPPPHHHH', 2: 'PPPPPPHHHH' };
+        const STRAT_ACT = { H: 'hit', S: 'stand', D: 'double', T: 'double', P: 'split', R: 'surrender' };
+        const ACT_NAME = { hit: '要牌', stand: '停牌', double: '加倍', split: '分牌', surrender: '投降' };
+        // 練習用的第一手（兩張牌）：回傳牌型 'pair' | 'soft' | 'hard'
+        function handType(cards) {
+            if (cards.length === 2 && cardValue(cards[0]) === cardValue(cards[1]) && !(cardValue(cards[0]) === 5)) return 'pair';
+            const h = handValue(cards); return h.soft && h.total <= 21 ? 'soft' : 'hard';
+        }
+        // 基本策略查表：cards 為前兩張，up 為莊家明牌；回傳 'hit' | 'stand' | 'double' | 'split' | 'surrender'
+        function bjStrategy(cards, up, allowSurr = true) {
+            const col = Math.min(cardValue(up), 11) - 2, t = handType(cards), h = handValue(cards);
+            let row;
+            if (t === 'pair') row = STRAT_PAIR[cardValue(cards[0])];
+            else if (t === 'soft') row = STRAT_SOFT[Math.min(19, Math.max(13, h.total))];
+            else row = STRAT_HARD[Math.min(17, Math.max(8, h.total))];
+            const code = row[col];
+            return code === 'R' && !allowSurr ? 'hit' : STRAT_ACT[code];
+        }
+        // 練習統計：固定欄位 { all, hard, soft, pair }，每欄 [答對, 總數]，每欄總數上限 DRILL_CAP
+        const DRILL_CAP = 99999;
+        const defDrill = () => ({ all: [0, 0], hard: [0, 0], soft: [0, 0], pair: [0, 0] });
+        const validDrill = (raw) => {
+            const d = defDrill(); if (!raw || typeof raw !== 'object') return d;
+            for (const k of Object.keys(d)) { const v = raw[k]; if (Array.isArray(v) && Number.isInteger(v[0]) && Number.isInteger(v[1]) && v[1] >= 0 && v[1] <= DRILL_CAP && v[0] >= 0 && v[0] <= v[1]) d[k] = [v[0], v[1]]; }
+            return d;
+        };
+        const drillFull = (d) => d.all[1] >= DRILL_CAP || d.hard[1] >= DRILL_CAP || d.soft[1] >= DRILL_CAP || d.pair[1] >= DRILL_CAP;
+        const drillAdd = (d, type, correct) => { const n = validDrill(d); for (const k of ['all', type]) { n[k][1]++; if (correct) n[k][0]++; } return n; };
+        const drillRate = (v) => (v[1] ? Math.round(v[0] / v[1] * 100) + '%（' + v[0] + '/' + v[1] + '）' : '—');
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -542,7 +624,7 @@
         const fx = (el, kf, o) => el && el.animate(kf, { duration: 300, easing: 'ease-out', fill: 'backwards', ...o });
         function animateTable(prev) {
             if (!prev || !motionOK()) return;
-            const tb = $('.table').getBoundingClientRect(), deck = { left: tb.right - 50, top: tb.top };
+            const pr = $('#deckPile').getBoundingClientRect(), deck = { left: pr.left, top: pr.top };      // 從牌堆飛出（含連線時對手抽的牌：每次狀態更新都會比對所有座位新增的牌）
             const seatEls = [...$('#seats').children], dc = $('#dealerCards').children;
             const cardsOf = (seat) => seat < 0 ? dc : seatEls[seat] && seatEls[seat].querySelector('.cards').children;
             const sched = dealSchedule(prev.hands.map(h => h.length), prev.dealer.length, V.hands.map(h => (h || []).length), V.dealer.length, 70);
@@ -627,6 +709,39 @@
         $('#leave').onclick = () => location.reload();
         $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
         if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+
+        // ---------- 基本策略練習 ----------
+        let DR = validDrill(store.get('blackjack_drill', null)), drHand = null, drUp = '', drDone = true;
+        const drSave = () => store.set('blackjack_drill', DR);
+        function drStat() {
+            const t = $('#dStat'); t.textContent = `正確率　總體 ${drillRate(DR.all)}　硬牌 ${drillRate(DR.hard)}　軟牌 ${drillRate(DR.soft)}　對子 ${drillRate(DR.pair)}`;
+        }
+        function drDeal() {
+            if (drillFull(DR)) { $('#dMsg').textContent = '練習紀錄已達上限，請先按「清除練習紀錄」再繼續。'; $('#dNext').hidden = true; return; }
+            const card = () => RANKS[Util.rnd(13)] + SUITS[Util.rnd(4)];
+            do { drHand = [card(), card()]; } while (handValue(drHand).blackjack);
+            drUp = card(); drDone = false;
+            $('#dUp').replaceChildren(cardEl(drUp)); $('#dHand').replaceChildren(...drHand.map(cardEl));
+            const h = handValue(drHand); $('#dTot').textContent = ({ pair: '對子', soft: '軟 ', hard: '硬 ' }[handType(drHand)]) + (handType(drHand) === 'pair' ? '' : h.total);
+            $('#dMsg').textContent = '該怎麼做？'; $('#dNext').hidden = true;
+            $('#dAct').querySelectorAll('button').forEach(b => { b.disabled = false; b.hidden = b.dataset.a === 'surrender' && !$('#dSurr').checked; });
+        }
+        function drAnswer(a) {
+            if (drDone) return;
+            if (drillFull(DR)) { drDeal(); return; }
+            drDone = true;
+            const right = bjStrategy(drHand, drUp, $('#dSurr').checked), ok = a === right;
+            DR = drillAdd(DR, handType(drHand), ok); drSave(); drStat();
+            $('#dMsg').textContent = ok ? `答對了：${ACT_NAME[right]}` : `答錯了，正確是「${ACT_NAME[right]}」（你選 ${ACT_NAME[a]}）`;
+            $('#dMsg').style.color = ok ? 'var(--ok)' : 'var(--bad)';
+            $('#dAct').querySelectorAll('button').forEach(b => { b.disabled = true; }); $('#dNext').hidden = false; $('#dNext').focus();
+        }
+        $('#dAct').replaceChildren(...Object.keys(ACT_NAME).map(a => Object.assign(document.createElement('button'), { textContent: ACT_NAME[a], onclick: () => drAnswer(a) }))); Object.keys(ACT_NAME).forEach((a, i) => { $('#dAct').children[i].dataset.a = a; });
+        $('#dNext').onclick = () => { $('#dMsg').style.color = ''; drDeal(); };
+        $('#dSurr').onchange = () => { if (!drDone) drDeal(); };
+        $('#drillBtn').onclick = () => { show('#menu', false); show('#drill', true); drStat(); drDeal(); };
+        $('#dBack').onclick = () => { show('#drill', false); show('#menu', true); };
+        $('#dClear').onclick = () => { if (confirm('清除所有基本策略練習的正確率紀錄？無法復原。')) { DR = defDrill(); drSave(); drStat(); if (drDone) drDeal(); } };
     </script>
 </body>
 

@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="收藏清單：電影清單、影集追蹤、遊戲 Backlog、願望清單與價格追蹤四合一，狀態、評分、進度與價格歷史，可匯出匯入 JSON。">
+    <meta name="st-keys" content="collect_movies,collect_series,collect_games,collect_wishes">
+    <meta property="og:title" content="收藏清單" />
+    <meta property="og:description" content="電影、影集、遊戲 Backlog、願望清單，一個頁面全記下來。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/collections.html" />
+    <title>收藏清單</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        label { font-weight: 600; display: block; margin: 10px 0 6px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .row>* { flex: 1; min-width: 120px; }
+        .item { padding: 12px 0; border-top: 1px solid var(--line); }
+        .item h3 { margin: 0; word-break: break-word; }
+        .item .txt { white-space: pre-wrap; word-break: break-word; margin: 6px 0; }
+        .item a { word-break: break-all; }
+        .bar { height: 10px; background: var(--fill); border-radius: 99px; overflow: hidden; margin: 8px 0 4px; }
+        .bar i { display: block; height: 100%; background: var(--blue); }
+        .acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+        .acts input { width: 100px; flex: 0 0 auto; }
+        .acts button { min-height: 44px; }
+        .spark { width: 100%; height: 40px; display: block; margin: 6px 0; }
+        .spark polyline { fill: none; stroke: var(--blue); stroke-width: 2; vector-effect: non-scaling-stroke; }
+        .low { color: var(--ok); font-weight: 600; }
+        #io { width: 100%; font-size: 16px; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>收藏清單</h1>
+        <p class="sub">電影、影集、遊戲、想買的東西，一個頁面全記下來。資料只存在這支瀏覽器。</p>
+
+        <div class="card"><div class="tabs" id="tabs"></div></div>
+
+        <div class="card" id="upCard" hidden>
+            <h2>今日 / 本週更新</h2>
+            <div id="updates"></div>
+        </div>
+
+        <div class="card">
+            <h2 id="formTitle">新增</h2>
+            <div id="form"></div>
+            <div class="row" style="margin-top:10px"><button class="primary" id="save">加入清單</button><button id="cancel" hidden>取消編輯</button></div>
+            <p class="note" id="formNote"></p>
+        </div>
+
+        <div class="card">
+            <h2>統計</h2>
+            <div id="stats"></div>
+        </div>
+
+        <div class="card">
+            <div class="row">
+                <input id="q" type="search" placeholder="搜尋" aria-label="搜尋">
+                <select id="fst" aria-label="狀態篩選"></select>
+                <select id="sort" aria-label="排序"></select>
+            </div>
+            <div id="list"></div>
+            <p class="note" id="listNote"></p>
+        </div>
+
+        <div class="card">
+            <h2>匯出 / 匯入 / 清除</h2>
+            <textarea id="io" rows="4" placeholder="匯出的 JSON 會出現在這裡；要匯入就貼上 JSON 再按匯入" aria-label="JSON 文字"></textarea>
+            <div class="row" style="margin-top:8px"><button id="exp">匯出此分頁</button><button id="imp">匯入並取代此分頁</button><button id="clearAll">清除此分頁</button></div>
+            <p class="note" id="ioNote"></p>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>四種「清單 + 狀態 + 評分」的收藏放在同一頁，用上方分頁切換：電影清單、影集追蹤、遊戲 Backlog、願望清單（含價格追蹤）。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>想看的電影、追到第幾集的影集、買了不玩的遊戲、想買又在等降價的東西，不想再散在各處。</li>
+        <li>年底回顧今年看了幾部電影、遊戲通關率多少。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>選分頁、填表單、按「加入清單」；每筆可「編輯」「刪除」，用搜尋、狀態與排序找項目。</li>
+        <li>電影：想看 / 看過，評分 0.5–5 顆星（半顆為單位），看過日期、類型標籤（逗號分隔）、心得；統計有各年度看過部數與平均分。</li>
+        <li>影集：填總季數、每季集數（例如 10,12,8，可不填）、目前季 / 集；按「+1 集」前進，集數到頂會進下一季，最後一季到頂自動「追完」。可設更新星期幾與下一集日期，「今日 / 本週更新」會列出 7 天內要更新的追中影集。</li>
+        <li>遊戲：想玩 / 在玩 / 已通關 / 放棄，平台可自填或從建議挑，遊玩時數可用「累加時數」逐次加。</li>
+        <li>願望清單：填目標價與目前價格；在項目上輸入新價格按「更新價格」，會留下價格歷史（每項最多 30 筆，同一天只留最後一次），顯示歷史最低價、走勢小圖，目前價低於或等於目標價會標「低於目標價」。連結只接受 http / https。</li>
+        <li>「匯出此分頁」把 JSON 放進文字框；貼上 JSON 按「匯入並取代此分頁」會先嚴格檢查，有任何一筆格式不對就整份拒絕並說明第幾筆。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">影集《某某劇》每季 10,12 集，目前 S1 E10
+        按「+1 集」→ 變成 S2 E1（進度條 5%）
+        願望「耳機」目標價 2000，更新價格 1890
+        → 標示「低於目標價」，歷史最低價 1890</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>價格要自己手動更新，本工具不會連網抓價；數字僅供參考。</li>
+        <li>每個分頁最多 1000 筆，滿了會拒絕新增並提示；片名等文字最多 100 字、心得 / 備註最多 1000 字。</li>
+        <li>刪除單筆會連帶刪掉它的價格歷史；「清除此分頁」只清目前分頁（會先確認，無法復原，建議先匯出）。</li>
+        <li>資料壞掉或被備份還原成舊格式時，載入會自動修正或丟掉無效的筆；資料存不下時會跳出儲存失敗提示。資料只在本機，換機前請先用右上角備份或匯出。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { store, esc, day } = Util;
+
+        // --- pure ---
+        const MAX = 1000, MAX_IO = 2000000, MAX_HIST = 30;
+        const ST = {
+            movie: { want: '想看', done: '看過' },
+            series: { watching: '追中', want: '想追', done: '追完', dropped: '放棄' },
+            game: { want: '想玩', playing: '在玩', done: '已通關', dropped: '放棄' },
+            wish: { want: '想買', bought: '已購買' },
+        };
+        const KEYS = { movie: 'collect_movies', series: 'collect_series', game: 'collect_games', wish: 'collect_wishes' };
+        const isObj = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
+        const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && day.shift(s, 0) === s;
+        const int = (v, lo, hi) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : lo; };
+        const num = (v, lo, hi, step) => { const n = Number(v); return Number.isFinite(n) && v !== '' && v !== null ? Math.min(hi, Math.max(lo, Math.round(n / step) * step)) : lo; };
+        const half = (v) => num(v, 0, 5, 0.5);
+        const money = (v) => Math.round(num(v, 0, 99999999, 0.01) * 100) / 100;
+        const str = (v, n) => typeof v === 'string' ? v.trim().slice(0, n) : '';
+        const newId = () => Math.random().toString(36).slice(2, 10);
+        const cleanId = (x) => typeof x === 'string' && x.length > 0 && x.length <= 40 ? x : '';
+        const status = (kind, v) => ST[kind][v] ? v : Object.keys(ST[kind])[0];
+        const cleanUrl = (v) => {
+            const s = str(v, 500); if (!s) return '';
+            try { const u = new URL(s); return u.protocol === 'http:' || u.protocol === 'https:' ? s : ''; } catch (e) { return ''; }
+        };
+        const cleanTags = (v) => {
+            const a = Array.isArray(v) ? v : typeof v === 'string' ? v.split(/[,，、]+/) : [];
+            return [...new Set(a.map(t => str(t, 20)).filter(Boolean))].slice(0, 10);
+        };
+        const parseEps = (v) => {
+            const a = Array.isArray(v) ? v : typeof v === 'string' ? v.split(/[,，、\s]+/) : [];
+            return a.map(x => Math.round(Number(x))).filter(n => Number.isFinite(n) && n >= 1 && n <= 999).slice(0, 50);
+        };
+        const cleanHist = (h) => Array.isArray(h) ? h.filter(e => isObj(e) && isDate(e.d) && Number(e.p) > 0).map(e => ({ d: e.d, p: money(e.p) })).slice(-MAX_HIST) : [];
+
+        const CLEAN = {
+            movie(b) {
+                if (!isObj(b)) return null; const title = str(b.title, 100); if (!title) return null;
+                return { id: cleanId(b.id), title, status: status('movie', b.status), rating: half(b.rating), date: isDate(b.date) ? b.date : '', tags: cleanTags(b.tags), review: str(b.review, 1000) };
+            },
+            series(b) {
+                if (!isObj(b)) return null; const title = str(b.title, 100); if (!title) return null;
+                const eps = parseEps(b.eps), seasons = Math.max(int(b.seasons, 0, 50), eps.length);
+                return {
+                    id: cleanId(b.id), title, status: status('series', b.status), seasons, eps, season: int(b.season, 1, 50), ep: int(b.ep, 0, 999),
+                    airDay: b.airDay === '' || b.airDay === null || b.airDay === undefined ? -1 : int(b.airDay, -1, 6), nextDate: isDate(b.nextDate) ? b.nextDate : '', note: str(b.note, 1000),
+                };
+            },
+            game(b) {
+                if (!isObj(b)) return null; const title = str(b.title, 100); if (!title) return null;
+                return { id: cleanId(b.id), title, status: status('game', b.status), platform: str(b.platform, 30), hours: num(b.hours, 0, 99999, 0.5), rating: half(b.rating), note: str(b.note, 1000) };
+            },
+            wish(b) {
+                if (!isObj(b)) return null; const title = str(b.title, 100); if (!title) return null;
+                return { id: cleanId(b.id), title, status: status('wish', b.status), target: money(b.target), price: money(b.price), url: cleanUrl(b.url), pri: int(b.pri, 1, 3) || 2, note: str(b.note, 1000), history: cleanHist(b.history) };
+            },
+        };
+        // 清單整理：丟掉壞資料、補 / 修正重複 id、最多 MAX 筆（留最後加入的）
+        function cleanList(kind, list) {
+            if (!Array.isArray(list)) return [];
+            const seen = new Set(), out = [];
+            for (const x of list) {
+                const b = CLEAN[kind](x); if (!b) continue;
+                while (!b.id || seen.has(b.id)) b.id = newId();
+                seen.add(b.id); out.push(b);
+            }
+            return out.slice(-MAX);
+        }
+        // 匯入（嚴格）：任何一筆不合格就整份拒絕；回傳 { items, err }
+        function parseImport(kind, text) {
+            const bad = (err) => ({ items: null, err });
+            if (typeof text !== 'string' || !text.trim()) return bad('沒有內容');
+            if (text.length > MAX_IO) return bad('內容太大');
+            let a; try { a = JSON.parse(text); } catch (e) { return bad('不是有效的 JSON'); }
+            if (!Array.isArray(a)) return bad('最外層必須是陣列 [ ... ]');
+            if (a.length > MAX) return bad(`最多 ${MAX} 筆，這份有 ${a.length} 筆`);
+            for (let i = 0; i < a.length; i++) {
+                const x = a[i], n = `第 ${i + 1} 筆`;
+                if (!isObj(x)) return bad(`${n}不是物件`);
+                if (!CLEAN[kind](x)) return bad(`${n}缺少片名 / 名稱`);
+                if (x.status !== undefined && !ST[kind][x.status]) return bad(`${n}的 status 不合法（可用：${Object.keys(ST[kind]).join(' / ')}）`);
+                if (x.rating !== undefined && !(typeof x.rating === 'number' && x.rating >= 0 && x.rating <= 5)) return bad(`${n}的 rating 必須是 0–5 的數字`);
+                for (const k of ['date', 'nextDate']) if (x[k] && !isDate(x[k])) return bad(`${n}的 ${k} 不是 YYYY-MM-DD`);
+                if (x.url && !cleanUrl(x.url)) return bad(`${n}的 url 只接受 http / https`);
+                for (const k of ['price', 'target', 'hours', 'season', 'ep', 'seasons', 'pri']) if (x[k] !== undefined && !(typeof x[k] === 'number' && x[k] >= 0 && Number.isFinite(x[k]))) return bad(`${n}的 ${k} 必須是不小於 0 的數字`);
+            }
+            return { items: cleanList(kind, a), err: '' };
+        }
+        // 影集
+        function nextAir(s, from) {
+            if (isDate(s.nextDate) && s.nextDate >= from) return s.nextDate;
+            if (s.airDay >= 0 && s.airDay <= 6) return day.shift(from, (s.airDay - (day.num(from) + 4) % 7 + 7) % 7);
+            return '';
+        }
+        // +1 集：集數到頂進下一季；最後一季到頂 → 追完；有更新星期時下一集日期順延
+        function plusEp(s, today) {
+            const n = { ...s }, cap = s.eps[s.season - 1];
+            if (n.status === 'want') n.status = 'watching';
+            if (cap && s.ep + 1 > cap) {
+                if (s.season < s.seasons) { n.season = s.season + 1; n.ep = 1; } else { n.ep = cap; n.status = 'done'; }
+            } else n.ep = Math.min(999, s.ep + 1);
+            if (n.status !== 'done' && n.airDay >= 0 && n.nextDate && n.nextDate <= today) n.nextDate = nextAir({ ...n, nextDate: '' }, day.shift(today, 1));
+            return n;
+        }
+        function seriesPct(s) {
+            if (!s.eps.length || s.eps.length < s.seasons) return null;
+            const total = s.eps.reduce((a, b) => a + b, 0), seen = s.eps.slice(0, s.season - 1).reduce((a, b) => a + b, 0) + s.ep;
+            return s.status === 'done' ? 100 : Math.min(100, Math.round(seen / total * 100));
+        }
+        function updatesOf(list, today) {
+            const t = [], w = [];
+            for (const s of list) {
+                if (s.status !== 'watching') continue;
+                const d = nextAir(s, today); if (!d) continue;
+                const diff = day.between(today, d);
+                if (diff === 0) t.push({ s, d }); else if (diff <= 6) w.push({ s, d });
+            }
+            w.sort((a, b) => a.d.localeCompare(b.d));
+            return { today: t, week: w };
+        }
+        // 遊戲 / 電影 / 願望
+        const addHours = (g, h) => ({ ...g, hours: num(g.hours + num(h, 0, 99999, 0.5), 0, 99999, 0.5) });
+        const isBelow = (w) => w.price > 0 && w.target > 0 && w.price <= w.target;
+        const lowest = (w) => w.history.length ? Math.min(...w.history.map(e => e.p)) : 0;
+        // 記錄價格：同一天覆蓋最後一筆，價格沒變不重複記；每項最多 MAX_HIST 筆
+        function setPrice(w, p, today) {
+            p = money(p); const n = { ...w, price: p }; if (p <= 0) return n;
+            const h = [...w.history], last = h[h.length - 1];
+            if (last && last.d === today) h[h.length - 1] = { d: today, p }; else if (!last || last.p !== p) h.push({ d: today, p });
+            n.history = h.slice(-MAX_HIST); return n;
+        }
+        function sparkPoints(hist, w, h) {
+            if (hist.length < 2) return '';
+            const ps = hist.map(e => e.p), lo = Math.min(...ps), hi = Math.max(...ps), r = hi - lo || 1;
+            return ps.map((p, i) => `${(i / (ps.length - 1) * w).toFixed(1)},${(h - (p - lo) / r * h).toFixed(1)}`).join(' ');
+        }
+        // 篩選 / 排序
+        function filterItems(list, st, q) {
+            q = String(q || '').trim().toLowerCase();
+            return list.filter(x => (st === 'all' || x.status === st) && (!q || [x.title, x.review, x.note, x.platform, (x.tags || []).join(' ')].join(' ').toLowerCase().includes(q)));
+        }
+        const SORTS = {
+            movie: { added: '最近加入', rating: '評分高到低', date: '看過日期新到舊', title: '片名' },
+            series: { added: '最近加入', next: '下一集日期', progress: '進度高到低', title: '片名' },
+            game: { added: '最近加入', hours: '時數多到少', rating: '評分高到低', title: '名稱' },
+            wish: { added: '最近加入', pri: '優先度', price: '目前價低到高', gap: '離目標價最近', title: '名稱' },
+        };
+        function sortItems(kind, list, key, today) {
+            const a = [...list].reverse(), t = (x, y) => x.title.localeCompare(y.title);
+            const gap = (w) => w.price > 0 && w.target > 0 ? w.price - w.target : Infinity;
+            const nx = (s) => nextAir(s, today) || '9999';
+            const c = {
+                title: t, rating: (x, y) => y.rating - x.rating, date: (x, y) => y.date.localeCompare(x.date), hours: (x, y) => y.hours - x.hours,
+                next: (x, y) => nx(x).localeCompare(nx(y)), progress: (x, y) => (seriesPct(y) ?? -1) - (seriesPct(x) ?? -1),
+                pri: (x, y) => x.pri - y.pri, price: (x, y) => (x.price || Infinity) - (y.price || Infinity), gap: (x, y) => gap(x) - gap(y),
+            }[key];
+            return c && SORTS[kind][key] ? a.sort(c) : a;
+        }
+        // 統計：回傳 [[標籤, 值]]
+        const avgOf = (l) => { const r = l.filter(x => x.rating > 0); return r.length ? Math.round(r.reduce((s, x) => s + x.rating, 0) / r.length * 100) / 100 : null; };
+        const fmtAvg = (v) => v === null ? '—' : String(v);
+        function statLines(kind, list, year, today) {
+            const n = (st) => list.filter(x => x.status === st).length;
+            if (kind === 'movie') {
+                const done = list.filter(x => x.status === 'done'), ys = {};
+                for (const m of done) { const y = (m.date || '').slice(0, 4) || '未記日期'; (ys[y] = ys[y] || []).push(m); }
+                const rows = Object.keys(ys).sort().reverse().slice(0, 6).map(y => [`${y} 年看過`, `${ys[y].length} 部，平均 ${fmtAvg(avgOf(ys[y]))}`]);
+                return [['想看', `${n('want')} 部`], ['累計看過', `${done.length} 部`], ['平均評分', fmtAvg(avgOf(list))], ...(ys[year] ? [] : [[`${year} 年看過`, '0 部']]), ...rows];
+            }
+            if (kind === 'series') return [['追中', `${n('watching')} 部`], ['想追', `${n('want')} 部`], ['追完', `${n('done')} 部`], ['放棄', `${n('dropped')} 部`]];
+            if (kind === 'game') {
+                const started = n('playing') + n('done') + n('dropped');
+                return [['Backlog 堆積（想玩）', `${n('want')} 款`], ['在玩', `${n('playing')} 款`], ['總遊玩時數', `${Math.round(list.reduce((s, g) => s + g.hours, 0) * 10) / 10} 小時`], ['通關率（通關 / 已開始）', started ? `${Math.round(n('done') / started * 100)}%（${n('done')}/${started}）` : '—'], ['平均評分', fmtAvg(avgOf(list))]];
+            }
+            const open = list.filter(w => w.status === 'want'), cost = (w) => w.price || w.target;
+            return [['想買', `${open.length} 項`], ['已低於目標價', `${open.filter(isBelow).length} 項`], ['總預算（想買，現價優先、無現價用目標價）', `$${Math.round(open.reduce((s, w) => s + cost(w), 0) * 100) / 100}`], ['已購買', `${n('bought')} 項，$${Math.round(list.filter(w => w.status === 'bought').reduce((s, w) => s + w.price, 0) * 100) / 100}`]];
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const data = {};
+        for (const k in KEYS) data[k] = cleanList(k, store.get(KEYS[k], []));
+        let kind = 'movie', editId = null;
+        const today = day.today(), year = today.slice(0, 4);
+        const LABEL = { movie: '電影', series: '影集', game: '遊戲', wish: '願望' };
+        const persist = () => store.set(KEYS[kind], data[kind]);
+        const WD = ['日', '一', '二', '三', '四', '五', '六'];
+        const rateOpts = [['0', '未評分'], ...Array.from({ length: 10 }, (_, i) => [String((i + 1) / 2), `${(i + 1) / 2} ★`])];
+        const FIELDS = {
+            movie: [['title', '片名', 'text'], ['status', '狀態', 'sel'], ['rating', '評分（0.5 顆為單位）', 'sel', rateOpts], ['date', '看過日期', 'date'], ['tags', '類型標籤（逗號分隔）', 'text'], ['review', '心得', 'area']],
+            series: [['title', '片名', 'text'], ['status', '狀態', 'sel'], ['seasons', '總季數（可不填）', 'num'], ['eps', '每季集數（例 10,12,8，可不填）', 'text'], ['season', '目前季', 'num'], ['ep', '目前集（這季已看幾集）', 'num'], ['airDay', '每週更新', 'sel', [['', '未設定'], ...WD.map((w, i) => [String(i), '週' + w])]], ['nextDate', '下一集日期', 'date'], ['note', '備註', 'area']],
+            game: [['title', '遊戲名稱', 'text'], ['status', '狀態', 'sel'], ['platform', '平台', 'text'], ['hours', '遊玩時數', 'num'], ['rating', '評分（0.5 顆為單位）', 'sel', rateOpts], ['note', '備註', 'area']],
+            wish: [['title', '名稱', 'text'], ['status', '狀態', 'sel'], ['target', '目標價', 'num'], ['price', '目前價格', 'num'], ['url', '連結（http / https）', 'text'], ['pri', '優先度', 'sel', [['1', '高'], ['2', '中'], ['3', '低']]], ['note', '備註', 'area']],
+        };
+        const LEN = { title: 100, platform: 30, url: 500, eps: 100, tags: 200 };
+        const DEF = { season: '1', ep: '0', hours: '0', pri: '2', rating: '0', airDay: '' };
+
+        function buildForm() {
+            const f = $('#form'); f.replaceChildren();
+            for (const [k, label, type, opts] of FIELDS[kind]) {
+                const l = document.createElement('label'); l.htmlFor = 'f_' + k; l.textContent = label;
+                let e;
+                if (type === 'sel') {
+                    e = document.createElement('select');
+                    e.replaceChildren(...(opts || Object.entries(ST[kind])).map(([v, t]) => new Option(t, v)));
+                } else if (type === 'area') { e = document.createElement('textarea'); e.rows = 3; e.maxLength = 1000; }
+                else {
+                    e = document.createElement('input');
+                    if (type === 'num') { e.type = 'number'; e.inputMode = 'decimal'; e.min = 0; e.step = k === 'price' || k === 'target' ? '0.01' : k === 'hours' ? '0.5' : '1'; }
+                    else { e.type = type; e.maxLength = LEN[k] || 100; }
+                    if (k === 'platform') { e.setAttribute('list', 'plat'); }
+                }
+                e.id = 'f_' + k; e.style.width = '100%';
+                f.append(l, e);
+            }
+            if (kind === 'game') {
+                const dl = document.createElement('datalist'); dl.id = 'plat';
+                dl.replaceChildren(...['PC', 'Switch', 'PS5', 'PS4', 'Xbox', 'Steam Deck', '手機', '其他'].map(p => new Option(p)));
+                f.append(dl);
+            }
+            resetForm();
+        }
+        const fld = (k) => $('#f_' + k);
+        function resetForm() {
+            editId = null;
+            for (const [k, , type] of FIELDS[kind]) { const e = fld(k); if (type === 'sel') e.selectedIndex = 0; e.value = type === 'sel' && DEF[k] !== undefined ? DEF[k] : type === 'sel' ? e.value : (DEF[k] || ''); }
+            $('#formTitle').textContent = `新增${LABEL[kind]}`; $('#save').textContent = '加入清單'; $('#cancel').hidden = true;
+        }
+        function fillForm(x) {
+            editId = x.id;
+            for (const [k] of FIELDS[kind]) fld(k).value = k === 'tags' ? x.tags.join(', ') : k === 'eps' ? x.eps.join(',') : k === 'airDay' ? (x.airDay < 0 ? '' : x.airDay) : x[k];
+            $('#formTitle').textContent = `編輯${LABEL[kind]}`; $('#save').textContent = '儲存修改'; $('#cancel').hidden = false;
+            fld('title').scrollIntoView({ block: 'center' });
+        }
+        $('#save').onclick = () => {
+            const old = editId && data[kind].find(x => x.id === editId), raw = { ...(old || {}), id: old ? old.id : '' };
+            for (const [k] of FIELDS[kind]) raw[k] = fld(k).value;
+            let c = CLEAN[kind](raw);
+            if (!c) { $('#formNote').textContent = '請填名稱'; return; }
+            if (raw.url && !c.url) { $('#formNote').textContent = '連結只接受 http / https 開頭的網址'; return; }
+            if (kind === 'movie') { if (c.status === 'done' && !c.date) c.date = today; if (c.status === 'want') c.date = ''; }
+            if (kind === 'wish') c = setPrice(c, c.price, today);
+            if (old) data[kind] = data[kind].map(x => x.id === old.id ? c : x);
+            else { if (data[kind].length >= MAX) { $('#formNote').textContent = `最多 ${MAX} 筆，請先刪除不要的`; return; } c.id = newId(); data[kind].push(c); }
+            persist(); $('#formNote').textContent = '已儲存'; resetForm(); drawAll();
+        };
+        $('#cancel').onclick = () => { resetForm(); $('#formNote').textContent = ''; };
+
+        const mk = (txt, fn) => { const b = document.createElement('button'); b.textContent = txt; b.onclick = fn; return b; };
+        const upd = (id, fn) => { data[kind] = data[kind].map(x => x.id === id ? fn(x) : x); persist(); drawAll(); };
+        function body(x) {
+            if (kind === 'movie') return `<div class="muted">${x.rating ? '★ ' + x.rating : '未評分'}${x.date ? ' · ' + x.date : ''}${x.tags.length ? ' · ' + esc(x.tags.join(' / ')) : ''}</div>${x.review ? `<div class="txt">${esc(x.review)}</div>` : ''}`;
+            if (kind === 'series') {
+                const p = seriesPct(x), nx = nextAir(x, today);
+                return `<div class="muted">S${x.season} E${x.ep}${x.seasons ? ` / 共 ${x.seasons} 季` : ''}${p === null ? '' : ` · ${p}%`}${nx ? ` · 下一集 ${nx}` : ''}</div>${p === null ? '' : `<div class="bar" role="progressbar" aria-valuenow="${p}" aria-valuemin="0" aria-valuemax="100"><i style="width:${p}%"></i></div>`}${x.note ? `<div class="txt">${esc(x.note)}</div>` : ''}`;
+            }
+            if (kind === 'game') return `<div class="muted">${esc(x.platform) || '未填平台'} · ${x.hours} 小時${x.rating ? ' · ★ ' + x.rating : ''}</div>${x.note ? `<div class="txt">${esc(x.note)}</div>` : ''}`;
+            const low = lowest(x), pts = sparkPoints(x.history, 100, 30);
+            return `<div class="muted">優先度 ${['', '高', '中', '低'][x.pri]} · 目標 ${x.target || '—'} · 目前 ${x.price || '—'}${low ? ' · 歷史最低 ' + low : ''} ${x.status === 'want' && isBelow(x) ? '<span class="low">低於目標價</span>' : ''}</div>`
+                + (pts ? `<svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none" role="img" aria-label="價格走勢"><polyline points="${pts}"/></svg>` : '')
+                + (x.url ? `<div><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.url)}</a></div>` : '') + (x.note ? `<div class="txt">${esc(x.note)}</div>` : '');
+        }
+        function acts(x, box) {
+            if (kind === 'series') box.append(mk('+1 集', () => upd(x.id, s => plusEp(s, today))));
+            if (kind === 'game' || kind === 'wish') {
+                const inp = document.createElement('input'); inp.type = 'number'; inp.inputMode = 'decimal'; inp.min = 0; inp.step = kind === 'game' ? '0.5' : '0.01';
+                inp.placeholder = kind === 'game' ? '小時' : '新價格'; inp.setAttribute('aria-label', inp.placeholder);
+                box.append(inp, mk(kind === 'game' ? '累加時數' : '更新價格', () => { if (inp.value === '') return; upd(x.id, w => kind === 'game' ? addHours(w, inp.value) : setPrice(w, inp.value, today)); }));
+                if (kind === 'wish' && x.history.length > 1) box.append(mk('清歷史', () => { if (confirm(`清除「${x.title}」的價格歷史（只留目前價格一筆）？無法復原。`)) upd(x.id, w => setPrice({ ...w, history: [] }, w.price, today)); }));
+            }
+            box.append(mk('編輯', () => fillForm(x)), mk('刪除', () => {
+                if (!confirm(`刪除「${x.title}」？${kind === 'wish' ? '價格歷史也會一併刪除。' : ''}無法復原。`)) return;
+                data[kind] = data[kind].filter(y => y.id !== x.id); if (editId === x.id) resetForm(); persist(); drawAll();
+            }));
+        }
+        function drawList() {
+            const L = data[kind], r = sortItems(kind, filterItems(L, $('#fst').value, $('#q').value), $('#sort').value, today);
+            $('#list').replaceChildren(...r.map(x => {
+                const d = document.createElement('div'); d.className = 'item';
+                d.innerHTML = `<h3>${esc(x.title)} <small class="muted">${ST[kind][x.status]}</small></h3>` + body(x);
+                const a = document.createElement('div'); a.className = 'acts'; acts(x, a); d.append(a);
+                return d;
+            }));
+            $('#listNote').textContent = r.length ? '' : (L.length ? '沒有符合的項目' : `還沒有${LABEL[kind]}，從上方新增第一筆吧`);
+        }
+        function drawAll() {
+            $('#stats').replaceChildren(...statLines(kind, data[kind], year, today).map(([a, b]) => Util.statRow(a, b)));
+            $('#upCard').hidden = kind !== 'series';
+            if (kind === 'series') {
+                const u = updatesOf(data.series, today), line = (t, l) => l.length ? l.map(e => Util.statRow(`${t}${t ? ' ' : ''}${e.d.slice(5)}`, `${e.s.title}（S${e.s.season} E${e.s.ep + 1}）`)) : [];
+                const rows = [...line('今天', u.today), ...line('本週', u.week)];
+                $('#updates').replaceChildren(...(rows.length ? rows : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '本週沒有要更新的追中影集（設定更新星期或下一集日期後會出現）' })]));
+            }
+            drawList(); drawTabs();
+        }
+        function drawTabs() {
+            $('#tabs').replaceChildren(...Object.keys(KEYS).map(k => {
+                const b = mk(`${LABEL[k]} ${data[k].length}`, () => { kind = k; setKind(); }); b.className = 'sm'; b.setAttribute('aria-pressed', k === kind); return b;
+            }));
+        }
+        function setKind() {
+            $('#fst').replaceChildren(new Option('全部狀態', 'all'), ...Object.entries(ST[kind]).map(([v, t]) => new Option(t, v)));
+            $('#sort').replaceChildren(...Object.entries(SORTS[kind]).map(([v, t]) => new Option(t, v)));
+            $('#q').value = ''; $('#formNote').textContent = ''; $('#ioNote').textContent = ''; $('#io').value = '';
+            buildForm(); drawAll();
+        }
+        $('#q').oninput = drawList; $('#fst').onchange = drawList; $('#sort').onchange = drawList;
+
+        $('#exp').onclick = () => {
+            if (!data[kind].length) { $('#ioNote').textContent = '沒有可匯出的資料'; return; }
+            $('#io').value = JSON.stringify(data[kind], null, 1); $('#io').select(); $('#ioNote').textContent = `已匯出 ${data[kind].length} 筆，可複製存起來`;
+        };
+        $('#imp').onclick = () => {
+            const r = parseImport(kind, $('#io').value);
+            if (r.err) { $('#ioNote').textContent = '匯入失敗：' + r.err; return; }
+            if (!confirm(`用匯入的 ${r.items.length} 筆取代目前「${LABEL[kind]}」分頁的 ${data[kind].length} 筆？無法復原。`)) return;
+            data[kind] = r.items; resetForm(); persist(); drawAll(); $('#ioNote').textContent = `已匯入 ${r.items.length} 筆`;
+        };
+        $('#clearAll').onclick = () => {
+            if (!data[kind].length || !confirm(`清除「${LABEL[kind]}」分頁全部 ${data[kind].length} 筆？只會清這個分頁，無法復原，建議先匯出。`)) return;
+            data[kind] = []; resetForm(); persist(); drawAll();
+        };
+        setKind();
+    </script>
+</body>
+
+</html>

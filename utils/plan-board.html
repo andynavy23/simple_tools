@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="看板與時間區塊：多個 Kanban 看板（自訂欄位、卡片、標籤色、到期日、匯出 Markdown），以及把一天規劃成時間區塊（不重疊、空檔統計、範本、匯出文字 / ICS）。">
+    <meta property="og:title" content="看板與時間區塊" />
+    <meta property="og:description" content="Kanban 看板與每日時間區塊規劃，資料存在本機。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/plan-board.html" />
+    <meta name="st-keys" content="planb_boards,planb_tpl,planb_blocks_*">
+    <title>看板與時間區塊</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>兩個規劃工具放在一頁：「看板」用欄位與卡片管理事情的進度；「時間區塊」把一天排成一塊塊的色塊，看得出哪裡還有空檔。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>專案、讀書、家事想分成「待辦 / 進行中 / 完成」追蹤。</li>
+        <li>想先把明天的 6:00–24:00 排好，或套用「工作日」「週末」範本。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>看板：選看板（最多 10 個），欄位可新增、改名、左右移動、刪除（最多 8 欄）；「＋卡片」填標題、備註、標籤色、到期日。手機用卡片上的「← →」換欄、「↑ ↓」調順序，桌面也可直接拖曳卡片。上方色點可依標籤色篩選，可複製或下載 Markdown（每欄一節的 checkbox 清單，最後一欄視為完成）。</li>
+        <li>時間區塊：選日期與顯示範圍（起訖小時、每格 15 / 30 / 60 分鐘）。手機先點一格當開始、再點一格當結束，上方表單會帶入時間，填標題與類別後按「新增區塊」；也可直接用表單選起訖。點既有色塊可編輯、刪除、或用「提前 / 延後」微調；桌面可拖曳色塊移動、拖下緣調整長度。</li>
+        <li>範本：把今天的排法「另存為範本」，換日期後「套用到此日」。匯出：複製文字，或下載 .ics（時間以台灣 UTC+8 計）。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">看板「讀書」：待辦 → 進行中 → 完成，卡片「統計學第三章」到期日過了還在前兩欄就會標「逾期」。時間區塊：09:00–12:00 工作、12:00–13:00 休息，下方會算出各類別總時數與空檔。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>看板上限：10 個看板、每個 8 欄、300 張卡片、備註 1000 字；滿了會拒絕新增並提示。刪除欄位時，可選擇把卡片移到第一欄，或連同卡片一併刪除；最後一欄不能刪。刪除看板、清除全部都會先確認，無法復原。</li>
+        <li>時間區塊上限：每天 60 個、範本 20 個；區塊不得重疊，重疊會提示並拒絕。依日期各存一份（鍵 planb_blocks_日期），只保留最近 90 天，更早的日期每次開啟頁面時自動清掉；可選日期為 90 天前到一年後。</li>
+        <li>資料只存在這台裝置；壞掉的資料載入時會被略過或補預設值。底部「資料管理」可分別清除看板、範本、全部時間區塊。ICS 匯出為簡版（標題轉義、時間轉成 UTC），僅供參考。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <style>
+        :root { --wrap-w: 1000px; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+        .row label { color: var(--muted); font-size: 14px; }
+        .row input[type=text], .row select { flex: 1 1 120px; min-width: 0; }
+        .tag { color: var(--muted); font-size: 13px; }
+        .dots { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+        .dots button { padding-inline: 12px; }
+        .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--cc); vertical-align: -1px; margin-right: 4px; }
+        .cols { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
+        @media (min-width: 900px) { .cols { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); align-items: start; } }
+        .col { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; background: var(--fill); min-width: 0; }
+        .col.over { outline: 2px dashed var(--blue); }
+        .col > header { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 8px; }
+        .col > header b { flex: 1 1 80px; overflow-wrap: anywhere; }
+        .k { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--cc, var(--line)); border-radius: var(--radius-sm); padding: 8px; margin-bottom: 8px; }
+        .kt { font-weight: 600; overflow-wrap: anywhere; }
+        .kn { color: var(--muted); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 6em; overflow: hidden; }
+        .kd { font-size: 13px; color: var(--muted); }
+        .kd.od { color: var(--bad); font-weight: 600; }
+        .kb { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+        dialog { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); width: min(92vw, 420px); padding: 14px; }
+        dialog::backdrop { background: rgba(0, 0, 0, .45); }
+        dialog label { display: block; margin: 8px 0 2px; color: var(--muted); font-size: 14px; }
+        dialog input, dialog textarea, dialog select { width: 100%; box-sizing: border-box; }
+        #tlbox { max-width: 640px; margin-top: 10px; }
+        #tl { position: relative; border-top: 1px solid var(--line); }
+        .tc { display: flex; height: 36px; box-sizing: border-box; border-bottom: 1px solid var(--line); cursor: pointer; }
+        .tc span { width: 52px; flex: none; font-size: 12px; color: var(--muted); padding: 2px 4px; }
+        .tc.pend { background: color-mix(in srgb, var(--blue) 25%, transparent); }
+        .blk { position: absolute; left: 56px; right: 0; box-sizing: border-box; overflow: hidden; padding: 2px 6px; font-size: 13px; border: 1px solid var(--cc); border-left: 5px solid var(--cc); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--cc) 26%, var(--card)); color: var(--text); cursor: pointer; }
+        .blk.sel { outline: 2px solid var(--blue); }
+        .blk .rs { display: none; position: absolute; left: 0; right: 0; bottom: 0; height: 6px; cursor: ns-resize; background: var(--cc); }
+        @media (pointer: fine) { .blk .rs { display: block; } }
+        .gap { padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+        .msg { min-height: 1.4em; font-size: 14px; color: var(--bad); }
+        .msg.ok { color: var(--ok); }
+        pre.out { white-space: pre-wrap; background: var(--fill); padding: 8px; border-radius: var(--radius-sm); font-size: 13px; overflow-wrap: anywhere; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>看板與時間區塊</h1>
+        <p class="sub">Kanban 看板與每日時間區塊規劃，資料只存在這台裝置。</p>
+
+        <div class="tabs" role="tablist">
+            <button data-t="k" aria-pressed="true">看板</button>
+            <button data-t="t" aria-pressed="false">時間區塊</button>
+        </div>
+
+        <div class="pane" data-t="k">
+            <div class="card">
+                <div class="row">
+                    <select id="bsel" aria-label="看板"></select>
+                    <button class="sm" id="bAdd">新增看板</button>
+                    <button class="sm" id="bRen">改名</button>
+                    <button class="sm" id="bDelB">刪除看板</button>
+                </div>
+                <div class="tag" id="bcount"></div>
+                <div class="dots" id="dots" role="group" aria-label="標籤色篩選"></div>
+                <div class="row"><button class="sm" id="cAddCol">新增欄位</button><button class="sm" id="mdCopy">複製 Markdown</button><button class="sm" id="mdDl">下載 .md</button></div>
+                <div class="cols" id="cols"></div>
+            </div>
+        </div>
+
+        <div class="pane" data-t="t" hidden>
+            <div class="card">
+                <div class="row">
+                    <button class="sm" id="dPrev" aria-label="前一天">‹</button>
+                    <input type="date" id="date" aria-label="日期">
+                    <button class="sm" id="dNext" aria-label="後一天">›</button>
+                    <button class="sm" id="dToday">今天</button>
+                </div>
+                <div class="row">
+                    <label for="cfgS">範圍</label><select id="cfgS"></select>
+                    <label for="cfgE">到</label><select id="cfgE"></select>
+                    <label for="cfgStep">每格</label>
+                    <select id="cfgStep"><option value="15">15 分</option><option value="30">30 分</option><option value="60">60 分</option></select>
+                </div>
+                <div class="row">
+                    <select id="bs" aria-label="開始"></select><span>–</span><select id="be" aria-label="結束"></select>
+                    <input type="text" id="bt" maxlength="40" placeholder="標題" aria-label="標題">
+                    <select id="bc" aria-label="類別"></select>
+                </div>
+                <div class="row">
+                    <button class="primary" id="blkSave">新增區塊</button>
+                    <button class="sm" id="blkUp" disabled>提前</button>
+                    <button class="sm" id="blkDn" disabled>延後</button>
+                    <button class="sm" id="blkDel" disabled>刪除區塊</button>
+                    <button class="sm" id="blkCancel">取消選取</button>
+                </div>
+                <div class="msg" id="tmsg" role="status" aria-live="polite"></div>
+                <div class="tag">手機：先點一格當開始、再點一格當結束，再按「新增區塊」。</div>
+                <div id="tlbox"><div id="tl"></div></div>
+            </div>
+
+            <div class="card">
+                <h2>統計</h2>
+                <div id="stats"></div>
+            </div>
+
+            <div class="card">
+                <h2>範本與匯出</h2>
+                <div class="row">
+                    <select id="tpl" aria-label="範本"></select>
+                    <button class="sm" id="tplApply">套用到此日</button>
+                    <button class="sm" id="tplDel">刪除範本</button>
+                </div>
+                <div class="row"><button class="sm" id="tplSave">把這天另存為範本</button><span class="tag" id="tplN"></span></div>
+                <div class="row">
+                    <button class="sm" id="txCopy">複製文字</button>
+                    <button class="sm" id="icsDl">下載 .ics</button>
+                    <button class="sm" id="dayClear">清除這一天</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>資料管理</h2>
+            <div class="row">
+                <button class="sm" id="clrB">清除所有看板</button>
+                <button class="sm" id="clrT">清除所有範本</button>
+                <button class="sm" id="clrD">清除所有時間區塊</button>
+            </div>
+        </div>
+    </div>
+
+    <dialog id="kd">
+        <h2 id="kdTitle">卡片</h2>
+        <label for="kdT">標題</label><input type="text" id="kdT" maxlength="80">
+        <label for="kdN">備註（最多 1000 字）</label><textarea id="kdN" rows="4" maxlength="1000"></textarea>
+        <label for="kdC">標籤色</label><select id="kdC"></select>
+        <label for="kdD">到期日</label><input type="date" id="kdD">
+        <div class="msg" id="kdMsg"></div>
+        <div class="row"><button class="primary" id="kdOk">儲存</button><button id="kdNo">取消</button></div>
+    </dialog>
+
+    <script>
+        const { day, esc } = Util;
+        // --- pure ---
+        const MAX_BOARDS = 10, MAX_COLS = 8, MAX_CARDS = 300, MAX_NOTE = 1000, MAX_TITLE = 80;
+        const MAX_DAY_BLOCKS = 60, MAX_TPL = 20, KEEP_DAYS = 90, NCOLOR = 6;
+        const DEFAULT_COLS = ['待辦', '進行中', '完成'];
+        const COL_N = ['紅', '橘', '綠', '藍', '紫', '灰'], CAT_N = ['工作', '學習', '運動', '休息', '生活', '其他'];
+        const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+        const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+        const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s + 'T00:00:00Z')) && new Date(s + 'T00:00:00Z').toISOString().slice(0, 10) === s;
+        const colorIdx = (v) => Number.isInteger(v) && v >= 0 && v < NCOLOR ? v : -1;
+
+        function newBoard(name) { return { id: uid(), name: str(name, 20).trim() || '看板', cols: DEFAULT_COLS.map(n => ({ id: uid(), name: n })), cards: [] }; }
+
+        // 載入驗證：補預設、去重 id、截斷到上限、壞卡片丟掉
+        function cleanBoards(raw) {
+            const r = raw && typeof raw === 'object' ? raw : {}, seen = new Set(), out = [];
+            const fresh = (id, set) => { if (typeof id !== 'string' || !id || id.length > 40 || set.has(id)) id = uid(); set.add(id); return id; };
+            for (const b of Array.isArray(r.boards) ? r.boards : []) {
+                if (!b || typeof b !== 'object' || out.length >= MAX_BOARDS) continue;
+                const cols = [], cs = new Set(), cards = [], ks = new Set();
+                for (const c of Array.isArray(b.cols) ? b.cols : []) {
+                    if (!c || typeof c !== 'object' || cols.length >= MAX_COLS) continue;
+                    cols.push({ id: fresh(c.id, cs), name: str(c.name, 20).trim() || '欄位' });
+                }
+                if (!cols.length) for (const n of DEFAULT_COLS) cols.push({ id: fresh(null, cs), name: n });
+                for (const k of Array.isArray(b.cards) ? b.cards : []) {
+                    if (!k || typeof k !== 'object' || cards.length >= MAX_CARDS) continue;
+                    const title = str(k.title, MAX_TITLE).trim(); if (!title) continue;
+                    cards.push({ id: fresh(k.id, ks), col: cs.has(k.col) ? k.col : cols[0].id, title, note: str(k.note, MAX_NOTE), color: colorIdx(k.color), due: isDate(k.due) ? k.due : '' });
+                }
+                out.push({ id: fresh(b.id, seen), name: str(b.name, 20).trim() || '看板', cols, cards });
+            }
+            return { boards: out, cur: out.some(b => b.id === r.cur) ? r.cur : (out[0] ? out[0].id : '') };
+        }
+
+        // 移動卡片到某欄、插在 beforeId 之前（沒給就放該欄最後）；欄內順序 = 陣列順序
+        function moveTo(cards, id, colId, beforeId) {
+            const k = cards.find(c => c.id === id);
+            if (!k || id === beforeId) return cards;
+            const rest = cards.filter(c => c.id !== id);
+            let i = beforeId ? rest.findIndex(c => c.id === beforeId) : -1;
+            if (i < 0) i = rest.length;
+            rest.splice(i, 0, { ...k, col: colId });
+            return rest;
+        }
+        // 欄內上下調整（dir = -1 / 1），與同欄的相鄰卡片交換
+        function shiftCard(cards, id, dir) {
+            const i = cards.findIndex(c => c.id === id); if (i < 0) return cards;
+            let j = i + dir;
+            while (j >= 0 && j < cards.length && cards[j].col !== cards[i].col) j += dir;
+            if (j < 0 || j >= cards.length) return cards;
+            const a = cards.slice(); [a[i], a[j]] = [a[j], a[i]]; return a;
+        }
+        // 換到左 / 右一欄（放在該欄最後）
+        function stepCol(cols, cards, id, dir) {
+            const k = cards.find(c => c.id === id); if (!k) return cards;
+            const ni = cols.findIndex(c => c.id === k.col) + dir;
+            return ni < 0 || ni >= cols.length ? cards : moveTo(cards, id, cols[ni].id, null);
+        }
+        function moveColumn(cols, id, dir) {
+            const i = cols.findIndex(c => c.id === id), j = i + dir;
+            if (i < 0 || j < 0 || j >= cols.length) return cols;
+            const a = cols.slice(); [a[i], a[j]] = [a[j], a[i]]; return a;
+        }
+        // 刪欄：mode 'move' 卡片移到剩下的第一欄，'drop' 連卡片一併刪除；最後一欄不能刪
+        function removeCol(b, id, mode) {
+            if (b.cols.length < 2 || !b.cols.some(c => c.id === id)) return b;
+            const cols = b.cols.filter(c => c.id !== id), to = cols[0].id;
+            const cards = mode === 'drop' ? b.cards.filter(c => c.col !== id) : b.cards.map(c => c.col === id ? { ...c, col: to } : c);
+            return { ...b, cols, cards };
+        }
+        const isOverdue = (k, lastColId, today) => !!k.due && k.due < today && k.col !== lastColId;
+        function kanbanMd(b) {
+            const md = ['# ' + b.name];
+            b.cols.forEach((c, i) => {
+                md.push('', '## ' + c.name);
+                for (const k of b.cards.filter(k => k.col === c.id)) {
+                    md.push(`- [${i === b.cols.length - 1 ? 'x' : ' '}] ${k.title}${k.due ? ` (到期 ${k.due})` : ''}${k.color >= 0 ? ` [${COL_N[k.color]}]` : ''}`);
+                    if (k.note) md.push(...k.note.split('\n').map(l => '  ' + l));
+                }
+            });
+            return md.join('\n') + '\n';
+        }
+
+        // ---- 時間區塊 ----
+        const toMin = (s) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(s)); if (!m) return NaN; const h = +m[1], mi = +m[2]; return h > 24 || mi > 59 || (h === 24 && mi > 0) ? NaN : h * 60 + mi; };
+        const toHM = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+        const fmtDur = (m) => m >= 60 ? `${Math.floor(m / 60)} 小時${m % 60 ? ' ' + (m % 60) + ' 分' : ''}` : `${m} 分`;
+        const cellRange = (start, step, a, b, max = 1440) => ({ s: start + Math.min(a, b) * step, e: Math.min(max, start + (Math.max(a, b) + 1) * step) });
+        const validBlock = (b) => !!b && typeof b === 'object' && typeof b.id === 'string' && !!b.id && Number.isInteger(b.s) && Number.isInteger(b.e)
+            && b.s % 5 === 0 && b.e % 5 === 0 && b.s >= 0 && b.e <= 1440 && b.s < b.e && Number.isInteger(b.c) && b.c >= 0 && b.c < NCOLOR && typeof b.t === 'string';
+        const overlapWith = (blocks, s, e, skipId) => blocks.find(b => b.id !== skipId && b.s < e && s < b.e) || null;
+        // 新增或更新（同 id）；回 { blocks } 或 { err }
+        function putBlock(blocks, nb) {
+            if (!validBlock(nb)) return { err: '時間不正確（5 分鐘的倍數、結束要晚於開始）' };
+            const exists = blocks.some(b => b.id === nb.id);
+            if (!exists && blocks.length >= MAX_DAY_BLOCKS) return { err: `每天最多 ${MAX_DAY_BLOCKS} 個區塊` };
+            const x = overlapWith(blocks, nb.s, nb.e, nb.id);
+            if (x) return { err: `與「${x.t || '未命名'}」(${toHM(x.s)}–${toHM(x.e)}) 重疊` };
+            return { blocks: (exists ? blocks.map(b => b.id === nb.id ? nb : b) : [...blocks, nb]).sort((a, b) => a.s - b.s) };
+        }
+        // 載入驗證：壞區塊丟掉、重疊的後者丟掉、截斷到上限
+        function cleanDay(raw) {
+            let blocks = [];
+            for (const b of Array.isArray(raw && raw.blocks) ? raw.blocks : []) {
+                if (blocks.length >= MAX_DAY_BLOCKS || !b) continue;
+                const nb = { id: b.id, s: b.s, e: b.e, t: str(b.t, 40), c: b.c };
+                const r = putBlock(blocks, nb); if (r.blocks) blocks = r.blocks;
+            }
+            return blocks;
+        }
+        function freeGaps(blocks, start, end) {
+            const gaps = []; let cur = start;
+            for (const b of blocks.slice().sort((a, b) => a.s - b.s)) {
+                if (b.e <= cur) continue;
+                if (b.s >= end) break;
+                if (b.s > cur) gaps.push([cur, b.s]);
+                cur = Math.max(cur, b.e);
+            }
+            if (cur < end) gaps.push([cur, end]);
+            return gaps;
+        }
+        function catTotals(blocks) { const t = Array(NCOLOR).fill(0); for (const b of blocks) t[b.c] += b.e - b.s; return t; }
+        // 拖曳：mv 整塊移動（長度不變、不出界）、rs 調整結束時間（至少 5 分鐘）
+        function dragBlock(b, mode, dm) {
+            if (mode === 'rs') return { s: b.s, e: Math.max(b.s + 5, Math.min(1440, b.e + dm)) };
+            const dur = b.e - b.s, s = Math.max(0, Math.min(1440 - dur, b.s + dm));
+            return { s, e: s + dur };
+        }
+        const cleanCfg = (c) => {
+            const o = { start: 360, end: 1440, step: 30 }; if (!c || typeof c !== 'object') return o;
+            if (Number.isInteger(c.start) && Number.isInteger(c.end) && c.start % 60 === 0 && c.end % 60 === 0 && c.start >= 0 && c.end <= 1440 && c.start < c.end) { o.start = c.start; o.end = c.end; }
+            if ([15, 30, 60].includes(c.step)) o.step = c.step;
+            return o;
+        };
+        function cleanTpl(raw) {
+            const r = raw && typeof raw === 'object' ? raw : {}, list = [], ids = new Set();
+            for (const t of Array.isArray(r.list) ? r.list : []) {
+                if (!t || typeof t !== 'object' || list.length >= MAX_TPL) continue;
+                const name = str(t.name, 20).trim(); if (!name) continue;
+                let id = typeof t.id === 'string' && t.id && !ids.has(t.id) ? t.id : uid(); ids.add(id);
+                list.push({ id, name, blocks: cleanDay(t) });
+            }
+            return { list, cfg: cleanCfg(r.cfg) };
+        }
+        const cloneBlocks = (blocks) => blocks.map(b => ({ ...b, id: uid() }));
+        const icsEscape = (s) => String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+        const icsFold = (line) => { const a = Array.from(line), out = []; for (let i = 0; i < a.length; i += 25) out.push(a.slice(i, i + 25).join('')); return out.join('\r\n '); };
+        // 台灣時間（UTC+8）轉成 UTC 時戳
+        function icsStamp(date, min) { const { y, m, d } = day.parse(date); return new Date(Date.UTC(y, m - 1, d, 0, min - 480)).toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z'; }
+        function buildIcs(date, blocks, nowMs) {
+            const stamp = new Date(nowMs).toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
+            const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//simple_tools//plan-board//ZH', 'CALSCALE:GREGORIAN'];
+            for (const b of blocks) L.push('BEGIN:VEVENT', `UID:${b.id}-${date}@simple-tools`, 'DTSTAMP:' + stamp, 'DTSTART:' + icsStamp(date, b.s), 'DTEND:' + icsStamp(date, b.e), icsFold('SUMMARY:' + icsEscape(b.t || '未命名')), 'END:VEVENT');
+            L.push('END:VCALENDAR');
+            return L.join('\r\n') + '\r\n';
+        }
+        function dayText(date, blocks, start, end) {
+            const L = [date];
+            for (const b of blocks) L.push(`${toHM(b.s)}–${toHM(b.e)} ${b.t || '未命名'}（${CAT_N[b.c]}）`);
+            const t = catTotals(blocks), free = freeGaps(blocks, start, end).reduce((a, g) => a + g[1] - g[0], 0);
+            L.push('', t.map((m, i) => m ? `${CAT_N[i]} ${fmtDur(m)}` : '').filter(Boolean).concat(`空檔 ${fmtDur(free)}`).join('、'));
+            return L.join('\n') + '\n';
+        }
+        // 過期的每日資料鍵（日期早於 keep 天前，或鍵名格式不對）
+        function pruneKeys(keys, today, keep) {
+            const limit = day.shift(today, -keep);
+            return keys.filter(k => { if (!k.startsWith('planb_blocks_')) return false; const d = k.slice(13); return !isDate(d) || d < limit; });
+        }
+        // --- /pure ---
+
+        const $ = (id) => document.getElementById(id);
+        const COLORS = ['#e5534b', '#e8912d', '#3fa46a', '#3b82f6', '#8b5cf6', '#8a8f98'];
+        const setCC = (el, i) => el.style.setProperty('--cc', i >= 0 ? COLORS[i] : 'transparent');
+        const ccStyle = (i) => i >= 0 ? `--cc:${COLORS[i]}` : '';
+        const KEY_B = 'planb_boards', KEY_T = 'planb_tpl', KEY_D = 'planb_blocks_';
+        let B = cleanBoards(Util.store.get(KEY_B, null)), T = cleanTpl(Util.store.get(KEY_T, null));
+        if (!B.boards.length) { const nb = newBoard('看板 1'); B = { boards: [nb], cur: nb.id }; }
+        const saveB = () => Util.store.set(KEY_B, B), saveT = () => Util.store.set(KEY_T, T);
+        const board = () => B.boards.find(b => b.id === B.cur) || B.boards[0];
+        let fil = -1;
+
+        // 分頁
+        document.querySelectorAll('.tabs button').forEach(btn => btn.onclick = () => {
+            document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-pressed', x === btn));
+            document.querySelectorAll('.pane').forEach(p => p.hidden = p.dataset.t !== btn.dataset.t);
+            if (btn.dataset.t === 't') renderT();
+        });
+
+        // ---------- 看板 ----------
+        function renderK() {
+            const b = board(), today = day.today(), last = b.cols[b.cols.length - 1].id;
+            $('bsel').innerHTML = B.boards.map(x => `<option value="${x.id}"${x.id === b.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
+            $('bcount').textContent = `${B.boards.length}/${MAX_BOARDS} 個看板 · 此看板 ${b.cols.length}/${MAX_COLS} 欄、${b.cards.length}/${MAX_CARDS} 張卡片`;
+            $('dots').innerHTML = `<button class="sm" data-f="-1" aria-pressed="${fil < 0}">全部</button>` + COL_N.map((n, i) => `<button class="sm" data-f="${i}" aria-pressed="${fil === i}"><span class="dot" style="${ccStyle(i)}"></span>${n}</button>`).join('');
+            const fine = matchMedia('(pointer:fine)').matches;
+            $('cols').innerHTML = b.cols.map((c, ci) => {
+                const all = b.cards.filter(k => k.col === c.id), ks = all.filter(k => fil < 0 || k.color === fil);
+                return `<section class="col" data-col="${c.id}"><header><b>${esc(c.name)}</b><small>${all.length}</small>
+<button class="sm" data-a="cl" data-col="${c.id}" aria-label="欄位左移">◀</button><button class="sm" data-a="cr" data-col="${c.id}" aria-label="欄位右移">▶</button><button class="sm" data-a="cren" data-col="${c.id}" aria-label="欄位改名">✎</button><button class="sm" data-a="cdel" data-col="${c.id}" aria-label="刪除欄位">✕</button></header>`
+                    + ks.map(k => {
+                        const od = isOverdue(k, last, today);
+                        return `<article class="k" data-id="${k.id}" style="${ccStyle(k.color)}"${fine ? ' draggable="true"' : ''}><div class="kt">${esc(k.title)}</div>${k.note ? `<div class="kn">${esc(k.note)}</div>` : ''}${k.due ? `<div class="kd${od ? ' od' : ''}">到期 ${k.due}${od ? '（逾期）' : ''}</div>` : ''}
+<div class="kb"><button class="sm" data-a="L" aria-label="移到左欄">←</button><button class="sm" data-a="R" aria-label="移到右欄">→</button><button class="sm" data-a="U" aria-label="上移">↑</button><button class="sm" data-a="D" aria-label="下移">↓</button><button class="sm" data-a="E" aria-label="編輯">✎</button><button class="sm" data-a="X" aria-label="刪除卡片">✕</button></div></article>`;
+                    }).join('')
+                    + `<button class="sm" data-a="add" data-col="${c.id}">＋卡片</button></section>`;
+            }).join('');
+        }
+        const commitB = () => { saveB(); renderK(); };
+        $('bsel').onchange = (e) => { B.cur = e.target.value; fil = -1; commitB(); };
+        $('dots').onclick = (e) => { const f = e.target.closest('[data-f]'); if (f) { fil = +f.dataset.f; renderK(); } };
+        $('bAdd').onclick = () => {
+            if (B.boards.length >= MAX_BOARDS) return alert(`看板最多 ${MAX_BOARDS} 個，請先刪除不用的看板`);
+            const n = prompt('新看板名稱（20 字內）', '看板 ' + (B.boards.length + 1)); if (n === null) return;
+            const nb = newBoard(n); B.boards.push(nb); B.cur = nb.id; fil = -1; commitB();
+        };
+        $('bRen').onclick = () => { const b = board(), n = prompt('看板名稱（20 字內）', b.name); if (n !== null && n.trim()) { b.name = n.trim().slice(0, 20); commitB(); } };
+        $('bDelB').onclick = () => {
+            const b = board();
+            if (!confirm(`刪除看板「${b.name}」與其中 ${b.cards.length} 張卡片？無法復原。`)) return;
+            B.boards = B.boards.filter(x => x.id !== b.id);
+            if (!B.boards.length) B.boards.push(newBoard('看板 1'));
+            B.cur = B.boards[0].id; fil = -1; commitB();
+        };
+        $('cAddCol').onclick = () => {
+            const b = board(); if (b.cols.length >= MAX_COLS) return alert(`每個看板最多 ${MAX_COLS} 欄`);
+            const n = prompt('欄位名稱（20 字內）'); if (n && n.trim()) { b.cols.push({ id: uid(), name: n.trim().slice(0, 20) }); commitB(); }
+        };
+        $('mdCopy').onclick = (e) => Util.copyWithFeedback(e.target, kanbanMd(board()));
+        $('mdDl').onclick = () => Util.download(new Blob([kanbanMd(board())], { type: 'text/markdown' }), board().name + '.md');
+
+        // 卡片表單
+        let editing = null; // { id|null, col }
+        function openCard(col, k) {
+            editing = { id: k ? k.id : null, col: k ? k.col : col };
+            $('kdTitle').textContent = k ? '編輯卡片' : '新增卡片';
+            $('kdT').value = k ? k.title : ''; $('kdN').value = k ? k.note : ''; $('kdC').value = k ? k.color : -1; $('kdD').value = k ? k.due : ''; $('kdMsg').textContent = '';
+            $('kd').showModal();
+        }
+        $('kdC').innerHTML = '<option value="-1">無</option>' + COL_N.map((n, i) => `<option value="${i}">${n}</option>`).join('');
+        $('kdNo').onclick = () => $('kd').close();
+        $('kdOk').onclick = () => {
+            const b = board(), title = $('kdT').value.trim(), due = $('kdD').value;
+            if (!title) return $('kdMsg').textContent = '請輸入標題';
+            if (due && !isDate(due)) return $('kdMsg').textContent = '到期日格式不正確';
+            const f = { title: title.slice(0, MAX_TITLE), note: $('kdN').value.slice(0, MAX_NOTE), color: colorIdx(+$('kdC').value), due };
+            if (editing.id) Object.assign(b.cards.find(c => c.id === editing.id) || {}, f);
+            else { if (b.cards.length >= MAX_CARDS) return $('kdMsg').textContent = `每個看板最多 ${MAX_CARDS} 張卡片，請先刪除`; b.cards.push({ id: uid(), col: editing.col, ...f }); }
+            $('kd').close(); commitB();
+        };
+
+        $('cols').onclick = (e) => {
+            const btn = e.target.closest('button[data-a]'); if (!btn) return;
+            const b = board(), a = btn.dataset.a, cid = btn.dataset.col, kid = btn.closest('.k') && btn.closest('.k').dataset.id;
+            if (a === 'add') return openCard(cid, null);
+            if (a === 'cl' || a === 'cr') b.cols = moveColumn(b.cols, cid, a === 'cl' ? -1 : 1);
+            else if (a === 'cren') { const c = b.cols.find(c => c.id === cid), n = prompt('欄位名稱（20 字內）', c.name); if (n === null || !n.trim()) return; c.name = n.trim().slice(0, 20); }
+            else if (a === 'cdel') {
+                if (b.cols.length < 2) return alert('至少要保留一個欄位');
+                const n = b.cards.filter(c => c.col === cid).length; let mode = 'move';
+                if (n && !confirm(`此欄有 ${n} 張卡片。按「確定」把卡片移到第一欄再刪除欄位；按「取消」可選擇連卡片一併刪除。`)) {
+                    if (!confirm(`連同 ${n} 張卡片一併刪除？無法復原。`)) return;
+                    mode = 'drop';
+                } else if (!n && !confirm('刪除這個空欄位？')) return;
+                Object.assign(b, removeCol(b, cid, mode));
+            }
+            else if (a === 'L' || a === 'R') b.cards = stepCol(b.cols, b.cards, kid, a === 'L' ? -1 : 1);
+            else if (a === 'U' || a === 'D') b.cards = shiftCard(b.cards, kid, a === 'U' ? -1 : 1);
+            else if (a === 'E') return openCard(null, b.cards.find(c => c.id === kid));
+            else if (a === 'X') { if (!confirm('刪除這張卡片？無法復原。')) return; b.cards = b.cards.filter(c => c.id !== kid); }
+            commitB();
+        };
+        // 桌面拖曳
+        let dragId = null;
+        $('cols').addEventListener('dragstart', (e) => { const k = e.target.closest && e.target.closest('.k'); if (k) { dragId = k.dataset.id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragId); } });
+        $('cols').addEventListener('dragover', (e) => { const c = e.target.closest('.col'); if (dragId && c) { e.preventDefault(); document.querySelectorAll('.col.over').forEach(x => x !== c && x.classList.remove('over')); c.classList.add('over'); } });
+        $('cols').addEventListener('dragend', () => { dragId = null; document.querySelectorAll('.col.over').forEach(x => x.classList.remove('over')); });
+        $('cols').addEventListener('drop', (e) => {
+            const c = e.target.closest('.col'); if (!dragId || !c) return;
+            e.preventDefault();
+            const k = e.target.closest('.k'), b = board();
+            b.cards = moveTo(b.cards, dragId, c.dataset.col, k ? k.dataset.id : null); dragId = null; commitB();
+        });
+
+        // ---------- 時間區塊 ----------
+        const ROWH = 36;
+        let date = day.today(), blocks = [], selId = null, pend = null, view = { rs: 360, step: 30 };
+        const keyOf = (d) => KEY_D + d;
+        const minDate = () => day.shift(day.today(), -KEEP_DAYS), maxDate = () => day.shift(day.today(), 365);
+        function pruneOld() {
+            const keys = []; try { for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i)); } catch (e) { return; }
+            for (const k of pruneKeys(keys, day.today(), KEEP_DAYS)) try { localStorage.removeItem(k); } catch (e) { }
+        }
+        function loadDay() { blocks = cleanDay(Util.store.get(keyOf(date), null)); selId = null; pend = null; }
+        function saveDay() {
+            if (blocks.length) Util.store.set(keyOf(date), { blocks });
+            else try { localStorage.removeItem(keyOf(date)); } catch (e) { }
+        }
+        const say = (m, ok) => { $('tmsg').textContent = m || ''; $('tmsg').className = 'msg' + (ok ? ' ok' : ''); };
+        function opts(sel, from, to, stepM, fmt) { let h = ''; for (let m = from; m <= to; m += stepM) h += `<option value="${m}">${fmt(m)}</option>`; sel.innerHTML = h; }
+        opts($('bs'), 0, 1435, 5, toHM); opts($('be'), 5, 1440, 5, toHM);
+        opts($('cfgS'), 0, 1380, 60, toHM); opts($('cfgE'), 60, 1440, 60, toHM);
+        $('bc').innerHTML = CAT_N.map((n, i) => `<option value="${i}">${n}</option>`).join('');
+        const syncCfg = () => { $('cfgS').value = T.cfg.start; $('cfgE').value = T.cfg.end; $('cfgStep').value = T.cfg.step; };
+        const fillForm = (s, e, t, c) => { $('bs').value = s; $('be').value = e; $('bt').value = t; $('bc').value = c; };
+
+        function renderT() {
+            $('date').value = date; $('date').min = minDate(); $('date').max = maxDate();
+            const cfg = T.cfg, step = cfg.step;
+            // 顯示範圍：設定範圍加上落在範圍外的區塊（對齊格線）
+            let rs = cfg.start, re = cfg.end;
+            for (const b of blocks) { rs = Math.min(rs, Math.floor(b.s / step) * step); re = Math.max(re, Math.ceil(b.e / step) * step); }
+            view = { rs, step };
+            const n = Math.ceil((re - rs) / step);
+            let h = '';
+            for (let i = 0; i < n; i++) { const m = rs + i * step; h += `<div class="tc${pend === i ? ' pend' : ''}" data-i="${i}"><span>${m % 60 === 0 || step >= 30 ? toHM(m) : ''}</span></div>`; }
+            for (const b of blocks) {
+                h += `<div class="blk${b.id === selId ? ' sel' : ''}" data-id="${b.id}" style="--cc:${COLORS[b.c]};top:${(b.s - rs) / step * ROWH}px;height:${(b.e - b.s) / step * ROWH}px"><b>${toHM(b.s)}–${toHM(b.e)}</b> ${esc(b.t || '未命名')}<div class="rs"></div></div>`;
+            }
+            $('tl').style.height = n * ROWH + 'px'; $('tl').innerHTML = h;
+            const sel = blocks.find(b => b.id === selId);
+            $('blkSave').textContent = sel ? '更新區塊' : '新增區塊';
+            for (const id of ['blkUp', 'blkDn', 'blkDel']) $(id).disabled = !sel;
+            // 統計
+            const planned = blocks.reduce((a, b) => a + Math.max(0, Math.min(b.e, cfg.end) - Math.max(b.s, cfg.start)), 0), gaps = freeGaps(blocks, cfg.start, cfg.end), free = gaps.reduce((a, g) => a + g[1] - g[0], 0), tot = catTotals(blocks);
+            $('stats').innerHTML = `<div class="gap">範圍 ${toHM(cfg.start)}–${toHM(cfg.end)}（${fmtDur(cfg.end - cfg.start)}）· 已排 ${fmtDur(planned)} · 空檔 ${fmtDur(free)} · 區塊 ${blocks.length}/${MAX_DAY_BLOCKS}</div>`
+                + tot.map((m, i) => m ? `<div class="gap"><span class="dot" style="--cc:${COLORS[i]}"></span>${CAT_N[i]}：${fmtDur(m)}</div>` : '').join('')
+                + `<h3>空檔</h3>` + (gaps.length ? gaps.map(g => `<div class="gap">${toHM(g[0])}–${toHM(g[1])}（${fmtDur(g[1] - g[0])}）</div>`).join('') : '<div class="gap">沒有空檔</div>');
+            $('tpl').innerHTML = T.list.length ? T.list.map(t => `<option value="${t.id}">${esc(t.name)}（${t.blocks.length} 塊）</option>`).join('') : '<option value="">（尚無範本）</option>';
+            $('tplN').textContent = `範本 ${T.list.length}/${MAX_TPL}`;
+        }
+        function setDate(d) {
+            if (!isDate(d)) return renderT();
+            date = d < minDate() ? minDate() : d > maxDate() ? maxDate() : d;
+            loadDay(); say(''); fillForm(view.rs, view.rs + view.step, '', 5); renderT();
+        }
+        $('date').onchange = (e) => setDate(e.target.value);
+        $('dPrev').onclick = () => setDate(day.shift(date, -1));
+        $('dNext').onclick = () => setDate(day.shift(date, 1));
+        $('dToday').onclick = () => setDate(day.today());
+        const cfgChange = () => {
+            const s = +$('cfgS').value, e = +$('cfgE').value;
+            if (s >= e) { say('結束要晚於開始'); return syncCfg(); }
+            T.cfg = { start: s, end: e, step: +$('cfgStep').value }; saveT(); pend = null; renderT();
+        };
+        $('cfgS').onchange = $('cfgE').onchange = $('cfgStep').onchange = cfgChange;
+
+        $('tl').addEventListener('click', (e) => {
+            if (suppress) return;
+            const bl = e.target.closest('.blk');
+            if (bl) {
+                const b = blocks.find(x => x.id === bl.dataset.id); if (!b) return;
+                selId = b.id; pend = null; fillForm(b.s, b.e, b.t, b.c); say(''); return renderT();
+            }
+            const c = e.target.closest('.tc'); if (!c) return;
+            const i = +c.dataset.i; selId = null;
+            if (pend === null) { pend = i; say('已選開始，再點結束格', true); return renderT(); }
+            const r = cellRange(view.rs, view.step, pend, i); pend = null;
+            fillForm(r.s, r.e, $('bt').value, +$('bc').value);
+            say(`已選 ${toHM(r.s)}–${toHM(r.e)}，填標題後按「新增區塊」`, true); renderT();
+        });
+        function applyBlock(nb) {
+            const r = putBlock(blocks, nb);
+            if (r.err) { say(r.err); return false; }
+            blocks = r.blocks; saveDay(); pruneOld(); say(''); return true;
+        }
+        $('blkSave').onclick = () => {
+            const sel = blocks.find(b => b.id === selId);
+            const nb = { id: sel ? sel.id : uid(), s: +$('bs').value, e: +$('be').value, t: $('bt').value.trim().slice(0, 40), c: +$('bc').value };
+            if (applyBlock(nb)) { selId = null; pend = null; $('bt').value = ''; say('已儲存', true); }
+            renderT();
+        };
+        const nudge = (dir) => {
+            const b = blocks.find(x => x.id === selId); if (!b) return;
+            const d = dir * view.step, nb = { ...b, s: b.s + d, e: b.e + d };
+            if (applyBlock(nb)) fillForm(nb.s, nb.e, nb.t, nb.c);
+            renderT();
+        };
+        $('blkUp').onclick = () => nudge(-1); $('blkDn').onclick = () => nudge(1);
+        $('blkDel').onclick = () => { blocks = blocks.filter(b => b.id !== selId); selId = null; saveDay(); say('已刪除', true); renderT(); };
+        $('blkCancel').onclick = () => { selId = null; pend = null; say(''); renderT(); };
+        $('dayClear').onclick = () => {
+            if (!blocks.length) return;
+            if (!confirm(`清除 ${date} 的 ${blocks.length} 個區塊？無法復原。`)) return;
+            blocks = []; selId = null; saveDay(); renderT();
+        };
+
+        // 桌面拖曳（只限滑鼠，不影響手機捲動）
+        let drag = null, suppress = false;
+        $('tl').addEventListener('pointerdown', (e) => {
+            if (e.pointerType !== 'mouse' || e.button !== 0) return;
+            const el = e.target.closest('.blk'), b = el && blocks.find(x => x.id === el.dataset.id); if (!b) return;
+            drag = { b, mode: e.target.classList.contains('rs') ? 'rs' : 'mv', y: e.clientY, el, moved: false };
+            el.setPointerCapture(e.pointerId);
+        });
+        const dragTo = (e) => { const dm = Math.round((e.clientY - drag.y) / ROWH) * view.step; return dragBlock(drag.b, drag.mode, dm); };
+        $('tl').addEventListener('pointermove', (e) => {
+            if (!drag) return;
+            if (Math.abs(e.clientY - drag.y) > 3) drag.moved = true;
+            if (!drag.moved) return;
+            const r = dragTo(e);
+            drag.el.style.top = (r.s - view.rs) / view.step * ROWH + 'px'; drag.el.style.height = (r.e - r.s) / view.step * ROWH + 'px';
+        });
+        $('tl').addEventListener('pointerup', (e) => {
+            if (!drag) return;
+            const d = drag; drag = null;
+            if (!d.moved) return;
+            suppress = true; setTimeout(() => suppress = false, 0);
+            const r = dragTo(e); selId = d.b.id;
+            if (applyBlock({ ...d.b, ...r })) fillForm(r.s, r.e, d.b.t, d.b.c);
+            renderT();
+        });
+
+        // 範本
+        $('tplSave').onclick = () => {
+            if (!blocks.length) return say('這天還沒有區塊，無法存成範本');
+            const n = prompt('範本名稱（20 字內，例如 工作日）'); if (n === null || !n.trim()) return;
+            const name = n.trim().slice(0, 20), old = T.list.find(t => t.name === name);
+            if (old) { if (!confirm(`已有範本「${name}」，要覆蓋嗎？`)) return; old.blocks = cloneBlocks(blocks); }
+            else { if (T.list.length >= MAX_TPL) return say(`範本最多 ${MAX_TPL} 個，請先刪除`); T.list.push({ id: uid(), name, blocks: cloneBlocks(blocks) }); }
+            saveT(); say('範本已儲存', true); renderT();
+        };
+        $('tplApply').onclick = () => {
+            const t = T.list.find(x => x.id === $('tpl').value); if (!t) return;
+            if (blocks.length && !confirm(`${date} 已有 ${blocks.length} 個區塊，套用「${t.name}」會取代它們，無法復原。繼續？`)) return;
+            blocks = cloneBlocks(t.blocks); selId = null; saveDay(); say('已套用', true); renderT();
+        };
+        $('tplDel').onclick = () => {
+            const t = T.list.find(x => x.id === $('tpl').value); if (!t) return;
+            if (!confirm(`刪除範本「${t.name}」？無法復原。`)) return;
+            T.list = T.list.filter(x => x.id !== t.id); saveT(); renderT();
+        };
+        $('txCopy').onclick = (e) => Util.copyWithFeedback(e.target, dayText(date, blocks, T.cfg.start, T.cfg.end));
+        $('icsDl').onclick = () => { if (!blocks.length) return say('這天沒有區塊可匯出'); Util.download(new Blob([buildIcs(date, blocks, Date.now())], { type: 'text/calendar' }), `plan-${date}.ics`); };
+
+        // 資料管理
+        $('clrB').onclick = () => {
+            if (!confirm('清除所有看板與卡片？無法復原。')) return;
+            try { localStorage.removeItem(KEY_B); } catch (e) { }
+            const nb = newBoard('看板 1'); B = { boards: [nb], cur: nb.id }; fil = -1; renderK();
+        };
+        $('clrT').onclick = () => {
+            if (!confirm('清除所有範本與顯示範圍設定？無法復原。')) return;
+            try { localStorage.removeItem(KEY_T); } catch (e) { }
+            T = cleanTpl(null); syncCfg(); renderT();
+        };
+        $('clrD').onclick = () => {
+            if (!confirm('清除所有日期的時間區塊？無法復原。')) return;
+            const keys = []; try { for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i)); } catch (e) { }
+            for (const k of keys) if (k.startsWith(KEY_D)) try { localStorage.removeItem(k); } catch (e) { }
+            blocks = []; selId = null; renderT();
+        };
+
+        pruneOld(); syncCfg(); loadDay(); fillForm(T.cfg.start, T.cfg.start + T.cfg.step, '', 5); renderK(); renderT();
+    </script>
+</body>
+
+</html>

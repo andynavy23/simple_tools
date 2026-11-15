@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="心智圖：樹狀節點自動排版、拖曳改父層、折疊、8 色、撤銷重做，多張存檔，匯出 PNG 與 Markdown 大綱，也能貼大綱建立心智圖。">
+    <meta property="og:title" content="心智圖" />
+    <meta property="og:description" content="自動排版的心智圖，手機友善，匯出 PNG / Markdown 大綱。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/mind-map.html" />
+    <meta name="st-keys" content="mindmap_maps,mindmap_cur">
+    <title>心智圖</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>用「中心主題 + 往外長出的分支」整理想法的心智圖。版面自動排好（左右展開），你只要輸入文字、調整結構。可存多張，匯出圖片或 Markdown 大綱。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+            <li>腦力激盪、讀書筆記、專案拆解、旅遊 / 活動規劃。</li>
+            <li>已經有一份縮排大綱，想一鍵變成圖。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+            <li>點一個節點選取，按「子節點」往下長、「同層」加旁邊的節點，輸入文字後按確定。點兩下節點或按「編輯」改文字。</li>
+            <li>「折疊」收起子樹；「↑ ↓」調整同層順序；上方 8 色可替選取的節點上色。</li>
+            <li>改變父層：電腦直接把節點拖到另一個節點上；手機按「移到…」再點新的父節點（不能移到自己的後代底下）。</li>
+            <li>畫布：電腦拖背景平移、滾輪縮放；手機預設不攔截捲動，要平移 / 雙指縮放請先按「移動畫布」（此時在畫布上滑動不會捲動頁面，用完再關掉），也可用「＋ －」與「置中」。</li>
+            <li>鍵盤（電腦，焦點在畫布）：Enter 同層、Tab 子節點、Delete 刪除、F2 編輯、空白鍵折疊、方向鍵移動選取、Ctrl+Z / Ctrl+Y 撤銷 / 重做。</li>
+            <li>下方管理多張心智圖；「匯出 / 匯入」可存 PNG、複製 Markdown 大綱，或貼上縮排大綱（- 清單或 # 標題）建立新的心智圖。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">貼上<br>- 旅行計畫<br>&nbsp;&nbsp;- 交通<br>&nbsp;&nbsp;&nbsp;&nbsp;- 高鐵<br>&nbsp;&nbsp;- 住宿<br>按「建立心智圖」，就得到一個根節點「旅行計畫」、兩個分支的圖。</div>
+        <h3>小提醒</h3>
+        <ul>
+            <li>資料只存在這台裝置（鍵 mindmap_maps、mindmap_cur），自動存檔；可用右上角備份。</li>
+            <li>上限：30 張圖、每張 500 個節點、每個節點 100 字；超過會拒絕新增並提示，不會默默刪舊的。</li>
+            <li>刪除節點會連子樹一起刪（子樹超過 3 個節點會先確認），可用撤銷（最近 50 步）救回；撤銷紀錄切換或離開頁面後消失。</li>
+            <li>刪除單張心智圖、清除全部都會先確認且無法復原。壞掉的舊資料載入時會自動修復或略過。</li>
+            <li>匯入大綱：沒有單一最上層時會自動加一個「中心主題」根節點；超過上限的部分會被截掉並提示。PNG 太大（極大的圖）會拒絕匯出，請先折疊部分節點。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <style>
+        :root { --wrap-w: 900px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+        .row > input[type=text] { flex: 1 1 140px; min-width: 0; }
+        .row > select { flex: 1 1 140px; min-width: 0; }
+        .tag { color: var(--muted); font-size: 13px; }
+        .stage { position: relative; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); overflow: hidden; }
+        #mm { display: block; width: 100%; height: 60vh; height: 60dvh; min-height: 340px; max-height: 720px; user-select: none; -webkit-user-select: none; touch-action: auto; }
+        #mm .n { cursor: pointer; }
+        #mm .n text { font-size: 14px; font-family: system-ui, "Microsoft JhengHei", "PingFang TC", sans-serif; pointer-events: none; }
+        #mm .n.drop rect { stroke: var(--ok); stroke-width: 4; }
+        #mm .n.drag { opacity: .6; }
+        .sw { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .sw button { width: 44px; height: 44px; padding: 0; border-radius: 50%; border: 2px solid var(--line); }
+        .sw button[aria-pressed=true] { outline: 3px solid var(--blue); outline-offset: 1px; }
+        textarea#md { width: 100%; min-height: 150px; font-family: ui-monospace, monospace; resize: vertical; box-sizing: border-box; }
+        dialog { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; width: min(92vw, 360px); }
+        dialog::backdrop { background: rgba(0, 0, 0, .4); }
+        dialog input { width: 100%; box-sizing: border-box; margin: 8px 0 12px; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>心智圖</h1>
+        <p class="sub">節點自動排版，拖曳改結構，匯出 PNG / Markdown 大綱。自動存在這台裝置。</p>
+
+        <div class="card">
+            <div class="row">
+                <select id="msel" aria-label="選擇心智圖"></select>
+                <input type="text" id="mname" maxlength="30" aria-label="心智圖名稱">
+                <button class="sm" id="mren">改名</button>
+            </div>
+            <div class="row">
+                <button class="sm" id="mnew">新增一張</button>
+                <button class="sm" id="mdup">複製這張</button>
+                <button class="sm" id="mdel">刪除這張</button>
+                <span class="tag" id="mcount"></span>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="row">
+                <button class="sm primary" id="bChild">子節點</button>
+                <button class="sm" id="bSib">同層</button>
+                <button class="sm" id="bEdit">編輯</button>
+                <button class="sm" id="bFold">折疊</button>
+                <button class="sm" id="bMove" aria-pressed="false">移到…</button>
+                <button class="sm" id="bUp" aria-label="同層上移">↑</button>
+                <button class="sm" id="bDn" aria-label="同層下移">↓</button>
+                <button class="sm" id="bDel">刪除</button>
+            </div>
+            <div class="row">
+                <button class="sm" id="bUndo">撤銷</button>
+                <button class="sm" id="bRedo">重做</button>
+                <button class="sm" id="bFit">置中</button>
+                <button class="sm" id="bZin" aria-label="放大">＋</button>
+                <button class="sm" id="bZout" aria-label="縮小">－</button>
+                <button class="sm" id="bPan" aria-pressed="false">移動畫布</button>
+            </div>
+            <div class="tag" id="info" style="margin-bottom:8px"></div>
+            <div class="stage"><svg id="mm" tabindex="0" role="img" aria-label="心智圖畫布" xmlns="http://www.w3.org/2000/svg"></svg></div>
+            <div class="sw" id="sw" style="margin-top:10px" aria-label="節點顏色"></div>
+        </div>
+
+        <div class="card">
+            <h2>匯出 / 匯入</h2>
+            <div class="row">
+                <button class="sm primary" id="xPng">下載 PNG</button>
+                <button class="sm" id="xGen">產生 Markdown 大綱</button>
+                <button class="sm" id="xCopy">複製</button>
+                <button class="sm" id="xMd">下載 .md</button>
+            </div>
+            <textarea id="md" maxlength="40000" placeholder="在這裡貼上縮排大綱（- 清單或 # 標題）再按「建立心智圖」，或按「產生 Markdown 大綱」看目前這張。"></textarea>
+            <div class="row" style="margin-top:8px">
+                <button class="sm primary" id="xImp">用這段文字建立心智圖</button>
+                <span class="tag" id="xMsg"></span>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="row"><button class="sm" id="clrAll">清除全部心智圖</button><span class="tag">刪光本頁所有資料，無法復原。</span></div>
+        </div>
+    </div>
+
+    <dialog id="dlg">
+        <form id="dform">
+            <label for="dtxt">節點文字（最多 100 字）</label>
+            <input type="text" id="dtxt" maxlength="100" autocomplete="off">
+            <div class="row" style="margin:0"><button class="primary" type="submit">確定</button><button type="button" id="dcancel">取消</button></div>
+        </form>
+    </dialog>
+
+    <script>
+        // --- pure ---
+        const MAX_MAPS = 30, MAX_NODES = 500, MAX_TEXT = 100, MAX_HIST = 50, COLS = 8, MAX_NAME = 30;
+        const clean1 = (t) => String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT);
+        const byIdMap = (nodes) => { const m = new Map(); for (const n of nodes) m.set(n.id, n); return m; };
+        const kidsMap = (nodes) => {
+            const by = byIdMap(nodes), k = new Map();
+            for (const n of nodes) if (n.p != null && by.has(n.p)) { if (!k.has(n.p)) k.set(n.p, []); k.get(n.p).push(n.id); }
+            return k;
+        };
+        const rootOf = (nodes) => { const r = nodes.find(n => n.p == null); return r ? r.id : null; };
+        const nextId = (nodes) => { const u = new Set(nodes.map(n => n.id)); let i = nodes.length + 1; while (u.has('n' + i)) i++; return 'n' + i; };
+        const subtreeIds = (nodes, id) => {
+            const k = kidsMap(nodes), out = [], q = [id];
+            while (q.length) { const c = q.shift(); out.push(c); for (const x of k.get(c) || []) q.push(x); }
+            return out;
+        };
+        // 環檢查：不能移動根、不能移到自己或自己的後代底下、移到原父層無意義
+        const canMove = (nodes, id, to) => {
+            const by = byIdMap(nodes), n = by.get(id);
+            if (!n || n.p == null || !by.has(to) || id === to || n.p === to) return false;
+            let c = by.get(to), i = 0;
+            while (c && c.p != null && i++ <= nodes.length) { if (c.p === id) return false; c = by.get(c.p); }
+            return true;
+        };
+        // 移到新父層，成為最後一個子節點；回傳是否成功
+        const moveNode = (nodes, id, to) => {
+            if (!canMove(nodes, id, to)) return false;
+            const i = nodes.findIndex(n => n.id === id), n = nodes.splice(i, 1)[0];
+            n.p = to; nodes.push(n);
+            const t = nodes.find(x => x.id === to); if (t) t.f = 0;
+            return true;
+        };
+        // 同層上移 / 下移（dir = -1 / 1）：交換兩兄弟在陣列的位置
+        const swapSibling = (nodes, id, dir) => {
+            const n = nodes.find(x => x.id === id); if (!n || n.p == null) return false;
+            const sib = nodes.filter(x => x.p === n.p), i = sib.indexOf(n), o = sib[i + dir];
+            if (!o) return false;
+            const a = nodes.indexOf(n), b = nodes.indexOf(o);
+            nodes[a] = o; nodes[b] = n; return true;
+        };
+        const cw = (c) => c.charCodeAt(0) > 255 ? 15 : 8;
+        const wrapText = (t, maxW = 200) => {
+            const lines = []; let cur = '', w = 0;
+            for (const c of String(t)) {
+                const x = cw(c);
+                if (w + x > maxW && cur) { lines.push(cur); cur = ''; w = 0; }
+                cur += c; w += x;
+            }
+            lines.push(cur); return lines;
+        };
+        const nodeSize = (t) => {
+            const lines = wrapText(t), w = Math.max(...lines.map(l => [...l].reduce((s, c) => s + cw(c), 0)));
+            return { w: Math.max(48, w) + 24, h: lines.length * 18 + 14, lines };
+        };
+        // 左右展開的緊湊樹狀版面：垂直依子樹高度、水平依深度（每一層取該側最寬者）；父節點置中於第一與最後一個可見子節點
+        // 回傳 { id: {x, y, w, h, s, lines} }，x / y 為左上角，s = 1 右側 / -1 左側 / 0 根；折疊的節點不顯示子孫
+        const layout = (nodes, rootId, GX = 44, GY = 10) => {
+            const by = byIdMap(nodes), kids = kidsMap(nodes), sz = {}, H = {}, pos = {};
+            const vis = (id) => by.get(id).f ? [] : (kids.get(id) || []);
+            const gap = (ks) => GY * Math.max(0, ks.length - 1);
+            const calc = (id) => {
+                sz[id] = nodeSize(by.get(id).t);
+                const ks = vis(id); let s = gap(ks);
+                for (const k of ks) { calc(k); s += H[k]; }
+                H[id] = Math.max(sz[id].h, s);
+            };
+            calc(rootId);
+            const rk = vis(rootId), half = Math.ceil(rk.length / 2), groups = [[rk.slice(0, half), 1], [rk.slice(half), -1]];
+            for (const [g, s] of groups) {
+                const mw = [];
+                const scan = (id, d) => { mw[d] = Math.max(mw[d] || 0, sz[id].w); for (const k of vis(id)) scan(k, d + 1); };
+                for (const k of g) scan(k, 1);
+                const start = [0, sz[rootId].w / 2 + GX];
+                for (let d = 2; d < mw.length; d++) start[d] = start[d - 1] + mw[d - 1] + GX;
+                const place = (id, top, d) => {
+                    const ks = vis(id); let cy;
+                    if (!ks.length) cy = top + H[id] / 2;
+                    else {
+                        let tot = gap(ks); for (const k of ks) tot += H[k];
+                        let y = top + (H[id] - tot) / 2, first, last;
+                        for (const k of ks) { const c = place(k, y, d + 1); if (first === undefined) first = c; last = c; y += H[k] + GY; }
+                        cy = (first + last) / 2;
+                    }
+                    const { w, h, lines } = sz[id];
+                    pos[id] = { x: s > 0 ? start[d] : -start[d] - w, y: cy - h / 2, w, h, s, lines };
+                    return cy;
+                };
+                let tot = gap(g); for (const k of g) tot += H[k];
+                let y = -tot / 2; for (const k of g) { place(k, y, 1); y += H[k] + GY; }
+            }
+            const r = sz[rootId]; pos[rootId] = { x: -r.w / 2, y: -r.h / 2, w: r.w, h: r.h, s: 0, lines: r.lines };
+            return pos;
+        };
+        const bbox = (pos) => {
+            let a = 1e9, b = 1e9, c = -1e9, d = -1e9;
+            for (const k in pos) { const p = pos[k]; a = Math.min(a, p.x); b = Math.min(b, p.y); c = Math.max(c, p.x + p.w); d = Math.max(d, p.y + p.h); }
+            return { x: a, y: b, w: c - a, h: d - b };
+        };
+        // 匯出 PNG 的縮放：邊長 ≤ 8192、總像素 ≤ 1600 萬；太大回傳 0（拒絕）
+        const pngScale = (w, h) => { let s = 2; while (s >= 1 && (w * s > 8192 || h * s > 8192 || w * h * s * s > 16e6)) s -= .5; return s >= 1 ? s : 0; };
+        // Markdown 大綱：根節點 "# 文字"，其後每層縮排 2 空白的 "- " 清單
+        const toOutline = (nodes, rootId) => {
+            const by = byIdMap(nodes), kids = kidsMap(nodes), out = ['# ' + clean1(by.get(rootId).t)];
+            const walk = (id, d) => { for (const k of kids.get(id) || []) { out.push('  '.repeat(d) + '- ' + clean1(by.get(k).t)); walk(k, d + 1); } };
+            walk(rootId, 0); return out.join('\n');
+        };
+        // 容錯解析：# 標題層級、- * + 1. 清單、縮排（空白或 Tab，Tab 算 4 格）、純文字行；多個最上層時自動加根節點
+        const parseOutline = (src, rootName = '中心主題') => {
+            const items = []; let hd = -1, stack = [];
+            for (const raw of String(src == null ? '' : src).replace(/\r/g, '').split('\n')) {
+                if (!raw.trim()) continue;
+                let m = /^ {0,3}(#{1,6})\s+(.*)$/.exec(raw);
+                if (m) { hd = m[1].length - 1; stack = []; const t = clean1(m[2]); if (t) items.push({ d: hd, t }); continue; }
+                m = /^([ \t]*)(?:(?:[-*+]|\d+[.)])\s+)?(.*)$/.exec(raw);
+                const ind = m[1].replace(/\t/g, '    ').length, t = clean1(m[2]);
+                while (stack.length && stack[stack.length - 1] > ind) stack.pop();
+                if (!stack.length || stack[stack.length - 1] < ind) stack.push(ind);
+                if (t) items.push({ d: hd + stack.length, t });
+            }
+            if (!items.length) return null;
+            let prev = -1; for (const it of items) { it.d = Math.max(0, Math.min(it.d, prev + 1)); prev = it.d; }
+            if (!(items.filter(i => i.d === 0).length === 1 && items[0].d === 0)) { for (const it of items) it.d++; items.unshift({ d: 0, t: clean1(rootName) || '中心主題' }); }
+            const nodes = [], par = []; let truncated = false;
+            for (const it of items) {
+                if (nodes.length >= MAX_NODES) { truncated = true; break; }
+                const id = 'n' + (nodes.length + 1);
+                nodes.push({ id, t: it.t, p: it.d ? par[it.d - 1] : null, col: 0, f: 0 });
+                par[it.d] = id;
+            }
+            return { nodes, root: 'n1', truncated };
+        };
+        // 撤銷 / 重做堆疊（存 JSON 快照字串）
+        const hNew = () => ({ u: [], r: [] });
+        const hPush = (h, s) => { h.u.push(s); if (h.u.length > MAX_HIST) h.u.shift(); h.r.length = 0; };
+        const hUndo = (h, cur) => { if (!h.u.length) return null; h.r.push(cur); return h.u.pop(); };
+        const hRedo = (h, cur) => { if (!h.r.length) return null; h.u.push(cur); return h.r.pop(); };
+        // 載入驗證：補預設、去重、孤兒 / 環接回根、截斷到上限；沒有可用節點回傳 null
+        const cleanNodes = (raw) => {
+            if (!Array.isArray(raw)) return null;
+            const seen = new Set(), out = [];
+            for (const x of raw) {
+                if (out.length >= MAX_NODES) break;
+                if (!x || typeof x !== 'object' || typeof x.id !== 'string' || !x.id || x.id.length > 40 || seen.has(x.id)) continue;
+                seen.add(x.id);
+                out.push({ id: x.id, t: typeof x.t === 'string' ? x.t.slice(0, MAX_TEXT) : '', p: typeof x.p === 'string' ? x.p : null, col: Number.isInteger(x.col) && x.col >= 0 && x.col < COLS ? x.col : 0, f: x.f ? 1 : 0 });
+            }
+            if (!out.length) return null;
+            const root = out.find(n => n.p == null) || out[0], by = byIdMap(out);
+            root.p = null;
+            for (const n of out) if (n !== root && (n.p == null || !by.has(n.p) || n.p === n.id)) n.p = root.id;
+            for (const n of out) {
+                let c = n, i = 0;
+                while (c && c.p != null && i++ <= out.length) c = by.get(c.p);
+                if (c !== root) n.p = root.id;
+            }
+            return out;
+        };
+        const cleanMaps = (raw) => {
+            if (!Array.isArray(raw)) return [];
+            const out = [], seen = new Set();
+            for (const m of raw) {
+                if (out.length >= MAX_MAPS) break;
+                if (!m || typeof m !== 'object' || typeof m.id !== 'string' || !m.id || seen.has(m.id)) continue;
+                const nodes = cleanNodes(m.nodes); if (!nodes) continue;
+                seen.add(m.id);
+                out.push({ id: m.id, name: (typeof m.name === 'string' && m.name.trim() ? m.name.trim() : '心智圖').slice(0, MAX_NAME), nodes, ts: Number.isFinite(m.ts) ? m.ts : 0 });
+            }
+            return out;
+        };
+        // --- /pure ---
+
+        (function () {
+            const $ = (s) => document.querySelector(s);
+            const svg = $('#mm'), dlg = $('#dlg'), NS = 'http://www.w3.org/2000/svg';
+            const PAL = ['', '#f8b4b4', '#fbd38d', '#faf089', '#9ae6b4', '#81e6d9', '#90cdf4', '#d6bcfa'];
+            const PALN = ['預設', '紅', '橘', '黃', '綠', '青', '藍', '紫'];
+            const toast = (t) => (window.Chrome && Chrome.toast) ? Chrome.toast(t, 2200) : alert(t);
+            const newMap = (name, nodes) => ({ id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, nodes: nodes || [{ id: 'n1', t: '中心主題', p: null, col: 0, f: 0 }], ts: Date.now() });
+
+            let maps = cleanMaps(Util.store.get('mindmap_maps', []));
+            if (!maps.length) maps = [newMap('心智圖 1')];
+            const sid = Util.store.get('mindmap_cur', '');
+            let cur = maps.find(m => m.id === sid) || maps[0];
+            let sel = null, hist = hNew(), lay = {}, view = { cx: 0, cy: 0, k: 1 }, panMode = false, moveFrom = null, editing = null;
+            const N = () => cur.nodes;
+            const get = (id) => N().find(n => n.id === id);
+            const root = () => rootOf(N());
+
+            // ---- 存檔 ----
+            let saveT = 0;
+            const saveNow = () => { clearTimeout(saveT); saveT = 0; Util.store.set('mindmap_maps', maps); Util.store.set('mindmap_cur', cur.id); };
+            const scheduleSave = () => { clearTimeout(saveT); saveT = setTimeout(saveNow, 400); };
+            addEventListener('pagehide', () => { if (saveT) saveNow(); });
+            document.addEventListener('visibilitychange', () => { if (document.hidden && saveT) saveNow(); });
+
+            // ---- 視圖（viewBox）----
+            const dims = () => { const r = svg.getBoundingClientRect(); return { W: r.width || 300, H: r.height || 340, l: r.left, t: r.top }; };
+            function applyView() {
+                const { W, H } = dims(), k = view.k;
+                svg.setAttribute('viewBox', [view.cx - W / 2 / k, view.cy - H / 2 / k, W / k, H / k].join(' '));
+            }
+            const toContent = (x, y) => { const d = dims(); return { x: view.cx + (x - d.l - d.W / 2) / view.k, y: view.cy + (y - d.t - d.H / 2) / view.k }; };
+            const clampK = (k) => Math.max(.15, Math.min(3, k));
+            function zoomAt(f, x, y) {
+                const d = dims(), a = toContent(x, y);
+                view.k = clampK(view.k * f);
+                view.cx = a.x - (x - d.l - d.W / 2) / view.k; view.cy = a.y - (y - d.t - d.H / 2) / view.k;
+                applyView();
+            }
+            function fit() {
+                const b = bbox(lay), { W, H } = dims();
+                view.k = clampK(Math.min((W - 40) / b.w, (H - 40) / b.h, 1.2));
+                view.cx = b.x + b.w / 2; view.cy = b.y + b.h / 2; applyView();
+            }
+            function reveal(id) {
+                const p = lay[id]; if (!p) return;
+                const { W, H } = dims(), x0 = view.cx - W / 2 / view.k, y0 = view.cy - H / 2 / view.k, m = 20 / view.k;
+                if (p.x < x0 + m || p.x + p.w > x0 + W / view.k - m || p.y < y0 + m || p.y + p.h > y0 + H / view.k - m) { view.cx = p.x + p.w / 2; view.cy = p.y + p.h / 2; applyView(); }
+            }
+
+            // ---- 繪圖 ----
+            const esc = Util.esc;
+            function nodeMarkup(L, C, selId) {
+                const by = byIdMap(N()), kids = kidsMap(N());
+                let e = '', g = '';
+                for (const id in L) {
+                    const n = by.get(id), c = L[id];
+                    if (n.p != null) {
+                        const p = L[n.p], x1 = c.s > 0 ? p.x + p.w : p.x, x2 = c.s > 0 ? c.x : c.x + c.w, y1 = p.y + p.h / 2, y2 = c.y + c.h / 2, mx = (x1 + x2) / 2;
+                        e += `<path d="M${x1} ${y1}C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none" style="stroke:${C.line}" stroke-width="2"/>`;
+                    }
+                    const fill = n.col ? PAL[n.col] : C.card, tx = n.col ? '#1a202c' : C.text, s = id === selId;
+                    let t = '';
+                    c.lines.forEach((l, i) => { t += `<text x="${c.x + c.w / 2}" y="${c.y + 7 + 18 * i + 13}" text-anchor="middle" font-size="14" font-family="system-ui,'Microsoft JhengHei','PingFang TC',sans-serif"${id === root() ? ' font-weight="700"' : ''} style="fill:${tx}">${esc(l)}</text>`; });
+                    let badge = '';
+                    if (n.f && kids.get(id)) {
+                        const cnt = subtreeIds(N(), id).length - 1, bx = c.s >= 0 ? c.x + c.w + 12 : c.x - 12;
+                        badge = `<circle cx="${bx}" cy="${c.y + c.h / 2}" r="11" style="fill:${C.card};stroke:${C.line}"/><text x="${bx}" y="${c.y + c.h / 2 + 4}" text-anchor="middle" font-size="11" style="fill:${C.text}">${cnt > 99 ? '99+' : cnt}</text>`;
+                    }
+                    g += `<g class="n" data-id="${esc(id)}"><rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" rx="10" style="fill:${fill};stroke:${s ? C.sel : C.muted}" stroke-width="${s ? 3.5 : 1.2}"/>${t}${badge}</g>`;
+                }
+                return e + g;
+            }
+            const CSSC = { line: 'var(--line)', card: 'var(--card)', text: 'var(--text)', muted: 'var(--muted)', sel: 'var(--blue)' };
+            function render() {
+                if (!get(sel)) sel = root();
+                lay = layout(N(), root());
+                svg.innerHTML = nodeMarkup(lay, CSSC, sel);
+                applyView(); ui();
+            }
+            function ui() {
+                const n = get(sel), kids = kidsMap(N()), has = n && kids.has(n.id), isRoot = n && n.p == null;
+                $('#info').textContent = `已選：${n ? n.t || '（空白）' : '—'}　節點 ${N().length}/${MAX_NODES}${moveFrom ? '　請點新的父節點' : ''}`;
+                $('#bFold').textContent = n && n.f ? '展開' : '折疊'; $('#bFold').disabled = !has;
+                $('#bDel').disabled = isRoot; $('#bMove').disabled = isRoot; $('#bUp').disabled = isRoot; $('#bDn').disabled = isRoot;
+                $('#bMove').setAttribute('aria-pressed', moveFrom ? 'true' : 'false');
+                $('#bUndo').disabled = !hist.u.length; $('#bRedo').disabled = !hist.r.length;
+                $('#sw').querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-pressed', n && n.col === i ? 'true' : 'false'));
+                const sl = $('#msel'); sl.innerHTML = maps.map(m => `<option value="${esc(m.id)}"${m === cur ? ' selected' : ''}>${esc(m.name)}</option>`).join('');
+                if (document.activeElement !== $('#mname')) $('#mname').value = cur.name;
+                $('#mcount').textContent = `${maps.length}/${MAX_MAPS} 張`;
+            }
+
+            // ---- 編輯（全部經過 edit：記快照、重畫、存檔）----
+            function edit(fn) {
+                const s = JSON.stringify(N());
+                if (fn() === false) return false;
+                hPush(hist, s); cur.ts = Date.now(); render(); scheduleSave(); return true;
+            }
+            function openEdit(id) { const n = get(id); if (!n) return; editing = id; $('#dtxt').value = n.t; dlg.showModal(); $('#dtxt').select(); }
+            $('#dform').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const id = editing, t = clean1($('#dtxt').value); editing = null; dlg.close();
+                if (id && t && get(id) && get(id).t !== t) edit(() => { get(id).t = t; });
+                svg.focus();
+            });
+            $('#dcancel').onclick = () => { editing = null; dlg.close(); svg.focus(); };
+            dlg.addEventListener('cancel', () => { editing = null; });
+            function addNode(asSibling) {
+                const s = get(sel); if (!s) return;
+                if (N().length >= MAX_NODES) return toast(`每張心智圖最多 ${MAX_NODES} 個節點`);
+                if (asSibling && s.p == null) asSibling = false;
+                let nid;
+                edit(() => {
+                    nid = nextId(N());
+                    const n = { id: nid, t: '新節點', p: asSibling ? s.p : s.id, col: 0, f: 0 };
+                    if (asSibling) N().splice(N().indexOf(s) + 1, 0, n); else { s.f = 0; N().push(n); }
+                    sel = nid;
+                });
+                render(); reveal(nid); openEdit(nid);
+            }
+            function del() {
+                const s = get(sel); if (!s) return;
+                if (s.p == null) return toast('根節點不能刪除（可改文字，或刪除整張圖）');
+                const ids = subtreeIds(N(), sel);
+                if (ids.length > 3 && !confirm(`這個節點底下共 ${ids.length} 個節點，會一起刪除（可按「撤銷」救回）。確定？`)) return;
+                const par = s.p;
+                edit(() => { const set = new Set(ids); cur.nodes = N().filter(n => !set.has(n.id)); sel = par; });
+            }
+            function tryMove(id, to) {
+                if (!canMove(N(), id, to)) { toast('不能移到這裡（不可移到自己或自己的後代底下）'); return false; }
+                return edit(() => moveNode(N(), id, to));
+            }
+            function undo(redo) {
+                const s = (redo ? hRedo : hUndo)(hist, JSON.stringify(N()));
+                if (s == null) return;
+                cur.nodes = JSON.parse(s); cur.ts = Date.now(); render(); scheduleSave();
+            }
+            $('#bChild').onclick = () => addNode(false);
+            $('#bSib').onclick = () => addNode(true);
+            $('#bEdit').onclick = () => openEdit(sel);
+            $('#bFold').onclick = () => { const n = get(sel); if (n) edit(() => { n.f = n.f ? 0 : 1; }); };
+            $('#bDel').onclick = del;
+            $('#bUp').onclick = () => edit(() => swapSibling(N(), sel, -1));
+            $('#bDn').onclick = () => edit(() => swapSibling(N(), sel, 1));
+            $('#bMove').onclick = () => { moveFrom = moveFrom ? null : sel; ui(); if (moveFrom) toast('點選要成為新父層的節點'); };
+            $('#bUndo').onclick = () => undo(false);
+            $('#bRedo').onclick = () => undo(true);
+            $('#bFit').onclick = fit;
+            $('#bZin').onclick = () => { const d = dims(); zoomAt(1.25, d.l + d.W / 2, d.t + d.H / 2); };
+            $('#bZout').onclick = () => { const d = dims(); zoomAt(.8, d.l + d.W / 2, d.t + d.H / 2); };
+            function setPan(v) { panMode = v; svg.style.touchAction = v ? 'none' : 'auto'; $('#bPan').setAttribute('aria-pressed', v ? 'true' : 'false'); }
+            $('#bPan').onclick = () => setPan(!panMode);
+            setPan(matchMedia('(pointer: fine)').matches);   // 觸控裝置預設不攔截捲動
+            PAL.forEach((c, i) => {
+                const b = document.createElement('button');
+                b.setAttribute('aria-label', PALN[i]); b.title = PALN[i]; b.style.background = c || 'var(--card)';
+                b.onclick = () => { const n = get(sel); if (n && n.col !== i) edit(() => { n.col = i; }); };
+                $('#sw').appendChild(b);
+            });
+
+            // ---- 指標：選取 / 平移 / 雙指縮放 / 拖曳節點改父層 ----
+            const ptrs = new Map(); let drag = null, pinch = null, suppress = false;
+            const nodeAt = (x, y) => { const el = document.elementFromPoint(x, y); const g = el && el.closest && el.closest('#mm .n'); return g ? g.dataset.id : null; };
+            svg.addEventListener('pointerdown', (e) => {
+                if (e.pointerType === 'touch' && !panMode) return;
+                ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                if (ptrs.size === 1) {
+                    const g = e.target.closest && e.target.closest('.n');
+                    drag = { id: g && g.dataset.id !== root() ? g.dataset.id : null, g, sx: e.clientX, sy: e.clientY, cx: view.cx, cy: view.cy, moved: false, over: null };
+                } else if (ptrs.size === 2) {
+                    if (drag && drag.g) drag.g.removeAttribute('transform');
+                    drag = null;
+                    const [a, b] = [...ptrs.values()], mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+                    pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, k: view.k, a: toContent(mx, my) };
+                }
+            });
+            addEventListener('pointermove', (e) => {
+                if (!ptrs.has(e.pointerId)) return;
+                ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                if (pinch && ptrs.size >= 2) {
+                    const [a, b] = [...ptrs.values()], mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, dd = dims();
+                    view.k = clampK(pinch.k * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d);
+                    view.cx = pinch.a.x - (mx - dd.l - dd.W / 2) / view.k; view.cy = pinch.a.y - (my - dd.t - dd.H / 2) / view.k;
+                    applyView(); suppress = true; return;
+                }
+                if (!drag) return;
+                const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+                if (!drag.moved && Math.hypot(dx, dy) < 6) return;
+                drag.moved = true;
+                if (drag.id) {
+                    drag.g.setAttribute('transform', `translate(${dx / view.k} ${dy / view.k})`);
+                    drag.g.style.pointerEvents = 'none'; drag.g.classList.add('drag');
+                    const t = nodeAt(e.clientX, e.clientY);
+                    if (drag.over !== t) { svg.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); drag.over = t; const tg = t && svg.querySelector(`.n[data-id="${CSS.escape(t)}"]`); if (tg && canMove(N(), drag.id, t)) tg.classList.add('drop'); else drag.over = null; }
+                } else { view.cx = drag.cx - dx / view.k; view.cy = drag.cy - dy / view.k; applyView(); }
+            });
+            const endPtr = (e, cancel) => {
+                if (!ptrs.delete(e.pointerId)) return;
+                if (ptrs.size < 2) pinch = null;
+                if (!ptrs.size && suppress) setTimeout(() => { suppress = false; }, 60);
+                const d = drag; drag = null;
+                if (!d) return;
+                if (d.moved) { suppress = true; setTimeout(() => { suppress = false; }, 60); }
+                if (d.moved && d.id && d.over && !cancel) { sel = d.id; tryMove(d.id, d.over); } else if (d.moved && d.id) render();
+            };
+            addEventListener('pointerup', (e) => endPtr(e, false));
+            addEventListener('pointercancel', (e) => endPtr(e, true));
+            svg.addEventListener('click', (e) => {
+                if (suppress) { suppress = false; return; }
+                const g = e.target.closest && e.target.closest('.n'); if (!g) return;
+                const id = g.dataset.id;
+                if (moveFrom) { const f = moveFrom; moveFrom = null; if (id !== f) { sel = f; tryMove(f, id) && (sel = f); } ui(); return; }
+                sel = id; render();
+            });
+            svg.addEventListener('dblclick', (e) => { const g = e.target.closest && e.target.closest('.n'); if (g) { sel = g.dataset.id; render(); openEdit(sel); } });
+            svg.addEventListener('wheel', (e) => { e.preventDefault(); zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX, e.clientY); }, { passive: false });
+            addEventListener('resize', applyView);
+
+            // ---- 鍵盤（焦點在畫布或頁面空白處）----
+            document.addEventListener('keydown', (e) => {
+                if (dlg.open || e.altKey) return;
+                const t = e.target; if (t !== document.body && !svg.contains(t) && t !== svg) return;
+                const k = e.key;
+                if ((e.ctrlKey || e.metaKey) && /^[zy]$/i.test(k)) { e.preventDefault(); undo(k.toLowerCase() === 'y' || e.shiftKey); return; }
+                if (e.ctrlKey || e.metaKey) return;
+                const n = get(sel); if (!n) return;
+                const go = (id) => { if (id) { sel = id; render(); reveal(id); } };
+                const kids = kidsMap(N()), vk = (id) => (get(id).f ? [] : kids.get(id) || []);
+                let h = true;
+                if (k === 'Enter') addNode(true);
+                else if (k === 'Tab' && !e.shiftKey) addNode(false);
+                else if (k === 'Delete' || k === 'Backspace') del();
+                else if (k === 'F2') openEdit(sel);
+                else if (k === ' ') { if (kids.has(sel)) edit(() => { n.f = n.f ? 0 : 1; }); }
+                else if (k === 'Escape') { moveFrom = null; ui(); }
+                else if (k === 'ArrowUp' || k === 'ArrowDown') {
+                    const sib = n.p == null ? [] : kids.get(n.p), i = sib.indexOf(sel); go(sib[i + (k === 'ArrowUp' ? -1 : 1)]);
+                } else if (k === 'ArrowLeft' || k === 'ArrowRight') {
+                    const s = lay[sel].s, right = k === 'ArrowRight', vks = vk(sel);
+                    if (s === 0) go(right ? vks[0] : vks[Math.ceil(vks.length / 2)]);
+                    else if ((s > 0) === right) go(vks[0]);
+                    else go(n.p);
+                } else h = false;
+                if (h) e.preventDefault();
+            });
+
+            // ---- 多張心智圖 ----
+            function switchMap(m) { saveNow(); cur = m; sel = null; hist = hNew(); moveFrom = null; render(); fit(); saveNow(); }
+            $('#msel').onchange = (e) => { const m = maps.find(x => x.id === e.target.value); if (m) switchMap(m); };
+            $('#mren').onclick = () => { const v = $('#mname').value.trim().slice(0, MAX_NAME); if (v) { cur.name = v; ui(); scheduleSave(); } };
+            const room = () => maps.length < MAX_MAPS || (toast(`最多 ${MAX_MAPS} 張，請先刪除不用的`), false);
+            $('#mnew').onclick = () => { if (!room()) return; const m = newMap('心智圖 ' + (maps.length + 1)); maps.push(m); switchMap(m); };
+            $('#mdup').onclick = () => { if (!room()) return; const m = newMap((cur.name + ' 複本').slice(0, MAX_NAME), JSON.parse(JSON.stringify(N()))); maps.push(m); switchMap(m); };
+            $('#mdel').onclick = () => {
+                if (!confirm(`刪除心智圖「${cur.name}」？此圖所有節點都會消失，無法復原。`)) return;
+                maps = maps.filter(m => m !== cur); if (!maps.length) maps = [newMap('心智圖 1')];
+                switchMap(maps[0]);
+            };
+            $('#clrAll').onclick = () => {
+                if (!confirm('清除全部心智圖？所有圖與節點都會刪除，無法復原。')) return;
+                maps = [newMap('心智圖 1')]; switchMap(maps[0]);
+            };
+
+            // ---- 匯出 / 匯入 ----
+            const setMsg = (t) => { $('#xMsg').textContent = t; };
+            $('#xGen').onclick = () => { $('#md').value = toOutline(N(), root()); setMsg('已產生目前這張的大綱'); };
+            $('#xCopy').onclick = async () => { if (!$('#md').value) $('#xGen').click(); setMsg(await Util.copyText($('#md').value) ? '已複製' : '複製失敗，請手動選取'); };
+            $('#xMd').onclick = () => { if (!$('#md').value) $('#xGen').click(); Util.download(new Blob([$('#md').value], { type: 'text/markdown' }), (cur.name || 'mindmap') + '.md'); };
+            $('#xImp').onclick = () => {
+                if (!room()) return;
+                const r = parseOutline($('#md').value);
+                if (!r) return setMsg('沒有讀到內容：請貼上縮排大綱（- 清單或 # 標題）');
+                const m = newMap(r.nodes[0].t.slice(0, MAX_NAME) || '匯入的心智圖', r.nodes); maps.push(m); switchMap(m);
+                setMsg(`已建立「${m.name}」，共 ${r.nodes.length} 個節點` + (r.truncated ? `（超過 ${MAX_NODES} 個的部分已截掉）` : ''));
+            };
+            $('#xPng').onclick = () => {
+                const cs = getComputedStyle(document.documentElement), v = (n) => cs.getPropertyValue(n).trim() || '#888';
+                const C = { line: v('--muted'), card: v('--card'), text: v('--text'), muted: v('--muted'), sel: v('--blue') };
+                const L = lay, b = bbox(L), pad = 24, w = Math.ceil(b.w + pad * 2), h = Math.ceil(b.h + pad * 2), s = pngScale(w, h);
+                if (!s) return toast('圖太大無法匯出 PNG，請先折疊部分節點');
+                const str = `<svg xmlns="${NS}" width="${w}" height="${h}" viewBox="${b.x - pad} ${b.y - pad} ${w} ${h}"><rect x="${b.x - pad}" y="${b.y - pad}" width="${w}" height="${h}" style="fill:${v('--bg')}"/>${nodeMarkup(L, C, null)}</svg>`;
+                const img = new Image();
+                img.onload = () => {
+                    const c = document.createElement('canvas'); c.width = Math.round(w * s); c.height = Math.round(h * s);
+                    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+                    c.toBlob((bl) => bl ? Util.download(bl, (cur.name || 'mindmap') + '.png') : toast('匯出失敗'), 'image/png');
+                };
+                img.onerror = () => toast('匯出失敗');
+                img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(str);
+            };
+
+            render(); fit();
+            saveNow();   // 把驗證修復後的資料寫回
+        })();
+    </script>
+</body>
+
+</html>

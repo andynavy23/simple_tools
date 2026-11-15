@@ -10,7 +10,7 @@
     <meta property="og:description" content="一個時間看各城市的當地時間，或開即時看板。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/timezone.html" />
-    <meta name="st-keys" content="tz_zones,tz_meet">
+    <meta name="st-keys" content="tz_zones,tz_meet,timezone_clocks">
     <title>時區轉換</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -52,6 +52,42 @@
 
         .city {
             font-weight: 600;
+        }
+
+        .wgrid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        @media (min-width: 720px) {
+            .wgrid {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+
+        .wc {
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            padding: 10px;
+            position: relative;
+            background: var(--card);
+        }
+
+        .wc.night {
+            background: var(--fill);
+        }
+
+        .wc .wt {
+            font-size: 26px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .wc .del {
+            position: absolute;
+            top: 2px;
+            right: 2px;
         }
 
         .meta {
@@ -224,6 +260,7 @@
             <button id="tabConv" aria-pressed="true">時間對照</button>
             <button id="tabMeet" aria-pressed="false">會議時間尋找</button>
             <button id="tabTrip" aria-pressed="false">出差 / 旅行版</button>
+            <button id="tabWorld" aria-pressed="false">世界時鐘</button>
         </div>
 
         <div id="paneConv">
@@ -274,6 +311,22 @@
             </div>
         </div>
 
+        <div id="paneWorld" hidden>
+            <div class="card">
+                <div id="wgrid" class="wgrid"></div>
+                <div class="row" style="margin-top:12px">
+                    <input id="wadd" list="zlist" placeholder="新增城市時區，例如 Asia/Seoul" aria-label="新增世界時鐘城市">
+                    <button id="waddbtn">新增</button>
+                </div>
+                <div class="row" style="margin-top:8px">
+                    <label class="muted" style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="checkbox" id="wh12"> 12 小時制</label>
+                    <button class="sm" id="wdef">還原預設城市</button>
+                    <button class="sm" id="wclear">清除全部</button>
+                </div>
+                <p class="meta" id="wmsg" style="margin:8px 0 0"></p>
+            </div>
+        </div>
+
         <div id="paneTrip" class="mt" hidden>
             <div class="card">
                 <p class="meta" style="margin:0 0 10px">出差 / 旅行期間，固定的會議時間（例如每天台灣 21:00 的站會）換算成出差地每一天的當地時間；遇到夏令時間切換會標示差幾小時變了。</p>
@@ -313,6 +366,7 @@
         <li>按「複製建議會議時間」貼給同事，每個城市都是當地時間，跨日會標「前一天 / 後一天」。</li>
         </ol>
         <p><b>出差 / 旅行版</b>：切到「出差 / 旅行版」，選「會議時間是哪個城市的」與「我出差到」（城市來自「時間對照」清單），選出差起訖日期（最多 31 天）與會議時間，會列出每一天在出差地的當地時間與日期（跨日標前一天 / 後一天），出差期間若遇夏令時間切換，會標示「時差變動」；那天若會議時間剛好落在被跳過的夏令時段會標「該時間不存在」。可「複製換算表」。這個分頁不儲存資料。</p>
+        <p><b>世界時鐘</b>：切到「世界時鐘」，多個城市的即時時鐘並排顯示（預設 8 個城市），每張卡片有當地日期星期、日夜（6:00–17:59 當作白天 🌞，其餘夜晚 🌙，是簡化規則，不是實際日出日落）、與你這台裝置所在時區的時差。可用輸入框新增城市（最多 24 個）、× 移除、切換 12 / 24 小時制、「還原預設城市」與「清除全部」（都會先確認）。城市與 12 小時設定存在 <code>timezone_clocks</code>，壞資料載入時回到預設。</p>
         <h3>範例</h3>
         <div class="eg">臺北、東京、雪梨，2026/10/03，皆 09:00–18:00
         → 共同上班時間：臺北時間 09:00–16:00（雪梨這天還是 UTC+10）
@@ -360,6 +414,27 @@
         function offsetLabel(ms, zone) {
             const mins = Math.round(offsetMs(ms, zone) / 60000), sign = mins < 0 ? '-' : '+', a = Math.abs(mins);
             return `UTC${sign}${Math.floor(a / 60)}${a % 60 ? ':' + String(a % 60).padStart(2, '0') : ''}`;
+        }
+
+        // ---------- 世界時鐘 ----------
+        const MAX_CLOCKS = 24, DEFAULT_CLOCKS = ['Asia/Taipei', 'Asia/Tokyo', 'Asia/Singapore', 'Europe/London', 'Europe/Paris', 'America/New_York', 'America/Los_Angeles', 'Australia/Sydney'];
+        // 載入驗證：非物件 / 壞欄位回預設；zones 去重、丟掉不認得的時區、截到上限；h12 非布林當 false
+        function normClocks(raw, isZone) {
+            const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null;
+            if (!o || !Array.isArray(o.zones)) return { zones: DEFAULT_CLOCKS.slice(), h12: o ? o.h12 === true : false };
+            const zones = [];
+            for (const z of o.zones) { if (zones.length >= MAX_CLOCKS) break; if (typeof z === 'string' && isZone(z) && !zones.includes(z)) zones.push(z); }
+            return { zones, h12: o.h12 === true };
+        }
+        // 簡化日夜：6:00–17:59 為白天
+        const isDayHour = (h) => h >= 6 && h < 18;
+        // zone 比 localZone 快幾分鐘（東邊為正）
+        const diffMin = (ms, zone, localZone) => Math.round((offsetMs(ms, zone) - offsetMs(ms, localZone)) / 60000);
+        const localDiffText = (min) => { if (!min) return '與本地相同'; const a = Math.abs(min), h = Math.floor(a / 60), m = a % 60; return `比本地${min > 0 ? '快' : '慢'} ${h}${m ? ':' + String(m).padStart(2, '0') : ''} 小時`; };
+        function fmtClock(p, h12, sec) {
+            const pd = (n) => String(n).padStart(2, '0'), s = sec ? ':' + pd(p.s) : '';
+            if (!h12) return `${pd(p.h)}:${pd(p.mi)}${s}`;
+            return `${p.h < 12 ? '上午' : '下午'} ${p.h % 12 || 12}:${pd(p.mi)}${s}`;
         }
 
         // ---------- 會議時間尋找 ----------
@@ -713,12 +788,50 @@
         for (const id of ['#trFrom', '#trTo', '#trStart', '#trEnd', '#trTime']) $(id).addEventListener('change', renderTrip);
         $('#trStart').addEventListener('change', () => { if ($('#trEnd').value < $('#trStart').value) { $('#trEnd').value = $('#trStart').value; renderTrip(); } });
         $('#trCopy').onclick = () => { if (tripLast) Util.copyWithFeedback($('#trCopy'), tripLast, () => { $('#trMsg').textContent = '無法自動複製，請手動選取上面的換算表'; }); };
+        // ---------- 世界時鐘（介面） ----------
+        const CKEY = 'timezone_clocks', localZone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Taipei'; } catch (e) { return 'Asia/Taipei'; } })();
+        let clocks = normClocks(Util.store.get(CKEY, null), isZone);
+        const saveClocks = () => Util.store.set(CKEY, clocks);
+        function renderWorld() {
+            const ms = Date.now();
+            $('#wh12').checked = clocks.h12;
+            $('#wgrid').replaceChildren(...(clocks.zones.length ? clocks.zones.map(z => {
+                const p = parts(ms, z), c = document.createElement('div'), day = isDayHour(p.h);
+                c.className = 'wc' + (day ? '' : ' night'); c.dataset.z = z;
+                c.innerHTML = '<div class="city"></div><div class="wt"></div><div class="meta wd"></div><div class="meta wf"></div>';
+                c.children[0].textContent = (day ? '🌞 ' : '🌙 ') + city(z);
+                c.children[1].textContent = fmtClock(p, clocks.h12, true);
+                c.children[2].textContent = `${p.m}/${p.d} 週${WEEK[new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay()]}`;
+                c.children[3].textContent = localDiffText(diffMin(ms, z, localZone));
+                const del = document.createElement('button'); del.className = 'del'; del.textContent = '×'; del.setAttribute('aria-label', '移除 ' + z);
+                del.onclick = () => { clocks.zones = clocks.zones.filter(x => x !== z); saveClocks(); renderWorld(); };
+                c.append(del); return c;
+            }) : [Object.assign(document.createElement('p'), { className: 'meta', textContent: '還沒有城市，請在下方新增或還原預設。' })]));
+        }
+        let worldMin = -1;
+        setInterval(() => {
+            if ($('#paneWorld').hidden) return;
+            const ms = Date.now(), minute = Math.floor(ms / 60000);
+            if (minute !== worldMin) { worldMin = minute; renderWorld(); return; }
+            document.querySelectorAll('#wgrid .wc').forEach(c => { c.children[1].textContent = fmtClock(parts(ms, c.dataset.z), clocks.h12, true); });
+        }, 500);
+        $('#waddbtn').onclick = () => {
+            const z = $('#wadd').value.trim();
+            if (!isZone(z)) { $('#wmsg').textContent = '找不到這個時區，請從建議清單選擇（格式：洲/城市）'; return; }
+            if (clocks.zones.includes(z)) { $('#wmsg').textContent = '已經在清單中'; return; }
+            if (clocks.zones.length >= MAX_CLOCKS) { $('#wmsg').textContent = `最多 ${MAX_CLOCKS} 個城市，請先移除不用的`; return; }
+            clocks.zones.push(z); $('#wadd').value = ''; $('#wmsg').textContent = ''; saveClocks(); renderWorld();
+        };
+        $('#wh12').onchange = () => { clocks.h12 = $('#wh12').checked; saveClocks(); renderWorld(); };
+        $('#wdef').onclick = () => { if (!confirm('還原為預設的 8 個城市？目前的清單會被取代，無法復原。')) return; clocks.zones = DEFAULT_CLOCKS.slice(); saveClocks(); renderWorld(); };
+        $('#wclear').onclick = () => { if (!clocks.zones.length || !confirm(`清除全部 ${clocks.zones.length} 個世界時鐘城市？無法復原。`)) return; clocks.zones = []; saveClocks(); renderWorld(); };
         const tab = (k) => {
+            $('#paneWorld').hidden = k !== 'world'; $('#tabWorld').setAttribute('aria-pressed', k === 'world'); if (k === 'world') renderWorld();
             $('#paneConv').hidden = k !== 'conv'; $('#paneMeet').hidden = k !== 'meet'; $('#paneTrip').hidden = k !== 'trip';
             $('#tabConv').setAttribute('aria-pressed', k === 'conv'); $('#tabMeet').setAttribute('aria-pressed', k === 'meet'); $('#tabTrip').setAttribute('aria-pressed', k === 'trip');
             if (k === 'meet') renderMeet(); if (k === 'trip') renderTrip();
         };
-        $('#tabConv').onclick = () => tab('conv'); $('#tabMeet').onclick = () => tab('meet'); $('#tabTrip').onclick = () => tab('trip');
+        $('#tabConv').onclick = () => tab('conv'); $('#tabMeet').onclick = () => tab('meet'); $('#tabTrip').onclick = () => tab('trip'); $('#tabWorld').onclick = () => tab('world');
         setNow();
         render();
     </script>

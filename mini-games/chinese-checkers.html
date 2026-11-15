@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="跳棋（中國跳棋）：六角星盤、2 / 3 / 4 / 6 人，單步加連跳，把棋子全部搬到對面。可對電腦、同機輪流或連線對戰（房主驗證每一步，電腦可補位）。">
+    <meta property="og:title" content="跳棋" />
+    <meta property="og:description" content="六角星盤的中國跳棋：2–6 人，對電腦、同機輪流或連線對戰，點棋子再點落點自動找連跳路徑。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/chinese-checkers.html" />
+    <meta name="st-keys" content="chkr_opts,chkr_stats">
+    <title>跳棋</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>中國跳棋：六角星形棋盤，每人 10 顆棋子從自己的角出發，最先把棋子全部搬到「正對面的角」就贏。支援 2、3、4、6 人（標準起始配置）。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>一個人練習：「單機對電腦」，選人數與電腦強度（其餘座位都是電腦），不用連線。</li>
+        <li>幾個人共用一支手機：「同機輪流」，每輪棋盤會轉到輪到的人面前。</li>
+        <li>和遠方朋友玩：建立房間，把邀請連結傳出去，空的座位由電腦補上。</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+        <li>輪流走一步。點自己的棋子，會亮出所有可去的位置（小圓點），再點目標就走。</li>
+        <li><b>單步</b>：移到相鄰的空格。<b>跳</b>：隔著一顆相鄰的棋子（任何人的都行）跳到正對面的空格，可以連續跳，一回合只走一個棋子。點最終落點，程式會自動找出跳的路徑；一個落點有多條路時取最少跳數。</li>
+        <li>「落點確認」打開後，第一次點落點會先畫出路徑預覽，再點一次才走（手機防誤觸）。</li>
+        <li>棋子的顏色就是它的起始角；最先把自己的棋子全部走進對面角的人獲勝。對面角若被別人的棋子占滿且其中至少有你一顆，也算你完成（避免被對手永遠擋住）。</li>
+        <li>回合上限：每人走滿 150 步仍沒人完成，就依「離目標的距離總和」判定，最近者獲勝。</li>
+        <li><b>連線</b>：輸入暱稱（1–10 字）、選人數與每步時間（不限 / 15 / 30 / 60 秒），按「建立房間」，把邀請連結傳給朋友，朋友輸入暱稱按「加入」或貼上房號。人到齊（或不夠也行）後房主按「開始遊戲」，沒有人的座位由電腦補位。</li>
+        <li>房主端驗證每一步（含連跳路徑），非法的步一律拒絕。成員斷線時該座位由電腦代打，同暱稱重新開連結就會接回原座位。每步時間到了會由電腦代走一步。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">兩人對戰：你在下方、對手在上方。點最前面的棋子 → 亮出兩顆可跳的落點 → 點較遠的那個，程式連跳兩次直接到位。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>電腦強度：簡單會常走隨機步、普通用貪心（優先往目標推進、先帶動落後的棋子），都不偷看，單步不到 0.3 秒。</li>
+        <li>戰績（chkr_stats）依「單機 / 連線 × 人數」記勝負與單機最快步數，只有幾個數字（上限 99999）不會變多；選項記在 chkr_opts。「清除戰績」「清除全部本機資料」前都會先確認、無法復原，後者會重新載入頁面並結束進行中的一局。兩個鍵都可用右上角的備份匯出 / 載入；資料壞掉會自動用預設值。</li>
+        <li>進行中的棋局不會存檔，重新整理就結束（連線的成員重新整理會自動接回）。</li>
+        <li>不提供 5 人局（沒有對稱的標準配置）。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <style>
+        :root {
+            --wrap-w: 560px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .row input[type=text] {
+            flex: 1 1 130px;
+        }
+
+        .sec {
+            font-weight: 700;
+            margin: 14px 0 8px;
+        }
+
+        .sec:first-child {
+            margin-top: 0;
+        }
+
+        .status {
+            text-align: center;
+            font-weight: 700;
+            font-size: 17px;
+            margin: 2px 0 6px;
+            min-height: 1.6em;
+        }
+
+        #board {
+            display: block;
+            width: 100%;
+            aspect-ratio: 13.6 / 15.2;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #board .hole {
+            fill: var(--fill);
+            stroke: var(--line);
+            stroke-width: .04;
+        }
+
+        #board .pc {
+            stroke: var(--text);
+            stroke-width: .05;
+        }
+
+        #board .pc.me {
+            cursor: pointer;
+        }
+
+        #board .selring {
+            fill: none;
+            stroke: var(--blue);
+            stroke-width: .12;
+        }
+
+        #board .dest {
+            fill: var(--blue);
+            fill-opacity: .85;
+        }
+
+        #board .lm {
+            fill: none;
+            stroke: var(--muted);
+            stroke-width: .1;
+            stroke-dasharray: .25 .2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            opacity: .7;
+            pointer-events: none;
+        }
+
+        #board .pv {
+            fill: none;
+            stroke: var(--blue);
+            stroke-width: .14;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            pointer-events: none;
+        }
+
+        #legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 12px;
+            justify-content: center;
+            font-size: 14px;
+            margin: 6px 0;
+        }
+
+        #legend .on {
+            font-weight: 700;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+
+        #legend i {
+            display: inline-block;
+            width: .9em;
+            height: .9em;
+            border-radius: 50%;
+            border: 1px solid var(--text);
+            vertical-align: -1px;
+            margin-right: 3px;
+        }
+
+        #lobby ul {
+            list-style: none;
+            margin: 8px 0;
+            padding: 0;
+        }
+
+        #lobby li {
+            padding: 4px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>跳棋</h1>
+        <p class="sub">六角星盤，單步加連跳，先把棋子全部搬到對面。</p>
+
+        <div class="card" id="menu">
+            <p class="sec">單機（不用連線）</p>
+            <div class="row">
+                <select id="n" aria-label="人數"><option value="2">2 人</option><option value="3">3 人</option><option value="4">4 人</option><option value="6">6 人</option></select>
+                <select id="level" aria-label="電腦強度"><option value="easy">簡單</option><option value="normal">普通</option></select>
+            </div>
+            <div class="row"><button class="primary" id="solo">單機對電腦</button><button id="local">同機輪流</button></div>
+            <div class="row"><label><input type="checkbox" id="confirm"> 落點確認（點兩次才走）</label></div>
+            <p class="sec">和朋友連線（人數用上方設定）</p>
+            <div class="row"><input type="text" id="nick" maxlength="10" placeholder="連線暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+            <div class="row">
+                <select id="tmax" aria-label="每步時間"><option value="0">每步不限時</option><option value="15">每步 15 秒</option><option value="30">每步 30 秒</option><option value="60">每步 60 秒</option></select>
+            </div>
+            <div class="row">
+                <button id="host">建立房間</button>
+                <input type="text" id="joinId" placeholder="貼上房號" aria-label="房號" autocomplete="off">
+                <button id="join">加入</button>
+            </div>
+            <p class="note" id="netMsg"></p>
+            <p class="sec">戰績與資料</p>
+            <div id="stats"></div>
+            <div class="row" style="margin-top:8px"><button class="sm" id="clrStats">清除戰績</button><button class="sm" id="clrAll">清除全部本機資料</button></div>
+        </div>
+
+        <div class="card" id="game" hidden>
+            <div class="status" id="status" role="status"></div>
+            <div id="lobby" hidden>
+                <p>座位（空位開始時由電腦補上）：</p>
+                <ul id="seatList"></ul>
+                <button class="primary" id="start" hidden>開始遊戲</button>
+            </div>
+            <div id="play" hidden>
+                <svg id="board" viewBox="-6.8 -7.6 13.6 15.2" role="img" aria-label="跳棋棋盤"></svg>
+                <div id="legend"></div>
+            </div>
+            <div class="row" style="justify-content:center;margin-top:8px">
+                <button class="sm" id="cancel">取消選取</button>
+                <button class="sm" id="cfBtn" aria-pressed="false">落點確認：關</button>
+                <button class="sm" id="copy" hidden>複製邀請連結</button>
+                <button class="sm primary" id="again" hidden>再來一局</button>
+                <button class="sm" id="leave">離開</button>
+            </div>
+            <p class="note" id="gameMsg"></p>
+        </div>
+    </div>
+
+    <script id="app">
+        // --- pure ---
+        // 棋盤：軸座標 (q,r)，121 格 = 兩個大三角形的聯集；六個角（區）依順時針從上方起編號 0..5，對角 = (z+3)%6
+        // 座位 i 的起始區 = CK_ZONES[人數][i]，目標區 = 對角；盤面 board[格] = 座位編號或 -1
+        const CK_DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+        const CK_ZONES = { 2: [0, 3], 3: [0, 2, 4], 4: [1, 2, 4, 5], 6: [0, 1, 2, 3, 4, 5] };
+        const CK_CAP = 150;                 // 每人最多走幾步；超過依距離總和判定
+        const CK_STAT_MAX = 99999;
+        const ckZoneOf = (q, r) => { const s = -q - r; return r <= -5 ? 0 : q >= 5 ? 1 : s <= -5 ? 2 : r >= 5 ? 3 : q <= -5 ? 4 : s >= 5 ? 5 : -1; };
+        const ckHex = (a, b) => { const dq = a[0] - b[0], dr = a[1] - b[1]; return Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr)); };
+        const CK = (() => {
+            const cells = [];
+            for (let r = -8; r <= 8; r++) for (let q = -8; q <= 8; q++) { const s = -q - r; if ((q >= -4 && r >= -4 && s >= -4) || (q <= 4 && r <= 4 && s <= 4)) cells.push([q, r]); }
+            const idx = new Map(cells.map(([q, r], i) => [q + ',' + r, i]));
+            const nb = cells.map(([q, r]) => CK_DIRS.map(([dq, dr]) => { const j = idx.get((q + dq) + ',' + (r + dr)); return j === undefined ? -1 : j; }));
+            const zone = cells.map(([q, r]) => ckZoneOf(q, r));
+            const zc = [0, 1, 2, 3, 4, 5].map(z => cells.map((_, i) => i).filter(i => zone[i] === z));
+            const apex = zc.map(l => l.reduce((b, i) => (ckHex(cells[i], [0, 0]) > ckHex(cells[b], [0, 0]) ? i : b), l[0]));
+            return { cells, nb, zone, zc, apex, N: cells.length };
+        })();
+        const ckTarget = (n, seat) => (CK_ZONES[n][seat] + 3) % 6;
+
+        function ckNew(n) {
+            const board = new Array(CK.N).fill(-1);
+            CK.zone.forEach((z, i) => { const s = CK_ZONES[n].indexOf(z); if (s >= 0) board[i] = s; });
+            return { n, board, turn: 0, rounds: 0, winner: -1, why: '', last: null, mv: new Array(n).fill(0) };
+        }
+
+        // 從某格出發的所有落點：Map(落點 → 路徑[落點...])；起點視為已空出
+        function ckMoves(b, from) {
+            const res = new Map();
+            for (const n of CK.nb[from]) if (n >= 0 && b[n] === -1) res.set(n, [n]);
+            const seen = new Set([from]), q = [[from, []]];
+            while (q.length) {
+                const [c, p] = q.shift();
+                for (let d = 0; d < 6; d++) {
+                    const a = CK.nb[c][d];
+                    if (a < 0 || a === from || b[a] === -1) continue;
+                    const t = CK.nb[a][d];
+                    if (t < 0 || seen.has(t) || !(b[t] === -1 || t === from)) continue;
+                    seen.add(t); const np = [...p, t]; q.push([t, np]);
+                    if (!res.has(t)) res.set(t, np);
+                }
+            }
+            return res;
+        }
+        // 驗證一條路徑：單步（相鄰空格）或每一段都是「跳過相鄰棋子到對面空格」的連跳
+        function ckValidPath(b, from, path) {
+            if (!Number.isInteger(from) || from < 0 || from >= CK.N || b[from] < 0) return false;
+            if (!Array.isArray(path) || !path.length || path.length > 60 || path.some(x => !Number.isInteger(x) || x < 0 || x >= CK.N)) return false;
+            if (path.length === 1 && CK.nb[from].includes(path[0])) return b[path[0]] === -1;
+            let c = from; const seen = new Set([from]);
+            for (const t of path) {
+                if (seen.has(t) || !(b[t] === -1)) return false;
+                let ok = false;
+                for (let d = 0; d < 6 && !ok; d++) { const a = CK.nb[c][d]; ok = a >= 0 && a !== from && b[a] !== -1 && CK.nb[a][d] === t; }
+                if (!ok) return false;
+                seen.add(t); c = t;
+            }
+            return true;
+        }
+        function ckAllMoves(b, seat) {
+            const out = [];
+            b.forEach((v, from) => { if (v === seat) ckMoves(b, from).forEach((path, to) => out.push({ from, to, path })); });
+            return out;
+        }
+        const ckHasMove = (b, seat) => b.some((v, from) => v === seat && ckMoves(b, from).size > 0);
+        function ckWon(b, n, seat) {
+            const z = CK.zc[ckTarget(n, seat)];
+            return z.every(i => b[i] !== -1) && z.some(i => b[i] === seat);
+        }
+        function ckDistSum(b, n, seat) {
+            const tip = CK.cells[CK.apex[ckTarget(n, seat)]];
+            return b.reduce((s, v, i) => s + (v === seat ? ckHex(CK.cells[i], tip) : 0), 0);
+        }
+        const ckInTarget = (b, n, seat) => CK.zc[ckTarget(n, seat)].filter(i => b[i] === seat).length;
+        // 走一步（驗證輪到誰、棋子歸屬、路徑），更新輪次與勝負；回傳是否成功
+        function ckPlay(G, from, path) {
+            if (G.winner !== -1 || !ckValidPath(G.board, from, path) || G.board[from] !== G.turn) return false;
+            const seat = G.turn, to = path[path.length - 1], b = G.board;
+            b[to] = seat; b[from] = -1; G.mv[seat]++; G.last = { seat, from, path: path.slice() };
+            if (ckWon(b, G.n, seat)) { G.winner = seat; G.why = 'win'; return true; }
+            let t = seat, k = 0;
+            do { t = (t + 1) % G.n; if (t === 0) G.rounds++; k++; } while (k < G.n && !ckHasMove(b, t));
+            G.turn = t;
+            if (G.rounds >= CK_CAP || !ckHasMove(b, t)) {
+                let best = 0, bs = Infinity;
+                for (let s = 0; s < G.n; s++) { const d = ckDistSum(b, G.n, s); if (d < bs) { bs = d; best = s; } }
+                G.winner = best; G.why = 'cap';
+            }
+            return true;
+        }
+        // 電腦選步：貪心（往目標頂點推進 + 優先帶動落後的棋子 + 進入目標區加分），不離開已進入的目標區；簡單加大隨機
+        function ckPick(b, n, seat, level, rnd) {
+            let all = ckAllMoves(b, seat);
+            if (!all.length) return null;
+            const tz = ckTarget(n, seat), tip = CK.cells[CK.apex[tz]];
+            const keep = all.filter(m => !(CK.zone[m.from] === tz && CK.zone[m.to] !== tz));
+            if (keep.length) all = keep;
+            const jit = level === 'easy' ? 6 : 0.3;
+            let best = null, bs = -Infinity;
+            for (const m of all) {
+                const df = ckHex(CK.cells[m.from], tip), dt = ckHex(CK.cells[m.to], tip);
+                const s = (df - dt) + 0.3 * df + (CK.zone[m.to] === tz && CK.zone[m.from] !== tz ? 1 : 0) + rnd() * jit;
+                if (s > bs) { bs = s; best = m; }
+            }
+            return best;
+        }
+        const ckEnc = (b) => b.map(v => v + 1).join('');
+        function ckDec(s, n) {
+            if (typeof s !== 'string' || s.length !== CK.N || !/^[0-9]+$/.test(s)) return null;
+            const b = Array.from(s, c => +c - 1);
+            return b.every(v => v >= -1 && v < n) ? b : null;
+        }
+        const ckInt = (v, lo, hi, d) => (Number.isInteger(v) && v >= lo && v <= hi ? v : d);
+        function cleanOpts(o) {
+            o = o && typeof o === 'object' ? o : {};
+            return { n: [2, 3, 4, 6].includes(o.n) ? o.n : 2, level: o.level === 'easy' ? 'easy' : 'normal', confirm: o.confirm === true, tmax: [0, 15, 30, 60].includes(o.tmax) ? o.tmax : 0 };
+        }
+        const CK_STAT_KEYS = ['s2', 's3', 's4', 's6', 'n2', 'n3', 'n4', 'n6'];
+        function cleanStats(o) {
+            o = o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+            const r = {};
+            for (const k of CK_STAT_KEYS) { const a = Array.isArray(o[k]) ? o[k] : []; r[k] = [ckInt(a[0], 0, CK_STAT_MAX, 0), ckInt(a[1], 0, CK_STAT_MAX, 0), ckInt(a[2], 0, 9999, 0)]; }
+            return r;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const esc = Util.esc;
+        const ZC = ['#d8433a', '#f0b429', '#3fa34d', '#2f7fd6', '#8a5cc9', '#f3efe6'];
+        const ZN = ['紅', '黃', '綠', '藍', '紫', '白'];
+        const SQ3 = Math.sqrt(3) / 2;
+        const connKey = 'chkr_conn';
+
+        let mode = 'menu';              // menu | solo | local | host | guest
+        let G = null, soloSeats = [], gSeats = [], sel = null, moves = new Map(), pend = null, cpuT = 0, dl = 0, tmax = 0;
+        let room = null, hostN = 2, hostNick = '', hostId = '', gN = 2, leaving = false;
+        let opts = cleanOpts(null), stats = cleanStats(null);
+        addEventListener('pagehide', () => { leaving = true; }); addEventListener('pageshow', () => { leaving = false; });
+
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const gameMsg = (t) => { $('#gameMsg').textContent = t || ''; };
+        const enableNet = (on) => ['#local', '#solo', '#host', '#join', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const removeKey = (k) => { try { localStorage.removeItem(k); } catch (e) { /* 無法清除也不影響 */ } };
+        const saveOpts = () => Util.store.set('chkr_opts', opts);
+        const saveStats = () => Util.store.set('chkr_stats', stats);
+
+        function hostSeats() {
+            return Array.from({ length: hostN }, (_, i) => {
+                if (i === 0) return { name: hostNick, human: true };
+                const p = room.players[i];
+                return p ? { name: p.nick, human: p.connected, off: !p.connected } : { name: '電腦', human: false };
+            });
+        }
+        const seats = () => (mode === 'host' ? hostSeats() : mode === 'guest' ? gSeats : soloSeats);
+        const acting = () => (mode === 'local' ? G.turn : mode === 'guest' ? room.myIndex : 0);
+        const myTurn = () => !!G && G.winner === -1 && G.turn === acting() && (mode !== 'guest' || !!room);
+        const nOf = () => (G ? G.n : gN);
+        const label = (s) => ZN[CK_ZONES[nOf()][s]] + '方' + ((seats()[s] || {}).name ? '（' + seats()[s].name + '）' : '');
+
+        // ---------- 畫面 ----------
+        function statusText() {
+            if (!G) return mode === 'guest' ? '已加入，等待房主開始…' : '等待玩家加入…';
+            if (G.winner !== -1) return (mode !== 'local' && G.winner === acting() ? '你贏了！' : `${label(G.winner)}獲勝！`) + (G.why === 'cap' ? '（回合上限，依距離判定）' : '');
+            const left = dl ? Math.max(0, Math.ceil((dl - performance.now()) / 1000)) : 0;
+            return (mode !== 'local' && G.turn === acting() ? '輪到你' : `輪到 ${label(G.turn)}`) + (left ? ` ・剩 ${left} 秒` : '');
+        }
+        function render() {
+            const lobby = !G;
+            $('#lobby').hidden = !lobby; $('#play').hidden = lobby;
+            $('#status').textContent = statusText();
+            $('#start').hidden = !(lobby && mode === 'host');
+            $('#copy').hidden = mode !== 'host';
+            $('#again').hidden = !(G && G.winner !== -1 && mode !== 'guest');
+            $('#cancel').hidden = !G; $('#cfBtn').hidden = !G;
+            $('#cfBtn').textContent = '落點確認：' + (opts.confirm ? '開' : '關'); $('#cfBtn').setAttribute('aria-pressed', opts.confirm);
+            if (lobby) {
+                if (mode === 'host') $('#seatList').innerHTML = hostSeats().map((s, i) => `<li>座位 ${i + 1}：${esc(s.name)}${i && !s.human && s.name !== '電腦' ? '（離線）' : ''}</li>`).join('');
+                else $('#seatList').innerHTML = gSeats.map((s, i) => `<li>座位 ${i + 1}：${esc(s.name)}</li>`).join('');
+                return;
+            }
+            const n = G.n, S = seats(), view = mode === 'local' ? G.turn : Math.min(acting(), n - 1);
+            const deg = (3 - CK_ZONES[n][view]) * 60;
+            const me = G.winner === -1 && myTurn() ? acting() : -2;
+            const P = (i) => { const [q, r] = CK.cells[i]; return [+(q + r / 2).toFixed(3), +(r * SQ3).toFixed(3)]; };
+            let h = `<g transform="rotate(${deg})">`;
+            CK.cells.forEach((_, i) => {
+                const [x, y] = P(i), z = CK.zone[i];
+                h += `<circle class="hole" data-i="${i}" cx="${x}" cy="${y}" r=".46"/>`;
+                if (z >= 0 && CK_ZONES[n].includes(z)) h += `<circle cx="${x}" cy="${y}" r=".46" fill="${ZC[z]}" fill-opacity=".22" pointer-events="none"/>`;
+            });
+            const line = (cls, from, path) => `<polyline class="${cls}" points="${[from, ...path].map(i => P(i).join(',')).join(' ')}"/>`;
+            if (G.last) h += line('lm', G.last.from, G.last.path);
+            if (sel !== null && pend !== null && moves.has(pend)) h += line('pv', sel, moves.get(pend));
+            G.board.forEach((v, i) => {
+                if (v < 0) return;
+                const [x, y] = P(i);
+                h += `<circle class="pc${v === me ? ' me' : ''}" data-i="${i}" cx="${x}" cy="${y}" r=".38" fill="${ZC[CK_ZONES[n][v]]}"/>`;
+            });
+            if (sel !== null) { const [x, y] = P(sel); h += `<circle class="selring" cx="${x}" cy="${y}" r=".46" pointer-events="none"/>`; }
+            moves.forEach((_, i) => { const [x, y] = P(i); h += `<circle class="dest" data-i="${i}" cx="${x}" cy="${y}" r="${i === pend ? .3 : .17}"/>`; });
+            $('#board').innerHTML = h + '</g>';
+            $('#legend').innerHTML = S.map((s, i) => `<span class="${G.winner === -1 && G.turn === i ? 'on' : ''}"><i style="background:${ZC[CK_ZONES[n][i]]}"></i>${esc(s.name)}${s.human ? '' : s.off ? '（離線，電腦代打）' : s.name === '電腦' || mode === 'solo' ? '' : '（電腦）'} ${ckInTarget(G.board, n, i)}/10</span>`).join('');
+        }
+        const showScreen = (s) => { $('#menu').hidden = s !== 'menu'; $('#game').hidden = s !== 'game'; };
+
+        function renderMenu() {
+            $('#n').value = opts.n; $('#level').value = opts.level; $('#confirm').checked = opts.confirm; $('#tmax').value = opts.tmax;
+            $('#stats').innerHTML = [2, 3, 4, 6].map(n => { const a = stats['s' + n], c = stats['n' + n]; return `${n} 人：單機 ${a[0]} 勝 ${a[1]} 負${a[2] ? `（最快 ${a[2]} 步）` : ''} ・ 連線 ${c[0]} 勝 ${c[1]} 負`; }).join('<br>');
+        }
+
+        // ---------- 遊戲流程（單機 / 輪流 / 房主共用） ----------
+        function scheduleCpu() {
+            clearTimeout(cpuT); dl = 0;
+            if (!G || G.winner !== -1 || mode === 'guest') return;
+            const s = G.turn;
+            if (seats()[s].human) { if (mode === 'host' && tmax) dl = performance.now() + tmax * 1000; return; }
+            cpuT = setTimeout(() => cpuMove(s, opts.level), 450);
+        }
+        function cpuMove(s, level) {
+            if (!G || G.turn !== s || G.winner !== -1) return;
+            const m = ckPick(G.board, G.n, s, level, Math.random);
+            if (m) ckPlay(G, m.from, m.path);
+            afterMove();
+        }
+        function afterMove() {
+            sel = null; moves = new Map(); pend = null;
+            if (G.winner !== -1) onOver();
+            scheduleCpu();
+            if (mode === 'host') publish(); else render();
+        }
+        function onOver() {
+            if (mode !== 'solo' && mode !== 'host' && mode !== 'guest') return;
+            const k = (mode === 'solo' ? 's' : 'n') + G.n, a = stats[k], won = G.winner === acting();
+            if (won) { if (a[0] < CK_STAT_MAX) a[0]++; if (mode === 'solo' && G.why === 'win') { const m = G.mv[0]; if (m > 0 && m <= 9999 && (!a[2] || m < a[2])) a[2] = m; } }
+            else if (a[1] < CK_STAT_MAX) a[1]++;
+            saveStats();
+        }
+        function newGame() { G = ckNew(G ? G.n : opts.n); sel = null; moves = new Map(); pend = null; gameMsg(''); }
+        function enter(m) { mode = m; showScreen('game'); }
+        function startSolo(kind) {
+            const n = opts.n;
+            soloSeats = Array.from({ length: n }, (_, i) => (kind === 'solo' ? (i ? { name: '電腦' + i, human: false } : { name: '你', human: true }) : { name: '玩家' + (i + 1), human: true }));
+            G = ckNew(n); gameMsg(''); enter(kind); scheduleCpu(); render();
+        }
+
+        // 提交一步：單機 / 輪流 / 房主直接處理，成員送給房主
+        function submit(from, path) {
+            if (mode === 'guest') { if (room) room.send({ type: 'MOVE', from, path }); return; }
+            if (!ckPlay(G, from, path)) { gameMsg('非法的一步'); render(); return; }
+            gameMsg(''); afterMove();
+        }
+        $('#board').onclick = (e) => {
+            const el = e.target.closest('[data-i]');
+            if (!el || !myTurn()) return;
+            const i = +el.dataset.i;
+            if (sel !== null && moves.has(i)) {
+                if (opts.confirm && pend !== i) { pend = i; render(); return; }
+                const from = sel, path = moves.get(i); sel = null; moves = new Map(); pend = null;
+                return submit(from, path);
+            }
+            if (G.board[i] === acting() && i !== sel) { sel = i; moves = ckMoves(G.board, i); } else { sel = null; moves = new Map(); }
+            pend = null; render();
+        };
+        $('#cancel').onclick = () => { sel = null; moves = new Map(); pend = null; render(); };
+        $('#cfBtn').onclick = () => { opts.confirm = !opts.confirm; $('#confirm').checked = opts.confirm; pend = null; saveOpts(); render(); };
+        $('#confirm').onchange = () => { opts.confirm = $('#confirm').checked; saveOpts(); };
+        $('#n').onchange = () => { opts.n = +$('#n').value; opts = cleanOpts(opts); saveOpts(); };
+        $('#level').onchange = () => { opts.level = $('#level').value; opts = cleanOpts(opts); saveOpts(); };
+        $('#tmax').onchange = () => { opts.tmax = +$('#tmax').value; opts = cleanOpts(opts); saveOpts(); };
+        $('#solo').onclick = () => startSolo('solo');
+        $('#local').onclick = () => startSolo('local');
+        $('#clrStats').onclick = () => { if (confirm('清除所有戰績？無法復原。')) { stats = cleanStats(null); saveStats(); renderMenu(); } };
+        $('#clrAll').onclick = () => { if (confirm('清除戰績與選項？無法復原，頁面會重新載入，進行中的這一局會結束。')) { ['chkr_stats', 'chkr_opts'].forEach(removeKey); location.reload(); } };
+        $('#again').onclick = () => {
+            if (mode === 'host') { clearTimeout(cpuT); newGame(); scheduleCpu(); publish(); return; }
+            clearTimeout(cpuT); newGame(); scheduleCpu(); render();
+        };
+        $('#leave').onclick = () => { if (G && G.winner === -1 && !confirm('離開這一局？')) return; try { sessionStorage.removeItem(connKey); } catch (e) { } leaving = true; clearTimeout(cpuT); if (room) room.destroy(); location.hash = ''; location.reload(); };
+        $('#copy').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copy'), url, () => prompt('請手動複製邀請連結：', url)); };
+
+        // ---------- 連線：房主 ----------
+        const readNick = () => { const n = $('#nick').value.trim(); if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; } return n; };
+        function stateMsg() {
+            return {
+                type: 'STATE', n: hostN, seats: hostSeats().map(s => ({ name: s.name, human: !!s.human, off: !!s.off })),
+                game: G ? { board: ckEnc(G.board), turn: G.turn, rounds: G.rounds, winner: G.winner, why: G.why, last: G.last } : null,
+                left: dl ? Math.max(0, Math.round(dl - performance.now())) : 0,
+            };
+        }
+        function publish() { render(); if (room) room.broadcast(stateMsg()); }
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            enableNet(false); netMsg('連線中…');
+            hostNick = nick; hostN = opts.n; tmax = opts.tmax; G = null;
+            room = P2PRoom.host({
+                nick, maxPlayers: hostN, keepSlots: true,
+                canJoin: (nk) => (G && G.winner === -1 && !room.players.some(p => !p.connected && p.nick === nk) ? '遊戲進行中，只有原本的玩家能重新加入' : ''),
+                onReady(r) { hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id); enter('host'); publish(); },
+                onJoin() { scheduleCpu(); publish(); },
+                onLeave() { scheduleCpu(); publish(); },
+                onMessage(p, d) { hostMsg(p.index, d); },
+                onError(err, message) { netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } },
+            });
+        }
+        $('#start').onclick = () => { if (mode !== 'host' || G) return; G = ckNew(hostN); scheduleCpu(); publish(); };
+        // 成員來的一切資料都要驗證
+        function hostMsg(seat, d) {
+            if (mode !== 'host' || !G || !d || typeof d !== 'object' || d.type !== 'MOVE') return;
+            const reject = (why) => { publish(); if (room) room.sendTo(seat, { type: 'REJECT', why }); };
+            if (G.winner !== -1 || G.turn !== seat || !hostSeats()[seat] || !hostSeats()[seat].human) return reject('現在不是你的回合');
+            if (!ckPlay(G, d.from, d.path)) return reject('非法的一步');
+            afterMove();
+        }
+
+        // ---------- 連線：成員 ----------
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim();
+            if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…');
+            room = P2PRoom.join(id, {
+                nick,
+                onJoined() { try { sessionStorage.setItem(connKey, JSON.stringify({ id, nick })); } catch (e) { } hostId = id; G = null; gSeats = []; enter('guest'); render(); },
+                onMessage(d) {
+                    if (!d || typeof d !== 'object') return;
+                    if (d.type === 'REJECT') { gameMsg(String(d.why || '').slice(0, 30)); return; }
+                    if (d.type !== 'STATE' || !CK_ZONES[d.n] || !Array.isArray(d.seats) || d.seats.length !== d.n) return;
+                    gN = d.n;
+                    gSeats = d.seats.map(s => ({ name: String((s && s.name) || '').slice(0, 12), human: !!(s && s.human), off: !!(s && s.off) }));
+                    const prev = G;
+                    if (d.game) {
+                        const g = d.game, b = ckDec(g.board, d.n), last = g.last;
+                        if (!b) return;
+                        if (!Number.isInteger(g.turn) || g.turn < 0 || g.turn >= d.n || !Number.isInteger(g.winner) || g.winner < -1 || g.winner >= d.n) return;
+                        G = { n: d.n, board: b, turn: g.turn, rounds: ckInt(g.rounds, 0, 9999, 0), winner: g.winner, why: g.why === 'cap' ? 'cap' : g.why === 'win' ? 'win' : '', mv: new Array(d.n).fill(0), last: null };
+                        if (last && ckInt(last.seat, 0, d.n - 1, -1) >= 0 && Array.isArray(last.path) && last.path.length <= 60 && [last.from, ...last.path].every(x => Number.isInteger(x) && x >= 0 && x < CK.N)) G.last = { seat: last.seat, from: last.from, path: last.path };
+                        dl = d.left > 0 ? performance.now() + Math.min(d.left, 120000) : 0;
+                        if (prev && prev.winner === -1 && G.winner !== -1) onOver();
+                    } else { G = null; dl = 0; }
+                    sel = null; moves = new Map(); pend = null; gameMsg(''); render();
+                },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; try { sessionStorage.removeItem(connKey); } catch (e) { } },
+                onClose() {
+                    if (mode !== 'guest' || leaving) return;
+                    try { sessionStorage.removeItem(connKey); } catch (e) { }
+                    alert('房主已離開或連線中斷，遊戲結束'); location.reload();
+                },
+                onError(err, message) { netMsg(message); enableNet(true); try { sessionStorage.removeItem(connKey); } catch (e) { } },
+            });
+        }
+        $('#host').onclick = hostRoom;
+        $('#join').onclick = joinRoom;
+
+        // 倒數顯示 / 逾時代走
+        setInterval(() => {
+            if (!G || G.winner !== -1 || !dl) return;
+            if (mode === 'host' && performance.now() > dl) { dl = 0; gameMsg('逾時，由電腦代走'); cpuMove(G.turn, 'normal'); return; }
+            $('#status').textContent = statusText();
+        }, 300);
+
+        // ---------- 啟動 ----------
+        opts = cleanOpts(Util.store.get('chkr_opts', null)); stats = cleanStats(Util.store.get('chkr_stats', null));
+        if (P2PRoom.roomFromUrl()) {
+            $('#joinId').value = P2PRoom.roomFromUrl();
+            try { const c = JSON.parse(sessionStorage.getItem(connKey) || 'null'); if (c && c.id === P2PRoom.roomFromUrl() && P2PRoom.validNick(c.nick)) { $('#nick').value = c.nick; joinRoom(); } } catch (e) { }
+        }
+        renderMenu();
+        showScreen('menu');
+    </script>
+</body>
+
+</html>

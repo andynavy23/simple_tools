@@ -54,7 +54,7 @@ const setVal = (page, sel, v) => page.evaluate((s, x) => { const e = document.qu
 // ---------- 同機傳遞：兩真一假 ----------
 {
     const { page, errors } = await makePage();
-    assert.strictEqual(await page.evaluate(() => document.querySelectorAll('#kind option').length), 6);
+    assert.strictEqual(await page.evaluate(() => document.querySelectorAll("#kind option").length), 8);
     assert.ok(await overflow(page) <= 0, '選單橫向溢出');
     await setVal(page, '#soloNames', 'A\nB\nC'); await setVal(page, '#kind', 'truths');
     await click(page, '同機傳遞開始');

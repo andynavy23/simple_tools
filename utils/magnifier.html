@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="手機放大鏡：用後鏡頭即時放大 1–8 倍，可凍結畫面慢慢看、開手電筒、切換高對比 / 反白 / 黑白濾鏡、存成圖片，大字大按鈕，給長輩閱讀小字。">
+    <meta property="og:title" content="手機放大鏡" />
+    <meta property="og:description" content="相機即時放大、凍結畫面、手電筒與高對比濾鏡。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/magnifier.html" />
+    <title>手機放大鏡</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>把手機（或有鏡頭的電腦）變成放大鏡：用相機即時放大小字，可以定格畫面慢慢看、開手電筒、用高對比或反白讓字更清楚。介面字大、按鈕大，適合長輩使用。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>藥品說明書、食品成分、收據、地圖上的字太小看不清楚。</li>
+        <li>光線不足的地方想看清楚字（開手電筒）。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>按「開啟相機」，瀏覽器詢問權限時選「允許」。</li>
+        <li>拖曳「放大倍率」滑桿（1–8 倍）；手機若支援光學 / 硬體變焦會自動優先使用，其餘用數位放大。</li>
+        <li>要看得更久就按「定格」，畫面會停住（不必一直舉著手機），再按「繼續」回到即時畫面。</li>
+        <li>「手電筒」只有手機與瀏覽器支援時才會出現；「濾鏡」可切換標準 / 高對比 / 反白 / 黑白。</li>
+        <li>「存圖」會把目前畫面存成 PNG 圖片（Safari 等不支援濾鏡存檔的瀏覽器會存成原色）。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">看藥品說明書：開啟相機 → 倍率拉到 3 倍 → 對準文字按「定格」→ 切到「高對比」慢慢讀。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>需要 HTTPS（或 localhost）與相機權限；被拒絕時請到瀏覽器網址列的網站設定重新允許。</li>
+        <li>影像只在你的裝置上處理，不會上傳，也不儲存任何資料；離開頁面或切到別的分頁時會自動關閉相機。</li>
+        <li>數位放大倍率越高畫面越粗糙，這是正常的；手抖時用「定格」比較好讀。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <style>
+        :root { --wrap-w: 720px; }
+        .stage { position: relative; background: #000; border-radius: var(--radius); overflow: hidden; aspect-ratio: 3 / 4; max-height: 70dvh; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+        .stage canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
+        .stage video { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        #msg { color: #fff; padding: 20px; text-align: center; font-size: 20px; line-height: 1.5; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+        .ctl { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
+        .ctl button { min-height: 60px; font-size: 20px; font-weight: 700; }
+        .ctl .wide { grid-column: 1 / -1; }
+        .zoomrow { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 20px; font-weight: 700; }
+        .zoomrow input { flex: 1; height: 44px; }
+        .zoomrow output { min-width: 3.2em; text-align: right; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>手機放大鏡</h1>
+        <p class="sub">用相機放大小字，可定格、開手電筒、切換高對比。</p>
+
+        <div class="stage"><video id="v" playsinline muted></video><canvas id="cv" aria-label="放大畫面"></canvas><div id="msg">按下方「開啟相機」開始</div></div>
+        <div class="zoomrow"><label for="z">放大倍率</label><input type="range" id="z" min="1" max="8" step="0.1" value="2"><output id="zv">2.0×</output></div>
+        <div class="ctl">
+            <button class="primary wide" id="start">開啟相機</button>
+            <button id="freeze" disabled>定格</button>
+            <button id="filter" disabled>濾鏡：標準</button>
+            <button id="torch" hidden>手電筒：關</button>
+            <button id="save" disabled>存圖</button>
+        </div>
+    </div>
+
+    <script>
+        const $ = (s) => document.querySelector(s);
+        // --- pure ---
+        // 把倍率 z 拆成硬體變焦 hw 與數位放大 dig（hw × dig = z）；cap 為 { min, max } 或 null
+        function splitZoom(z, cap) {
+            z = Math.min(8, Math.max(1, +z || 1));
+            if (!cap || !(cap.max > 1)) return { hw: 0, dig: z };
+            const hw = Math.min(Math.max(z, cap.min || 1), cap.max);
+            return { hw, dig: Math.max(1, z / hw) };
+        }
+        // 以中心為準的數位放大裁切矩形（來源 w×h，倍率 z ≥ 1）
+        function cropRect(w, h, z) {
+            z = Math.max(1, +z || 1);
+            const sw = w / z, sh = h / z;
+            return { sx: (w - sw) / 2, sy: (h - sh) / 2, sw, sh };
+        }
+        const FILTERS = [['標準', 'none'], ['高對比', 'contrast(1.8) saturate(1.2)'], ['反白', 'invert(1) contrast(1.4)'], ['黑白', 'grayscale(1) contrast(1.6)']];
+        // --- /pure ---
+
+        const v = $('#v'), cv = $('#cv'), ctx = cv.getContext('2d'), msg = $('#msg');
+        let stream = null, track = null, cap = null, frozen = null, fi = 0, torchOn = false, raf = 0;
+        const say = (t) => { msg.textContent = t; msg.hidden = !t; };
+
+        function draw() {
+            raf = requestAnimationFrame(draw);
+            const src = frozen || v, w = frozen ? frozen.width : v.videoWidth, h = frozen ? frozen.height : v.videoHeight;
+            if (!w || !h) return;
+            const z = +$('#z').value, st = track && track.getSettings ? track.getSettings() : {};
+            const { dig } = frozen ? { dig: z } : splitZoom(z, cap ? { min: cap.min, max: cap.max } : null);
+            const r = cropRect(w, h, frozen ? z : (cap && st.zoom ? z / st.zoom : dig));
+            if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+            ctx.drawImage(src, r.sx, r.sy, r.sw, r.sh, 0, 0, w, h);
+        }
+        function stop() {
+            cancelAnimationFrame(raf); frozen = null;
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            stream = track = cap = null; torchOn = false; v.srcObject = null;
+            ['#freeze', '#filter', '#save'].forEach(s => { $(s).disabled = true; });
+            $('#torch').hidden = true; $('#freeze').textContent = '定格'; $('#start').textContent = '開啟相機';
+        }
+        async function start() {
+            stop();
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { say(window.isSecureContext === false ? '這個網址不是安全連線（需要 HTTPS），瀏覽器不允許使用相機。' : '這個瀏覽器或裝置不支援相機。'); return; }
+            say('正在開啟相機…');
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+            } catch (e) {
+                say(e && e.name === 'NotAllowedError' ? '相機權限被拒絕。請到瀏覽器網址列的網站設定，把相機改成「允許」後再試一次。' : e && e.name === 'NotFoundError' ? '找不到相機。請確認裝置有鏡頭、沒有被其他程式占用。' : '無法開啟相機（' + ((e && e.name) || '未知錯誤') + '）。請稍後再試。');
+                return;
+            }
+            track = stream.getVideoTracks()[0];
+            cap = track.getCapabilities ? track.getCapabilities() : {};
+            if (!(cap.zoom && cap.zoom.max > 1)) cap.zoom = null; else cap.min = cap.zoom.min; cap.max = cap.zoom ? cap.zoom.max : 0;
+            v.srcObject = stream;
+            try { await v.play(); } catch (e) { /* 自動播放被擋時仍可能有畫面 */ }
+            say('');
+            ['#freeze', '#filter', '#save'].forEach(s => { $(s).disabled = false; });
+            $('#torch').hidden = !cap.torch; $('#start').textContent = '重新開啟相機';
+            applyZoom(); raf = requestAnimationFrame(draw);
+        }
+        // 支援硬體變焦就同步套用；其餘由 draw() 數位放大
+        function applyZoom() {
+            const z = +$('#z').value; $('#zv').textContent = z.toFixed(1) + '×';
+            if (track && cap && cap.zoom) { const { hw } = splitZoom(z, { min: cap.min, max: cap.max }); track.applyConstraints({ advanced: [{ zoom: hw }] }).catch(() => { }); }
+        }
+        $('#z').oninput = applyZoom;
+        $('#start').onclick = start;
+        $('#freeze').onclick = () => {
+            if (frozen) { frozen = null; $('#freeze').textContent = '定格'; return; }
+            if (!v.videoWidth) return;
+            const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight;
+            c.getContext('2d').drawImage(v, 0, 0);
+            frozen = c; $('#freeze').textContent = '繼續';
+        };
+        $('#filter').onclick = () => { fi = (fi + 1) % FILTERS.length; cv.style.filter = FILTERS[fi][1]; $('#filter').textContent = '濾鏡：' + FILTERS[fi][0]; };
+        $('#torch').onclick = async () => {
+            try { await track.applyConstraints({ advanced: [{ torch: !torchOn }] }); torchOn = !torchOn; $('#torch').textContent = '手電筒：' + (torchOn ? '開' : '關'); }
+            catch (e) { $('#torch').hidden = true; }
+        };
+        $('#save').onclick = () => {
+            if (!cv.width) return;
+            const c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height;
+            const x = c.getContext('2d'); x.filter = FILTERS[fi][1]; x.drawImage(cv, 0, 0);   // 不支援 ctx.filter 的瀏覽器會存成原色
+            c.toBlob((b) => {
+                if (!b) return;
+                const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'magnifier.png';
+                document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+            }, 'image/png');
+        };
+        addEventListener('pagehide', stop);
+        document.addEventListener('visibilitychange', () => { if (document.hidden && stream) { stop(); say('已暫停相機，請再按「開啟相機」。'); } });
+    </script>
+</body>
+
+</html>

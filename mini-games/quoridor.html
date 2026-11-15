@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="Quoridor 步步為營：9×9 棋盤走位與放牆，先到對邊者勝；可單機對電腦、同機 2–4 人或連線對戰。">
+    <meta property="og:title" content="Quoridor 步步為營" />
+    <meta property="og:description" content="走位或放牆擋路，不能把對手完全封死；單機、同機或連線 2–4 人。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/quoridor.html" />
+    <meta name="st-keys" content="quor_opts,quor_stats">
+    <title>Quoridor 步步為營</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>Quoridor（步步為營）是 9×9 棋盤上的競速棋：每人一顆棋子，目標是先走到「對面那一邊」。每回合二選一：<b>移動棋子一格</b>，或<b>放一面牆</b>擋住對手的路。可單機對電腦、同機輪流，或連線和朋友玩。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>想要輕量的策略對戰：規則簡單、每局約 5–10 分鐘。</li>
+        <li>一個人練習（對電腦），或和朋友在同一支手機輪流下。</li>
+        </ul>
+        <h3>怎麼玩</h3>
+        <ol>
+        <li>2 人：每人 10 面牆；4 人：每人 5 面牆。紅棋從下方出發要走到最上排，藍棋（2 人時在上方）要走到最下排；4 人時黃棋（上）去下排、藍棋（左）去最右排、綠棋（右）去最左排。盤邊的色線標出各色的目標邊。</li>
+        <li><b>移動</b>：停在「移動」分頁，點亮綠點的格子。每次走相鄰一格（上下左右），不能穿牆。相鄰有對手棋時可以<b>跳過</b>他；若跳過去的位置被牆擋住或被別顆棋占據，就改成<b>側跳</b>到對手左右的格子。</li>
+        <li><b>放牆</b>：切到「放牆」分頁，點棋盤上的格線交叉點選位置（出現預覽），再點同一個點可切換橫 / 豎，確認沒問題按「確認放牆」。牆長 2 格，不能和既有的牆重疊或交叉，<b>也不能把任何一位玩家通往目標邊的路完全封死</b>（預覽變紅就是不合法）。</li>
+        <li>最先走到目標邊的人獲勝。牆用完就只能走棋。</li>
+        <li><b>單機對電腦</b>：選人數（2 人或 1 + 3 台電腦）與強度。簡單：多半沿最短路走、偶爾放牆；普通：評估「雙方最短路徑差」並預想對手下一步（4 人時只看自己這一步）。電腦只用盤面上看得到的資訊。</li>
+        <li><b>同機</b>：2–4 人輪流用同一個畫面，自己的回合再操作。</li>
+        <li><b>連線</b>：輸入暱稱建房、把邀請連結傳給朋友；房主選 2 人或 4 人桌（4 人桌至少 2 位真人，空位由電腦補），可設每步時限。按「開始」後輪流下棋。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">你被擋在牆前繞遠路時，可以反過來用牆讓對手多繞更久；一面牆要讓對手多走 2 步以上才划算。</div>
+        <h3>連線規則與限制</h3>
+        <ul>
+        <li>房主驗證每一步：是不是輪到你、走法是否合法、牆有沒有重疊 / 交叉 / 封死路，非法的步會被擋下。</li>
+        <li>有每步時限時，逾時由房主代你往最短路走一步。玩家斷線時，輪到他會由電腦先代走；同暱稱重新加入就能接回棋子。房主離開則遊戲結束。</li>
+        <li>棋局全程公開，沒有隱藏資訊。</li>
+        </ul>
+        <h3>小提醒</h3>
+        <ul>
+        <li>會存在這台裝置的只有：設定（<code>quor_opts</code>：模式 / 人數 / 強度 / 時限）與對電腦戰績（<code>quor_stats</code>：4 種「人數 × 強度」各記勝、負、最少步數，最多 4 筆、每個數字上限 99999）。按頁面下方「清除設定與戰績」可刪除（無法復原；頁面會重新載入，進行中的這一局會結束）。</li>
+        <li>資料損壞時會忽略並用預設值。同機與連線的對局不會記錄戰績。</li>
+        </ul>
+    </template>
+    <style>
+        :root { --wrap-w: 520px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .row input { flex: 1 1 130px; }
+        .seg { display: flex; gap: 6px; margin: 6px 0 12px; }
+        .seg button { flex: 1; padding-left: 4px; padding-right: 4px; }
+        .st { text-align: center; font-weight: 700; min-height: 1.6em; margin: 10px 0; }
+        .pl.turn { border-color: var(--blue); }
+        .pl i { display: inline-block; width: .8em; height: .8em; border-radius: 50%; margin-right: .4em; }
+        #bd { display: block; width: 100%; max-width: 480px; margin: 0 auto; touch-action: manipulation; }
+        #bd .qc { fill: var(--fill); stroke: var(--line); stroke-width: .3; }
+        #bd .qw { fill: var(--text); }
+        #bd .qpv { fill: var(--blue); opacity: .6; }
+        #bd .qpv.bad { fill: var(--bad); }
+        #bd .qm { fill: var(--ok); opacity: .8; }
+        #bd .qd { fill: var(--muted); opacity: .5; }
+        #bd .hit { fill: transparent; cursor: pointer; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>Quoridor 步步為營</h1>
+        <p class="sub">走位或放牆，先到對邊者勝；不能把對手的路完全封死。</p>
+        <div class="card">
+            <div class="seg" id="modes"><button data-m="ai" aria-pressed="true">對電腦</button><button data-m="local" aria-pressed="false">同機</button><button data-m="net" aria-pressed="false">連線</button></div>
+            <div class="row">
+                <label>人數 <select id="np"><option value="2">2 人</option><option value="4">4 人</option></select></label>
+                <label id="lvW">強度 <select id="lv"><option value="easy">簡單</option><option value="normal">普通</option></select></label>
+                <label id="tmW" hidden>每步時限 <select id="tm"><option value="0">無</option><option value="30">30 秒</option><option value="60">60 秒</option></select></label>
+            </div>
+            <div class="row" style="margin-top:8px" id="startRow"><button class="primary" id="newBtn">開始新局</button></div>
+            <div id="pNet" hidden>
+                <div id="netMenu">
+                    <div class="row"><input id="nick" maxlength="10" placeholder="暱稱（中英數 1–10 字）" aria-label="暱稱"></div>
+                    <div class="row" style="margin-top:8px"><button class="primary" id="hostBtn">建立房間</button><input id="joinId" placeholder="貼上房號" aria-label="房號"><button id="joinBtn">加入</button></div>
+                    <p class="note" id="netMsg"></p>
+                </div>
+                <div id="netBar" hidden>
+                    <div class="row" style="justify-content:center">
+                        <button id="copyInvite" hidden>複製邀請連結</button><button class="primary" id="startBtn" hidden>開始</button><button class="primary" id="again" hidden>再來一局</button><button id="leave">離開</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card" id="game" hidden>
+            <div class="players" id="pls"></div>
+            <div class="st" id="stat" role="status"></div>
+            <svg id="bd" viewBox="-2 -2 109 109" role="img" aria-label="棋盤"></svg>
+            <div class="seg" id="tabs" style="margin-top:12px"><button data-t="m" aria-pressed="true">移動</button><button data-t="w" aria-pressed="false">放牆</button></div>
+            <div class="row" id="wbar" hidden style="justify-content:center">
+                <button id="rot">橫 / 豎</button><button class="primary" id="putW" disabled>確認放牆</button>
+            </div>
+        </div>
+        <div class="card"><h2 style="margin:0 0 6px;font-size:1em">對電腦戰績</h2><div id="stats"></div></div>
+        <button class="sm" id="clearAll">清除設定與戰績</button>
+    </div>
+    <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/p2p-room.js"></script>
+    <script>
+        // --- pure ---
+        // 座標 (r,c) 皆 0..8；牆 {o:'h'|'v', r, c}（r,c 0..7）：
+        //   h：位於第 r 與 r+1 列之間，橫跨第 c、c+1 欄；v：位於第 c 與 c+1 欄之間，縱跨第 r、r+1 列
+        // 座位 0..3 = 下、左、上、右（2 人只用 下、上）；目標：下→第 0 列、左→第 8 欄、上→第 8 列、右→第 0 欄
+        const D = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+        const START = [[8, 4], [4, 0], [0, 4], [4, 8]];
+        const sideOf = (np, p) => (np === 2 ? [0, 2][p] : p);
+        const atGoal = (side, r, c) => (side === 0 ? r === 0 : side === 1 ? c === 8 : side === 2 ? r === 8 : c === 0);
+        const COLORS = ['#d9534f', '#2f7fd8', '#e0a800', '#3aa655'], CN = ['紅', '藍', '黃', '綠'];
+
+        function initState(np) {
+            return { np, pawns: Array.from({ length: np }, (_, p) => START[sideOf(np, p)].slice()), walls: [], left: Array(np).fill(np === 2 ? 10 : 5), turn: 0, win: -1, n: 0 };
+        }
+        const wallSet = (walls) => new Set(walls.map(w => w.o + w.r + ',' + w.c));
+        function blocked(ws, r, c, dr, dc) {
+            const nr = r + dr, nc = c + dc;
+            if (nr < 0 || nr > 8 || nc < 0 || nc > 8) return true;
+            if (dr) { const rr = dr > 0 ? r : r - 1; return ws.has('h' + rr + ',' + c) || ws.has('h' + rr + ',' + (c - 1)); }
+            const cc = dc > 0 ? c : c - 1; return ws.has('v' + r + ',' + cc) || ws.has('v' + (r - 1) + ',' + cc);
+        }
+        // 玩家 p 到目標邊的最短路（忽略其他棋子，用於合法性與評估）：{d, path:[格索引 r*9+c…]}，d=-1 代表無路
+        function bfs(ws, st, p) {
+            const side = sideOf(st.np, p), prev = new Int16Array(81).fill(-2), q = [st.pawns[p][0] * 9 + st.pawns[p][1]];
+            prev[q[0]] = -1;
+            for (let i = 0; i < q.length; i++) {
+                const k = q[i], r = (k / 9) | 0, c = k % 9;
+                if (atGoal(side, r, c)) { const path = []; for (let x = k; x >= 0; x = prev[x]) path.push(x); path.reverse(); return { d: path.length - 1, path }; }
+                for (const [dr, dc] of D) if (!blocked(ws, r, c, dr, dc)) { const n = (r + dr) * 9 + c + dc; if (prev[n] === -2) { prev[n] = k; q.push(n); } }
+            }
+            return { d: -1, path: [] };
+        }
+        // 棋子可走的格子（含跳過相鄰對手與側跳）
+        function pawnMoves(st, p, ws = wallSet(st.walls)) {
+            const [r, c] = st.pawns[p], out = [];
+            const occ = (a, b) => st.pawns.some((q, i) => i !== p && q[0] === a && q[1] === b);
+            for (const [dr, dc] of D) {
+                if (blocked(ws, r, c, dr, dc)) continue;
+                const nr = r + dr, nc = c + dc;
+                if (!occ(nr, nc)) { out.push([nr, nc]); continue; }
+                if (!blocked(ws, nr, nc, dr, dc) && !occ(nr + dr, nc + dc)) { out.push([nr + dr, nc + dc]); continue; }
+                for (const [er, ec] of D) if (er * dr + ec * dc === 0 && !blocked(ws, nr, nc, er, ec) && !occ(nr + er, nc + ec)) out.push([nr + er, nc + ec]);
+            }
+            return out;
+        }
+        // 牆是否合法：範圍、不重複 / 重疊 / 交叉，且每位玩家都仍有路
+        function wallLegal(st, w) {
+            if (!w || (w.o !== 'h' && w.o !== 'v') || !Number.isInteger(w.r) || !Number.isInteger(w.c) || w.r < 0 || w.r > 7 || w.c < 0 || w.c > 7) return false;
+            for (const x of st.walls) {
+                if (x.r === w.r && x.c === w.c) return false;
+                if (x.o === w.o && (w.o === 'h' ? x.r === w.r && Math.abs(x.c - w.c) === 1 : x.c === w.c && Math.abs(x.r - w.r) === 1)) return false;
+            }
+            const ws = wallSet(st.walls.concat(w));
+            for (let p = 0; p < st.np; p++) if (bfs(ws, st, p).d < 0) return false;
+            return true;
+        }
+        // 套用一步（{t:'m',r,c} 或 {t:'w',o,r,c}）；不合法回傳 null。不改動傳入的狀態
+        function applyMove(st, mv) {
+            if (!mv || st.win >= 0) return null;
+            const p = st.turn, s = { ...st, pawns: st.pawns.map(x => x.slice()), walls: st.walls.slice(), left: st.left.slice() };
+            if (mv.t === 'm') {
+                if (!pawnMoves(st, p).some(m => m[0] === mv.r && m[1] === mv.c)) return null;
+                s.pawns[p] = [mv.r, mv.c];
+                if (atGoal(sideOf(st.np, p), mv.r, mv.c)) s.win = p;
+            } else if (mv.t === 'w') {
+                if (st.left[p] <= 0 || !wallLegal(st, mv)) return null;
+                s.walls.push({ o: mv.o, r: mv.r, c: mv.c }); s.left[p]--;
+            } else return null;
+            s.turn = (p + 1) % st.np; s.n = st.n + 1;
+            return s;
+        }
+        // 網路收到的狀態驗證
+        function validState(s) {
+            const i = (x, a, b) => Number.isInteger(x) && x >= a && x <= b;
+            if (!s || typeof s !== 'object' || (s.np !== 2 && s.np !== 4)) return false;
+            if (!Array.isArray(s.pawns) || s.pawns.length !== s.np || !s.pawns.every(q => Array.isArray(q) && i(q[0], 0, 8) && i(q[1], 0, 8))) return false;
+            if (!Array.isArray(s.left) || s.left.length !== s.np || !s.left.every(x => i(x, 0, 10))) return false;
+            if (!Array.isArray(s.walls) || s.walls.length > 20 || !s.walls.every(w => w && (w.o === 'h' || w.o === 'v') && i(w.r, 0, 7) && i(w.c, 0, 7))) return false;
+            return i(s.turn, 0, s.np - 1) && i(s.win, -1, s.np - 1) && i(s.n, 0, 9999);
+        }
+
+        // 電腦：候選 = 棋子移動 + 擋在某位對手最短路上的牆
+        function candWalls(st, ws) {
+            const p = st.turn, seen = new Set(), out = [];
+            for (let q = 0; q < st.np; q++) {
+                if (q === p) continue;
+                const { path } = bfs(ws, st, q);
+                for (let i = 0; i + 1 < path.length; i++) {
+                    const a = path[i], b = path[i + 1], ra = (a / 9) | 0, ca = a % 9, rb = (b / 9) | 0, cb = b % 9;
+                    const list = ra !== rb ? [{ o: 'h', r: Math.min(ra, rb), c: ca }, { o: 'h', r: Math.min(ra, rb), c: ca - 1 }] : [{ o: 'v', r: ra, c: Math.min(ca, cb) }, { o: 'v', r: ra - 1, c: Math.min(ca, cb) }];
+                    for (const w of list) { const k = w.o + w.r + ',' + w.c; if (!seen.has(k)) { seen.add(k); if (wallLegal(st, w)) out.push({ t: 'w', ...w }); } }
+                }
+            }
+            return out;
+        }
+        const cands = (st, ws = wallSet(st.walls)) => pawnMoves(st, st.turn, ws).map(([r, c]) => ({ t: 'm', r, c })).concat(st.left[st.turn] > 0 ? candWalls(st, ws) : []);
+        const oppAvg = (st, p, ws) => { let t = 0, k = 0; for (let q = 0; q < st.np; q++) if (q !== p) { t += bfs(ws, st, q).d; k++; } return t / k; };
+        const evalSt = (st, p) => { if (st.win >= 0) return st.win === p ? 1000 : -1000; const ws = wallSet(st.walls); return oppAvg(st, p, ws) - bfs(ws, st, p).d + 0.25 * st.left[p]; };
+        // level：'step' 只沿最短路走一步；'easy' 多半走最短路、偶爾放牆；'normal' 評估「對手最短路 − 自己最短路」，2 人時再預想對手一步
+        // ponytail: 候選牆只考慮擋在對手最短路上的位置，深度最多 2 層；要更強再加 alpha-beta / 更深
+        function aiMove(st, level = 'normal', rng = Math.random) {
+            const p = st.turn, ws = wallSet(st.walls);
+            const mv = pawnMoves(st, p, ws).map(([r, c]) => ({ t: 'm', r, c }));
+            const step = () => {
+                let best = [], bd = 1e9;
+                for (const m of mv) { const s = applyMove(st, m), d = s.win === p ? -1 : bfs(wallSet(s.walls), s, p).d; if (d < bd) { bd = d; best = [m]; } else if (d === bd) best.push(m); }
+                return best[(rng() * best.length) | 0];
+            };
+            if (level === 'step') return step();
+            const walls = st.left[p] > 0 ? candWalls(st, ws) : [];
+            if (level === 'easy') {
+                if (walls.length && rng() < 0.2) {
+                    let best = null, bg = 0; const base = oppAvg(st, p, ws);
+                    for (const w of walls) { const g = oppAvg(applyMove(st, w), p, wallSet(st.walls.concat(w))) - base; if (g > bg) { bg = g; best = w; } }
+                    if (best) return best;
+                }
+                return step();
+            }
+            let best = null, bs = -1e9;
+            for (const m of mv.concat(walls)) {
+                const s = applyMove(st, m); let v;
+                if (s.win >= 0) v = 1000;
+                else if (st.np === 2) { v = 1e9; for (const m2 of cands(s)) v = Math.min(v, evalSt(applyMove(s, m2), p)); }
+                else v = evalSt(s, p);
+                v += rng() * 0.01; if (v > bs) { bs = v; best = m; }
+            }
+            return best;
+        }
+
+        // 設定與戰績（載入驗證、補預設、限制大小）
+        const cleanOpts = (o) => { o = o && typeof o === 'object' ? o : {}; return { mode: ['ai', 'local', 'net'].includes(o.mode) ? o.mode : 'ai', np: o.np === 4 ? 4 : 2, level: o.level === 'easy' ? 'easy' : 'normal', time: [0, 30, 60].includes(o.time) ? o.time : 0 }; };
+        function cleanStats(s) {
+            const n = (x) => (Number.isInteger(x) && x >= 0 ? Math.min(x, 99999) : 0), out = {};
+            if (s && typeof s === 'object') for (const k of ['2e', '2n', '4e', '4n']) { const v = s[k]; if (v && typeof v === 'object') out[k] = { w: n(v.w), l: n(v.l), best: n(v.best) }; }
+            return out;
+        }
+        function recordWin(stats, np, level, won, moves) {
+            const s = cleanStats(stats), k = np + level[0], v = s[k] || { w: 0, l: 0, best: 0 };
+            if (won) { v.w = Math.min(99999, v.w + 1); if (!v.best || moves < v.best) v.best = Math.min(99999, moves); } else v.l = Math.min(99999, v.l + 1);
+            s[k] = v; return s;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const NS = 'http://www.w3.org/2000/svg';
+        let opts = cleanOpts(Util.store.get('quor_opts', null)), stats = cleanStats(Util.store.get('quor_stats', null));
+        let mode = opts.mode, cur = null, tab = 'm', wsel = null, lastN = -1, botT = 0;
+        let G = null;     // 本機局
+        let room = null, isHost = false, my = -1, V = null, hostId = '';
+        const H = { phase: 'lobby', np: 2, time: 0, st: null, bots: [], names: [], wins: [0, 0, 0, 0], cnt: [], winner: -1, why: '', deadline: 0, turnT: 0 };
+        const saveOpts = () => { opts = cleanOpts({ ...opts, mode, np: +$('#np').value, level: $('#lv').value, time: +$('#tm').value }); Util.store.set('quor_opts', opts); };
+
+        // ---------- 畫面 ----------
+        const el = (tag, cls, at) => { const e = document.createElementNS(NS, tag); if (cls) e.setAttribute('class', cls); for (const k in at) e.setAttribute(k, at[k]); return e; };
+        const canAct = () => !!cur && cur.st && cur.st.win < 0 && !cur.over && (cur.me < 0 ? !cur.bots[cur.st.turn] : cur.me === cur.st.turn);
+        function drawBoard() {
+            const st = cur.st, svg = $('#bd'), kids = [];
+            for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) kids.push(el('rect', 'qc', { x: c * 12, y: r * 12, width: 9, height: 9, rx: 1 }));
+            for (let p = 0; p < st.np; p++) {
+                const s = sideOf(st.np, p);
+                const g = s === 0 ? [0, -1.4, 105, 1] : s === 1 ? [106, 0, 1, 105] : s === 2 ? [0, 106, 105, 1] : [-1.4, 0, 1, 105];
+                kids.push(el('rect', '', { x: g[0], y: g[1], width: g[2], height: g[3], style: `fill:${COLORS[p]}` }));
+            }
+            for (const w of st.walls) kids.push(el('rect', 'qw', w.o === 'h' ? { x: w.c * 12, y: w.r * 12 + 9, width: 21, height: 3, rx: .8 } : { x: w.c * 12 + 9, y: w.r * 12, width: 3, height: 21, rx: .8 }));
+            const act = canAct();
+            if (act && tab === 'w' && wsel) {
+                const ok = st.left[st.turn] > 0 && wallLegal(st, wsel);
+                kids.push(el('rect', 'qpv' + (ok ? '' : ' bad'), wsel.o === 'h' ? { x: wsel.c * 12, y: wsel.r * 12 + 9, width: 21, height: 3, rx: .8 } : { x: wsel.c * 12 + 9, y: wsel.r * 12, width: 3, height: 21, rx: .8 }));
+            }
+            st.pawns.forEach((q, p) => {
+                kids.push(el('circle', '', { cx: q[1] * 12 + 4.5, cy: q[0] * 12 + 4.5, r: 3.5, style: `fill:${COLORS[p]};stroke:${p === st.turn && st.win < 0 ? 'var(--text)' : 'var(--card)'};stroke-width:${p === st.turn && st.win < 0 ? 1 : .5}` }));
+            });
+            if (act && tab === 'm') for (const [r, c] of pawnMoves(st, st.turn)) {
+                kids.push(el('circle', 'qm', { cx: c * 12 + 4.5, cy: r * 12 + 4.5, r: 2 }));
+                kids.push(el('rect', 'hit', { x: c * 12 - 1.5, y: r * 12 - 1.5, width: 12, height: 12, 'data-r': r, 'data-c': c }));
+            }
+            if (act && tab === 'w') for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+                kids.push(el('circle', 'qd', { cx: c * 12 + 10.5, cy: r * 12 + 10.5, r: .9 }));
+                kids.push(el('rect', 'hit', { x: c * 12 + 4.5, y: r * 12 + 4.5, width: 12, height: 12, 'data-wr': r, 'data-wc': c }));
+            }
+            svg.replaceChildren(...kids);
+        }
+        function paint() {
+            $('#game').hidden = !cur;
+            if (!cur) return;
+            const st = cur.st;
+            if (!st) {
+                $('#pls').replaceChildren(...cur.names.map((n, i) => Object.assign(document.createElement('div'), { className: 'pl' + (cur.conn[i] ? '' : ' off'), textContent: n + (i === 0 ? ' 👑' : '') + (i === cur.me ? '（我）' : '') })));
+                $('#stat').textContent = cur.msg; $('#tabs').hidden = $('#wbar').hidden = true; $('#bd').replaceChildren(); return;
+            }
+            if (st.n !== lastN) { lastN = st.n; wsel = null; }
+            $('#pls').replaceChildren(...st.pawns.map((q, p) => Object.assign(document.createElement('div'), {
+                className: 'pl' + (st.turn === p && st.win < 0 ? ' turn' : '') + (cur.conn && cur.conn[p] === false ? ' off' : ''),
+                innerHTML: `<i style="background:${COLORS[p]}"></i>${Util.esc(cur.names[p])}${p === cur.me ? '（我）' : ''}　牆 ${st.left[p]}${cur.wins ? '　勝 ' + cur.wins[p] : ''}`,
+            })));
+            $('#stat').textContent = cur.msg || '';
+            $('#tabs').hidden = !canAct(); $('#wbar').hidden = !(canAct() && tab === 'w');
+            for (const b of $('#tabs').children) b.setAttribute('aria-pressed', b.dataset.t === tab);
+            $('#putW').disabled = !(wsel && st.left[st.turn] > 0 && wallLegal(st, wsel));
+            if (canAct() && tab === 'w' && !wsel) $('#stat').textContent = st.left[st.turn] > 0 ? '點棋盤格線交叉點放牆（再點同一點切換橫 / 豎）' : '你的牆用完了，請切到「移動」';
+            drawBoard();
+        }
+        const who = (st, names) => `${names[st.turn]}（${CN[st.turn]}）`;
+        function localView() {
+            const s = G.st, over = s.win >= 0;
+            cur = { st: s, names: G.names, me: G.mode === 'ai' ? 0 : -1, bots: G.bots, over, msg: over ? `🎉 ${who({ turn: s.win }, G.names)} 到達對邊，獲勝！（${G.cnt[s.win]} 步）` : G.bots[s.turn] ? `${who(s, G.names)} 思考中…` : `輪到 ${who(s, G.names)}` };
+            paint();
+        }
+
+        $('#bd').onclick = (e) => {
+            const d = e.target.dataset; if (!d || !canAct()) return;
+            if (d.r !== undefined) submit({ t: 'm', r: +d.r, c: +d.c });
+            else if (d.wr !== undefined) {
+                const r = +d.wr, c = +d.wc;
+                wsel = wsel && wsel.r === r && wsel.c === c ? { o: wsel.o === 'h' ? 'v' : 'h', r, c } : { o: wsel ? wsel.o : 'h', r, c };
+                paint();
+            }
+        };
+        $('#tabs').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; tab = b.dataset.t; wsel = null; paint(); };
+        $('#rot').onclick = () => { if (wsel) { wsel = { ...wsel, o: wsel.o === 'h' ? 'v' : 'h' }; paint(); } };
+        $('#putW').onclick = () => { if (wsel) { const w = wsel; wsel = null; submit({ t: 'w', ...w }); } };
+        function submit(mv) {
+            if (!canAct()) return;
+            if (mode === 'net') { if (isHost) hostMove(0, mv); else room.send({ t: 'MV', mv }); } else localMove(mv);
+            tab = 'm';
+        }
+
+        // ---------- 本機（對電腦 / 同機） ----------
+        function localStart() {
+            clearTimeout(botT); saveOpts();
+            const np = opts.np, ai = mode === 'ai';
+            G = { mode, st: initState(np), bots: Array.from({ length: np }, (_, i) => ai && i > 0), names: Array.from({ length: np }, (_, i) => (ai ? (i ? '電腦' + i : '我') : '玩家' + (i + 1))), level: opts.level, cnt: Array(np).fill(0) };
+            tab = 'm'; lastN = -1; localView(); if (G.bots[0]) botT = setTimeout(botMove, 450);
+        }
+        function localMove(mv) {
+            if (!G || G.st.win >= 0) return false;
+            const p = G.st.turn, s = applyMove(G.st, mv);
+            if (!s) { cur.msg = '這一步不合法'; paint(); return false; }
+            G.cnt[p]++; G.st = s;
+            if (s.win >= 0 && G.mode === 'ai') { stats = recordWin(stats, s.np, G.level, s.win === 0, G.cnt[0]); Util.store.set('quor_stats', stats); showStats(); }
+            localView();
+            if (s.win < 0 && G.bots[s.turn]) botT = setTimeout(botMove, 450);
+            return true;
+        }
+        function botMove() { if (G && G.st.win < 0 && G.bots[G.st.turn]) localMove(aiMove(G.st, G.level)); }
+
+        function showStats() {
+            const rows = Object.keys(stats).map(k => { const v = stats[k]; return `<div class="li"><span>${k[0]} 人 ${k[1] === 'e' ? '簡單' : '普通'}</span><b>勝 ${v.w} 負 ${v.l}${v.best ? '　最少 ' + v.best + ' 步' : ''}</b></div>`; });
+            $('#stats').innerHTML = rows.join('') || '<div class="muted">還沒有紀錄</div>';
+        }
+
+        // ---------- 連線（房主制） ----------
+        const netMsg = (t) => { $('#netMsg').textContent = t; };
+        const enableNet = (on) => ['#hostBtn', '#joinBtn', '#joinId', '#nick'].forEach(s => { $(s).disabled = !on; });
+        const connAt = (i) => !H.bots[i] && !!(room.players[i] && room.players[i].connected);
+        function pub() {
+            return {
+                phase: H.phase, np: H.np, time: H.time, st: H.st, bots: H.bots, wins: H.wins.slice(0, H.np), winner: H.winner, why: H.why,
+                names: Array.from({ length: H.np }, (_, i) => (room.players[i] && !H.bots[i] ? room.players[i].nick : '電腦' + i)),
+                conn: Array.from({ length: H.np }, (_, i) => (H.phase === 'lobby' ? !!(room.players[i] && room.players[i].connected) : H.bots[i] || connAt(i))),
+                rem: H.deadline ? Math.max(0, Math.ceil((H.deadline - Date.now()) / 1000)) : 0,
+            };
+        }
+        function push() { V = pub(); V.at = Date.now(); netView(); room.broadcast({ t: 'STATE', s: V }); }
+        function validNetState(s) {
+            const arr = (a, f) => Array.isArray(a) && a.length === s.np && a.every(f);
+            if (!s || typeof s !== 'object' || (s.np !== 2 && s.np !== 4) || !['lobby', 'play', 'over'].includes(s.phase)) return false;
+            if (!arr(s.names, x => typeof x === 'string' && x.length <= 12) || !arr(s.conn, x => typeof x === 'boolean') || !Array.isArray(s.bots) || s.bots.length > 4 || !s.bots.every(x => typeof x === 'boolean') || !arr(s.wins, x => Number.isInteger(x))) return false;
+            if (!Number.isInteger(s.rem) || !Number.isInteger(s.winner) || typeof s.why !== 'string') return false;
+            return s.st === null || (validState(s.st) && s.st.np === s.np);
+        }
+        function netView() {
+            const s = V, play = s.phase === 'play', over = s.phase === 'over', st = s.st;
+            let t;
+            if (s.phase === 'lobby') t = isHost ? (room.players.length < 2 ? '等待朋友加入…（把邀請連結傳給朋友）' : '人到齊了，按「開始」（空位由電腦補）') : '等待房主開始…';
+            else if (play) {
+                const left = s.rem ? Math.max(0, s.rem - Math.floor((Date.now() - s.at) / 1000)) : 0;
+                t = (st.turn === my ? '輪到你了' : `等待 ${s.names[st.turn]}（${CN[st.turn]}）`) + (s.conn[st.turn] ? '' : '（離線，電腦先代走）') + (left ? `　⏱ ${left} 秒` : '');
+            } else t = s.winner < 0 ? s.why : `${s.winner === my ? '🎉 你贏了' : '💥 ' + s.names[s.winner] + ' 贏了'}：${s.why}`;
+            cur = { st, names: s.names, me: my, bots: s.bots, over: !play, conn: s.conn, wins: s.wins, msg: t };
+            $('#netMenu').hidden = true; $('#netBar').hidden = false; paint();
+            $('#copyInvite').hidden = !(isHost && s.phase === 'lobby'); $('#startBtn').hidden = !(isHost && s.phase === 'lobby');
+            $('#startBtn').disabled = !(isHost && room.players.length >= 2 && (H.np === 4 || room.players.length === 2) && room.players.every(p => p.connected));
+            $('#again').hidden = !(isHost && over);
+        }
+        setInterval(() => { if (mode === 'net' && V && V.phase === 'play' && V.rem) netView(); }, 1000);
+
+        function turnStart() {
+            clearTimeout(H.turnT); H.deadline = 0;
+            if (H.phase !== 'play') return;
+            const p = H.st.turn, off = !H.bots[p] && !connAt(p);
+            if (H.bots[p] || off) H.turnT = setTimeout(() => autoMove(p, H.bots[p] ? 'normal' : 'easy'), H.bots[p] ? 700 : 5000);
+            else if (H.time) { H.deadline = Date.now() + H.time * 1000; H.turnT = setTimeout(() => autoMove(p, 'step'), H.time * 1000 + 200); }
+        }
+        function autoMove(p, level) { if (H.phase === 'play' && H.st.turn === p) hostMove(p, aiMove(H.st, level), true); }
+        function hostMove(from, mv, auto) {
+            const s = H.phase === 'play' && from === H.st.turn ? applyMove(H.st, mv) : null;
+            if (!s) { if (!auto && from !== 0) room.sendTo(from, { t: 'ERR', m: '這一步不合法，或還沒輪到你' }); else if (!auto && V) { cur.msg = '這一步不合法'; paint(); } return; }
+            H.cnt[from]++; H.st = s;
+            if (s.win >= 0) { clearTimeout(H.turnT); H.deadline = 0; H.phase = 'over'; H.winner = s.win; H.wins[s.win]++; H.why = `${CN[s.win]}棋到達對邊（${H.cnt[s.win]} 步）`; } else turnStart();
+            push();
+        }
+        function hostStart() {
+            const n = room.players.length;
+            if (H.phase !== 'lobby' || n < 2 || n > H.np || (H.np === 2 && n !== 2) || !room.players.every(p => p.connected)) return;
+            room.keepSlots = true; H.bots = Array.from({ length: H.np }, (_, i) => i >= n); H.st = initState(H.np); H.cnt = Array(H.np).fill(0); H.phase = 'play'; H.winner = -1; H.why = '';
+            lastN = -1; turnStart(); push();
+        }
+        const onNetError = (err, message) => { if (V || isHost) return; netMsg(message); enableNet(true); if (room) { room.destroy(); room = null; } };
+        const readNick = () => { const n = $('#nick').value.trim(); if (!P2PRoom.validNick(n)) { netMsg('暱稱請使用 1–10 位中英文或數字'); return null; } return n; };
+        function hostRoom() {
+            const nick = readNick(); if (!nick) return;
+            saveOpts(); H.np = opts.np; H.time = opts.time;
+            enableNet(false); ['#np', '#tm'].forEach(s => { $(s).disabled = true; }); netMsg('連線中…');
+            room = P2PRoom.host({
+                nick, maxPlayers: H.np,
+                onReady(r) { isHost = true; my = 0; hostId = r.id; history.replaceState('', document.title, location.pathname + '#' + r.id); push(); },
+                canJoin: (n) => (H.phase !== 'lobby' ? (room.players.some(p => !p.connected && p.nick === n) ? null : '遊戲已經開始') : null),
+                onJoin: () => { if (H.phase === 'play') turnStart(); push(); },
+                onLeave() { if (H.phase === 'lobby') room.prune(); else if (H.phase === 'play') turnStart(); push(); },
+                onMessage(p, d) { if (d && d.t === 'MV') hostMove(p.index, d.mv); },
+                onError: onNetError,
+            });
+        }
+        function joinRoom() {
+            const nick = readNick(), id = $('#joinId').value.trim(); if (!nick) return;
+            if (!id) { netMsg('請貼上房號'); return; }
+            enableNet(false); netMsg('連線中…'); hostId = id;
+            room = P2PRoom.join(id, {
+                nick,
+                onRoster(players, me) { my = me; },
+                onMessage(d) {
+                    if (!d) return;
+                    if (d.t === 'STATE' && validNetState(d.s)) { V = d.s; V.at = Date.now(); netView(); } else if (d.t === 'ERR' && typeof d.m === 'string' && cur) { cur.msg = d.m.slice(0, 40); paint(); }
+                },
+                onRejected(reason) { netMsg(reason); enableNet(true); room = null; },
+                onClose() { if (V) { alert('房主已離開，遊戲結束'); location.reload(); } },
+                onError: onNetError,
+            });
+        }
+
+        // ---------- 介面 ----------
+        function setMode(m) {
+            mode = m; clearTimeout(botT);
+            for (const b of $('#modes').children) b.setAttribute('aria-pressed', b.dataset.m === m);
+            $('#pNet').hidden = m !== 'net'; $('#startRow').hidden = m === 'net'; $('#lvW').hidden = m !== 'ai'; $('#tmW').hidden = m !== 'net';
+            if (m === 'net') { if (V) netView(); else { cur = null; paint(); } } else if (G && G.mode === m) localView(); else { cur = null; paint(); }
+        }
+        $('#modes').onclick = (e) => { const b = e.target.closest('button'); if (b && !(room && b.dataset.m !== 'net')) { setMode(b.dataset.m); saveOpts(); } };
+        $('#np').onchange = $('#lv').onchange = $('#tm').onchange = saveOpts;
+        $('#newBtn').onclick = () => { saveOpts(); localStart(); };
+        $('#hostBtn').onclick = hostRoom; $('#joinBtn').onclick = joinRoom; $('#startBtn').onclick = hostStart;
+        $('#again').onclick = () => { room.keepSlots = false; room.prune(); Object.assign(H, { phase: 'lobby', st: null, winner: -1, why: '' }); push(); };
+        $('#leave').onclick = () => location.reload();
+        $('#copyInvite').onclick = () => { const url = P2PRoom.inviteLink(hostId); Util.copyWithFeedback($('#copyInvite'), url, () => prompt('請手動複製邀請連結：', url)); };
+        $('#clearAll').onclick = () => {
+            if (!confirm('清除 Quoridor 的設定與對電腦戰績？無法復原。頁面會重新載入，進行中的這一局會結束。')) return;
+            try { localStorage.removeItem('quor_opts'); localStorage.removeItem('quor_stats'); } catch (e) { }
+            location.reload();
+        };
+        $('#np').value = opts.np; $('#lv').value = opts.level; $('#tm').value = opts.time;
+        showStats(); setMode(P2PRoom.roomFromUrl() ? 'net' : opts.mode);
+        if (P2PRoom.roomFromUrl()) $('#joinId').value = P2PRoom.roomFromUrl();
+    </script>
+</body>
+
+</html>

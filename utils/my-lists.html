@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="個人清單：本機書籤管理（標籤、搜尋、匯入匯出瀏覽器書籤 HTML、重複網址偵測）與帳號盤點表（2FA、備援碼、檢查日期，不存密碼）。資料只存在本機。">
+    <meta property="og:title" content="個人清單" />
+    <meta property="og:description" content="書籤整理與帳號安全盤點，資料只在本機。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/my-lists.html" />
+    <meta name="st-keys" content="mylists_bookmarks,mylists_accounts">
+    <meta name="st-disclaimer" content="general">
+    <title>個人清單</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 680px;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        .fgrid select,
+        .fgrid input {
+            width: 100%;
+        }
+
+        .btns {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .msg {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 8px 0 0;
+            min-height: 1.2em;
+        }
+
+        .msg.bad {
+            color: var(--bad);
+        }
+
+        .warnbox {
+            border: 1px solid var(--bad);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            color: var(--bad);
+            font-size: 14px;
+            margin: 0 0 10px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .stats div {
+            background: var(--fill);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+        }
+
+        .stats small {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .stats b {
+            font-size: 20px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .filters {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .filters input {
+            flex: 2 1 160px;
+            min-width: 0;
+        }
+
+        .filters select {
+            flex: 1 1 110px;
+            min-width: 0;
+        }
+
+        .item h2 {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin: 0 0 6px;
+            word-break: break-all;
+        }
+
+        .item h2 a {
+            color: inherit;
+        }
+
+        .chip {
+            font-size: 12px;
+            font-weight: 400;
+            color: var(--muted);
+            background: var(--fill);
+            border-radius: 99px;
+            padding: 2px 10px;
+            border: 0;
+            min-height: 0;
+        }
+
+        button.chip.on {
+            background: var(--blue);
+            color: var(--on-blue);
+        }
+
+        .badge {
+            font-size: 12px;
+            font-weight: 700;
+            border-radius: 99px;
+            padding: 2px 10px;
+            color: #fff;
+        }
+
+        .badge.bad {
+            background: var(--bad);
+        }
+
+        .badge.warn {
+            background: var(--blue);
+            color: var(--on-blue);
+        }
+
+        .badge.ok {
+            background: var(--ok);
+        }
+
+        .item .meta {
+            color: var(--muted);
+            font-size: 14px;
+            margin: 2px 0;
+            word-break: break-all;
+        }
+
+        .item .meta b {
+            color: var(--text);
+        }
+
+        .item.bad {
+            border-left: 4px solid var(--bad);
+        }
+
+        .item.warn {
+            border-left: 4px solid var(--blue);
+        }
+
+        .tagbar {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>個人清單</h1>
+        <p class="sub">書籤整理、帳號盤點兩份本機清單。資料只存在這個瀏覽器。</p>
+
+        <div class="tabs" id="tabs">
+            <button data-t="bm" aria-pressed="true">書籤</button>
+            <button data-t="ac" aria-pressed="false">帳號盤點</button>
+        </div>
+
+        <div id="tab-bm">
+            <div class="card">
+                <h2 id="b_title">新增書籤</h2>
+                <div class="fgrid">
+                    <div class="full"><label for="b_url">網址（只收 http / https，沒寫會補 https://）</label><input id="b_url" type="text" inputmode="url" maxlength="2000" autocapitalize="off" placeholder="example.com/page"></div>
+                    <div class="full"><label for="b_name">標題</label><input id="b_name" type="text" maxlength="200" placeholder="可留白，留白會用網域"></div>
+                    <div class="full"><label for="b_tags">標籤（逗號分隔，最多 10 個）</label><input id="b_tags" type="text" maxlength="300" placeholder="工作, 教學"></div>
+                    <div class="full"><label for="b_note">備註</label><input id="b_note" type="text" maxlength="500"></div>
+                </div>
+                <div class="btns">
+                    <button class="primary" id="b_save">新增</button>
+                    <button id="b_cancel" hidden>取消編輯</button>
+                </div>
+                <p class="msg" id="b_msg"></p>
+            </div>
+
+            <div class="card">
+                <div class="filters">
+                    <input id="b_q" type="text" placeholder="搜尋標題、網址、標籤、備註…" aria-label="搜尋書籤">
+                    <select id="b_sort" aria-label="排序">
+                        <option value="date">最新加入</option>
+                        <option value="title">標題</option>
+                    </select>
+                </div>
+                <div class="tagbar" id="b_tagbar"></div>
+            </div>
+
+            <div id="b_list"></div>
+
+            <div class="card">
+                <h2>資料管理</h2>
+                <p class="msg" style="margin:0 0 8px">最多 2000 筆。可匯入 / 匯出瀏覽器書籤 HTML（Chrome、Edge、Firefox、Safari 的「匯出書籤」檔），不會抓網站圖示。</p>
+                <div class="btns" style="margin-top:0">
+                    <button id="b_import">匯入書籤 HTML</button>
+                    <button id="b_export">匯出書籤 HTML</button>
+                    <button id="b_clear" style="color:var(--bad)">清除全部書籤</button>
+                </div>
+                <input id="b_file" type="file" accept=".html,.htm,text/html" hidden>
+                <p class="msg" id="b_dmsg"></p>
+            </div>
+        </div>
+
+        <div id="tab-ac" hidden>
+            <div class="card">
+                <p class="warnbox"><b>請勿在此輸入密碼或備援碼。</b>這裡只記「有哪些帳號、有沒有開 2FA」；看起來像密碼的內容會被擋下。</p>
+                <h2 id="a_title">新增帳號</h2>
+                <div class="fgrid">
+                    <div class="full"><label for="a_name">服務名稱</label><input id="a_name" type="text" maxlength="60" placeholder="例如：Google、國泰世華"></div>
+                    <div class="full"><label for="a_acct">帳號 / 登入信箱</label><input id="a_acct" type="text" maxlength="100" autocapitalize="off" autocomplete="off" placeholder="例如：me@example.com"></div>
+                    <div><label for="a_cat">類別</label><select id="a_cat"></select></div>
+                    <div><label for="a_tfa">2FA 狀態</label><select id="a_tfa"></select></div>
+                    <div><label for="a_backup">備援碼已保存</label><select id="a_backup"></select></div>
+                    <div><label for="a_checked">最後檢查日期</label><input id="a_checked" type="date"></div>
+                    <div class="full"><label for="a_note">備註</label><input id="a_note" type="text" maxlength="200" autocomplete="off" placeholder="例如：換過手機要重新綁定"></div>
+                </div>
+                <div class="btns">
+                    <button class="primary" id="a_save">新增</button>
+                    <button id="a_cancel" hidden>取消編輯</button>
+                </div>
+                <p class="msg" id="a_msg"></p>
+            </div>
+
+            <div class="card">
+                <div class="stats" id="a_stats"></div>
+            </div>
+
+            <div class="card">
+                <div class="filters">
+                    <input id="a_q" type="text" placeholder="搜尋服務、帳號、備註…" aria-label="搜尋帳號">
+                    <select id="a_catF" aria-label="類別篩選"></select>
+                    <select id="a_riskF" aria-label="風險篩選">
+                        <option value="">全部狀態</option>
+                        <option value="bad">高風險（金融沒開 2FA）</option>
+                        <option value="warn">需檢查（超過 180 天）</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="a_list"></div>
+
+            <div class="card">
+                <h2>資料管理</h2>
+                <p class="msg" style="margin:0 0 8px">最多 500 筆。單筆刪除在每筆右下角。</p>
+                <div class="btns" style="margin-top:0">
+                    <button id="a_clear" style="color:var(--bad)">清除全部帳號</button>
+                </div>
+                <p class="msg" id="a_dmsg"></p>
+            </div>
+        </div>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>兩份「個人清單 + 標籤 + 搜尋」放在同一頁：<b>書籤</b>整理常用網址，<b>帳號盤點</b>記錄你有哪些線上帳號、有沒有開兩步驟驗證（2FA）、備援碼有沒有保存。全部只存在這個瀏覽器，不連線。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>瀏覽器書籤太亂，想用標籤和搜尋整理，或和別的瀏覽器互相搬家。</li>
+        <li>年度大掃除：看看哪些重要帳號（尤其金融）還沒開 2FA、很久沒檢查。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>書籤：填網址（可省略 https://），標題與標籤可留白；搜尋框同時比對標題、網址、標籤、備註；點標籤可篩選；可依最新加入或標題排序。</li>
+        <li>網址重複（忽略 http/https、www、結尾斜線、#片段與 utm_ 追蹤參數）時會詢問是否合併進既有那筆（標籤聯集、備註接續）。</li>
+        <li>匯入：選瀏覽器匯出的書籤 HTML，資料夾名稱會變成標籤，已存在的網址只合併標籤；匯出會產生同格式檔，可再匯入瀏覽器。</li>
+        <li>帳號盤點：填服務、帳號、類別、2FA 與備援碼狀態、最後檢查日期。「金融」類沒開 2FA 標紅，超過 180 天沒檢查（或沒填日期）標黃，高風險排最前面。</li>
+        <li>每筆的「編輯」「刪除」只動那一筆。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">輸入 example.com/a/?utm_source=x
+        → 存成 https://example.com/a/?utm_source=x，比對時等同 https://www.example.com/a
+        帳號：國泰世華 / 金融 / 2FA 未設定 → 紅色「高風險」</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li><b>不要在帳號盤點輸入密碼或備援碼。</b>內容含「password / 密碼 / 備援碼」字樣或像長隨機字串時會被拒絕儲存；即使這樣也只是輔助，請自己多留意。</li>
+        <li>匯入只讀書籤的網址、標題、日期與標籤，不執行任何內容；只收 http / https，超過 2000 筆會截斷並提示。</li>
+        <li>上限：書籤 2000 筆（網址 2000 字、標題 200 字、備註 500 字、標籤 10 個）、帳號 500 筆；滿了要先刪除才能新增。</li>
+        <li>「清除全部」會刪掉該分頁所有資料且無法復原；載入到壞掉的資料會自動略過或補預設值；存不下時會跳出共用的儲存失敗提示。</li>
+        <li>資料只存在這個瀏覽器，清除網站資料會消失；右上角「💾」可匯出備份。風險判定僅供參考。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        const { day, store } = Util;
+
+        // --- pure ---
+        const ML = { BM_MAX: 2000, URL: 2000, TITLE: 200, TAG: 20, TAGS: 10, BNOTE: 500, AC_MAX: 500, NAME: 60, ACCT: 100, ANOTE: 200, STALE: 180 };
+        const ACC_CATS = ['金融', '社群', '購物', '工作', '雲端', '其他'];
+        const TFA = { none: '未設定', sms: '簡訊', app: '驗證 App', key: '硬體金鑰' };
+        const BACKUP = { yes: '是', no: '否', na: '不適用' };
+        const str = (v, n) => typeof v === 'string' ? v.trim().slice(0, n) : '';
+        const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        const twToday = (ms = Date.now()) => new Date(ms + 8 * 36e5).toISOString().slice(0, 10);
+        function validDate(s) {
+            if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+            const p = day.parse(s);
+            return p.y >= 1990 && p.y <= 2100 && p.m >= 1 && p.m <= 12 && p.d >= 1 && p.d <= day.daysInMonth(p.y, p.m);
+        }
+
+        // ---- 書籤 ----
+        // 網址正規化：只收 http / https；沒寫協定補 https://；其他協定（javascript:、data:、mailto:…）回傳 null
+        function normUrl(s) {
+            s = String(s ?? '').trim();
+            if (!s || s.length > ML.URL || /[\s<>"]/.test(s)) return null;
+            if (!/^https?:\/\//i.test(s)) {
+                if (/^[a-z][a-z0-9+.-]*:(?!\d)/i.test(s) || s.startsWith('//')) return null;
+                s = 'https://' + s;
+            }
+            try {
+                const u = new URL(s);
+                if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+                if (!u.hostname || u.username || u.password) return null;
+                return u.href;
+            } catch (e) { return null; }
+        }
+        // 重複比對用的鍵：忽略協定、www、#片段、結尾斜線、utm_ 與常見追蹤參數，參數排序
+        function dupKey(url) {
+            const n = normUrl(url); if (!n) return '';
+            const u = new URL(n);
+            const ps = [...u.searchParams].filter(([k]) => !/^(utm_|fbclid$|gclid$)/i.test(k)).sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+            const q = ps.map(([k, v]) => k + '=' + v).join('&');
+            return u.host.toLowerCase().replace(/^www\./, '') + (u.pathname.replace(/\/+$/, '') || '') + (q ? '?' + q : '');
+        }
+        const findDup = (list, url, exceptId) => { const k = dupKey(url); return k ? list.find(b => b.id !== exceptId && dupKey(b.url) === k) || null : null; };
+        function parseTags(s) {
+            const out = [], seen = new Set();
+            for (const t0 of (Array.isArray(s) ? s : String(s ?? '').split(/[,，、\n]+/))) {
+                const t = str(t0, ML.TAG); if (!t || seen.has(t.toLowerCase())) continue;
+                seen.add(t.toLowerCase()); out.push(t); if (out.length >= ML.TAGS) break;
+            }
+            return out;
+        }
+        const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
+        function normBM(r) {
+            if (!r || typeof r !== 'object') return null;
+            const url = normUrl(r.url); if (!url) return null;
+            return { id: str(r.id, 40) || newId(), url, title: str(r.title, ML.TITLE) || hostOf(url), tags: parseTags(r.tags), note: str(r.note, ML.BNOTE), added: validDate(r.added) ? r.added : twToday() };
+        }
+        function normBMList(raw) {
+            if (!Array.isArray(raw)) return [];
+            const seen = new Set(), out = [];
+            for (const r of raw) { const b = normBM(r); if (!b || seen.has(b.id)) continue; seen.add(b.id); out.push(b); if (out.length >= ML.BM_MAX) break; }
+            return out;
+        }
+        // 表單檢查（回傳錯誤字串，沒問題 ''）
+        function checkBM(r) {
+            if (!normUrl(r.url)) return '請填有效的網址（只接受 http / https）';
+            if (String(r.title ?? '').trim().length > ML.TITLE) return `標題最長 ${ML.TITLE} 字`;
+            if (String(r.note ?? '').trim().length > ML.BNOTE) return `備註最長 ${ML.BNOTE} 字`;
+            return '';
+        }
+        // 新增：重複時回傳 dup（由畫面詢問是否合併），滿了拒絕
+        function addBM(list, r, id = newId(), today = twToday()) {
+            const err = checkBM(r); if (err) return { list, err };
+            const dup = findDup(list, r.url); if (dup) return { list, err: '', dup };
+            if (list.length >= ML.BM_MAX) return { list, err: `最多 ${ML.BM_MAX} 筆，請先刪除不用的書籤` };
+            return { list: [...list, normBM({ ...r, id, added: today })], err: '' };
+        }
+        function updateBM(list, id, r) {
+            const err = checkBM(r); if (err) return { list, err };
+            const old = list.find(x => x.id === id); if (!old) return { list, err: '找不到這筆書籤' };
+            if (findDup(list, r.url, id)) return { list, err: '網址和另一筆書籤重複' };
+            return { list: list.map(x => x.id === id ? normBM({ ...r, id, added: old.added }) : x), err: '' };
+        }
+        // 合併：標籤聯集、備註不同就接續
+        function mergeBM(list, id, r) {
+            return list.map(x => {
+                if (x.id !== id) return x;
+                const note = r.note && !x.note.includes(r.note) ? (x.note ? x.note + '；' : '') + r.note : x.note;
+                return normBM({ ...x, tags: [...x.tags, ...parseTags(r.tags)], note });
+            });
+        }
+        const removeBM = (list, id) => list.filter(x => x.id !== id);
+        function filterBM(list, q, tag) {
+            const ks = String(q || '').toLowerCase().split(/\s+/).filter(Boolean);
+            return list.filter(b => (!tag || b.tags.includes(tag)) && ks.every(k => [b.title, b.url, b.note, ...b.tags].some(v => v.toLowerCase().includes(k))));
+        }
+        function sortBM(list, by) {
+            return [...list].sort((a, b) => by === 'title' ? a.title.localeCompare(b.title) || (a.id < b.id ? -1 : 1) : (a.added < b.added ? 1 : a.added > b.added ? -1 : (a.id < b.id ? 1 : -1)));
+        }
+        function tagCounts(list) {
+            const m = new Map();
+            for (const b of list) for (const t of b.tags) m.set(t, (m.get(t) || 0) + 1);
+            return [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+        }
+
+        // Netscape Bookmark HTML：用標記掃描（不建 DOM、不執行任何東西）；<H3> 資料夾名稱變標籤
+        const decodeEnt = (s) => s.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (m, e) => {
+            e = e.toLowerCase();
+            if (e[0] === '#') { const c = e[1] === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10); try { return String.fromCodePoint(c); } catch (x) { return ''; } }
+            return { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }[e];
+        });
+        const stripTags = (s) => decodeEnt(s.replace(/<[^>]*>/g, '')).trim();
+        function attrsOf(s) {
+            const o = {}; s.replace(/([a-z_][a-z0-9_-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi, (m, k, a, b, c) => { o[k.toLowerCase()] = decodeEnt(a ?? b ?? c ?? ''); return ''; });
+            return o;
+        }
+        function parseBookmarksHtml(text, max = ML.BM_MAX) {
+            const src = String(text ?? ''), lo = src.toLowerCase();
+            const re = /<(\/dl|dl|h3|a)\b([^>]*)>/gi, stack = [], items = [];
+            let pending = null, skipped = 0, truncated = false, m;
+            while ((m = re.exec(src))) {
+                const tag = m[1].toLowerCase(), end = re.lastIndex;
+                if (tag === 'dl') { stack.push(pending); pending = null; }
+                else if (tag === '/dl') stack.pop();
+                else if (tag === 'h3') {
+                    const c = lo.indexOf('</h3', end); pending = stripTags(src.slice(end, c < 0 ? end : c)); if (c >= 0) re.lastIndex = c;
+                } else {
+                    const c = lo.indexOf('</a', end), at = attrsOf(m[2]), url = normUrl(at.href);
+                    if (c >= 0) re.lastIndex = c;
+                    if (!url) { skipped++; continue; }
+                    if (items.length >= max) { truncated = true; break; }
+                    const ad = Number(at.add_date), added = Number.isFinite(ad) && ad > 0 ? twToday(ad * 1000) : '';
+                    items.push({ url, title: stripTags(src.slice(end, c < 0 ? end : c)), tags: parseTags([...stack.filter(Boolean), ...String(at.tags || '').split(',')]), added: validDate(added) ? added : '' });
+                }
+            }
+            return { items, skipped, truncated };
+        }
+        const escH = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        function toBookmarksHtml(list) {
+            const rows = list.map(b => {
+                const t = Math.floor(Date.parse(b.added + 'T00:00:00+08:00') / 1000) || 0;
+                return `    <DT><A HREF="${escH(b.url)}" ADD_DATE="${t}"${b.tags.length ? ` TAGS="${escH(b.tags.join(','))}"` : ''}>${escH(b.title)}</A>`;
+            });
+            return '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n' + rows.join('\n') + '\n</DL><p>\n';
+        }
+        // 匯入合併：已存在的網址只補標籤；新的依上限加入。回傳統計
+        function importBM(list, parsed, today = twToday()) {
+            const out = [...list], keys = new Map(out.map((b, i) => [dupKey(b.url), i]));
+            let added = 0, merged = 0, full = 0;
+            for (const it of parsed.items) {
+                const k = dupKey(it.url), i = keys.get(k);
+                if (i !== undefined) { out[i] = mergeBM([out[i]], out[i].id, { tags: it.tags, note: '' })[0]; merged++; continue; }
+                if (out.length >= ML.BM_MAX) { full++; continue; }
+                keys.set(k, out.length); out.push(normBM({ ...it, id: newId(), added: it.added || today })); added++;
+            }
+            return { list: out, added, merged, full };
+        }
+
+        // ---- 帳號盤點 ----
+        // 看起來像密碼 / 備援碼 / 長隨機字串？（含關鍵字、或單一長字串同時有大寫+小寫+數字、或分組的碼）
+        function looksLikePassword(s) {
+            s = String(s ?? '').trim(); if (!s) return false;
+            if (/password|passwd|pwd|passcode|recovery\s*code|backup\s*code|secret|密碼|口令|備援碼|备援码|備用碼|備份碼|復原碼|恢復碼/i.test(s)) return true;
+            if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return false;
+            if (/^(?:[a-z0-9]{4,6}[- ]){2,}[a-z0-9]{4,6}$/i.test(s) && /\d/.test(s)) return true;
+            if (/\s/.test(s) || s.length < 16) return false;
+            return /[a-z]/.test(s) && /[A-Z]/.test(s) && /\d/.test(s);
+        }
+        function normAcc(r) {
+            if (!r || typeof r !== 'object') return null;
+            const name = str(r.name, ML.NAME); if (!name) return null;
+            return {
+                id: str(r.id, 40) || newId(), name, acct: str(r.acct, ML.ACCT), cat: ACC_CATS.includes(r.cat) ? r.cat : '其他',
+                tfa: Object.hasOwn(TFA, r.tfa) ? r.tfa : 'none', backup: Object.hasOwn(BACKUP, r.backup) ? r.backup : 'na',
+                checked: validDate(r.checked) ? r.checked : '', note: str(r.note, ML.ANOTE),
+            };
+        }
+        function normAccList(raw) {
+            if (!Array.isArray(raw)) return [];
+            const seen = new Set(), out = [];
+            for (const r of raw) { const a = normAcc(r); if (!a || seen.has(a.id)) continue; seen.add(a.id); out.push(a); if (out.length >= ML.AC_MAX) break; }
+            return out;
+        }
+        function checkAcc(r) {
+            const s = (v) => String(v ?? '').trim();
+            if (!s(r.name)) return '請填服務名稱';
+            if (s(r.name).length > ML.NAME) return `服務名稱最長 ${ML.NAME} 字`;
+            if (s(r.acct).length > ML.ACCT) return `帳號最長 ${ML.ACCT} 字`;
+            if (s(r.note).length > ML.ANOTE) return `備註最長 ${ML.ANOTE} 字`;
+            if (s(r.checked) && !validDate(s(r.checked))) return '最後檢查日期不正確';
+            if (looksLikePassword(r.name) || looksLikePassword(r.acct) || looksLikePassword(r.note)) return '內容看起來像密碼或備援碼，請不要存在這裡（只記帳號與狀態）';
+            return '';
+        }
+        function addAcc(list, r, id = newId()) {
+            const err = checkAcc(r); if (err) return { list, err };
+            if (list.length >= ML.AC_MAX) return { list, err: `最多 ${ML.AC_MAX} 筆，請先刪除不用的帳號` };
+            return { list: [...list, normAcc({ ...r, id })], err: '' };
+        }
+        function updateAcc(list, id, r) {
+            const err = checkAcc(r); if (err) return { list, err };
+            if (!list.some(x => x.id === id)) return { list, err: '找不到這筆帳號' };
+            return { list: list.map(x => x.id === id ? normAcc({ ...r, id }) : x), err: '' };
+        }
+        const removeAcc = (list, id) => list.filter(x => x.id !== id);
+        // 風險：金融沒開 2FA = bad；超過 180 天沒檢查（沒填日期也算）= warn；其餘 ok
+        function riskOf(a, today) {
+            const age = a.checked ? day.between(a.checked, today) : Infinity;
+            const stale = age > ML.STALE, noTfa = a.tfa === 'none', finNo = a.cat === '金融' && noTfa;
+            return { level: finNo ? 'bad' : stale ? 'warn' : 'ok', finNo, stale, noTfa, noBackup: !noTfa && a.backup === 'no', age };
+        }
+        function filterAcc(list, q, cat, risk, today) {
+            const ks = String(q || '').toLowerCase().split(/\s+/).filter(Boolean);
+            return list.filter(a => (!cat || a.cat === cat) && (!risk || riskOf(a, today).level === risk) && ks.every(k => [a.name, a.acct, a.note, a.cat].some(v => v.toLowerCase().includes(k))));
+        }
+        function sortAcc(list, today) {
+            const rank = { bad: 0, warn: 1, ok: 2 };
+            return [...list].sort((a, b) => rank[riskOf(a, today).level] - rank[riskOf(b, today).level] || a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1));
+        }
+        function statsAcc(list, today) {
+            const s = { count: list.length, noTfa: 0, finNo: 0, stale: 0, noBackup: 0 };
+            for (const a of list) { const r = riskOf(a, today); if (r.noTfa) s.noTfa++; if (r.finNo) s.finNo++; if (r.stale) s.stale++; if (r.noBackup) s.noBackup++; }
+            return s;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+        const KB = 'mylists_bookmarks', KA = 'mylists_accounts';
+        let bms = normBMList(store.get(KB, [])), accs = normAccList(store.get(KA, []));
+        let bEdit = null, aEdit = null, tagSel = '';
+        const say = (id, t, bad) => { const m = $(id); m.textContent = t; m.className = 'msg' + (bad ? ' bad' : ''); };
+
+        $('#tabs').onclick = (e) => {
+            const t = e.target.closest('button'); if (!t) return;
+            [...$('#tabs').children].forEach(b => b.setAttribute('aria-pressed', b === t));
+            $('#tab-bm').hidden = t.dataset.t !== 'bm'; $('#tab-ac').hidden = t.dataset.t !== 'ac';
+        };
+
+        // ===== 書籤 =====
+        const saveB = () => store.set(KB, bms);
+        const readB = () => ({ url: $('#b_url').value, title: $('#b_name').value, tags: $('#b_tags').value, note: $('#b_note').value });
+        function resetB() {
+            bEdit = null; ['b_url', 'b_name', 'b_tags', 'b_note'].forEach(i => { $('#' + i).value = ''; });
+            $('#b_title').textContent = '新增書籤'; $('#b_save').textContent = '新增'; $('#b_cancel').hidden = true;
+        }
+        function renderB() {
+            const counts = tagCounts(bms); if (tagSel && !counts.some(([t]) => t === tagSel)) tagSel = '';
+            $('#b_tagbar').replaceChildren(...counts.slice(0, 40).map(([t, n]) => {
+                const b = el('button', 'chip' + (t === tagSel ? ' on' : ''), `${t} ${n}`); b.onclick = () => { tagSel = tagSel === t ? '' : t; renderB(); }; return b;
+            }));
+            const shown = sortBM(filterBM(bms, $('#b_q').value, tagSel), $('#b_sort').value), list = $('#b_list'); list.replaceChildren();
+            if (!shown.length) { list.append(el('div', 'card muted', bms.length ? '沒有符合的書籤' : '還沒有書籤，從上面新增或匯入瀏覽器書籤')); return; }
+            for (const b of shown.slice(0, 200)) {
+                const card = el('div', 'card item'), h = el('h2'), a = el('a', '', b.title);
+                a.href = b.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; h.append(a); card.append(h);
+                card.append(el('div', 'meta', b.url));
+                if (b.tags.length) { const p = el('div', 'tagbar'); b.tags.forEach(t => p.append(el('span', 'chip', t))); card.append(p); }
+                if (b.note) card.append(el('div', 'meta', '備註：' + b.note));
+                card.append(el('div', 'meta', '加入：' + b.added));
+                const bt = el('div', 'btns'), ed = el('button', 'sm', '編輯'), del = el('button', 'sm', '刪除');
+                ed.onclick = () => { bEdit = b.id; $('#b_url').value = b.url; $('#b_name').value = b.title; $('#b_tags').value = b.tags.join(', '); $('#b_note').value = b.note; $('#b_title').textContent = '編輯書籤'; $('#b_save').textContent = '儲存'; $('#b_cancel').hidden = false; say('#b_msg', ''); $('#b_title').scrollIntoView({ block: 'start' }); };
+                del.setAttribute('aria-label', '刪除 ' + b.title); del.style.color = 'var(--bad)';
+                del.onclick = () => { if (!confirm(`刪除書籤「${b.title}」？無法復原。`)) return; bms = removeBM(bms, b.id); if (bEdit === b.id) resetB(); saveB(); renderB(); };
+                bt.append(ed, del); card.append(bt); list.append(card);
+            }
+            if (shown.length > 200) list.append(el('div', 'card muted', `只顯示前 200 筆（共 ${shown.length} 筆符合），請用搜尋或標籤縮小範圍`));
+        }
+        $('#b_save').onclick = () => {
+            const r = readB();
+            if (bEdit) { const res = updateBM(bms, bEdit, r); if (res.err) return say('#b_msg', res.err, true); bms = res.list; saveB(); resetB(); say('#b_msg', '已儲存'); return renderB(); }
+            const res = addBM(bms, r); if (res.err) return say('#b_msg', res.err, true);
+            if (res.dup) {
+                if (!confirm(`這個網址已存在：「${res.dup.title}」。\n按「確定」合併（標籤聯集、備註接續），按「取消」不新增。`)) return say('#b_msg', '已取消，沒有新增');
+                bms = mergeBM(bms, res.dup.id, r); saveB(); resetB(); say('#b_msg', '已合併到既有書籤'); return renderB();
+            }
+            bms = res.list; saveB(); resetB(); say('#b_msg', '已新增'); renderB();
+        };
+        $('#b_cancel').onclick = () => { resetB(); say('#b_msg', ''); };
+        ['#b_q', '#b_sort'].forEach(q => { $(q).oninput = renderB; });
+        $('#b_export').onclick = () => {
+            if (!bms.length) return say('#b_dmsg', '還沒有書籤可以匯出');
+            Util.download(new Blob([toBookmarksHtml(bms)], { type: 'text/html;charset=utf-8' }), `書籤_${twToday()}.html`); say('#b_dmsg', `已匯出 ${bms.length} 筆`);
+        };
+        $('#b_import').onclick = () => $('#b_file').click();
+        $('#b_file').onchange = async () => {
+            const f = $('#b_file').files[0]; $('#b_file').value = ''; if (!f) return;
+            if (f.size > 20e6) return say('#b_dmsg', '檔案太大（上限 20 MB）', true);
+            const p = parseBookmarksHtml(await f.text());
+            if (!p.items.length) return say('#b_dmsg', '沒有讀到任何 http / https 書籤' + (p.skipped ? `（略過 ${p.skipped} 筆其他協定）` : ''), true);
+            const r = importBM(bms, p); bms = r.list; saveB(); renderB();
+            say('#b_dmsg', `匯入完成：新增 ${r.added}、合併重複 ${r.merged}` + (p.skipped ? `、略過非 http/https ${p.skipped}` : '') + (p.truncated ? `；檔案超過 ${ML.BM_MAX} 筆，後面的已截斷` : '') + (r.full ? `；已達上限，${r.full} 筆未加入` : ''), p.truncated || r.full > 0);
+        };
+        $('#b_clear').onclick = () => {
+            if (!bms.length) return say('#b_dmsg', '目前沒有書籤');
+            if (!confirm(`清除全部 ${bms.length} 筆書籤？無法復原。`)) return;
+            bms = []; saveB(); resetB(); say('#b_dmsg', '已清除全部'); renderB();
+        };
+
+        // ===== 帳號盤點 =====
+        const saveA = () => store.set(KA, accs);
+        ACC_CATS.forEach(c => { $('#a_cat').append(new Option(c, c)); $('#a_catF').append(new Option(c, c)); });
+        $('#a_catF').prepend(new Option('全部類別', '')); $('#a_catF').value = '';
+        Object.entries(TFA).forEach(([k, v]) => $('#a_tfa').append(new Option(v, k)));
+        Object.entries(BACKUP).forEach(([k, v]) => $('#a_backup').append(new Option(v, k)));
+        const readA = () => ({ name: $('#a_name').value, acct: $('#a_acct').value, cat: $('#a_cat').value, tfa: $('#a_tfa').value, backup: $('#a_backup').value, checked: $('#a_checked').value, note: $('#a_note').value });
+        function resetA() {
+            aEdit = null; ['a_name', 'a_acct', 'a_note'].forEach(i => { $('#' + i).value = ''; });
+            $('#a_cat').value = ACC_CATS[0]; $('#a_tfa').value = 'none'; $('#a_backup').value = 'na'; $('#a_checked').value = twToday();
+            $('#a_title').textContent = '新增帳號'; $('#a_save').textContent = '新增'; $('#a_cancel').hidden = true;
+        }
+        const RISK_LABEL = { bad: '高風險', warn: '需檢查', ok: '正常' };
+        function renderA() {
+            const today = twToday(), sBox = $('#a_stats'), st = statsAcc(accs, today); sBox.replaceChildren();
+            [['帳號數', st.count], ['金融沒開 2FA', st.finNo], ['沒開 2FA', st.noTfa], ['超過 180 天沒檢查', st.stale], ['有 2FA 但備援碼沒存', st.noBackup]].forEach(([k, v]) => { const d = el('div'); d.append(el('small', '', k), el('b', '', v)); sBox.append(d); });
+            const shown = sortAcc(filterAcc(accs, $('#a_q').value, $('#a_catF').value, $('#a_riskF').value, today), today), list = $('#a_list'); list.replaceChildren();
+            if (!shown.length) { list.append(el('div', 'card muted', accs.length ? '沒有符合的帳號' : '還沒有帳號，從上面新增第一筆吧')); return; }
+            for (const a of shown) {
+                const r = riskOf(a, today), card = el('div', 'card item ' + r.level), h = el('h2', '', a.name);
+                h.append(el('span', 'chip', a.cat), el('span', 'badge ' + r.level, RISK_LABEL[r.level])); card.append(h);
+                const line = (k, v) => { if (!v) return; const p = el('div', 'meta'); p.append(k + '：', el('b', '', v)); card.append(p); };
+                line('帳號', a.acct); line('2FA', TFA[a.tfa]); line('備援碼已保存', BACKUP[a.backup] + (r.noBackup ? '（建議保存）' : ''));
+                line('最後檢查', a.checked ? `${a.checked}（${r.age} 天前）` : '未填'); line('備註', a.note);
+                const bt = el('div', 'btns'), ed = el('button', 'sm', '編輯'), del = el('button', 'sm', '刪除');
+                ed.onclick = () => { aEdit = a.id; $('#a_name').value = a.name; $('#a_acct').value = a.acct; $('#a_cat').value = a.cat; $('#a_tfa').value = a.tfa; $('#a_backup').value = a.backup; $('#a_checked').value = a.checked; $('#a_note').value = a.note; $('#a_title').textContent = '編輯帳號'; $('#a_save').textContent = '儲存'; $('#a_cancel').hidden = false; say('#a_msg', ''); $('#a_title').scrollIntoView({ block: 'start' }); };
+                del.setAttribute('aria-label', '刪除 ' + a.name); del.style.color = 'var(--bad)';
+                del.onclick = () => { if (!confirm(`刪除帳號「${a.name}」？無法復原。`)) return; accs = removeAcc(accs, a.id); if (aEdit === a.id) resetA(); saveA(); renderA(); };
+                bt.append(ed, del); card.append(bt); list.append(card);
+            }
+        }
+        $('#a_save').onclick = () => {
+            const r = readA(), res = aEdit ? updateAcc(accs, aEdit, r) : addAcc(accs, r);
+            if (res.err) return say('#a_msg', res.err, true);
+            const was = aEdit; accs = res.list; saveA(); resetA(); say('#a_msg', was ? '已儲存' : '已新增'); renderA();
+        };
+        $('#a_cancel').onclick = () => { resetA(); say('#a_msg', ''); };
+        ['#a_q', '#a_catF', '#a_riskF'].forEach(q => { $(q).oninput = renderA; });
+        $('#a_clear').onclick = () => {
+            if (!accs.length) return say('#a_dmsg', '目前沒有帳號');
+            if (!confirm(`清除全部 ${accs.length} 筆帳號？無法復原。`)) return;
+            accs = []; saveA(); resetA(); say('#a_dmsg', '已清除全部'); renderA();
+        };
+
+        resetB(); resetA(); renderB(); renderA();
+    </script>
+</body>
+
+</html>

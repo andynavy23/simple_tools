@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="遊戲小幫手：每日任務清單、DPS 與暴擊期望、強化期望成本模擬三合一，不內建任何遊戲數值，數字由你填。">
+    <meta property="og:title" content="遊戲小幫手" />
+    <meta property="og:description" content="每日任務、DPS 暴擊期望、強化成本模擬三合一。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/game-assist/game-tools.html" />
+    <meta name="st-keys" content="gametools_daily,gametools_opts">
+    <title>遊戲小幫手</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <script src="../shared/js/util.js"></script>
+    <style>
+        :root { --wrap-w: 720px; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+        .tabs button { flex: 1; }
+        .full { grid-column: 1 / -1; }
+        .gm { margin-bottom: 12px; }
+        .gm h2 { margin: 0 0 8px; font-size: 18px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .tk { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); }
+        .tk label { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+        .tk input[type=checkbox] { width: 22px; height: 22px; flex: none; }
+        .tk .tg { font-size: 12px; color: var(--muted); flex: none; }
+        .tk.done label span { text-decoration: line-through; color: var(--muted); }
+        .add { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+        .add input { flex: 1; min-width: 120px; }
+        .bar { display: flex; align-items: flex-end; gap: 2px; height: 120px; margin: 8px 0 4px; }
+        .bar i { flex: 1; background: var(--blue); min-height: 1px; border-radius: 2px 2px 0 0; }
+        .axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+        .cmp { font-weight: 700; }
+        .rm { color: var(--bad); }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>遊戲小幫手</h1>
+        <p class="sub">不內建任何遊戲數值，數字由你填，僅供參考。</p>
+        <div class="tabs" id="tabs"><button data-t="pDaily">每日任務</button><button data-t="pDps">DPS 期望</button><button data-t="pEnh">強化成本</button></div>
+
+        <section id="pDaily" hidden>
+            <div class="card">
+                <div class="fgrid">
+                    <div><label for="dH">每日重置時刻（台灣時間）</label><select id="dH"></select></div>
+                    <div><label for="wD">每週重置星期</label><select id="wD"></select></div>
+                    <div><label for="wH">每週重置時刻</label><select id="wH"></select></div>
+                </div>
+                <div id="dSum" style="margin-top:10px"></div>
+            </div>
+            <div id="games"></div>
+            <div class="card">
+                <div class="add"><input id="gName" maxlength="20" placeholder="新增遊戲名稱"><button id="gAdd">新增遊戲</button></div>
+                <div class="add"><button id="dClear" class="sm rm">清除全部每日任務資料</button></div>
+            </div>
+        </section>
+
+        <section id="pDps" hidden>
+            <div class="card" id="cmp"></div>
+            <div id="cfgs"></div>
+            <div class="add"><button id="cAdd">新增配置</button></div>
+        </section>
+
+        <section id="pEnh" hidden>
+            <div class="card">
+                <div class="fgrid">
+                    <div><label for="eT">目標等級（1–30）</label><input id="eT" type="number" min="1" max="30" step="1" value="10"></div>
+                    <div><label for="eP">每級成功率 (%)</label><input id="eP" type="number" min="0.01" max="100" step="any" value="60"></div>
+                    <div class="full"><label for="eL">各級成功率覆寫（選填，逗號分隔，從第 1 級起，不足的用上面統一值）</label><input id="eL" placeholder="例：90,80,70,50"></div>
+                    <div><label for="eF">失敗懲罰</label><select id="eF"><option value="none">無（原地不動）</option><option value="drop">掉 1 級</option><option value="reset">歸零</option><option value="destroy">毀損（歸零並付重買費）</option></select></div>
+                    <div><label for="eC">每次花費</label><input id="eC" type="number" min="0" step="any" value="100"></div>
+                    <div><label for="eX">毀損重買費（僅毀損）</label><input id="eX" type="number" min="0" step="any" value="0"></div>
+                    <div><label for="eR">模擬次數（1,000–1,000,000）</label><input id="eR" type="number" min="1000" max="1000000" step="1000" value="100000"></div>
+                    <div><label for="eS">隨機種子（相同可重現）</label><input id="eS" type="number" step="1" value="1"></div>
+                </div>
+                <div class="add"><button id="eGo">執行蒙地卡羅模擬</button></div>
+            </div>
+            <div class="card" id="eOut"></div>
+            <div class="card" id="eSim" hidden></div>
+        </section>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>三個遊戲小工具合一：每日任務清單、DPS 與暴擊期望、強化期望成本模擬。不內建任何遊戲數值，數字由你填，僅供參考。上方分頁切換。</p>
+        <h3>什麼時候用</h3>
+        <p>追蹤每天 / 每週要做的事、比較兩套裝備哪個輸出高、衝裝備前估預算。</p>
+        <h3>每日任務</h3>
+        <h4>怎麼用</h4>
+        <ol>
+            <li>先設重置時刻（預設台灣時間 05:00；每週預設週一 05:00，可改）。</li>
+            <li>新增遊戲，再為每個遊戲新增任務並選「每日」或「每週」。</li>
+            <li>勾選完成；過了重置時刻會自動變回未完成（開啟頁面與切回分頁時重算）。</li>
+            <li>上方顯示「今日完成 x / y」（只算每日任務）、本週完成數與連續全勤天數（當天所有每日任務都完成才算）。</li>
+        </ol>
+        <div class="eg">每日任務共 6 項，今天勾了 4 項 → 今日完成 4 / 6；全勤後連續天數 +1，隔天沒全勤則歸零。</div>
+        <h4>小提醒</h4>
+        <ul>
+            <li>最多 20 個遊戲、每個遊戲 30 項任務，滿了會拒絕新增並提示，不會自動刪舊資料。</li>
+            <li>單筆任務按「刪」、整個遊戲按「刪除遊戲」、全部用「清除全部每日任務資料」，都會先確認，無法復原。</li>
+            <li>時間固定用台灣時間 (UTC+8)，與裝置時區無關。資料只存在本機，可用右上角「💾」備份。</li>
+        </ul>
+        <h3>DPS 期望</h3>
+        <h4>怎麼用</h4>
+        <ol>
+            <li>填攻擊力下限 / 上限（固定值兩欄填一樣）、暴擊率 (%)、暴擊倍率（2 = 兩倍）。</li>
+            <li>出手方式二選一：每秒攻擊次數，或「冷卻 + 施放時間」（每輪 = 冷卻 + 施放時間，每次施放可有多段命中）。</li>
+            <li>附加傷害是每次命中固定加的值（不暴擊）；防禦減免 % 是對手減傷，破防 % 會抵銷其中一部分。</li>
+            <li>可新增 2–5 組配置並排比較，會標出哪組 DPS 最高與相對第一組的提升百分比。</li>
+        </ol>
+        <div class="eg">攻擊 100–100、暴擊率 50%、倍率 2 → 期望倍率 1.5，單次期望 150；攻速 2 次 / 秒 → DPS 300。</div>
+        <h4>小提醒</h4>
+        <ul>
+            <li>公式：單次 = (平均攻擊 × (1 + 暴擊率 × (倍率 − 1)) + 附加) × (1 − 減免 × (1 − 破防))。</li>
+            <li>只儲存上次輸入（最多 5 組配置），「刪除」可移除配置（至少留 2 組）；壞資料載入會回到預設。</li>
+        </ul>
+        <h3>強化成本</h3>
+        <h4>怎麼用</h4>
+        <ol>
+            <li>填目標等級、每級成功率（也可逐級覆寫）、失敗懲罰、每次花費。</li>
+            <li>上方「解析解」用馬可夫鏈直接算出精確的期望次數與期望花費，即時更新。</li>
+            <li>按「執行蒙地卡羅模擬」跑 1,000–1,000,000 次，顯示平均、中位數、P90、P99 與花費分佈圖，並與解析解對照。固定種子結果可重現。</li>
+        </ol>
+        <div class="eg">目標 1 級、成功率 50%、無懲罰、每次 100 → 期望 2 次、花費 200。</div>
+        <h4>小提醒</h4>
+        <ul>
+            <li>期望值是長期平均，分佈通常很偏，運氣差時遠高於平均，預算可參考 P90 / P99。</li>
+            <li>模擬步數太大時會自動減少次數並提示。成功率不可為 0。</li>
+        </ul>
+        <h3>範例</h3>
+        <div class="eg">每日任務：新增遊戲「A 遊戲」，任務「簽到」「刷副本」（每日），「公會戰」（每週）；勾完每日任務就累計一天全勤。
+DPS：攻擊 1000、暴擊率 50%、暴擊倍率 2 → 期望倍率 1.5，單次期望 1500；再加第二組配置比較誰的 DPS 高。
+強化：目標 3 級、每級成功率 50%、失敗不扣級、每次花費 100 → 期望 6 次、花費 600。</div>
+    </template>
+
+    <script>
+        // --- pure ---
+        const DAILY_CAP = { games: 20, tasks: 30, name: 30 };
+        const TW = 8 * 3600e3;
+        // 每日期間編號：以重置時刻切日（台灣時間）
+        function dayKey(ts, hour) { return Math.floor((ts + TW - hour * 3600e3) / 86400e3); }
+        // 每週期間編號：該週起始日的日編號
+        function weekKey(ts, wd, hour) {
+            const d = dayKey(ts, hour);
+            return d - ((((d + 4) % 7) - wd + 7) % 7);
+        }
+        function isDone(t, now, set) {
+            if (!t.done) return false;
+            return t.kind === 'w' ? weekKey(t.done, set.wd, set.wh) === weekKey(now, set.wd, set.wh) : dayKey(t.done, set.dh) === dayKey(now, set.dh);
+        }
+        function cleanDaily(raw) {
+            const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+            const iv = (v, lo, hi, d) => { v = Math.floor(Number(v)); return v >= lo && v <= hi ? v : d; };
+            const s = o.set && typeof o.set === 'object' ? o.set : {};
+            const set = { dh: iv(s.dh, 0, 23, 5), wd: iv(s.wd, 0, 6, 1), wh: iv(s.wh, 0, 23, 5) };
+            const games = [], seen = new Set();
+            for (const g of (Array.isArray(o.games) ? o.games : []).slice(0, DAILY_CAP.games)) {
+                if (!g || typeof g !== 'object' || typeof g.id !== 'string' || !g.id || seen.has(g.id)) continue;
+                seen.add(g.id);
+                const tasks = [], ts = new Set();
+                for (const t of (Array.isArray(g.tasks) ? g.tasks : []).slice(0, DAILY_CAP.tasks)) {
+                    if (!t || typeof t !== 'object' || typeof t.id !== 'string' || !t.id || ts.has(t.id)) continue;
+                    ts.add(t.id);
+                    const done = Number(t.done);
+                    tasks.push({ id: t.id, name: String(t.name == null ? '' : t.name).slice(0, DAILY_CAP.name) || '任務', kind: t.kind === 'w' ? 'w' : 'd', done: Number.isFinite(done) && done > 0 ? done : 0 });
+                }
+                games.push({ id: g.id, name: String(g.name == null ? '' : g.name).slice(0, DAILY_CAP.name) || '遊戲', tasks });
+            }
+            const st = o.streak && typeof o.streak === 'object' ? o.streak : {};
+            const ni = (v) => { v = Math.floor(Number(v)); return Number.isFinite(v) && v >= 0 && v < 1e6 ? v : 0; };
+            return { set, games, streak: { last: ni(st.last), n: ni(st.n), pl: ni(st.pl), pn: ni(st.pn) } };
+        }
+        // 全勤連續天數：today 為今日期間編號、allDone 為今日每日任務是否全完成（至少一項）
+        function streakStep(st, today, allDone) {
+            if (allDone && st.last !== today) return { last: today, n: (st.last === today - 1 ? st.n : 0) + 1, pl: st.last, pn: st.n };
+            if (!allDone && st.last === today) return { last: st.pl, n: st.pn, pl: 0, pn: 0 };
+            return st;
+        }
+        function streakShow(st, today) { return st.last === today || st.last === today - 1 ? st.n : 0; }
+
+        // DPS：crit / red / pen 為百分比，mult 為倍率（2 = 兩倍）
+        function dpsCalc(c) {
+            const lo = Number(c.min), hi = Number(c.max), cr = Number(c.crit) / 100, m = Number(c.mult), flat = Number(c.flat) || 0;
+            const red = (Number(c.red) || 0) / 100, pen = (Number(c.pen) || 0) / 100;
+            if (![lo, hi, cr, m].every(Number.isFinite) || lo < 0 || hi < lo || cr < 0 || cr > 1 || m < 0 || flat < 0 || red < 0 || red > 1 || pen < 0 || pen > 1) return { error: '請檢查輸入：攻擊力下限 ≤ 上限、百分比 0–100' };
+            let rate;
+            if (c.mode === 'cd') {
+                const cd = Number(c.cd), cast = Number(c.cast) || 0, hits = Number(c.hits) || 1;
+                if (!(cd >= 0) || !(cast >= 0) || !(cd + cast > 0) || !(hits > 0)) return { error: '冷卻 + 施放時間要大於 0' };
+                rate = hits / (cd + cast);
+            } else {
+                rate = Number(c.speed);
+                if (!(rate >= 0)) return { error: '攻速要 ≥ 0' };
+            }
+            const base = (lo + hi) / 2, critMult = 1 + cr * (m - 1);
+            const perHit = (base * critMult + flat) * (1 - red * (1 - pen));
+            return { base, critMult, perHit, rate, dps: perHit * rate, critShare: base > 0 ? cr * m / critMult : 0 };
+        }
+        const DPS_DEF = { name: '', min: 100, max: 100, crit: 50, mult: 2, mode: 'speed', speed: 2, cd: 5, cast: 1, hits: 1, flat: 0, red: 0, pen: 0 };
+        function cleanCfg(r, i) {
+            r = r && typeof r === 'object' ? r : {};
+            const o = { name: String(r.name == null ? '' : r.name).slice(0, 20) || '配置 ' + 'ABCDE'[i] };
+            for (const k of Object.keys(DPS_DEF)) {
+                if (k === 'name') continue;
+                if (k === 'mode') { o.mode = r.mode === 'cd' ? 'cd' : 'speed'; continue; }
+                const v = Number(r[k]);
+                o[k] = Number.isFinite(v) && v >= 0 && v <= 1e12 ? v : DPS_DEF[k];
+            }
+            return o;
+        }
+        const ENH_DEF = { t: 10, p: 60, l: '', f: 'none', c: 100, x: 0, r: 100000, s: 1 };
+        function cleanOpts(raw) {
+            const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+            let cfgs = (o.dps && Array.isArray(o.dps.cfgs) ? o.dps.cfgs : []).slice(0, 5).map(cleanCfg);
+            while (cfgs.length < 2) cfgs.push(cleanCfg({}, cfgs.length));
+            const e = o.enh && typeof o.enh === 'object' ? o.enh : {}, en = {};
+            for (const k of Object.keys(ENH_DEF)) {
+                if (k === 'l') en.l = typeof e.l === 'string' ? e.l.slice(0, 200) : '';
+                else if (k === 'f') en.f = ['none', 'drop', 'reset', 'destroy'].includes(e.f) ? e.f : 'none';
+                else { const v = Number(e[k]); en[k] = Number.isFinite(v) && Math.abs(v) <= 1e12 ? v : ENH_DEF[k]; }
+            }
+            return { dps: { cfgs }, enh: en };
+        }
+
+        // 強化：probs[i] 為第 i 級→i+1 的成功率；penalty none / drop / reset / destroy
+        function parseProbs(str, T, uniformPct) {
+            const parts = String(str || '').split(/[,，\s]+/).filter(Boolean).map(Number);
+            const a = [];
+            for (let i = 0; i < T; i++) a.push((i < parts.length ? parts[i] : uniformPct) / 100);
+            return a;
+        }
+        const failTo = (i, pen) => pen === 'none' ? i : pen === 'drop' ? Math.max(i - 1, 0) : 0;
+        function solveLin(A, b) {
+            const n = b.length, M = A.map((r, i) => [...r, b[i]]);
+            for (let c = 0; c < n; c++) {
+                let p = c;
+                for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+                [M[c], M[p]] = [M[p], M[c]];
+                for (let r = 0; r < n; r++) {
+                    if (r === c) continue;
+                    const f = M[r][c] / M[c][c];
+                    if (f) for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k];
+                }
+            }
+            return M.map((r, i) => r[n] / r[i]);
+        }
+        // 解析解：從 0 級到目標的期望次數與期望花費
+        function enhExpect(probs, pen, cost, extra) {
+            const T = probs.length;
+            if (!(T >= 1) || !probs.every(p => p > 0 && p <= 1) || !(cost >= 0) || !(extra >= 0)) return { error: '成功率要在 0–100% 之間（不可為 0），花費不可為負' };
+            const A = [], a1 = [], a2 = [];
+            for (let i = 0; i < T; i++) {
+                const row = new Array(T).fill(0), q = 1 - probs[i];
+                row[i] += 1;
+                if (i + 1 < T) row[i + 1] -= probs[i];
+                row[failTo(i, pen)] -= q;
+                A.push(row);
+                a1.push(1);
+                a2.push(cost + (pen === 'destroy' ? q * extra : 0));
+            }
+            const attempts = solveLin(A, a1)[0], total = solveLin(A, a2)[0];
+            return Number.isFinite(attempts) && Number.isFinite(total) ? { attempts, cost: total } : { error: '期望值過大，無法計算' };
+        }
+        // 蒙地卡羅：回傳每回合的次數與花費；步數總預算超過 maxSteps 就提早停止
+        function enhSim(probs, pen, cost, extra, runs, seed, maxSteps = 3e8) {
+            const rnd = Util.seeded(seed), T = probs.length, att = new Float64Array(runs), cst = new Float64Array(runs);
+            let steps = 0, n = 0, stuck = 0;
+            for (; n < runs && steps < maxSteps; n++) {
+                let lv = 0, k = 0, c = 0;
+                while (lv < T && k < 1e6) {
+                    k++; c += cost;
+                    if (rnd() < probs[lv]) lv++;
+                    else { if (pen === 'destroy') c += extra; lv = failTo(lv, pen); }
+                }
+                if (lv < T) stuck++;
+                att[n] = k; cst[n] = c; steps += k;
+            }
+            return { att: att.subarray(0, n), cst: cst.subarray(0, n), n, stuck };
+        }
+        function summarize(arr) {
+            const n = arr.length;
+            if (!n) return { mean: 0, median: 0, p90: 0, p99: 0 };
+            const s = Float64Array.from(arr).sort(), q = (x) => s[Math.min(n - 1, Math.ceil(x * n) - 1)];
+            let sum = 0;
+            for (let i = 0; i < n; i++) sum += s[i];
+            return { mean: sum / n, median: q(0.5), p90: q(0.9), p99: q(0.99), min: s[0], max: s[n - 1] };
+        }
+        function histogram(arr, bins, hi) {
+            const h = new Array(bins).fill(0);
+            if (!(hi > 0)) { h[0] = arr.length; return h; }
+            for (const v of arr) h[Math.min(bins - 1, Math.floor(v / hi * bins))]++;
+            return h;
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const row = Util.statRow;
+        const nf = (v, d = 2) => Number.isFinite(v) ? v.toLocaleString('zh-TW', { maximumFractionDigits: d }) : '—';
+        const mk = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+
+        // 持久化：選項
+        const opts = cleanOpts(Util.store.get('gametools_opts', null));
+        const saveOpts = () => Util.store.set('gametools_opts', opts);
+
+        // ===== 每日任務 =====
+        (() => {
+            let D = cleanDaily(Util.store.get('gametools_daily', null));
+            const save = () => Util.store.set('gametools_daily', D);
+            const hrs = [...Array(24).keys()], days = '日一二三四五六';
+            for (const [id, key] of [['dH', 'dh'], ['wH', 'wh']]) {
+                const s = $('#' + id);
+                hrs.forEach(h => s.append(mk('option', { value: h, textContent: String(h).padStart(2, '0') + ':00' })));
+                s.value = D.set[key];
+                s.onchange = () => { D.set[key] = +s.value; save(); render(); };
+            }
+            const sw = $('#wD');
+            [...days].forEach((d, i) => sw.append(mk('option', { value: i, textContent: '週' + d })));
+            sw.value = D.set.wd;
+            sw.onchange = () => { D.set.wd = +sw.value; save(); render(); };
+            const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+
+            function render() {
+                const now = Date.now(), set = D.set, today = dayKey(now, set.dh);
+                let dx = 0, dy = 0, wx = 0, wy = 0;
+                const box = $('#games');
+                box.replaceChildren();
+                for (const g of D.games) {
+                    const card = mk('div', { className: 'card gm' });
+                    card.append(mk('h2', {}, mk('span', { textContent: g.name }), mk('button', { className: 'sm rm', textContent: '刪除遊戲', onclick: () => { if (confirm(`刪除「${g.name}」與其全部任務？無法復原。`)) { D.games = D.games.filter(x => x.id !== g.id); save(); render(); } } })));
+                    for (const t of g.tasks) {
+                        const done = isDone(t, now, set);
+                        if (t.kind === 'w') { wy++; if (done) wx++; } else { dy++; if (done) dx++; }
+                        const cb = mk('input', { type: 'checkbox', checked: done, onchange: () => { t.done = cb.checked ? Date.now() : 0; save(); render(); } });
+                        card.append(mk('div', { className: 'tk' + (done ? ' done' : '') },
+                            mk('label', {}, cb, mk('span', { textContent: t.name })),
+                            mk('span', { className: 'tg', textContent: t.kind === 'w' ? '每週' : '每日' }),
+                            mk('button', { className: 'sm rm', textContent: '刪', onclick: () => { if (confirm(`刪除任務「${t.name}」？無法復原。`)) { g.tasks = g.tasks.filter(x => x.id !== t.id); save(); render(); } } })));
+                    }
+                    const inp = mk('input', { maxLength: DAILY_CAP.name, placeholder: `新增任務（${g.tasks.length}/${DAILY_CAP.tasks}）` });
+                    const kind = mk('select', {}, mk('option', { value: 'd', textContent: '每日' }), mk('option', { value: 'w', textContent: '每週' }));
+                    const add = () => {
+                        const name = inp.value.trim();
+                        if (!name) return;
+                        if (g.tasks.length >= DAILY_CAP.tasks) { alert(`每個遊戲最多 ${DAILY_CAP.tasks} 項任務，請先刪除不用的。`); return; }
+                        g.tasks.push({ id: uid(), name: name.slice(0, DAILY_CAP.name), kind: kind.value, done: 0 });
+                        save(); render();
+                    };
+                    inp.onkeydown = (e) => { if (e.key === 'Enter') add(); };
+                    card.append(mk('div', { className: 'add' }, inp, kind, mk('button', { textContent: '新增', onclick: add })));
+                    box.append(card);
+                }
+                const ns = streakStep(D.streak, today, dy > 0 && dx === dy);
+                if (ns !== D.streak) { D.streak = ns; save(); }
+                const sum = $('#dSum');
+                sum.replaceChildren(row('今日完成', `${dx} / ${dy}`, 'big'), row('本週完成', `${wx} / ${wy}`), row('連續全勤', `${streakShow(D.streak, today)} 天`));
+                if (!D.games.length) box.append(mk('p', { className: 'note', textContent: '還沒有遊戲，先在下方新增一個。' }));
+            }
+            const gAdd = () => {
+                const name = $('#gName').value.trim();
+                if (!name) return;
+                if (D.games.length >= DAILY_CAP.games) { alert(`最多 ${DAILY_CAP.games} 個遊戲，請先刪除不用的。`); return; }
+                D.games.push({ id: uid(), name: name.slice(0, DAILY_CAP.name), tasks: [] });
+                $('#gName').value = '';
+                save(); render();
+            };
+            $('#gAdd').onclick = gAdd;
+            $('#gName').onkeydown = (e) => { if (e.key === 'Enter') gAdd(); };
+            $('#dClear').onclick = () => {
+                if (!confirm('清除全部遊戲、任務、重置設定與全勤紀錄？無法復原。')) return;
+                try { localStorage.removeItem('gametools_daily'); } catch (e) { }
+                D = cleanDaily(null);
+                $('#dH').value = D.set.dh; $('#wD').value = D.set.wd; $('#wH').value = D.set.wh;
+                render();
+            };
+            render();
+            document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+            setInterval(() => { if (!document.hidden && !document.activeElement.matches('input')) render(); }, 60000);
+            window.__dailyRender = render;
+        })();
+
+        // ===== DPS =====
+        (() => {
+            const F = [['min', '攻擊力下限'], ['max', '攻擊力上限（固定值填同上）'], ['crit', '暴擊率 (%)'], ['mult', '暴擊倍率（2 = 兩倍）'], ['flat', '附加傷害（每次命中）'], ['red', '對手防禦減免 (%)'], ['pen', '破防 (%)']];
+            const M = { speed: [['speed', '每秒攻擊次數']], cd: [['cd', '冷卻（秒）'], ['cast', '施放時間（秒）'], ['hits', '每次施放命中數']] };
+            const cfgs = opts.dps.cfgs, box = $('#cfgs');
+            let outs = [];
+            function build() {
+                box.replaceChildren(); outs = [];
+                cfgs.forEach((c, i) => {
+                    const g = mk('div', { className: 'fgrid' });
+                    const field = (k, label) => { const inp = mk('input', { type: 'number', step: 'any', min: 0, value: c[k] }); inp.oninput = () => { c[k] = inp.value === '' ? NaN : +inp.value; calc(); }; return mk('div', {}, mk('label', { textContent: label }), inp); };
+                    const nm = mk('input', { maxLength: 20, value: c.name }); nm.oninput = () => { c.name = nm.value.slice(0, 20); calc(); };
+                    g.append(mk('div', { className: 'full' }, mk('label', { textContent: '配置名稱' }), nm));
+                    F.forEach(([k, l]) => g.append(field(k, l)));
+                    const md = mk('select', {}, mk('option', { value: 'speed', textContent: '依攻速' }), mk('option', { value: 'cd', textContent: '依冷卻 + 施放' }));
+                    md.value = c.mode; md.onchange = () => { c.mode = md.value; build(); calc(); };
+                    g.append(mk('div', { className: 'full' }, mk('label', { textContent: '出手方式' }), md));
+                    M[c.mode].forEach(([k, l]) => g.append(field(k, l)));
+                    const out = mk('div'); outs.push(out);
+                    const del = mk('button', { className: 'sm rm', textContent: '刪除此配置', onclick: () => { if (cfgs.length <= 2) { alert('至少要保留 2 組配置才能比較。'); return; } if (confirm(`刪除「${c.name}」？無法復原。`)) { cfgs.splice(i, 1); build(); calc(); } } });
+                    box.append(mk('div', { className: 'card gm' }, g, out, mk('div', { className: 'add' }, del)));
+                });
+                $('#cAdd').hidden = cfgs.length >= 5;
+            }
+            function calc() {
+                const rs = cfgs.map(c => dpsCalc(c));
+                rs.forEach((r, i) => {
+                    outs[i].replaceChildren();
+                    if (r.error) { outs[i].append(mk('p', { className: 'note', textContent: r.error })); return; }
+                    outs[i].append(row('期望倍率', '× ' + nf(r.critMult, 3)), row('單次期望傷害', nf(r.perHit)), row('DPS', nf(r.dps), 'big'), row('暴擊傷害占主攻擊比', nf(r.critShare * 100, 1) + ' %'));
+                });
+                const cmp = $('#cmp');
+                cmp.replaceChildren();
+                const ok = rs.map((r, i) => i).filter(i => !rs[i].error);
+                if (ok.length < 2) { cmp.textContent = '請修正輸入以進行比較'; return; }
+                const best = ok.reduce((a, b) => rs[b].dps > rs[a].dps ? b : a), base = rs[ok[0]].dps;
+                cmp.append(row('DPS 最高', `${cfgs[best].name}（${nf(rs[best].dps)}）`, 'big'));
+                ok.forEach(i => cmp.append(row(cfgs[i].name, `${nf(rs[i].dps)}${i === ok[0] ? '（基準）' : base > 0 ? `（${rs[i].dps >= base ? '+' : ''}${nf((rs[i].dps / base - 1) * 100, 1)}%）` : ''}`, i === best ? 'cmp' : '')));
+                saveOpts();
+            }
+            $('#cAdd').onclick = () => { if (cfgs.length >= 5) return; cfgs.push(cleanCfg({}, cfgs.length)); build(); calc(); };
+            build(); calc();
+        })();
+
+        // ===== 強化 =====
+        (() => {
+            const E = opts.enh, ids = { t: 'eT', p: 'eP', l: 'eL', f: 'eF', c: 'eC', x: 'eX', r: 'eR', s: 'eS' };
+            for (const k in ids) $('#' + ids[k]).value = E[k];
+            const get = () => {
+                const v = {};
+                for (const k in ids) { const el = $('#' + ids[k]); v[k] = k === 'l' || k === 'f' ? el.value : +el.value; }
+                v.t = Math.floor(v.t);
+                return v;
+            };
+            const check = (v) => {
+                if (!(v.t >= 1 && v.t <= 30)) return '目標等級要在 1–30';
+                if (!(v.r >= 1000 && v.r <= 1e6)) return '模擬次數要在 1,000–1,000,000';
+                if (!Number.isFinite(v.s)) return '種子要是數字';
+                return '';
+            };
+            let last = null;
+            function analytic() {
+                const v = get(), out = $('#eOut'), bad = check(v);
+                out.replaceChildren(mk('h2', { textContent: '結果（解析解）' }));
+                $('#eSim').hidden = true;
+                if (bad) { out.append(mk('p', { className: 'note', textContent: bad })); last = null; return; }
+                Object.assign(E, v); E.l = v.l.slice(0, 200); saveOpts();
+                const probs = parseProbs(v.l, v.t, v.p), r = enhExpect(probs, v.f, v.c, v.x);
+                if (r.error) { out.append(mk('p', { className: 'note', textContent: r.error })); last = null; return; }
+                last = { v, probs, r };
+                out.append(row('期望次數', nf(r.attempts) + ' 次'), row('期望花費', nf(r.cost), 'big'));
+                out.append(mk('p', { className: 'note', textContent: '馬可夫鏈精確解（長期平均）；按下方按鈕可看實際分佈。' }));
+            }
+            Object.values(ids).forEach(id => $('#' + id).oninput = analytic);
+            $('#eF').onchange = analytic;
+            $('#eGo').onclick = () => {
+                analytic();
+                if (!last) return;
+                const { v, probs, r } = last, sim = enhSim(probs, v.f, v.c, v.x, v.r, v.s);
+                const useCost = v.c > 0 || v.x > 0, arr = useCost ? sim.cst : sim.att, name = useCost ? '花費' : '次數';
+                const sc = summarize(sim.cst), sa = summarize(sim.att), s = useCost ? sc : sa;
+                const el = $('#eSim');
+                el.hidden = false;
+                el.replaceChildren(mk('h2', { textContent: `結果（模擬 ${nf(sim.n, 0)} 次，種子 ${v.s}）` }));
+                if (sim.n < v.r) el.append(mk('p', { className: 'note', textContent: `步數過多，已提早停在 ${nf(sim.n, 0)} 次。` }));
+                if (sim.stuck) el.append(mk('p', { className: 'note', textContent: `有 ${sim.stuck} 回合超過 100 萬次仍未達標（已截斷）。` }));
+                const diff = (a, b) => b > 0 ? `（與解析解差 ${nf((a / b - 1) * 100, 2)}%）` : '';
+                el.append(row('平均次數', nf(sa.mean) + ' 次 ' + diff(sa.mean, r.attempts)), row('平均花費', nf(sc.mean) + ' ' + diff(sc.mean, r.cost), 'big'),
+                    row('中位數花費', nf(sc.median)), row('P90 花費', nf(sc.p90)), row('P99 花費', nf(sc.p99)), row('最高花費', nf(sc.max)), row('中位數次數 / P99 次數', `${nf(sa.median, 0)} / ${nf(sa.p99, 0)}`));
+                const H = histogram(arr, 20, s.p99), mx = Math.max(...H, 1);
+                const bar = mk('div', { className: 'bar' });
+                H.forEach(c => bar.append(mk('i', { style: `height:${c / mx * 100}%`, title: String(c) })));
+                el.append(mk('p', { className: 'note', textContent: `${name}分佈（最右一格含超過 P99 的部分）` }), bar, mk('div', { className: 'axis' }, mk('span', { textContent: '0' }), mk('span', { textContent: nf(s.p99 / 2, 0) }), mk('span', { textContent: '≥ ' + nf(s.p99, 0) })));
+            };
+            analytic();
+        })();
+
+        // 分頁
+        const tabs = document.querySelectorAll('#tabs button');
+        function show(id) {
+            tabs.forEach(b => b.setAttribute('aria-pressed', b.dataset.t === id));
+            document.querySelectorAll('section').forEach(s => s.hidden = s.id !== id);
+        }
+        tabs.forEach(b => b.onclick = () => show(b.dataset.t));
+        show('pDaily');
+    </script>
+</body>
+
+</html>

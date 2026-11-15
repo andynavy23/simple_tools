@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
     <meta name="description" content="書單追蹤：記錄想讀、在讀、讀完的書，進度條、評分、心得與年度統計，可匯出 Markdown 或 CSV。">
-    <meta name="st-keys" content="books_list">
+    <meta name="st-keys" content="books_list,readinglist_later">
     <meta property="og:title" content="書單追蹤" />
     <meta property="og:description" content="追蹤閱讀進度、評分與心得，今年讀完幾本一目了然。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
@@ -146,6 +146,12 @@
         <h1>書單追蹤</h1>
         <p class="sub">想讀、在讀、讀完，一本一本記。資料只存在這支瀏覽器。</p>
 
+        <div class="tabs" id="views" style="margin-bottom:10px">
+            <button class="sm" data-v="books" aria-pressed="true">書單</button>
+            <button class="sm" data-v="later" aria-pressed="false">稍後閱讀</button>
+        </div>
+
+        <div id="vBooks">
         <div class="card">
             <h2 id="formTitle">新增書籍</h2>
             <label for="title">書名</label>
@@ -191,6 +197,36 @@
             <div class="row" style="margin-top:10px"><button id="expMd">匯出 .md</button><button id="expCsv">匯出 CSV</button><button id="clearAll">清除全部書單</button></div>
             <p class="note" id="listNote"></p>
         </div>
+        </div>
+
+        <div id="vLater" hidden>
+            <div class="card">
+                <h2>新增稍後閱讀</h2>
+                <label for="lu">網址（http / https）</label>
+                <input id="lu" type="url" inputmode="url" maxlength="2000" placeholder="https://..." style="width:100%">
+                <label for="lt">標題</label>
+                <input id="lt" maxlength="100" placeholder="可留白（會用網站名稱）" style="width:100%">
+                <label for="ltags">標籤（用逗號或空白分開，最多 8 個）</label>
+                <input id="ltags" maxlength="200" style="width:100%">
+                <label for="ln">備註</label>
+                <input id="ln" maxlength="300" style="width:100%">
+                <div class="row" style="margin-top:10px"><button class="primary" id="ladd">加入</button></div>
+                <p class="note" id="lmsg"></p>
+            </div>
+            <div class="card">
+                <h2>統計</h2>
+                <div id="lstats"></div>
+            </div>
+            <div class="card">
+                <div class="tabs" id="ltabs"></div>
+                <div class="row" style="margin-top:10px">
+                    <input id="lq" type="search" placeholder="搜尋標題 / 網址 / 備註 / 標籤" aria-label="搜尋稍後閱讀" style="flex:1;min-width:140px">
+                </div>
+                <div id="llist"></div>
+                <div class="row" style="margin-top:10px"><button id="lclear">清除全部稍後閱讀</button></div>
+                <p class="note" id="llnote"></p>
+            </div>
+        </div>
     </div>
 
     <template id="help">
@@ -210,6 +246,7 @@
         <li>用上方分頁（全部 / 想讀 / 在讀 / 讀完 / 擱置）、搜尋框與排序找書。</li>
         <li>按「編輯」可改評分、心得（整體心得）、日期等；「匯出 .md / CSV」備份成文字檔。</li>
         <li>每本書下方的「摘錄與備註」：展開後輸入頁碼（可不填）、摘錄內容與備註，按「加入摘錄」；可一直加多筆，每筆有 ✕ 單筆刪除。搜尋框也會找摘錄與備註（命中時自動展開）；匯出 .md 會把每本書的摘錄一起帶出（CSV 欄位不變，不含摘錄）。</li>
+        <li>上方切到「稍後閱讀」：貼上文章網址（只接受 http / https）、標題、標籤、備註，按「加入」；之後可標已讀 / 未讀、搜尋、依狀態篩選，看未讀數與近 30 天已讀數。不會抓網頁內容（離線、沒有後端），標題請自己填。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">《小王子》總 120 頁，目前 30 頁 → 進度 25%
@@ -222,6 +259,7 @@
         <li>把「讀完」的書頁數改小，會退回「在讀」並清掉完成日。</li>
         <li>「清除全部書單」會刪掉所有書（會先確認，無法復原，建議先匯出）。</li>
         <li>摘錄存在每本書的資料裡：刪除那本書會連帶刪除它所有摘錄；每本最多 200 筆、摘錄與備註各最多 2000 字，整體資料量太大時會拒絕新增並提示（不會默默刪舊的）；舊版資料沒有摘錄欄位，載入時自動視為 0 筆，壞掉的摘錄會被略過。</li>
+        <li>稍後閱讀最多 500 筆，滿了會拒絕新增（不會默默刪舊的）；同一網址不會重複加入；每筆有「刪除」，「清除全部稍後閱讀」會先確認、無法復原（不影響書單）；載入時壞資料與非 http / https 網址會被略過。</li>
         <li>最多 2000 本；資料只在本機，換機前請先用右上角備份或匯出。</li>
         </ul>
     </template>
@@ -338,6 +376,47 @@
             return out.join('\n');
         }
         const exportCsv = (books) => csvStringify(['書名', '作者', '總頁數', '目前頁數', '狀態', '評分', '開始日期', '完成日期', '心得'], books.map(b => [b.title, b.author, b.total, b.page, STATUS[b.status], b.rating, b.start, b.finish, b.review]));
+
+        // ---- 稍後閱讀 ----
+        const MAX_LATER = 500;
+        // 只接受 http / https；回傳正規化網址，不合法回傳 ''
+        function laterUrl(u) {
+            if (typeof u !== 'string') return '';
+            try { const x = new URL(u.trim()); return (x.protocol === 'http:' || x.protocol === 'https:') && x.href.length <= 2000 ? x.href : ''; } catch (e) { return ''; }
+        }
+        const parseTags = (v) => { const a = Array.isArray(v) ? v : String(v || '').split(/[,，、\s]+/); return [...new Set(a.map(t => str(t, 20)).filter(Boolean))].slice(0, 8); };
+        function cleanLater(list, today) {
+            if (!Array.isArray(list)) return [];
+            const seen = new Set(), out = [];
+            for (const x of list) {
+                if (!x || typeof x !== 'object') continue;
+                const url = laterUrl(x.url); if (!url) continue;
+                let id = typeof x.id === 'string' && x.id ? x.id.slice(0, 40) : ''; while (!id || seen.has(id)) id = newId(); seen.add(id);
+                const read = x.read === true;
+                out.push({ id, url, title: str(x.title, 100) || new URL(url).hostname, note: str(x.note, 300), tags: parseTags(x.tags), added: isDate(x.added) ? x.added : (today || ''), read, readDate: read && isDate(x.readDate) ? x.readDate : '' });
+                if (out.length >= MAX_LATER) break;
+            }
+            return out;
+        }
+        // 新增：{ list, err }；網址不合法 / 重複 / 超過上限都拒絕
+        function addLater(list, item, today) {
+            const url = laterUrl(item.url);
+            if (!url) return { list, err: '請輸入 http 或 https 開頭的網址' };
+            if (list.length >= MAX_LATER) return { list, err: `最多 ${MAX_LATER} 筆，請先刪除已讀的` };
+            if (list.some(x => x.url === url)) return { list, err: '這個網址已經在清單裡' };
+            const [c] = cleanLater([{ ...item, url, id: newId(), added: today }], today);
+            return { list: [...list, c], err: '' };
+        }
+        const toggleLater = (list, id, today) => list.map(x => x.id === id ? { ...x, read: !x.read, readDate: x.read ? '' : today } : x);
+        const delLater = (list, id) => list.filter(x => x.id !== id);
+        function laterStats(list, today) {
+            const rd = list.filter(x => x.read), age = (x) => day.between(x.readDate, today);
+            return { unread: list.length - rd.length, read: rd.length, read30: rd.filter(x => x.readDate && age(x) >= 0 && age(x) <= 30).length };
+        }
+        function filterLater(list, status, q) {
+            q = String(q || '').trim().toLowerCase();
+            return list.filter(x => (status === 'all' || (status === 'read') === x.read) && (!q || (x.title + ' ' + x.url + ' ' + x.note + ' ' + x.tags.join(' ')).toLowerCase().includes(q)));
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -425,6 +504,41 @@
             return det;
         }
         function drawAll() { drawStats(); drawList(); }
+
+        // ---- 稍後閱讀 UI ----
+        let later = cleanLater(store.get('readinglist_later', []), today), ltab = 'all';
+        const saveLater = () => store.set('readinglist_later', later);
+        const ltabDefs = [['all', '全部'], ['unread', '未讀'], ['read', '已讀']];
+        $('#ltabs').replaceChildren(...ltabDefs.map(([k]) => { const b = document.createElement('button'); b.className = 'sm'; b.dataset.tab = k; b.onclick = () => { ltab = k; drawLater(); }; return b; }));
+        function drawLater() {
+            const s = laterStats(later, today);
+            $('#lstats').replaceChildren(Util.statRow('未讀', s.unread + ' 篇'), Util.statRow('近 30 天已讀', s.read30 + ' 篇'), Util.statRow('累計已讀', s.read + ' 篇'));
+            for (const b of $('#ltabs').children) { const k = b.dataset.tab; b.textContent = ltabDefs.find(d => d[0] === k)[1] + ' ' + filterLater(later, k, '').length; b.setAttribute('aria-pressed', k === ltab); }
+            const r = filterLater(later, ltab, $('#lq').value).slice().reverse();
+            $('#llist').replaceChildren(...r.map(x => {
+                const d = document.createElement('div'); d.className = 'book';
+                const h = document.createElement('h3'), a = document.createElement('a');
+                a.href = x.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = x.title; a.style.cssText = 'overflow-wrap:anywhere;' + (x.read ? 'opacity:.6' : '');
+                h.append(a, ' ', Object.assign(document.createElement('small'), { className: 'muted', textContent: x.read ? '已讀 ' + x.readDate : '未讀' }));
+                const meta = Object.assign(document.createElement('div'), { className: 'muted', textContent: [new URL(x.url).hostname, '加入 ' + x.added, x.tags.map(t => '#' + t).join(' ')].filter(Boolean).join('　') });
+                meta.style.overflowWrap = 'anywhere'; d.append(h, meta);
+                if (x.note) d.append(Object.assign(document.createElement('div'), { className: 'rev', textContent: x.note }));
+                const acts = document.createElement('div'); acts.className = 'acts';
+                const tg = Object.assign(document.createElement('button'), { textContent: x.read ? '改回未讀' : '標為已讀' }); tg.onclick = () => { later = toggleLater(later, x.id, today); saveLater(); drawLater(); };
+                const del = Object.assign(document.createElement('button'), { textContent: '刪除' }); del.onclick = () => { if (!confirm(`刪除「${x.title}」？無法復原。`)) return; later = delLater(later, x.id); saveLater(); drawLater(); };
+                acts.append(tg, del); d.append(acts); return d;
+            }));
+            $('#llnote').textContent = r.length ? '' : (later.length ? '沒有符合的項目' : '還沒有項目，從上方貼一個網址吧');
+        }
+        $('#ladd').onclick = () => {
+            const r = addLater(later, { url: $('#lu').value, title: $('#lt').value, tags: $('#ltags').value, note: $('#ln').value }, today);
+            if (r.err) { $('#lmsg').textContent = r.err; return; }
+            later = r.list; saveLater(); for (const id of ['lu', 'lt', 'ltags', 'ln']) $('#' + id).value = ''; $('#lmsg').textContent = '已加入'; drawLater();
+        };
+        $('#lclear').onclick = () => { if (!later.length || !confirm(`清除全部 ${later.length} 筆稍後閱讀？無法復原（書單不受影響）。`)) return; later = []; saveLater(); drawLater(); };
+        $('#lq').oninput = drawLater;
+        document.querySelectorAll('#views button').forEach(b => { b.onclick = () => { document.querySelectorAll('#views button').forEach(x => x.setAttribute('aria-pressed', x === b)); $('#vBooks').hidden = b.dataset.v !== 'books'; $('#vLater').hidden = b.dataset.v !== 'later'; }; });
+        drawLater();
         $('#q').oninput = drawList; $('#sort').onchange = drawList;
         const exp = (csv) => { if (!books.length) { $('#listNote').textContent = '沒有可匯出的資料'; return; } download(new Blob([csv ? '﻿' + exportCsv(books) : exportMd(books)], { type: csv ? 'text/csv;charset=utf-8' : 'text/markdown;charset=utf-8' }), `reading-list.${csv ? 'csv' : 'md'}`); };
         $('#clearAll').onclick = () => { if (!books.length || !confirm(`清除全部 ${books.length} 本書（含所有摘錄）？無法復原，建議先匯出。`)) return; books = []; editId = null; resetForm(); persist(); drawAll(); };

@@ -62,6 +62,11 @@
             margin-top: 8px;
         }
 
+        .tk-big { font-size: clamp(40px, 16vw, 96px); font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; line-height: 1.1; margin: 8px 0 }
+        .tk-time { text-align: center; color: var(--muted); font-size: clamp(18px, 6vw, 32px); font-variant-numeric: tabular-nums; margin-bottom: 10px }
+        .row2 { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center }
+        #tick:fullscreen { background: var(--bg); display: flex; flex-direction: column; justify-content: center; align-items: stretch; padding: 24px; }
+        #tick:fullscreen .tk-big { font-size: clamp(60px, 22vw, 240px) }
         textarea {
             width: 100%;
             min-height: 110px;
@@ -182,14 +187,32 @@
             </div>
         </div>
 
+        <div id="p4" hidden>
+            <div class="card">
+                <h2>會議成本</h2>
+                <label for="mtg" class="muted" style="font-size:13px">每行「職級,人數,平均時薪（元）」（最多 10 行；以下為虛構範例）</label>
+                <textarea id="mtg" data-s spellcheck="false"></textarea>
+                <div class="fgrid" id="g_mtg"></div>
+                <div class="out" id="o_mtg"></div>
+            </div>
+            <div class="card" id="tick">
+                <h2>即時看板</h2>
+                <div class="tk-big" id="tkMoney">0</div>
+                <div class="tk-time" id="tkTime">00:00:00</div>
+                <div class="row2"><button class="primary" id="tkGo">開始</button><button id="tkRst">重設</button><button id="tkFs">全螢幕</button></div>
+                <p class="warn">依上方每小時總成本與經過時間即時累計；時薪是假設值，僅供提醒大家時間有價。</p>
+            </div>
+        </div>
+
         <button id="reset">重置所有輸入</button>
     </div>
 
     <template id="help">
         <h3>這是什麼</h3>
-        <p>四個分頁的商業小計算：「利潤與定價」（毛利、損益兩平、發票稅額拆分）、「電商與外送」（平台費後利潤、包裹材積、規格檢查）、「行銷指標」（CTR / CPC / ROAS、漏斗、A/B 測試、電子報）、「新創股權」（多輪募資稀釋、簡易估值敏感度、員工認股權行使損益）。</p>
+        <p>五個分頁的商業小計算（第五個「會議成本」見下）：「利潤與定價」（毛利、損益兩平、發票稅額拆分）、「電商與外送」（平台費後利潤、包裹材積、規格檢查）、「行銷指標」（CTR / CPC / ROAS、漏斗、A/B 測試、電子報）、「新創股權」（多輪募資稀釋、簡易估值敏感度、員工認股權行使損益）。</p>
         <h3>什麼時候用</h3>
         <ul>
+        <li>開會前想知道這場會議值多少錢，或開會時用即時計時看板投影提醒大家。</li>
         <li>替商品定價、評估某個價格賺不賺錢。</li>
         <li>上架賣場前，扣完平台抽成與金流費看實際到手多少。</li>
         <li>廣告成效或 A/B 測試的結果想知道是不是真的有差。</li>
@@ -199,6 +222,7 @@
         <li>選分頁，直接在欄位填數字，結果會即時更新；空白欄位視為未填。</li>
         <li>費率、材積係數、規格上限是可編輯欄位，預設只是範例值，請改成你實際的合約或官方數字。</li>
         <li>新創股權：填創辦人與選擇權池現有持股，再每行一輪「輪次,募資額,投前估值,投後選擇權池目標%」，看每輪後創辦人剩多少；估值填營收 / 淨利與倍數；認股權填行使價、市價、股數與你的稅率。</li>
+        <li>會議成本：每行「職級,人數,時薪」（最多 10 行）算出每小時總成本，填會議時長與每年次數看預估與年化；「開始 / 暫停 / 重設」計時看板會以時間戳累計已燒掉的金額，「全螢幕」可投影（瀏覽器支援才有作用）。計時進度不會儲存，重新整理頁面會歸零；時薪是你的假設值，僅供溝通參考。</li>
         <li>「重置所有輸入」會清掉記住的輸入並恢復預設值。</li>
         </ol>
         <h3>範例</h3>
@@ -389,8 +413,28 @@
         function normOpts(raw, ids) {
             const o = raw && typeof raw === 'object' ? raw : {}, v = {};
             if (o.v && typeof o.v === 'object' && !Array.isArray(o.v)) for (const k of ids) if (typeof o.v[k] === 'string' && o.v[k].length <= 2000) v[k] = o.v[k];
-            return { tab: [0, 1, 2, 3].includes(o.tab) ? o.tab : 0, v };
+            return { tab: [0, 1, 2, 3, 4].includes(o.tab) ? o.tab : 0, v };
         }
+        // 會議成本：每行「職級,人數,時薪」，最多 10 行；回傳 { groups, err }
+        function parseMeeting(text) {
+            const lines = String(text || '').split('\n').map(l => l.trim()).filter(Boolean), groups = [];
+            if (!lines.length) return { groups, err: '請至少填一行「職級,人數,時薪」' };
+            if (lines.length > 10) return { groups, err: '最多 10 行' };
+            for (const l of lines) {
+                const p = l.split(/[,，]/).map(x => x.trim()), n = +p[1], r = +p[2];
+                if (p.length !== 3 || !p[0] || !Number.isInteger(n) || n < 1 || n > 10000 || !(r >= 0) || !isFinite(r) || r > 1e7) return { groups: [], err: '格式錯誤：' + l.slice(0, 30) + '（人數須為正整數、時薪須為數字）' };
+                groups.push({ name: p[0], n, rate: r });
+            }
+            return { groups, err: null };
+        }
+        // 每小時總成本、預估（minutes 分鐘）、年化（times 次）
+        function meetingCost(groups, minutes, times) {
+            const perHour = groups.reduce((a, g) => a + g.n * g.rate, 0), people = groups.reduce((a, g) => a + g.n, 0);
+            const total = minutes >= 0 ? perHour * minutes / 60 : NaN;
+            return { perHour, perMin: perHour / 60, people, total, annual: times >= 0 ? total * times : NaN };
+        }
+        const burned = (perHour, ms) => perHour * Math.max(0, ms) / 3600000;
+        const fmtClock = (ms) => { const t = Math.floor(Math.max(0, ms) / 1000), p = (n) => String(n).padStart(2, '0'); return p(Math.floor(t / 3600)) + ':' + p(Math.floor(t / 60) % 60) + ':' + p(t % 60); };
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -415,19 +459,21 @@
             g_cap: [['k_f', '創辦團隊現有持股（%）', '80'], ['k_p', '現有選擇權池（%）', '10']],
             g_val: [['w_rev', '年營收（元）', '10000000'], ['w_np', '年淨利（元，選填）', '1500000'], ['w_mr', '營收倍數（範例值）', '3'], ['w_mp', '本益倍數（範例值）', '12']],
             g_esop: [['x_k', '行使價（元 / 股）', '10'], ['x_m', '行使時市價（元 / 股）', '50'], ['x_n', '股數', '10000'], ['x_t', '行使時稅率（% 範例值，視為所得課稅）', '20'], ['x_s', '賣出價（元 / 股，選填）', ''], ['x_c', '賣出價差稅率（%，範例值）', '0']],
+            g_mtg: [['mt_dur', '預計會議時長（分鐘）', '60'], ['mt_freq', '每年開幾次（年化用）', '52']],
             g_nl: [['n_sent', '寄出封數', '5000'], ['n_bnc', '退信數', '50'], ['n_open', '開信數', '1200'], ['n_clk', '點擊數', '200'], ['n_uns', '退訂數', '10'], ['n_new', '新增訂閱', '80'], ['n_list', '期初清單人數', '5000']],
         };
-        const IDS = [...Object.values(G).flat().map(f => f[0]), 'fun', 'rounds'];
+        const IDS = [...Object.values(G).flat().map(f => f[0]), 'fun', 'rounds', 'mtg'];
+        const MTG_DEF = '主管,2,900\n工程師,5,500\n設計,1,450';
         const FUN_DEF = '訪客,10000\n加入購物車,1200\n結帳,600\n付款,420';
         const ROUNDS_DEF = '種子輪,2000000,8000000,10\nA 輪,20000000,60000000,10';
-        const DEFS = Object.fromEntries([...Object.values(G).flat().map(f => [f[0], f[2]]), ['fun', FUN_DEF], ['rounds', ROUNDS_DEF]]);
+        const DEFS = Object.fromEntries([...Object.values(G).flat().map(f => [f[0], f[2]]), ['fun', FUN_DEF], ['rounds', ROUNDS_DEF], ['mtg', MTG_DEF]]);
         for (const [gid, fs] of Object.entries(G)) {
             $('#' + gid).innerHTML = fs.map(([id, lab, def, opts]) => `<div><label for="${id}">${lab}</label>` + (opts
                 ? `<select id="${id}" data-s>${opts.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('')}</select>`
                 : `<input id="${id}" data-s type="number" step="any" inputmode="decimal">`) + '</div>').join('');
         }
 
-        const TABS = ['利潤與定價', '電商與外送', '行銷指標', '新創股權'];
+        const TABS = ['利潤與定價', '電商與外送', '行銷指標', '新創股權', '會議成本'];
         let tab = 0;
         $('#tabs').innerHTML = TABS.map((t, i) => `<button class="sm" data-i="${i}" aria-pressed="false">${t}</button>`).join('');
         function showTab(i) {
@@ -445,6 +491,17 @@
         };
         const NEED = '請填入有效數字';
         let bepData = null;
+
+        let perHour = 0, tkAcc = 0, tkT0 = 0, tkTimer = 0;   // 計時以時間戳累計，不存檔
+        const tkMs = () => tkAcc + (tkT0 ? Date.now() - tkT0 : 0);
+        function tkDraw() { $('#tkMoney').textContent = nf(burned(perHour, tkMs()), 0); $('#tkTime').textContent = fmtClock(tkMs()); }
+        $('#tkGo').onclick = () => {
+            if (tkT0) { tkAcc += Date.now() - tkT0; tkT0 = 0; clearInterval(tkTimer); $('#tkGo').textContent = '繼續'; }
+            else { tkT0 = Date.now(); tkTimer = setInterval(tkDraw, 200); $('#tkGo').textContent = '暫停'; }
+            tkDraw();
+        };
+        $('#tkRst').onclick = () => { tkAcc = 0; tkT0 = 0; clearInterval(tkTimer); $('#tkGo').textContent = '開始'; tkDraw(); };
+        $('#tkFs').onclick = () => { const t = $('#tick'), r = t.requestFullscreen || t.webkitRequestFullscreen; if (document.fullscreenElement) document.exitFullscreen(); else if (r) Promise.resolve(r.call(t)).catch(() => { }); else alert('這個瀏覽器不支援全螢幕'); };
 
         function calc() {
             const g = (id) => document.getElementById(id).value;
@@ -506,6 +563,13 @@
             show('o_val', vs.length ? vs.map(r => [`營收 ${nf(r.mRev)} 倍 / 獲利 ${nf(r.mPe)} 倍`, [isFinite(r.byRev) ? '營收法 ' + nf(r.byRev, 0) : '', isFinite(r.byPe) ? '獲利法 ' + nf(r.byPe, 0) : ''].filter(Boolean).join('　'), r.k === 1 ? 'ok' : '']) : '請填入營收或淨利與倍數');
             const ep = esop(num('x_k'), num('x_m'), num('x_n'), num('x_t') || 0, num('x_s'), num('x_c') || 0);
             show('o_esop', !ep ? NEED : [['行使成本', nf(ep.cost, 0)], ['行使當下價差', nf(ep.spread, 0), ep.underwater ? 'bad' : ''], ['行使時稅額', nf(ep.taxEx, 0)], ['行使當下需備現金（成本 + 稅）', nf(ep.cashNeed, 0)], ['稅後帳面價差', nf(ep.paperNet, 0), ep.paperNet < 0 ? 'bad' : 'ok'], ...(ep.underwater ? [['提醒', '市價低於行使價（水下），行使會直接虧損']] : []), ...(ep.net == null ? [] : [['賣出價差稅', nf(ep.taxCg, 0)], ['賣出後淨損益', nf(ep.net, 0), ep.net < 0 ? 'bad' : 'ok']])]);
+            // 會議成本
+            const mp = parseMeeting(g('mtg'));
+            if (mp.err) { show('o_mtg', mp.err); perHour = 0; } else {
+                const mc = meetingCost(mp.groups, num('mt_dur'), num('mt_freq')); perHour = mc.perHour;
+                show('o_mtg', [['參與人數', nf(mc.people, 0) + ' 人'], ['每小時總成本', nf(mc.perHour, 0), 'ok'], ['每分鐘', nf(mc.perMin, 1)], ['預估總成本（依時長）', isFinite(mc.total) ? nf(mc.total, 0) : '—'], ['年化（時長 × 每年次數）', isFinite(mc.annual) ? nf(mc.annual, 0) : '—', 'bad']]);
+            }
+            tkDraw();
             // 電子報
             const nl = newsletter(num('n_sent'), num('n_bnc') || 0, num('n_open'), num('n_clk'), num('n_uns') || 0, num('n_new') || 0, num('n_list'));
             const nr = [['已送達', isFinite(nl.dlv) ? nf(nl.dlv, 0) : NaN, nf], ['退信率', nl.bounceRate, pc], ['開信率（占送達）', nl.open, pc], ['點擊率（占送達）', nl.click, pc], ['點開率（點擊 ÷ 開信）', nl.ctor, pc], ['退訂率', nl.unsub, pc], ['清單淨成長率', nl.growth, pc]].filter(r => r[1] === r[1]);

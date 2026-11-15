@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="台灣連假與補班日行事曆：2025–2027 國定假日、補假、補班月曆，下一個連假倒數，以及「請最少幾天假換最長連假」的請假最佳化。">
+    <meta property="og:title" content="台灣連假行事曆 / 請假最佳化" />
+    <meta property="og:description" content="國定假日、補班月曆、連假倒數與請假最佳化。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/tw-holidays.html" />
+    <meta name="st-keys" content="twhol_custom,twhol_marks">
+    <meta name="st-disclaimer" content="travel">
+    <title>台灣連假行事曆</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>內建 2025–2027 年台灣國定假日（農曆節日用瀏覽器內建農曆推算）、補假與補班日，提供月曆、連假清單、下一個連假倒數，以及「請假最佳化」：請最少幾天假，換最長的連續休假。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>想知道下一個連假是哪天、還有幾天、共幾天。</li>
+        <li>規劃年假：手上有 N 天假，要怎麼請才休得最久。</li>
+        <li>想印出年度 / 單月日曆（含放假、補班、農曆與自己的標記日）貼牆或存成 PDF。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>「月曆」：切換年份與月份，紅色為放假、藍色為補班，灰色為一般週末。</li>
+        <li>「連假清單」：列出該年連續休 3 天以上的區段與天數。</li>
+        <li>「請假最佳化」：選年度、輸入可請假天數 N（1–10），列出「請假天數 ↔ 連休天數」最划算的方案與要請的日期，可複製。</li>
+        <li>「列印日曆」：選年度、範圍（單月 / 整年一頁 / 整年每月一頁）、週首日、紙張方向，可勾選顯示假日與補班、農曆；下方可新增自己的標記日（可設「每年重複」，如生日）；按「列印 / 存成 PDF」用瀏覽器列印功能輸出（建議取消頁首頁尾）。</li>
+        <li>「資料編輯」：官方公告和內建資料不同時，可新增「放假」或「補班」日期覆蓋；也可看內建的調整放假 / 補班範例。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">2025 春節：1/25（六）到 2/2（日）連休 9 天（含 1/27 調整放假），2/8（六）要補班。輸入 N = 2，可能得到「請 2 天換 9 天以上」之類的方案。</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>規則依「紀念日及節日實施條例」推算（週六提前一天補假、週日延後一天補假；春節放除夕到初三）。<b>調整放假與補班日是範例資料，請以行政院人事行政總處公告為準</b>，不同時請在「資料編輯」覆蓋。</li>
+        <li>勞動節、教師節、光復節、行憲紀念日以 2025 年起全民放假計；企業、學校、軍公教實際放假可能不同。</li>
+        <li>自訂資料存在這台裝置（鍵 twhol_custom），上限 200 筆，滿了要先刪除才能新增；可單筆刪除或「清除全部自訂資料」（會先確認，無法復原）；列印日曆的標記日存在鍵 twhol_marks，上限 100 筆，同樣可單筆刪除或「清除全部標記」（會先確認，無法復原），資料壞掉時載入會自動略過壞項；壞掉的資料載入時會被略過。</li>
+        <li>請假最佳化假設週末與放假日休息、補班日上班，請假日只挑一般上班日；僅供參考。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <style>
+        :root { --wrap-w: 720px; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+        .row label { color: var(--muted); font-size: 14px; }
+        .row input[type=text] { flex: 1 1 140px; }
+        .big { font-size: 22px; font-weight: 700; }
+        .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+        .cal .h { text-align: center; color: var(--muted); font-size: 13px; padding: 2px 0; }
+        .cal .d { border: 1px solid var(--line); border-radius: var(--radius-sm); min-height: 54px; padding: 3px 2px; text-align: center; min-width: 0; }
+        .cal .d b { display: block; font-size: 15px; }
+        .cal .d small { display: block; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .cal .d.off { background: color-mix(in srgb, var(--bad) 18%, transparent); }
+        .cal .d.wk { background: var(--fill); }
+        .cal .d.work { background: color-mix(in srgb, var(--blue) 18%, transparent); }
+        .cal .d.today { outline: 2px solid var(--blue); }
+        .li2 { padding: 8px 0; border-bottom: 1px solid var(--line); }
+        .li2 small { display: block; color: var(--muted); }
+        .li2 .x { float: right; }
+        .tag { color: var(--muted); font-size: 13px; }
+        #pArea { margin-top: 14px; }
+        #pArea .pm { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px; display: flex; flex-direction: column; background: var(--card); color: var(--text); min-width: 0; }
+        #pArea .pm h4 { margin: 0 0 4px; text-align: center; font-size: 15px; }
+        #pArea .g { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); flex: 1; grid-auto-rows: 1fr; }
+        #pArea .g .h { text-align: center; font-size: 11px; color: var(--muted); }
+        #pArea .g .c { border: 1px solid var(--line); margin: -0.5px; padding: 1px 2px; min-height: 34px; overflow: hidden; font-size: 11px; line-height: 1.25; min-width: 0; }
+        #pArea .g .c b { font-size: 13px; }
+        #pArea .g .c.we b { color: var(--muted); }
+        #pArea .g .c.off b, #pArea .g .c.off i { color: var(--bad); }
+        #pArea .g .c i { display: block; font-style: normal; font-size: 10px; color: var(--muted); }
+        #pArea .g .c u { display: block; text-decoration: none; font-size: 10px; border-left: 2px solid var(--blue); padding-left: 2px; }
+        #pArea .yr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        #pArea.small .g .c { min-height: 22px; text-align: center; font-size: 10px; }
+        #pArea.small .g .c b { font-size: 11px; }
+        @media (min-width: 700px) { #pArea .yr { grid-template-columns: repeat(var(--pc, 4), minmax(0, 1fr)); } }
+        @media print {
+            body > :not(.wrap) { display: none !important; }
+            .wrap > :not(#pArea) { display: none !important; }
+            body { zoom: 1 !important; background: #fff !important; }
+            #pArea { --text: #000; --muted: #555; --line: #888; --bad: #c0392b; --blue: #1f5fa8; --card: #fff; margin: 0; color: #000; }
+            #pArea .pm { border: 0; padding: 0; height: var(--ph); break-after: page; background: #fff; }
+            #pArea .pm:last-child { break-after: auto; }
+            #pArea .pm h4 { font-size: 20px; }
+            #pArea .g .c { font-size: 12px; }
+            #pArea .g .c b { font-size: 18px; }
+            #pArea .yr { height: var(--ph); gap: 6mm; grid-template-columns: repeat(var(--pc, 4), minmax(0, 1fr)); }
+            #pArea .yr .pm { height: auto; break-after: auto; }
+            #pArea.small .pm h4 { font-size: 14px; }
+            #pArea.small .g .c b { font-size: 12px; }
+        }
+    </style>
+    <style id="pgStyle"></style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>台灣連假行事曆</h1>
+        <p class="sub">2025–2027 國定假日、補班日、連假倒數與請假最佳化。<b>調整放假 / 補班為範例，請以行政院人事行政總處公告為準。</b></p>
+
+        <div class="card">
+            <div class="big" id="next"></div>
+            <div class="tag" id="nextSub"></div>
+        </div>
+
+        <div class="card">
+            <div class="tabs" role="tablist">
+                <button data-t="cal" aria-pressed="true">月曆</button>
+                <button data-t="runs" aria-pressed="false">連假清單</button>
+                <button data-t="opt" aria-pressed="false">請假最佳化</button>
+                <button data-t="print" aria-pressed="false">列印日曆</button>
+                <button data-t="data" aria-pressed="false">資料編輯</button>
+            </div>
+
+            <div class="pane" data-t="cal">
+                <div class="row"><button class="sm" id="prev" aria-label="上個月">‹</button><b id="ym"></b><button class="sm" id="nxt" aria-label="下個月">›</button></div>
+                <div class="cal" id="calGrid"></div>
+                <div id="monthList"></div>
+            </div>
+
+            <div class="pane" data-t="runs" hidden>
+                <div class="row"><label for="ry">年度</label><select id="ry"></select></div>
+                <div id="runList"></div>
+            </div>
+
+            <div class="pane" data-t="opt" hidden>
+                <div class="row"><label for="oy">年度</label><select id="oy"></select><label for="on">可請假天數</label><input type="number" id="on" min="1" max="10" value="3" style="width:80px"><button class="primary" id="oGo">計算</button></div>
+                <div id="oRes"></div>
+                <div class="row"><button class="sm" id="oCopy" hidden>複製方案</button></div>
+            </div>
+
+            <div class="pane" data-t="print" hidden>
+                <div class="row"><label for="py">年度</label><select id="py"></select><label for="pscope">範圍</label><select id="pscope"><option value="grid">整年一頁</option><option value="pages">整年每月一頁</option><option value="month">單月</option></select><label for="pmo">月份</label><select id="pmo"></select></div>
+                <div class="row"><label for="pws">週首日</label><select id="pws"><option value="0">週日</option><option value="1">週一</option></select><label for="por">紙張</label><select id="por"><option value="landscape">A4 橫向</option><option value="portrait">A4 直向</option></select></div>
+                <div class="row"><label><input type="checkbox" id="phol" checked> 假日與補班</label><label><input type="checkbox" id="plun"> 農曆</label><button class="primary" id="pgo">列印 / 存成 PDF</button></div>
+                <h2>標記日（<span id="mN">0</span>/100）</h2>
+                <div class="row"><input type="date" id="mDate" aria-label="日期"><input type="text" id="mText" maxlength="20" placeholder="標記文字（例如 媽媽生日）" aria-label="標記文字"><label><input type="checkbox" id="mYear"> 每年重複</label><button class="primary" id="mAdd">新增</button></div>
+                <div class="row"><button class="sm" id="mClear">清除全部標記</button></div>
+                <div id="mList"></div>
+            </div>
+
+            <div class="pane" data-t="data" hidden>
+                <p class="tag">自訂資料會覆蓋內建（同一天以自訂為準）。「補班」可用來取消某天的放假。</p>
+                <div class="row"><input type="date" id="cDate" aria-label="日期"><select id="cKind" aria-label="種類"><option value="off">放假</option><option value="work">補班</option></select><input type="text" id="cName" maxlength="20" placeholder="名稱（例如 調整放假）" aria-label="名稱"><button class="primary" id="cAdd">新增</button></div>
+                <div class="row"><b>自訂資料（<span id="cN">0</span>/200）</b><button class="sm" id="cClear">清除全部自訂資料</button></div>
+                <div id="cList"></div>
+                <h2>內建調整放假 / 補班（範例）</h2>
+                <div id="adjList"></div>
+            </div>
+        </div>
+    </div>
+    <div id="pArea" hidden></div>
+
+    <script>
+        const { day } = Util;
+        // --- pure ---
+        const YEARS = [2025, 2026, 2027], MAX_CUSTOM = 200;
+        // 調整放假 / 補班：範例資料，請以行政院人事行政總處公告為準
+        const TW_ADJ = [
+            { d: '2025-01-27', kind: 'off', name: '春節調整放假' }, { d: '2025-02-08', kind: 'work', name: '補班（補 1/27）' },
+            { d: '2026-02-07', kind: 'work', name: '補班（補 2/20）' }, { d: '2026-02-20', kind: 'off', name: '春節調整放假' },
+        ];
+        const dow = (ds) => (day.num(ds) + 4) % 7;     // 0=日
+        const LF = new Intl.DateTimeFormat('en-u-ca-chinese', { month: 'numeric', day: 'numeric', timeZone: 'UTC' });
+        // 西曆日期 → 農曆 { m, d, leap }
+        function lunarOf(ds) {
+            const { y, m, d } = day.parse(ds), p = LF.formatToParts(new Date(Date.UTC(y, m - 1, d, 12)));
+            const mo = p.find(x => x.type === 'month').value;
+            return { m: parseInt(mo, 10), d: +p.find(x => x.type === 'day').value, leap: /\D/.test(mo) };
+        }
+        // 清明（4 月幾日，21 世紀公式；2025–2027 正確）
+        function qingming(y) { const t = y % 100; return Math.floor(t * 0.2422 + 4.81) - Math.floor((t - 1) / 4); }
+        // 該西曆年的春節初一、端午（農曆 5/5）、中秋（8/15）
+        const _lc = {};
+        function lunarEvents(y) {
+            if (_lc[y]) return _lc[y];
+            const r = {};
+            for (let ds = y + '-01-15'; ds <= y + '-10-15'; ds = day.shift(ds, 1)) {
+                const l = lunarOf(ds); if (l.leap) continue;
+                if (l.m === 1 && l.d === 1 && !r.ny) r.ny = ds;
+                else if (l.m === 5 && l.d === 5) r.dw = ds;
+                else if (l.m === 8 && l.d === 15) r.mf = ds;
+            }
+            return (_lc[y] = r);
+        }
+        // 依法定規則推算某年的放假日（含補假）：[{ d, name }]
+        function autoHolidays(y) {
+            const L = lunarEvents(y), q = qingming(y), p2 = (n) => String(n).padStart(2, '0'), res = [];
+            const add = (d, name, spring) => res.push({ d, name, spring: !!spring });
+            add(y + '-01-01', '元旦');
+            add(day.shift(L.ny, -1), '除夕', 1); add(L.ny, '春節初一', 1); add(day.shift(L.ny, 1), '春節初二', 1); add(day.shift(L.ny, 2), '春節初三', 1);
+            add(y + '-02-28', '和平紀念日');
+            add(y + '-04-' + p2(q === 4 ? 3 : 4), '兒童節'); add(y + '-04-' + p2(q), '清明節');
+            add(y + '-05-01', '勞動節'); add(L.dw, '端午節'); add(y + '-09-28', '教師節'); add(L.mf, '中秋節');
+            add(y + '-10-10', '國慶日'); add(y + '-10-25', '光復節'); add(y + '-12-25', '行憲紀念日');
+            res.sort((a, b) => a.d.localeCompare(b.d));
+            // 補假：週六提前一天、週日延後一天；春節落在週末者順延到春節後的上班日
+            const taken = new Set(res.map(x => x.d)), extra = [];
+            const free = (d) => !taken.has(d) && dow(d) !== 0 && dow(d) !== 6;
+            const springEnd = day.shift(L.ny, 2);
+            res.forEach(h => {
+                const w = dow(h.d); if (w !== 0 && w !== 6) return;
+                let t = h.spring ? springEnd : h.d, step = h.spring || w === 0 ? 1 : -1;
+                do { t = day.shift(t, step); } while (!free(t));
+                taken.add(t); extra.push({ d: t, name: h.name + '補假' });
+            });
+            return res.concat(extra).map(x => ({ d: x.d, name: x.name }));
+        }
+        // 日曆：Map 日期 → { kind: 'off' | 'work', name }；順序：法定 → 內建調整 → 自訂
+        function buildMap(years, custom) {
+            const m = new Map();
+            years.forEach(y => autoHolidays(y).forEach(h => m.set(h.d, { kind: 'off', name: h.name })));
+            TW_ADJ.forEach(a => m.set(a.d, { kind: a.kind, name: a.name }));
+            (custom || []).forEach(a => m.set(a.d, { kind: a.kind, name: a.name }));
+            return m;
+        }
+        const isRest = (map, ds) => { const e = map.get(ds); return e ? e.kind === 'off' : dow(ds) === 0 || dow(ds) === 6; };
+        // 連續休假區段（≥ min 天，且與 [from, to] 有交集）
+        function restRuns(map, from, to, min = 3) {
+            const out = []; let s = null;
+            const a = day.shift(from, -10), b = day.shift(to, 10);
+            for (let ds = a; ds <= day.shift(b, 1); ds = day.shift(ds, 1)) {
+                const r = ds <= b && isRest(map, ds);
+                if (r && !s) s = ds;
+                if (!r && s) {
+                    const e = day.shift(ds, -1), len = day.between(s, e) + 1;
+                    if (len >= min && e >= from && s <= to) {
+                        const names = []; for (let x = s; x <= e; x = day.shift(x, 1)) { const v = map.get(x); if (v && v.kind === 'off' && !names.includes(v.name.replace(/補假|初[一二三]/, ''))) names.push(v.name.replace(/補假|初[一二三]/, '')); }
+                        out.push({ from: s, to: e, len, names });
+                    }
+                    s = null;
+                }
+            }
+            return out;
+        }
+        // 下一個（或進行中的）連假；today 為 YYYY-MM-DD
+        function nextRun(runs, today) {
+            const r = runs.find(x => x.to >= today); if (!r) return null;
+            return { ...r, ongoing: r.from <= today, until: Math.max(0, day.between(today, r.from)) };
+        }
+        // 請假最佳化：最多請 N 天（只請一般上班日），回傳「請假天數 ↔ 連休天數」未被支配的方案
+        function optimizeLeave(map, year, N, topK = 8) {
+            const a = year + '-01-01', n = day.between(a, (year + 1) + '-02-10') + 1, ds = [], rest = [], W = [0];
+            for (let i = 0; i < n; i++) { ds[i] = day.shift(a, i); rest[i] = isRest(map, ds[i]); W[i + 1] = W[i] + (rest[i] ? 0 : 1); }
+            const before = isRest(map, day.shift(a, -1)), len = day.between(a, (year + 1) + '-01-01');
+            const plans = [];
+            for (let i = 0; i < len; i++) {
+                if (i === 0 ? before : rest[i - 1]) continue;   // 左邊還是休息日就還能免費延伸
+                for (let j = i; j < n - 1; j++) {
+                    if (rest[j + 1]) continue;               // 右邊是休息日就還能免費延伸
+                    const cost = W[j + 1] - W[i];
+                    if (cost > N) break;
+                    if (cost < 1 || cost === j - i + 1) continue;      // 沒請假，或整段都是請假（沒有休息日）
+                    plans.push({ from: ds[i], to: ds[j], len: j - i + 1, cost });
+                }
+            }
+            const best = plans.filter(p => !plans.some(q => q.cost <= p.cost && q.len >= p.len && (q.cost < p.cost || q.len > p.len)));
+            best.sort((x, y) => y.len - x.len || x.cost - y.cost || x.from.localeCompare(y.from));
+            const seen = {}, out = [];
+            best.forEach(p => { const k = p.cost + '|' + p.len; seen[k] = (seen[k] || 0) + 1; if (seen[k] <= 2) out.push(p); });
+            return out.slice(0, topK).map(p => {
+                const leave = []; for (let x = p.from; x <= p.to; x = day.shift(x, 1)) if (!isRest(map, x)) leave.push(x);
+                return { ...p, leave };
+            });
+        }
+        const wd = (ds) => '日一二三四五六'[dow(ds)];
+        const md = (ds) => ds.slice(5).replace('-', '/') + '（' + wd(ds) + '）';
+        function validCustom(x) {
+            return !!x && typeof x.id === 'string' && x.id.length <= 20 && typeof x.d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.d) && !isNaN(Date.parse(x.d + 'T00:00:00Z')) && new Date(x.d + 'T00:00:00Z').toISOString().slice(0, 10) === x.d
+                && x.d >= '2000-01-01' && x.d <= '2100-12-31' && (x.kind === 'off' || x.kind === 'work') && typeof x.name === 'string' && x.name.length <= 20;
+        }
+        const cleanCustom = (v) => (Array.isArray(v) ? v.filter(validCustom) : []).slice(0, MAX_CUSTOM);
+        // 列印日曆：月曆格（週首日 ws：0 日 / 1 一），前後以 null 補齊成整週
+        function monthGrid(y, m, ws) {
+            const lead = (dow(day.ymd(y, m, 1)) - ws + 7) % 7, n = day.daysInMonth(y, m), out = Array(lead).fill(null);
+            for (let d = 1; d <= n; d++) out.push(day.ymd(y, m, d));
+            while (out.length % 7) out.push(null);
+            return out;
+        }
+        const LUNAR_M = ['正', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '臘'];
+        function lunarDayName(d) { return d === 10 ? '初十' : d === 20 ? '二十' : d === 30 ? '三十' : ['初', '十', '廿'][Math.floor(d / 10)] + '一二三四五六七八九'[d % 10 - 1]; }
+        // 農曆標示：初一顯示月名（閏月加「閏」），其餘顯示日名
+        function lunarLabel(ds) { const l = lunarOf(ds); return l.d === 1 ? (l.leap ? '閏' : '') + LUNAR_M[l.m - 1] + '月' : lunarDayName(l.d); }
+        const MAX_MARKS = 100;
+        function validMark(x) {
+            return !!x && typeof x.id === 'string' && x.id.length <= 20 && typeof x.d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.d) && !isNaN(Date.parse(x.d + 'T00:00:00Z')) && new Date(x.d + 'T00:00:00Z').toISOString().slice(0, 10) === x.d
+                && x.d >= '2000-01-01' && x.d <= '2100-12-31' && typeof x.text === 'string' && x.text.length > 0 && x.text.length <= 20 && (x.yearly === undefined || typeof x.yearly === 'boolean');
+        }
+        const cleanMarks = (v) => (Array.isArray(v) ? v.filter(validMark) : []).slice(0, MAX_MARKS);
+        // 某日的標記文字（每年重複者比對月日）
+        const marksOn = (marks, ds) => marks.filter(k => k.d === ds || (k.yearly && k.d.slice(5) === ds.slice(5))).map(k => k.text);
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const todayTW = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+        let custom = cleanCustom(Util.store.get('twhol_custom', [])), MAP = null, marks = cleanMarks(Util.store.get('twhol_marks', []));
+        const saveMarks = () => Util.store.set('twhol_marks', marks);
+        const saveCustom = () => Util.store.set('twhol_custom', custom);
+        const yearsAround = (y) => [y - 1, y, y + 1];
+        function mapFor(y) { return buildMap(yearsAround(y), custom); }
+        const today = todayTW();
+        let cy = Math.min(2027, Math.max(2025, +today.slice(0, 4))), cm = +today.slice(5, 7);
+
+        function fillYears() {
+            ['#ry', '#oy', '#py'].forEach(s => { $(s).replaceChildren(...YEARS.map(y => Object.assign(document.createElement('option'), { value: y, textContent: y + ' 年' }))); $(s).value = cy; });
+        }
+        function renderNext() {
+            const y = +today.slice(0, 4), map = buildMap([y - 1, y, y + 1, y + 2], custom);
+            const r = nextRun(restRuns(map, today, day.shift(today, 400)), today);
+            $('#next').textContent = r ? (r.ongoing ? '連假進行中' : `下一個連假：還有 ${r.until} 天`) : '近期沒有連假資料';
+            $('#nextSub').textContent = r ? `${r.from} ${md(r.from).slice(-3)} – ${r.to} ${md(r.to).slice(-3)}，共 ${r.len} 天${r.names.length ? '（' + r.names.join('、') + '）' : ''}` : '';
+        }
+        function renderCal() {
+            const map = mapFor(cy);
+            $('#ym').textContent = `${cy} 年 ${cm} 月`;
+            const first = day.ymd(cy, cm, 1), n = day.daysInMonth(cy, cm), cells = [];
+            '日一二三四五六'.split('').forEach(c => cells.push(Object.assign(document.createElement('div'), { className: 'h', textContent: c })));
+            for (let i = 0; i < dow(first); i++) cells.push(document.createElement('div'));
+            const list = [];
+            for (let d = 1; d <= n; d++) {
+                const ds = day.ymd(cy, cm, d), e = map.get(ds), w = dow(ds);
+                const c = document.createElement('div'), b = document.createElement('b'), s = document.createElement('small');
+                c.className = 'd' + (e ? (e.kind === 'off' ? ' off' : ' work') : (w === 0 || w === 6 ? ' wk' : '')) + (ds === today ? ' today' : '');
+                b.textContent = d; s.textContent = e ? (e.kind === 'work' ? '補班' : e.name) : ''; c.append(b, s); cells.push(c);
+                if (e) list.push(`${md(ds)} ${e.kind === 'work' ? '補班：' : ''}${e.name}`);
+            }
+            $('#calGrid').replaceChildren(...cells);
+            $('#monthList').replaceChildren(...list.map(t => Object.assign(document.createElement('div'), { className: 'li2', textContent: t })));
+        }
+        function renderRuns() {
+            const y = +$('#ry').value, map = mapFor(y);
+            const rs = restRuns(map, y + '-01-01', y + '-12-31');
+            $('#runList').replaceChildren(...rs.map(r => { const d = document.createElement('div'); d.className = 'li2'; d.textContent = `${r.from.slice(5)} ${wd(r.from)} – ${r.to.slice(5)} ${wd(r.to)}　共 ${r.len} 天`; d.append(Object.assign(document.createElement('small'), { textContent: r.names.join('、') || '週末連假' })); return d; }));
+        }
+        let lastText = '';
+        function renderOpt() {
+            const y = +$('#oy').value, N = Math.max(1, Math.min(10, Math.floor(+$('#on').value) || 1));
+            $('#on').value = N;
+            const ps = optimizeLeave(mapFor(y), y, N);
+            lastText = `${y} 年請 ${N} 天以內的方案：\n` + ps.map((p, i) => `${i + 1}. ${md(p.from)} – ${md(p.to)}：請 ${p.cost} 天（${p.leave.map(x => x.slice(5)).join('、')}）換連休 ${p.len} 天`).join('\n');
+            $('#oRes').replaceChildren(...(ps.length ? ps.map((p, i) => { const d = document.createElement('div'); d.className = 'li2'; d.append(Object.assign(document.createElement('b'), { textContent: `${i + 1}. 請 ${p.cost} 天，連休 ${p.len} 天` }), Object.assign(document.createElement('small'), { textContent: `${md(p.from)} – ${md(p.to)}；請假：${p.leave.map(md).join('、')}` })); return d; }) : [Object.assign(document.createElement('div'), { textContent: '沒有找到方案' })]));
+            $('#oCopy').hidden = !ps.length;
+        }
+        function renderData() {
+            $('#cN').textContent = custom.length;
+            $('#cList').replaceChildren(...custom.slice().sort((a, b) => a.d.localeCompare(b.d)).map(c => {
+                const d = document.createElement('div'); d.className = 'li2';
+                const x = Object.assign(document.createElement('button'), { className: 'sm x', textContent: '刪除' });
+                x.onclick = () => { custom = custom.filter(z => z.id !== c.id); saveCustom(); refresh(); };
+                d.append(x, `${c.d}（${wd(c.d)}）${c.kind === 'work' ? '補班' : '放假'}：${c.name || '—'}`); return d;
+            }));
+            $('#adjList').replaceChildren(...TW_ADJ.map(a => Object.assign(document.createElement('div'), { className: 'li2', textContent: `${a.d}（${wd(a.d)}）${a.kind === 'work' ? '補班' : '放假'}：${a.name}` })));
+        }
+        function renderMarks() {
+            $('#mN').textContent = marks.length;
+            $('#mList').replaceChildren(...marks.slice().sort((a, b) => a.d.slice(5).localeCompare(b.d.slice(5)) || a.d.localeCompare(b.d)).map(k => {
+                const d = document.createElement('div'); d.className = 'li2';
+                const x = Object.assign(document.createElement('button'), { className: 'sm x', textContent: '刪除' });
+                x.onclick = () => { marks = marks.filter(z => z.id !== k.id); saveMarks(); renderMarks(); renderPrint(); };
+                d.append(x, `${k.d}（${wd(k.d)}）${k.yearly ? '每年 ' : ''}${k.text}`); return d;
+            }));
+        }
+        function renderPrint() {
+            const y = +$('#py').value, scope = $('#pscope').value, ws = +$('#pws').value, big = scope !== 'grid';
+            const hol = $('#phol').checked, lun = $('#plun').checked, map = mapFor(y), land = $('#por').value === 'landscape';
+            const mk = (m) => {
+                const box = document.createElement('div'); box.className = 'pm';
+                const h = document.createElement('h4'); h.textContent = `${y} 年 ${m} 月`;
+                const g = document.createElement('div'); g.className = 'g';
+                (ws ? '一二三四五六日' : '日一二三四五六').split('').forEach(c => g.append(Object.assign(document.createElement('div'), { className: 'h', textContent: c })));
+                monthGrid(y, m, ws).forEach(ds => {
+                    const c = document.createElement('div');
+                    if (ds) {
+                        const e = hol ? map.get(ds) : null, w = dow(ds), b = document.createElement('b');
+                        c.className = 'c' + (e && e.kind === 'off' ? ' off' : '') + (!e && (w === 0 || w === 6) ? ' we' : '');
+                        b.textContent = +ds.slice(8); c.append(b);
+                        if (big && lun) c.append(Object.assign(document.createElement('i'), { textContent: lunarLabel(ds) }));
+                        if (big && e) c.append(Object.assign(document.createElement('i'), { textContent: e.kind === 'work' ? '補班' : e.name }));
+                        if (!big && e && e.kind === 'work') c.append(Object.assign(document.createElement('i'), { textContent: '班' }));
+                        const ts = marksOn(marks, ds);
+                        if (big) ts.forEach(t => c.append(Object.assign(document.createElement('u'), { textContent: t })));
+                        else if (ts.length) c.style.textDecoration = 'underline';
+                    } else c.className = 'c';
+                    g.append(c);
+                });
+                box.append(h, g); return box;
+            };
+            const A = $('#pArea');
+            A.classList.toggle('small', !big);
+            A.style.setProperty('--ph', land ? '188mm' : '275mm'); A.style.setProperty('--pc', land ? 4 : 3);
+            $('#pgStyle').textContent = '@media print { @page { size: A4 ' + $('#por').value + '; margin: 10mm; } }';
+            if (scope === 'grid') { const w = document.createElement('div'); w.className = 'yr'; for (let m = 1; m <= 12; m++) w.append(mk(m)); A.replaceChildren(w); }
+            else if (scope === 'pages') A.replaceChildren(...Array.from({ length: 12 }, (_, i) => mk(i + 1)));
+            else A.replaceChildren(mk(+$('#pmo').value));
+            $('#pmo').disabled = scope !== 'month';
+        }
+        function refresh() { renderNext(); renderCal(); renderRuns(); renderData(); renderMarks(); renderPrint(); }
+
+        $('#prev').onclick = () => { if (--cm < 1) { cm = 12; cy--; } renderCal(); };
+        $('#nxt').onclick = () => { if (++cm > 12) { cm = 1; cy++; } renderCal(); };
+        $('#ry').onchange = renderRuns; $('#oGo').onclick = renderOpt;
+        $('#oCopy').onclick = () => Util.copyWithFeedback($('#oCopy'), lastText, () => prompt('請手動複製：', lastText));
+        $('#cAdd').onclick = () => {
+            const x = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), d: $('#cDate').value, kind: $('#cKind').value, name: $('#cName').value.trim() };
+            if (!validCustom(x)) { alert('日期或名稱不正確（名稱最多 20 字）'); return; }
+            if (custom.length >= MAX_CUSTOM) { alert('自訂資料已達上限 ' + MAX_CUSTOM + ' 筆，請先刪除'); return; }
+            custom = custom.filter(z => z.d !== x.d); custom.push(x); saveCustom(); $('#cName').value = ''; refresh();
+        };
+        $('#cClear').onclick = () => { if (!custom.length || !confirm('清除全部自訂資料？無法復原。')) return; custom = []; saveCustom(); refresh(); };
+        document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+            document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-pressed', x === b));
+            document.querySelectorAll('.pane').forEach(p => { p.hidden = p.dataset.t !== b.dataset.t; });
+            $('#pArea').hidden = b.dataset.t !== 'print';
+            if (b.dataset.t === 'opt' && !$('#oRes').children.length) renderOpt();
+        });
+        $('#mAdd').onclick = () => {
+            const x = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), d: $('#mDate').value, text: $('#mText').value.trim(), yearly: $('#mYear').checked };
+            if (!validMark(x)) { alert('日期或文字不正確（文字 1–20 字）'); return; }
+            if (marks.length >= MAX_MARKS) { alert('標記日已達上限 ' + MAX_MARKS + ' 筆，請先刪除'); return; }
+            marks.push(x); saveMarks(); $('#mText').value = ''; renderMarks(); renderPrint();
+        };
+        $('#mClear').onclick = () => { if (!marks.length || !confirm('清除全部標記日？無法復原。')) return; marks = []; saveMarks(); renderMarks(); renderPrint(); };
+        $('#pgo').onclick = () => { renderPrint(); window.print(); };
+        ['#py', '#pscope', '#pmo', '#pws', '#por', '#phol', '#plun'].forEach(q => $(q).onchange = renderPrint);
+        $('#pmo').replaceChildren(...Array.from({ length: 12 }, (_, i) => Object.assign(document.createElement('option'), { value: i + 1, textContent: (i + 1) + ' 月' })));
+        $('#pmo').value = cm;
+        $('#mDate').value = today;
+        $('#cDate').value = today;
+        fillYears(); refresh();
+    </script>
+</body>
+
+</html>

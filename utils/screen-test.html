@@ -390,6 +390,80 @@
             color: var(--muted);
             display: block;
         }
+
+        .gpbtns {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+            gap: 6px;
+            margin: 10px 0;
+        }
+
+        .gpbtns span {
+            position: relative;
+            overflow: hidden;
+            padding: 8px 4px;
+            border-radius: 10px;
+            background: var(--fill);
+            text-align: center;
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        .gpbtns span i {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            height: 4px;
+            background: var(--blue);
+            width: 0;
+        }
+
+        .gpbtns span.hit {
+            background: var(--ok);
+            color: #fff;
+        }
+
+        .gpsticks {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin: 10px 0;
+        }
+
+        .gpstick {
+            text-align: center;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .gpstick div {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 1px solid var(--line);
+            background: var(--fill);
+        }
+
+        .gpstick div b {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            margin: -8px 0 0 -8px;
+            border-radius: 50%;
+            background: var(--blue);
+            left: 50%;
+            top: 50%;
+        }
+
+        .gpstick div u {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            margin: auto;
+            border: 1px dashed var(--muted);
+            opacity: .5;
+        }
     </style>
 </head>
 
@@ -414,6 +488,7 @@
                 <button data-t="touch" aria-pressed="false">多點觸控</button>
                 <button data-t="rate" aria-pressed="false">滑鼠輪詢率</button>
                 <button data-t="dev" aria-pressed="false">裝置尺寸速查</button>
+                <button data-t="pad" aria-pressed="false">手把</button>
             </div>
 
             <div class="pane" data-t="screen">
@@ -525,6 +600,19 @@
                 <div class="row" style="margin-top:10px"><button class="sm" id="rateReset">重新量測</button></div>
             </div>
 
+            <div class="pane" data-t="pad" hidden>
+                <p class="note" id="gpNone">尚未偵測到手把。請先連線（USB / 藍牙）並<b>按下手把上任一個鍵</b>喚醒；iPhone / iPad 的 Safari 支援度有限。</p>
+                <div id="gpBox" hidden>
+                    <label>手把<select id="gpSel"></select></label>
+                    <p class="note" id="gpInfo"></p>
+                    <div class="gpbtns" id="gpBtns"></div>
+                    <div class="gpsticks" id="gpSticks"></div>
+                    <label>死區 <output id="gpDzOut">0.10</output><input type="range" id="gpDz" min="0" max="0.5" step="0.01" value="0.1"></label>
+                    <div id="gpAxes" class="note"></div>
+                    <div class="row" style="margin-top:10px"><button class="sm" id="gpVib">震動測試</button><span class="note" id="gpVibMsg"></span></div>
+                </div>
+            </div>
+
             <div class="pane" data-t="dev" hidden>
                 <p class="note">常見裝置的 CSS 像素尺寸（直向）、像素比與安全區域；目前這台裝置會高亮。可複製成媒體查詢。</p>
                 <div id="devNow"></div>
@@ -566,6 +654,7 @@
         <li>「多點觸控」：手指放上方框，顯示每個觸控點座標與最大同時點數；要上下捲動頁面時勾「捲動頁面模式」，或從方框外滑動。</li>
         <li>「滑鼠輪詢率」：在方框內快速畫圓，估算 pointermove 事件頻率（僅供參考，瀏覽器會合併事件、降低時間精度）。</li>
         <li>「裝置尺寸速查」：常見手機 / 平板 / 筆電的 CSS 尺寸、像素比與安全區域，目前裝置會高亮，可複製成媒體查詢；只列有把握的機型。</li>
+        <li>「手把」：連線手把後按任一鍵喚醒，會列出名稱與對應（standard 為標準配置），按鍵亮綠並顯示類比量（LT / RT 的深淺條），搖桿圓圈顯示位置；拖曳「死區」可看小於門檻的軸值被視為 0（偵測飄移）；「震動測試」在有支援時震動約 0.5 秒；多支手把可從下拉切換。</li>
         <li>「麥克風」：選麥克風、設定回音消除 / 噪音抑制 / 自動增益，按「開始測試」，對著麥克風說話，音量條應該跳動（紅線是峰值保持）。按「錄 5 秒回放」會錄下 5 秒並播放。</li>
         </ol>
         <h3>範例</h3>
@@ -583,6 +672,7 @@
         <li>相機畫面、照片與 5 秒錄音都只存在記憶體裡，不會上傳；重新整理或離開頁面就消失，要留著請先下載。</li>
         <li>「瀏覽器環境」只在本機讀取瀏覽器提供的資訊，不會送出到任何地方；有些欄位（例如記憶體、網路估計）只有部分瀏覽器提供，會顯示「未提供」。localStorage 檢查只讀取、不寫入任何資料。</li>
         <li>剪貼簿、通知、觸控點與輪詢率資料都只在本機顯示、不儲存、不上傳；通知權限由瀏覽器管理，要收回請到網站設定。「鍵盤」分頁最後一鍵會顯示 key / code / keyCode / 修飾鍵。</li>
+        <li>手把分頁使用瀏覽器的 Gamepad API，只在本機讀取、不儲存；不支援的瀏覽器（部分 iOS）會一直顯示未偵測到，震動也只有部分瀏覽器 / 手把支援。</li>
         <li>本頁只記住你上次停留的分頁（鍵 screentest_tab，可用右上角備份），不會記錄相機或麥克風資料；重新開啟頁面不會自動開相機。</li>
         </ul>
     </template>
@@ -629,7 +719,7 @@
         }
 
         // 相機 / 麥克風
-        const TABS = ['screen', 'kb', 'mouse', 'ppi', 'cam', 'mic', 'env', 'clip', 'notify', 'gamut', 'touch', 'rate', 'dev'];
+        const TABS = ['screen', 'kb', 'mouse', 'ppi', 'cam', 'mic', 'env', 'clip', 'notify', 'gamut', 'touch', 'rate', 'dev', 'pad'];
         const validTab = (v) => TABS.includes(v) ? v : 'screen';          // 舊版 / 壞掉的備份值一律退回「螢幕壞點」
         const CAM_RES = [['QVGA 320×240', 320, 240], ['VGA 640×480', 640, 480], ['HD 1280×720', 1280, 720], ['Full HD 1920×1080', 1920, 1080], ['QHD 2560×1440', 2560, 1440], ['4K 3840×2160', 3840, 2160]];
         // 指定裝置就用 exact deviceId（不再用 facingMode）；解析度用 ideal，讓瀏覽器挑最接近的
@@ -845,6 +935,12 @@
         const deviceQuery = (d, kind) => kind === 'max' ? `@media (max-width: ${d[2]}px) { }` : `@media (device-width: ${d[2]}px) and (device-height: ${d[3]}px) and (resolution: ${d[4]}dppx) { }`;
         // 鍵盤修飾鍵
         const modKeys = (e) => [e.ctrlKey && 'Ctrl', e.shiftKey && 'Shift', e.altKey && 'Alt', e.metaKey && 'Meta'].filter(Boolean).join('+') || '無';
+        // 手把：死區（|v| 小於門檻視為 0）；標準配置的按鈕名稱
+        const deadzone = (v, dz) => (typeof v !== 'number' || !Number.isFinite(v) || Math.abs(v) < dz ? 0 : v);
+        const GP_STD = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'Back', 'Start', 'L3', 'R3', '↑', '↓', '←', '→', 'Home'];
+        const gpBtnName = (i, mapping) => mapping === 'standard' && GP_STD[i] ? GP_STD[i] : '按鈕 ' + i;
+        // 軸成對（0,1）（2,3）… 轉成搖桿位置：x、y 為 -1..1（經死區），mag 為偏移量（最大 1）
+        const stickPos = (ax, ay, dz) => { const x = deadzone(ax, dz), y = deadzone(ay, dz); return { x, y, mag: Math.min(1, Math.hypot(x, y)) }; };
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -1169,8 +1265,46 @@
             });
         }
 
+        // ---------- 手把 ----------
+        let gpIdx = -1, gpRaf = 0, gpBuilt = '';
+        const pads = () => { try { return [...(navigator.getGamepads ? navigator.getGamepads() : [])].filter(Boolean); } catch (e) { return []; } };
+        const gpVib = (p) => p.vibrationActuator && p.vibrationActuator.playEffect ? p.vibrationActuator : (p.hapticActuators && p.hapticActuators[0] && p.hapticActuators[0].pulse ? p.hapticActuators[0] : null);
+        function gpBuild(p) {
+            const n = p.buttons.length, na = p.axes.length;
+            $('#gpBtns').replaceChildren(...p.buttons.map((_, i) => { const sp = document.createElement('span'); sp.append(gpBtnName(i, p.mapping), document.createElement('i')); return sp; }));
+            const st = [];
+            for (let a = 0; a + 1 < na; a += 2) { const d = document.createElement('div'), t = document.createElement('div'); t.className = 'gpstick'; d.append(document.createElement('u'), document.createElement('b')); t.append(d, document.createElement('span')); st.push(t); }
+            $('#gpSticks').replaceChildren(...st);
+            $('#gpInfo').textContent = `${p.id} · mapping：${p.mapping || '（未知）'} · ${n} 個按鈕、${na} 個軸`;
+            const v = gpVib(p); $('#gpVib').disabled = !v; $('#gpVibMsg').textContent = v ? '' : '此手把 / 瀏覽器不支援震動';
+            gpBuilt = p.index + ':' + n + ':' + na;
+        }
+        function gpFrame() {
+            gpRaf = 0; if (tab !== 'pad') return;
+            const list = pads(); $('#gpNone').hidden = list.length > 0; $('#gpBox').hidden = !list.length;
+            if (list.length) {
+                const sel = $('#gpSel'), key = list.map(p => p.index + p.id).join('|');
+                if (sel.dataset.k !== key) { sel.dataset.k = key; sel.replaceChildren(...list.map(p => Object.assign(document.createElement('option'), { value: p.index, textContent: `#${p.index} ${p.id.slice(0, 40)}` }))); }
+                if (!list.some(p => p.index === gpIdx)) gpIdx = list[0].index;
+                sel.value = gpIdx;
+                const p = list.find(q => q.index === gpIdx);
+                if (gpBuilt !== p.index + ':' + p.buttons.length + ':' + p.axes.length) gpBuild(p);
+                const dz = parseFloat($('#gpDz').value) || 0; $('#gpDzOut').textContent = dz.toFixed(2);
+                [...$('#gpBtns').children].forEach((el, i) => { const b = p.buttons[i], v = b ? b.value : 0; el.classList.toggle('hit', !!(b && b.pressed)); el.lastChild.style.width = Math.round(v * 100) + '%'; });
+                [...$('#gpSticks').children].forEach((el, k) => { const s = stickPos(p.axes[2 * k], p.axes[2 * k + 1], dz), pad = el.firstChild; pad.lastChild.style.transform = `translate(${s.x * 52}px,${s.y * 52}px)`; pad.firstChild.style.width = pad.firstChild.style.height = (dz * 100) + '%'; el.lastChild.textContent = `${k ? '右' : '左'}搖桿 X ${(p.axes[2 * k] || 0).toFixed(2)} / Y ${(p.axes[2 * k + 1] || 0).toFixed(2)}`; });
+                $('#gpAxes').textContent = '軸：' + p.axes.map((v, i) => `${i}: ${deadzone(v, dz).toFixed(2)}`).join('　') + `（原始值小於 ${dz.toFixed(2)} 顯示為 0）`;
+            }
+            gpRaf = requestAnimationFrame(gpFrame);
+        }
+        const gpStart = () => { if (!gpRaf) gpRaf = requestAnimationFrame(gpFrame); };
+        window.addEventListener('gamepadconnected', () => { if (tab === 'pad') gpStart(); });
+        window.addEventListener('gamepaddisconnected', () => { gpBuilt = ''; if (tab === 'pad') gpStart(); });
+        $('#gpSel').onchange = () => { gpIdx = +$('#gpSel').value; gpBuilt = ''; };
+        $('#gpVib').onclick = () => { const p = pads().find(q => q.index === gpIdx), a = p && gpVib(p); if (!a) return; const fail = () => { $('#gpVibMsg').textContent = '震動失敗'; }; try { const r = a.playEffect ? a.playEffect('dual-rumble', { duration: 500, strongMagnitude: 1, weakMagnitude: 1 }) : a.pulse(1, 500); if (r && r.catch) r.catch(fail); } catch (e) { fail(); } };
+
         // ---------- 分頁 ----------
         function render() {
+            if (tab === 'pad') gpStart();
             if (tab === 'env') renderEnv();
             if (tab === 'notify') renderNotify(); if (tab === 'gamut') renderGamut(); if (tab === 'dev') renderDev();
             if (tab !== 'cam') stopCam(); if (tab !== 'mic') stopMic();

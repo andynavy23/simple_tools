@@ -97,6 +97,34 @@ await mode('chem', 'conc'); assert.ok((await text('#coutc')).includes('0.1'));
 await mode('chem', 'dil'); assert.ok((await text('#dout')).includes('41.6666'));
 await noOverflow('chem');
 
+// 矩陣
+await tab('mx'); assert.ok((await text('#mx_out')).includes('最簡列階梯形'), '預設高斯消去');
+await mode('mx', 'det'); assert.ok((await text('#mx_out')).includes('-1'));
+await mode('mx', 'inv'); assert.ok((await text('#mx_out')).includes('A × A⁻¹ = 單位矩陣'));
+await mode('mx', 'solve'); assert.ok((await text('#mx_out')).includes('x1 = 2'), '解 Ax=b 預設 b'); assert.ok((await text('#mx_out')).includes('x3 = -1'));
+await set('#mx_a', '1 1\n1 1'); await set('#mx_b', '1\n2'); assert.ok((await text('#mx_out')).includes('無解'));
+await set('#mx_a', '1 2\n2 4'); await set('#mx_b', '3\n6'); assert.ok((await text('#mx_out')).includes('無限多解') && (await text('#mx_out')).includes('t1'));
+await mode('mx', 'inv'); assert.ok((await text('#mx_out')).includes('奇異矩陣'));
+await set('#mx_a', '1 2\n3'); assert.ok((await text('#mx_err')).includes('一樣')); assert.strictEqual(await text('#mx_out'), '');
+await set('#mx_a', '1/2 1/3\n1/4 1/5'); await mode('mx', 'det'); assert.ok((await text('#mx_out')).includes('1/60'));
+await click('#mx_dec'); assert.ok((await text('#mx_out')).includes('0.016666'), '小數顯示'); await click('#mx_dec');
+await mode('mx', 'mul'); await set('#mx_b', '1 0\n0 1'); assert.ok((await text('#mx_out')).includes('1/2'));
+await set('#mx_a', Array.from({ length: 8 }, (_, i) => Array.from({ length: 8 }, (_, j) => (i === j ? 2 : 1)).join(' ')).join('\n')); await mode('mx', 'gauss');
+assert.ok((await text('#mx_out')).includes('最簡列階梯形'));
+await noOverflow('mx 8x8');
+// 方程式
+await tab('eq'); assert.ok((await text('#eq_out')).includes('判別式'));
+await set('#eq_a', '1'); await set('#eq_b', '2'); await set('#eq_c', '5'); assert.ok((await text('#eq_out')).includes('-1 + 2i'));
+await set('#eq_a', '0'); assert.ok((await text('#eq_err')).includes('不可為 0'));
+await mode('eq', 'poly'); assert.ok((await text('#eq_out')).includes('殘差'));
+await set('#eq_p', '1 0 0 -1'); assert.ok((await text('#eq_out')).includes('根 3'));
+await mode('eq', 'sys'); assert.ok((await text('#eq_out')).includes('x = 2'));
+await set('#eq_s', 'x + y = 1\nx + y = 2'); assert.ok((await text('#eq_out')).includes('無解'));
+await set('#eq_s', 'x + = 1'); assert.ok((await text('#eq_err')).length > 0);
+await mode('eq', 'num'); assert.ok((await text('#eq_out')).includes('牛頓法：收斂'));
+await set('#eq_f', 'foo(x)'); assert.ok((await text('#eq_err')).includes('未知'));
+await noOverflow('eq');
+
 // 物理
 await tab('phy'); assert.ok((await text('#cout3')).includes('299792458'));
 await set('#qc', 'zzzz'); assert.ok((await text('#cout3')).includes('找不到')); await set('#qc', '普朗克'); assert.ok((await text('#cout3')).includes('6.62607015e-34'));

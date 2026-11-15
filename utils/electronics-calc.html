@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="st-disclaimer" content="general">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="電子計算器：電阻色碼（4 / 5 / 6 環雙向）、歐姆定律與功率、電阻串並聯、LED 限流電阻、分壓器、RC 時間常數、E12 / E24 / E96 標準值，離線運算。">
+    <meta property="og:title" content="電子計算器" />
+    <meta property="og:description" content="電阻色碼、歐姆定律、串並聯、LED 限流電阻、分壓、RC 與標準電阻值。" />
+    <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
+    <meta property="og:url" content="https://andynavy23.github.io/simple_tools/utils/electronics-calc.html" />
+    <meta name="st-keys" content="electronicsc_opts">
+    <title>電子計算器</title>
+    <link rel="stylesheet" href="../shared/css/theme.css">
+    <script src="../shared/js/chrome.js"></script>
+    <style>
+        :root {
+            --wrap-w: 640px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .tabs button {
+            flex: 1 1 auto;
+            padding-left: 8px;
+            padding-right: 8px;
+        }
+
+        .fgrid {
+            margin-bottom: 10px;
+        }
+
+        .fgrid>div {
+            min-width: 0;
+        }
+
+        .fgrid select,
+        .fgrid input[type=text] {
+            width: 100%;
+        }
+
+        .fgrid .wide {
+            grid-column: 1 / -1;
+        }
+
+        .out {
+            margin-top: 6px;
+        }
+
+        .warn {
+            color: var(--muted);
+            font-size: 13px;
+            margin: 8px 0 0;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 80px;
+        }
+
+        /* 電阻示意：色環顏色是色碼本身的意義，不隨風格變 */
+        .res {
+            display: flex;
+            align-items: stretch;
+            gap: 4px;
+            height: 44px;
+            width: 100%;
+            max-width: 320px;
+            margin: 6px auto 12px;
+            padding: 0 14px;
+            background: #d9c7a0;
+            border-radius: 22px;
+            border: 1px solid var(--line);
+            box-sizing: border-box;
+        }
+
+        .res i {
+            flex: 1;
+            max-width: 22px;
+            border-left: 1px solid rgba(0, 0, 0, .25);
+            border-right: 1px solid rgba(0, 0, 0, .25);
+        }
+
+        .res i.gap {
+            visibility: hidden;
+        }
+
+        .bands {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .bands select {
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="../index.html">‹ 工具箱</a>
+        <h1>電子計算器</h1>
+        <p class="sub">電阻色碼、歐姆定律、串並聯、LED 限流電阻、分壓、RC 與標準電阻值。數值欄可用 k、M、m、u、n、p 後綴（例：4.7k、100n、2.2u、4k7）。只記住上次輸入。</p>
+
+        <div class="tabs" id="tabs"></div>
+        <div id="panes"></div>
+
+        <button id="reset">重置所有輸入</button>
+    </div>
+
+    <template id="help">
+        <h3>這是什麼</h3>
+        <p>做電子小製作時常用的七個計算：電阻色碼（4 / 5 / 6 環，色環 ⇄ 阻值）、歐姆定律與功率、電阻串並聯、LED 限流電阻、分壓器、RC 時間常數與截止頻率、E12 / E24 / E96 標準值最近值。</p>
+        <h3>什麼時候用</h3>
+        <ul>
+        <li>手上有顆電阻看不懂色環，或知道要幾 Ω 想知道色環怎麼排。</li>
+        <li>點亮 LED 要配多大的電阻、電阻要幾瓦。</li>
+        <li>算出來的阻值買不到，想知道最接近的標準值。</li>
+        </ul>
+        <h3>怎麼用</h3>
+        <ol>
+        <li>選分頁，在欄位填數字，結果即時更新。數值欄可寫 k（千）、M（百萬）、m（毫）、u 或 µ（微）、n（奈）、p（皮）；4k7 代表 4.7k；後面的單位字母（Ω、V、A、W、F）可省略。</li>
+        <li>色碼：「色環 → 阻值」選環數與每一環的顏色；「阻值 → 色環」填阻值與誤差，會畫出色環並標出是否為精確值。</li>
+        <li>歐姆定律：V / I / R / P 只要填兩個，其餘自動算出。</li>
+        <li>串並聯：每行（或用空白 / 逗號隔開）一個阻值，最多 50 個。</li>
+        <li>LED：填電源電壓、順向電壓、電流，得到電阻值、功率與建議的 E24 標準值。</li>
+        </ol>
+        <h3>範例</h3>
+        <div class="eg">黃 紫 紅 金（4 環）→ 4.7 kΩ ±5%
+        5 V、紅光 LED（2 V）、20 mA → 150 Ω、0.06 W
+        10 k 與 10 k 並聯 → 5 kΩ；12 V 經 10 k + 10 k 分壓 → 6 V
+        R = 10 kΩ、C = 100 nF → τ = 1 ms、截止頻率 15.9 Hz</div>
+        <h3>小提醒</h3>
+        <ul>
+        <li>只記住上次的分頁與各欄位輸入（鍵 electronicsc_opts），沒有其他資料與成長問題；壞資料或舊版資料載入時會被忽略並使用預設值。存不下時會顯示共用的儲存失敗提示；「重置」前會先確認，無法復原。</li>
+        <li>僅供學習與製作參考，不取代元件規格書；用於高電壓、市電或可能傷人的電路請找專業人員。電阻實際額定功率請留一倍以上餘裕。</li>
+        <li>色碼：第一環不能是黑色（會警示）；5 / 6 環是精密電阻（3 位有效數字）；第 6 環是溫度係數（ppm/K）。顏色辨識困難時請用三用電表量測。</li>
+        <li>標準值以對數尺度找最近的值；LED 建議值取「不小於計算值」的 E24（電流較保守）。</li>
+        </ul>
+    </template>
+
+    <script src="../shared/js/util.js"></script>
+    <script>
+        // --- pure ---
+        const fin = (...a) => a.every(x => typeof x === 'number' && isFinite(x));
+        const SI = { p: 1e-12, n: 1e-9, u: 1e-6, 'µ': 1e-6, 'μ': 1e-6, m: 1e-3, '': 1, k: 1e3, K: 1e3, M: 1e6, G: 1e9, R: 1 };
+        // 解析帶 SI 後綴的數字："4.7k"、"100n"、"4k7"、"10mA"；無法解析回 NaN
+        function parseSI(s) {
+            s = String(s ?? '').trim();
+            if (!s || s.length > 30) return NaN;
+            let m = s.match(/^(\d+)([pnuµμmkKMGR])(\d+)\s*(?:Ω|ohms?|[VAWF])?$/);
+            if (m) return Number((+(m[1] + '.' + m[3]) * SI[m[2]]).toPrecision(12));
+            m = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s*([pnuµμmkKMG]?)\s*(?:Ω|ohms?|[VAWF])?$/);
+            return m ? Number((+m[1] * SI[m[2]]).toPrecision(12)) : NaN;
+        }
+        // 3 位有效數字 + SI 前綴
+        function fmtSI(x, u = '') {
+            if (!isFinite(x)) return '—';
+            if (x === 0) return '0 ' + u;
+            const e = Math.max(-12, Math.min(9, Math.floor(Math.log10(Math.abs(x)) / 3) * 3)), p = { '-12': 'p', '-9': 'n', '-6': 'µ', '-3': 'm', 0: '', 3: 'k', 6: 'M', 9: 'G' }[e];
+            return Number((x / Math.pow(10, e)).toPrecision(4)) + ' ' + p + u;
+        }
+
+        // ===== 色碼 =====
+        // 色環代碼：'0'–'9' 黑棕紅橙黃綠藍紫灰白，'g' 金，'s' 銀
+        const CNAME = { 0: '黑', 1: '棕', 2: '紅', 3: '橙', 4: '黃', 5: '綠', 6: '藍', 7: '紫', 8: '灰', 9: '白', g: '金', s: '銀' };
+        const CHEX = { 0: '#111111', 1: '#8b4513', 2: '#d32f2f', 3: '#fb8c00', 4: '#fdd835', 5: '#388e3c', 6: '#1976d2', 7: '#8e24aa', 8: '#9e9e9e', 9: '#fafafa', g: '#c9a227', s: '#c0c0c0' };
+        const TOL = { 1: 1, 2: 2, 5: 0.5, 6: 0.25, 7: 0.1, 8: 0.05, g: 5, s: 10 };
+        const TCO = { 1: 100, 2: 50, 3: 15, 4: 25, 6: 10, 7: 5 };
+        const ROLES = { 4: ['d', 'd', 'm', 't'], 5: ['d', 'd', 'd', 'm', 't'], 6: ['d', 'd', 'd', 'm', 't', 'c'] };
+        const ROLE_KEYS = { d: '0123456789'.split(''), m: [...'0123456789'.split(''), 'g', 's'], t: Object.keys(TOL), c: Object.keys(TCO) };
+        const multOf = (k) => k === 'g' ? 0.1 : k === 's' ? 0.01 : Math.pow(10, +k);
+        // keys：4 / 5 / 6 個代碼 → { ohms, tol(%), tc(ppm/K | null) }；代碼不合法回 null
+        function decodeBands(keys) {
+            const n = keys?.length, roles = ROLES[n];
+            if (!roles || !keys.every((k, i) => ROLE_KEYS[roles[i]].includes(String(k)))) return null;
+            keys = keys.map(String);
+            const d = roles.filter(r => r === 'd').length, digits = +keys.slice(0, d).join('');
+            return { ohms: Number((digits * multOf(keys[d])).toPrecision(12)), tol: TOL[keys[d + 1]], tc: n === 6 ? TCO[keys[5]] : null };
+        }
+        // 阻值 → n 環代碼（n = 4 / 5）；exact = 色環能否精確表示（否則為四捨五入的近似）；超出範圍回 null
+        function encodeBands(ohms, n, tolKey = 'g') {
+            const d = n === 4 ? 2 : n === 5 ? 3 : 0;
+            if (!d || !fin(ohms) || !(ohms > 0) || !(tolKey in TOL)) return null;
+            let m = Math.floor(Math.log10(ohms) + 1e-12) - (d - 1);
+            if (m < -2) m = -2;
+            let digits = Math.round(ohms / Math.pow(10, m));
+            if (digits >= Math.pow(10, d)) { digits /= 10; m++; }
+            if (m > 9 || digits < 1) return null;
+            const ds = String(digits).padStart(d, '0').split(''), mk = m >= 0 ? String(m) : m === -1 ? 'g' : 's';
+            return { keys: [...ds, mk, tolKey], exact: Math.abs(digits * Math.pow(10, m) - ohms) <= 1e-9 * ohms, value: Number((digits * Math.pow(10, m)).toPrecision(12)) };
+        }
+
+        // ===== 歐姆定律：V I R P 填兩個，其餘算出（皆需 > 0）=====
+        function ohmLaw(V, I, R, P) {
+            const have = [V, I, R, P].map(x => fin(x) && x > 0);
+            if (have.filter(Boolean).length !== 2) return null;
+            let v = V, i = I, r = R, p = P;
+            if (have[0] && have[1]) { r = v / i; p = v * i; }
+            else if (have[0] && have[2]) { i = v / r; p = v * v / r; }
+            else if (have[0] && have[3]) { i = p / v; r = v * v / p; }
+            else if (have[1] && have[2]) { v = i * r; p = i * i * r; }
+            else if (have[1] && have[3]) { v = p / i; r = p / (i * i); }
+            else { v = Math.sqrt(p * r); i = Math.sqrt(p / r); }
+            return { V: v, I: i, R: r, P: p };
+        }
+        // 串並聯（空陣列回 null）；並聯遇 0 Ω 為 0
+        const seriesR = (a) => a.length ? a.reduce((s, x) => s + x, 0) : null;
+        const parallelR = (a) => !a.length ? null : a.some(x => x === 0) ? 0 : 1 / a.reduce((s, x) => s + 1 / x, 0);
+        // 文字 → 阻值陣列（空白 / 逗號 / 換行分隔，最多 50 個，不合法或負值忽略並計數）
+        function parseList(t) {
+            const vals = [];
+            let bad = 0;
+            for (const s of String(t ?? '').split(/[\s,，;；]+/).filter(Boolean).slice(0, 50)) { const v = parseSI(s); if (v >= 0 && isFinite(v)) vals.push(v); else bad++; }
+            return { vals, bad };
+        }
+
+        // ===== E 系列 =====
+        const E12 = [100, 120, 150, 180, 220, 270, 330, 390, 470, 560, 680, 820];
+        const E24 = [100, 110, 120, 130, 150, 160, 180, 200, 220, 240, 270, 300, 330, 360, 390, 430, 470, 510, 560, 620, 680, 750, 820, 910];
+        const E96 = [100, 102, 105, 107, 110, 113, 115, 118, 121, 124, 127, 130, 133, 137, 140, 143, 147, 150, 154, 158, 162, 165, 169, 174, 178, 182, 187, 191, 196, 200, 205, 210, 215, 221, 226, 232, 237, 243, 249, 255, 261, 267, 274, 280, 287, 294, 301, 309, 316, 324, 332, 340, 348, 357, 365, 374, 383, 392, 402, 412, 422, 432, 442, 453, 464, 475, 487, 499, 511, 523, 536, 549, 562, 576, 590, 604, 619, 634, 649, 665, 681, 698, 715, 732, 750, 768, 787, 806, 825, 845, 866, 887, 909, 931, 953, 976];
+        const ESERIES = { E12, E24, E96 };
+        // 回傳 { nearest（對數尺度最近）, lower（≤ r 的最大）, upper（≥ r 的最小）, err（nearest 相對誤差 %）}
+        function nearestE(r, series) {
+            const S = ESERIES[series];
+            if (!S || !fin(r) || !(r > 0)) return null;
+            const dec = Math.floor(Math.log10(r) + 1e-12), c = [];
+            for (let d = dec - 1; d <= dec + 1; d++) for (const m of S) c.push(Number((m / 100 * Math.pow(10, d)).toPrecision(6)));
+            c.sort((a, b) => a - b);
+            let lower = c[0], upper = c[c.length - 1];
+            for (const x of c) { if (x <= r * (1 + 1e-9)) lower = x; }
+            for (const x of [...c].reverse()) { if (x >= r * (1 - 1e-9)) upper = x; }
+            const nearest = Math.abs(Math.log(upper / r)) < Math.abs(Math.log(r / lower)) ? upper : lower;
+            return { nearest, lower, upper, err: (nearest - r) / r * 100 };
+        }
+
+        // ===== LED、分壓、RC =====
+        const WATTS = [0.125, 0.25, 0.5, 1, 2, 5];
+        // Vs 電源 V、Vf 順向電壓 V、mA 電流、n 串聯顆數 → 電阻 Ω 與功率 W；電源不夠回 null
+        function ledResistor(Vs, Vf, mA, n = 1) {
+            if (!fin(Vs, Vf, mA) || !(mA > 0) || !(Vf >= 0) || !(n >= 1)) return null;
+            const drop = Vs - Vf * Math.floor(n);
+            if (!(drop > 0)) return null;
+            const I = mA / 1000, R = drop / I, e24 = nearestE(R, 'E24');
+            const Ru = e24.upper, Ia = drop / Ru;
+            return { R, P: drop * I, nearest: e24.nearest, up: Ru, Iactual: Ia, Pup: drop * Ia, rating: WATTS.find(w => w >= 2 * drop * Ia) ?? null };
+        }
+        const divider = (Vin, R1, R2) => fin(Vin, R1, R2) && R1 >= 0 && R2 >= 0 && R1 + R2 > 0 ? { Vout: Vin * R2 / (R1 + R2), I: Vin / (R1 + R2), P: Vin * Vin / (R1 + R2) } : null;
+        // 已知 Vin、想要的 Vout 與 R1，求 R2（需 0 < Vout < Vin）
+        const dividerR2 = (Vin, Vout, R1) => fin(Vin, Vout, R1) && R1 > 0 && Vout > 0 && Vout < Vin ? R1 * Vout / (Vin - Vout) : null;
+        // RC：τ = RC、fc = 1/(2πτ)；targetF 有填則反推 C
+        function rcCalc(R, C, targetF) {
+            if (!fin(R, C) || !(R > 0) || !(C > 0)) return null;
+            const tau = R * C;
+            return { tau, fc: 1 / (2 * Math.PI * tau), rise: 2.2 * tau, settle: 5 * tau, cFor: fin(targetF) && targetF > 0 ? 1 / (2 * Math.PI * R * targetF) : NaN };
+        }
+
+        // 還原用：只收白名單 id 的字串值，限制長度
+        function normOpts(raw, ids) {
+            const o = raw && typeof raw === 'object' ? raw : {}, v = {};
+            if (o.v && typeof o.v === 'object' && !Array.isArray(o.v)) for (const k of ids) if (typeof o.v[k] === 'string' && o.v[k].length <= 2000) v[k] = o.v[k];
+            return { tab: Number.isInteger(o.tab) && o.tab >= 0 && o.tab <= 6 ? o.tab : 0, v };
+        }
+        // --- /pure ---
+
+        const $ = (s) => document.querySelector(s);
+        const KEY = 'electronicsc_opts', { store, statRow } = Util;
+        const nf = (x, d = 3) => isFinite(x) ? Number(x.toPrecision(d + 1)).toLocaleString('zh-TW', { maximumFractionDigits: 12 }) : '—';
+        const val = (id) => document.getElementById(id).value;
+        const num = (id) => { const s = val(id); return s.trim() === '' ? NaN : parseSI(s); };
+
+        // 欄位：[id, 標籤, 預設值, 選項（陣列 = select；'ta' = textarea）]
+        const G = {
+            g_ohm: ['歐姆定律與功率', 1, [['oh_v', '電壓 V（伏特）', '12'], ['oh_i', '電流 I（安培，可寫 20m）', ''], ['oh_r', '電阻 R（歐姆）', '6'], ['oh_p', '功率 P（瓦特）', '']], 'V、I、R、P 只要填「兩個」，其餘自動算出（第一次進來預設 12 V 與 6 Ω）。'],
+            g_net: ['電阻串聯與並聯', 2, [['rs_t', '阻值清單（每行或空白 / 逗號分隔，最多 50 個）', '100 220 330', 'ta']], '並聯遇 0 Ω 視為短路，結果 0。'],
+            g_led: ['LED 限流電阻', 3, [['lv_s', '電源電壓（V）', '5'], ['lv_f', 'LED 順向電壓（V，紅 ≈ 2、白 / 藍 ≈ 3）', '2'], ['lv_i', '電流（mA）', '20'], ['lv_n', '串聯顆數', '1']], '順向電壓與建議電流請查 LED 規格書；一般指示燈 5–20 mA 就夠亮。建議值取「不小於計算值」的 E24，電流會稍低一點、較安全。'],
+            g_div: ['分壓器', 4, [['dv_m', '要求什麼', 'out', [['out', '已知 R1、R2 → 求輸出電壓'], ['r2', '已知 Vout、R1 → 求 R2']]], ['dv_vin', '輸入電壓 Vin（V）', '5'], ['dv_r1', 'R1（上臂，接 Vin）', '10k'], ['dv_r2', 'R2（下臂，接地）', '10k'], ['dv_vo', '目標輸出 Vout（V，求 R2 時用）', '3.3']], '分壓輸出接負載時會被拉低，負載阻抗要遠大於 R2（至少 10 倍）。'],
+            g_rc: ['RC 時間常數與截止頻率', 5, [['rc_r', '電阻 R（Ω）', '10k'], ['rc_c', '電容 C（F，可寫 100n、2.2u）', '100n'], ['rc_f', '目標截止頻率（Hz，選填，反推 C）', '']], 'τ = R × C；一階 RC 低通 / 高通的 −3 dB 截止頻率 fc = 1 / (2πRC)。'],
+            g_e: ['標準值最近值', 6, [['es_v', '阻值（Ω）', '4800'], ['es_s', '系列', 'E24', [['E12', 'E12（±10%）'], ['E24', 'E24（±5%）'], ['E96', 'E96（±1%）']]]], 'E12 有 12 個、E24 有 24 個、E96 有 96 個基本值（每個十進位）；以對數尺度比較誰最接近。']
+        };
+        const TABS = ['色碼', '歐姆', '串並聯', 'LED', '分壓', 'RC', '標準值'];
+        const CB = ['cb_0', 'cb_1', 'cb_2', 'cb_3', 'cb_4', 'cb_5'];
+        const COLOR_IDS = ['cb_n', ...CB, 'cr_v', 'cr_n', 'cr_t'];
+        const IDS = [...COLOR_IDS, ...Object.values(G).flatMap(g => g[2].map(f => f[0]))];
+        const DEFS = { cb_n: '4', cb_0: '4', cb_1: '7', cb_2: '2', cb_3: 'g', cb_4: '1', cb_5: '1', cr_v: '4.7k', cr_n: '4', cr_t: 'g', ...Object.fromEntries(Object.values(G).flatMap(g => g[2].map(f => [f[0], f[2]]))) };
+
+        const field = ([id, lab, def, opts]) => opts === 'ta'
+            ? `<div class="wide"><label for="${id}">${lab}</label><textarea id="${id}" data-s maxlength="2000" spellcheck="false"></textarea></div>`
+            : `<div><label for="${id}">${lab}</label>` + (opts ? `<select id="${id}" data-s>${opts.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('')}</select>` : `<input id="${id}" data-s type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="30">`) + '</div>';
+        const colorOpts = (keys) => keys.map(k => `<option value="${k}">${CNAME[k]}</option>`).join('');
+        const colorPane = `<div class="card"><h2>色環 → 阻值</h2>
+            <div class="res" id="res1"></div>
+            <div class="fgrid"><div><label for="cb_n">環數</label><select id="cb_n" data-s><option value="4">4 環</option><option value="5">5 環（精密）</option><option value="6">6 環（含溫度係數）</option></select></div></div>
+            <div class="bands" id="bands">${CB.map((id, i) => `<div><label for="${id}" id="l_${id}"></label><select id="${id}" data-s></select></div>`).join('')}</div>
+            <div class="out" id="o_cb"></div>
+            <p class="warn">顏色順序：黑 棕 紅 橙 黃 綠 藍 紫 灰 白 = 0–9；金、銀作倍率為 ×0.1、×0.01，作誤差為 ±5%、±10%。</p></div>
+            <div class="card"><h2>阻值 → 色環</h2>
+            <div class="fgrid"><div><label for="cr_v">阻值（Ω，可寫 4.7k、4k7、220）</label><input id="cr_v" data-s type="text" inputmode="text" autocomplete="off" spellcheck="false" maxlength="30"></div>
+            <div><label for="cr_n">環數</label><select id="cr_n" data-s><option value="4">4 環</option><option value="5">5 環（3 位有效數字）</option></select></div>
+            <div><label for="cr_t">誤差</label><select id="cr_t" data-s>${Object.keys(TOL).map(k => `<option value="${k}">${CNAME[k]} ±${TOL[k]}%</option>`).join('')}</select></div></div>
+            <div class="res" id="res2"></div>
+            <div class="out" id="o_cr"></div></div>`;
+        $('#panes').innerHTML = TABS.map((_, i) => `<div id="p${i}" hidden>` + (i === 0 ? colorPane : '') + Object.entries(G).filter(([, g]) => g[1] === i).map(([gid, g]) =>
+            `<div class="card"><h2>${g[0]}</h2><div class="fgrid">${g[2].map(field).join('')}</div><div class="out" id="o_${gid}"></div>${g[3] ? `<p class="warn">${g[3]}</p>` : ''}</div>`).join('') + '</div>').join('');
+        let tab = 0;
+        $('#tabs').innerHTML = TABS.map((t, i) => `<button class="sm" data-i="${i}" aria-pressed="false">${t}</button>`).join('');
+        function showTab(i) {
+            tab = i;
+            [...$('#tabs').children].forEach((b, j) => b.setAttribute('aria-pressed', j === i));
+            TABS.forEach((_, j) => { $('#p' + j).hidden = j !== i; });
+        }
+        $('#tabs').onclick = (e) => { const b = e.target.closest('button'); if (b) { showTab(+b.dataset.i); save(); } };
+
+        const show = (gid, rows) => {
+            const box = $('#o_' + gid);
+            if (typeof rows === 'string') { box.replaceChildren(Object.assign(document.createElement('div'), { textContent: rows, className: 'muted' })); return; }
+            box.replaceChildren(...rows.map(r => statRow(r[0], r[1], r[2])));
+        };
+        const NAMES = (keys) => keys.map(k => CNAME[k]).join(' ');
+        function strip(id, keys) {
+            const box = $(id);
+            // 數字環、倍率環靠左，誤差環（與溫度係數環）靠右，中間留空
+            const roles = ROLES[keys.length], items = keys.map((k, i) => `<i style="background:${CHEX[k]}" title="${CNAME[k]}"></i>`);
+            const gapAt = roles.indexOf('m') + 1;
+            items.splice(gapAt, 0, '<i class="gap"></i>');
+            box.innerHTML = items.join('');
+        }
+        // 依環數重建各環的選項與標籤；保留已選值（不合法則取預設）
+        function buildBands() {
+            const n = +val('cb_n'), roles = ROLES[n], names = { d: '數字', m: '倍率', t: '誤差', c: '溫度係數' };
+            let di = 0;
+            CB.forEach((id, i) => {
+                const sel = document.getElementById(id), role = roles[i];
+                sel.parentElement.hidden = !role;
+                if (!role) return;
+                const old = sel.value;
+                sel.innerHTML = colorOpts(ROLE_KEYS[role]);
+                sel.value = ROLE_KEYS[role].includes(old) ? old : (role === 'd' ? DEFS[id] : role === 'm' ? '2' : role === 't' ? 'g' : '1');
+                document.getElementById('l_' + id).textContent = `第 ${i + 1} 環（${role === 'd' ? '數字' + ++di : names[role]}）`;
+            });
+        }
+        function calc() {
+            // 色碼
+            const n = +val('cb_n'), keys = CB.slice(0, n).map(id => val(id)), dc = decodeBands(keys);
+            strip('#res1', keys);
+            show('cb',!dc ? '色環組合不合法' : [['阻值', fmtSI(dc.ohms, 'Ω') + `（${nf(dc.ohms, 6)} Ω）`, 'ok'], ['誤差', '±' + dc.tol + '%（' + fmtSI(dc.ohms * (1 - dc.tol / 100), 'Ω') + ' – ' + fmtSI(dc.ohms * (1 + dc.tol / 100), 'Ω') + '）'], ...(dc.tc != null ? [['溫度係數', dc.tc + ' ppm/K']] : []), ['顏色', NAMES(keys)], ...(keys[0] === '0' ? [['注意', '第一環是黑色，通常不是正確讀法（也許要從另一端讀）', 'bad']] : [])]);
+            const eb = encodeBands(num('cr_v'), +val('cr_n'), val('cr_t'));
+            if (eb) strip('#res2', eb.keys); else $('#res2').replaceChildren();
+            show('cr', !eb ? '阻值需為 0.01 Ω 以上、不超過約 99.9 GΩ 的有效數字' : [['色環', NAMES(eb.keys), 'ok'], ...(eb.exact ? [] : [['注意', `色環無法精確表示，已四捨五入為 ${fmtSI(eb.value, 'Ω')}`, 'bad']]), ['對應阻值', fmtSI(eb.value, 'Ω')]]);
+            // 歐姆
+            const ol = ohmLaw(num('oh_v'), num('oh_i'), num('oh_r'), num('oh_p'));
+            show('g_ohm', !ol ? '請只填 V、I、R、P 其中兩個（皆需大於 0）' : [['電壓 V', fmtSI(ol.V, 'V'), 'ok'], ['電流 I', fmtSI(ol.I, 'A'), 'ok'], ['電阻 R', fmtSI(ol.R, 'Ω'), 'ok'], ['功率 P', fmtSI(ol.P, 'W'), 'ok']]);
+            // 串並聯
+            const { vals, bad } = parseList(val('rs_t')), sr = seriesR(vals), pr = parallelR(vals);
+            show('g_net', !vals.length ? '請輸入至少一個阻值' : [[`${vals.length} 個電阻串聯`, fmtSI(sr, 'Ω'), 'ok'], [`${vals.length} 個電阻並聯`, fmtSI(pr, 'Ω'), 'ok'], ...(bad ? [['略過', bad + ' 個無法讀取的項目', 'bad']] : [])]);
+            // LED
+            const lr = ledResistor(num('lv_s'), num('lv_f'), num('lv_i'), num('lv_n') || 1);
+            show('g_led', !lr ? '電源電壓需大於 LED 順向電壓總和，電流需大於 0' : [['計算電阻值', fmtSI(lr.R, 'Ω'), 'ok'], ['電阻消耗功率', fmtSI(lr.P, 'W')], ['最近的 E24', fmtSI(lr.nearest, 'Ω')], ['建議 E24（不小於計算值）', fmtSI(lr.up, 'Ω'), 'ok'], ['換成建議值後的電流', fmtSI(lr.Iactual, 'A') + '（功率 ' + fmtSI(lr.Pup, 'W') + '）'], ['建議電阻額定功率', lr.rating ? lr.rating + ' W 以上（留 2 倍餘裕）' : '超過 5 W，請改用功率電阻']]);
+            // 分壓
+            const vin = num('dv_vin'), r1 = num('dv_r1');
+            if (val('dv_m') === 'r2') {
+                const r2 = dividerR2(vin, num('dv_vo'), r1), e = r2 && nearestE(r2, 'E24'), e96 = r2 && nearestE(r2, 'E96'), chk = e && divider(vin, r1, e.nearest);
+                show('g_div', !r2 ? '需要 0 < Vout < Vin，R1 > 0' : [['所需 R2', fmtSI(r2, 'Ω'), 'ok'], ['最近 E24', fmtSI(e.nearest, 'Ω') + `（Vout ≈ ${nf(chk.Vout, 4)} V）`], ['最近 E96', fmtSI(e96.nearest, 'Ω')]]);
+            } else {
+                const d = divider(vin, r1, num('dv_r2'));
+                show('g_div', !d ? '需要有效的 Vin、R1、R2（不可同為 0）' : [['輸出電壓 Vout', fmtSI(d.Vout, 'V'), 'ok'], ['分壓比', nf(d.Vout / vin, 4)], ['電流', fmtSI(d.I, 'A')], ['總功耗', fmtSI(d.P, 'W')]]);
+            }
+            // RC
+            const rc = rcCalc(num('rc_r'), num('rc_c'), num('rc_f'));
+            show('g_rc', !rc ? 'R 與 C 需為大於 0 的有效數字' : [['時間常數 τ', fmtSI(rc.tau, 's'), 'ok'], ['截止頻率 fc', fmtSI(rc.fc, 'Hz'), 'ok'], ['上升時間（10–90%）', fmtSI(rc.rise, 's')], ['充放電到 99%（5τ）', fmtSI(rc.settle, 's')], ...(isFinite(rc.cFor) ? [['要達目標頻率的 C', fmtSI(rc.cFor, 'F') + '（最近 E12：' + fmtSI(nearestE(rc.cFor, 'E12').nearest, 'F') + '）', 'ok']] : [])]);
+            // 標準值
+            const ne = nearestE(num('es_v'), val('es_s'));
+            show('g_e', !ne ? '請輸入大於 0 的阻值' : [['最近的標準值', fmtSI(ne.nearest, 'Ω') + `（誤差 ${ne.err >= 0 ? '+' : ''}${nf(ne.err, 3)}%）`, 'ok'], ['不大於', fmtSI(ne.lower, 'Ω')], ['不小於', fmtSI(ne.upper, 'Ω')]]);
+        }
+
+        function save() {
+            const v = {}; document.querySelectorAll('[data-s]').forEach(e => { v[e.id] = e.value; });
+            store.set(KEY, { tab, v });
+        }
+        document.addEventListener('input', () => { calc(); save(); });
+        document.addEventListener('change', (e) => { if (e.target.id === 'cb_n') buildBands(); calc(); save(); });
+        $('#reset').onclick = () => {
+            if (!confirm('確定要清除所有輸入並恢復預設值嗎？頁面會重新載入，無法復原。')) return;
+            try { localStorage.removeItem(KEY); } catch (e) { /* 無法清除也照常重新載入 */ }
+            location.reload();
+        };
+        const opts = normOpts(store.get(KEY, null), IDS);
+        const setV = (id) => { const e = document.getElementById(id), v = id in opts.v ? opts.v[id] : DEFS[id]; e.value = v; if (e.tagName === 'SELECT' && e.value !== v) e.value = DEFS[id]; };
+        ['cb_n'].forEach(setV); buildBands();
+        for (const id of IDS) if (id !== 'cb_n') { if (CB.includes(id)) { const e = document.getElementById(id), v = opts.v[id]; if (v !== undefined && [...e.options].some(o => o.value === v)) e.value = v; } else setV(id); }
+        calc(); showTab(opts.tab);
+    </script>
+</body>
+
+</html>
