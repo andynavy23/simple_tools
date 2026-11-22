@@ -11,7 +11,9 @@ near(tierCost(330, 's', 1).cost, 120 * 1.78 + 210 * 2.55);
 near(tierCost(331, 's', 1).cost, 120 * 1.78 + 210 * 2.55 + 3.80);
 near(tierCost(700, 'n', 1).cost, 120 * 1.78 + 210 * 2.26 + 170 * 3.13 + 200 * 4.24);
 near(tierCost(1000, 's', 1).cost, 120 * 1.78 + 210 * 2.55 + 170 * 3.80 + 200 * 5.14 + 300 * 6.44);
-near(tierCost(1001, 's', 1).cost, tierCost(1000, 's', 1).cost + 8.46);
+near(tierCost(1001, 's', 1).cost, tierCost(1000, 's', 1).cost + 8.86);          // 2025/10/1 起：1001 度以上夏月 8.86、非夏月 7.03；701–1000 度夏月 6.44、非夏月 5.27
+near(tierCost(1000, 'n', 1).cost, 120 * 1.78 + 210 * 2.26 + 170 * 3.13 + 200 * 4.24 + 300 * 5.27);
+near(tierCost(1001, 'n', 1).cost, tierCost(1000, 'n', 1).cost + 7.03);
 // 兩個月級距加倍
 near(tierCost(240, 'n', 2).cost, 427.2);
 near(tierCost(241, 'n', 2).cost, 427.2 + 2.26);

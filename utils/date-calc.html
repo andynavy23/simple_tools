@@ -202,7 +202,12 @@
         }
 
         // 農曆年（以「相關公曆年」表示，如 2024 年春節前是 2023）。fmt 預設用瀏覽器 / Node 內建的 Intl 農曆；回傳 { year, month, day, leap } 或 null
+        // Intl（ICU）在新月落在 UTC+8 午夜前後幾分鐘時會差一天（2027 春節 ICU 算 2/7，實為 2/6）；下列區間以天文新月（UTC+8）校正：[起, 迄, 農曆年, 月, 起日的農曆日]
+        const LUNAR_FIX = [['2027-02-06', '2027-03-07', 2027, 1, 1], ['2030-02-02', '2030-02-02', 2029, 12, 30], ['2030-02-03', '2030-03-03', 2030, 1, 1]];
+        const lunarFix = (ds) => { const e = LUNAR_FIX.find(x => ds >= x[0] && ds <= x[1]); return e && { ry: e[2], m: e[3], d: e[4] + day.between(e[0], ds) }; };
+        const LM_NAME = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '臘月'];
         function lunarOf(dateStr, Fmt = Intl.DateTimeFormat) {
+            const fx = lunarFix(dateStr); if (fx) return { year: fx.ry, month: LM_NAME[fx.m - 1], day: fx.d, leap: false };
             try {
                 const { y, m, d } = day.parse(dateStr), parts = new Fmt('zh-u-ca-chinese', { timeZone: 'UTC', year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(new Date(Date.UTC(y, m - 1, d, 12)));
                 const get = (t) => (parts.find(p => p.type === t) || {}).value, ry = +get('relatedYear'), mon = String(get('month')), dd = +get('day');
@@ -235,6 +240,8 @@
             try {
                 const f = new Intl.DateTimeFormat('zh-u-ca-chinese', { timeZone: 'UTC', year: 'numeric', month: 'numeric', day: 'numeric' }), out = [];
                 for (let n = day.num(day.ymd(ry, 1, 1)), end = day.num(day.ymd(ry + 1, 3, 1)); n < end; n++) {
+                    const fx = lunarFix(day.shift('1970-01-01', n));
+                    if (fx) { if (fx.ry === ry) out.push({ n, m: fx.m, leap: false, d: fx.d }); continue; }
                     const ps = f.formatToParts(new Date(n * 864e5 + 432e5)), g = (t) => (ps.find(p => p.type === t) || {}).value, mon = String(g('month'));
                     if (+g('relatedYear') !== ry) continue;
                     out.push({ n, m: lunarMonthNum(mon), leap: /^[闰閏]/.test(mon), d: +g('day') });

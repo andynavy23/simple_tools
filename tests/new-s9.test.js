@@ -54,5 +54,22 @@ const assert = require('assert');
     // 自訂資料驗證
     assert.equal(m.cleanCustom([{ id: 'a', d: '2025-01-01', kind: 'off', name: 'x' }, null, { id: 'b', d: '2025-13-01', kind: 'off', name: 'x' }, { id: 'c', d: '2025-01-02', kind: 'bad', name: '' }, 5]).length, 1);
     assert.deepEqual(m.cleanCustom('x'), []); assert.equal(m.cleanCustom(Array(300).fill({ id: 'a', d: '2025-01-01', kind: 'work', name: '' })).length, 200);
+    // 農曆校正：Intl 對 2027 春節差一天（算 2/7，實為 2/6）；初一 / 端午 / 中秋 對照權威日期
+    assert.equal(m.lunarEvents(2027).ny, '2027-02-06'); assert.equal(m.lunarEvents(2027).dw, '2027-06-09'); assert.equal(m.lunarEvents(2027).mf, '2027-09-15');
+    assert.deepEqual(m.lunarOf('2027-02-05'), { m: 12, d: 29, leap: false }); assert.deepEqual(m.lunarOf('2027-03-07'), { m: 1, d: 30, leap: false }); assert.deepEqual(m.lunarOf('2027-03-08'), { m: 2, d: 1, leap: false });
+    assert.equal(m.lunarEvents(2030).ny, '2030-02-03');
+    assert.deepEqual([2025, 2026, 2027].map(y => m.autoHolidays(y).filter(x => x.name === '除夕').map(x => x.d)[0]), ['2025-01-28', '2026-02-16', '2027-02-05']);
+    // 人事行政總處辦公日曆表：2026 春節 2/14–2/22 共 9 天（2/15 補假在 2/20）、無補班；2027 春節 2/4–2/10 共 7 天
+    const map2 = m.buildMap([2025, 2026, 2027, 2028], []);
+    const has = (y, a, b, len) => { const r = m.restRuns(map2, y + '-01-01', y + '-12-31').find(x => x.from === a); assert.ok(r && r.to === b && r.len === len, a + ' ' + JSON.stringify(r)); };
+    has(2026, '2026-02-14', '2026-02-22', 9); has(2026, '2026-02-27', '2026-03-01', 3); has(2026, '2026-04-03', '2026-04-06', 4); has(2026, '2026-05-01', '2026-05-03', 3);
+    has(2026, '2026-06-19', '2026-06-21', 3); has(2026, '2026-09-25', '2026-09-28', 4); has(2026, '2026-10-09', '2026-10-11', 3); has(2026, '2026-10-24', '2026-10-26', 3); has(2026, '2026-12-25', '2026-12-27', 3);
+    has(2027, '2027-02-04', '2027-02-10', 7); has(2027, '2027-04-03', '2027-04-06', 4); has(2027, '2027-04-30', '2027-05-02', 3); has(2027, '2027-12-24', '2027-12-26', 3); has(2027, '2027-12-31', '2028-01-02', 3);
+    // 全年總放假日數（含週末）：2026 = 120、2027 = 121（人事行政總處公告）
+    const rest = (y) => { let n = 0; for (let d = y + '-01-01'; d <= y + '-12-31'; d = new Date(Date.parse(d) + 864e5).toISOString().slice(0, 10)) if (m.isRest(map2, d)) n++; return n; };
+    assert.equal(rest(2026), 120); assert.equal(rest(2027), 121);
+    assert.ok(![...map2].some(([d, e]) => e.kind === 'work' && d >= '2026-01-01'), '2026 起無補班');
+    // 真實資料的請假最佳化：2026 春節 N=4 可得 ≥ 9 天、且請的日子都是平日
+    const real = m.optimizeLeave(map2, 2026, 4); assert.ok(real.some(p => p.len >= 9) && real.every(p => p.leave.every(d => !m.isRest(map2, d))));
     ok('tw-holidays');
 }

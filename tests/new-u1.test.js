@@ -58,6 +58,19 @@ const assert = require('assert');
     // 全表：每種兩張牌 × 莊家明牌都要查得到合法動作
     const R = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10']; const okA = new Set(['hit', 'stand', 'double', 'split', 'surrender']);
     for (const a of R) for (const b of R) { if (a === 'A' && b === '10' || a === '10' && b === 'A') continue; for (const u of [...R.slice(1), 'A']) assert.ok(okA.has(S(a + 'S', b + 'H', u + 'D')), a + b + u); }
+    // 黃金表：由精確計算得出（8 副牌有限牌堆、S17、DAS、莊家偷看、晚投降、可再分牌至 4 手、分 A 只拿一張；8 副牌逐格 EV 取最佳動作）。欄 = 莊家 2..10,A
+    const GOLD = {
+        hard: { 8: 'HHHHHHHHHH', 9: 'HDDDDHHHHH', 10: 'DDDDDDDDHH', 11: 'DDDDDDDDDH', 12: 'HHSSSHHHHH', 13: 'SSSSSHHHHH', 14: 'SSSSSHHHHH', 15: 'SSSSSHHHRH', 16: 'SSSSSHHRRR', 17: 'SSSSSSSSSS' },
+        soft: { 13: 'HHHDDHHHHH', 14: 'HHHDDHHHHH', 15: 'HHDDDHHHHH', 16: 'HHDDDHHHHH', 17: 'HDDDDHHHHH', 18: 'SDDDDSSHHH', 19: 'SSSSSSSSSS' },
+        pair: { 2: 'PPPPPPHHHH', 3: 'PPPPPPHHHH', 4: 'HHHPPHHHHH', 6: 'PPPPPHHHHH', 7: 'PPPPPPHHHH', 8: 'PPPPPPPPPP', 9: 'PPPPPSPPSS', 10: 'SSSSSSSSSS', 11: 'PPPPPPPPPP' },
+    };
+    const NAMEC = { H: 'hit', S: 'stand', D: 'double', P: 'split', R: 'surrender' }, UPS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'A'];
+    const cardsFor = (kind, k) => kind === 'hard' ? (k >= 12 ? ['10S', (k - 10) + 'H'] : [k === 8 ? '2S' : k === 9 ? '3S' : k === 10 ? '4S' : '5S', '6H']) : kind === 'soft' ? ['AS', (k - 11) + 'H'] : (k === 11 ? ['AS', 'AH'] : [k + 'S', k + 'H']);
+    for (const kind of Object.keys(GOLD)) for (const k of Object.keys(GOLD[kind])) for (let i = 0; i < 10; i++) {
+        const want = NAMEC[GOLD[kind][k][i]], cs = cardsFor(kind, +k), up = UPS[i] + 'D';
+        assert.strictEqual(S(cs[0], cs[1], up), want, `${kind} ${k} vs ${UPS[i]}`);
+        assert.strictEqual(S(cs[0], cs[1], up, false), want === 'surrender' ? 'hit' : want, `${kind} ${k} vs ${UPS[i]} 不可投降`);
+    }
     // 統計
     assert.deepStrictEqual(m.validDrill(null), m.defDrill()); assert.deepStrictEqual(m.validDrill({ all: [5, 3], hard: 'x', soft: [1, 2.5], pair: [-1, 4] }), m.defDrill());
     assert.deepStrictEqual(m.validDrill({ all: [3, 5], hard: [1, 2] }).all, [3, 5]);

@@ -74,7 +74,7 @@
         root.addEventListener('pagehide', () => { try { const p = getPeer(); if (p) p.destroy(); } catch (e) { } });
     }
 
-    const call = (fn, ...args) => { if (typeof fn === 'function') fn(...args); };
+    const call = (fn, ...args) => { if (typeof fn === 'function') { try { fn(...args); } catch (e) { console.error('P2PRoom handler', e); } } };   // 成員送畸形資料造成處理函式丟例外時，不讓連線層壞掉
     const trySend = (conn, msg) => { try { if (conn && conn.open !== false) conn.send(msg); } catch (e) { /* 對方已斷線 */ } };
     const roster = (players) => players.map(p => ({ index: p.index, nick: p.nick, connected: p.connected }));
 

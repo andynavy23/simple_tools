@@ -173,7 +173,7 @@
 .st-data .st-msg.ok{color:var(--ok)}
 .st-help footer label{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
 @media (max-width:600px){.st-help{width:100vw;max-width:100vw;max-height:92vh;max-height:92dvh;margin:auto auto 0;border-bottom-left-radius:0;border-bottom-right-radius:0}}
-.st-bar button{width:auto;min-width:38px;padding:0 10px;gap:6px;display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+.st-bar button{width:auto;min-width:44px;min-height:44px;padding:0 10px;gap:6px;display:inline-flex;align-items:center;justify-content:center;font-size:13px}
 .st-help header b{font-family:var(--head-font);font-size:18px}
 .st-bar svg{width:19px;height:19px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .st-bar .st-lb{display:none}

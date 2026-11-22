@@ -14,6 +14,10 @@ const assert = require('assert');
     // 30 日不足：2025 年二月只有 29 天，30 日取月底
     assert.equal(m.lunarToSolar(2025, 2, 30, false), m.lunarToSolar(2025, 2, 29, false));
     assert.notEqual(m.lunarToSolar(2025, 2, 29, false), m.lunarToSolar(2025, 2, 28, false));
+    // Intl 對 2027 春節差一天（算 2/7，實為 2/6）：校正後 初一 2/6、正月最後一日 3/7（30 日）、2030 初一 2/3
+    assert.equal(m.lunarToSolar(2027, 1, 1, false), '2027-02-06'); assert.equal(m.lunarToSolar(2027, 1, 30, false), '2027-03-07'); assert.equal(m.lunarToSolar(2027, 2, 1, false), '2027-03-08');
+    assert.equal(m.lunarToSolar(2027, 12, 1, false) > '2027-12-01', true); assert.equal(m.lunarToSolar(2030, 1, 1, false), '2030-02-03'); assert.equal(m.lunarToSolar(2029, 12, 30, false), '2030-02-02');
+    assert.equal(m.lunarToSolar(2027, 5, 5, false), '2027-06-09'); assert.equal(m.lunarToSolar(2027, 8, 15, false), '2027-09-15');
     ok('lunarToSolar');
     const nb = m.nextLunarBirthday(1, 1, false, '2025-02-01');
     assert.equal(nb.date, '2026-02-17'); assert.equal(nb.days, day(nb.date, '2025-02-01'));
@@ -30,7 +34,7 @@ const assert = require('assert');
     assert.equal(sp[0].p.name, 'B'); assert.equal(sp[0].info.days, 4); assert.equal(sp[0].info.age, 25); assert.equal(sp[0].info.turning, 26);
     assert.equal(m.soonTag(0), '今天'); assert.equal(m.soonTag(7), '7 天內'); assert.equal(m.soonTag(8), '30 天內'); assert.equal(m.soonTag(31), '');
     const lp = m.personInfo({ id: 'l', name: 'L', cal: 'l', ly: 1990, lm: 1, ld: 1, leap: false }, '2026-11-16');
-    assert.equal(lp.zodiac, '馬'); assert.equal(lp.birth, '1990-01-27'); assert.equal(lp.next, '2027-02-07'); assert.equal(lp.turning, 37);
+    assert.equal(lp.zodiac, '馬'); assert.equal(lp.birth, '1990-01-27'); assert.equal(lp.next, '2027-02-06'); assert.equal(lp.turning, 37);
     assert.ok(m.peopleText(c, '2026-11-16').includes('媽'));
     const ics = m.peopleIcs(c, '2026-11-16');
     assert.ok(ics.startsWith('BEGIN:VCALENDAR') && ics.includes('RRULE:FREQ=YEARLY') && (ics.match(/BEGIN:VEVENT/g) || []).length === 1 + 5);
@@ -51,7 +55,11 @@ const assert = require('assert');
     assert.equal(f25['冬至'] && m.festivalsOfYear(2026).find(f => f.name === '冬至').date, '2026-12-22');
     const nf = m.nextFestivals('2026-11-16');
     assert.equal(nf[0].name, '冬至'); assert.equal(nf[0].days, 36);
-    assert.ok(nf.some(f => f.name === '農曆新年' && f.date === '2027-02-07'));
+    assert.ok(nf.some(f => f.name === '農曆新年' && f.date === '2027-02-06'));
+    // Intl 在 2027 春節差一天，已校正：初一 2/6、元宵 2/20、端午 6/9、中秋 9/15；2030 初一 2/3
+    const f27 = Object.fromEntries(m.festivalsOfYear(2027).map(f => [f.name, f.date]));
+    assert.equal(f27['農曆新年'], '2027-02-06'); assert.equal(f27['元宵節'], '2027-02-20'); assert.equal(f27['端午節'], '2027-06-09'); assert.equal(f27['中秋節'], '2027-09-15');
+    assert.equal(Object.fromEntries(m.festivalsOfYear(2030).map(f => [f.name, f.date]))['農曆新年'], '2030-02-03');
     assert.ok(nf.every((f, i) => i === 0 || nf[i - 1].days <= f.days) && new Set(nf.map(f => f.name)).size === nf.length);
     assert.ok(nf.find(f => f.name === '冬至').approx);
     const a = m.addFestival([], nf[0]); assert.ok(a.added && a.events.length === 1);

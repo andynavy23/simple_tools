@@ -37,7 +37,8 @@
         <div class="eg">2025 春節：1/25（六）到 2/2（日）連休 9 天（含 1/27 調整放假），2/8（六）要補班。輸入 N = 2，可能得到「請 2 天換 9 天以上」之類的方案。</div>
         <h3>小提醒</h3>
         <ul>
-        <li>規則依「紀念日及節日實施條例」推算（週六提前一天補假、週日延後一天補假；春節放除夕到初三）。<b>調整放假與補班日是範例資料，請以行政院人事行政總處公告為準</b>，不同時請在「資料編輯」覆蓋。</li>
+        <li>規則依「紀念日及節日實施條例」推算（週六提前一天補假、週日延後一天補假；春節放除夕前一日到初三，逢週末順延補假）。資料對照行政院人事行政總處「政府行政機關辦公日曆表」（114、115、116 年，查詢日 2026-11-22）：114 年 6 月修正後已取消補班制度，2026、2027 年都沒有補班日，僅 2025 春節有 1/27 調整放假與 2/8 補班。<b>請以人事行政總處公告為準</b>，不同時請在「資料編輯」覆蓋。</li>
+        <li>農曆節日用瀏覽器內建農曆推算，並以天文新月（UTC+8）校正已知差一天的日期（例如 2027 春節初一是 2/6，部分瀏覽器會算成 2/7）。</li>
         <li>勞動節、教師節、光復節、行憲紀念日以 2025 年起全民放假計；企業、學校、軍公教實際放假可能不同。</li>
         <li>自訂資料存在這台裝置（鍵 twhol_custom），上限 200 筆，滿了要先刪除才能新增；可單筆刪除或「清除全部自訂資料」（會先確認，無法復原）；列印日曆的標記日存在鍵 twhol_marks，上限 100 筆，同樣可單筆刪除或「清除全部標記」（會先確認，無法復原），資料壞掉時載入會自動略過壞項；壞掉的資料載入時會被略過。</li>
         <li>請假最佳化假設週末與放假日休息、補班日上班，請假日只挑一般上班日；僅供參考。</li>
@@ -103,7 +104,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>台灣連假行事曆</h1>
-        <p class="sub">2025–2027 國定假日、補班日、連假倒數與請假最佳化。<b>調整放假 / 補班為範例，請以行政院人事行政總處公告為準。</b></p>
+        <p class="sub">2025–2027 國定假日、補班日、連假倒數與請假最佳化。<b>資料依行政院人事行政總處辦公日曆表（114–116 年），請以人事行政總處公告為準。</b></p>
 
         <div class="card">
             <div class="big" id="next"></div>
@@ -151,7 +152,7 @@
                 <div class="row"><input type="date" id="cDate" aria-label="日期"><select id="cKind" aria-label="種類"><option value="off">放假</option><option value="work">補班</option></select><input type="text" id="cName" maxlength="20" placeholder="名稱（例如 調整放假）" aria-label="名稱"><button class="primary" id="cAdd">新增</button></div>
                 <div class="row"><b>自訂資料（<span id="cN">0</span>/200）</b><button class="sm" id="cClear">清除全部自訂資料</button></div>
                 <div id="cList"></div>
-                <h2>內建調整放假 / 補班（範例）</h2>
+                <h2>內建調整放假 / 補班（人事行政總處 114–116 年辦公日曆表，2026-11-22 查詢；115、116 年無補班）</h2>
                 <div id="adjList"></div>
             </div>
         </div>
@@ -162,15 +163,18 @@
         const { day } = Util;
         // --- pure ---
         const YEARS = [2025, 2026, 2027], MAX_CUSTOM = 200;
-        // 調整放假 / 補班：範例資料，請以行政院人事行政總處公告為準
+        // 補班：依行政院人事行政總處「政府行政機關辦公日曆表」（114 年 6/27/2024 公告、查詢日 2026-11-22）：2025 春節 1/27 調整放假、2/8 補班。
+        // 114 年 6 月修正後刪除「調整放假補行上班」，115（2026）、116（2027）年辦公日曆表皆無補班日（除夕前一日已列入春節放假），故只剩這一筆。
         const TW_ADJ = [
-            { d: '2025-01-27', kind: 'off', name: '春節調整放假' }, { d: '2025-02-08', kind: 'work', name: '補班（補 1/27）' },
-            { d: '2026-02-07', kind: 'work', name: '補班（補 2/20）' }, { d: '2026-02-20', kind: 'off', name: '春節調整放假' },
+            { d: '2025-02-08', kind: 'work', name: '補班（補 1/27）' },
         ];
         const dow = (ds) => (day.num(ds) + 4) % 7;     // 0=日
         const LF = new Intl.DateTimeFormat('en-u-ca-chinese', { month: 'numeric', day: 'numeric', timeZone: 'UTC' });
         // 西曆日期 → 農曆 { m, d, leap }
+        // Intl（ICU）在新月落在 UTC+8 午夜前後幾分鐘時會差一天（2027 春節 ICU 算 2/7，實為 2/6）；下列區間以天文新月（UTC+8）校正：[起, 迄, 農曆年, 月, 起日的農曆日]
+        const LUNAR_FIX = [['2027-02-06', '2027-03-07', 2027, 1, 1], ['2030-02-02', '2030-02-02', 2029, 12, 30], ['2030-02-03', '2030-03-03', 2030, 1, 1]];
         function lunarOf(ds) {
+            const e = LUNAR_FIX.find(x => ds >= x[0] && ds <= x[1]); if (e) return { m: e[3], d: e[4] + day.between(e[0], ds), leap: false };
             const { y, m, d } = day.parse(ds), p = LF.formatToParts(new Date(Date.UTC(y, m - 1, d, 12)));
             const mo = p.find(x => x.type === 'month').value;
             return { m: parseInt(mo, 10), d: +p.find(x => x.type === 'day').value, leap: /\D/.test(mo) };
@@ -195,11 +199,12 @@
             const L = lunarEvents(y), q = qingming(y), p2 = (n) => String(n).padStart(2, '0'), res = [];
             const add = (d, name, spring) => res.push({ d, name, spring: !!spring });
             add(y + '-01-01', '元旦');
-            add(day.shift(L.ny, -1), '除夕', 1); add(L.ny, '春節初一', 1); add(day.shift(L.ny, 1), '春節初二', 1); add(day.shift(L.ny, 2), '春節初三', 1);
+            add(day.shift(L.ny, -2), '除夕前一日', 1); add(day.shift(L.ny, -1), '除夕', 1); add(L.ny, '春節初一', 1); add(day.shift(L.ny, 1), '春節初二', 1); add(day.shift(L.ny, 2), '春節初三', 1);
             add(y + '-02-28', '和平紀念日');
             add(y + '-04-' + p2(q === 4 ? 3 : 4), '兒童節'); add(y + '-04-' + p2(q), '清明節');
             add(y + '-05-01', '勞動節'); add(L.dw, '端午節'); add(y + '-09-28', '教師節'); add(L.mf, '中秋節');
             add(y + '-10-10', '國慶日'); add(y + '-10-25', '光復節'); add(y + '-12-25', '行憲紀念日');
+            if (dow((y + 1) + '-01-01') === 6) add(y + '-12-31', '元旦補假');   // 隔年元旦逢週六，補假在本年 12/31
             res.sort((a, b) => a.d.localeCompare(b.d));
             // 補假：週六提前一天、週日延後一天；春節落在週末者順延到春節後的上班日
             const taken = new Set(res.map(x => x.d)), extra = [];

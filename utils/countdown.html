@@ -329,11 +329,16 @@
 
         // ---------- 節慶：農曆用 Intl 換算、清明 / 冬至用通行公式（±1 日）、國曆節日用規則 ----------
         // 農曆年 ry 內，一次掃完 ry-01-01 ~ ry-12-31，回傳 { 'm-d': 國曆日期 }（只收平月）；Intl 不支援回傳 {}
+        // Intl（ICU）在新月落在 UTC+8 午夜前後幾分鐘時會差一天（2027 春節 ICU 算 2/7，實為 2/6）；下列區間以天文新月（UTC+8）校正：[起, 迄, 農曆年, 月, 起日的農曆日]
+        const LUNAR_FIX = [['2027-02-06', '2027-03-07', 2027, 1, 1], ['2030-02-02', '2030-02-02', 2029, 12, 30], ['2030-02-03', '2030-03-03', 2030, 1, 1]];
+        const lunarFix = (ds) => { const e = LUNAR_FIX.find(x => ds >= x[0] && ds <= x[1]); return e && { ry: e[2], m: e[3], d: e[4] + day.between(e[0], ds) }; };
         function lunarFestDates(ry, wanted) {
             const out = {};
             try {
                 const f = new Intl.DateTimeFormat('zh-u-ca-chinese', { timeZone: 'UTC', year: 'numeric', month: 'numeric', day: 'numeric' });
                 for (let n = daysBetween('1970-01-01', ymd({ y: ry, m: 1, d: 1 })), end = n + 366; n < end; n++) {
+                    const fx = lunarFix(day.shift('1970-01-01', n));
+                    if (fx) { const k = fx.m + '-' + fx.d; if (fx.ry === ry && wanted.includes(k) && !out[k]) out[k] = day.shift('1970-01-01', n); continue; }
                     const ps = f.formatToParts(new Date(n * 864e5 + 432e5)), g = (t) => (ps.find(p => p.type === t) || {}).value, mon = String(g('month'));
                     if (+g('relatedYear') !== ry || /^[闰閏]/.test(mon)) continue;
                     const key = ({ 正: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10, 十一: 11, 十二: 12 }[mon.replace(/月$/, '')] || parseInt(mon, 10)) + '-' + g('day');
