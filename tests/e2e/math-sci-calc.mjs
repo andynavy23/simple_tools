@@ -137,7 +137,7 @@ await noOverflow('phy');
 await page.reload({ waitUntil: 'load' });
 const cur = () => page.evaluate(() => document.querySelector('.tabs button[aria-pressed=true]').dataset.t);
 assert.strictEqual(await cur(), 'phy');
-for (const bad of ['{"tab":"zzz"}', 'null', '[1]', '"x"', '{bad']) { await page.evaluate((v) => localStorage.setItem('mathsci_opts', v), bad); await page.reload({ waitUntil: 'load' }); assert.strictEqual(await cur(), 'nt', bad); }
+for (const bad of ['{"tab":"zzz"}', 'null', '[1]', '"x"', '{bad']) { await page.evaluate((v) => { sessionStorage.clear(); localStorage.setItem('mathsci_opts', v); }, bad); await page.reload({ waitUntil: 'load' }); assert.strictEqual(await cur(), 'nt', bad); }
 await page.evaluate(() => localStorage.removeItem('mathsci_opts'));
 
 assert.deepEqual(errors, []);

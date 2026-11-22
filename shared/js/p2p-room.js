@@ -4,7 +4,7 @@
  * 本模組負責「連線層」：建房、加入、暱稱驗證、拒絕、名單、斷線、踢人、只信任房主、逾時、錯誤說明。
  * 工具之間傳的訊息（任意可序列化資料）原樣轉送，不做任何格式規定。
  *
- * 使用：<script src="../shared/js/p2p-room.js"></script>（PeerJS 會由本檔自動從 CDN 載入）
+ * 使用：<script src="../shared/js/p2p-room.js"></script>（PeerJS 由本檔自動載入 shared/js/vendor/peerjs.min.js，失敗才退回 unpkg）
  *
  * // 房主
  * const room = P2PRoom.host({
@@ -34,7 +34,8 @@
 (function (root) {
     'use strict';
 
-    const PEERJS_URL = 'https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js';
+    const P2P_SRC = typeof document !== 'undefined' && document.currentScript ? document.currentScript.src : '';
+    const PEERJS_URLS = [...(P2P_SRC ? [new URL('vendor/peerjs.min.js', P2P_SRC).href] : []), 'https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js'];   // 先本地，失敗才退回 CDN
     const ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }];
     const JOIN_TIMEOUT_MS = 10000;
     const NICK_RE = /^[a-zA-Z0-9一-龥]+$/;
@@ -46,11 +47,14 @@
         if (root.Peer) return Promise.resolve(root.Peer);
         if (!peerLoader) {
             peerLoader = new Promise((resolve, reject) => {
-                const s = document.createElement('script');
-                s.src = PEERJS_URL;
-                s.onload = () => resolve(root.Peer);
-                s.onerror = () => { peerLoader = null; reject({ type: 'load-failed' }); };
-                document.head.append(s);
+                const tryLoad = (i) => {
+                    const s = document.createElement('script');
+                    s.src = PEERJS_URLS[i];
+                    s.onload = () => resolve(root.Peer);
+                    s.onerror = () => { s.remove(); if (i + 1 < PEERJS_URLS.length) tryLoad(i + 1); else { peerLoader = null; reject({ type: 'load-failed' }); } };
+                    document.head.append(s);
+                };
+                tryLoad(0);
             });
         }
         return peerLoader;

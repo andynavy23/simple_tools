@@ -292,6 +292,9 @@ const ok = (name) => console.log('ok  ' + name);
         delete global.Chrome; assert.equal(store.set('a', 1), false);
         global.localStorage = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = v; } }; failed = 0; global.Chrome = { storageFailed() { failed++; } };
         assert.equal(store.set('ok', 1), true); assert.equal(failed, 0, '成功時不提示'); delete global.Chrome;
+        global.localStorage.removeItem = (k) => { delete mem[k]; };
+        assert.equal(store.remove('ok'), true); assert.equal(store.get('ok', 'gone'), 'gone');
+        global.localStorage = { removeItem() { throw new Error('blocked'); } }; assert.equal(store.remove('ok'), false);   // 被封鎖 → 不丟錯
         // ObjectId
         const O = Util.oid;
         assert.ok(O.isValid('507f1f77bcf86cd799439011') && O.isValid(' 507F1F77BCF86CD799439011 ') && !O.isValid('507f1f77bcf86cd79943901') && !O.isValid('zzzf1f77bcf86cd799439011') && !O.isValid(5) && !O.isValid(''));

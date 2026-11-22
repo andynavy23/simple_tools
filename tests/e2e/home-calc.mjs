@@ -33,7 +33,7 @@ await tab(6); assert.ok((await txt('#o_g_dia')).includes('240') || (await txt('#
 await page.reload({ waitUntil: 'load' });
 assert.ok(await page.$eval('#p6', e => !e.hidden), '記住分頁'); assert.strictEqual(await page.$eval('#fu_a', e => e.value), '300');
 // 壞資料
-await page.evaluate(() => localStorage.setItem('homec_opts', '{"tab":99,"v":{"fe_n":5,"fu_a":null}}'));
+await page.evaluate(() => { sessionStorage.clear(); localStorage.setItem('homec_opts', '{"tab":99,"v":{"fe_n":5,"fu_a":null}}'); });
 await page.reload({ waitUntil: 'load' });
 assert.ok(await page.$eval('#p0', e => !e.hidden)); assert.strictEqual(await page.$eval('#fe_n', e => e.value), '20');
 // 重置

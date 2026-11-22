@@ -1,8 +1,8 @@
 // Simple Tools service worker：預快取首頁與共用檔，其餘同源 GET 用 stale-while-revalidate（先給快取、背景更新，下次載入就是新版）。
-// 不處理跨來源請求（PeerJS CDN 等）與非 GET。改動快取行為時請調高 CACHE_VERSION（首頁 index.html 裡的 SW_CACHE 要同步）。
-const CACHE_VERSION = 'v3';
+// 不處理跨來源請求（PeerJS 退回備援的 unpkg 等）與非 GET。改動快取行為時請調高 CACHE_VERSION（首頁 index.html 裡的 SW_CACHE 要同步）。
+const CACHE_VERSION = 'v4';
 const CACHE = 'st-' + CACHE_VERSION;
-const CORE = ['./', 'index.html', 'manifest.webmanifest', 'shared/css/theme.css', 'shared/css/maple.css', 'shared/js/chrome.js', 'shared/js/util.js', 'shared/js/p2p-room.js', 'shared/js/tw-holiday-data.js', 'assets/icons/icon-192.png', 'assets/icons/apple-touch-icon.png', 'assets/icons/icon-512.png', 'assets/icons/maskable-512.png', 'assets/icons/favicon.svg', 'assets/icons/favicon-16.png', 'assets/icons/favicon-32.png', 'assets/icons/favicon.ico', 'favicon.ico'];
+const CORE = ['./', 'index.html', 'manifest.webmanifest', 'shared/css/theme.css', 'shared/css/maple.css', 'shared/js/chrome.js', 'shared/js/util.js', 'shared/js/p2p-room.js', 'shared/js/vendor/peerjs.min.js', 'shared/js/tw-holiday-data.js', 'assets/icons/icon-192.png', 'assets/icons/apple-touch-icon.png', 'assets/icons/icon-512.png', 'assets/icons/maskable-512.png', 'assets/icons/favicon.svg', 'assets/icons/favicon-16.png', 'assets/icons/favicon-32.png', 'assets/icons/favicon.ico', 'favicon.ico'];
 
 self.addEventListener('install', (e) => {
     e.waitUntil(caches.open(CACHE).then(c => Promise.all(CORE.map(u => c.add(u).catch(() => { })))).then(() => self.skipWaiting()));

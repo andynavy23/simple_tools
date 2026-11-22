@@ -393,7 +393,7 @@
         document.querySelectorAll('h2').forEach((x) => { if (/^(計算)?結果$/.test(x.textContent.trim())) { const c = x.closest('.card'); if (c) c.classList.add('st-result'); } });
         if (rb) rb.hidden = !h || h.getBoundingClientRect().top < innerHeight - 140;
     }
-    // 記住目前分頁（sessionStorage，只在這個瀏覽器分頁內有效；只用於沒有 st-keys 的頁面）：點分頁鈕記索引，重新載入時若目前是第 1 個分頁就點回去
+    // 記住目前分頁（sessionStorage，只在這個瀏覽器分頁內有效；頁面自己已用 localStorage 還原到別的分頁時不覆蓋）：點分頁鈕記索引，重新載入時若目前是第 1 個分頁就點回去
     const TABSEL = '.tabs,#tabs,[role=tablist]', tabKey = 'st_tab:' + location.pathname;
     const tabsOf = () => [...document.querySelectorAll(TABSEL)];
     const tabMem = () => { try { const o = JSON.parse(sessionStorage.getItem(tabKey)); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (e) { return {}; } };
@@ -413,7 +413,6 @@
             if (ci < 0 || i < 0) return;
             try { const m = tabMem(); m[ci] = i; sessionStorage.setItem(tabKey, JSON.stringify(m)); } catch (err) { /* 沒有也只是不記住 */ }
         }, true);
-        if (metaKeys()) return;            // 有宣告 st-keys 的頁面通常自己用 localStorage 記分頁，不重複處理
         const go = () => requestAnimationFrame(restoreTabs);
         if (document.readyState === 'complete') go(); else addEventListener('load', go);
     }

@@ -40,7 +40,7 @@ await noScroll('行銷');
 await page.reload({ waitUntil: 'load' });
 assert.ok(await page.$eval('#p2', e => !e.hidden), '記住分頁'); assert.strictEqual(await page.$eval('#fun', e => e.value), 'a,1');
 // 壞資料
-await page.evaluate(() => localStorage.setItem('bizcalc_opts', '{"tab":9,"v":{"p_cost":5,"fun":null}}'));
+await page.evaluate(() => { sessionStorage.clear(); localStorage.setItem('bizcalc_opts', '{"tab":9,"v":{"p_cost":5,"fun":null}}'); });
 await page.reload({ waitUntil: 'load' });
 assert.ok(await page.$eval('#p0', e => !e.hidden)); assert.strictEqual(await page.$eval('#p_cost', e => e.value), '100');
 // 重置

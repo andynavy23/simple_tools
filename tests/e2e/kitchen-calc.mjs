@@ -29,7 +29,7 @@ try {
     await page.reload({ waitUntil: 'load' });
     assert.ok(await page.$eval('#p10', e => !e.hidden), '記住分頁'); assert.strictEqual(await page.$eval('#m_list', e => e.value), '亂寫'); assert.strictEqual(await page.$eval('#y_pct', e => e.value), '2');
     // 壞資料
-    await page.evaluate(() => localStorage.setItem('kitchenc_opts', '{"tab":99,"v":{"y_pct":5,"m_list":null,"y_type":"zzz"}}'));
+    await page.evaluate(() => { sessionStorage.clear(); localStorage.setItem('kitchenc_opts', '{"tab":99,"v":{"y_pct":5,"m_list":null,"y_type":"zzz"}}'); });
     await page.reload({ waitUntil: 'load' });
     assert.ok(await page.$eval('#p0', e => !e.hidden)); assert.strictEqual(await page.$eval('#y_pct', e => e.value), '1'); assert.strictEqual(await page.$eval('#y_type', e => e.value), 'instant');
     // 重置

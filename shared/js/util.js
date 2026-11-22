@@ -274,6 +274,10 @@
             try { localStorage.setItem(key, JSON.stringify(value)); return true; }
             catch (e) { if (!quiet && root.Chrome && root.Chrome.storageFailed) root.Chrome.storageFailed(); return false; }
         },
+        // 刪除鍵：失敗不丟、不提示，回傳是否成功
+        remove(key) {
+            try { localStorage.removeItem(key); return true; } catch (e) { return false; }
+        },
     };
 
     const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex, seeded, parseCSV, toObjects, isNum, csvStringify, oid, ids };
