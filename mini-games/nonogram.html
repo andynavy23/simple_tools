@@ -10,7 +10,7 @@
     <meta property="og:description" content="依行列提示塗格子的邏輯益智遊戲。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/nonogram.html" />
-    <meta name="st-keys" content="nono_best_*">
+    <meta name="st-keys" content="nono_best_*,nono_cur">
     <title>數織 Nonogram</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -153,6 +153,7 @@
         <li>✕ 只是筆記，不影響是否過關。</li>
         <li>棋盤上滑動不會捲動頁面，要捲動請從棋盤外滑。</li>
         <li>15×15 的格子較小，可以先用較小的盤面練習。</li>
+            <li>進行中的盤面（題目、已塗的格子、已用時間）會自動存在這台裝置，重新整理或切回來可接續；完成或按「新題目」就清掉，永遠只存一局。</li>
             <li>最佳紀錄存在這台裝置；想重來可按頁面下方的「清除最佳紀錄」（只清這個遊戲，無法復原；頁面會重新載入，進行中的這一局會結束）。</li>
 </ul>
     </template>
@@ -237,6 +238,13 @@
             }
             return null;
         }
+        // 驗證進行中存檔 { n, grid(解答), cells(玩家塗色), sec }；sizes 為允許的大小。不合格回傳 null
+        function restoreNono(o, sizes) {
+            if (!o || !sizes.includes(o.n) || !Number.isSafeInteger(o.sec) || o.sec < 0 || o.sec > 1e7) return null;
+            const sq = (g, max) => Array.isArray(g) && g.length === o.n && g.every(r => Array.isArray(r) && r.length === o.n && r.every(v => Number.isInteger(v) && v >= 0 && v <= max));
+            if (!sq(o.grid, 1) || !sq(o.cells, 2) || !o.grid.some(r => r.includes(1))) return null;
+            return { n: o.n, grid: o.grid.map(r => [...r]), cells: o.cells.map(r => [...r]), sec: o.sec };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -246,8 +254,17 @@
         const bestKey = () => 'nono_best_' + N;
         const showBest = () => { const b = store.get(bestKey(), null); $('#best').textContent = b === null ? '—' : fmt(b); };
 
+        // 進行中存檔：每次畫面更新與離開頁面時寫入，完成 / 換題時清掉
+        const CUR = 'nono_cur';
+        const saveCur = () => { if (P && !done) store.set(CUR, { n: N, grid: P.grid, cells, sec: started ? Math.floor((Date.now() - started) / 1000) : 0 }); };
+        const rmCur = () => { try { localStorage.removeItem(CUR); } catch (e) { } };
+        const startTimer = () => { timer = setInterval(() => { $('#time').textContent = fmt(Math.floor((Date.now() - started) / 1000)); }, 500); };
+        addEventListener('pagehide', saveCur);
+        document.addEventListener('visibilitychange', () => { if (document.hidden) saveCur(); });
+
         let pending = 0;
         function newPuzzle() {
+            rmCur();
             N = +$('#size').value;
             clearInterval(timer); clearTimeout(pending); started = 0; done = false; $('#time').textContent = '0:00'; $('#msg').textContent = '出題中…';
             pending = setTimeout(() => {                                  // 先讓畫面更新再計算；連按時只保留最後一次
@@ -279,6 +296,7 @@
                 el.classList.toggle('f', v === 1); el.textContent = v === 2 ? '✕' : '';
             });
             if (!P) return;
+            saveCur();
             const g = cells.map(r => r.map(v => (v === 1 ? 1 : 0)));
             document.querySelectorAll('#board .rl').forEach(el => el.classList.toggle('done', sameClue(runsOf(g[el.dataset.row]), P.rowC[el.dataset.row])));
             document.querySelectorAll('#board .cl').forEach(el => el.classList.toggle('done', sameClue(runsOf(g.map(r => r[el.dataset.col])), P.colC[el.dataset.col])));
@@ -288,13 +306,13 @@
             if (done || !el || el.dataset.i === undefined) return;
             const i = +el.dataset.i, j = +el.dataset.j;
             if (cells[i][j] === val) return;
-            if (!started) { started = Date.now(); timer = setInterval(() => { $('#time').textContent = fmt(Math.floor((Date.now() - started) / 1000)); }, 500); }
+            if (!started) { started = Date.now(); startTimer(); }
             cells[i][j] = val; render();
             if (matches(cells, P.rowC, P.colC)) win();
         }
 
         function win() {
-            done = true; clearInterval(timer);
+            done = true; clearInterval(timer); rmCur();
             const secs = Math.floor((Date.now() - started) / 1000), best = store.get(bestKey(), null);
             $('#time').textContent = fmt(secs);
             $('#msg').textContent = best === null || secs < best ? `🎉 完成！${fmt(secs)}（新紀錄）` : `🎉 完成！${fmt(secs)}`;
@@ -321,9 +339,15 @@
         $('#size').onchange = newPuzzle;
         $('#mode').onclick = () => { marking = !marking; $('#mode').setAttribute('aria-pressed', marking); };
         $('#clear').onclick = () => { if (!P || done) return; cells = Array.from({ length: N }, () => new Array(N).fill(0)); $('#msg').textContent = ''; render(); };
-        newPuzzle();
+        // 接續上次進行中的盤面
+        const cur = restoreNono(store.get(CUR, null), [...$('#size').options].map(o => +o.value));
+        if (cur) {
+            N = cur.n; $('#size').value = N; P = { grid: cur.grid, ...cluesOf(cur.grid) }; cells = cur.cells;
+            if (cur.sec || cells.some(r => r.some(Boolean))) { started = Date.now() - cur.sec * 1000; startTimer(); }
+            $('#time').textContent = fmt(cur.sec); build(); showBest();
+        } else newPuzzle();
     </script>
-<script>document.getElementById('clearBest').onclick=()=>{if(!confirm('清除這個遊戲的所有最佳紀錄？無法復原。頁面會重新載入，正在進行的這一局會結束。'))return;try{const p=['nono_best_'];Object.keys(localStorage).filter(k=>p.some(x=>k.startsWith(x))).forEach(k=>localStorage.removeItem(k));}catch(e){}location.reload();};</script>
+<script>document.getElementById('clearBest').onclick=()=>{if(!confirm('清除這個遊戲的所有最佳紀錄？無法復原。頁面會重新載入，正在進行的這一局會結束。'))return;try{const p=['nono_best_', 'nono_cur'];Object.keys(localStorage).filter(k=>p.some(x=>k.startsWith(x))).forEach(k=>localStorage.removeItem(k));}catch(e){}location.reload();};</script>
 </body>
 
 </html>

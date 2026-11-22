@@ -23,6 +23,19 @@ try {
     assert.ok((await txt('#lInfo')).includes('Java') && (await txt('#lInfo')).includes('共 5 筆'), await txt('#lInfo'));
     assert.equal(await count('#list .ent'), 5);
     assert.ok(await page.$eval('#src', e => e.disabled), '載入檔案後文字框停用');
+    // 非輸入元件聚焦時 paste 純文字、整頁 drop 檔案
+    const fire = (kind, text) => page.evaluate((kind, text) => {
+        const dt = new DataTransfer(); if (kind === 'paste') dt.setData('text/plain', text); else dt.items.add(new File([text], 'd.log', { type: 'text/plain' }));
+        const e = kind === 'paste' ? new Event('paste', { bubbles: true, cancelable: true }) : new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt });
+        if (kind === 'paste') Object.defineProperty(e, 'clipboardData', { value: dt });
+        document.body.dispatchEvent(e);
+    }, kind, text);
+    await fire('paste', '2024-05-01 10:00:01,123 INFO a - x\n2024-05-01 10:00:02,000 INFO a - y\n2024-05-01 10:00:03,000 ERROR a - z'); await wait(500);
+    assert.equal(await count('#list .ent'), 3); assert.ok(!(await page.$eval('#src', e => e.disabled)));
+    await fire('drop', LOG); await wait(500);
+    assert.equal(await count('#list .ent'), 5);
+    await click('#clear'); await wait(200);
+    await (await page.$('#file')).uploadFile(file); await wait(500);
     await click('#clear'); await wait(100);
     assert.equal(await count('#list .ent'), 0);
 

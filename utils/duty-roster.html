@@ -128,7 +128,7 @@
         <div class="card">
             <h2>輪值表 <span class="muted" id="cnt" style="font-weight:400;font-size:14px"></span></h2>
             <div id="out"></div>
-            <div class="row" style="margin-top:12px"><button class="primary" id="copy">複製成文字</button></div>
+            <div class="row" style="margin-top:12px"><button class="primary" id="copy">複製成文字</button><select id="icsWho" aria-label="匯出對象"></select><button id="expIcs">下載 .ics</button></div>
             <p class="note" id="tally"></p>
         </div>
         </div>
@@ -193,6 +193,7 @@
         <div class="eg">家事分配：成員 爸爸、媽媽；家事 洗碗（每天、1 分）、倒垃圾（每週、2 分）；分配一週 → 洗碗 7 次 + 倒垃圾 1 次，總分 9，兩人各 4 與 5 分。</div>
         <h3>小提醒</h3>
         <ul>
+        <li>「下載 .ics」：每期一個全天事件（標題「輪值：某某」，依目前設定與跳過週末規則），最多 52 期；旁邊的下拉可選「只匯出某一位」。再次匯入同一份檔案會依固定 ID 更新；匯出只讀取目前畫面，不新增儲存資料。</li>
         <li>每月週期以起始日的「日」為準，遇到月底自動取該月最後一天</li>
         <li>名單與設定會記在這個瀏覽器，不會上傳</li>
         <li>家事分配的次數：一週＝每天 7 次、每週 1 次、一次性 1 次（每月的家事不排入一週）；一個月＝每天 30 次、每週 4 次、每月 1 次、一次性 1 次</li>
@@ -228,6 +229,21 @@
                 rows.push({ date, name: names[(((offset + i) % names.length) + names.length) % names.length], wd: weekdayOf(date) });
             }
             return rows;
+        }
+        // ICS：每期一個全天事件（DTEND = 隔天），可只匯出某一位（who 為空 = 全部），最多 52 期
+        const icsEsc = (s) => String(s).replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,');
+        function icsFold(line) {   // 每行 ≤ 75 octets，以字元為單位切，續行以空白開頭
+            const out = []; let cur = '', n = 0;
+            for (const ch of line) { const b = new TextEncoder().encode(ch).length; if (n + b > 75) { out.push(cur); cur = ' '; n = 1; } cur += ch; n += b; }
+            return [...out, cur].join('\r\n');
+        }
+        function rosterIcs(rows, now, who = '') {
+            const d8 = (d) => d.replace(/-/g, ''), stamp = now.toISOString().replace(/[-:]|\.\d+/g, '');
+            const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//simple_tools//Roster//ZH-TW', 'CALSCALE:GREGORIAN'];
+            rows.filter(r => !who || r.name === who).slice(0, 52).forEach((r, i) =>
+                L.push('BEGIN:VEVENT', `UID:roster-${d8(r.date)}-${i}@simple-tools-roster`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${d8(r.date)}`, `DTEND;VALUE=DATE:${d8(day.shift(r.date, 1))}`, `SUMMARY:${icsEsc('輪值：' + r.name)}`, 'END:VEVENT'));
+            L.push('END:VCALENDAR');
+            return L.map(icsFold).join('\r\n') + '\r\n';
         }
         const tally = (rows) => rows.reduce((m, r) => (m[r.name] = (m[r.name] || 0) + 1, m), {});
 
@@ -361,6 +377,7 @@
                 const n = document.createElement('b'); n.textContent = r.name + (r === upcoming ? '（下一個）' : '');
                 d.append(t, w, n); return d;
             }));
+            const who = $('#icsWho').value; $('#icsWho').replaceChildren(new Option('全部成員', ''), ...names.map(n => new Option(n, n))); $('#icsWho').value = names.includes(who) ? who : '';
             const tl = tally(rows);
             $('#tally').textContent = names.length ? '每人次數：' + Object.entries(tl).map(([k, v]) => `${k} ${v}`).join('、') : '請先輸入名單';
         }
@@ -368,6 +385,11 @@
         ['#names', '#start', '#period', '#count', '#offset', '#skipWe'].forEach(s => { $(s).oninput = $(s).onchange = render; });
         $('#shuffle').onclick = () => { $('#names').value = shuffle(parseNames($('#names').value)).join('\n'); render(); };
         $('#copy').onclick = () => copyWithFeedback($('#copy'), rows.map(r => `${r.date}（${WD[r.wd]}）${r.name}`).join('\n'));
+        $('#expIcs').onclick = () => {
+            const list = rows.filter(r => !$('#icsWho').value || r.name === $('#icsWho').value);
+            if (!list.length) { $('#tally').textContent = '沒有可匯出的輪值'; return; }
+            Util.download(new Blob([rosterIcs(rows, new Date(), $('#icsWho').value)], { type: 'text/calendar;charset=utf-8' }), 'duty-roster.ics');
+        };
         render();
 
         // ===== 家事分配分頁 =====

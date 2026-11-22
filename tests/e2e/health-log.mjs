@@ -33,7 +33,7 @@ const f = path.join(browser.downloadDir, `健康數值記錄_${ymd}.csv`);
 for (let i = 0; i < 50 && !fs.existsSync(f); i++) await new Promise(r => setTimeout(r, 100));
 const csv = fs.readFileSync(f, 'utf8'); assert.ok(csv.includes('收縮壓') && csv.includes('142,92,88') && csv.includes('105'));
 // 單筆刪除、清除全部
-await page.evaluate(() => document.querySelector('#list .rec button').click()); L = await stored(); assert.equal(L.length, 4);
+await page.evaluate(() => document.querySelector('#list .rec button:last-child').click()); L = await stored(); assert.equal(L.length, 4);
 await click('#clearAll'); L = await stored(); assert.deepEqual(L, []);
 // 壞資料
 await page.evaluate(() => { localStorage.setItem('healthlog_items', JSON.stringify([null, { k: 'bp', sys: 5 }, 'x'])); location.reload(); });

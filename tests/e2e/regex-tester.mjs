@@ -16,6 +16,8 @@ await click('#infGo');
 assert.ok((await text('#infOut')).includes('^[A-Z]'));
 await set('#re', '(');
 assert.ok((await text('#err')).length > 0);
+await set('#re', '([a-');
+assert.ok((await text('#err')).includes('字元集合'), '壞式樣出現中文提示');
 
 const noHScroll = await page.evaluate(() => document.scrollingElement.scrollWidth <= innerWidth + 1);
 assert.ok(noHScroll, '頁面出現橫向捲動');

@@ -7,7 +7,7 @@
     <meta name="st-disclaimer" content="health">
     <meta name="color-scheme" content="light dark">
     <meta name="description" content="心情日記：每天記一筆心情、標籤與文字，月曆顏色一眼看出情緒起伏，並統計平均心情、標籤影響與連續記錄天數。">
-    <meta name="st-keys" content="mood_entries,mood_tags">
+    <meta name="st-keys" content="mood_entries,mood_tags,mood_draft">
     <meta property="og:title" content="心情日記" />
     <meta property="og:description" content="每天一筆心情，月曆、統計、搜尋與匯出，資料只存在本機。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
@@ -209,6 +209,7 @@
             <label>感恩日記（今天值得感謝的三件事，選填）</label>
             <div id="gInputs"><input class="g" maxlength="100" placeholder="感恩的事 1" aria-label="感恩的事 1"><input class="g" maxlength="100" placeholder="感恩的事 2" aria-label="感恩的事 2" style="margin-top:6px"><input class="g" maxlength="100" placeholder="感恩的事 3" aria-label="感恩的事 3" style="margin-top:6px"></div>
             <label for="text">想說的話</label>
+            <p class="note" id="draftNote" hidden>已還原未儲存的草稿 · <button class="sm" id="draftDrop">捨棄</button></p>
             <textarea id="text" rows="4" maxlength="2000" placeholder="今天發生了什麼？"></textarea>
             <div class="row" style="margin-top:10px">
                 <button class="primary" id="save">儲存（覆蓋當天）</button>
@@ -287,6 +288,7 @@
         <h3>小提醒</h3>
         <ul>
         <li>每天最多一筆，最多保存 3650 筆（約十年），超過會捨棄最舊的。</li>
+        <li>寫到一半還沒儲存的內容（文字、心情、標籤）會自動存成一份草稿，重新整理或切回來會還原並提示，可按「捨棄」；儲存、刪除當天、換日期或清除全部時草稿一併清掉，永遠只存一份。</li>
         <li>想全部重來？按「清除全部日記」（會先確認，標籤清單保留，無法復原，建議先匯出）。</li>
         <li>連續天數：今天還沒記沒關係，從昨天往回算。</li>
         <li>資料只在本機，換手機或清除瀏覽資料前請先用右上角備份。</li>
@@ -309,6 +311,11 @@
             const out = [];
             for (const t of a) { const s = typeof t === 'string' ? t.trim() : ''; if (s && s.length <= 12 && !out.includes(s)) out.push(s); }
             return out.slice(0, max);
+        }
+        // 未儲存草稿 { date, text, mood, tags }：型別不對或沒有文字就丟棄，文字截到 2000 字；日期不合或在未來就丟棄
+        function cleanDraft(o, today) {
+            if (!o || typeof o.text !== 'string' || !o.text.trim() || !isDate(o.date) || o.date > today) return null;
+            return { date: o.date, text: o.text.slice(0, 2000), mood: Number.isInteger(o.mood) && o.mood >= 1 && o.mood <= 5 ? o.mood : 0, tags: cleanTags(o.tags) };
         }
         // ---------- 標籤管理 ----------
         const MAX_TAGS = 40;                                           // 可選標籤清單的上限
@@ -436,14 +443,20 @@
         const moodColor = (m) => `color-mix(in srgb, hsl(${(m - 1) * 30}, 70%, 50%) 55%, var(--card))`;
 
         $('#date').value = today; $('#date').max = today;
-        $('#moods').replaceChildren(...MOODS.map((e, i) => { const b = document.createElement('button'); b.textContent = e; b.setAttribute('aria-label', `心情 ${i + 1}`); b.onclick = () => { curMood = i + 1; drawForm(); }; return b; }));
+        $('#moods').replaceChildren(...MOODS.map((e, i) => { const b = document.createElement('button'); b.textContent = e; b.setAttribute('aria-label', `心情 ${i + 1}`); b.onclick = () => { curMood = i + 1; drawForm(); draftSoon(); }; return b; }));
 
         function drawForm() {
             [...$('#moods').children].forEach((b, i) => b.setAttribute('aria-pressed', curMood === i + 1));
             const all = [...new Set([...tagList, ...curTags])];
-            $('#chips').replaceChildren(...all.map(t => { const b = document.createElement('button'); b.className = 'sm'; b.textContent = t; b.setAttribute('aria-pressed', curTags.has(t)); b.onclick = () => { curTags.has(t) ? curTags.delete(t) : curTags.add(t); drawForm(); }; return b; }));
+            $('#chips').replaceChildren(...all.map(t => { const b = document.createElement('button'); b.className = 'sm'; b.textContent = t; b.setAttribute('aria-pressed', curTags.has(t)); b.onclick = () => { curTags.has(t) ? curTags.delete(t) : curTags.add(t); drawForm(); draftSoon(); }; return b; }));
         }
+        // 草稿：輸入時節流 500ms 存起來；儲存 / 刪除 / 換日期（loadDate）時清掉
+        let draftT = 0;
+        const rmDraft = () => { clearTimeout(draftT); try { localStorage.removeItem('mood_draft'); } catch (e) { } };
+        const saveDraft = () => { const text = $('#text').value; if (text.trim()) store.set('mood_draft', { date: $('#date').value, text, mood: curMood, tags: [...curTags] }); else rmDraft(); };
+        const draftSoon = () => { clearTimeout(draftT); draftT = setTimeout(saveDraft, 500); };
         function loadDate() {
+            rmDraft(); $('#draftNote').hidden = true;
             const d = $('#date').value, e = entries.find(x => x.date === d);
             curMood = e ? e.mood : 0; curTags = new Set(e ? e.tags : []); $('#text').value = e ? e.text : '';
             document.querySelectorAll('#gInputs .g').forEach((inp, i) => { inp.value = e && e.g ? e.g[i] || '' : ''; });
@@ -573,7 +586,12 @@
         $('#q').oninput = drawSearch;
         const exp = (md) => { if (!entries.length) { $('#count').textContent = '沒有可匯出的資料'; return; } download(new Blob([exportText(entries, md)], { type: 'text/plain;charset=utf-8' }), `mood-journal.${md ? 'md' : 'txt'}`); };
         $('#expTxt').onclick = () => exp(false); $('#expMd').onclick = () => exp(true);
+        const draft = cleanDraft(store.get('mood_draft', null), today);
+        if (draft) { $('#date').value = draft.date; vy = day.parse(draft.date).y; vm = day.parse(draft.date).m; }
         loadDate(); drawStats(); drawReview(); drawSearch(); drawGrat();
+        $('#text').addEventListener('input', draftSoon);
+        $('#draftDrop').onclick = () => loadDate();
+        if (draft) { $('#text').value = draft.text; curMood = draft.mood; curTags = new Set(draft.tags); drawForm(); $('#draftNote').hidden = false; saveDraft(); }
     </script>
 </body>
 

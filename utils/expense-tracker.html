@@ -177,6 +177,7 @@
                 <input type="date" id="date" aria-label="日期">
                 <input type="text" id="note" maxlength="30" placeholder="備註（選填）" aria-label="備註">
                 <button class="primary" id="add">新增</button>
+                <button id="cancelEdit" hidden>取消編輯</button>
             </div>
         </div>
 
@@ -289,6 +290,7 @@
         <li>匯率只供記帳參考，不等於信用卡實際請款金額（有手續費與結算日差異）。</li>
         <li>備份會一併包含「匯率快取」這個資料；還原時若外幣資料壞掉，會保留台幣金額、丟掉外幣資訊。</li>
         <li>金額欄或備註欄按 <kbd>Enter</kbd> 可直接新增。</li>
+        <li>明細每筆有「編輯」：資料帶回上方表單，按「儲存」以原筆覆蓋（同樣檢查，不增加筆數）；外幣筆會帶回當初鎖定的匯率（可手改），台幣金額依此重算。</li>
         <li>新增的資料也在本機：預算設定只有一組（可按「重設為預設」）；資產快照最多 600 筆，滿了要先刪舊的，可單筆刪除或「清除全部快照」；專案最多 50 個，刪除專案只拿掉專案標記、支出明細保留。有專案時匯出 CSV 會多一欄「專案」。</li>
         <li>財務自由目標是 4% 法則的粗估（平均月支出 × 12 × 25），不是投資建議；壞掉的預算、快照、專案資料載入時會補預設或略過。</li>
         </ul>
@@ -305,6 +307,14 @@
         const MAX_ENTRIES = 20000, MAX_FIXED = 200;
         const validEntry = (e) => !!e && typeof e.id === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.d) && Number.isFinite(e.amt) && e.amt > 0 && e.amt < 1e12
             && (e.type === 'in' || e.type === 'out') && typeof e.cat === 'string' && typeof e.note === 'string';
+
+        // 編輯：以 id 覆蓋原筆（保留固定支出的 rid，避免重複記入）；不合法或找不到回 null，筆數不變
+        function updateEntry(list, id, e) {
+            const old = list.find(x => x.id === id), v = { ...e, id };
+            if (!old || !validEntry(v)) return null;
+            if (old.rid) v.rid = old.rid;
+            return list.map(x => x.id === id ? v : x);
+        }
 
         // 某個月（YYYY-MM）的收支、分類統計與明細（日期新到舊）
         function summarize(entries, ym) {
@@ -573,8 +583,10 @@
                 const a = Object.assign(document.createElement('b'), { className: 'amt ' + e.type, textContent: (e.type === 'in' ? '+' : '−') + money(e.amt) });
                 const x = Object.assign(document.createElement('button'), { className: 'sm del', textContent: '刪除' });
                 x.setAttribute('aria-label', '刪除 ' + e.cat + ' ' + money(e.amt));
-                x.onclick = () => { entries = entries.filter(y => y.id !== e.id); save(); render(); };
-                r.append(main, a, x);
+                x.onclick = () => { entries = entries.filter(y => y.id !== e.id); if (editId === e.id) endEdit(); save(); render(); };
+                const ed = Object.assign(document.createElement('button'), { className: 'sm', textContent: '編輯' });
+                ed.setAttribute('aria-label', '編輯 ' + e.cat + ' ' + money(e.amt)); ed.onclick = () => startEdit(e);
+                r.append(main, a, ed, x);
                 return r;
             }) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '本月沒有紀錄' })]));
             renderBudget(); renderFire(); renderTrips();
@@ -681,6 +693,18 @@
         }
         $('#cur').onchange = onCur; $('#amt').addEventListener('input', showTwd); $('#rate').addEventListener('input', showTwd);
 
+        let editId = null;
+        function endEdit() { editId = null; $('#add').textContent = '新增'; $('#cancelEdit').hidden = true; }
+        // 編輯：帶回表單；外幣筆沿用當初鎖定的匯率（顯示、可手改）與外幣金額
+        function startEdit(e) {
+            editId = e.id; $('#type').value = e.type; fillCats(); $('#cat').value = e.cat; $('#date').value = e.d; $('#note').value = e.note;
+            $('#cur').value = e.cur || 'TWD'; onCur();
+            if (e.cur) { $('#rate').value = e.rate; $('#amt').value = e.fx; showTwd(); } else $('#amt').value = e.amt;
+            if (e.trip && !$('#tripRow').hidden) $('#trip').value = e.trip;
+            $('#add').textContent = '儲存'; $('#cancelEdit').hidden = false; $('#amt').focus();
+            $('#add').scrollIntoView({ block: 'center' });
+        }
+        $('#cancelEdit').onclick = () => { endEdit(); $('#amt').value = ''; $('#note').value = ''; if ($('#cur').value !== 'TWD') onCur(); };
         $('#add').onclick = () => {
             const e = { id: Date.now().toString(36) + rnd(1e6).toString(36), d: $('#date').value, type: $('#type').value, cat: $('#cat').value, amt: parseFloat($('#amt').value), note: $('#note').value.trim() };
             const cur = $('#cur').value;
@@ -692,8 +716,14 @@
             }
             if (!validEntry(e)) { $('#amt').focus(); return; }
             if (e.type === 'out' && $('#trip').value && trips.some(t => t.id === $('#trip').value)) e.trip = $('#trip').value;
-            if (entries.length >= MAX_ENTRIES) return warn(`明細已達 ${MAX_ENTRIES} 筆上限，請先匯出並用「刪除一年前的紀錄」清理`);
-            entries.push(e); save();
+            if (editId) {
+                const n = updateEntry(entries, editId, e); if (!n) return warn('找不到要編輯的這筆紀錄');
+                entries = n; endEdit();
+            } else {
+                if (entries.length >= MAX_ENTRIES) return warn(`明細已達 ${MAX_ENTRIES} 筆上限，請先匯出並用「刪除一年前的紀錄」清理`);
+                entries.push(e);
+            }
+            save();
             $('#amt').value = ''; $('#note').value = ''; if (cur !== 'TWD') onCur();
             ym = e.d.slice(0, 7); render(); $('#amt').focus();
         };

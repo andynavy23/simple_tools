@@ -165,7 +165,7 @@
                 <div class="ctxw"><label for="f_ctx" id="ctxL">測量情境</label><select id="f_ctx"></select></div>
                 <div class="full"><label for="f_note">備註（可留白）</label><input id="f_note" type="text" maxlength="100" placeholder="例如：剛吃藥、運動後"></div>
             </div>
-            <div class="btns"><button class="primary" id="save">新增</button></div>
+            <div class="btns"><button class="primary" id="save">新增</button><button id="cancelEdit" hidden>取消編輯</button></div>
             <p class="msg" id="formMsg"></p>
         </div>
 
@@ -215,7 +215,7 @@
 
         <div class="card">
             <h2>資料管理</h2>
-            <p class="msg" style="margin:0 0 8px">最多 5000 筆。單筆刪除在每筆右側；這裡可匯出給醫師或全部清除。</p>
+            <p class="msg" style="margin:0 0 8px">最多 5000 筆。單筆編輯 / 刪除在每筆右側；這裡可匯出給醫師或全部清除。</p>
             <div class="btns" style="margin-top:0"><button id="csv">匯出 CSV（全部）</button><button id="clearAll" style="color:var(--bad)">清除全部</button></div>
             <p class="msg" id="dataMsg"></p>
         </div>
@@ -233,7 +233,7 @@
         <ol>
         <li>上方切換「血壓 / 血糖 / 體重」，填日期時間與數值，選情境，按「新增」。</li>
         <li>下方可選統計範圍（7 / 30 / 90 天、全部）；統計卡與趨勢圖會跟著變，趨勢圖上的虛線是參考界線。</li>
-        <li>每筆右側可刪除；「匯出 CSV」可用試算表開啟或列印。</li>
+        <li>每筆右側可「編輯」（資料帶回上方表單，按「儲存」以原筆覆蓋，不增加筆數）或刪除；「匯出 CSV」可用試算表開啟或列印。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">血壓 126 / 82、心率 72 → 在一般參考範圍
@@ -302,11 +302,24 @@
             return out;
         }
         // 新增：滿 5000 筆拒絕；r 欄位來自輸入框（字串）
+        function checkFields(k, r) {
+            if (!validDate(r.date)) return '請選有效的日期（1990–2100）';
+            if (!validTime(r.time)) return '請填時間';
+            if (str(r.note, 1e6).length > HL.NOTE) return `備註最長 ${HL.NOTE} 字`;
+            return checkValues(k, r);
+        }
+        // 編輯：以 id 覆蓋原筆（類型不變、同樣驗證、不增加筆數）
+        function updateItem(list, id, r) {
+            const old = list.find(x => x.id === id);
+            if (!old) return { list, err: '找不到這筆記錄' };
+            const err = checkFields(old.k, r);
+            if (err) return { list, err };
+            return { list: list.map(x => x.id === id ? normItem({ ...r, k: old.k, id }) : x), err: '' };
+        }
+        // 驗證失敗時該聚焦哪一欄
+        const errField = (err) => [[/收縮壓/, 'f_sys'], [/舒張壓/, 'f_dia'], [/心率/, 'f_hr'], [/血糖/, 'f_glu'], [/體重/, 'f_kg'], [/日期/, 'f_date'], [/時間/, 'f_time'], [/備註/, 'f_note']].find(([re]) => re.test(err))?.[1] || 'f_sys';
         function addItem(list, k, r) {
-            if (!validDate(r.date)) return { list, err: '請選有效的日期（1990–2100）' };
-            if (!validTime(r.time)) return { list, err: '請填時間' };
-            if (str(r.note, 1e6).length > HL.NOTE) return { list, err: `備註最長 ${HL.NOTE} 字` };
-            const err = checkValues(k, r);
+            const err = checkFields(k, r);
             if (err) return { list, err };
             if (list.length >= HL.MAX) return { list, err: `最多 ${HL.MAX} 筆，請先刪除不用的記錄` };
             return { list: [...list, normItem({ ...r, k, id: newId() })], err: '' };
@@ -415,7 +428,7 @@
         const $ = (s) => document.querySelector(s);
         const KEY = 'healthlog_items';
         let items = normList(store.get(KEY, []));
-        let kind = 'bp', showAll = false;
+        let kind = 'bp', showAll = false, editId = null;
         const save = () => store.set(KEY, items);
         const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
         const say = (id, text, bad) => { const m = $(id); m.textContent = text; m.className = 'msg' + (bad ? ' bad' : ''); };
@@ -423,7 +436,7 @@
         const nowTime = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 
         function setKind(k) {
-            kind = k; showAll = false;
+            kind = k; showAll = false; editId = null; $('#save').textContent = '新增'; $('#cancelEdit').hidden = true;
             document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.k === k));
             for (const x of ['bp', 'bg', 'wt']) document.querySelectorAll('.' + x).forEach(e => { e.hidden = x !== k; });
             $('.ctxw').hidden = k === 'wt';
@@ -475,7 +488,10 @@
                 l.append(top, el('small', '', `${it.date} ${it.time}${it.ctx ? '・' + it.ctx : ''}${it.note ? '・' + it.note : ''}`));
                 const del = el('button', 'sm', '刪除'); del.style.color = 'var(--bad)'; del.setAttribute('aria-label', `刪除 ${it.date} ${it.time} 的記錄`);
                 del.onclick = () => { if (!confirm(`刪除 ${it.date} ${it.time} 的${KINDS[it.k]}記錄？無法復原。`)) return; items = removeItem(items, it.id); save(); render(); };
-                r.append(l, del); c.append(r);
+                const ed = el('button', 'sm', '編輯'); ed.setAttribute('aria-label', `編輯 ${it.date} ${it.time} 的記錄`);
+                ed.onclick = () => startEdit(it);
+                const bs = el('div'); bs.style.cssText = 'display:flex;gap:6px'; bs.append(ed, del);
+                r.append(l, bs); c.append(r);
             });
             if (!showAll && mine.length > 50) { const m = el('button', '', `顯示全部 ${mine.length} 筆`); m.style.marginTop = '8px'; m.onclick = () => { showAll = true; render(); }; c.append(m); }
             list.append(c);
@@ -483,13 +499,25 @@
 
         $('#tabs').onclick = (e) => { const b = e.target.closest('button[data-k]'); if (b) setKind(b.dataset.k); };
         $('#range').onchange = render;
+        function startEdit(it) {
+            editId = it.id;
+            for (const [i, v] of [['f_date', it.date], ['f_time', it.time], ['f_sys', it.sys], ['f_dia', it.dia], ['f_hr', it.hr || ''], ['f_glu', it.glu], ['f_kg', it.kg], ['f_note', it.note]]) $('#' + i).value = v ?? '';
+            if (it.ctx) $('#f_ctx').value = it.ctx;
+            $('#formTitle').textContent = '編輯' + KINDS[kind]; $('#save').textContent = '儲存'; $('#cancelEdit').hidden = false;
+            say('#formMsg', '編輯中：改完按「儲存」覆蓋原筆'); $('#formTitle').scrollIntoView({ block: 'center' }); $('#f_date').focus();
+        }
+        function endEdit() { editId = null; $('#formTitle').textContent = '新增' + KINDS[kind]; $('#save').textContent = '新增'; $('#cancelEdit').hidden = true; }
+        $('#cancelEdit').onclick = () => { endEdit(); ['f_sys', 'f_dia', 'f_hr', 'f_glu', 'f_kg', 'f_note'].forEach(i => { $('#' + i).value = ''; }); say('#formMsg', ''); };
+        for (const i of ['f_date', 'f_time', 'f_sys', 'f_dia', 'f_hr', 'f_glu', 'f_kg', 'f_ctx', 'f_note']) $('#' + i).addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); $('#save').click(); } });
         $('#save').onclick = () => {
             const r = { date: $('#f_date').value, time: $('#f_time').value, sys: $('#f_sys').value, dia: $('#f_dia').value, hr: $('#f_hr').value, glu: $('#f_glu').value, kg: $('#f_kg').value, ctx: $('#f_ctx').value, note: $('#f_note').value };
-            const res = addItem(items, kind, r);
-            if (res.err) { say('#formMsg', res.err, true); return; }
+            const wasEdit = !!editId, res = wasEdit ? updateItem(items, editId, r) : addItem(items, kind, r);
+            if (res.err) { say('#formMsg', res.err, true); const f = $('#' + errField(res.err)); f.setAttribute('aria-invalid', 'true'); f.focus(); return; }
+            document.querySelectorAll('[aria-invalid]').forEach(x => x.removeAttribute('aria-invalid'));
             items = res.list; save();
             ['f_sys', 'f_dia', 'f_hr', 'f_glu', 'f_kg', 'f_note'].forEach(i => { $('#' + i).value = ''; });
-            $('#f_time').value = nowTime(); say('#formMsg', '已新增'); render();
+            endEdit(); $('#f_time').value = nowTime(); say('#formMsg', wasEdit ? '已儲存修改' : '已新增'); render();
+            $(kind === 'bp' ? '#f_sys' : kind === 'bg' ? '#f_glu' : '#f_kg').focus();
         };
         addEventListener('resize', () => render());
         new MutationObserver(() => render()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-ui-style', 'data-ui-mode'] });

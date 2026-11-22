@@ -305,6 +305,32 @@
             color: #ffb800;
         }
 
+        /* 我的最愛：上移 / 置頂 */
+        .mv {
+            flex: none;
+            display: flex;
+        }
+
+        .mv button {
+            width: 44px;
+            min-height: 44px;
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+            color: var(--muted);
+            font-size: 16px;
+        }
+
+        #view[data-dens=compact] .mv {
+            border-top: var(--card-border);
+        }
+
+        #view[data-dens=compact] .mv button {
+            flex: 1;
+        }
+
         details.topic {
             margin-top: 18px;
         }
@@ -1188,7 +1214,7 @@
                 </div>
             </a>
 
-            <a class="card" href="fun/white-noise.html" data-ic="rain" data-cat="趣味" data-topic="創作與放鬆" data-kw="白噪音 雨聲 風聲 睡眠 專注 環境音 助眠 放鬆 noise" data-added="2026-10-02">
+            <a class="card" href="fun/white-noise.html" data-ic="rain" data-cat="趣味" data-topic="創作與放鬆" data-kw="白噪音 雨聲 風聲 睡眠 專注 環境音 助眠 放鬆 noise" data-added="2026-10-02" data-store="1">
                 <div class="icon" style="--c1:#8e8e93;--c2:#3a3a3c">🌧️</div>
                 <div>
                     <h2>白噪音 / 環境音</h2>
@@ -1332,7 +1358,7 @@
                 </div>
             </a>
 
-            <a class="card" href="utils/loan-calculator.html" data-ic="bank" data-cat="工具" data-topic="金錢與生活" data-kw="貸款 房貸 月付金 利息 複利 存款 利率 買房 租房 還款" data-added="2026-10-02">
+            <a class="card" href="utils/loan-calculator.html" data-ic="bank" data-cat="工具" data-topic="金錢與生活" data-kw="貸款 房貸 月付金 利息 複利 存款 利率 買房 租房 還款" data-added="2026-10-02" data-store="1">
                 <div class="icon" style="--c1:#0a84ff;--c2:#5e5ce6">🏦</div>
                 <div>
                     <h2>貸款 / 複利試算</h2>
@@ -1530,7 +1556,7 @@
                 </div>
             </a>
 
-            <a class="card" href="mini-games/nonogram.html" data-ic="tiles" data-cat="小遊戲" data-topic="益智" data-kw="數織 nonogram 繪圖邏輯 方塊 益智 picross" data-added="2026-10-02">
+            <a class="card" href="mini-games/nonogram.html" data-ic="tiles" data-cat="小遊戲" data-topic="益智" data-kw="數織 nonogram 繪圖邏輯 方塊 益智 picross" data-added="2026-10-02" data-store="1">
                 <div class="icon" style="--c1:#8e8e93;--c2:#48484a">🧩</div>
                 <div>
                     <h2>數織 Nonogram</h2>
@@ -3085,7 +3111,7 @@
             ['閱讀', 'book', '本機閱讀'],
         ];
         const FEATURED = ['utils/calculator.html', 'utils/unit-converter.html', 'fun/todo.html', 'fun/pomodoro.html', 'utils/expense-tracker.html', 'utils/qr-code.html', 'utils/password-gen.html', 'fun/wheel.html', 'mini-games/game-2048.html'];
-        const SW_CACHE = 'st-v2';   // 要和 sw.js 的 'st-' + CACHE_VERSION 一致
+        const SW_CACHE = 'st-v3';   // 要和 sw.js 的 'st-' + CACHE_VERSION 一致
 
         const $ = (s) => document.querySelector(s);
         const src = $('#src');
@@ -3117,7 +3143,13 @@
 
         const h = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const k in attrs || {}) { if (k === 'text') e.textContent = attrs[k]; else if (k === 'style' || k === 'role' || k.startsWith('aria-')) e.setAttribute(k, attrs[k]); else e[k] = attrs[k]; } e.append(...kids); return e; };
 
-        function row(it, showCat) {
+        function moveFav(href, to) {            // to: 'up' 上移一格 / 'top' 置頂；只改順序
+            const i = fav.indexOf(href); if (i < 1) return;
+            fav.splice(i, 1); fav.splice(to === 'top' ? 0 : i - 1, 0, href);
+            store.set('home_fav', fav); render();
+            const b = $('#view').querySelector(`.mv button[data-h="${CSS.escape(href)}"][data-mv="${to}"]`) || $('#view').querySelector(`.mv button[data-h="${CSS.escape(href)}"]`); if (b) b.focus();
+        }
+        function row(it, showCat, favIdx = -1) {
             const a = h('a', { className: 'item', href: it.href },
                 h('span', Object.assign({ className: 'ic', style: it.style }, ICONS[it.ic] ? { innerHTML: svg(it.ic) } : { text: it.icon })),
                 h('span', { className: 'tx' }, h('b', { text: it.title },
@@ -3129,13 +3161,17 @@
             const star = h('button', { className: 'star', type: 'button', text: on ? '★' : '☆' });
             star.setAttribute('aria-pressed', on); star.setAttribute('aria-label', (on ? '移出最愛：' : '加入最愛：') + it.title);
             star.onclick = () => { fav = fav.includes(it.href) ? fav.filter(x => x !== it.href) : [it.href, ...fav]; store.set('home_fav', fav); render(); };
-            return h('div', { className: 'row' }, a, star);
+            const mv = favIdx > 0 ? [h('span', { className: 'mv' }, ...[['up', '↑', '上移'], ...(favIdx > 1 ? [['top', '⇈', '置頂']] : [])].map(([k, t, l]) => {
+                const b = h('button', { type: 'button', text: t, title: l }); b.dataset.mv = k; b.dataset.h = it.href; b.setAttribute('aria-label', `${l}：${it.title}`); b.onclick = () => moveFav(it.href, k); return b;
+            }))] : [];
+            return h('div', { className: 'row' }, a, star, ...mv);
         }
-        const rows = (list, showCat) => h('div', { className: 'rows' }, ...list.map(i => row(i, showCat)));
+        const rows = (list, showCat, isFav) => h('div', { className: 'rows' }, ...list.map((i, k) => row(i, showCat, isFav ? k : -1)));
         const sec = (title, note, node) => [h('h2', { className: 'sec' }, title, h('small', { text: note || '' })), node];
         const chip = (label, pressed, onclick) => { const b = h('button', { className: 'sm', type: 'button', text: label }); if (pressed !== null) b.setAttribute('aria-pressed', pressed); b.onclick = onclick; return b; };
         const filterChips = (list) => h('div', { className: 'chips fl', role: 'group', 'aria-label': '依性質篩選' }, ...FILTERS.map(([k, l]) => [k, l, list.filter(i => passFilter(i, k)).length]).filter(([k, , n]) => n || flt === k).map(([k, l, n]) => chip(`${l} ${n}`, flt === k, () => { flt = k; render(); })));
-        const goView = (name) => { $('#q').value = ''; view = name; scat = ''; history.replaceState(null, '', name === '首頁' ? location.pathname : '#' + encodeURIComponent(name)); render(); scrollTo(0, 0); };
+        const saveQ = () => { try { const v = $('#q').value; if (v) sessionStorage.setItem('st_home_q', v); else sessionStorage.removeItem('st_home_q'); } catch (e) { } };
+        const goView = (name) => { $('#q').value = ''; saveQ(); view = name; scat = ''; history.replaceState(null, '', name === '首頁' ? location.pathname : '#' + encodeURIComponent(name)); render(); scrollTo(0, 0); };
 
         const SVG = {
             grid: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>',
@@ -3188,7 +3224,7 @@
                 })));
                 const rec = recent.map(x => byHref[x]).filter(Boolean).slice(0, 6), fv = fav.map(x => byHref[x]).filter(Boolean);
                 if (rec.length) out.push(...sec('最近使用', '', rows(rec)));
-                if (fv.length) { const s = sec('我的最愛', '點工具上的 ☆ 加入', rows(fv)); s[0].id = 'favsec'; out.push(...s); }
+                if (fv.length) { const s = sec('我的最愛', '點工具上的 ☆ 加入；↑ 上移、⇈ 置頂', rows(fv, false, true)); s[0].id = 'favsec'; out.push(...s); }
                 out.push(...sec('最近新增', `${NEW_DAYS} 天內加入的有「新」標示`, rows(recentAdded(items, 8))));
                 out.push(...sec('常用推薦', fv.length || rec.length ? '' : '先從這些開始', rows(FEATURED.map(x => byHref[x]).filter(Boolean))));
                 if (!fv.length) out.push(h('p', { className: 'note', text: '小提醒：點工具上的 ☆ 可以加入「我的最愛」，之後會出現在首頁最上面。' }));
@@ -3239,12 +3275,12 @@
         const kbLinks = () => [...$('#view').querySelectorAll('a.item')];
         const kbMark = () => { const ls = kbLinks(); ls.forEach((a, i) => a.closest('.row').classList.toggle('kbsel', i === kbIdx)); if (ls[kbIdx]) ls[kbIdx].scrollIntoView({ block: 'nearest' }); };
         const focusSearch = () => { scrollTo(0, 0); const q = $('#q'); q.focus(); q.select(); };
-        $('#q').oninput = () => { kbIdx = -1; render(); };
+        $('#q').oninput = () => { kbIdx = -1; saveQ(); render(); };
         $('#q').addEventListener('keydown', (e) => {
             const ls = kbLinks();
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { if (!ls.length) return; e.preventDefault(); kbIdx = (kbIdx + (e.key === 'ArrowDown' ? 1 : -1) + ls.length) % ls.length; kbMark(); }
             else if (e.key === 'Enter') { const a = ls[kbIdx] || (tokens($('#q').value).length ? ls[0] : null); if (a) { e.preventDefault(); a.click(); } }
-            else if (e.key === 'Escape') { $('#q').value = ''; kbIdx = -1; render(); }
+            else if (e.key === 'Escape') { $('#q').value = ''; saveQ(); kbIdx = -1; render(); }
         });
         addEventListener('keydown', (e) => {
             const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName) || (document.activeElement && document.activeElement.isContentEditable);
@@ -3253,6 +3289,7 @@
         try { if (sessionStorage.getItem('st_focus_search')) { sessionStorage.removeItem('st_focus_search'); focusSearch(); } } catch (err) { }       // 從別的工具頁按 Ctrl/Cmd+K 回來
         addEventListener('hashchange', () => { view = pickView(hashView()); render(); });
         addEventListener('pageshow', (e) => { if (e.persisted) { recent = list_(store.get('home_recent', [])); render(); } });
+        try { $('#q').value = (sessionStorage.getItem('st_home_q') || '').slice(0, 100); } catch (err) { }       // 返回 / 重新載入後還原搜尋字串
         render();
 
         // ---------- PWA / 離線 ----------

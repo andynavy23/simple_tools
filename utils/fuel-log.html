@@ -148,7 +148,7 @@
                 <div class="f"><label for="liters">公升</label><input type="number" id="liters" min="0" step="any"></div>
                 <div class="f"><label for="price">單價（元/L）</label><input type="number" id="price" min="0" step="any"></div>
                 <label><input type="checkbox" id="full" checked> 加滿</label>
-                <button class="primary" id="add">新增</button>
+                <button class="primary" id="add">新增</button><button id="cancelEdit" hidden>取消編輯</button>
             </div>
             <p class="note" id="msg"></p>
         </div>
@@ -244,7 +244,7 @@
         <li>每次加油填「日期」「里程（km，儀表板總里程）」「公升」「單價（元/L）」。</li>
         <li>如果這次有加到滿，保持勾選「加滿」；沒加滿就取消勾選，再按「新增」。</li>
         <li>至少有兩筆「加滿」的紀錄，「統計」就會顯示平均油耗、每公里油錢、最好與最差一段，並畫出每段油耗長條圖。</li>
-        <li>「紀錄」可逐筆刪除，或「匯出 CSV」、「清除全部」。</li>
+        <li>「紀錄」每筆可「編輯」（帶回上方表單，按「儲存」以原筆覆蓋，不增加筆數；里程不可與其他筆重複，油耗隨之重算）或刪除，或「匯出 CSV」、「清除全部」。</li>
         </ol>
         <h3>範例</h3>
         <div class="eg">第一筆：里程 1000、30 公升、30 元/L、加滿
@@ -296,6 +296,13 @@
             const best = segs.reduce((a, s) => (s.kmPerL > a.kmPerL ? s : a)), worst = segs.reduce((a, s) => (s.kmPerL < a.kmPerL ? s : a));
             return { km, liters: l, cost: c, kmPerL: km / l, lPer100: l / km * 100, costPerKm: c / km, best: best.kmPerL, worst: worst.kmPerL, count: segs.length };
         }
+
+        // 編輯：以 id 覆蓋原筆；同樣驗證，里程不可與其他筆重複；回傳新陣列或 null（筆數不變）
+        const updateEntry = (list, id, e) => {
+            const v = { ...e, id };
+            if (!list.some(x => x.id === id) || !validEntry(v) || list.some(x => x.id !== id && x.odo === v.odo)) return null;
+            return list.map(x => x.id === id ? v : x);
+        };
 
         // CSV（開頭是 = + - @ 的文字補單引號，避免試算表公式注入）
         const csvCell = (v) => { let s = String(v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
@@ -436,14 +443,26 @@
                 const r = document.createElement('div'); r.className = 'it'; const m = document.createElement('div'); m.className = 'main';
                 m.append(document.createTextNode(`${e.d}　${fmt(e.odo, 0)} km`), Object.assign(document.createElement('small'), { textContent: `${fmt(e.l, 2)} L × ${fmt(e.p)} = ${fmt(e.l * e.p, 0)} 元${e.full ? '' : '（沒加滿）'}` }));
                 const del = Object.assign(document.createElement('button'), { className: 'sm', textContent: '刪除' }); del.setAttribute('aria-label', '刪除 ' + e.d + ' 的紀錄'); del.onclick = () => { entries = entries.filter(x => x.id !== e.id); save(); render(); };
-                r.append(m, del); return r;
+                const ed = Object.assign(document.createElement('button'), { className: 'sm', textContent: '編輯' }); ed.setAttribute('aria-label', '編輯 ' + e.d + ' 的紀錄');
+                ed.onclick = () => { editId = e.id; $('#date').value = e.d; $('#odo').value = e.odo; $('#liters').value = e.l; $('#price').value = e.p || ''; $('#full').checked = e.full; $('#add').textContent = '儲存'; $('#cancelEdit').hidden = false; $('#msg').textContent = '編輯中：改完按「儲存」覆蓋原筆'; $('#odo').focus(); };
+                r.append(m, ed, del); return r;
             }) : [Object.assign(document.createElement('p'), { className: 'muted', textContent: '還沒有紀錄' })]));
             renderTco(); renderMaint();
         }
 
+        let editId = null;
+        const endEdit = () => { editId = null; $('#add').textContent = '新增'; $('#cancelEdit').hidden = true; };
+        $('#cancelEdit').onclick = () => { endEdit(); $('#odo').value = ''; $('#liters').value = ''; $('#price').value = ''; $('#msg').textContent = ''; };
+        for (const i of ['date', 'odo', 'liters', 'price']) $('#' + i).addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.isComposing) { ev.preventDefault(); $('#add').click(); } });
         $('#add').onclick = () => {
             const e = { id: Date.now().toString(36) + rnd(1e6).toString(36), d: $('#date').value, odo: parseFloat($('#odo').value), l: parseFloat($('#liters').value), p: parseFloat($('#price').value || '0'), full: $('#full').checked };
-            if (!validEntry(e)) { $('#msg').textContent = '請填入日期、里程、公升（單價可留空）'; return; }
+            document.querySelectorAll('[aria-invalid]').forEach(x => x.removeAttribute('aria-invalid'));
+            if (!validEntry({ ...e, id: 'x' })) { $('#msg').textContent = '請填入日期、里程、公升（單價可留空）'; const f = $(!/^\d{4}-\d{2}-\d{2}$/.test(e.d) ? '#date' : !(e.odo >= 0) ? '#odo' : !(e.l > 0 && e.l < 1000) ? '#liters' : '#price'); f.setAttribute('aria-invalid', 'true'); f.focus(); return; }
+            if (editId) {
+                const n = updateEntry(entries, editId, e);
+                if (!n) { $('#msg').textContent = '這個里程已經有另一筆紀錄了'; $('#odo').setAttribute('aria-invalid', 'true'); $('#odo').focus(); return; }
+                entries = n; save(); endEdit(); $('#msg').textContent = '已儲存修改'; $('#odo').value = ''; $('#liters').value = ''; render(); $('#odo').focus(); return;
+            }
             if (entries.length >= MAX_ENTRIES) { $('#msg').textContent = `紀錄已達 ${MAX_ENTRIES} 筆上限，請先匯出並刪除舊紀錄`; return; }
             if (entries.some(x => x.odo === e.odo)) { $('#msg').textContent = '這個里程已經有一筆紀錄了'; return; }
             $('#msg').textContent = ''; entries.push(e); save(); $('#odo').value = ''; $('#liters').value = ''; render(); $('#odo').focus();

@@ -227,9 +227,12 @@
             <div class="row">
                 <input type="text" id="text" maxlength="100" placeholder="要做什麼？" aria-label="待辦事項">
                 <input type="date" id="due" aria-label="到期日（可不填）">
+                <select id="rep" aria-label="重複"><option value="">不重複</option><option value="d">每天</option><option value="w">每週</option><option value="m">每月</option></select>
                 <button class="primary" id="add">新增</button>
             </div>
         </div>
+
+        <input type="search" id="tq" maxlength="100" placeholder="搜尋待辦" aria-label="搜尋待辦" style="width:100%;margin-bottom:12px">
 
         <div class="row vtabs" style="margin-bottom:12px">
             <button id="vList" aria-pressed="true">清單</button>
@@ -257,7 +260,7 @@
         <ol>
         <li>輸入「要做什麼？」，需要的話選「到期日」，按「新增」或 <kbd>Enter</kbd>。</li>
         <li>勾選左側方塊表示完成，會移到「已完成」。</li>
-        <li>點文字可修改內容；▲▼ 調整同一組內的順序，✕ 刪除。</li>
+        <li>點文字可修改內容；▲▼ 調整同一組內的順序，✕ 刪除（刪除後 6 秒內可按「復原」放回原位；接著再刪另一筆，前一筆就不能復原了）。</li>
         <li>在「番茄鐘」頁選好「正在做的待辦」並完成專注後，這裡每項會顯示 🍅 累計番茄數與專注分鐘；按「依番茄排序」讓每一組內由多到少排列（排序時先不能 ▲▼ 調整，再按一次還原）。</li>
         <li>「清除已完成」一次刪除所有已完成項目（會先確認）。最多 500 項。</li>
         <li>按上方「月曆」：每天的格子顯示未完成的待辦數（逾期是紅色，全部完成顯示 ✓）；「‹ ›」換月份、「今天」回到本月。</li>
@@ -275,6 +278,8 @@
         <div class="eg">輸入「繳電費」、到期日選明天 → 出現在「明天」群組。切到「月曆」，明天那格出現「1」；過期後數字變紅色，並移到紅色的「逾期」群組。</div>
         <h3>小提醒</h3>
         <ul>
+        <li>搜尋：上方搜尋框即時以文字包含篩選清單與四象限（含已完成），清空還原；只是篩選畫面，不改資料。</li>
+        <li>重複：新增時選「每天／每週／每月」（沒填到期日就以今天起算），勾選完成時自動依到期日產生下一筆；每月遇月底進位到該月最後一天（1/31 → 2/28）；未完成的舊筆不會重複產生。若已滿 500 項，仍會標記完成但不產生下一筆並提示。重複只多存每筆一個選填欄位 rep，舊資料視為不重複；清除方式同一般待辦。</li>
         <li>每項最多 100 字；到期日可不填，沒有到期日的待辦只會在「清單」的「沒有日期」裡，不會出現在月曆。</li>
         <li>番茄數來自番茄鐘自己的資料（這頁只讀取、不修改）；刪除待辦後，它的番茄統計會在下次開啟番茄鐘時自動清掉；想清空全部統計請到番茄鐘按「清除待辦番茄統計」。</li>
         <li>匯出：「匯出 Markdown」下載勾選清單（依分組，已完成為 [x]）；「匯出 .ics」只輸出「有到期日、未完成」的待辦，每項一個全天事件（用事件而非 VTODO，因為多數行事曆會忽略 VTODO），再次匯入同一份檔案會依固定 ID 更新而不是重複。匯出只讀取目前清單，不新增任何儲存資料。</li>
@@ -321,6 +326,16 @@
             if (!q) return false;
             i.important = q[3]; i.urgent = q[4]; return true;
         }
+        const REPS = ['d', 'w', 'm'];
+        const pad2 = (n) => String(n).padStart(2, '0');
+        // 下一次到期日：每月遇月底進位到月底（1/31 → 2/28，閏年 2/29）
+        function nextDue(due, rep) {
+            if (rep === 'd') return day.shift(due, 1);
+            if (rep === 'w') return day.shift(due, 7);
+            const [y, m, d] = due.split('-').map(Number), t = y * 12 + m, ny = Math.floor(t / 12), nm = t % 12 + 1;
+            return `${ny}-${pad2(nm)}-${pad2(Math.min(d, new Date(Date.UTC(ny, nm, 0)).getUTCDate()))}`;
+        }
+        const matchQ = (i, q) => !q || i.t.toLowerCase().includes(q.toLowerCase());
         const validItem = (i) => !!i && typeof i.id === 'string' && typeof i.t === 'string' && i.t.length >= 1 && i.t.length <= 100 && (i.due === '' || /^\d{4}-\d{2}-\d{2}$/.test(i.due)) && typeof i.done === 'boolean';
         const dueLabel = (due, today, between) => { if (!due) return ''; const d = between(today, due); return d === 0 ? '今天' : d === 1 ? '明天' : d === -1 ? '昨天' : d < 0 ? `逾期 ${-d} 天` : `${d} 天後`; };
         const MAX_ITEMS = 500;
@@ -374,29 +389,41 @@
         const $ = (s) => document.querySelector(s);
         const SUB = $('#sub').textContent;
         const rawItems = store.get('todo_items', []);
-        let items = (Array.isArray(rawItems) ? rawItems : []).filter(validItem).slice(0, MAX_ITEMS).map(i => ({ ...i, important: i.important === true, urgent: i.urgent === true }));
+        let items = (Array.isArray(rawItems) ? rawItems : []).filter(validItem).slice(0, MAX_ITEMS).map(i => ({ ...i, important: i.important === true, urgent: i.urgent === true, rep: REPS.includes(i.rep) ? i.rep : '' }));
         const save = () => { $('#sub').textContent = SUB; store.set('todo_items', items); };
         const today = () => day.today();
 
+        // 刪除可在 6 秒內復原（以原索引與 id 插回）；再刪下一筆時，前一筆不可復原
+        let lastDel = null;
+        function delItem(it) {
+            const idx = items.findIndex(x => x.id === it.id); if (idx < 0) return;
+            items = items.filter(x => x.id !== it.id); const mine = lastDel = { it, idx };
+            save(); render();
+            Chrome.toast('已刪除『' + it.t.slice(0, 20) + '』', 6000, '', { label: '復原', onClick: () => {
+                if (lastDel !== mine) return; lastDel = null;
+                if (items.length >= MAX_ITEMS || items.some(x => x.id === it.id)) return;
+                items.splice(Math.min(idx, items.length), 0, it); save(); render();
+            } });
+        }
         let byPomo = false;
         function render() {
             const tasks = store.get('pomo_tasks', {});
-            const gs = group(items, today(), day.between).map(g => byPomo ? { ...g, items: sortByPomo(g.items, tasks) } : g);
+            const gs = group(items.filter(i => matchQ(i, $('#tq').value.trim())), today(), day.between).map(g => byPomo ? { ...g, items: sortByPomo(g.items, tasks) } : g);
             $('#lists').replaceChildren(...(gs.length ? gs.map(g => {
                 const card = document.createElement('div'); card.className = 'card grp';
                 const h = document.createElement('h2'); h.className = g.key === 'late' ? 'late' : ''; h.append(g.label, Object.assign(document.createElement('small'), { textContent: g.items.length + ' 項' }));
                 card.append(h, ...g.items.map(it => {
                     const r = document.createElement('div'); r.className = 'it' + (it.done ? ' done' : '');
                     const cb = Object.assign(document.createElement('input'), { type: 'checkbox', checked: it.done }); cb.setAttribute('aria-label', '完成：' + it.t);
-                    cb.onchange = () => { it.done = cb.checked; save(); render(); };
+                    cb.onchange = () => setDone(it, cb.checked);
                     const t = Object.assign(document.createElement('span'), { className: 't', textContent: it.t, title: '點一下修改' });
                     t.onclick = () => { const v = prompt('修改待辦事項', it.t); if (v !== null && v.trim()) { it.t = v.trim().slice(0, 100); save(); render(); } };
                     const pt = pomoOf(tasks, it.id);
                     const pm = Object.assign(document.createElement('span'), { className: 'pm', textContent: pt.count ? `🍅${pt.count}・${pt.minutes}分` : '' });
-                    const d = Object.assign(document.createElement('span'), { className: 'd', textContent: it.done ? '' : dueLabel(it.due, today(), day.between) });
+                    const d = Object.assign(document.createElement('span'), { className: 'd', textContent: it.done ? '' : dueLabel(it.due, today(), day.between) + (it.rep ? ' 🔁' : '') });
                     const mk = (txt, label, fn) => { const b = Object.assign(document.createElement('button'), { className: 'sm', textContent: txt, onclick: fn }); b.setAttribute('aria-label', label); return b; };
                     const up = mk('▲', '上移', () => { items = move(items, it.id, -1, today(), day.between); save(); render(); }), dn = mk('▼', '下移', () => { items = move(items, it.id, 1, today(), day.between); save(); render(); });
-                    const del = mk('✕', '刪除', () => { items = items.filter(x => x.id !== it.id); save(); render(); });
+                    const del = mk('✕', '刪除', () => delItem(it));
                     r.append(cb, t, pm, d, ...(it.done || byPomo ? [] : [up, dn]), del);
                     return r;
                 }));
@@ -411,7 +438,7 @@
             if (view !== 'q') { box.replaceChildren(); return; }
             const el = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
             box.replaceChildren(...QUADS.map(([key, name, adv]) => {
-                const list = items.filter(i => !i.done && quadOf(i) === key);
+                const list = items.filter(i => !i.done && quadOf(i) === key && matchQ(i, $('#tq').value.trim()));
                 const card = el('div', { className: 'card', id: 'q_' + key }, el('h2', { textContent: name + '（' + list.length + '）' }), el('p', { className: 'adv', textContent: adv }));
                 card.ondragover = (e) => { e.preventDefault(); card.classList.add('over'); };
                 card.ondragleave = () => card.classList.remove('over');
@@ -419,8 +446,8 @@
                 if (!list.length) card.append(el('p', { className: 'muted', textContent: '（空）' }));
                 list.forEach(it => {
                     const cb = el('input', { type: 'checkbox', checked: it.done }); cb.setAttribute('aria-label', '完成：' + it.t);
-                    cb.onchange = () => { it.done = cb.checked; save(); render(); };
-                    const del = el('button', { className: 'sm', textContent: '✕', onclick: () => { items = items.filter(x => x.id !== it.id); save(); render(); } }); del.setAttribute('aria-label', '刪除');
+                    cb.onchange = () => setDone(it, cb.checked);
+                    const del = el('button', { className: 'sm', textContent: '✕', onclick: () => delItem(it) }); del.setAttribute('aria-label', '刪除');
                     const row = el('div', { className: 'it', draggable: true }, cb, el('span', { className: 't', textContent: it.t }), el('span', { className: 'd', textContent: dueLabel(it.due, today(), day.between) }), del);
                     row.ondragstart = (e) => e.dataTransfer.setData('text/plain', it.id);
                     const qb = el('div', { className: 'qb' }, ...QUADS.filter(x => x[0] !== key).map(x => { const b = el('button', { className: 'sm qm', textContent: '→ ' + x[1], onclick: () => { setQuad(it, x[0]); save(); render(); } }); b.dataset.to = x[0]; b.setAttribute('aria-label', '移到' + x[1]); return b; }));
@@ -430,15 +457,26 @@
             }));
         }
 
-        function addItem(t, due) {
+        // 勾選完成：有 rep 且有到期日時產生下一筆（插在原項目後面）；滿了就只完成並提示
+        function setDone(it, v) {
+            it.done = v;
+            let full = false;
+            if (v && it.rep && it.due) {
+                if (items.length >= MAX_ITEMS) full = true;
+                else items.splice(items.indexOf(it) + 1, 0, { ...it, id: Date.now().toString(36) + rnd(1e6).toString(36), due: nextDue(it.due, it.rep), done: false });
+            }
+            save(); render();
+            if (full) $('#sub').textContent = `⚠ 已滿 ${MAX_ITEMS} 項，沒有產生下一筆重複待辦`;
+        }
+        function addItem(t, due, rep = '') {
             if (items.length >= MAX_ITEMS) { $('#sub').textContent = `⚠ 最多 ${MAX_ITEMS} 項，請先清除已完成或刪除不用的`; return false; }
-            items.push({ id: Date.now().toString(36) + rnd(1e6).toString(36), t, due, done: false });
+            items.push({ id: Date.now().toString(36) + rnd(1e6).toString(36), t, due: rep && !due ? today() : due, done: false, rep });
             save(); return true;
         }
         function add() {
             const t = $('#text').value.trim();
             if (!t) { $('#text').focus(); return; }
-            if (!addItem(t, $('#due').value)) return;
+            if (!addItem(t, $('#due').value, $('#rep').value)) return;
             $('#text').value = ''; $('#text').focus(); render();
         }
 
@@ -473,8 +511,8 @@
                 if (!list.length) panel.append(el('p', { className: 'muted', textContent: '這天沒有待辦' }));
                 list.forEach(it => {
                     const cb = el('input', { type: 'checkbox', checked: it.done }); cb.setAttribute('aria-label', '完成：' + it.t);
-                    cb.onchange = () => { it.done = cb.checked; save(); render(); };
-                    const del = el('button', { className: 'sm', textContent: '✕', onclick: () => { items = items.filter(x => x.id !== it.id); save(); render(); } }); del.setAttribute('aria-label', '刪除');
+                    cb.onchange = () => setDone(it, cb.checked);
+                    const del = el('button', { className: 'sm', textContent: '✕', onclick: () => delItem(it) }); del.setAttribute('aria-label', '刪除');
                     panel.append(el('div', { className: 'it' + (it.done ? ' done' : '') }, cb, el('span', { className: 't', textContent: it.t }), del));
                 });
                 const inp = el('input', { type: 'text', id: 'calText', maxLength: 100, placeholder: '在這天新增待辦' }); inp.setAttribute('aria-label', '在這天新增待辦');
@@ -494,7 +532,7 @@
         $('#vList').onclick = () => setView('list'); $('#vCal').onclick = () => setView('cal'); $('#vQ').onclick = () => setView('q');
         $('#sortPomo').onclick = () => { byPomo = !byPomo; $('#sortPomo').setAttribute('aria-pressed', byPomo); render(); };
         addEventListener('storage', (e) => { if (e.key === 'pomo_tasks') render(); });
-        $('#add').onclick = add;
+        $('#add').onclick = add; $('#tq').oninput = render;
         $('#text').onkeydown = (e) => { if (e.key === 'Enter' && !e.isComposing) add(); };
         $('#clearDone').onclick = () => { if (!confirm(`清除 ${items.filter(i => i.done).length} 項已完成的待辦？無法復原。`)) return; items = items.filter(i => !i.done); save(); render(); };
         const exp = (name, type, body) => download(new Blob([body], { type: type + ';charset=utf-8' }), name);

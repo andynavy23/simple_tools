@@ -78,8 +78,8 @@
         <p class="sub">選一張圖片，調整尺寸與品質後下載。處理全部在你的瀏覽器完成，圖片不會上傳；重新編碼也會移除 EXIF（拍攝地點等）資訊。</p>
 
         <div class="card">
-            <label class="drop" id="drop" for="file" tabindex="0">點這裡選擇圖片，或把圖片拖進來<br><small>JPEG、PNG、WebP、GIF、BMP、AVIF（瀏覽器能開啟的格式）</small></label>
-            <input type="file" id="file" accept="image/*,.svg,.heic,.heif" hidden>
+            <label class="drop" id="drop" for="file" tabindex="0">點這裡選擇圖片（可多選，最多 30 張批次），或把圖片拖進來<br><small>JPEG、PNG、WebP、GIF、BMP、AVIF（瀏覽器能開啟的格式）</small></label>
+            <input type="file" id="file" accept="image/*,.svg,.heic,.heif" multiple hidden>
             <details style="margin-top:10px"><summary class="muted" style="cursor:pointer;padding:10px 0">或貼上 SVG 程式碼</summary>
                 <textarea id="svgText" aria-label="SVG 原始碼" spellcheck="false" placeholder="&lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 100 100&quot;&gt;…&lt;/svg&gt;" style="width:100%;min-height:90px;margin-top:8px;font:13px ui-monospace,monospace"></textarea>
                 <button class="sm" id="svgGo" style="margin-top:6px">用這段 SVG</button>
@@ -117,6 +117,11 @@
                 <label for="q">品質</label><input type="range" id="q" min="10" max="100" value="80"><b id="qv">80</b>
             </div>
             <div class="row" id="bgRow"><label for="bg">透明背景填色（JPEG 不支援透明）</label><input type="color" id="bg" value="#ffffff"></div>
+            <div id="batchBox" hidden style="margin-bottom:10px">
+                <p class="muted" id="batchInfo"></p>
+                <div id="batchList"></div>
+                <div class="row"><button class="primary" id="batchZip">批次套用設定並打包 ZIP</button></div>
+            </div>
             <img id="preview" alt="處理後預覽" hidden>
             <div id="stats"></div>
             <div class="row" style="margin-top:10px"><button class="primary" id="save">下載</button><button id="reset">換一張</button></div>
@@ -169,6 +174,7 @@
         <li>選「格式」（JPEG / WebP / PNG），用「品質」滑桿調整（PNG 無損，不受品質影響）。</li>
         <li>下方預覽與「原始 / 處理後」大小會即時更新，看到「縮小 xx%」就是省下的比例。</li>
         <li>滿意後按「下載」；想處理別張按「換一張」。</li>
+        <li>批次：一次選多張（最多 30 張、每張 30 MB、合計 300 MB，超過的會說明並不加入），預覽第一張，按「批次套用設定並打包 ZIP」用同一組尺寸 / 格式 / 品質處理全部；檔名加尺寸後綴，單張失敗只標示那一張。批次不支援 SVG。</li>
         <li>App 圖示：選好圖片後，下方會出現「App 圖示 / Favicon 尺寸包」。選「完整顯示」或「填滿」與背景色，按「產生圖示包」，可逐張下載、下載 favicon.ico，或「全部打包下載 ZIP」；底部的 HTML 與 manifest 片段可直接複製。建議用正方形、至少 512 × 512 的圖。</li>
         <li>佔位圖：展開頁面下方「佔位圖產生」，填尺寸（可多種，如 300x200, 640x480）、背景 / 文字色與文字（可用 {w} {h}），每種尺寸可下載 PNG / SVG、複製 SVG data URI，或全部打包成 ZIP。</li>
         <li>圖片轉 PDF：展開「圖片轉 PDF」，加入多張圖片，用 ↑ ↓ 調順序、✕ 刪除；選紙張（A4 / Letter / 原圖尺寸）、方向、邊界，按「產生 PDF」下載。每張圖等比縮放並置中。</li>
@@ -181,7 +187,7 @@
         <li>HEIC（iPhone 預設照片格式）：只有 Safari 能直接開啟並轉成 JPEG / WebP / PNG（等於 HEIC 轉 JPG）；其他瀏覽器會顯示提示，本頁不內建 HEIC 解碼器。</li>
         <li>輸出為 JPEG 時，透明部分會填上「透明背景填色」選的顏色。</li>
         <li>重新編碼會移除 EXIF；GIF 動圖只會取第一格。</li>
-        <li>太大的圖片（超過瀏覽器記憶體上限）可能處理失敗。</li>
+        <li>太大的圖片（超過瀏覽器記憶體上限）可能處理失敗。批次處理全在記憶體中進行，不會儲存任何資料。</li>
         <li>佔位圖：文字字級會自動縮到塞得下；PNG 是下載時才產生，預覽用的是 SVG。尺寸以 4096 為上限，最多 20 種，輸入格式不對會直接指出哪一項，不會默默略過。</li>
         <li>圖片轉 PDF：圖片一律先轉成 JPEG 再嵌入（PNG 的透明處會填白、EXIF 一併移除），所以檔案可能比原圖大或小；「最長邊」與「JPEG 品質」在按下「產生 PDF」時套用。上限 100 頁、輸入總大小 100 MB，超過會拒絕新增並提示；清單只存在記憶體，重新整理就會消失，不會儲存或上傳任何圖片。單張圖若瀏覽器無法讀取，會指出檔名並中止。</li>
         <li>圖示包的 maskable 圖示會把圖縮到 56% 並填背景色（安全區規格），Android 才不會把邊角裁掉；ZIP 不壓縮（PNG 本來就壓縮過）。圖示包只在記憶體中產生，不儲存任何資料。</li>
@@ -225,6 +231,22 @@
         // 下載檔名：原檔名去副檔名 + 尺寸 + 新副檔名
         const outName = (name, w, h, mime) => `${(name || 'image').replace(/\.[^.]*$/, '').replace(/[\\/:*?"<>|]/g, '_')}-${w}x${h}.${EXT[mime] || 'jpg'}`;
         const sizeOk = (w, h) => w > 0 && h > 0 && w <= MAX_DIM && h <= MAX_DIM && w * h <= MAX_PIXELS;
+
+        // ---- 批次：選檔上限與輸出檔名 ----
+        const BATCH_MAX = 30, BATCH_FILE_MAX = 30 * 1048576, BATCH_TOTAL_MAX = 300 * 1048576;
+        // files: [{ name, size }]；回傳 { ok: 收下的, notes: 沒收下的原因 }。超過張數、單檔、總大小上限的都拒絕並說明（不默默丟掉）
+        function batchPick(files) {
+            const ok = [], notes = []; let total = 0;
+            if (files.length > BATCH_MAX) notes.push('最多 ' + BATCH_MAX + ' 張，後面 ' + (files.length - BATCH_MAX) + ' 張未加入');
+            for (const f of files.slice(0, BATCH_MAX)) {
+                if (f.size > BATCH_FILE_MAX) { notes.push('「' + String(f.name).slice(0, 30) + '」超過單檔 30 MB 上限，未加入'); continue; }
+                if (total + f.size > BATCH_TOTAL_MAX) { notes.push('總大小會超過 300 MB，「' + String(f.name).slice(0, 30) + '」起未加入'); break; }
+                total += f.size; ok.push(f);
+            }
+            return { ok, notes };
+        }
+        // 檔名重複時在副檔名前加 -2、-3
+        function uniqueNames(names) { const seen = {}; return names.map(n => { const k = n.toLowerCase(); seen[k] = (seen[k] || 0) + 1; return seen[k] === 1 ? n : n.replace(/(\.[^.]*)?$/, '-' + seen[k] + '$1'); }); }
 
         // ---- App 圖示 / Favicon 尺寸包 ----
         const ICON_PLAN = [16, 32, 48, 180, 192, 512].map(s => ({ name: 'icon-' + s + '.png', size: s, maskable: false })).concat([192, 512].map(s => ({ name: 'icon-maskable-' + s + '.png', size: s, maskable: true })));
@@ -512,14 +534,49 @@
         };
         const later = () => { clearTimeout(timer); timer = setTimeout(process, 150); };
 
-        $('#file').onchange = (e) => load(e.target.files[0]);
+        // 批次：多選時預覽第一張，按「批次套用設定並打包 ZIP」把每張都用同一組尺寸 / 格式 / 品質處理；單張失敗只標示該張
+        let batch = [];
+        function pick(fl) {
+            const files = [...fl]; if (!files.length) return;
+            if (files.length === 1) { batch = []; $('#batchBox').hidden = true; return load(files[0]); }
+            const { ok, notes } = batchPick(files);
+            batch = ok; $('#batchBox').hidden = !ok.length; $('#batchList').replaceChildren();
+            if (!ok.length) return showErr(notes.join('；'));
+            $('#batchInfo').textContent = '已選 ' + ok.length + ' 張（預覽的是第一張）' + (notes.length ? '。' + notes.join('；') : '') + '。';
+            load(ok[0]);
+        }
+        $('#batchZip').onclick = async () => {
+            const btn = $('#batchZip'), maxW = parseInt($('#maxw').value, 10) || null, maxH = parseInt($('#maxh').value, 10) || null, mime = $('#fmt').value, q = $('#q').value / 100, files = [], rows = [];
+            btn.disabled = true;
+            for (const [i, f] of batch.entries()) {
+                $('#batchInfo').textContent = '處理中 ' + (i + 1) + ' / ' + batch.length + '…';
+                try {
+                    if (f.type === 'image/svg+xml' || /\.svg$/i.test(f.name)) throw new Error('批次不支援 SVG，請單張處理');
+                    let bmp; try { bmp = await createImageBitmap(f, { imageOrientation: 'from-image' }); } catch { throw new Error(isHeic(f) ? 'HEIC 無法在這個瀏覽器開啟' : '無法讀取（格式不支援或檔案損毀）'); }
+                    const { w, h } = fitSize(bmp.width, bmp.height, maxW, maxH);
+                    if (!sizeOk(bmp.width, bmp.height) || !sizeOk(w, h)) { bmp.close(); throw new Error('圖片太大（單邊上限 16384 像素、總像素上限 1 億）'); }
+                    const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g = cv.getContext('2d');
+                    if (mime === 'image/jpeg') { g.fillStyle = $('#bg').value; g.fillRect(0, 0, w, h); }
+                    g.imageSmoothingQuality = 'high'; g.drawImage(bmp, 0, 0, w, h); bmp.close();
+                    const blob = await new Promise(res => cv.toBlob(res, mime, mime === 'image/png' ? undefined : q));
+                    if (!blob) throw new Error('這個瀏覽器無法輸出這種格式');
+                    files.push({ name: outName(f.name, w, h, blob.type), data: new Uint8Array(await blob.arrayBuffer()) }); rows.push([f.name, w + ' × ' + h + '・' + fmtBytes(blob.size), 'ok']);
+                } catch (e) { rows.push([f.name, e.message, 'bad']); }
+            }
+            $('#batchList').replaceChildren(...rows.map(r => statRow(r[0], r[1], r[2])));
+            const names = uniqueNames(files.map(x => x.name)); files.forEach((x, i) => { x.name = names[i]; });
+            $('#batchInfo').textContent = '完成：成功 ' + files.length + ' 張、失敗 ' + (batch.length - files.length) + ' 張。';
+            if (files.length) download(new Blob([zipStore(files)], { type: 'application/zip' }), 'images.zip');
+            btn.disabled = false;
+        };
+        $('#file').onchange = (e) => pick(e.target.files);
         ['maxw', 'maxh', 'fmt', 'q', 'bg'].forEach(id => { $('#' + id).oninput = later; });
         $('#save').onclick = () => { if (result) download(result.blob, outName(srcFile.name, result.w, result.h, result.blob.type)); };
-        $('#reset').onclick = () => { $('#panel').hidden = true; $('#iconCard').hidden = true; $('#icOut').hidden = true; icons = []; $('#preview').hidden = true; $('#file').value = ''; if (src && src.close) src.close(); src = null; };
+        $('#reset').onclick = () => { $('#panel').hidden = true; $('#iconCard').hidden = true; $('#icOut').hidden = true; icons = []; $('#preview').hidden = true; $('#file').value = ''; batch = []; $('#batchBox').hidden = true; if (src && src.close) src.close(); src = null; };
         const drop = $('#drop');
         ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
         ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
-        drop.addEventListener('drop', (e) => load(e.dataTransfer.files[0]));
+        drop.addEventListener('drop', (e) => pick(e.dataTransfer.files));
         drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#file').click(); } });
     </script>
 </body>

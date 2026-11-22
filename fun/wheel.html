@@ -85,6 +85,11 @@
             </div>
             <div id="result" aria-live="polite"></div>
             <button class="primary" id="spin">開始轉</button>
+            <div class="presets" style="margin:12px 0 0;align-items:center">
+                <label style="display:flex;align-items:center;gap:6px;margin:0;font-weight:400"><input type="checkbox" id="once"> 抽中後從本輪移除</label>
+                <button class="sm" id="resetRound">重置本輪</button>
+            </div>
+            <ol id="hist" style="margin:8px 0 0;padding-left:1.6em" aria-label="本次結果"></ol>
         </div>
 
         <div class="card">
@@ -115,6 +120,8 @@
         <div class="eg">選項寫「拉麵」「便當*2」「燒肉*3」→ 總權重 6，被選中的機率分別為 1/6、2/6、3/6（燒肉 50%）。</div>
         <h3>小提醒</h3>
         <ul>
+        <li>勾選「抽中後從本輪移除」：抽中的選項會從轉盤拿掉，輪流請客 / 分配任務就不會重複；只剩 1 個時會提示，全部抽完後按「重置本輪」重來。改選項或載入常用清單也會重置本輪。沒勾選時機率與權重不變。</li>
+        <li>轉盤下方列出本次開啟頁面期間的結果（最多 50 筆，超過會淘汰最舊的；只在畫面上，不存檔，重新整理就清空），不影響已儲存的選項。</li>
         <li>轉盤上名稱超過 8 個字會被縮短，結果仍顯示完整名稱。</li>
         <li>先決定結果再讓轉盤停到該格，機率與權重一致。</li>
         <li>清單自動存在這個瀏覽器，文字框最多 5000 字；要清除就清空文字框（只有這一筆資料），可用 💾 備份。</li>
@@ -148,13 +155,17 @@
         const btn = $('#spin'), out = $('#result');
         const KEY = 'wheel_items', TAU = Math.PI * 2;
         const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-        let angle = 0, spinning = false;
+        let angle = 0, spinning = false, removed = new Set(), hist = [];
 
         const { store } = Util;
         { const v = store.get(KEY, ''); ta.value = typeof v === 'string' ? v.slice(0, 5000) : ''; }
         if (!ta.value) ta.value = '拉麵\n便當*2\n燒肉\n麥當勞\n自己煮';
 
-        const parse = () => parseItems(ta.value);
+        // 本輪可抽的選項（帶原始序號）：勾選「抽中後移除」時排除已抽中的
+        const parseAll = () => parseItems(ta.value).map((it, i) => ({ ...it, i }));
+        const parse = () => parseAll().filter(it => !$('#once').checked || !removed.has(it.i));
+        const resetRound = () => { removed = new Set(); };
+        function renderHist() { $('#hist').replaceChildren(...hist.map(h => Object.assign(document.createElement('li'), { textContent: h }))); }
 
         function draw() {
             const items = parse(), n = items.length, R = cv.width / 2;
@@ -184,8 +195,9 @@
         }
 
         function spin() {
-            const items = parse();
-            if (items.length < 2) { out.textContent = '請至少輸入 2 個選項'; return; }
+            const items = parse(), once = $('#once').checked;
+            if (once && removed.size && !items.length) { out.textContent = '本輪已抽完，請按「重置本輪」'; return; }
+            if (items.length < (once && removed.size ? 1 : 2)) { out.textContent = '請至少輸入 2 個選項'; return; }
             const total = items.reduce((s, i) => s + i.w, 0);
             // 先抽出贏家，再讓轉盤停在那一格（落點在該格內隨機，避免永遠停在中線）
             let r = Math.random() * total, k = 0;
@@ -202,6 +214,8 @@
                 spinning = false;
                 btn.disabled = false;
                 out.textContent = '🎉 ' + items[k].name;
+                hist = [items[k].name, ...hist].slice(0, 50); renderHist();
+                if (once) { removed.add(items[k].i); const left = parse().length; if (left === 1) out.textContent += '（只剩 1 個，抽完這個本輪就結束）'; else if (!left) out.textContent += "（本輪結束，按「重置本輪」重來）"; }
             };
             spinning = true;
             btn.disabled = true;
@@ -217,13 +231,15 @@
         }
 
         $('#presets').replaceChildren(...Object.entries(PRESETS).map(([name, list]) => Object.assign(document.createElement('button'), {
-            className: 'sm', textContent: name, onclick: () => { if (spinning) return; ta.value = list.join('\n'); store.set(KEY, ta.value); out.textContent = ''; draw(); },
+            className: 'sm', textContent: name, onclick: () => { if (spinning) return; ta.value = list.join('\n'); store.set(KEY, ta.value); resetRound(); out.textContent = ''; draw(); },
         })));
         btn.onclick = spin;
         ta.oninput = () => {
-            store.set(KEY, ta.value);
+            store.set(KEY, ta.value); resetRound();
             if (!spinning) { out.textContent = ''; draw(); }
         };
+        $('#once').onchange = () => { if (!spinning) { out.textContent = ''; draw(); } };
+        $('#resetRound').onclick = () => { if (spinning) return; resetRound(); out.textContent = ''; draw(); };
         draw();
     </script>
 </body>

@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/artale/maple-leaf.png" />
     <meta property="og:title" content="Artale Party Tool - 團練小工具" />
     <meta property="og:description" content="aespaaa 公會製作, 可能破壞友誼，謹慎使用" />
@@ -39,6 +39,7 @@
         <div class="eg">單人：目標設 20% → 按 +5%、+5%、+1% 共 11，進度條約 55%；再按 +5% 兩次，進度封頂在目標 20 → 出現慶祝特效。掉落點「武器」兩次、「捲軸(貴)」一次 → 總數 3。</div>
         <h3>小提醒</h3>
         <ul>
+        <li>隊員斷線或被隊長關閉時，上方會出現紅色橫幅：按「重新加入」沿用房號與暱稱再連一次（不會重載頁面），「離開」才會回到起點；被移出隊伍則不能重新加入。</li>
         <li>單人使用的資料只在這次開啟期間，關掉頁面就會清除（暱稱會記住）。</li>
         <li>手機畫面下方是切換頁面的導覽列；右下「日誌」可看操作紀錄。</li>
         <li>語音提醒用瀏覽器內建語音，需要裝置有開聲音。</li>
@@ -249,7 +250,7 @@
             background: #fff;
             border-top: 4px solid #000;
             position: fixed;
-            bottom: 30px;
+            bottom: calc(30px + env(safe-area-inset-bottom));
             /* 為固定文案留空間 */
             width: 100%;
             z-index: 1000;
@@ -279,7 +280,9 @@
             position: fixed;
             bottom: 0;
             width: 100%;
-            height: 30px;
+            box-sizing: border-box;
+            height: calc(30px + env(safe-area-inset-bottom));
+            padding-bottom: env(safe-area-inset-bottom);
             line-height: 30px;
             text-align: center;
             font-size: 0.75rem;
@@ -492,7 +495,7 @@
 
 <body>
 
-    <div class="container py-4" style="padding-top:3.2rem !important">
+    <div class="container py-4" style="padding-top:4rem !important">
         <!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h4 class="m-0">ARTALE PARTY TOOL</h4>
@@ -705,6 +708,12 @@
 
     <div class="fixed-footer">aespaaa 公會製作</div>
 
+    <div id="netBanner" class="d-none" role="alert" style="position:fixed;left:0;right:0;top:0;z-index:1500;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;padding:10px 12px;background:#b3261e;color:#fff;font-size:15px">
+        <span id="netMsg"></span>
+        <button id="netRejoin" class="btn btn-pixel btn-sm" onclick="rejoinRoom()">重新加入（沿用房號與暱稱）</button>
+        <button class="btn btn-pixel btn-pixel-outline btn-sm" onclick="location.reload()">離開</button>
+    </div>
+
     <div id="loadingOverlay" class="loading-overlay">
         <div class="pixel-spinner"></div>
         <h5 id="loadingTitle">正在同步頻道設定...</h5>
@@ -826,7 +835,7 @@
         function confirmNickname() {
             let input = document.getElementById('nickname').value.trim();
             if (input && typeof P2PRoom !== "undefined" && !P2PRoom.validNick(input, MAX_NICK)) {
-                return alert("暱稱格錯誤：僅限繁中、英數，且不可超過30字!");
+                return Chrome.toast("暱稱格錯誤：僅限繁中、英數，且不可超過30字!", 4000, 'bad');
             }
 
             if (!input) {
@@ -880,8 +889,19 @@
 
         function onNetError(err, message) {
             toggleLoading(false);
-            alert(message + "\n請嘗試重新加入。");
-            location.reload();
+            showNet(message, !isCaptain && !!lastJoinId);
+        }
+        // 斷線 / 被拒：頁內橫幅，不重載頁面；可重新加入時沿用房號與暱稱
+        let lastJoinId = '';
+        function showNet(msg, canRejoin) {
+            if (!isCaptain) room = null;                 // join 端連線已結束，才允許再次 joinRoom
+            document.getElementById('netMsg').textContent = msg;
+            document.getElementById('netRejoin').classList.toggle('d-none', !canRejoin);
+            document.getElementById('netBanner').classList.remove('d-none');
+        }
+        function rejoinRoom() {
+            document.getElementById('netBanner').classList.add('d-none');
+            joinRoom(lastJoinId);
         }
 
         function createRoom() {
@@ -933,10 +953,11 @@
             addLog('[系統] 單人使用（資料只在這次開啟期間）');
         }
 
-        function joinRoom() {
+        function joinRoom(again) {
             if (room) return;
-            const id = document.getElementById('joinIdInput').value.trim();
-            if (!id) return alert("請輸入房號!");
+            const id = (typeof again === 'string' ? again : document.getElementById('joinIdInput').value).trim();
+            if (!id) return Chrome.toast("請輸入房號!", 3000, 'bad');
+            lastJoinId = id;
             toggleLoading(true, "正在尋找冒險夥伴...");
             room = P2PRoom.join(id, {
                 nick: myName, maxNick: MAX_NICK,
@@ -955,8 +976,8 @@
                     }
                     else if (data.type === 'TEST_START') { showSurvivalUI(data.payload); }
                 },
-                onRejected(reason) { toggleLoading(false); alert(reason); location.reload(); },
-                onClose() { alert("隊長已中斷伺服器"); location.reload(); },
+                onRejected(reason) { toggleLoading(false); showNet(reason, true); },
+                onClose(c) { showNet(c && c.kicked ? "你已被移出隊伍" + (c.reason ? "：" + c.reason : "") : "與隊長的連線中斷了", !(c && c.kicked)); },
                 onError: onNetError,
             });
         }
@@ -1179,13 +1200,13 @@
         function leaveRoom() { if (confirm(solo ? "離開單人使用？（資料會清除）" : "確定要離隊嗎？")) location.reload(); }
         function copyInviteLink() {
             const link = P2PRoom.inviteLink(myId);
-            Util.copyText(link).then(ok => ok ? alert("邀請連結已複製!") : prompt("請手動複製邀請連結：", link));
+            Util.copyWithFeedback(document.getElementById('copyInviteBtn'), link, () => prompt("請手動複製邀請連結：", link));
         }
         function toggleLogs() { const s = document.getElementById('logSection'); s.style.display = s.style.display === 'block' ? 'none' : 'block'; }
         function showHelp() { if (window.Chrome) Chrome.openHelp(); else document.getElementById('helpModal').showModal(); }      // 統一用 chrome.js 的完整說明；舊簡述只當後備
         function updateExpTarget() {
             const v = parseInt(document.getElementById('newTargetInput').value);
-            if (!(v >= 1)) return alert("目標請輸入大於 0 的整數!");
+            if (!(v >= 1)) return Chrome.toast("目標請輸入大於 0 的整數!", 3000, 'bad');
             sendAction('UPDATE_TARGET', v);
         }
         function resetMyLoot() { sendAction('RESET_LOOT_SELF'); }

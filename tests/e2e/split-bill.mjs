@@ -46,5 +46,18 @@ try {
     // 壞資料不壞頁
     await page.evaluate(() => localStorage.setItem('bill_util', '{"members":"x","months":[null]}')); await page.reload({ waitUntil: 'load' }); assert.equal(await count('#u_people .chip'), 0);
     assert.equal(await page.evaluate(() => document.querySelector('meta[name="st-keys"]').content), 'bill_state,bill_util');
+
+    // 132 / 147：複製結算文字（3 人、小明先付 900 三人分 + 阿美先付 300 兩人分）
+    await page.evaluate(() => localStorage.setItem('bill_state', JSON.stringify({ people: ['小明', '小華', '阿美'], expenses: [] })));
+    await page.reload({ waitUntil: 'load' });
+    assert.equal(await page.evaluate(() => document.querySelector('#copyBtn').disabled), true, '沒有支出時停用');
+    await page.evaluate(() => localStorage.setItem('bill_state', JSON.stringify({ people: ['小明', '小華', '阿美'], expenses: [{ desc: '晚餐', payer: '小明', amount: 90000, shares: ['小明', '小華', '阿美'] }] })));
+    await page.reload({ waitUntil: 'load' });
+    assert.equal(await page.evaluate(() => document.querySelector('#copyBtn').disabled), false);
+    await page.evaluate(() => { window.__clip = ''; Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__clip = t; } }, configurable: true }); });
+    await click('#copyBtn'); await new Promise(r => setTimeout(r, 100));
+    const clip = await page.evaluate(() => window.__clip), tl = clip.split(String.fromCharCode(10)).filter(l => l.includes('→'));
+    assert.equal(tl.length, 2, clip); assert.ok(tl.includes('小華 → 小明：NT$ 300') && tl.includes('阿美 → 小明：NT$ 300'), clip);
+    assert.ok(clip.includes('小明 可收回 NT$ 600'), clip);
     assert.deepEqual(errors, []);
 } finally { await browser.close(); }

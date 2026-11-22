@@ -51,6 +51,7 @@ try {
     assert.equal(await t.page.evaluate(() => localStorage.getItem('pomo_tasks')), null, '取消後不能寫入');
     await (await t.page.$('.st-data input[type=file]')).uploadFile(bk);
     await t.page.waitForSelector('.st-prev ul');
+    await t.page.evaluate(() => document.querySelector('.st-before').click());                      // 有覆蓋時要先下載目前資料才能確認載入
     await Promise.all([t.page.waitForNavigation({ timeout: 8000 }), t.page.evaluate(() => [...document.querySelectorAll('.st-prev button')].find(b => /確認載入/.test(b.textContent)).click())]);
     assert.equal(await t.page.evaluate(() => localStorage.getItem('todo_items')), '[{"id":"a"},{"id":"b"}]');
     assert.equal(await t.page.evaluate(() => localStorage.getItem('pomo_tasks')), '[]');

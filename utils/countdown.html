@@ -154,6 +154,7 @@
             </div>
             <div class="row" style="margin-top:10px">
                 <label><input type="checkbox" id="yearly"> 每年重複（紀念日）</label>
+                <button class="sm" id="cancelEdit" hidden>取消編輯</button>
                 <button class="primary" id="add" style="margin-left:auto">新增</button>
             </div>
             <p class="note" id="msg"></p>
@@ -206,6 +207,7 @@
         <h3>小提醒</h3>
         <ul>
         <li>資料只存在這個瀏覽器，換裝置或清除資料就沒了，重要的可先匯出 .ics</li>
+        <li>寫錯了不用刪掉重建：每筆右側按「編輯」，上方表單會帶入名稱 / 日期 / 每年重複，改完按「儲存修改」；附在上面的清單（行李 / 待辦）與勾選狀態、戒除設定都會保留，排序與天數即時更新。編輯中按「取消編輯」放棄修改。</li>
         <li>每年重複的 2/29 在非閏年算 2/28</li>
         <li>戒除計數：在「戒除計數」填名稱、起算日與每天花費（0 也可），會在下方列表顯示已持續天數（起算日當天為 0 天，每過一天加 1）、估算省下的金額與下一個里程碑；起算日若在未來則照一般倒數。復發要重來可展開該筆的「清單」按「重新起算（今天）」，不要了按 × 刪除。非醫療建議。</li>
         <li>旅遊倒數：新增旅行出發日，展開「清單」可「加入旅行行李範本」與「加入行前待辦範本」，一邊倒數一邊勾選。</li>
@@ -449,19 +451,32 @@
                 right.firstChild.style.display = 'block';
                 const del = document.createElement('button');
                 del.className = 'del'; del.textContent = '×'; del.setAttribute('aria-label', '刪除 ' + e.name);
-                del.onclick = () => { events.splice(i, 1); save(); render(); };
+                del.onclick = () => { if (editing === e) stopEdit(); events.splice(i, 1); save(); render(); };
+                const ed = document.createElement('button');
+                ed.className = 'sm'; ed.textContent = '編輯'; ed.setAttribute('aria-label', '編輯 ' + e.name);
+                ed.onclick = () => { editing = e; $('#name').value = e.name; $('#date').value = e.date; $('#yearly').checked = !!e.yearly && !e.quit; $('#yearly').disabled = !!e.quit; $('#add').textContent = '儲存修改'; $('#cancelEdit').hidden = false; $('#msg').textContent = ''; $('#name').scrollIntoView({ block: 'center' }); $('#name').focus(); };
                 const wrap = document.createElement('div');
                 wrap.style.cssText = 'display:flex;align-items:center;gap:6px';
-                wrap.append(right, del);
+                wrap.append(right, ed, del);
                 row.append(left, wrap);
                 box.append(row);
             });
         }
 
+        // 編輯：直接改原物件的名稱 / 日期 / 每年重複，清單（items）、戒除設定原封不動
+        let editing = null;
+        function stopEdit() { editing = null; $('#add').textContent = '新增'; $('#cancelEdit').hidden = true; $('#yearly').disabled = false; $('#name').value = ''; $('#msg').textContent = ''; }
+        $('#cancelEdit').onclick = stopEdit;
         $('#add').onclick = () => {
             const name = $('#name').value.trim(), date = $('#date').value;
             if (!name) { $('#msg').textContent = '請輸入名稱'; return; }
             if (!date) { $('#msg').textContent = '請選擇日期'; return; }
+            if (editing) {
+                const oldKey = editing.name + '|' + editing.date;
+                editing.name = name; editing.date = date; if (!editing.quit) editing.yearly = $('#yearly').checked;
+                if (openKeys.delete(oldKey)) openKeys.add(name + '|' + date);
+                stopEdit(); save(); render(); return;
+            }
             if (events.length >= MAX_EVENTS) { $('#msg').textContent = `最多 ${MAX_EVENTS} 個日期，請先刪除不用的`; return; }
             events.push({ name, date, yearly: $('#yearly').checked, items: [] });
             save();

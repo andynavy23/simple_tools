@@ -151,6 +151,7 @@
                 <input type="text" id="newName" maxlength="20" placeholder="新詞庫名稱" aria-label="新詞庫名稱">
                 <button id="addDeck">建立</button>
                 <button class="sm" id="delDeck">刪除此詞庫</button>
+                <select id="dir" aria-label="複習方向"><option value="f">正面 → 背面</option><option value="b">背面 → 正面</option><option value="r">隨機方向</option></select>
             </div>
         </div>
 
@@ -223,6 +224,7 @@
         <div class="eg">貼上「apple | 蘋果」→ 新卡片。第一次按「良好」：1 天後；隔天再按「良好」：3 天後；再按「良好」：8 天後。按「重來」則今天稍後會再出現。</div>
         <h3>小提醒</h3>
         <ul>
+        <li>複習方向：詞庫旁可選「正面 → 背面」（預設）、「背面 → 正面」（看解釋想單字）或「隨機方向」；排程與進度不分方向、共用同一份（不會讓進度翻倍），評分公式也相同。方向設定跟著詞庫選擇存在 <code>flash_cur</code>（固定一筆，不會累積；舊資料或壞資料視為正 → 背），清除網站資料即可重置。</li>
         <li>每天最多出 20 張新卡；重複的正面會被略過。最多 30 個詞庫、每個詞庫 3000 張。</li>
         <li>「複製整個詞庫」可備份，資料只存在這個瀏覽器；刪除詞庫會一併刪掉進度。</li>
         <li>聽寫需要裝置支援語音朗讀；沒有語音（或找不到該語言的語音）時會提示，此時會自動顯示解釋，改成看解釋拼單字。聽寫成績不會儲存。</li>
@@ -738,19 +740,22 @@ yield|n.|收益；v. 產出|The investment yields five percent a year.`;
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
-        let decks = cleanDecks(store.get('flash_decks', {})), cur = store.get('flash_cur', ''), queue = [], flipped = false;
-        if (typeof cur !== 'string') cur = '';
-        const save = () => { store.set('flash_decks', decks); store.set('flash_cur', cur); };
+        // flash_cur：舊版是詞庫名稱字串；新版 { n: 詞庫名稱, dir: 'f' 正→背 | 'b' 背→正 | 'r' 隨機 }，缺欄位 / 非法值 = 正→背
+        const rawCur = store.get('flash_cur', ''), curObj = rawCur && typeof rawCur === 'object' && !Array.isArray(rawCur) ? rawCur : { n: rawCur };
+        let decks = cleanDecks(store.get('flash_decks', {})), cur = typeof curObj.n === 'string' ? curObj.n : '', dir = ['f', 'b', 'r'].includes(curObj.dir) ? curObj.dir : 'f', queue = [], flipped = false, rev = false;
+        const save = () => { store.set('flash_decks', decks); store.set('flash_cur', { n: cur, dir }); };
+        const pickRev = () => { rev = dir === 'b' || (dir === 'r' && Math.random() < 0.5); };   // 進度與排程不分方向，共用同一份
         const cards = () => decks[cur] || [];
         const GRADES = [['重來', 0], ['困難', 1], ['良好', 2], ['簡單', 3]];
 
-        function buildQueue() { queue = dueQueue(cards(), day.today()); flipped = false; }
+        function buildQueue() { queue = dueQueue(cards(), day.today()); flipped = false; pickRev(); }
 
         function renderDecks() {
             const names = Object.keys(decks);
             if (!names.includes(cur)) cur = names[0] || '';
-            $('#deck').replaceChildren(...names.map(n => new Option(`${n}（${decks[n].length}）`, n)));
+            $('#deck').replaceChildren(...(names.length ? names.map(n => new Option(`${n}（${decks[n].length}）`, n)) : [Object.assign(new Option('尚無詞庫', ''), { disabled: true })]));
             $('#deck').value = cur;
+            $('#deck').style.minWidth = '9em';
         }
 
         function render() {
@@ -761,9 +766,9 @@ yield|n.|收益；v. 產出|The investment yields five percent a year.`;
             if (!cur) { face.textContent = '先在上方建立一個詞庫'; return; }
             if (i === undefined) { face.innerHTML = '<span>🎉 今天沒有要複習的卡片<small>明天再來，或在下方新增卡片</small></span>'; return; }
             const c = cs[i];
-            face.replaceChildren(Object.assign(document.createElement('span'), { textContent: c.f }));
+            face.replaceChildren(Object.assign(document.createElement('span'), { textContent: rev ? c.b : c.f }));
             if (flipped) {
-                face.firstChild.append(Object.assign(document.createElement('span'), { className: 'back', textContent: c.b }));
+                face.firstChild.append(Object.assign(document.createElement('span'), { className: 'back', textContent: rev ? c.f : c.b }));
                 if (c.ex) face.firstChild.append(Object.assign(document.createElement('small'), { textContent: c.ex }));
                 $('#grades').replaceChildren(...GRADES.map(([n, g]) => {
                     const b = document.createElement('button'), nx = schedule(c, g, t), small = document.createElement('small');
@@ -778,7 +783,7 @@ yield|n.|收益；v. 產出|The investment yields five percent a year.`;
             const next = schedule(cards()[i], g, day.today());
             decks[cur][i] = next; save();
             if (g === 0) queue.push(i);                                  // 重來：本次稍後再出現
-            flipped = false; render();
+            flipped = false; pickRev(); render();
         }
 
         $('#face').onclick = $('#flip').onclick = () => { if (queue.length && !flipped) { flipped = true; render(); } };
@@ -796,6 +801,8 @@ yield|n.|收益；v. 產出|The investment yields five percent a year.`;
             decks[n] = []; cur = n; $('#newName').value = ''; save(); renderDecks(); buildQueue(); render(); $('#info').textContent = '';
         };
         $('#delDeck').onclick = () => { if (cur && confirm(`確定刪除詞庫「${cur}」與它的學習進度？無法復原。`)) { delete decks[cur]; cur = ''; save(); renderDecks(); buildQueue(); render(); } };
+        $('#dir').value = dir;
+        $('#dir').onchange = () => { dir = $('#dir').value; save(); pickRev(); render(); };
         $('#deck').onchange = () => { cur = $('#deck').value; save(); buildQueue(); render(); };
         $('#importBtn').onclick = () => {
             if (!cur) { $('#info').textContent = '請先建立詞庫'; return; }

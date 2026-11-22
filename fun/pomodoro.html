@@ -253,7 +253,7 @@
         <div class="eg">預設 25／5／15：連續完成 4 顆專注（共 100 分鐘）後，第 4 次休息會自動變成 15 分鐘長休息。</div>
         <h3>小提醒</h3>
         <ul>
-        <li>以結束時間計算，分頁在背景也不會變慢；但<b>頁面需保持開啟</b>，手機鎖屏或關閉分頁可能中斷、也聽不到提示音。</li>
+        <li>以結束時間計算，分頁在背景也不會變慢；但<b>頁面需保持開啟</b>，手機鎖屏或關閉分頁可能中斷、也聽不到提示音。計時進行中會請求「螢幕恆亮」避免自動鎖屏（暫停 / 結束即釋放，切到別的分頁後回來會重新取得）；瀏覽器不支援時略過，這個功能不存任何資料。</li>
         <li>只有「專注」完整結束才會計入紀錄，跳過不算。紀錄只保留最近 400 天；「清除專注紀錄」會清空全部統計，無法復原。</li>
         <li>紀錄只存在這個瀏覽器，保留約 400 天。</li>
         <li>待辦統計最多 500 個項目（滿了就不再為新項目累計，不會刪舊的）；待辦被刪除後，這裡的統計會在下次開啟本頁時自動清掉。「清除待辦番茄統計」只清各待辦的累計，不影響上面的每日紀錄與待辦本身，無法復原。</li>
@@ -387,6 +387,21 @@
             document.title = running ? `${text} ${MODES[mode].label}` : '番茄鐘';
             $('#count').textContent = stats().count;
             $('#mins').textContent = stats().minutes;
+            wakeSync();
+        }
+
+        // 螢幕恆亮：計時中持有 Wake Lock，暫停 / 結束釋放；分頁隱藏時系統會自動釋放，回前景由 wakeSync 重取；不支援就略過
+        let wakeLock = null, wakeBusy = false;
+        async function wakeSync() {
+            try {
+                if (running && !wakeLock && !wakeBusy && navigator.wakeLock && !document.hidden) {
+                    wakeBusy = true;
+                    const l = await navigator.wakeLock.request('screen');
+                    wakeBusy = false;
+                    if (!running) { l.release(); return; }
+                    wakeLock = l; l.addEventListener('release', () => { if (wakeLock === l) wakeLock = null; });
+                } else if (!running && wakeLock) { const l = wakeLock; wakeLock = null; l.release(); }
+            } catch (e) { wakeBusy = false; }
         }
 
         function renderHist() {
@@ -493,7 +508,7 @@
         $('#eyeClose').onclick = () => { eyeEnd = 0; $('#eyeBar').hidden = true; };
         $('#eyeReset').onclick = () => { if (!confirm('重設護眼提醒設定（回到關閉）？無法復原。')) return; eye = cleanEye(null); eyeNext = Date.now() + EYE_MS; eyeEnd = 0; $('#eyeBar').hidden = true; saveEye(); renderEye(); };
         setInterval(eyeTick, 1000);
-        document.addEventListener('visibilitychange', () => { if (!document.hidden) eyeTick(); });
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) { eyeTick(); wakeSync(); } });
         renderEye();
         setMode('work');
     </script>

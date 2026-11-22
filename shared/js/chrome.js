@@ -9,7 +9,7 @@
  *   首頁用 content="*" 代表全站）。有宣告就會出現「💾」按鈕，可匯出 / 載入 JSON 備份（換瀏覽器、清除網站資料前先匯出）。
  *   載入時只會寫入符合宣告的鍵（首頁的全站備份例外），並會先讓使用者確認。
  * 切換風格 / 明暗（含系統明暗改變）後會在 window 派發 'st-themechange'；canvas 圖表監聽它即可用新顏色重畫。
- * 提示訊息：Chrome.toast(文字, 毫秒) 顯示非阻塞的小提示；Chrome.storageFailed() 是「儲存失敗」的標準提示
+ * 提示訊息：Chrome.toast(文字, 毫秒, 種類, {label, onClick}) 顯示非阻塞的小提示（最後一個參數選用，加一顆「復原」之類的按鈕）；Chrome.storageFailed() 是「儲存失敗」的標準提示
  *   （Util.store.set 失敗時會自動呼叫；不用 Util.store 而直接寫 localStorage 的頁面，要在 catch 裡自己呼叫）。
  * 沒有 JS 時退回蘋果風格並跟隨系統明暗（見 theme.css）。
  */
@@ -161,6 +161,7 @@
 @media (pointer:coarse){input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=button]):not([type=submit]):not([type=reset]):not([type=image]),select,textarea{font-size:16px!important}}
 .st-toast{position:fixed;left:50%;bottom:max(18px,calc(env(safe-area-inset-bottom) + 10px));transform:translateX(-50%);z-index:70;max-width:min(92vw,460px);padding:12px 16px;border-radius:var(--radius-sm);background:var(--text);color:var(--bg);font:14px/1.5 var(--font);box-shadow:0 6px 24px rgba(0,0,0,.35);text-align:center}
 .st-toast.bad{background:var(--bad);color:#fff}
+.st-toast button{margin-left:10px;padding:4px 12px;background:transparent;color:inherit;border:1px solid currentColor;font-weight:600}
 .st-data p{margin:8px 0}
 .st-data .st-btns{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
 .st-enc{display:flex;gap:8px;align-items:center;font-size:14px;margin:8px 0 4px}
@@ -179,7 +180,7 @@
 .st-bar .st-lb{display:none}
 @media (min-width:601px){.st-bar .st-lb{display:inline}}
 .st-res{position:fixed;left:50%;bottom:max(16px,calc(env(safe-area-inset-bottom) + 10px));transform:translateX(-50%);z-index:45;padding:8px 16px;min-height:0;border-radius:999px;background:var(--text);color:var(--bg);border:0;font-size:14px;box-shadow:0 2px 10px rgba(0,0,0,.3)}
-@media (max-width:600px){.st-scroll{position:relative;display:flex!important;flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}.st-scroll::-webkit-scrollbar{display:none}.st-scroll>button{flex:none!important;white-space:nowrap}}
+@media (max-width:600px){.st-scroll{position:relative;display:flex!important;flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)}.st-scroll.st-end{-webkit-mask-image:none;mask-image:none}.st-scroll::-webkit-scrollbar{display:none}.st-scroll>button{flex:none!important;white-space:nowrap}}
 `;
 
     function el(tag, attrs, ...kids) {
@@ -246,9 +247,16 @@
 
     // ---------- 提示訊息 ----------
     let toastEl = null, toastTimer = 0, failedAt = 0;
-    function toast(msg, ms = 4000, kind = '') {
+    // action（選用）：{ label, onClick }（fn 也可）→ 訊息旁多一顆按鈕（如「復原」），按下後呼叫並收起提示
+    function toast(msg, ms = 4000, kind = '', action = null) {
         if (!toastEl) { toastEl = el('div', { class: 'st-toast', role: 'status', 'aria-live': 'polite' }); document.body.append(toastEl); }
         toastEl.textContent = msg; toastEl.className = 'st-toast ' + kind; toastEl.hidden = false;
+        const fn = action && (action.onClick || action.fn);
+        if (typeof fn === 'function') {
+            const b = el('button', { type: 'button', text: String(action.label || '復原') });
+            b.onclick = () => { clearTimeout(toastTimer); toastEl.hidden = true; fn(); };
+            toastEl.append(b);
+        }
         clearTimeout(toastTimer); toastTimer = setTimeout(() => { toastEl.hidden = true; }, ms);
     }
     // 儲存失敗的標準提示（5 秒內不重複顯示）
@@ -273,16 +281,20 @@
         const file = el('input', { type: 'file', accept: '.json,application/json', hidden: '', 'aria-label': '選擇備份檔' });
         const exp = el('button', { type: 'button', class: 'primary', text: '匯出備份' });
         const imp = el('button', { type: 'button', text: '載入備份' });
-        const encChk = el('input', { type: 'checkbox', id: 'st-enc-chk' }), encPw = el('input', { type: 'password', id: 'st-enc-pw', placeholder: '密碼（至少 4 個字）', autocomplete: 'new-password', 'aria-label': '備份加密密碼', hidden: '' });
+        const encChk = el('input', { type: 'checkbox', id: 'st-enc-chk' }), encPw = el('input', { type: 'password', id: 'st-enc-pw', placeholder: '密碼（至少 4 個字）', autocomplete: 'new-password', enterkeyhint: 'go', 'aria-label': '備份加密密碼', hidden: '' });
         encChk.onchange = () => { encPw.hidden = !encChk.checked; if (encChk.checked) encPw.focus(); };
+        const save = (body, suffix) => {
+            const d = new Date(), stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+            const a = el('a', { href: URL.createObjectURL(new Blob([body], { type: 'application/json' })), download: `simple-tools-${all ? 'all' : scope.replace(/\.html$/, '').replace(/\//g, '-')}-${stamp}${suffix}.json` });
+            document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        };
+        encPw.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); exp.click(); } };
         exp.onclick = async () => {
             const b = buildBackup(match, localStorage, scope);
             if (!Object.keys(b.data).length) { say('目前沒有資料可以匯出。', 'bad'); return; }
-            const d = new Date(), stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
             let body = JSON.stringify(b, null, 1);
             if (encChk.checked) { try { body = await encryptBackup(body, encPw.value); } catch (e) { say(e.message, 'bad'); return; } }
-            const a = el('a', { href: URL.createObjectURL(new Blob([body], { type: 'application/json' })), download: `simple-tools-${all ? 'all' : scope.replace(/\.html$/, '').replace(/\//g, '-')}-${stamp}${encChk.checked ? '-enc' : ''}.json` });
-            document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+            save(body, encChk.checked ? '-enc' : '');
             say(`已匯出 ${Object.keys(b.data).length} 項資料${encChk.checked ? '（已加密，忘記密碼就無法還原）' : ''}。請把檔案收好，之後在新的瀏覽器「載入備份」即可還原。`, 'ok');
             if (all) try { localStorage.setItem('st_last_backup', new Date().toISOString()); } catch (e) { /* 只是提醒用的時間戳 */ }
         };
@@ -294,7 +306,8 @@
             const text = await f.text();
             if (!isEncryptedBackup(text)) { restore(text); return; }
             // 加密備份：先要密碼，解密成功才進入同一套差異預覽流程
-            const pw = el('input', { type: 'password', placeholder: '備份密碼', autocomplete: 'current-password', 'aria-label': '備份密碼' });
+            const pw = el('input', { type: 'password', placeholder: '備份密碼', autocomplete: 'current-password', enterkeyhint: 'go', 'aria-label': '備份密碼' });
+            pw.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); go.click(); } };
             const go = el('button', { type: 'button', class: 'primary', text: '解密' }), no = el('button', { type: 'button', text: '取消' });
             no.onclick = () => { prev.replaceChildren(); say('已取消。'); };
             go.onclick = async () => { try { const t = await decryptBackup(text, pw.value); prev.replaceChildren(); say(''); restore(t); } catch (e) { say(e.message, 'bad'); } };
@@ -311,6 +324,9 @@
             const MAXROWS = 12, rows = [...d.over.map(x => row(x.k, `覆蓋（${fmtBytes(x.old)} → ${fmtBytes(x.size)}）`)), ...d.add.map(x => row(x.k, `新增（${fmtBytes(x.size)}）`))];
             const go = el('button', { type: 'button', class: 'primary', text: d.over.length ? `確認載入（覆蓋 ${d.over.length} 項）` : '確認載入' }), no = el('button', { type: 'button', text: '取消' });
             const writable = d.add.length + d.over.length;
+            // 有會被覆蓋的資料：先下載目前資料，才能按「確認載入」
+            const pre = d.over.length ? el('button', { type: 'button', class: 'st-before', text: '先下載目前資料再載入' }) : null;
+            if (pre) { go.disabled = true; pre.onclick = () => { save(JSON.stringify(buildBackup(match, localStorage, scope), null, 1), '-before-restore'); go.disabled = false; pre.textContent = '已下載目前資料，可以載入了'; }; }
             no.onclick = () => { prev.replaceChildren(); say('已取消。'); };
             go.onclick = () => {
                 try { for (const [k, v] of Object.entries(r.items)) if (localStorage.getItem(k) !== v) localStorage.setItem(k, v); }
@@ -321,7 +337,7 @@
             prev.replaceChildren(
                 el('p', { text: `備份裡有 ${n} 項屬於這裡的資料${when ? '（' + when + '）' : ''}：新增 ${d.add.length} 項、會覆蓋 ${d.over.length} 項、內容相同 ${d.same.length} 項（不會動）。覆蓋後無法復原${r.skipped ? `；另有 ${r.skipped} 項不屬於這裡，會略過` : ''}。` }),
                 rows.length ? el('ul', { class: 'st-difflist' }, ...rows.slice(0, MAXROWS), ...(rows.length > MAXROWS ? [el('li', { class: 'muted', text: `…還有 ${rows.length - MAXROWS} 項` })] : [])) : el('p', { class: 'muted', text: '所有資料都和目前相同，不需要載入。' }),
-                el('div', { class: 'st-btns' }, ...(writable ? [go] : []), no));
+                el('div', { class: 'st-btns' }, ...(pre ? [pre] : []), ...(writable ? [go] : []), no));
         };
         const close = el('button', { type: 'button', 'aria-label': '關閉', text: '✕' }); close.onclick = () => ddlg.close();
         const done = el('button', { type: 'button', class: 'primary', text: '關閉' }); done.onclick = () => ddlg.close();
@@ -365,14 +381,41 @@
         document.querySelectorAll('.tabs,.chips,#tabs,[role=tablist]').forEach((t) => {
             const many = t.querySelectorAll(':scope>button').length >= 6;
             t.classList.toggle('st-scroll', many);
+            if (many && !t._stEnd) { t._stEnd = () => t.classList.toggle('st-end', t.scrollLeft + t.clientWidth >= t.scrollWidth - 2); t.addEventListener('scroll', t._stEnd, { passive: true }); }
             const a = many && t.querySelector(':scope>button[aria-pressed=true],:scope>button[aria-selected=true],:scope>button.on,:scope>button.active,:scope>button.sel');
-            if (a && t.scrollWidth > t.clientWidth) { const want = a.offsetLeft - (t.clientWidth - a.offsetWidth) / 2; if (Math.abs(t.scrollLeft - want) > 8) t.scrollLeft = want; }
+            if (a && a !== t._stA && t.scrollWidth > t.clientWidth) { t._stA = a; const want = a.offsetLeft - (t.clientWidth - a.offsetWidth) / 2; if (Math.abs(t.scrollLeft - want) > 8) t.scrollLeft = want; }
+            if (!a) t._stA = null;
+            if (t._stEnd) t._stEnd();
         });
         const h = matchMedia('(max-width:600px)').matches && [...document.querySelectorAll('h2')].find((x) => /^(計算)?結果$/.test(x.textContent.trim()) && x.offsetParent);
         if (h && !rb) { rb = el('button', { type: 'button', class: 'st-res', text: '↓ 看結果' }); rb.onclick = () => rh && rh.scrollIntoView({ behavior: 'smooth', block: 'start' }); document.body.append(rb); }
         rh = h || null;
         document.querySelectorAll('h2').forEach((x) => { if (/^(計算)?結果$/.test(x.textContent.trim())) { const c = x.closest('.card'); if (c) c.classList.add('st-result'); } });
         if (rb) rb.hidden = !h || h.getBoundingClientRect().top < innerHeight - 140;
+    }
+    // 記住目前分頁（sessionStorage，只在這個瀏覽器分頁內有效；只用於沒有 st-keys 的頁面）：點分頁鈕記索引，重新載入時若目前是第 1 個分頁就點回去
+    const TABSEL = '.tabs,#tabs,[role=tablist]', tabKey = 'st_tab:' + location.pathname;
+    const tabsOf = () => [...document.querySelectorAll(TABSEL)];
+    const tabMem = () => { try { const o = JSON.parse(sessionStorage.getItem(tabKey)); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (e) { return {}; } };
+    function restoreTabs() {
+        const mem = tabMem(), ON = ':scope>button[aria-pressed=true],:scope>button[aria-selected=true],:scope>button.on,:scope>button.active,:scope>button.sel';
+        tabsOf().forEach((t, ci) => {
+            const bs = [...t.querySelectorAll(':scope>button')], i = mem[ci];
+            if (!Number.isInteger(i) || i < 1 || i >= bs.length) return;
+            const a = t.querySelector(ON);
+            if (!a || a === bs[0]) bs[i].click();         // 頁面自己已還原到別的分頁（如 localStorage）就不動
+        });
+    }
+    function trackTabs() {
+        document.addEventListener('click', (e) => {
+            const b = e.target.closest && e.target.closest('.tabs>button,#tabs>button,[role=tablist]>button'); if (!b) return;
+            const t = b.parentElement, ci = tabsOf().indexOf(t), i = [...t.querySelectorAll(':scope>button')].indexOf(b);
+            if (ci < 0 || i < 0) return;
+            try { const m = tabMem(); m[ci] = i; sessionStorage.setItem(tabKey, JSON.stringify(m)); } catch (err) { /* 沒有也只是不記住 */ }
+        }, true);
+        if (metaKeys()) return;            // 有宣告 st-keys 的頁面通常自己用 localStorage 記分頁，不重複處理
+        const go = () => requestAnimationFrame(restoreTabs);
+        if (document.readyState === 'complete') go(); else addEventListener('load', go);
     }
     const later = () => { if (!tick) tick = requestAnimationFrame(enhance); };
 
@@ -409,6 +452,7 @@
         if (!document.querySelector('#q[type=search]') && CHROME_SRC) addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); try { sessionStorage.setItem('st_focus_search', '1'); } catch (err) { /* 沒有也只是不自動聚焦 */ } location.href = new URL('../../index.html', CHROME_SRC).href; }
         });
+        if (!document.querySelector('#q[type=search]')) trackTabs();
         new MutationObserver(later).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-pressed', 'aria-selected', 'class'] });
         addEventListener('scroll', later, { passive: true }); addEventListener('resize', later); later();
     }

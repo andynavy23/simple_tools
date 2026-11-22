@@ -198,6 +198,7 @@
         <div class="eg">吉他 6 弦空弦是 E2 A2 D3 G3 B3 E4。彈第六弦，若顯示 E2 偏低 12 音分，就慢慢鎖緊到「準了」。</div>
         <h3>小提醒</h3>
         <ul>
+        <li>節拍器或複節奏播放中會請求「螢幕恆亮」，避免練琴時自動鎖屏（停止即釋放，切到別的分頁回來會重新取得）；瀏覽器不支援時略過，不存任何資料。</li>
         <li>調音器需要麥克風權限，音訊只在瀏覽器內分析、不會上傳；需 https 或 localhost。</li>
         <li>安靜環境較準；「A4 =」可微調基準音高（415–466 Hz）。</li>
         <li>切換分頁或離開頁面會自動停止。複節奏速度沿用節拍器 BPM（要改請先回節拍器分頁），改 BPM 後需重新開始才會套用；複節奏設定不會儲存。</li>
@@ -271,8 +272,23 @@
                 beat++; nextAt += beatMs(bpm);
             }
         }
-        function startMet() { running = true; beat = 0; nextAt = performance.now() + 50; $('#go').textContent = '停止'; sched = setInterval(schedule, 25); schedule(); }
-        function stopMet() { running = false; clearInterval(sched); $('#go').textContent = '開始'; document.querySelectorAll('#beats i').forEach(e => e.classList.remove('on')); }
+        // 螢幕恆亮：節拍器或複節奏播放中持有 Wake Lock，停止即釋放；分頁隱藏時系統自動釋放，回前景重取；不支援就略過
+        let wakeLock = null, wakeBusy = false;
+        async function wakeSync() {
+            try {
+                const want = running || !!pst;
+                if (want && !wakeLock && !wakeBusy && navigator.wakeLock && !document.hidden) {
+                    wakeBusy = true;
+                    const l = await navigator.wakeLock.request('screen');
+                    wakeBusy = false;
+                    if (!(running || pst)) { l.release(); return; }
+                    wakeLock = l; l.addEventListener('release', () => { if (wakeLock === l) wakeLock = null; });
+                } else if (!want && wakeLock) { const l = wakeLock; wakeLock = null; l.release(); }
+            } catch (e) { wakeBusy = false; }
+        }
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) wakeSync(); });
+        function startMet() { running = true; beat = 0; nextAt = performance.now() + 50; $('#go').textContent = '停止'; sched = setInterval(schedule, 25); schedule(); wakeSync(); }
+        function stopMet() { running = false; clearInterval(sched); $('#go').textContent = '開始'; document.querySelectorAll('#beats i').forEach(e => e.classList.remove('on')); wakeSync(); }
         $('#go').onclick = () => (running ? stopMet() : startMet());
         $('#bpm').oninput = () => setBpm(+$('#bpm').value);
         $('#minus').onclick = () => setBpm(bpm - 1); $('#plus').onclick = () => setBpm(bpm + 1);
@@ -295,13 +311,13 @@
             while (pst.q.length && pst.q[0].at <= now) { const h = pst.q.shift(); const row = $('#pdots').children[h.v === 'A' ? 0 : 1]; if (row) [...row.children].forEach((d, k) => { d.style.background = k === h.i ? (h.v === 'A' ? 'var(--bad)' : 'var(--blue)') : 'var(--fill)'; }); }
             pst.raf = requestAnimationFrame(pdraw);
         }
-        function stopPoly() { if (pst) { clearInterval(pst.iv); cancelAnimationFrame(pst.raf); pst = null; } if (pctx) { pctx.close().catch(() => { }); pctx = null; } $('#pgo').textContent = '開始'; }
+        function stopPoly() { if (pst) { clearInterval(pst.iv); cancelAnimationFrame(pst.raf); pst = null; } if (pctx) { pctx.close().catch(() => { }); pctx = null; } $('#pgo').textContent = '開始'; wakeSync(); }
         function startPoly() {
             const AC = window.AudioContext || window.webkitAudioContext;
             if (!AC) { $('#pmsg').textContent = '這個瀏覽器不支援 Web Audio，無法發聲。'; return; }
             pctx = new AC(); pctx.resume();
             pst = { a: pnum('#pa', 3), b: pnum('#pb', 4), cyc: pnum('#pc', 4) * 60 / bpm, t0: pctx.currentTime + 0.1, n: 0, q: [], iv: 0, raf: 0 };
-            pst.iv = setInterval(pfeed, 50); pfeed(); pdraw(); $('#pgo').textContent = '停止'; $('#pmsg').textContent = '';
+            pst.iv = setInterval(pfeed, 50); pfeed(); pdraw(); $('#pgo').textContent = '停止'; $('#pmsg').textContent = ''; wakeSync();
         }
         $('#pgo').onclick = () => (pst ? stopPoly() : startPoly());
         ['#pa', '#pb', '#pc'].forEach(id => { $(id).onchange = () => { const was = !!pst; stopPoly(); pdots(); if (was) startPoly(); }; });

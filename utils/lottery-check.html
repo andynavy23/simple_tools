@@ -63,7 +63,7 @@
         <p class="sub">開獎號碼請自行到財政部或台灣彩券官網查詢後貼上，這個頁面只負責核對，不會上網查資料。結果僅供參考，以官方公告為準。</p>
 
         <div class="card">
-            <div class="tabs"><button data-t="inv" aria-pressed="true">統一發票</button><button data-t="big" aria-pressed="false">大樂透</button><button data-t="pw" aria-pressed="false">威力彩</button></div>
+            <div class="tabs"><button data-t="inv" aria-pressed="true">統一發票</button><button data-t="big" aria-pressed="false">大樂透</button><button data-t="pw" aria-pressed="false">威力彩</button><button data-t="d5" aria-pressed="false">今彩 539</button></div>
 
             <div class="pane" data-t="inv">
                 <div class="fgrid">
@@ -94,6 +94,14 @@
                 <textarea id="pwT" spellcheck="false" placeholder="05 11 20 27 33 38 / 04"></textarea>
             </div>
 
+            <div class="pane" data-t="d5" hidden>
+                <div class="fgrid">
+                    <div style="grid-column:1/-1"><label for="d5W">開獎號碼（5 個，空白或逗號分隔）<small>1–39</small></label><input id="d5W" placeholder="例如：01 05 12 20 39" style="width:100%"></div>
+                </div>
+                <label for="d5T" style="display:block;margin:12px 0 4px;font-size:13px;color:var(--muted)">你的號碼（一行一注，5 個號碼）</label>
+                <textarea id="d5T" spellcheck="false" placeholder="01 05 12 20 38"></textarea>
+            </div>
+
             <div class="err" id="err" role="alert"></div>
             <button class="primary" id="check">對獎</button>
         </div>
@@ -106,7 +114,7 @@
 
     <template id="help">
         <h3>這是什麼</h3>
-        <p>幫你核對統一發票、大樂透、威力彩有沒有中獎。開獎號碼要自己貼上，這個頁面不會上網查。</p>
+        <p>幫你核對統一發票、大樂透、威力彩、今彩 539 有沒有中獎。開獎號碼要自己貼上，這個頁面不會上網查。</p>
         <h3>什麼時候用</h3>
         <ul>
         <li>手上一疊發票想一次對完。</li>
@@ -118,6 +126,7 @@
         <li>統一發票：填特別獎、特獎、頭獎（最多 3 組）與增開六獎，再把要對的發票一行一張貼進去（連字軌如 AB-12345678 也可以）。</li>
         <li>大樂透：填 6 個開獎號碼與特別號，再貼你的號碼，一行一注。</li>
         <li>威力彩：填第一區 6 個與第二區號碼；你的號碼最後一個是第二區，可用「/」或「+」隔開。</li>
+        <li>今彩 539：填 5 個開獎號碼（1–39），再貼你的號碼，一行一注 5 個。中 5 個頭獎、4 個貳獎、3 個參獎、2 個肆獎；獎金為程式內範例值，以官方公告為準。號碼重複或超出 1–39 會提示錯誤。</li>
         <li>按「對獎」，下方列出每張 / 每注的結果。</li>
         </ol>
         <h3>範例</h3>
@@ -180,11 +189,23 @@
             if (m === 6 && s) return '頭獎'; if (m === 6) return '貳獎'; if (m === 5 && s) return '參獎'; if (m === 5) return '肆獎'; if (m === 4 && s) return '伍獎'; if (m === 4) return '陸獎'; if (m === 3 && s) return '柒獎'; if (m === 2 && s) return '捌獎'; if (m === 3) return '玖獎'; if (m === 1 && s) return '普獎';
             return null;
         }
+        // 今彩 539：5 個號碼（1–39）。中幾個號碼 → [個數, 獎項, 獎金]；獎金為範例值，以官方公告為準
+        const D539 = [[5, '頭獎', 8000000], [4, '貳獎', 20000], [3, '參獎', 300], [2, '肆獎', 50]];
+        function prize539(mine, win) { const m = mine.filter(n => win.includes(n)).length, p = D539.find(x => x[0] === m); return p ? { name: p[1], amount: p[2], hit: m } : null; }
+        // 一注 539 號碼字串 → { nums } 或 { err }（5 個、不重複、1–39）
+        function parse539(s) {
+            const t = tokens(s).map(Number);
+            if (!t.length || t.some(n => !Number.isInteger(n))) return { err: '格式不對（只能是數字）' };
+            if (t.some(n => n < 1 || n > 39)) return { err: '號碼要在 1–39' };
+            if (t.length !== 5) return { err: '要剛好 5 個號碼' };
+            if (new Set(t).size !== 5) return { err: '號碼不能重複' };
+            return { nums: t };
+        }
         const noDup = (a) => new Set(a).size === a.length;
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
-        let tab = store.get('lc_tab', 'inv'); if (!['inv', 'big', 'pw'].includes(tab)) tab = 'inv';
+        let tab = store.get('lc_tab', 'inv'); if (!['inv', 'big', 'pw', 'd5'].includes(tab)) tab = 'inv';
         const money = (n) => n.toLocaleString('zh-TW');
         const row = (text, res, cls) => { const r = document.createElement('div'); r.className = 'res ' + cls; r.append(Object.assign(document.createElement('span'), { textContent: text }), Object.assign(document.createElement('b'), { textContent: res })); return r; };
 
@@ -197,6 +218,14 @@
                     const d = invoiceDigits(line); if (!d) { rows.push(row(line, '格式不對（要 8 位數字）', 'bad')); continue; }
                     const r = checkInvoice(d, win); if (r) { wins++; total += r.amount; }
                     rows.push(row(line, r ? `🎉 ${r.name}　${money(r.amount)} 元` : '沒中', r ? 'win' : ''));
+                }
+            } else if (tab === 'd5') {
+                const w = parse539($('#d5W').value);
+                if (w.err) { $('#err').textContent = '開獎號碼：' + w.err; return; }
+                for (const line of $('#d5T').value.split('\n').map(l => l.trim()).filter(Boolean)) {
+                    const m = parse539(line); if (m.err) { rows.push(row(line, m.err, 'bad')); continue; }
+                    const r = prize539(m.nums, w.nums); if (r) { wins++; total += r.amount; }
+                    rows.push(row(line, r ? `🎉 ${r.name}（中 ${r.hit} 個）　${money(r.amount)} 元` : '沒中', r ? 'win' : ''));
                 }
             } else {
                 const big = tab === 'big', max = big ? 49 : 38, win = parseNums($(big ? '#bw' : '#pwW').value, max), sp = parseInt($(big ? '#bs' : '#pwS').value, 10);
@@ -211,7 +240,7 @@
                 }
             }
             $('#outCard').hidden = !rows.length; $('#out').replaceChildren(...rows);
-            $('#sum').textContent = rows.length ? `${rows.length} 筆・中 ${wins} 筆${tab === 'inv' && total ? `・合計 ${money(total)} 元` : ''}${tab !== 'inv' && wins ? '（獎金依當期公告）' : ''}` : '';
+            $('#sum').textContent = rows.length ? `${rows.length} 筆・中 ${wins} 筆${tab !== 'big' && tab !== 'pw' && total ? `・合計 ${money(total)} 元` : ''}${(tab === 'big' || tab === 'pw') && wins ? '（獎金依當期公告）' : ''}` : '';
         }
         function render() { document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab)); document.querySelectorAll('.pane').forEach(p => { p.hidden = p.dataset.t !== tab; }); $('#outCard').hidden = true; $('#err').textContent = ''; }
         document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { tab = b.dataset.t; store.set('lc_tab', tab); render(); }; });

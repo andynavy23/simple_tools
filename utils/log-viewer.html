@@ -351,7 +351,7 @@
         </ul>
         <h3>怎麼用</h3>
         <ol>
-            <li><b>日誌檢視</b>：貼上文字或「載入檔案」。格式自動辨識（nginx / Apache combined、syslog、Java / Log4j / Logback、Python logging、每行 JSON），也可手動指定。用等級勾選、起訖時間、關鍵字或正則篩選；點一行展開原始內容與多行堆疊；勾「折疊連續重複」把相同訊息合併成 ×N。</li>
+            <li><b>日誌檢視</b>：貼上文字（游標不在輸入框時直接 Ctrl+V 也行）或「載入檔案」（也可把檔案拖進頁面）。格式自動辨識（nginx / Apache combined、syslog、Java / Log4j / Logback、Python logging、每行 JSON），也可手動指定。用等級勾選、起訖時間、關鍵字或正則篩選；點一行展開原始內容與多行堆疊；勾「折疊連續重複」把相同訊息合併成 ×N。</li>
             <li><b>JSON Lines</b>：每行一個 JSON 物件，顯示成欄位表。點欄位標題排序，用下拉選欄位與條件篩選；壞行會列出行號。</li>
             <li><b>Stack trace 整理</b>：貼上堆疊，自動辨識 Java、Python、JavaScript（Node 與瀏覽器）、.NET、Go panic。框架庫呼叫會折疊；在「專案前綴」填你的套件名或路徑（例如 <kbd>com.mycorp</kbd>、<kbd>/app/src/</kbd>）可把專案程式碼行標藍。「精簡版」可一鍵複製。</li>
         </ol>
@@ -689,14 +689,25 @@
         const refresh = () => (tab === 0 ? renderLog : tab === 1 ? renderJson : renderStack)();
         let timer;
         $('#src').oninput = () => { src = $('#src').value; clearTimeout(timer); timer = setTimeout(refresh, 300); };
-        $('#file').onchange = async () => {
-            const f = $('#file').files[0]; if (!f) return;
+        async function loadFile(f) {
+            if (!f) return;
             if (f.size > LIM.bytes) { $('#srcInfo').textContent = `檔案 ${(f.size / 1048576).toFixed(1)}MB 超過 20MB 上限，未載入。`; $('#file').value = ''; return; }
             $('#srcInfo').textContent = '讀取中…';
             try { src = await f.text(); } catch { $('#srcInfo').textContent = '讀取失敗'; return; }
             fileMode = true; $('#src').value = ''; $('#src').disabled = true; $('#src').placeholder = `已載入檔案：${f.name}（${(f.size / 1024).toFixed(0)} KB）。按「清除」可改貼文字。`;
             $('#srcInfo').textContent = ''; $('#file').value = ''; shown = LIM.rows; refresh();
-        };
+        }
+        $('#file').onchange = () => loadFile($('#file').files[0]);
+        // 整頁拖放檔案；焦點不在輸入元件時貼上純文字也視為日誌內容
+        addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault(); });
+        addEventListener('drop', (e) => { if (e.dataTransfer?.files.length) { e.preventDefault(); loadFile(e.dataTransfer.files[0]); } });
+        addEventListener('paste', (e) => {
+            if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || !$('#srcCard').offsetParent) return;
+            const t = e.clipboardData?.getData('text/plain'); if (!t) return;
+            e.preventDefault();
+            if (t.length > LIM.bytes) { $('#srcInfo').textContent = '貼上的文字超過 20MB 上限，未載入。'; return; }
+            fileMode = false; $('#src').disabled = false; $('#src').value = t; src = t; $('#srcInfo').textContent = ''; shown = LIM.rows; refresh();
+        });
         $('#clear').onclick = () => { src = ''; fileMode = false; $('#src').disabled = false; $('#src').value = ''; $('#src').placeholder = '貼上日誌文字，或載入檔案（上限 20MB，只解析前 200,000 行）'; $('#srcInfo').textContent = ''; shown = LIM.rows; refresh(); };
 
         // ---- 日誌檢視 ----

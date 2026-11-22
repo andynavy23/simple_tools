@@ -331,6 +331,7 @@
         <div class="card" id="dataCard">
             <h2 style="margin:0 0 6px;font-size:16px">資料管理</h2>
             <p class="warn" style="margin:0 0 8px">習慣與打卡紀錄只存在這個瀏覽器。單筆刪除用每張卡片右上角的 ×。</p>
+            <button id="expCsv">匯出 CSV</button>
             <button id="clearAll" style="color:var(--bad)">清除全部資料</button>
         </div>
     </div>
@@ -371,6 +372,7 @@
         <li>舊資料（沒有週期）一律視為每天，完全相容；資料損壞時會自動補預設值。</li>
         <li>舊的勾選型資料完全相容。數量型之後改目標，會以新目標重新判斷每天是否達標。</li>
         <li>資料只存在這個瀏覽器，清除網站資料會消失。</li>
+            <li>「匯出 CSV」（資料管理）：長表格（習慣名 / 日期 / 完成 / 單位），勾選型每個打卡日一列填 1、數量型填當日累計數值與單位，依日期排序；名稱開頭是 = + - @ 時加單引號防試算表公式；匯出只讀取、不新增儲存資料。</li>
             <li>資料上限：最多 50 個習慣、每個習慣最多記 3700 天，滿了會拒絕新增並提示；可刪除單一習慣，或按「清除全部資料」（會先確認、無法復原）。</li>
         </ul>
     </template>
@@ -501,6 +503,17 @@
         // 此刻該不該提醒：開啟、在時段內、距上次 ≥ 間隔
         const shouldRemind = (cfg, nowMin, lastMs, nowMs) => !!(cfg && cfg.on && inWindow(nowMin, cfg.from, cfg.to) && nowMs - lastMs >= (+cfg.every || 60) * 60000);
         const MAX_HABITS = 50;
+        // CSV 長表格：習慣名 / 日期 / 完成（勾選型 1、數量型填累計數值）/ 單位，依日期排序；文字欄開頭是 = + - @ 時補單引號防公式注入
+        const csvGuard = (v) => { const s = String(v ?? ''); return /^[=+\-@\t\r]/.test(s) ? "'" + s : s; };
+        function habitCsv(list) {
+            const rows = [];
+            for (const h of list) {
+                if (h.type === 'count') for (const [d, v] of Object.entries(h.logs || {})) rows.push([csvGuard(h.name), d, v, csvGuard(h.unit || '')]);
+                else for (const d of h.dates || []) rows.push([csvGuard(h.name), d, 1, '']);
+            }
+            rows.sort((a, b) => a[1].localeCompare(b[1]));
+            return Util.csvStringify(['習慣名', '日期', '完成（勾選型 1／數量型為累計數值）', '單位'], rows);
+        }
         // --- /pure ---
 
         const { store } = Util;
@@ -724,6 +737,7 @@ const sel = {};                                      // 數量型：目前操作
         setInterval(tick, 20000);
 
         // 清除全部：習慣（含打卡 / 數量紀錄 / 週期）與提醒設定兩個鍵都清掉
+        $('#expCsv').onclick = () => { if (!habits.length) { $('#addNote').textContent = '沒有可匯出的習慣'; return; } Util.download(new Blob(['﻿' + habitCsv(habits)], { type: 'text/csv;charset=utf-8' }), `習慣打卡_${day.today()}.csv`); };
         $('#clearAll').onclick = () => {
             if (!confirm('清除全部資料？會刪除所有習慣、打卡與數量紀錄、週期設定與提醒設定，無法復原。')) return;
             try { localStorage.removeItem(KEY); localStorage.removeItem(RKEY); } catch (e) { window.Chrome && Chrome.storageFailed(); }

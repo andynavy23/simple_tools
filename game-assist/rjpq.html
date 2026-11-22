@@ -53,6 +53,7 @@
         <li>單人版完全不連線，離線也能用。</li>
         <li>電腦版有「懸浮視窗」可把地圖放在遊戲上方（需 Chrome / Edge 新版）。</li>
         <li>路線總覽會用死路標記做推論，只供參考。</li>
+        <li>成員被房主踢出時，畫面下方會留著紅色提示，按「重置」才會清空並回到起點；錯誤與複製結果都用頁內提示，不會跳出對話框。</li>
             <li>單人使用的資料只在這次開啟期間，關掉頁面就會清除；可用「重置全部」清空。</li>
 </ul>
     </template>
@@ -154,7 +155,7 @@
                 .ms-btn { min-height: 44px; }
                 input { min-height: 44px; font-size: 16px; box-sizing: border-box; }
                 .door { height: 44px; }
-                .door-tag { font-size: 11px; transform: none; bottom: 0; }
+                .door-tag { font-size: 12px; transform: none; bottom: 0; }
                 .door-cell-id { font-size: 12px; }
                 .color-picker { gap: 8px; }
                 .color-option { width: 40px; height: 40px; }
@@ -165,7 +166,7 @@
                 .log-panel { font-size: 12px; }
                 .panel-label { font-size: 15px; }
                 #conn-status { font-size: 13px !important; }
-                .header { padding-right: 56px; flex-wrap: wrap; gap: 4px; }
+                .header { padding-right: 104px; flex-wrap: wrap; gap: 4px; }
                 .header .title { font-size: 14px; }
             }
 
@@ -321,7 +322,7 @@
             .f-label {
                 width: 24px;
                 font-weight: bold;
-                font-size: 11px;
+                font-size: 12px;
                 color: #fff;
                 background: #444; /* 深色背景 */
                 border-radius: 3px;
@@ -414,7 +415,7 @@
                 position: absolute;
                 top: 2px;
                 right: 4px;
-                font-size: 10px;
+                font-size: 12px;
                 color: rgba(0, 0, 0, 0.7);
                 font-weight: bold;
                 pointer-events: none;
@@ -428,7 +429,7 @@
                 position: absolute;
                 bottom: -2px;
                 right: 0;
-                font-size: 9px;
+                font-size: 12px;
                 background: rgba(0, 0, 0, 0.6);
                 color: #fff;
                 padding: 0 3px;
@@ -1134,7 +1135,7 @@
                     val = "冒險者" + Math.floor(1000 + Math.random() * 9000);
                 }
                 if (typeof P2PRoom !== "undefined" && !P2PRoom.validNick(val)) {
-                    return alert("暱稱請使用 1-10 位英數或中文字。");
+                    return Chrome.toast("暱稱請使用 1-10 位英數或中文字。", 4000, "bad");
                 }
 
                 myNick = val;
@@ -1195,7 +1196,7 @@
                     (s) => s && s.nick !== myNick && s.color === c,
                 );
                 if (isDup) {
-                    alert("該顏色已被房內其他隊友使用，請選擇其他顏色。");
+                    Chrome.toast("該顏色已被房內其他隊友使用，請選擇其他顏色。", 4000, "bad");
                     return;
                 }
 
@@ -1300,7 +1301,7 @@
             function onNetError(err, message) {
                 setLoading(false);
                 log(message, "error");
-                alert(message);
+                Chrome.toast(message, 6000, "bad");
                 if (!isHost && mySlotIndex === -1 && myNick) enableRoomControls();
             }
 
@@ -1382,7 +1383,7 @@
 
             function startJoin() {
                 const targetId = getDoc().getElementById("join-id").value.trim();
-                if (!targetId) return alert("請貼上房號");
+                if (!targetId) return Chrome.toast("請貼上房號", 3000, "bad");
                 setLoading(true, "正式接入中...");
                 setStatus("🟡 連線中...", "#b45309");
                 getDoc().getElementById("btn-host").disabled = true;
@@ -1404,14 +1405,14 @@
                     onMessage: onHostMessage,
                     onRejected(reason) {
                         setLoading(false);
-                        alert(reason);
+                        Chrome.toast(reason, 6000, "bad");
                         room = null;
                         enableRoomControls();
                     },
                     onClose({ kicked }) {
                         if (kicked) {
-                            alert("您已被房主踢出房間。系統將進行重置。");
-                            resetSettings(); // 完全重置
+                            room = null;
+                            Chrome.toast("您已被房主踢出房間。", 3600000, "bad", { label: "重置", onClick: resetSettings }); // 保持可見，按「重置」才完全重置
                         } else {
                             log("房主已離開。", "error");
                             leaveRoom(false);
@@ -1558,7 +1559,7 @@
 
             function copyInvite() {
                 const url = P2PRoom.inviteLink(fullMyId);
-                Util.copyText(url).then((ok) => (ok ? alert("連結已複製！") : prompt("請手動複製邀請連結：", url)));
+                Util.copyWithFeedback(getDoc().getElementById("btn-copy"), url, () => prompt("請手動複製邀請連結：", url));
             }
 
             // === 地圖邏輯 ===
@@ -1665,7 +1666,7 @@
             }
 
             function onDoorClick(f, d) {
-                if (!myNick) return alert("請先設定暱稱。");
+                if (!myNick) return Chrome.toast("請先設定暱稱。", 3000, "bad");
                 const ownerSlot = gameState.slots.find(
                     (s) =>
                         s &&
@@ -1767,7 +1768,7 @@
             // === 懸浮視窗 (PiP) ===
             async function togglePiP() {
                 if (!window.documentPictureInPicture)
-                    return alert("您的瀏覽器不支援懸浮視窗功能。");
+                    return Chrome.toast("您的瀏覽器不支援懸浮視窗功能。", 4000, "bad");
 
                 if (pipWindow) {
                     pipWindow.close();
@@ -1801,7 +1802,7 @@
                     });
                 } catch (err) {
                     console.error(err);
-                    alert("無法開啟懸浮視窗。");
+                    Chrome.toast("無法開啟懸浮視窗。", 4000, "bad");
                 }
             }
 
@@ -1858,10 +1859,7 @@
                     copyBtn.style.padding = "2px 8px";
                     copyBtn.innerText = "複製";
                     copyBtn.onclick = () => {
-                        Util.copyText(routeStr).then((ok) => {
-                            if (ok) alert(`已複製 ${s.nick} 的路線: \n${routeStr}`);
-                            else prompt("請手動複製路線：", routeStr);
-                        });
+                        Util.copyWithFeedback(copyBtn, routeStr, () => prompt("請手動複製路線：", routeStr));
                     };
 
                     div.appendChild(leftGroup);

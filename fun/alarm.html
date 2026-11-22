@@ -10,7 +10,7 @@
     <meta property="og:description" content="多組、可重複、可貪睡的網頁鬧鐘（需保持頁面開啟）。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/fun/alarm.html" />
-    <meta name="st-keys" content="alarms">
+    <meta name="st-keys" content="alarms,alarm_snooze">
     <title>網頁鬧鐘</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -98,7 +98,7 @@
 
         #ringing {
             overflow-y: auto;
-            padding: 16px;
+            padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
             position: fixed;
             inset: 0;
             z-index: 50;
@@ -162,6 +162,7 @@
             <div class="row"><span class="muted" style="font-size:13px">重複：</span><div class="days" id="days"></div><span class="muted" style="font-size:13px">（不選 = 只響一次）</span></div>
             <div class="row"><span class="muted" style="font-size:13px">起床任務：</span><select id="task" aria-label="起床任務"><option value="none">無</option><option value="math">心算</option><option value="text">輸入隨機字串</option><option value="shake">搖動手機</option></select><select id="diff" aria-label="任務難度"><option value="easy">簡單</option><option value="normal" selected>普通</option><option value="hard">困難</option></select><select id="tn" aria-label="心算題數"><option value="1">1 題</option><option value="2">2 題</option><option value="3" selected>3 題</option><option value="4">4 題</option><option value="5">5 題</option></select></div>
             <div class="row"><label class="muted" style="font-size:14px"><input type="checkbox" id="notif"> 同時用系統通知提醒</label><span class="muted" id="notifMsg" style="font-size:13px"></span></div>
+            <div class="row"><span class="muted" style="font-size:13px">貪睡時間：</span><select id="snz" aria-label="貪睡時間"><option value="5">5 分鐘</option><option value="10">10 分鐘</option><option value="15">15 分鐘</option></select></div>
         </div>
 
         <div class="card"><div id="list"></div><div class="muted" id="empty" style="text-align:center;padding:16px 0">還沒有鬧鐘</div></div>
@@ -196,7 +197,7 @@
         <li>想要系統通知，勾「同時用系統通知提醒」並允許權限。</li>
         <li>要防止賴床，新增前選「起床任務」與難度：「心算」要連續答對 N 題、「輸入隨機字串」要照著打、「搖動手機」要搖到次數夠。響鈴時按「關閉」才會出題，完成才會停；貪睡鈕照常可用（貪睡產生的鬧鐘會沿用同樣的任務）。</li>
         <li>被任務卡住怎麼辦：任務畫面下方的「緊急關閉」，<b>連按 5 次</b>（4 秒內）或<b>長按 3 秒</b>就能直接關掉。</li>
-        <li>響鈴時按「貪睡 5 分鐘」會新增一個 5 分鐘後的鬧鐘，按「關閉」就停止。</li>
+        <li>響鈴時按「貪睡」會新增一個鬧鐘（沿用起床任務），按「關閉」就停止；貪睡時間可在新增區的「貪睡時間」選 5 / 10 / 15 分鐘，預設 5 分鐘。</li>
         <li>清單右側的勾選是開關，「刪除」可移除。最多 30 組。貪睡產生的鬧鐘響過之後會自動從清單移除。</li>
         </ol>
         <h3>範例</h3>
@@ -209,6 +210,7 @@
         <li>搖動手機用裝置動作感測：iPhone 要按「允許動作感測」授權；沒有感測器、電腦或被拒絕時會自動改成心算 3 題。</li>
         <li>任務只在這個頁面的響鈴畫面裡有效，不是真正的系統鎖定，需要準時起床請同時用手機內建鬧鐘。</li>
         <li>鬧鐘（含任務設定）只存在這個瀏覽器，不會上傳；舊的鬧鐘一律當作「無任務」。</li>
+            <li>貪睡時間存在 <code>alarm_snooze</code>（固定一筆數字，不會累積；缺值或非法值載入時退回 5），沒有單獨的清除按鈕，清除網站資料即可重置。</li>
             <li>鬧鐘最多 30 組，滿了無法再新增（不會自動刪舊的）；每組都能按「刪除」移除，可用右上角 💾 備份。</li>
         </ul>
     </template>
@@ -252,6 +254,7 @@
         // 貪睡鬧鐘（id 以 z 開頭）只響一次，響過或被關掉就不該留在清單；標籤不重複疊加「（貪睡）」，且總長不超過 validAlarm 的 20 字
         const isSnooze = (a) => a.id.startsWith('z');
         const dropDoneSnooze = (list) => list.filter(a => !(isSnooze(a) && !a.on));
+        const cleanSnz = (v) => ([5, 10, 15].includes(Number(v)) ? Number(v) : 5);   // 貪睡分鐘數：缺值 / 非法值退回 5
         const snoozeLabel = (label) => (label || '鬧鐘').replace(/（貪睡）$/, '').slice(0, 16) + '（貪睡）';
         // ---------- 起床任務 ----------
         const TASKS = ['none', 'math', 'text', 'shake'], DIFFS = ['easy', 'normal', 'hard'];
@@ -293,6 +296,8 @@
         const rawAlarms = store.get('alarms', []);
         let alarms = dropDoneSnooze((Array.isArray(rawAlarms) ? rawAlarms : []).filter(validAlarm).map(normAlarm)), picked = new Set(), lastKey = '', ringTimer = null, ringing = null, titleTimer = null;
         const save = () => { store.set('alarms', alarms); };
+        let snz = cleanSnz(store.get('alarm_snooze', 5));
+        const showSnz = () => { $('#snz').value = snz; $('#snooze').textContent = `貪睡 ${snz} 分鐘`; };
 
         $('#days').replaceChildren(...WEEK.map((w, i) => { const b = Object.assign(document.createElement('button'), { textContent: w }); b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', '週' + w); b.onclick = () => { picked.has(i) ? picked.delete(i) : picked.add(i); b.setAttribute('aria-pressed', picked.has(i)); }; return b; }));
 
@@ -371,9 +376,11 @@
         $('#emerg').onpointerdown = () => { clearTimeout(holdTimer); holdTimer = setTimeout(stopRing, 3000); };
         $('#emerg').onpointerup = $('#emerg').onpointerleave = $('#emerg').onpointercancel = () => clearTimeout(holdTimer);
         $('#emerg').oncontextmenu = (e) => e.preventDefault();
+        $('#snz').onchange = () => { snz = cleanSnz($('#snz').value); store.set('alarm_snooze', snz); showSnz(); };
+        showSnz();
         $('#stop').onclick = () => { if (ringing && ringing.task && ringing.task !== 'none') startTask(); else stopRing(); };
         $('#snooze').onclick = () => {
-            if (!ringing) return; const t = new Date(Date.now() + 5 * 60000);
+            if (!ringing) return; const t = new Date(Date.now() + snz * 60000);
             alarms.push({ id: 'z' + Date.now().toString(36) + rnd(1e6).toString(36), time: hhmm(t), label: snoozeLabel(ringing.label), days: [], on: true, task: ringing.task, diff: ringing.diff, n: ringing.n }); save(); stopRing(); render();
         };
 

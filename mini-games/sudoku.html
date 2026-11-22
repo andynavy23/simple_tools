@@ -10,7 +10,7 @@
     <meta property="og:description" content="保證唯一解的數獨，有筆記與提示。" />
     <meta property="og:image" content="https://andynavy23.github.io/simple_tools/assets/og-image.png" />
     <meta property="og:url" content="https://andynavy23.github.io/simple_tools/mini-games/sudoku.html" />
-    <meta name="st-keys" content="sudoku_best_*,sudoku_daily_*">
+    <meta name="st-keys" content="sudoku_best_*,sudoku_daily_*,sudoku_cur">
     <title>數獨</title>
     <link rel="stylesheet" href="../shared/css/theme.css">
     <script src="../shared/js/chrome.js"></script>
@@ -226,6 +226,7 @@
         <li>某個數字已用滿 9 個時，下方該數字按鈕會變灰。</li>
         <li>使用「提示」仍會算完成，但請自行決定是否要比時間。</li>
             <li>「每日挑戰」依台灣時間，每天固定同一題（各難度各一題，唯一解），完成時間另外記錄，只保留最近 30 天；按「新題目」回到隨機題。</li>
+            <li>進行中的題目（題目、已填、筆記、已用時間）會自動存在這台裝置，重新整理或切回來可接續；完成、按「新題目」或每日挑戰跨日就清掉，永遠只存一局。</li>
             <li>最佳與每日挑戰紀錄存在這台裝置；想重來可按頁面下方的「清除最佳紀錄」（只清這個遊戲，無法復原；頁面會重新載入，進行中的這一局會結束）。</li>
 </ul>
     </template>
@@ -336,6 +337,17 @@
             for (let i = 0; i < 81; i++) if (b[i] && PEERS[i].some(p => b[p] === b[i])) bad.add(i);
             return bad;
         }
+        // 驗證進行中存檔 { lv, puzzle, board, notes, sec, daily }；levels 為允許的提示數。不合格回傳 null，合格則多帶 solution
+        function restoreSudoku(o, levels) {
+            if (!o || !levels.includes(o.lv) || !Number.isSafeInteger(o.sec) || o.sec < 0 || o.sec > 1e7) return null;
+            if (o.daily !== null && typeof o.daily !== 'string') return null;
+            const arr = (a, max) => Array.isArray(a) && a.length === 81 && a.every(v => Number.isInteger(v) && v >= 0 && v <= max);
+            if (!arr(o.puzzle, 9) || !arr(o.board, 9) || !arr(o.notes, 0x3fe)) return null;
+            if (o.puzzle.some((v, i) => v && o.board[i] !== v)) return null;           // 盤面與題目矛盾
+            const first = solve(o.puzzle, 2);
+            if (first.count !== 1) return null;                                        // 題目必須唯一解
+            return { lv: o.lv, puzzle: o.puzzle.slice(), board: o.board.slice(), notes: o.notes.slice(), sec: o.sec, daily: o.daily, solution: first.first };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -365,15 +377,27 @@
             $('#msg').textContent = '產生題目中…';
             setTimeout(() => {
                 ({ puzzle, solution } = daily ? dailyPuzzle(daily, +$('#level').value) : generate(+$('#level').value, rnd));
-                board = puzzle.slice(); notes = new Array(81).fill(0); sel = -1; done = false;
-                clearInterval(timer); start = Date.now();
-                timer = setInterval(() => { if (!done) $('#time').textContent = fmt(Math.floor((Date.now() - start) / 1000)); }, 500);
-                $('#time').textContent = '0:00';
-                const b = getBest(); $('#best').textContent = b ? fmt(b) : '—';
-                $('#msg').textContent = daily ? daily + ' 每日挑戰' : '';
-                paint();
+                board = puzzle.slice(); notes = new Array(81).fill(0);
+                begin(0);
             }, 20);
         }
+
+        // 開始（或接續）計時並畫面；sec = 已用秒數
+        function begin(sec) {
+            sel = -1; done = false;
+            clearInterval(timer); start = Date.now() - sec * 1000;
+            timer = setInterval(() => { if (!done) $('#time').textContent = fmt(Math.floor((Date.now() - start) / 1000)); }, 500);
+            $('#time').textContent = fmt(sec);
+            const b = getBest(); $('#best').textContent = b ? fmt(b) : '—';
+            $('#msg').textContent = daily ? daily + ' 每日挑戰' : '';
+            paint();
+        }
+        // 進行中存檔：每次畫面更新與離開頁面時寫入，完成時清掉
+        const CUR = 'sudoku_cur';
+        const saveCur = () => { if (!done && puzzle) store.set(CUR, { lv: +$('#level').value, puzzle, board, notes, sec: Math.floor((Date.now() - start) / 1000), daily }); };
+        const rmCur = () => { try { localStorage.removeItem(CUR); } catch (e) { } };
+        addEventListener('pagehide', saveCur);
+        document.addEventListener('visibilitychange', () => { if (document.hidden) saveCur(); });
 
         function paint() {
             const bad = conflicts(board);
@@ -398,6 +422,7 @@
             const counts = new Array(10).fill(0);
             board.forEach(v => counts[v]++);
             [...$('#pad').children].forEach((b, k) => { b.disabled = counts[k + 1] >= 9; });
+            saveCur();
         }
 
         function put(d) {
@@ -412,7 +437,7 @@
 
         function finishCheck() {
             if (board.some(v => !v) || conflicts(board).size) return;
-            done = true;
+            done = true; rmCur();
             const sec = Math.floor((Date.now() - start) / 1000), best = getBest();
             if (!best || sec < best) { store.set(bestKey(), sec); $('#best').textContent = fmt(sec); }
             $('#msg').textContent = `🎉 ${daily ? daily + ' 每日挑戰' : ''}完成！用時 ${fmt(sec)}${!best || sec < best ? '（新紀錄）' : ''}`;
@@ -448,9 +473,15 @@
             }
         });
 
-        newGame();
+        // 接續上次進行中的題目（每日挑戰跨日就丟棄）
+        const cur = restoreSudoku(store.get(CUR, null), [...$('#level').options].map(o => +o.value));
+        if (cur && (!cur.daily || cur.daily === twDay())) {
+            $('#level').value = cur.lv; daily = cur.daily; $('#daily').setAttribute('aria-pressed', !!daily);
+            ({ puzzle, solution, board, notes } = cur);
+            begin(cur.sec);
+        } else newGame();
     </script>
-<script>document.getElementById('clearBest').onclick=()=>{if(!confirm('清除這個遊戲的所有最佳紀錄？無法復原。頁面會重新載入，正在進行的這一局會結束。'))return;try{const p=['sudoku_best_', 'sudoku_daily_'];Object.keys(localStorage).filter(k=>p.some(x=>k.startsWith(x))).forEach(k=>localStorage.removeItem(k));}catch(e){}location.reload();};</script>
+<script>document.getElementById('clearBest').onclick=()=>{if(!confirm('清除這個遊戲的所有最佳紀錄？無法復原。頁面會重新載入，正在進行的這一局會結束。'))return;try{const p=['sudoku_best_', 'sudoku_daily_', 'sudoku_cur'];Object.keys(localStorage).filter(k=>p.some(x=>k.startsWith(x))).forEach(k=>localStorage.removeItem(k));}catch(e){}location.reload();};</script>
 </body>
 
 </html>

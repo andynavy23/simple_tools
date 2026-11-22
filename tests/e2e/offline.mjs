@@ -34,7 +34,7 @@ try {
     assert.match(msg, /^完成：/, '下載訊息：' + msg);
     assert.ok(!/失敗/.test(msg), '下載訊息有失敗：' + msg);
     const nCards = await page.evaluate(() => document.querySelectorAll('#src a.card').length);
-    const nCached = await page.evaluate(async () => (await (await caches.open('st-v2')).keys()).length);
+    const nCached = await page.evaluate(async () => (await (await caches.open('st-v3')).keys()).length);
     assert.ok(nCached >= nCards, `快取 ${nCached} 個檔案，少於 ${nCards} 張卡片`);
 
     // 切成離線後逐頁開：每頁要有 chrome.js 套用的外觀屬性與頁面主體（而不是離線錯誤頁）

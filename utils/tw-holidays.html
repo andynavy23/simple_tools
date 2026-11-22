@@ -28,7 +28,7 @@
         <h3>怎麼用</h3>
         <ol>
         <li>「月曆」：切換年份與月份，紅色為放假、藍色為補班，灰色為一般週末。</li>
-        <li>「連假清單」：列出該年連續休 3 天以上的區段與天數。</li>
+        <li>「連假清單」：列出該年連續休 3 天以上的區段與天數；按「下載 .ics」把該年每個連假匯成一個全天事件（起訖與清單一致），補班日另成事件並在標題註明「補班」，匯入手機行事曆即可；用「資料編輯」覆蓋的日期也會反映。</li>
         <li>「請假最佳化」：選年度、輸入可請假天數 N（1–10），列出「請假天數 ↔ 連休天數」最划算的方案與要請的日期，可複製。</li>
         <li>「列印日曆」：選年度、範圍（單月 / 整年一頁 / 整年每月一頁）、週首日、紙張方向，可勾選顯示假日與補班、農曆；下方可新增自己的標記日（可設「每年重複」，如生日）；按「列印 / 存成 PDF」用瀏覽器列印功能輸出（建議取消頁首頁尾）。</li>
         <li>「資料編輯」：官方公告和內建資料不同時，可新增「放假」或「補班」日期覆蓋；也可看內建的調整放假 / 補班範例。</li>
@@ -41,11 +41,13 @@
         <li>農曆節日用瀏覽器內建農曆推算，並以天文新月（UTC+8）校正已知差一天的日期（例如 2027 春節初一是 2/6，部分瀏覽器會算成 2/7）。</li>
         <li>勞動節、教師節、光復節、行憲紀念日以 2025 年起全民放假計；企業、學校、軍公教實際放假可能不同。</li>
         <li>自訂資料存在這台裝置（鍵 twhol_custom），上限 200 筆，滿了要先刪除才能新增；可單筆刪除或「清除全部自訂資料」（會先確認，無法復原）；列印日曆的標記日存在鍵 twhol_marks，上限 100 筆，同樣可單筆刪除或「清除全部標記」（會先確認，無法復原），資料壞掉時載入會自動略過壞項；壞掉的資料載入時會被略過。</li>
+        <li>匯出 .ics 只讀取目前資料，不新增任何儲存資料；再次匯入同一份檔案會依固定 ID 更新而不是重複。</li>
         <li>請假最佳化假設週末與放假日休息、補班日上班，請假日只挑一般上班日；僅供參考。</li>
         </ul>
     </template>
 
     <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/tw-holiday-data.js"></script>
     <style>
         :root { --wrap-w: 720px; }
         .tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -57,7 +59,7 @@
         .cal .h { text-align: center; color: var(--muted); font-size: 13px; padding: 2px 0; }
         .cal .d { border: 1px solid var(--line); border-radius: var(--radius-sm); min-height: 54px; padding: 3px 2px; text-align: center; min-width: 0; }
         .cal .d b { display: block; font-size: 15px; }
-        .cal .d small { display: block; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .cal .d small { display: block; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .cal .d.off { background: color-mix(in srgb, var(--bad) 18%, transparent); }
         .cal .d.wk { background: var(--fill); }
         .cal .d.work { background: color-mix(in srgb, var(--blue) 18%, transparent); }
@@ -70,16 +72,16 @@
         #pArea .pm { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px; display: flex; flex-direction: column; background: var(--card); color: var(--text); min-width: 0; }
         #pArea .pm h4 { margin: 0 0 4px; text-align: center; font-size: 15px; }
         #pArea .g { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); flex: 1; grid-auto-rows: 1fr; }
-        #pArea .g .h { text-align: center; font-size: 11px; color: var(--muted); }
-        #pArea .g .c { border: 1px solid var(--line); margin: -0.5px; padding: 1px 2px; min-height: 34px; overflow: hidden; font-size: 11px; line-height: 1.25; min-width: 0; }
+        #pArea .g .h { text-align: center; font-size: 12px; color: var(--muted); }
+        #pArea .g .c { border: 1px solid var(--line); margin: -0.5px; padding: 1px 2px; min-height: 34px; overflow: hidden; font-size: 12px; line-height: 1.25; min-width: 0; }
         #pArea .g .c b { font-size: 13px; }
         #pArea .g .c.we b { color: var(--muted); }
         #pArea .g .c.off b, #pArea .g .c.off i { color: var(--bad); }
-        #pArea .g .c i { display: block; font-style: normal; font-size: 10px; color: var(--muted); }
-        #pArea .g .c u { display: block; text-decoration: none; font-size: 10px; border-left: 2px solid var(--blue); padding-left: 2px; }
+        #pArea .g .c i { display: block; font-style: normal; font-size: 12px; color: var(--muted); }
+        #pArea .g .c u { display: block; text-decoration: none; font-size: 12px; border-left: 2px solid var(--blue); padding-left: 2px; }
         #pArea .yr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-        #pArea.small .g .c { min-height: 22px; text-align: center; font-size: 10px; }
-        #pArea.small .g .c b { font-size: 11px; }
+        #pArea.small .g .c { min-height: 22px; text-align: center; font-size: 12px; }
+        #pArea.small .g .c b { font-size: 12px; }
         @media (min-width: 700px) { #pArea .yr { grid-template-columns: repeat(var(--pc, 4), minmax(0, 1fr)); } }
         @media print {
             body > :not(.wrap) { display: none !important; }
@@ -127,7 +129,7 @@
             </div>
 
             <div class="pane" data-t="runs" hidden>
-                <div class="row"><label for="ry">年度</label><select id="ry"></select></div>
+                <div class="row"><label for="ry">年度</label><select id="ry"></select><button class="sm" id="runIcs">下載 .ics</button></div>
                 <div id="runList"></div>
             </div>
 
@@ -163,70 +165,7 @@
         const { day } = Util;
         // --- pure ---
         const YEARS = [2025, 2026, 2027], MAX_CUSTOM = 200;
-        // 補班：依行政院人事行政總處「政府行政機關辦公日曆表」（114 年 6/27/2024 公告、查詢日 2026-11-22）：2025 春節 1/27 調整放假、2/8 補班。
-        // 114 年 6 月修正後刪除「調整放假補行上班」，115（2026）、116（2027）年辦公日曆表皆無補班日（除夕前一日已列入春節放假），故只剩這一筆。
-        const TW_ADJ = [
-            { d: '2025-02-08', kind: 'work', name: '補班（補 1/27）' },
-        ];
-        const dow = (ds) => (day.num(ds) + 4) % 7;     // 0=日
-        const LF = new Intl.DateTimeFormat('en-u-ca-chinese', { month: 'numeric', day: 'numeric', timeZone: 'UTC' });
-        // 西曆日期 → 農曆 { m, d, leap }
-        // Intl（ICU）在新月落在 UTC+8 午夜前後幾分鐘時會差一天（2027 春節 ICU 算 2/7，實為 2/6）；下列區間以天文新月（UTC+8）校正：[起, 迄, 農曆年, 月, 起日的農曆日]
-        const LUNAR_FIX = [['2027-02-06', '2027-03-07', 2027, 1, 1], ['2030-02-02', '2030-02-02', 2029, 12, 30], ['2030-02-03', '2030-03-03', 2030, 1, 1]];
-        function lunarOf(ds) {
-            const e = LUNAR_FIX.find(x => ds >= x[0] && ds <= x[1]); if (e) return { m: e[3], d: e[4] + day.between(e[0], ds), leap: false };
-            const { y, m, d } = day.parse(ds), p = LF.formatToParts(new Date(Date.UTC(y, m - 1, d, 12)));
-            const mo = p.find(x => x.type === 'month').value;
-            return { m: parseInt(mo, 10), d: +p.find(x => x.type === 'day').value, leap: /\D/.test(mo) };
-        }
-        // 清明（4 月幾日，21 世紀公式；2025–2027 正確）
-        function qingming(y) { const t = y % 100; return Math.floor(t * 0.2422 + 4.81) - Math.floor((t - 1) / 4); }
-        // 該西曆年的春節初一、端午（農曆 5/5）、中秋（8/15）
-        const _lc = {};
-        function lunarEvents(y) {
-            if (_lc[y]) return _lc[y];
-            const r = {};
-            for (let ds = y + '-01-15'; ds <= y + '-10-15'; ds = day.shift(ds, 1)) {
-                const l = lunarOf(ds); if (l.leap) continue;
-                if (l.m === 1 && l.d === 1 && !r.ny) r.ny = ds;
-                else if (l.m === 5 && l.d === 5) r.dw = ds;
-                else if (l.m === 8 && l.d === 15) r.mf = ds;
-            }
-            return (_lc[y] = r);
-        }
-        // 依法定規則推算某年的放假日（含補假）：[{ d, name }]
-        function autoHolidays(y) {
-            const L = lunarEvents(y), q = qingming(y), p2 = (n) => String(n).padStart(2, '0'), res = [];
-            const add = (d, name, spring) => res.push({ d, name, spring: !!spring });
-            add(y + '-01-01', '元旦');
-            add(day.shift(L.ny, -2), '除夕前一日', 1); add(day.shift(L.ny, -1), '除夕', 1); add(L.ny, '春節初一', 1); add(day.shift(L.ny, 1), '春節初二', 1); add(day.shift(L.ny, 2), '春節初三', 1);
-            add(y + '-02-28', '和平紀念日');
-            add(y + '-04-' + p2(q === 4 ? 3 : 4), '兒童節'); add(y + '-04-' + p2(q), '清明節');
-            add(y + '-05-01', '勞動節'); add(L.dw, '端午節'); add(y + '-09-28', '教師節'); add(L.mf, '中秋節');
-            add(y + '-10-10', '國慶日'); add(y + '-10-25', '光復節'); add(y + '-12-25', '行憲紀念日');
-            if (dow((y + 1) + '-01-01') === 6) add(y + '-12-31', '元旦補假');   // 隔年元旦逢週六，補假在本年 12/31
-            res.sort((a, b) => a.d.localeCompare(b.d));
-            // 補假：週六提前一天、週日延後一天；春節落在週末者順延到春節後的上班日
-            const taken = new Set(res.map(x => x.d)), extra = [];
-            const free = (d) => !taken.has(d) && dow(d) !== 0 && dow(d) !== 6;
-            const springEnd = day.shift(L.ny, 2);
-            res.forEach(h => {
-                const w = dow(h.d); if (w !== 0 && w !== 6) return;
-                let t = h.spring ? springEnd : h.d, step = h.spring || w === 0 ? 1 : -1;
-                do { t = day.shift(t, step); } while (!free(t));
-                taken.add(t); extra.push({ d: t, name: h.name + '補假' });
-            });
-            return res.concat(extra).map(x => ({ d: x.d, name: x.name }));
-        }
-        // 日曆：Map 日期 → { kind: 'off' | 'work', name }；順序：法定 → 內建調整 → 自訂
-        function buildMap(years, custom) {
-            const m = new Map();
-            years.forEach(y => autoHolidays(y).forEach(h => m.set(h.d, { kind: 'off', name: h.name })));
-            TW_ADJ.forEach(a => m.set(a.d, { kind: a.kind, name: a.name }));
-            (custom || []).forEach(a => m.set(a.d, { kind: a.kind, name: a.name }));
-            return m;
-        }
-        const isRest = (map, ds) => { const e = map.get(ds); return e ? e.kind === 'off' : dow(ds) === 0 || dow(ds) === 6; };
+        const { TW_ADJ, dow, lunarOf, qingming, lunarEvents, autoHolidays, buildMap, isRest } = TwHol;   // 資料與推算在 shared/js/tw-holiday-data.js
         // 連續休假區段（≥ min 天，且與 [from, to] 有交集）
         function restRuns(map, from, to, min = 3) {
             const out = []; let s = null;
@@ -244,6 +183,22 @@
                 }
             }
             return out;
+        }
+        // ICS：該年每個連假一個全天事件（DTEND = 最後一天 + 1），補班日各一個全天事件（標題註明「補班」）；沿用目前的資料（含自訂覆蓋）
+        const icsEsc = (s) => String(s).replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,');
+        function icsFold(line) {   // 每行 ≤ 75 octets，以字元為單位切，續行以空白開頭
+            const out = []; let cur = '', n = 0;
+            for (const ch of line) { const b = new TextEncoder().encode(ch).length; if (n + b > 75) { out.push(cur); cur = ' '; n = 1; } cur += ch; n += b; }
+            return [...out, cur].join('\r\n');
+        }
+        function runsIcs(map, y, now) {
+            const d8 = (d) => d.replace(/-/g, ''), stamp = now.toISOString().replace(/[-:]|\.\d+/g, '');
+            const ev = (id, from, to, title) => ['BEGIN:VEVENT', `UID:${id}@simple-tools-twhol`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${d8(from)}`, `DTEND;VALUE=DATE:${d8(day.shift(to, 1))}`, `SUMMARY:${icsEsc(title)}`, 'END:VEVENT'];
+            const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//simple_tools//TwHolidays//ZH-TW', 'CALSCALE:GREGORIAN'];
+            restRuns(map, y + '-01-01', y + '-12-31').forEach(r => L.push(...ev('run-' + d8(r.from), r.from, r.to, `連假：${r.names.join('、') || '週末連假'}（共 ${r.len} 天）`)));
+            [...map.entries()].filter(([d, v]) => d.startsWith(y + '-') && v.kind === 'work').sort((a, b) => a[0].localeCompare(b[0])).forEach(([d, v]) => L.push(...ev('work-' + d8(d), d, d, `補班：${v.name}`)));
+            L.push('END:VCALENDAR');
+            return L.map(icsFold).join('\r\n') + '\r\n';
         }
         // 下一個（或進行中的）連假；today 為 YYYY-MM-DD
         function nextRun(runs, today) {
@@ -344,6 +299,7 @@
             const rs = restRuns(map, y + '-01-01', y + '-12-31');
             $('#runList').replaceChildren(...rs.map(r => { const d = document.createElement('div'); d.className = 'li2'; d.textContent = `${r.from.slice(5)} ${wd(r.from)} – ${r.to.slice(5)} ${wd(r.to)}　共 ${r.len} 天`; d.append(Object.assign(document.createElement('small'), { textContent: r.names.join('、') || '週末連假' })); return d; }));
         }
+        $('#runIcs').onclick = () => { const y = $('#ry').value; Util.download(new Blob([runsIcs(mapFor(+y), y, new Date())], { type: 'text/calendar;charset=utf-8' }), `tw-holidays-${y}.ics`); };
         let lastText = '';
         function renderOpt() {
             const y = +$('#oy').value, N = Math.max(1, Math.min(10, Math.floor(+$('#on').value) || 1));

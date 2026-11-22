@@ -48,8 +48,8 @@
         }
 
         .setrow input {
-            flex: 1;
-            min-width: 0;
+            flex: 1 1 64px;
+            min-width: 64px;
         }
 
         .setrow {
@@ -230,6 +230,7 @@
             <h2>資料管理</h2>
             <p class="note" id="count"></p>
             <div class="row">
+                <button class="sm" id="expCsv">匯出 CSV</button>
                 <button class="sm" id="delMove">刪除這個動作的全部紀錄</button>
                 <button class="sm" id="delOld">刪除一年前的紀錄</button>
                 <button class="sm" id="delAll">清除全部</button>
@@ -263,6 +264,7 @@
         <h3>小提醒</h3>
         <ul>
         <li>資料只存在本機瀏覽器，請用右上角「💾」備份。</li>
+        <li>「匯出 CSV」（資料管理）：每組一列（日期 / 動作 / 組序 / 重量 / 次數 / RPE / 預估 1RM / 備註），重量依目前 kg / lb 偏好並在標題標示單位，備註開頭是 = + - @ 時會加單引號避免被試算表當公式；匯出只讀取、不新增任何儲存資料。</li>
         <li>上限：訓練紀錄 5,000 次、每次最多 40 組、自訂動作 50 個；達到上限會拒絕新增並提示，請先刪除舊紀錄。</li>
         <li>清除：每筆有「刪除」；「資料管理」可刪某動作的全部紀錄、刪一年前的紀錄、清除全部（連同自訂動作），都會先確認且無法復原。刪除自訂動作時，它的紀錄也會一併從訓練紀錄與計畫中刪除。</li>
         <li>計畫最多 1 份（最多 7 天、每天 12 個動作），套用新的會取代舊的；「清除計畫」可單獨刪除，「清除全部」也會一併清掉計畫。</li>
@@ -410,6 +412,13 @@
             const u = lb ? 'lb' : 'kg';
             return `${e.d} ${name}\n` + e.s.map(([w, r, rp], i) => `${i + 1}. ${dispW(w, lb)}${u} × ${r}` + (rp ? ` @RPE ${rp}` : '')).join('\n') + (e.rpe ? `\nRPE ${e.rpe}` : '') + (e.n ? `\n${e.n}` : '');
         }
+        // CSV：開頭是 = + - @ 的文字前補單引號，避免試算表當成公式；每組一列，重量依 kg / lb 偏好
+        const csvGuard = (v) => { const s = String(v ?? ''); return /^[=+\-@\t\r]/.test(s) ? "'" + s : s; };
+        function workoutCsv(log, nameOf, lb, formula) {
+            const rows = [];
+            for (const e of chrono(log)) e.s.forEach(([w, r, rp], i) => rows.push([e.d, csvGuard(nameOf(e.m)), i + 1, dispW(w, lb), r, rp || e.rpe || '', r1(dispW(e1rm(w, r, formula), lb)), csvGuard(e.n)]));
+            return Util.csvStringify(['日期', '動作', '組序', `重量(${lb ? 'lb' : 'kg'})`, '次數', 'RPE', `預估1RM(${lb ? 'lb' : 'kg'})`, '備註'], rows);
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -514,6 +523,7 @@
             custom.push({ id: 'c_' + newId(), zh: zh.slice(0, 30), en: $('#nmEn').value.trim().slice(0, 30) }); saveMoves(); $('#nmZh').value = ''; $('#nmEn').value = ''; msg.textContent = '已新增'; renderMoveSelect(); render();
         };
         $('#delMove').onclick = () => { const id = $('#move').value, n = log.filter(e => e.m === id).length; if (n && confirm(`刪除「${mvName(id)}」的全部 ${n} 筆訓練紀錄？無法復原。`)) { log = log.filter(e => e.m !== id); stopEdit(); saveLog(); render(); } };
+        $('#expCsv').onclick = () => { if (!log.length) { $('#count').textContent = '沒有可匯出的訓練紀錄'; return; } Util.download(new Blob(['﻿' + workoutCsv(log, mvName, prefs.lb, prefs.formula)], { type: 'text/csv;charset=utf-8' }), `重訓記錄_${day.today()}.csv`); };
         $('#delOld').onclick = () => { const keep = pruneOlder(log, day.today()), n = log.length - keep.length; if (n && confirm(`刪除一年前（${day.shift(day.today(), -365)} 之前）的 ${n} 筆訓練紀錄？無法復原。`)) { log = keep; stopEdit(); saveLog(); render(); } };
         $('#delAll').onclick = () => { if ((log.length || custom.length || plan) && confirm(`清除全部 ${log.length} 筆訓練紀錄、${custom.length} 個自訂動作與${plan ? '訓練計畫' : '（無計畫）'}？無法復原。`)) { log = []; custom = []; plan = null; draft = null; stopEdit(); saveLog(); saveMoves(); savePlan(); renderMoveSelect(); render(); } };
 

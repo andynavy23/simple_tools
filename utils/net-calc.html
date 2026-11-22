@@ -117,6 +117,9 @@
             <label for="needH">需要幾台主機？（IPv4 最小前綴）</label>
             <input id="needH" type="text" inputmode="numeric" placeholder="例如 500" maxlength="10">
             <div id="needOut"></div>
+            <label for="vlsmIn">VLSM 子網分配（依各部門主機數，由大到小從上面的 IPv4 網段切出；一行一個「名稱 主機數」，最多 50 行）</label>
+            <textarea id="vlsmIn" rows="4" spellcheck="false" autocomplete="off" placeholder="業務部 100&#10;工程部 50&#10;會議室 20&#10;管理 2" style="width:100%;font:16px/1.5 ui-monospace,Menlo,Consolas,monospace"></textarea>
+            <div id="vlsmOut"></div>
         </section>
 
         <section class="card" id="p1" hidden>
@@ -201,7 +204,7 @@
         <h3>怎麼用</h3>
         <ol>
         <li>上方選分頁，輸入框改動時結果會即時更新。</li>
-        <li>CIDR：可寫 <kbd>/24</kbd> 或遮罩 <kbd>255.255.255.0</kbd>；下方可判斷某 IP 是否屬於網段、切子網、反查主機數需要的前綴。</li>
+        <li>CIDR：可寫 <kbd>/24</kbd> 或遮罩 <kbd>255.255.255.0</kbd>；下方可判斷某 IP 是否屬於網段、切子網、反查主機數需要的前綴。VLSM：在最下方框內一行一個「名稱 主機數」（最多 50 行），會依主機數由大到小從上面的 IPv4 網段依序切出不重疊的子網，列出前綴長度、可用範圍與剩餘位址數；空間不夠會明確提示「空間不足」（例：192.168.1.0/24 要 100 / 50 / 20 / 2 台 → /25、/26、/27、/30）。VLSM 只支援 IPv4，每段取「主機數 + 網路與廣播位址」所需的最小 2 的次方。</li>
         <li>下載時間：Mbps 是「位元」、MB/s 是「位元組」，差 8 倍；「實際可用比例」可調協定損耗。</li>
         <li>容量：併發數用 Little 定律 L = λ × W（QPS × 延遲秒數）。</li>
         </ol>
@@ -316,6 +319,35 @@
             let hb = 2; while (2 ** hb - 2 < n) hb++;
             return 32 - hb;
         }
+        // VLSM（IPv4）：items = [{ name, hosts }]，由大到小從母網段起點依序切出（大的在前，所以每段都對齊、不重疊）
+        // 回傳 { rows: [{ name, hosts, prefix, net, first, last, size }]（BigInt 位址）, free（剩餘位址數 BigInt）, error }；任一項放不下就在 error 說明並停止
+        function vlsm(c, items) {
+            if (!c || c.v !== 4) return { rows: [], free: 0n, error: 'VLSM 只支援 IPv4 網段' };
+            const i = cidrInfo(c), end = i.last + 1n, rows = [];
+            let cur = i.net;
+            for (const it of items.map((x, k) => ({ ...x, k })).sort((a, b) => b.hosts - a.hosts || a.k - b.k)) {
+                const p = prefixForHosts(it.hosts);
+                if (p === null) return { rows, free: end - cur, error: `「${it.name}」的主機數不合法（1 ~ 4294967294）` };
+                const size = 1n << BigInt(32 - p);
+                if (p < c.prefix || cur + size > end) return { rows, free: end - cur, error: `空間不足：「${it.name}」需要 /${p}（${size} 個位址），母網段 /${c.prefix} 剩 ${end - cur} 個` };
+                const last = cur + size - 1n, small = p >= 31;
+                rows.push({ name: it.name, hosts: it.hosts, prefix: p, net: cur, first: small ? cur : cur + 1n, last: small ? last : last - 1n, size });
+                cur += size;
+            }
+            return { rows, free: end - cur, error: '' };
+        }
+        // 文字 → [{ name, hosts }]；一行一個，最後一欄是主機數，前面是名稱（可省略）；回傳 { items, error }
+        const VLSM_MAX = 50;
+        function parseVlsm(text) {
+            const lines = String(text).split(/\r?\n/).map(l => l.trim()).filter(Boolean), items = [];
+            if (lines.length > VLSM_MAX) return { items: [], error: `最多 ${VLSM_MAX} 行` };
+            for (const [k, l] of lines.entries()) {
+                const t = l.split(/[\s,，]+/), h = t.pop();
+                if (!/^\d{1,10}$/.test(h) || +h < 1 || +h > 4294967294) return { items: [], error: `第 ${k + 1} 行「${l.slice(0, 30)}」：最後要是主機數（1 ~ 4294967294 的整數）` };
+                items.push({ name: t.join(' ').slice(0, 30) || '子網 ' + (k + 1), hosts: +h });
+            }
+            return { items, error: '' };
+        }
         const V4_RANGES = [
             ['0.0.0.0', 8, '本網路（0.0.0.0/8，「這台主機」）'], ['10.0.0.0', 8, '私有位址（RFC 1918）'], ['100.64.0.0', 10, '共享位址 / CGNAT（RFC 6598）'],
             ['127.0.0.0', 8, '環回 loopback'], ['169.254.0.0', 16, '連結本地 link-local（APIPA）'], ['172.16.0.0', 12, '私有位址（RFC 1918）'],
@@ -422,7 +454,7 @@
 
         function renderCidr() {
             const c = parseCidr($('#cidr').value);
-            ['#inOut', '#splitOut', '#needOut'].forEach(s => $(s).innerHTML = '');
+            ['#inOut', '#splitOut', '#needOut', '#vlsmOut'].forEach(s => $(s).innerHTML = '');
             if (!c) { $('#cidrOut').innerHTML = err('格式不正確，例如 192.168.1.0/24 或 2001:db8::/32'); return; }
             const i = cidrInfo(c), f = (n) => fmtIp(c.v, n);
             const rows = [['版本', 'IPv' + c.v], ['網段', f(i.net) + '/' + c.prefix], ['前綴長度', '/' + c.prefix]];
@@ -442,6 +474,11 @@
             if (sp) {
                 const s = splitCidr(c, +sp);
                 $('#splitOut').innerHTML = !s ? err(`前綴長度需大於 /${c.prefix} 且不超過 /${c.bits}`) : `<p class="note">共 ${big(s.count)} 個 /${sp} 子網${s.count > BigInt(s.list.length) ? '，只列前 ' + s.list.length + ' 個' : ''}：</p><pre class="note" style="white-space:pre-wrap;overflow-wrap:anywhere;font-family:ui-monospace,Menlo,Consolas,monospace">${esc(s.list.map(n => f(n) + '/' + sp).join('\n'))}</pre>`;
+            }
+            if ($('#vlsmIn').value.trim()) {
+                const pv = parseVlsm($('#vlsmIn').value), v = pv.error ? null : vlsm(c, pv.items), fi = (n) => ipv4Str(Number(n));
+                $('#vlsmOut').innerHTML = (pv.error ? err(pv.error) : v.error ? err(v.error) : '')
+                    + (v && v.rows.length ? `<pre class="note" id="vlsmRows" style="white-space:pre-wrap;overflow-wrap:anywhere;font-family:ui-monospace,Menlo,Consolas,monospace">${esc(v.rows.map(r => `${r.name}（${r.hosts} 台）\n  ${fi(r.net)}/${r.prefix}  可用 ${fi(r.first)} – ${fi(r.last)}`).join('\n') + (v.error ? '' : '\n剩餘 ' + big(v.free) + ' 個位址'))}</pre>` : '');
             }
             const nh = $('#needH').value.trim();
             if (nh) { const p = prefixForHosts(+nh); $('#needOut').innerHTML = p === null ? err('請輸入 1 ~ 4294967294 的整數') : `<p>${big(BigInt(nh))} 台主機 → 至少 <b>/${p}</b>（可用 ${big(p === 32 ? 1n : (1n << BigInt(32 - p)) - 2n)} 台，遮罩 ${ipv4Str(2 ** 32 - 2 ** (32 - p))}）</p>`; }
@@ -496,7 +533,7 @@
         $('#dlBu').innerHTML = Object.keys(BW_U).map(u => `<option${u === 'Mbps' ? ' selected' : ''}>${u}</option>`).join('');
         $('#slaTbl').innerHTML = '<table class="kv txt"><tr><th>可用度</th><th>每年</th><th>每月</th><th>每天</th></tr>' + [90, 95, 99, 99.5, 99.9, 99.95, 99.99, 99.999, 99.9999].map(p => { const d = downtime(p); return `<tr><td>${p}%</td><td>${fmtDuration(d.year)}</td><td>${fmtDuration(d.month)}</td><td>${fmtDuration(d.day)}</td></tr>`; }).join('') + '</table>';
         const bind = (ids, fn) => { ids.forEach(i => $(i).addEventListener('input', fn)); fn(); };
-        bind(['#cidr', '#inIp', '#splitP', '#needH'], renderCidr);
+        bind(['#cidr', '#inIp', '#splitP', '#needH', '#vlsmIn'], renderCidr);
         bind(['#v4'], renderV4); bind(['#v6'], renderV6); bind(['#mac'], renderMac);
         bind(['#dlSize', '#dlSu', '#dlBw', '#dlBu', '#dlEff'], renderDl);
         bind(['#slaP', '#slaL'], renderSla);

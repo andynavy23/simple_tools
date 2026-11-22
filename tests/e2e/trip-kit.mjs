@@ -39,5 +39,15 @@ const tab = (page, t) => click(page, `.tabs button[data-t="${t}"]`);
     assert.ok(await ev(page, () => document.documentElement.scrollWidth <= innerWidth), '橫向溢出');
     assert.deepEqual(errors, []);
 }
+{ // 137：提示改頁內 toast，不再跳 alert
+    const { page, errors } = await openPage(browser, 'utils/trip-kit.html');
+    let dialogs = 0; page.removeAllListeners('dialog'); page.on('dialog', d => { dialogs++; d.dismiss().catch(() => { }); });
+    await ev(page, () => localStorage.setItem('trip_plans', JSON.stringify([{ id: 't1', name: '滿', start: '2026-12-01', end: '2026-12-03', cur: 'TWD', tz: 8, items: Array.from({ length: 300 }, (_, i) => ({ id: 'i' + i, date: '2026-12-01', time: '', place: '地點' + i, note: '', mode: '', cost: 0 })) }])));
+    await page.reload({ waitUntil: 'load' });
+    await set(page, '#iPlace', '第 301 個'); await click(page, '#iAdd');
+    const t = await ev(page, () => { const e = document.querySelector('.st-toast'); return e && { text: e.textContent, cls: e.className, hidden: e.hidden }; });
+    assert.ok(t && !t.hidden && t.cls.includes('bad') && t.text.includes('300'), JSON.stringify(t)); assert.equal(dialogs, 0, '不該有 alert 視窗');
+    assert.deepEqual(errors, []);
+}
 await browser.close();
 console.log('ok  trip-kit e2e');

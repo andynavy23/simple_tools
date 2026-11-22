@@ -31,7 +31,7 @@ await pick('yld'); assert.ok((await text('#out')).includes('淨投報率'));
 await pick('lease'); assert.ok((await text('#out')).includes('房東應退還'));
 await set('#lease_dep', '60000'); assert.ok((await text('#out')).includes('超過 2 個月'));
 await set('#lease_out', ''); assert.ok((await text('#out')).includes('請選擇'));
-assert.strictEqual(await page.evaluate(() => localStorage.length), 0, '不存資料');
+assert.deepStrictEqual(await page.evaluate(() => Object.keys(localStorage)), ['loan_opts'], '只存 loan_opts');
 
 // 390px 不橫向溢出；輸入框字級 >= 16
 for (const m of ['debt', 'house']) {
@@ -39,5 +39,29 @@ for (const m of ['debt', 'house']) {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), m + ' 橫向溢出');
 }
 await click('[data-mode=buyrent]'); assert.ok((await text('#out')).includes('損益平衡'), '買房 vs 租房照舊');
+
+// 131 / 145 / 146：記住輸入、複製、逐期表匯出、重設、壞資料
+await page.evaluate(() => { window.__clip = ''; Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__clip = t; } }, configurable: true }); });
+await click('[data-mode=loan]'); await set('#p', '2000000'); await set('#grace', '12');
+let t = await text('#out'); assert.ok(t.includes('寬限期後首期應繳') && t.includes('比單一利率'), '寬限期結果');
+await set('#grace', '0'); await set('#rate2', '3'); assert.ok((await text('#out')).includes('第二段年利率與'), '只填一半要提示');
+await set('#from2', '61'); assert.ok((await text('#out')).includes('第 61 期起應繳'));
+await set('#rate2', ''); await set('#from2', '');
+await click('#copyBtn'); await new Promise(r => setTimeout(r, 100));
+let clip = await page.evaluate(() => window.__clip); assert.ok(clip.includes('每月應繳：') && /每月應繳：\d/.test(clip), '複製含月付：' + clip.slice(0, 60));
+await click('#tsvBtn'); await new Promise(r => setTimeout(r, 100));
+clip = await page.evaluate(() => window.__clip); const lines = clip.split(String.fromCharCode(10)), TAB = String.fromCharCode(9);
+assert.strictEqual(lines.length, 241); assert.ok(lines.every(l => l.split(TAB).length === 5)); assert.ok(lines[240].endsWith(TAB + '0'), '最後餘額 0');
+await page.reload({ waitUntil: 'load' });
+assert.strictEqual(await page.evaluate(() => document.querySelector('#p').value), '2000000', 'reload 保留');
+await click('[data-mode=debt]'); await pick('refi'); await page.reload({ waitUntil: 'load' });
+assert.strictEqual(await page.evaluate(() => document.querySelector('#sub').value), 'refi', '分頁與試算項目保留');
+await page.evaluate(() => { window.confirm = () => true; }); await click('#resetBtn');
+assert.deepStrictEqual(await page.evaluate(() => [localStorage.getItem('loan_opts'), document.querySelector('#p').value]), [null, '1000000'], '重設');
+await page.evaluate(() => localStorage.setItem('loan_opts', JSON.stringify({ mode: 5, v: { p: 'abc', rate: '1e99', years: null }, sub: 7 })));
+await page.reload({ waitUntil: 'load' });
+assert.strictEqual(await page.evaluate(() => document.querySelector('#p').value), '1000000', '壞資料補預設');
+await page.evaluate(() => localStorage.setItem('loan_opts', '{壞掉'));
+await page.reload({ waitUntil: 'load' }); assert.ok((await text('#out')).includes('每月應繳'));
 assert.deepStrictEqual(errors, []);
 await browser.close();

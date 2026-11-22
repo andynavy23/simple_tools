@@ -20,6 +20,11 @@ const browser = await launchEdge();
     assert.strictEqual(await page.evaluate(() => window.hacked), undefined, 'script 不可執行');
     assert.strictEqual(await page.$$eval('#reader img, #reader a[href], #reader script, #reader link', l => l.length), 0);
     assert.strictEqual(await page.$$eval('#toc option', o => o.length), 3);
+    // 鍵盤 ← → 切章
+    await page.keyboard.press('ArrowRight');
+    await page.waitForFunction(() => document.querySelector('#pos').textContent === '2 / 3');
+    await page.keyboard.press('ArrowLeft');
+    await page.waitForFunction(() => document.querySelector('#pos').textContent === '1 / 3');
     // 翻章 + 捲動 → 存進度
     await page.evaluate(() => document.querySelector('#next').click());
     await page.waitForFunction(() => document.querySelector('#pos').textContent === '2 / 3');

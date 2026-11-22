@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="st-disclaimer" content="finance">
+    <meta name="st-keys" content="loan_opts">
     <meta name="color-scheme" content="light dark">
     <meta name="description" content="貸款、複利、存款目標、債務與購屋租屋試算：月付金與逐期表、定期定額的複利成長，以及多久或每月要存多少才能達標。">
     <meta property="og:title" content="貸款 / 複利試算" />
@@ -104,6 +105,9 @@
                         <option value="principal">本金平均攤還（每期遞減）</option>
                     </select>
                 </div>
+                <div><label for="grace">寬限期（月，只繳利息，選填）</label><input id="grace" type="number" min="0" step="1" value="0"></div>
+                <div><label for="rate2">第二段年利率 (%，選填)</label><input id="rate2" type="number" min="0" step="any" value=""></div>
+                <div><label for="from2">第二段從第幾期起（選填）</label><input id="from2" type="number" min="1" step="1" value=""></div>
             </div>
         </div>
 
@@ -152,6 +156,10 @@
         </div>
 
         <div class="card" id="out"></div>
+        <div class="btns" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+            <button class="sm" id="copyBtn">複製結果</button>
+            <button class="sm" id="resetBtn">重設為預設</button>
+        </div>
         <div class="card" id="brCard" hidden>
             <h2>累積總成本</h2>
             <canvas id="cv" role="img" aria-label="買房與租房的逐年累積總成本曲線"></canvas>
@@ -159,6 +167,10 @@
         </div>
         <div class="card" id="tblCard" hidden>
             <h2 id="tblTitle">逐期明細</h2>
+            <div id="tblAct" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+                <button class="sm" id="tsvBtn">複製（TSV）</button>
+                <button class="sm" id="csvBtn">下載 CSV</button>
+            </div>
             <div class="tbl" id="tbl"></div>
         </div>
     </div>
@@ -202,7 +214,8 @@
         <li>報酬率是假設值，投資實際報酬會波動。</li>
         <li>買房 vs 租房是簡化估算：未計賣屋費用、增值稅、利率調整與房價波動；「每年持有成本」固定不隨年數調整；損益平衡是指「從那之後一直」買房都不比租房貴。</li>
         <li>債務與購屋分頁的利率、最低應繳比例、寬限期、負債比、押金月數上限等都是「範例值」，請依自己的契約與現行法規自行確認；全部為估算，非財務建議。</li>
-        <li>本頁不會儲存任何資料，重新整理就回到預設值。</li>
+        <li>貸款分頁可填「寬限期」（前 N 個月只繳利息）與「第二段利率 / 從第幾期起」（階梯利率）；兩者都會重新計算逐期表，並對照單一利率差多少利息。逐期明細上方可複製（TSV，貼進 Excel）或下載 CSV。</li>
+        <li>本頁會記住上次的分頁與所有輸入值（存在這台裝置的瀏覽器，鍵 loan_opts，固定一份不會越存越多，可用右上角 💾 備份）。按「重設為預設」會先詢問再清除；資料損壞時會自動補回預設值，儲存失敗會跳出提示。</li>
         </ul>
     </template>
 
@@ -224,6 +237,48 @@
                 totalInterest += interest;
             }
             return { rows, totalInterest, totalPaid: P + totalInterest };
+        }
+
+        // 貸款（可含寬限期與分段利率）：前 grace 期只繳利息；第 from2 期起改用 rate2（null = 不分段）。
+        // 本息平均：寬限後與每次利率改變時，用剩餘本金與剩餘期數重算月付；本金平均：寬限後本金 = 本金 ÷ (總期數 − 寬限期)
+        // grace = 0 且不分段（或 rate2 = rate）時與 amortize 完全一致
+        function amortizePlan(P, rate, months, type = 'annuity', grace = 0, rate2 = null, from2 = 0) {
+            const rows = []; let bal = P, totalInterest = 0, pay = 0, prevR = -1;
+            for (let n = 1; n <= months; n++) {
+                const r = (rate2 !== null && n >= from2 ? rate2 : rate) / 12 / 100, interest = bal * r;
+                let principal = 0;
+                if (n > grace) {
+                    if (type === 'annuity') {
+                        if (n === grace + 1 || r !== prevR) { const k = months - n + 1; pay = r === 0 ? bal / k : bal * r / (1 - Math.pow(1 + r, -k)); }
+                        principal = pay - interest;
+                    } else principal = P / (months - grace);
+                    prevR = r;
+                }
+                bal = n === months ? 0 : bal - principal;
+                rows.push({ n, payment: principal + interest, interest, principal, balance: Math.max(0, bal) });
+                totalInterest += interest;
+            }
+            return { rows, totalInterest, totalPaid: P + totalInterest };
+        }
+        // 寬限期 / 分段利率欄位檢查：回傳錯誤訊息，沒問題回傳 ''（rate2、from2 沒填請傳 null）
+        function checkLoanPlan(months, grace, rate2, from2) {
+            if (!Number.isInteger(grace) || grace < 0 || grace >= months) return `寬限期請填 0 到 ${months - 1} 的整數（月）`;
+            if ((rate2 === null) !== (from2 === null)) return '第二段年利率與「從第幾期起」要一起填，或兩者都留空';
+            if (rate2 !== null && !(rate2 >= 0 && Number.isInteger(from2) && from2 >= 1 && from2 <= months)) return `第二段利率不可為負，起始期數請填 1 到 ${months} 的整數`;
+            return '';
+        }
+        // 逐期明細 → 二維表（含標題列；金額四捨五入成整數，不帶千分位，方便貼進試算表）
+        const loanTable = (rows) => [['期', '應繳', '利息', '本金', '餘額'], ...rows.map(r => [r.n, Math.round(r.payment), Math.round(r.interest), Math.round(r.principal), Math.round(r.balance)])];
+
+        // 還原已存輸入：defs = { 欄位 id: 預設值字串 }；數字欄只收可轉數字且 |x| ≤ 1e12 的字串（空字串可），日期欄收 YYYY-MM-DD，其餘當文字（≤ 40 字），壞的補預設
+        function cleanOpts(raw, defs, modes) {
+            const o = raw && typeof raw === 'object' ? raw : {}, src = o.v && typeof o.v === 'object' ? o.v : {}, v = {};
+            for (const id of Object.keys(defs)) {
+                const d = defs[id], x = src[id], numeric = d === '' || isNum(d);
+                const good = typeof x === 'string' && (numeric ? x === '' || (isNum(x) && Math.abs(+x) <= 1e12) : /^\d{4}-\d{2}-\d{2}$/.test(d) ? /^\d{4}-\d{2}-\d{2}$/.test(x) : x.length <= 40);
+                v[id] = good ? x : d;
+            }
+            return { mode: modes.includes(o.mode) ? o.mode : modes[0], v, sub: o.sub && typeof o.sub === 'object' ? o.sub : {} };
         }
 
         // 複利：起始本金 + 每月投入，每月複利一次；回傳每年底的 { year, contributed, value }
@@ -451,7 +506,9 @@
             const mk = (cells, cls) => { const d = document.createElement('div'); d.className = 'li ' + (cls || ''); cells.forEach(c => { const s = document.createElement('span'); s.textContent = c; d.append(s); }); return d; };
             box.replaceChildren(mk(heads, 'h'), ...rows.map(r => mk(r)));
             $('#tblCard').hidden = false;
+            $('#tblAct').hidden = mode !== 'loan';
         }
+        let lastLoan = [];
 
         function render() {
             const out = $('#out');
@@ -484,15 +541,23 @@
             if (mode === 'loan') {
                 const P = num('p'), rate = num('rate'), years = num('years');
                 if (!(P > 0 && rate >= 0 && years > 0)) { out.textContent = '請輸入大於 0 的金額與年期，利率不可為負'; $('#tblCard').hidden = true; return; }
-                const months = Math.round(years * 12), a = amortize(P, rate, months, $('#type').value);
+                const months = Math.round(years * 12), type = $('#type').value, grace = num('grace') || 0;
+                const r2 = Number.isFinite(num('rate2')) ? num('rate2') : null, f2 = Number.isFinite(num('from2')) ? num('from2') : null;
+                const planErr = checkLoanPlan(months, grace, r2, f2);
+                if (planErr) { out.textContent = planErr; $('#tblCard').hidden = true; return; }
+                const plan = grace > 0 || r2 !== null, a = amortizePlan(P, rate, months, type, grace, r2, f2 || 0);
                 const first = a.rows[0], last = a.rows[months - 1];
+                lastLoan = a.rows;
                 out.append(
-                    Util.statRow($('#type').value === 'annuity' ? '每月應繳' : '首期應繳', money(first.payment), 'big'),
-                    ...($('#type').value === 'principal' ? [Util.statRow('末期應繳', money(last.payment))] : []),
+                    Util.statRow(type === 'annuity' && !plan ? '每月應繳' : '首期應繳', money(first.payment), 'big'),
+                    ...(grace > 0 ? [Util.statRow('寬限期後首期應繳', money(a.rows[grace].payment))] : []),
+                    ...(r2 !== null ? [Util.statRow(`第 ${f2} 期起應繳`, money(a.rows[f2 - 1].payment))] : []),
+                    ...(type === 'principal' ? [Util.statRow('末期應繳', money(last.payment))] : []),
                     Util.statRow('總利息', money(a.totalInterest)),
                     Util.statRow('總還款金額', money(a.totalPaid)),
                     Util.statRow('利息佔本金', (a.totalInterest / P * 100).toFixed(1) + ' %'),
                 );
+                if (plan) { const d = a.totalInterest - amortize(P, rate, months, type).totalInterest; out.append(Util.statRow(d >= 0 ? '比單一利率（無寬限）多付利息' : '比單一利率（無寬限）少付利息', money(Math.abs(d)), d > 0 ? 'bad' : 'ok')); }
                 $('#tblTitle').textContent = `逐期明細（共 ${months} 期）`;
                 table(['期', '應繳', '利息', '本金', '餘額'], a.rows.map(r => [r.n, money(r.payment), money(r.interest), money(r.principal), money(r.balance)]));
             } else {
@@ -654,7 +719,7 @@
         }
         function renderSub(out) {
             const g = SUBS[mode], sel = $('#sub');
-            if (sel.dataset.g !== mode) { sel.dataset.g = mode; sel.replaceChildren(...g.map(s => new Option(s.t, s.k))); }
+            if (sel.dataset.g !== mode) { sel.dataset.g = mode; sel.replaceChildren(...g.map(s => new Option(s.t, s.k))); if (g.some(s => s.k === savedSub[mode])) sel.value = savedSub[mode]; }
             const s = g.find(x => x.k === sel.value);
             document.querySelectorAll('#subForms > div').forEach(d => d.hidden = d.id !== 'sf_' + s.k);
             const v = subVals(s.k);
@@ -666,12 +731,36 @@
         }
         buildSubs();
 
-        document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
-            mode = b.dataset.mode;
-            document.querySelectorAll('[data-mode]').forEach(x => x.setAttribute('aria-pressed', x === b));
-            render();
-        });
-        document.querySelectorAll('input, select').forEach(i => { i.oninput = render; });
+        // ===== 記住輸入（loan_opts）、複製結果、逐期表匯出、重設 =====
+        const isNum = Util.isNum;
+        const DEFS = {}; document.querySelectorAll('input[id], select[id]').forEach(e => { if (e.id !== 'sub') DEFS[e.id] = e.value; });
+        const MODES = ['loan', 'invest', 'goal', 'buyrent', 'debt', 'house'];
+        let savedSub = {};
+        const setMode = (m) => { mode = m; document.querySelectorAll('[data-mode]').forEach(x => x.setAttribute('aria-pressed', x.dataset.mode === m)); };
+        function save() {
+            const v = {}; for (const id in DEFS) v[id] = document.getElementById(id).value;
+            if (mode === 'debt' || mode === 'house') savedSub[mode] = $('#sub').value;
+            Util.store.set('loan_opts', { mode, v, sub: savedSub });
+        }
+        function applyOpts(o) {
+            for (const [id, v] of Object.entries(o.v)) { const e = document.getElementById(id); e.value = v; if (e.tagName === 'SELECT' && e.value !== v) e.value = DEFS[id]; }
+            savedSub = o.sub; $('#sub').dataset.g = ''; setMode(o.mode);
+        }
+        applyOpts(cleanOpts(Util.store.get('loan_opts', null), DEFS, MODES));
+        const update = () => { render(); save(); };
+        document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { setMode(b.dataset.mode); update(); });
+        document.querySelectorAll('input, select').forEach(i => { i.oninput = update; });
+        $('#copyBtn').onclick = (ev) => {
+            const lines = [...$('#out').children].map(e => e.classList.contains('stat') ? e.children[0].textContent + '：' + e.children[1].textContent : e.textContent);
+            Util.copyWithFeedback(ev.target, [`${document.title} - ${document.querySelector(`[data-mode=${mode}]`).textContent}`, ...(lines.length ? lines : [$('#out').textContent])].join('\n'));
+        };
+        $('#tsvBtn').onclick = (ev) => Util.copyWithFeedback(ev.target, loanTable(lastLoan).map(r => r.join('\t')).join('\n'));
+        $('#csvBtn').onclick = () => { const [h, ...b] = loanTable(lastLoan); Util.download(new Blob(['﻿' + Util.csvStringify(h, b)], { type: 'text/csv' }), 'loan-schedule.csv'); };
+        $('#resetBtn').onclick = () => {
+            if (!confirm('會把所有分頁的輸入值還原成預設，並清除已記住的內容，無法復原。要繼續嗎？')) return;
+            try { localStorage.removeItem('loan_opts'); } catch (e) { }
+            applyOpts(cleanOpts(null, DEFS, MODES)); render();
+        };
         render();
     </script>
 </body>

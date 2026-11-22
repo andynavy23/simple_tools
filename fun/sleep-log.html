@@ -173,7 +173,7 @@
         <div class="card">
             <h2>資料管理</h2>
             <p class="note" id="count"></p>
-            <div class="row"><button class="sm" id="delOld">刪除一年前的紀錄</button><button class="sm" id="delAll">清除全部</button></div>
+            <div class="row"><button class="sm" id="expCsv">匯出 CSV</button><button class="sm" id="delOld">刪除一年前的紀錄</button><button class="sm" id="delAll">清除全部</button></div>
         </div>
     </div>
 
@@ -204,6 +204,7 @@
         <li>規律度是入睡時間的標準差：30 分鐘內算規律、60 分鐘內普通、更大則不規律。</li>
         <li>睡眠債只計「近 7 天內有記錄的夜晚」，沒記的日子不算；正值是不足、負值是盈餘。</li>
         <li>資料只存在本機瀏覽器，請用右上角「💾」備份。上限 3,650 筆（約 10 年），達到會拒絕新增並提示，請先「刪除一年前的紀錄」或刪單筆。</li>
+        <li>「匯出 CSV」（資料管理）：日期（起床日）/ 入睡 / 起床 / 時數 / 品質 / 備註，依日期由舊到新；備註開頭是 = + - @ 時加單引號避免被試算表當公式；匯出只讀取、不新增儲存資料。</li>
         <li>清除：每筆可刪；「資料管理」可刪一年前的紀錄、清除全部（會一併重設目標時數），都會先確認且無法復原。</li>
         </ul>
     </template>
@@ -277,6 +278,10 @@
         }
         const pruneOlder = (recs, today) => recs.filter(e => e.d >= day.shift(today, -365));
         const hm = (m) => `${Math.floor(Math.abs(m) / 60)} 小時 ${Math.round(Math.abs(m) % 60)} 分`;
+        // CSV：日期（起床日）/ 入睡 / 起床 / 時數 / 品質 / 備註，依日期舊到新；備註開頭是 = + - @ 時補單引號防公式注入
+        const csvGuard = (v) => { const s = String(v ?? ''); return /^[=+\-@\t\r]/.test(s) ? "'" + s : s; };
+        const sleepCsv = (list) => Util.csvStringify(['日期', '入睡', '起床', '時數', '品質', '備註'],
+            [...list].sort((a, b) => a.d.localeCompare(b.d)).map(e => [e.d, e.bt, e.wt, Math.round(durMin(e.d, e.bt, e.wt) / 60 * 100) / 100, e.q, csvGuard(e.n)]));
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -326,6 +331,7 @@
         document.querySelectorAll('.seg [data-n]').forEach(b => { b.onclick = () => { range = Number(b.dataset.n); render(); }; });
         $('#goal').onchange = () => { const v = parseFloat($('#goal').value); goal = cleanGoal(v); saveGoal(); render(); };
         $('#more').onclick = () => { shown += 30; render(); };
+        $('#expCsv').onclick = () => { if (!recs.length) { $('#count').textContent = '沒有可匯出的睡眠記錄'; return; } Util.download(new Blob(['﻿' + sleepCsv(recs)], { type: 'text/csv;charset=utf-8' }), `睡眠記錄_${today()}.csv`); };
         $('#delOld').onclick = () => { const keep = pruneOlder(recs, today()), n = recs.length - keep.length; if (n && confirm(`刪除一年前（${day.shift(today(), -365)} 之前）的 ${n} 筆睡眠紀錄？無法復原。`)) { recs = keep; stopEdit(); saveLog(); render(); } };
         $('#delAll').onclick = () => { if (recs.length && confirm(`清除全部 ${recs.length} 筆睡眠紀錄並重設目標時數？無法復原。`)) { recs = []; goal = 8; stopEdit(); saveLog(); saveGoal(); render(); } };
 

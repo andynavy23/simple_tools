@@ -245,7 +245,7 @@
         </ul>
         <h3>怎麼用</h3>
         <ol>
-        <li>選擇檔案或貼上內容，按「解析」。檔案若亂碼，按「改用 Big5 / GBK 重新解讀」或在「編碼」下拉改選。</li>
+        <li>選擇檔案（或把字幕檔拖進頁面）或貼上內容，按「解析」。檔案若亂碼，按「改用 Big5 / GBK 重新解讀」或在「編碼」下拉改選。</li>
         <li>在清單表格直接改時間（支援 <kbd>00:00:01,000</kbd>、<kbd>0:0:1.5</kbd>、<kbd>00:01.000</kbd>）與文字；可新增、刪除、排序。表格可左右捲動，第一欄（行號）固定。</li>
         <li>展開需要的功能：平移（可指定行號範圍）、兩點校正、幀率轉換、合併 / 拆分、搜尋取代、檢查。</li>
         <li>操作做錯可按「復原上一步」。</li>
@@ -526,11 +526,15 @@
             load(d.text, $('fmt').value);
             if (d.bad) say('這個檔案不是有效的 UTF-8，可能是 Big5 / GBK 編碼：請按下方按鈕重新解讀（目前顯示的可能是亂碼）', true);
         }
-        $('file').onchange = async () => {
-            const f = $('file').files[0]; if (!f) return;
+        async function loadFile(f) {
+            if (!f) return;
+            if (!/\.(srt|vtt|ass|ssa|sbv|txt)$/i.test(f.name)) { say('不支援的檔案類型（接受 .srt .vtt .ass .ssa .sbv .txt）', true); return; }
             if (f.size > 5 * 1024 * 1024) { say('檔案超過 5 MB，請改用較小的檔案', true); return; }
             baseName = f.name; raw = new Uint8Array(await f.arrayBuffer()); decodeAndLoad();
-        };
+        }
+        $('file').onchange = () => loadFile($('file').files[0]);
+        addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault(); });
+        addEventListener('drop', (e) => { if (e.dataTransfer?.files.length) { e.preventDefault(); loadFile(e.dataTransfer.files[0]); } });
         $('enc').onchange = () => { if (raw) decodeAndLoad(); };
         $('encBtns').onclick = (e) => { const b = e.target.closest('[data-enc]'); if (b && raw) { $('enc').value = b.dataset.enc; decodeAndLoad(); } };
         $('parse').onclick = () => { raw = null; $('encBtns').hidden = true; load($('src').value, $('fmt').value); };

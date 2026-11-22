@@ -4,6 +4,7 @@
 const fs = require('fs'), path = require('path'), assert = require('assert'), crypto = require('crypto');
 const root = path.join(__dirname, '..');
 global.Util = require(path.join(root, 'shared/js/util.js'));
+global.TwHol = require(path.join(root, 'shared/js/tw-holiday-data.js'));
 const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
 
 // 頁面外層用 const { ... } = Util 取得共用函式，這裡提供同樣的名稱
@@ -345,7 +346,12 @@ const NL = String.fromCharCode(10);
 
 // ===== 2048 =====
 {
-    const m = load('mini-games/game-2048.html', 'slideLine, move, spawn, canMove, maxTile, emptyBoard');
+    const m = load('mini-games/game-2048.html', 'N, slideLine, move, spawn, canMove, maxTile, emptyBoard, restoreGame');
+    {
+        const g = [[2, 0, 0, 0], [0, 4, 0, 0], [0, 0, 0, 0], [0, 0, 0, 2048]];
+        assert.deepEqual(m.restoreGame({ board: g, score: 10, won: true, daily: '2026-01-01' }), { board: g, score: 10, won: true, daily: '2026-01-01' });
+        for (const bad of [null, 5, {}, { board: 'x', score: 1 }, { board: g, score: -1 }, { board: g, score: 1.5 }, { board: [[2, 3, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]], score: 0 }, { board: g.slice(1), score: 0 }, { board: [[2, 0, 0], ...g.slice(1)], score: 0 }, { board: [null, ...g.slice(1)], score: 0 }]) assert.equal(m.restoreGame(bad), null);
+    }
     assert.deepEqual(m.slideLine([2, 2, 2, 2]), { line: [4, 4, 0, 0], gained: 8 });
     assert.deepEqual(m.slideLine([2, 2, 4, 0]), { line: [4, 4, 0, 0], gained: 4 });
     assert.deepEqual(m.slideLine([4, 2, 2, 0]), { line: [4, 4, 0, 0], gained: 4 });

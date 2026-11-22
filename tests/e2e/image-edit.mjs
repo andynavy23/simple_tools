@@ -13,6 +13,23 @@ try {
     }, sel, w, h);
     await put("#file", 400, 300); await page.evaluate(() => { if (scrollMode) document.querySelector("#mkScroll").click(); });
     await page.waitForFunction(() => document.querySelector('#fileMsg').textContent.includes('已載入'));
+    // 貼上 / 拖放圖片、非圖片檔
+    const feed = (type, name, kind) => page.evaluate(async (type, name, kind) => {
+        const c = document.createElement('canvas'); c.width = 64; c.height = 48;
+        const b = type === 'image/png' ? await new Promise(r => c.toBlob(r, 'image/png')) : new Blob(['x'], { type }), dt = new DataTransfer(); dt.items.add(new File([b], name, { type }));
+        document.querySelector('#fileMsg').textContent = '';
+        if (kind === 'paste') { const e = new Event('paste', { bubbles: true, cancelable: true }); Object.defineProperty(e, 'clipboardData', { value: dt }); document.dispatchEvent(e); }
+        else document.body.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    }, type, name, kind);
+    await feed('image/png', 'p.png', 'paste');
+    await page.waitForFunction(() => document.querySelector('#fileMsg').textContent.includes('已載入 64×48'));
+    await put("#file", 400, 300);
+    await feed('image/png', 'd.png', 'drop');
+    await page.waitForFunction(() => document.querySelector('#fileMsg').textContent.includes('已載入 64×48'));
+    await feed('text/plain', 'a.txt', 'drop');
+    await page.waitForFunction(() => document.querySelector('#fileMsg').textContent.includes('這不是圖片檔'));
+    await put("#file", 400, 300);
+    await page.waitForFunction(() => document.querySelector('#fileMsg').textContent.includes('已載入 400×300'));
     // 馬賽克：直接推一個 op 後重畫，檢查區域像素
     const px = (x, y) => page.evaluate((x, y) => [...document.querySelector('#mkCv').getContext('2d').getImageData(x, y, 1, 1).data], x, y);
     const before = await px(11, 11);

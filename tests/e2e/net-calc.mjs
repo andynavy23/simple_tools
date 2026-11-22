@@ -34,6 +34,12 @@ await tab(4); t = await txt('#dlOut'); assert.ok(t.includes('分') && t.includes
 await type('#dlSize', '100'); await page.select('#dlSu', 'MB'); await type('#dlBw', '8'); await type('#dlEff', '100'); assert.ok((await txt('#dlOut')).includes('1 分 40 秒'), await txt('#dlOut'));
 await type('#dlEff', '0'); assert.ok((await txt('#dlOut')).includes('請輸入'));
 assert.ok(await overflow() <= 1, 'dl 溢出');
+// 168 VLSM
+await tab(0); await type('#cidr', '192.168.1.0/24'); await type('#vlsmIn', ['業務 100', '工程 50', '會議 20', '管理 2'].join(String.fromCharCode(10)));
+t = await txt('#vlsmOut'); assert.ok(t.includes('192.168.1.0/25') && t.includes('192.168.1.128/26') && t.includes('192.168.1.192/27') && t.includes('192.168.1.224/30'), t);
+await type('#vlsmIn', ['A 100', 'B 100', 'C 10'].join(String.fromCharCode(10))); assert.ok((await txt('#vlsmOut')).includes('空間不足'));
+await type('#vlsmIn', 'oops'); assert.ok((await txt('#vlsmOut')).includes('第 1 行'));
+assert.ok(await overflow() <= 1, 'vlsm 溢出');
 await tab(5); assert.ok((await txt('#slaOut')).includes('8 小時 45 分 36 秒')); assert.ok((await txt('#slaTbl')).includes('99.999%'));
 await type('#slaL', '99.9, 99.9'); assert.ok((await txt('#slaSer')).includes('99.80010%'));
 await type('#slaP', '200'); assert.ok((await txt('#slaOut')).includes('0–100'));

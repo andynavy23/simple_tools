@@ -168,6 +168,7 @@
         <div class="card">
             <h2>結算</h2>
             <div id="result"></div>
+            <button id="copyBtn" style="margin-top:12px" disabled>複製結算文字</button>
             <button id="clear" style="margin-top:12px">全部清除</button>
         </div>
 
@@ -216,7 +217,7 @@
         <ol>
         <li>在「成員」輸入名字按「新增」（至少 2 人）。</li>
         <li>在「新增支出」填項目、金額，選「誰先付」，勾選分攤的人，按「加入這筆支出」。</li>
-        <li>下方「支出紀錄」可刪除錯誤的一筆；「結算」會列出每人可收回 / 應付，以及怎麼轉帳最省事。</li>
+        <li>下方「支出紀錄」可刪除錯誤的一筆；「結算」會列出每人可收回 / 應付，以及怎麼轉帳最省事；按「複製結算文字」可貼到 LINE 群組請大家轉帳（每行「小華 → 小明：NT$ 300」，沒有支出時按鈕停用）。</li>
         <li>小費快算：填帳單金額、小費 %、人數，可勾「每人湊整數」。</li>
         <li>租屋水電瓦斯：展開最下面的「租屋水電瓦斯分攤」，新增室友（填房間坪數才能用坪數分法），再「新增月份」：填電、水、瓦斯帳單，各自選分法；選「依用電度數」要填每人度數，電費也可留白只填電價（總額 = 總度數 × 電價）。按「記錄這個月」會存起來並加進累計；記錯就刪掉那個月重記。</li>
         </ol>
@@ -272,6 +273,15 @@
                 if (c.v === 0) creditors.shift();
             }
             return { net, transfers };
+        }
+
+        // 結算文字（貼到群組用）：每人可收 / 應付，加上轉帳清單「A → B：NT$ 120」；fmt 把「分」轉成金額字串
+        function settleText(people, net, transfers, total, fmt) {
+            const L = [`分帳結算（總支出 NT$ ${fmt(total)}）`];
+            people.forEach(p => L.push(`${p} ${net[p] > 0 ? '可收回 NT$ ' + fmt(net[p]) : net[p] < 0 ? '應付 NT$ ' + fmt(-net[p]) : '已結清'}`));
+            L.push(transfers.length ? '轉帳：' : '大家已經結清，不用轉帳');
+            transfers.forEach(t => L.push(`${t.from} → ${t.to}：NT$ ${fmt(t.amount)}`));
+            return L.join('\n');
         }
 
         // 小費快算（單位：分）：小費 = 帳單 × 百分比，四捨五入到分；每人 = 總額 ÷ 人數。roundUp 時每人無條件進位到整數元
@@ -413,6 +423,9 @@
         const saveU = () => store.set('bill_util', U);
         const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
 
+        let settleMsg = '';
+        $('#copyBtn').onclick = (ev) => Util.copyWithFeedback(ev.target, settleMsg);
+
         function render() {
             // 成員
             const pe = $('#people');
@@ -431,7 +444,8 @@
             });
             // 付款人 / 分攤者
             const keep = $('#payer').value;
-            $('#payer').replaceChildren(...S.people.map(p => new Option(p, p)));
+            $('#payer').replaceChildren(...(S.people.length ? S.people.map(p => new Option(p, p)) : [Object.assign(new Option('先新增成員', ''), { disabled: true })]));
+            $('#payer').style.minWidth = '8em';
             if (S.people.includes(keep)) $('#payer').value = keep;
             // 保留目前的勾選；新加入的成員預設勾選
             const checked = new Set([...document.querySelectorAll('#shares input:checked')].map(i => i.value));
@@ -459,10 +473,12 @@
             // 結算
             const rs = $('#result');
             rs.replaceChildren();
+            $('#copyBtn').disabled = !S.expenses.length;
             if (!S.expenses.length) { rs.append(el('div', '新增支出後會在這裡顯示結果', 'muted')); return; }
             const { net, transfers } = settle(S.people, S.expenses);
             const total = S.expenses.reduce((s, e) => s + e.amount, 0);
             rs.append(el('div', `總支出 ${money(total)}`, 'muted'));
+            settleMsg = settleText(S.people, net, transfers, total, money);
             S.people.forEach(p => {
                 const row = el('div', null, 'li');
                 row.append(el('span', p), el('b', (net[p] > 0 ? '可收回 ' : net[p] < 0 ? '應付 ' : '') + (net[p] === 0 ? '結清' : money(Math.abs(net[p]))), net[p] > 0 ? 'pos' : net[p] < 0 ? 'neg' : 'muted'));

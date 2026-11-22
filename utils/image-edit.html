@@ -185,7 +185,7 @@
         </ul>
         <h3>怎麼用</h3>
         <ol>
-            <li>上方選圖片，再點分頁。</li>
+            <li>上方選圖片（也可把圖片拖進頁面，或截圖後直接 Ctrl+V 貼上），再點分頁。</li>
             <li>遮蔽標註：選工具，在圖上拖曳框選區域（馬賽克 / 塗黑 / 框 / 箭頭）；「文字」是點一下放置。手機預設是「可捲動頁面」模式，要框選 / 畫圖時先按「✏️ 開始繪製」，要捲動時再按「✋ 捲動頁面」切回。</li>
             <li>九宮格：設欄列數，可打包 ZIP 或逐張下載。IG 發佈時要從最後一張開始傳，順序才會對。</li>
             <li>迷因 / YT 縮圖：輸入文字，調字級與顏色。</li>
@@ -310,14 +310,22 @@
                 const s = fitSize(bmp.width, bmp.height), cv = mk(s.w, s.h);
                 cv.getContext('2d').drawImage(bmp, 0, 0, s.w, s.h);
                 const resized = s.w !== bmp.width;
-                bmp.close(); src = cv;
                 $('#fileMsg').textContent = `已載入 ${bmp.width}×${bmp.height}` + (resized ? `（已縮小為 ${s.w}×${s.h}）` : '');
+                bmp.close(); src = cv;
                 resetMark(); refresh();
             } catch (e) {
                 $('#fileMsg').textContent = isHeic(file) ? '這個瀏覽器無法開啟 HEIC（只有 Safari 可以）。請先轉成 JPG 再選。' : '無法讀取這張圖片（格式不支援或檔案損毀）';
             }
         }
         $('#file').onchange = (e) => loadImg(e.target.files[0]);
+        // 整頁拖放 / 貼上（Ctrl+V 截圖）也餵給同一個載入函式
+        const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+        addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
+        addEventListener('drop', (e) => { if (hasFiles(e)) { e.preventDefault(); loadImg(e.dataTransfer.files[0]); } });
+        addEventListener('paste', (e) => {
+            const it = [...(e.clipboardData?.items || [])].find(i => i.kind === 'file' && i.type.startsWith('image/'));
+            if (it) { e.preventDefault(); loadImg(it.getAsFile()); }
+        });
 
         function need() { if (!src) { $('#fileMsg').textContent = '請先選擇圖片'; return false; } return true; }
 

@@ -62,7 +62,7 @@
     <div class="wrap">
         <a class="back" href="../index.html">‹ 工具箱</a>
         <h1>日期計算機</h1>
-        <p class="sub">相差幾天、幾天後是哪一天、這天是星期幾。工作日只排除週六日（不含國定假日）。</p>
+        <p class="sub">相差幾天、幾天後是哪一天、這天是星期幾。工作日預設只排除週六日，可勾選排除國定假日並計入補班。</p>
 
         <div class="card">
             <div class="tabs" role="tablist">
@@ -74,6 +74,7 @@
 
             <div class="pane" data-t="diff">
                 <div class="fgrid" style="margin-bottom:10px"><div><label for="d1">從</label><input type="date" id="d1"></div><div><label for="d2">到</label><input type="date" id="d2"></div></div>
+                <label class="row" style="gap:6px"><input type="checkbox" id="hd1"> 工作日排除國定假日並計入補班</label>
             </div>
             <div class="pane" data-t="add" hidden>
                 <div class="row"><label for="d3">起始日</label><input type="date" id="d3"></div>
@@ -82,6 +83,7 @@
                     <input type="number" id="amt" value="30" min="0" style="width:100px" aria-label="數量">
                     <select id="unit" aria-label="單位"><option value="d">天</option><option value="w">週</option><option value="m">個月</option><option value="y">年</option><option value="wd">個工作日</option></select>
                 </div>
+                <label class="row" id="hd2row" style="gap:6px" hidden><input type="checkbox" id="hd2"> 排除國定假日並計入補班</label>
             </div>
             <div class="pane" data-t="info" hidden>
                 <div class="row"><label for="d4">日期</label><input type="date" id="d4"></div>
@@ -137,6 +139,7 @@
         <ol>
         <li>「日期相差」：選「從」與「到」，看天數、週數、年月日與工作日數（起訖日都算）；順序反了會自動對調</li>
         <li>「日期加減」：選起始日、之後 / 之前、數量與單位（天、週、個月、年、個工作日）</li>
+        <li>工作日預設只排除週六日；勾選「排除國定假日並計入補班」會改用台灣國定假日表（放假日不算工作日、補班的週六日算工作日），和「台灣連假」工具同一份資料</li>
         <li>「日期資訊」：選一個日期，看星期、今年第幾天、ISO 週次、該月天數、是否閏年、距今幾天</li>
         <li>「生日 / 星座」下方可建立「家人朋友生日」清單：姓名、國曆或農曆生日、備註，顯示年齡、星座生肖、下次生日倒數（7 / 30 天內會標示），可複製文字或下載 ICS 匯入行事曆</li>
         <li>「生日 / 星座」：選出生日期（會記在本機，下次自動帶入），「計算到」預設今天；顯示年齡（年月日）、活了幾天、出生那天星期幾、星座與元素、農曆生日、天干地支、生肖、下次生日、第 10000 / 20000 天</li>
@@ -145,7 +148,7 @@
         <div class="eg">日期加減：起始日 <b>2026-10-03</b>、之後 <b>30</b> 天，結果是 <b>2026-11-02（週一）</b>。<br>日期相差：2026-10-03 到 2027-01-11 共 100 天，約 14 週 2 天，工作日 71 天。<br>生日 / 星座：出生日期 <b>2000-01-01</b>、計算到 <b>2026-10-03</b>，26 歲（26 年 9 個月 2 天）；出生那天是星期六；星座摩羯座；農曆生日 1999 年十一月 25 日，己卯年，屬兔（2000 年春節還沒到，生肖算前一年）。</div>
         <h3>小提醒</h3>
         <ul>
-        <li>工作日只排除週六日，不含國定假日與補班</li>
+        <li>工作日預設只排除週六日；勾選「排除國定假日並計入補班」才套用假日表，內建 2025–2027，年份範圍外會提示「超出內建範圍，僅排除週末」。不勾選時結果與先前完全相同；假日以政府公告為準，臨時調整請自行確認</li>
         <li>月份加減遇到月底（例如 1/31 加 1 個月）會取當月最後一天</li>
         <li>生日 / 星座只是日期計算，不做運勢；生肖與天干地支依<b>農曆新年</b>換算，1～2 月出生要特別注意</li>
         <li>2/29 出生的人，非閏年的生日算 2/28；農曆換算靠瀏覽器內建功能，太舊的瀏覽器可能無法顯示</li>
@@ -157,6 +160,7 @@
     </template>
 
     <script src="../shared/js/util.js"></script>
+    <script src="../shared/js/tw-holiday-data.js"></script>
     <script>
         const { day, statRow, store } = Util;
 
@@ -165,21 +169,22 @@
         const isLeap = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
         const daysInMonth = (y, m) => [31, isLeap(y) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1];
         const weekday = (s) => (((day.num(s) + 4) % 7) + 7) % 7;                 // 0 = 週日（1970-01-01 是週四）
-        const isWorkday = (s) => { const w = weekday(s); return w !== 0 && w !== 6; };
+        // map（選用，TwHol.buildMap 的結果）：有給就排除國定假日並計入補班，沒給只排除週六日
+        const isWorkday = (s, map) => { if (map) return !TwHol.isRest(map, s); const w = weekday(s); return w !== 0 && w !== 6; };
 
         const { addMonths, diffYMD } = day;                                       // 共用（shared/js/util.js）
 
         // 含起訖日的工作日數（a ≤ b）
-        function workdaysBetween(a, b) {
+        function workdaysBetween(a, b, map) {
             let n = 0;
-            for (let x = a, end = day.num(b); day.num(x) <= end; x = day.shift(x, 1)) if (isWorkday(x)) n++;
+            for (let x = a, end = day.num(b); day.num(x) <= end; x = day.shift(x, 1)) if (isWorkday(x, map)) n++;
             return n;
         }
 
         // 往後（n > 0）或往前（n < 0）數 n 個工作日；起始日本身不算
-        function addWorkdays(s, n) {
+        function addWorkdays(s, n, map) {
             const step = n < 0 ? -1 : 1;
-            for (let left = Math.abs(n); left > 0;) { s = day.shift(s, step); if (isWorkday(s)) left--; }
+            for (let left = Math.abs(n); left > 0;) { s = day.shift(s, step); if (isWorkday(s, map)) left--; }
             return s;
         }
 
@@ -332,6 +337,11 @@
         const valid = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
         const fmt = (s) => `${s}（週${WEEK[weekday(s)]}）`;
 
+        // 勾選時回傳假日表；起訖日（或加減的起始日）超出內建年份回傳 null（只排除週末）；沒勾回傳 undefined
+        let _hm;
+        function holMap(on, ...ds) { if (!on) return undefined; if (!ds.every(TwHol.inRange)) return null; return _hm || (_hm = TwHol.buildMap(TwHol.YEARS)); }
+        const rangeNote = () => Object.assign(document.createElement('p'), { className: 'note', textContent: '超出內建範圍（2025–2027），僅排除週末。' });
+
         function render() {
             document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.t === tab));
             document.querySelectorAll('.pane').forEach(p => { p.hidden = p.dataset.t !== tab; });
@@ -340,15 +350,20 @@
                 let a = $('#d1').value, b = $('#d2').value;
                 if (valid(a) && valid(b)) {
                     const rev = day.num(a) > day.num(b); if (rev) [a, b] = [b, a];
-                    const n = day.between(a, b), ymd = diffYMD(a, b);
-                    out.push(statRow('相差', `${n} 天`), statRow('約等於', `${Math.floor(n / 7)} 週 ${n % 7} 天`), statRow('年月日', `${ymd.y} 年 ${ymd.m} 個月 ${ymd.d} 天`), statRow('工作日數（含起訖日）', `${workdaysBetween(a, b)} 天`));
+                    const n = day.between(a, b), ymd = diffYMD(a, b), hm = holMap($('#hd1').checked, a, b);
+                    out.push(statRow('相差', `${n} 天`), statRow('約等於', `${Math.floor(n / 7)} 週 ${n % 7} 天`), statRow('年月日', `${ymd.y} 年 ${ymd.m} 個月 ${ymd.d} 天`), statRow('工作日數（含起訖日）', `${workdaysBetween(a, b, hm)} 天`));
+                    if (hm === null) out.push(rangeNote());
                     if (rev) out.push(Object.assign(document.createElement('p'), { className: 'note', textContent: '「到」比「從」早，已自動對調。' }));
                 }
             } else if (tab === 'add') {
                 const s = $('#d3').value, n = parseInt($('#amt').value, 10), sg = +$('#sign').value, u = $('#unit').value;
+                $('#hd2row').hidden = u !== 'wd';
+                let hm;
                 if (valid(s) && Number.isFinite(n) && n >= 0 && n <= 100000) {
-                    const r = u === 'd' ? day.shift(s, sg * n) : u === 'w' ? day.shift(s, sg * n * 7) : u === 'm' ? addMonths(s, sg * n) : u === 'y' ? addMonths(s, sg * n * 12) : addWorkdays(s, sg * n);
+                    if (u === 'wd') hm = holMap($('#hd2').checked, s);
+                    const r = u === 'd' ? day.shift(s, sg * n) : u === 'w' ? day.shift(s, sg * n * 7) : u === 'm' ? addMonths(s, sg * n) : u === 'y' ? addMonths(s, sg * n * 12) : addWorkdays(s, sg * n, hm);
                     out.push(statRow('起始日', fmt(s)), statRow('結果', fmt(r), 'ok'), statRow('相隔', `${Math.abs(day.between(s, r))} 天`));
+                    if (hm === null || (hm && !TwHol.inRange(r))) out.push(rangeNote());
                 }
             } else if (tab === 'zodiac') {
                 const b = $('#birth').value, t = $('#ztoday').value;

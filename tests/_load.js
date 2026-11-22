@@ -2,6 +2,7 @@
 const fs = require('fs'), path = require('path');
 const root = path.join(__dirname, '..');
 global.Util = global.Util || require(path.join(root, 'shared/js/util.js'));
+global.TwHol = global.TwHol || require(path.join(root, 'shared/js/tw-holiday-data.js'));
 const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
 const PRELUDE = 'const { rnd, shuffle, store, copyText, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex, seeded, parseCSV, toObjects, isNum, csvStringify, oid, ids } = Util;\n';
 const load = (file, names, from = '// --- pure ---', to = '// --- /pure ---') => {

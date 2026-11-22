@@ -280,6 +280,7 @@
         // --- /pure ---
 
         const $ = (id) => document.getElementById(id), esc = Util.esc, store = Util.store;
+        const say = (m) => Chrome.toast(m, 4000), warn = (m) => Chrome.toast(m, 4000, 'bad');     // 取代 alert：非阻塞提示，錯誤用警示色
         let trips = cleanTrips(store.get('trip_plans', [])), sel = trips[0] ? trips[0].id : '';
         let park = cleanPark(store.get('trip_parking', null)), timer = 0, routeRes = null;
         const saveTrips = () => store.set('trip_plans', trips);
@@ -319,23 +320,23 @@
             $('pCopy').onclick = (e) => Util.copyWithFeedback(e.target, tripText(t));
             $('pIcs').onclick = () => {
                 t.tz = Number($('pTz').value); saveTrips();
-                if (!t.items.length) return alert('這趟還沒有項目');
+                if (!t.items.length) return warn('這趟還沒有項目');
                 Util.download(new Blob([icsBuild(t, t.tz, Date.now())], { type: 'text/calendar' }), t.name.replace(/[\\/:*?"<>|]/g, '_') + '.ics');
             };
             body.querySelectorAll('[data-del]').forEach(x => x.onclick = () => { t.items = t.items.filter(i => i.id !== x.dataset.del); saveTrips(); renderPlan(); });
         }
         function addItem() {
             const t = curTrip(); if (!t) return;
-            if (t.items.length >= MAX_ITEMS) return alert(`這趟已達 ${MAX_ITEMS} 個項目上限，請先刪除一些`);
+            if (t.items.length >= MAX_ITEMS) return warn(`這趟已達 ${MAX_ITEMS} 個項目上限，請先刪除一些`);
             const it = cleanItem({ id: uid(), date: $('iDate').value, time: $('iTime').value, place: $('iPlace').value, note: $('iNote').value, mode: $('iMode').value, cost: $('iCost').value });
-            if (!it) return alert('請填地點（日期要在旅行範圍內）');
+            if (!it) return warn('請填地點（日期要在旅行範圍內）');
             t.items.push(it); saveTrips(); renderPlan();
         }
         $('tripSel').onchange = () => { sel = $('tripSel').value; renderPlan(); };
         $('tAdd').onclick = () => {
-            if (trips.length >= MAX_TRIPS) return alert(`最多 ${MAX_TRIPS} 趟旅行，請先刪除舊的`);
+            if (trips.length >= MAX_TRIPS) return warn(`最多 ${MAX_TRIPS} 趟旅行，請先刪除舊的`);
             const t = cleanTrips([{ id: uid(), name: $('tName').value, start: $('tStart').value, end: $('tEnd').value, cur: $('tCur').value, tz: 8, items: [] }])[0];
-            if (!t) return alert(`請選擇正確的日期範圍（結束不早於開始，最長 ${MAX_SPAN} 天）`);
+            if (!t) return warn(`請選擇正確的日期範圍（結束不早於開始，最長 ${MAX_SPAN} 天）`);
             trips.push(t); sel = t.id; saveTrips(); $('tName').value = ''; $('newTrip').open = false; renderPlan(); renderRouteTrips();
         };
         $('tripDel').onclick = () => {
@@ -410,9 +411,9 @@
                 };
                 $('pStart').onclick = () => {
                     let { lat, lng, acc } = draft; const ll = $('pLL').value.trim();
-                    if (ll) { const p = parseLatLng(ll); if (!p) return alert('經緯度格式要像 25.0478,121.5170'); if (p.lat !== lat || p.lng !== lng) acc = null; lat = p.lat; lng = p.lng; }
+                    if (ll) { const p = parseLatLng(ll); if (!p) return warn('經緯度格式要像 25.0478,121.5170'); if (p.lat !== lat || p.lng !== lng) acc = null; lat = p.lat; lng = p.lng; }
                     const s = cleanSpot({ id: uid(), floor: $('pFloor').value, zone: $('pZone').value, slot: $('pSlot').value, note: $('pNote').value, lat, lng, acc, t: Date.now(), photo: draft.photo }, true);
-                    park.cur = s; if (!savePark()) { park.cur = null; return alert('儲存失敗（空間不足？）；可先不附照片或清除歷史再試。'); } renderPark();
+                    park.cur = s; if (!savePark()) { park.cur = null; return warn('儲存失敗（空間不足？）；可先不附照片或清除歷史再試。'); } renderPark();
                 };
             }
             const cfgSave = () => { park.cfg = cleanPark({ cfg: { rate: $('cRate').value, cap: $('cCap').value, free: $('cFree').value } }).cfg; savePark(); };
@@ -445,10 +446,10 @@
             renderRouteTrips();
             $('rTrip').onchange = fillDays;
             $('rAddT').onclick = () => {
-                const t = trips.find(x => x.id === $('rTrip').value); if (!t) return alert('先在「行程」分頁建立一趟旅行');
-                if (t.items.length + names.length > MAX_ITEMS) return alert(`會超過每趟 ${MAX_ITEMS} 個項目上限`);
+                const t = trips.find(x => x.id === $('rTrip').value); if (!t) return warn('先在「行程」分頁建立一趟旅行');
+                if (t.items.length + names.length > MAX_ITEMS) return warn(`會超過每趟 ${MAX_ITEMS} 個項目上限`);
                 names.forEach((n, i) => { const it = cleanItem({ id: uid(), date: $('rDay').value, place: n, note: r.legs[i] != null && i < names.length - 1 ? `下一站 ${r.legs[i].toFixed(1)} km（直線）` : '' }); if (it) t.items.push(it); });
-                sel = t.id; saveTrips(); renderPlan(); alert('已加入（沒有時間的項目會排在當天最前面）');
+                sel = t.id; saveTrips(); renderPlan(); say('已加入（沒有時間的項目會排在當天最前面）');
             };
         };
         function fillDays() { const t = trips.find(x => x.id === ($('rTrip') || {}).value); if ($('rDay')) $('rDay').innerHTML = t ? dayList(t.start, t.end).map(d => `<option value="${d}">${d}</option>`).join('') : ''; }
