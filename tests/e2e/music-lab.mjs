@@ -47,6 +47,7 @@ await set('#rL', '6');
 await page.reload({ waitUntil: 'load' });
 assert.deepEqual(await visible(), ['spk']); assert.equal(await page.evaluate(() => document.querySelector('#rL').value), '6');
 page.removeAllListeners('dialog'); page.once('dialog', d => d.accept());
+await page.evaluate(() => sessionStorage.clear());   // 共用的「記住目前分頁」存在 sessionStorage；重設要從預設分頁開始，所以測試先清掉
 await Promise.all([page.waitForNavigation({ waitUntil: 'load' }), click('#reset')]);
 assert.equal(await page.evaluate(() => document.querySelector('#rL').value), '5'); assert.deepEqual(await visible(), ['chord']);
 assert.ok(await page.evaluate(() => document.scrollingElement.scrollWidth <= innerWidth + 1), '頁面出現橫向捲動');

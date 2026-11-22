@@ -137,6 +137,13 @@
         </div>
 
         <div class="card">
+            <h2>模擬 N 次看分布 <span class="muted" id="simN" style="font-weight:400;font-size:14px"></span></h2>
+            <div class="row"><label for="simCnt">次數（1–1,000,000）</label><input id="simCnt" type="number" min="1" max="1000000" step="1" value="100000" style="width:120px"><button class="sm" id="simGo">開始模擬</button><button class="sm" id="simStop" hidden>中止</button></div>
+            <p class="muted" id="simMsg" style="margin:6px 0"></p>
+            <div class="hist" id="simHist" style="margin-bottom:22px"></div>
+        </div>
+
+        <div class="card">
             <h2>最近 20 次</h2>
             <div class="log" id="log"></div>
         </div>
@@ -165,6 +172,7 @@
         <ul>
         <li>最多保留最近 500 次紀錄（超過會淘汰最舊的），只存在這個瀏覽器；按「清除紀錄」可全部刪除，會先確認、無法復原。</li>
         <li>換顆數或面數，分佈圖只會統計相同設定的紀錄。</li>
+        <li>「模擬 N 次看分布」：用目前的顆數與面數一次擲 N 次（1–1,000,000，分批執行、可隨時「中止」），畫出總和分佈並和理論平均對照；次數越多越接近鐘形。模擬結果不存檔、不影響上方的歷史紀錄，換顆數或面數或重新整理就清空。</li>
         </ul>
     </template>
 
@@ -185,6 +193,15 @@
         // 歷史驗證：欄位要合法、點數在 1..sides、最多留最近 500 筆
         const MAX_HIST = 500;
         const cleanHistory = (h) => Array.isArray(h) ? h.filter(x => !!x && Number.isInteger(x.n) && x.n >= 1 && x.n <= 6 && [4, 6, 8, 10, 12, 20, 100].includes(x.sides) && Number.isInteger(x.mod) && Array.isArray(x.faces) && x.faces.length === x.n && x.faces.every(f => Number.isInteger(f) && f >= 1 && f <= x.sides)).slice(-MAX_HIST) : [];
+        // 模擬：擲 c 次 n 顆 sides 面骰，把總和累計進 acc（{ 總和: 次數 }）；rand 為 Util.seeded 的函式
+        function simDice(rand, acc, n, sides, c) {
+            for (let i = 0; i < c; i++) { let s = 0; for (let j = 0; j < n; j++) s += 1 + rand.int(sides); acc[s] = (acc[s] || 0) + 1; }
+        }
+        // 模擬結果的平均與理論平均 n(sides+1)/2
+        function simMean(acc, n, sides) {
+            let c = 0, s = 0; for (const k in acc) { c += acc[k]; s += k * acc[k]; }
+            return { count: c, mean: c ? s / c : 0, theory: n * (sides + 1) / 2 };
+        }
         // --- /pure ---
 
         const $ = (s) => document.querySelector(s);
@@ -206,19 +223,21 @@
             $('#sum').textContent = faces.length > 1 || mod ? `總和 ${sum + mod}${mod ? `（${sum} ${mod > 0 ? '+' : '−'} ${Math.abs(mod)}）` : ''}` : '';
         }
 
-        function renderStats() {
-            const cur = history.filter(h => h.n === +$('#count').value && h.sides === +$('#sides').value);
-            const t = tally(cur.map(h => h.faces.reduce((a, b) => a + b, 0)));
+        function drawHist(el, t) {
             const lo = +$('#count').value, hi = +$('#count').value * +$('#sides').value;
             const keys = []; for (let k = lo; k <= hi && keys.length < 60; k++) keys.push(k);
             const max = Math.max(1, ...Object.values(t));
-            $('#hist').replaceChildren(...keys.map(k => {
+            el.replaceChildren(...keys.map(k => {
                 const bar = document.createElement('div');
                 bar.style.height = ((t[k] || 0) / max * 100) + '%';
                 bar.title = `${k}：${t[k] || 0} 次`;
                 if (keys.length <= 30 || k % 5 === 0) { const s = document.createElement('small'); s.textContent = k; bar.append(s); }
                 return bar;
             }));
+        }
+        function renderStats() {
+            const cur = history.filter(h => h.n === +$('#count').value && h.sides === +$('#sides').value);
+            drawHist($('#hist'), tally(cur.map(h => h.faces.reduce((a, b) => a + b, 0))));
             $('#n').textContent = `（${$('#count').value} 顆 d${$('#sides').value}，共 ${cur.length} 次）`;
             $('#log').replaceChildren(...history.slice(-20).reverse().map(h => {
                 const row = document.createElement('div');
@@ -239,7 +258,27 @@
             renderStats();
         };
         $('#clear').onclick = () => { if (history.length && !confirm('清除全部擲骰紀錄與統計？')) return; history = []; Util.store.set('dice_history', history); renderStats(); };
-        $('#count').onchange = $('#sides').onchange = renderStats;
+        // 模擬：分批執行、可中止，結果不存檔（換顆數 / 面數時清空）
+        let simRun = null;
+        const simClear = () => { if (simRun) simRun.cancel(); $('#simHist').replaceChildren(); $('#simN').textContent = ''; $('#simMsg').textContent = ''; };
+        $('#simStop').onclick = () => { if (simRun) simRun.cancel(); };
+        $('#simGo').onclick = () => {
+            if (simRun) return;
+            const c = Math.floor(Number($('#simCnt').value)), n = +$('#count').value, sides = +$('#sides').value;
+            if (!(c >= 1 && c <= 1000000)) { $('#simMsg').textContent = '次數要是 1–1,000,000'; return; }
+            const acc = {}, rand = Util.seeded(Date.now() + '' + Math.random());
+            $('#simGo').hidden = true; $('#simStop').hidden = false;
+            simRun = Util.runChunks(c, (a, b) => simDice(rand, acc, n, sides, b - a), {
+                onProgress: (d, t) => { $('#simMsg').textContent = `模擬中… ${d.toLocaleString()} / ${t.toLocaleString()}`; drawHist($('#simHist'), acc); },
+                onDone: (cancelled) => {
+                    simRun = null; $('#simGo').hidden = false; $('#simStop').hidden = true; drawHist($('#simHist'), acc);
+                    const m = simMean(acc, n, sides);
+                    $('#simN').textContent = `（${n} 顆 d${sides}，${cancelled ? '已中止，' : ''}共 ${m.count.toLocaleString()} 次）`;
+                    $('#simMsg').textContent = `平均總和 ${m.mean.toFixed(2)}（理論 ${m.theory}，不含加成）`;
+                },
+            });
+        };
+        $('#count').onchange = $('#sides').onchange = () => { simClear(); renderStats(); };
         renderStats();
     </script>
 </body>

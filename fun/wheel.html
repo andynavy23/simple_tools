@@ -99,6 +99,14 @@
             <textarea id="items" maxlength="5000"></textarea>
             <p class="note">加權重：在名稱後面寫 <b>*數字</b>，例如「燒肉*3」代表被選中機率是其他的 3 倍。清單會自動儲存在這個瀏覽器。</p>
         </div>
+
+        <div class="card">
+            <h2>模擬 N 次看分布</h2>
+            <p class="note">用目前的選項與權重（不含「抽中後移除」）抽 N 次，看實際比例和理論機率差多少。</p>
+            <div class="presets" style="align-items:center"><label for="simCnt" style="margin:0">次數（1–1,000,000）</label><input id="simCnt" type="number" min="1" max="1000000" step="1" value="10000" style="width:120px"><button class="sm" id="simGo">開始模擬</button><button class="sm" id="simStop" hidden>中止</button></div>
+            <p class="muted" id="simMsg" style="margin:6px 0"></p>
+            <div id="simOut"></div>
+        </div>
     </div>
 
     <template id="help">
@@ -122,6 +130,7 @@
         <ul>
         <li>勾選「抽中後從本輪移除」：抽中的選項會從轉盤拿掉，輪流請客 / 分配任務就不會重複；只剩 1 個時會提示，全部抽完後按「重置本輪」重來。改選項或載入常用清單也會重置本輪。沒勾選時機率與權重不變。</li>
         <li>轉盤下方列出本次開啟頁面期間的結果（最多 50 筆，超過會淘汰最舊的；只在畫面上，不存檔，重新整理就清空），不影響已儲存的選項。</li>
+        <li>「模擬 N 次看分布」：不轉盤，直接依目前選項與權重抽 N 次（1–1,000,000，分批執行、可「中止」），列出每個選項的實際次數與比例，對照理論機率；次數少時偏離很正常。結果不存檔，重新整理就清空。</li>
         <li>轉盤上名稱超過 8 個字會被縮短，結果仍顯示完整名稱。</li>
         <li>先決定結果再讓轉盤停到該格，機率與權重一致。</li>
         <li>清單自動存在這個瀏覽器，文字框最多 5000 字；要清除就清空文字框（只有這一筆資料），可用 💾 備份。</li>
@@ -148,9 +157,17 @@
             '週末活動': ['看電影', '爬山', '逛街', '宅在家', '咖啡廳', '桌遊', '運動', '郊遊', '補眠'],
             '運動': ['慢跑', '游泳', '瑜珈', '重訓', '騎單車', '羽球', '籃球', '健走'],
         };
+        // 依權重抽一個：r 為 [0,1) 的亂數，回傳選項序號
+        function pickIndex(items, r) {
+            const total = items.reduce((s, i) => s + i.w, 0); let x = r * total, k = 0;
+            while (k < items.length - 1 && x >= items[k].w) x -= items[k++].w;
+            return k;
+        }
+        // 模擬 c 次，累計進 counts（陣列，與 items 對應）；rand 為 Util.seeded 的函式
+        function simPick(items, rand, counts, c) { for (let i = 0; i < c; i++) counts[pickIndex(items, rand())]++; }
         // --- /pure ---
 
-        const $ = (s) => document.querySelector(s);
+        const $ =(s) => document.querySelector(s);
         const ta = $('#items'), cv = $('#wheel'), ctx = cv.getContext('2d');
         const btn = $('#spin'), out = $('#result');
         const KEY = 'wheel_items', TAU = Math.PI * 2;
@@ -241,6 +258,27 @@
         $('#once').onchange = () => { if (!spinning) { out.textContent = ''; draw(); } };
         $('#resetRound').onclick = () => { if (spinning) return; resetRound(); out.textContent = ''; draw(); };
         draw();
+
+        // 模擬（分批、可中止；結果不存檔）
+        let simRun = null;
+        $('#simStop').onclick = () => { if (simRun) simRun.cancel(); };
+        $('#simGo').onclick = () => {
+            if (simRun) return;
+            const items = parseItems(ta.value), c = Math.floor(Number($('#simCnt').value)), msg = $('#simMsg');
+            if (items.length < 2) { msg.textContent = '請至少輸入 2 個選項'; return; }
+            if (!(c >= 1 && c <= 1000000)) { msg.textContent = '次數要是 1–1,000,000'; return; }
+            const counts = items.map(() => 0), total = items.reduce((s, i) => s + i.w, 0), rand = Util.seeded(Date.now() + '' + Math.random());
+            const show = () => {
+                const n = counts.reduce((a, b) => a + b, 0);
+                $('#simOut').replaceChildren(...items.map((it, i) => Util.statRow(it.name.slice(0, 20), `${counts[i].toLocaleString()} 次　${n ? (counts[i] / n * 100).toFixed(2) : '0.00'}%（理論 ${(it.w / total * 100).toFixed(2)}%）`)));
+                return n;
+            };
+            $('#simGo').hidden = true; $('#simStop').hidden = false;
+            simRun = Util.runChunks(c, (a, b) => simPick(items, rand, counts, b - a), {
+                onProgress: (d, t) => { msg.textContent = `模擬中… ${d.toLocaleString()} / ${t.toLocaleString()}`; },
+                onDone: (cancelled) => { simRun = null; $('#simGo').hidden = false; $('#simStop').hidden = true; const n = show(); msg.textContent = `${cancelled ? '已中止' : '完成'}・共 ${n.toLocaleString()} 次`; },
+            });
+        };
     </script>
 </body>
 

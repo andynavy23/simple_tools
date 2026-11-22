@@ -73,6 +73,8 @@ node tests/e2e/visual_audit.mjs [片段]  # 全站視覺稽核（淺 / 深色各
 
 0. 登錄用 `node tests/register.mjs temp_reg_*.json`（規格檔寫在 repo 根目錄的 `temp_reg_<代號>.json`，欄位見 `tests/register.mjs` 檔頭）：一次補好首頁卡片、README、TOOLS，並刪掉 IDEAS.md 已完成的編號；不用手動改四個檔。規格欄位另有：`ic`（首頁線條圖示名，須在 `index.html` 的 `ICONS` 內，沒填就退回 emoji）、`remove`（合併掉的頁面路徑陣列，從首頁 / README / TOOLS 刪掉對應卡片與列；頁面檔本身要先自己刪）。`cat` 支援 遊戲輔助 / 工具 / 小遊戲 / 趣味。**用 Bash heredoc 寫含反斜線的程式（正規表示式、`\n`）會被吃掉，改用 Write / Edit 工具。**
 
+0.5. 新增 / 刪除 / 改名頁面後執行 `node tests/gen-sitemap.js` 重新產生 `sitemap.xml`（同時寫 `robots.txt`；有 `noindex` 的頁面不列）；`tests/new-sitemap.test.js` 會檢查兩者與首頁卡片一致。
+
 1. 先查 `TOOLS.md`：是既有工具的子集或延伸 → 擴充它（指名要加的分頁），不另開新檔；兩個工具共用同一份資料 / 輸入 → 合併。
 2. 新增：依分類建 `<category>/xxx.html`（含 chrome.js 與 help 模板），並在 `index.html`（複製一張 `<a class="card">`，填 `data-cat` / `data-topic`）、`README.md` 表格、`TOOLS.md`、`tests/tools.test.js` 各補一筆；若點子來自 `IDEAS.md`，做完把該項從 `IDEAS.md` 刪除。
 3. 刪除、改名或合併頁面時，同步改上述四處（合併用 `register.mjs` 的 `remove`），舊 localStorage 鍵**沿用同名**讓新頁面直接讀（鍵是全站共用的，不需搬資料），新頁的 `st-keys` 要全列；把相關測試的 `load(...)` 路徑與 e2e 改指向新頁、不刪斷言。不留轉址頁，舊網址會失效。合併時把各頁腳本包進 IIFE 或加前綴、id 加前綴、CSS 用 `@scope` 或前綴，第一次切到分頁才初始化。

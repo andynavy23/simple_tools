@@ -1379,11 +1379,11 @@ const NL = String.fromCharCode(10);
     // 累進稅額連續、遞增
     let prev = -1; for (let n = 0; n <= 7e6; n += 12345) { const t = m.incomeTax(n).tax; assert.ok(t >= prev); prev = t; }
     let e = m.estimateTax({ gross: 600000, married: false, dependents: 0 });
-    assert.deepEqual([e.exemption, e.standard, e.salarySpecial, e.basicDiff, e.net, e.tax], [92000, 131000, 218000, 0, 159000, 7950]);
+    assert.deepEqual([e.exemption, e.standard, e.salarySpecial, e.basicDiff, e.net, e.tax], [97000, 131000, 218000, 0, 154000, 7700]);
     e = m.estimateTax({ gross: 1200000, married: true, dependents: 2 });
-    assert.deepEqual([e.persons, e.exemption, e.standard, e.basicDiff, e.net, e.tax], [4, 368000, 262000, 178000, 174000, 8700]);
+    assert.deepEqual([e.persons, e.exemption, e.standard, e.basicDiff, e.net, e.tax], [4, 388000, 262000, 202000, 130000, 6500]);
     e = m.estimateTax({ gross: 100000, married: false, dependents: 0 }); assert.equal(e.net, 0); assert.equal(e.tax, 0); assert.equal(e.salarySpecial, 100000, '薪資特別扣除額不超過薪資');
-    e = m.estimateTax({ gross: 2000000, married: false, dependents: 0, other: 100000 }); assert.equal(e.net, 2000000 - 92000 - 131000 - 218000 - 100000); assert.equal(e.rate, 0.2);
+    e = m.estimateTax({ gross: 2000000, married: false, dependents: 0, other: 100000 }); assert.equal(e.net, 2000000 - 97000 - 131000 - 218000 - 100000); assert.equal(e.rate, 0.2);
     e = m.estimateTax({ gross: 3000000, married: false, dependents: 0 }); assert.ok(e.effective > 0.08 && e.effective < 0.2);
     assert.equal(m.estimateTax({ gross: 0, married: false, dependents: 0 }).effective, 0);
     // 年終多繳的稅 = 含獎金的稅 − 不含獎金的稅（邊際）

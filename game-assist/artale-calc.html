@@ -43,6 +43,7 @@
 
 
         <div class="card" id="out1"></div>
+        <div class="card" id="sim1"></div>
         </section>
 
         <section id="pExp" hidden>
@@ -79,6 +80,7 @@
 
 
         <div class="card" id="out3"></div>
+        <div class="card" id="sim3"></div>
         </section>
     </div>
 
@@ -166,7 +168,8 @@
         <h3>小提醒</h3>
         <ul>
         <li>所有結果都是長期平均的估算，實際運氣會有波動。</li>
-        <li>本頁不儲存任何資料，重新整理就回到預設值。</li>
+        <li>「捲軸期望值」與「抽卡機率」分頁下方有「模擬」：填模擬次數（1–200,000，可填亂數種子重現結果），按「開始模擬」用亂數實際跑，列出平均與 50% / 80% / 95% / 99% 情況的花費或抽數，並和理論期望值對照；分批執行不會卡住頁面，可隨時「中止」看部分結果。模擬是運氣的展示，理論期望值才是長期平均。</li>
+        <li>本頁不儲存任何資料（模擬結果也不存），重新整理就回到預設值。</li>
         </ul>
     </template>
 
@@ -269,6 +272,37 @@
                 total += w;
             }
             return out;
+        }
+
+        // ---------- 模擬（rand 為 Util.seeded 回傳的函式，傳回 [0,1)）----------
+        // 衝捲一次：要成功 k 次；失敗有 d 機率損毀（成功次數歸零、要重買裝備）。回傳 { n 張數, lost 損毀件數, capped 是否撞到上限 }
+        function simScrollOnce(rand, k, p, d, cap = 20000) {
+            let s = 0, n = 0, lost = 0;
+            while (n < cap) {
+                n++;
+                if (rand() < p) { if (++s >= k) return { n, lost }; }
+                else if (d > 0 && rand() < d) { lost++; s = 0; }
+            }
+            return { n, lost, capped: true };
+        }
+        // 抽卡一次：回傳 [第一次出貨的抽數, 拿到 UP 的抽數]（up = 1 代表沒有歪；guar = 歪了之後下一個必為 UP）
+        function simGachaOnce(rand, rates, up, guar, cap = 100000) {
+            let n = 0, i = 0, any = 0, lostUp = false;
+            while (n < cap) {
+                n++; i++;
+                if (rand() < rates[i - 1]) {
+                    i = 0; if (!any) any = n;
+                    if (up >= 1 || (guar && lostUp) || rand() < up) return [any, n];
+                    lostUp = true;
+                }
+            }
+            return [any || n, n];
+        }
+        // 樣本統計：平均、最小 / 最大、各百分位
+        function sampleStats(arr) {
+            const a = Float64Array.from(arr).sort(), n = a.length, q = (x) => a[Math.min(n - 1, Math.max(0, Math.ceil(x * n) - 1))];
+            let s = 0; for (const v of a) s += v;
+            return { n, mean: s / n, min: a[0], max: a[n - 1], q50: q(0.5), q80: q(0.8), q90: q(0.9), q95: q(0.95), q99: q(0.99) };
         }
         // --- /pure ---
 
@@ -388,6 +422,63 @@
         document.querySelectorAll('#pGacha input').forEach(i => i.oninput = render);
         render();
         })();
+
+        // 模擬面板（捲軸、抽卡共用）：make(n, rand) 回傳 { error } 或 { work(a, b), done, result() → 節點陣列 }；分批執行、可中止、不存檔
+        function simPanel(host, make) {
+            host.innerHTML = '<h2>模擬</h2><p class="note">用亂數實際跑 N 次，看花費或抽數的分布，和上面的期望值對照。種子相同會得到同樣結果。</p>'
+                + '<div class="fgrid"><div><label>模擬次數（1–200,000）</label><input class="n" type="number" min="1" max="200000" step="1" value="10000"></div>'
+                + '<div><label>亂數種子（留空 = 隨機）</label><input class="seed" maxlength="40" autocomplete="off"></div></div>'
+                + '<div style="display:flex;gap:8px;margin-top:12px"><button class="primary go">開始模擬</button><button class="stop" hidden>中止</button></div>'
+                + '<p class="note msg" role="alert"></p><div class="res"></div>';
+            const q = (s) => host.querySelector(s); let run = null;
+            q('.stop').onclick = () => { if (run) run.cancel(); };
+            q('.go').onclick = () => {
+                if (run) return;
+                const n = Math.floor(Number(q('.n').value)), msg = q('.msg'); msg.textContent = '';
+                if (!(n >= 1 && n <= 200000)) { msg.textContent = '模擬次數要是 1–200,000'; return; }
+                const seed = q('.seed').value.trim() || Date.now().toString(36) + Math.random().toString(36).slice(2, 6), job = make(n, Util.seeded(seed));
+                if (job.error) { msg.textContent = job.error; return; }
+                q('.go').hidden = true; q('.stop').hidden = false;
+                run = Util.runChunks(n, job.work, {
+                    onProgress: (d, t) => { msg.textContent = `模擬中… ${d} / ${t}`; },
+                    onDone: (cancelled) => {
+                        run = null; q('.go').hidden = false; q('.stop').hidden = true;
+                        msg.textContent = `${cancelled ? '已中止（部分結果）' : '完成'}・${job.done} 次・種子 ${seed}`;
+                        q('.res').replaceChildren(...job.result());
+                    },
+                });
+            };
+        }
+        const nfS = (v, d = 1) => v.toLocaleString('zh-TW', { maximumFractionDigits: d });
+        simPanel($('#sim1'), (n, rand) => {
+            const k = Math.floor(num('k')), p = num('p') / 100, d = num('d') / 100, c = num('c'), price = num('price');
+            if (!(k >= 1 && k <= 50) || !(p > 0 && p <= 1) || !(d >= 0 && d <= 1) || !(c >= 0) || !(price >= 0)) return { error: '請先修正上方輸入' };
+            const costs = new Float64Array(n), att = new Float64Array(n); let capped = 0;
+            const job = { done: 0, work(a, b) { for (let i = a; i < b; i++) { const r = simScrollOnce(rand, k, p, d); costs[i] = r.n * c + r.lost * price; att[i] = r.n; if (r.capped) capped++; } job.done = b; },
+                result() {
+                    const cs = sampleStats(costs.subarray(0, job.done)), as = sampleStats(att.subarray(0, job.done)), out = [
+                        row('平均用捲軸', `${nfS(as.mean, 2)} 張　（理論 ${nfS(expected(k, p, d, 1, 0), 2)}）`),
+                        row('平均總花費', `${nfS(cs.mean, 2)}　（理論 ${nfS(expected(k, p, d, c, price), 2)}）`, 'big'),
+                        row('50% 的人花費不超過', nfS(cs.q50, 0)), row('80%', nfS(cs.q80, 0)), row('95%', nfS(cs.q95, 0)), row('99%', nfS(cs.q99, 0)),
+                        row('最幸運 / 最倒楣', `${nfS(cs.min, 0)} / ${nfS(cs.max, 0)}`)];
+                    if (capped) { const t = document.createElement('p'); t.className = 'note'; t.textContent = `有 ${capped} 次超過單次 20,000 張的上限被截斷，平均會偏低。`; out.push(t); }
+                    return out;
+                } };
+            return job;
+        });
+        simPanel($('#sim3'), (n, rand) => {
+            const base = num('base') / 100, hard = Math.round(num('hard')), soft = Math.round(num('soft')) || 0, step = num('step') / 100, up = num('up') / 100, cost = num('cost') || 0, guar = $('#guar').checked;
+            if (!(base > 0 && base <= 1) || !(hard >= 1 && hard <= 500) || !(soft >= 0 && soft <= hard) || !(step >= 0) || !(up >= 0 && up <= 1) || !(cost >= 0)) return { error: '請先修正上方輸入' };
+            const rates = pullRates(base, hard, soft, step), pmf = firstHitPmf(rates), anyA = new Float64Array(n), upA = new Float64Array(n);
+            const job = { done: 0, work(a, b) { for (let i = a; i < b; i++) { const r = simGachaOnce(rand, rates, up, guar); anyA[i] = r[0]; upA[i] = r[1]; } job.done = b; },
+                result() {
+                    const part = (title, arr, theory) => { const s = sampleStats(arr.subarray(0, job.done)), f = (v) => `${nfS(v, 0)} 抽${cost ? `（約 ${nfS(v * cost, 0)}）` : ''}`;
+                        const h = document.createElement('h2'); h.className = 'sec'; h.textContent = title;
+                        return [h, row('平均抽數', `${nfS(s.mean)} 抽　（理論 ${nfS(theory)}）`), row('50% 的人在', f(s.q50)), row('80%', f(s.q80)), row('90%', f(s.q90)), row('99%', f(s.q99)), row('最幸運 / 最倒楣', `${s.min} / ${s.max} 抽`)]; };
+                    return up < 1 ? [...part('任意一個 5★', anyA, expectation(pmf)), ...part('指定的 UP 角色', upA, expectation(upPmf(pmf, up, guar)))] : part('任意一個 5★（= UP）', anyA, expectation(pmf));
+                } };
+            return job;
+        });
 
         // 分頁
         const tabs = document.querySelectorAll('#tabs button');

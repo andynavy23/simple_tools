@@ -229,6 +229,21 @@
         return rand01;
     }
 
+    // 分批執行大量迴圈（模擬用）：work(from, to) 處理 [from, to)，每批約 ms 毫秒後讓出給瀏覽器（setTimeout）。
+    // opt: { ms=20, onProgress(done,total), onDone(cancelled) }；回傳 { cancel() }，中止後不再呼叫 work
+    function runChunks(total, work, opt = {}) {
+        let done = 0, dead = false;
+        const step = () => {
+            if (dead) return;
+            const t = Date.now();
+            do { const to = Math.min(total, done + 200); work(done, to); done = to; } while (done < total && Date.now() - t < (opt.ms || 20));
+            if (opt.onProgress) opt.onProgress(done, total);
+            if (done >= total) { if (opt.onDone) opt.onDone(false); } else setTimeout(step, 8);
+        };
+        setTimeout(step, 0);
+        return { cancel() { if (dead || done >= total) return; dead = true; if (opt.onDone) opt.onDone(true); } };
+    }
+
     // Fisher-Yates 洗牌，回傳新陣列，不改動原陣列
     function shuffle(arr) {
         const a = [...arr];
@@ -280,7 +295,7 @@
         },
     };
 
-    const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex, seeded, parseCSV, toObjects, isNum, csvStringify, oid, ids };
+    const Util = { rnd, shuffle, copyText, copyWithFeedback, store, esc, day, statRow, tone, beep, speak, parseNames, download, sha256, randomHex, seeded, runChunks, parseCSV, toObjects, isNum, csvStringify, oid, ids };
     if (typeof module !== 'undefined' && module.exports) module.exports = Util;
     else root.Util = Util;
 })(typeof window !== 'undefined' ? window : globalThis);

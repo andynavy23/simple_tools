@@ -46,6 +46,7 @@ assert.strictEqual(await page.evaluate(() => document.querySelector('#tw').check
 // 壞資料容錯
 for (const bad of ['null', '[1,2]', '"x"', '{"dir":"zz","tw":"yes"}', '{oops']) {
     await page.evaluate((b) => localStorage.setItem('hanzi_opts', b), bad);
+    await page.evaluate(() => sessionStorage.clear());   // 共用的記住分頁存在 sessionStorage，壞資料測試要從乾淨 session 開始
     await page.reload({ waitUntil: 'load' });
     assert.strictEqual(await page.evaluate(() => document.querySelector('#dS2t').getAttribute('aria-pressed')), 'true', bad);
     assert.strictEqual(await page.evaluate(() => document.querySelector('#tw').checked), false, bad);

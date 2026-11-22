@@ -59,6 +59,8 @@ const assert = require('assert');
     assert.deepEqual(m.lunarOf('2027-02-05'), { m: 12, d: 29, leap: false }); assert.deepEqual(m.lunarOf('2027-03-07'), { m: 1, d: 30, leap: false }); assert.deepEqual(m.lunarOf('2027-03-08'), { m: 2, d: 1, leap: false });
     assert.equal(m.lunarEvents(2030).ny, '2030-02-03');
     assert.deepEqual([2025, 2026, 2027].map(y => m.autoHolidays(y).filter(x => x.name === '除夕').map(x => x.d)[0]), ['2025-01-28', '2026-02-16', '2027-02-05']);
+    // 116 年辦公日曆表（查證 2026-11-22）：總放假日數 121 日 = 平日放假 17 天 + 週末 104 天
+    assert.equal(m.autoHolidays(2027).filter(x => { const w = TwHol.dow(x.d); return w > 0 && w < 6; }).length, 17);
     // 人事行政總處辦公日曆表：2026 春節 2/14–2/22 共 9 天（2/15 補假在 2/20）、無補班；2027 春節 2/4–2/10 共 7 天
     const map2 = m.buildMap([2025, 2026, 2027, 2028], []);
     const has = (y, a, b, len) => { const r = m.restRuns(map2, y + '-01-01', y + '-12-31').find(x => x.from === a); assert.ok(r && r.to === b && r.len === len, a + ' ' + JSON.stringify(r)); };
