@@ -14,6 +14,8 @@ const pick = async (t, size) => {
     if (size) { await page.select('#size', String(size)); await ready(); }
 };
 
+const rerollFlow = async () => { for (let i = 0; i < 30 && (await ev(() => G.puz.paths[0].length)) <= 2; i++) { await ev(() => document.querySelector('#new').click()); await ready(); } assert.ok((await ev(() => G.puz.paths[0].length)) > 2, '找不到第一條路徑有中間格的題目'); };
+
 // 7 個分頁都在、按鈕夠大、不橫向溢出
 assert.strictEqual(await ev(() => document.querySelectorAll('#tabs button').length), 7);
 
@@ -59,6 +61,7 @@ const draw = async (paths) => {
     }
 };
 await pick('flow', 5);
+await rerollFlow();
 await noScroll('flow');
 assert.ok(await ev(() => getComputedStyle(document.querySelector('#board')).touchAction === 'none'), '盤面 touch-action:none');
 assert.ok(await ev(() => !document.querySelector('#flowbar').hidden && document.querySelector('#mark').hidden && document.querySelector('#pad').hidden));
@@ -73,7 +76,8 @@ await ev(() => document.querySelector('#scroll').click());
 assert.ok(await ev(() => getComputedStyle(document.querySelector('#board')).touchAction === 'none'));
 // 畫第一條 → 一步悔棋 / 重做
 await draw(await ev(() => [G.puz.paths[0]]));
-assert.strictEqual(await ev(() => G.hist.length), 1);
+const hs = await ev(() => ({ hist: G.hist.length, len: G.puz.paths[0].length, n: G.puz.n, k: G.puz.k, cells: G.board.filter(Boolean).length, path: G.puz.paths[0].join(',') }));
+assert.strictEqual(hs.hist, 1, '畫第一條後歷史應為 1：' + JSON.stringify(hs));
 assert.strictEqual(await ev(() => G.board.filter(v => v === 1).length), await ev(() => G.puz.paths[0].length));
 await ev(() => document.querySelector('#undo').click()); assert.strictEqual(await ev(() => G.board.filter(v => v === 1).length), 2);
 await ev(() => document.querySelector('#redo').click()); assert.strictEqual(await ev(() => G.board.filter(v => v === 1).length), await ev(() => G.puz.paths[0].length));
@@ -103,6 +107,7 @@ for (const n of [7, 9]) {
 }
 // 存檔接續（畫一條後重新整理）
 await pick('flow', 6);
+await rerollFlow();
 const fseed = await ev(() => G.seed);
 await draw(await ev(() => [G.puz.paths[0]]));
 await reload();

@@ -69,7 +69,13 @@
                 <div id="cdAtBox"><label for="cdAt">目標日期時間</label><input id="cdAt" type="datetime-local" aria-label="目標日期時間"></div>
                 <div class="row" style="margin-top:8px"><button id="cdRestart">重新開始倒數</button></div>
             </div>
-            <div id="fMq"><label for="speed">速度 <b id="speedV"></b></label><input id="speed" type="range" min="1" max="10" step="1" aria-label="跑馬燈速度"></div>
+            <div id="fMq">
+                <label for="speed">速度 <b id="speedV"></b>（每秒幾個字，一般閱讀約 2–4 字）</label>
+                <div class="row" style="align-items:center"><button id="spdDn" aria-label="慢一點（−0.1）">−</button><input id="speed" type="range" min="0.1" max="10" step="0.1" aria-label="跑馬燈速度（每秒幾個字）" style="flex:1"><button id="spdUp" aria-label="快一點（+0.1）">＋</button></div>
+                <div class="chips" id="spdPresets" aria-label="速度預設"></div>
+                <label for="fscale">字級 <b id="fsV"></b>（調小一個畫面可以看到更多字）</label>
+                <input id="fscale" type="range" min="30" max="100" step="5" aria-label="跑馬燈字級（占看板高度的百分比）">
+            </div>
 
             <h2 style="margin-top:14px">顏色</h2>
             <div class="chips" id="presets"></div>
@@ -92,6 +98,7 @@
         <li>在上方選「文字 / 時鐘 / 倒數 / 跑馬燈」，填對應設定，預覽會即時變化。</li>
         <li>時鐘可選 24 小時制、顯示秒、顯示日期。</li>
         <li>倒數可選「N 分鐘」或「到指定日期時間」；時間到會閃爍並嗶聲。按「重新開始倒數」可從頭計。</li>
+        <li>跑馬燈的速度以「每秒幾個字」計（0.1–10，可用滑桿、− ＋ 微調，或點「極慢 / 慢 / 普通 / 快 / 很快」預設）；一般閱讀約每秒 2–4 個字，要讓人看清楚就選 1 以下。「字級」可調小，一個畫面就能看到更多字。舊版記住的速度會自動換算。</li>
         <li>顏色有「主題、黑底黃字、白底黑字、綠底白字…」等高對比預設，也可自選字色與底色。</li>
         <li>按「進入看板」滿版顯示；點一下畫面顯示 / 隱藏控制列；「退出看板」或 <kbd>Esc</kbd> 離開。</li>
         </ol>
@@ -116,19 +123,21 @@
         // --- pure ---
         const MODES = ['text', 'clock', 'countdown', 'marquee'];
         const PRESETS = [['主題', '', ''], ['黑底黃字', '#000000', '#ffd400'], ['白底黑字', '#ffffff', '#000000'], ['綠底白字', '#0a6b2d', '#ffffff'], ['黑底白字', '#000000', '#ffffff'], ['藍底白字', '#0a3d91', '#ffffff']];
-        const DEFAULTS = { mode: 'text', text: '歡迎光臨', h24: true, secs: true, date: false, cdKind: 'min', cdAt: '', cdMin: 5, speed: 5, fg: '', bg: '', blink: false };
+        const DEFAULTS = { mode: 'text', text: '歡迎光臨', h24: true, secs: true, date: false, cdKind: 'min', cdAt: '', cdMin: 5, cps: 0.8, fs: 50, fg: '', bg: '', blink: false };
         const hex = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : '';
         function normOpts(o) {
             o = o && typeof o === 'object' && !Array.isArray(o) ? o : {};
             const n = (v, lo, hi, d) => { const x = Math.round(Number(v)); return v === null || v === '' || !Number.isFinite(x) ? d : Math.min(hi, Math.max(lo, x)); };
+            const f1 = (v, lo, hi, d) => { const x = Number(v); return v === null || v === '' || v === undefined || !Number.isFinite(x) ? d : Math.min(hi, Math.max(lo, Math.round(x * 10) / 10)); };
             const fg = hex(o.fg), bg = hex(o.bg), both = fg && bg;
+            const legacy = o.cps === undefined && o.speed !== undefined && o.speed !== null && o.speed !== '' && Number.isFinite(Number(o.speed)) ? Number(o.speed) * 0.18 : undefined;   // 舊版 speed 1–10（框寬百分比）→ 每秒字數
             return {
                 mode: MODES.includes(o.mode) ? o.mode : DEFAULTS.mode,
                 text: typeof o.text === 'string' ? o.text.slice(0, 200) : DEFAULTS.text,
                 h24: o.h24 !== false, secs: o.secs !== false, date: o.date === true,
                 cdKind: o.cdKind === 'at' ? 'at' : 'min',
                 cdAt: typeof o.cdAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(o.cdAt) ? o.cdAt : '',
-                cdMin: n(o.cdMin, 1, 10080, DEFAULTS.cdMin), speed: n(o.speed, 1, 10, DEFAULTS.speed),
+                cdMin: n(o.cdMin, 1, 10080, DEFAULTS.cdMin), cps: f1(o.cps !== undefined ? o.cps : legacy, 0.1, 10, DEFAULTS.cps), fs: n(o.fs, 30, 100, DEFAULTS.fs),
                 fg: both ? fg : '', bg: both ? bg : '', blink: o.blink === true,
             };
         }
@@ -165,10 +174,10 @@
             }
             return startMs + o.cdMin * 60000;
         }
-        // 跑馬燈：從右側框外移到左側框外；速度 1–10 對應每秒走 5%–50% 框寬
-        function marqueeSpec(textW, boxW, speed) {
-            const pps = Math.max(1, boxW) * 0.05 * Math.min(10, Math.max(1, speed));
-            return { from: boxW, to: -textW, dur: Math.round((boxW + textW) / pps * 100) / 100 };
+        // 跑馬燈：從右側框外移到左側框外；cps = 每秒走幾個字寬（字級 px），所以字大字小、看板大小都不影響閱讀速度
+        function marqueeSpec(textW, boxW, cps, fontPx) {
+            const pps = Math.max(1, fontPx) * Math.min(10, Math.max(0.1, Number(cps) || 0.1));
+            return { from: boxW, to: -textW, dur: Math.round((Math.max(0, boxW) + Math.max(0, textW)) / pps * 100) / 100 };
         }
         // --- /pure ---
 
@@ -193,16 +202,16 @@
             }
             txt.textContent = main; txt2.textContent = sub; txt2.hidden = !sub;
             txt.classList.toggle('blink', blink); txt.classList.toggle('mq', o.mode === 'marquee');
-            const key = [o.mode, o.mode === 'text' || o.mode === 'marquee' ? main : main.length, sub ? 1 : 0, W, H, o.speed].join('|');
+            const key = [o.mode, o.mode === 'text' || o.mode === 'marquee' ? main : main.length, sub ? 1 : 0, W, H, o.cps, o.fs].join('|');
             if (key === lastKey) return;
             lastKey = key;
-            let size = o.mode === 'marquee' ? H * 0.5 : fitFont(W, H, main.split('\n'), { extra: sub ? 0.3 * 1.15 : 0 });
+            let size = o.mode === 'marquee' ? H * o.fs / 100 : fitFont(W, H, main.split('\n'), { extra: sub ? 0.3 * 1.15 : 0 });
             txt.style.fontSize = size + 'px'; txt2.style.fontSize = Math.round(size * 0.3 * 10) / 10 + 'px';
             if (o.mode !== 'marquee') {   // 估算偏差的修正：實際量到太寬或太高就按比例縮小一次
                 const k = Math.min(1, W * 0.94 / (txt.offsetWidth || 1), H * 0.94 / ((txt.offsetHeight + (sub ? txt2.offsetHeight : 0)) || 1));
                 if (k < 1) { size = Math.floor(size * k * 10) / 10; txt.style.fontSize = size + 'px'; txt2.style.fontSize = Math.round(size * 0.3 * 10) / 10 + 'px'; }
             } else {
-                const s = marqueeSpec(txt.offsetWidth, W, o.speed);
+                const s = marqueeSpec(txt.offsetWidth, W, o.cps, size);
                 txt.style.setProperty('--from', s.from + 'px'); txt.style.setProperty('--to', s.to + 'px'); txt.style.setProperty('--dur', s.dur + 's');
             }
         }
@@ -213,7 +222,7 @@
             $('#fText').hidden = !(o.mode === 'text' || o.mode === 'marquee'); $('#fClock').hidden = o.mode !== 'clock'; $('#fCd').hidden = o.mode !== 'countdown'; $('#fMq').hidden = o.mode !== 'marquee';
             $('#cdMinBox').hidden = o.cdKind !== 'min'; $('#cdAtBox').hidden = o.cdKind !== 'at';
             $('#text').value = o.text; $('#h24').checked = o.h24; $('#secs').checked = o.secs; $('#date').checked = o.date; $('#blink').checked = o.blink;
-            $('#cdKind').value = o.cdKind; $('#cdMin').value = o.cdMin; $('#cdAt').value = o.cdAt; $('#speed').value = o.speed; $('#speedV').textContent = o.speed;
+            $('#cdKind').value = o.cdKind; $('#cdMin').value = o.cdMin; $('#cdAt').value = o.cdAt; $('#speed').value = o.cps; $('#speedV').textContent = o.cps + ' 字/秒'; $('#fscale').value = o.fs; $('#fsV').textContent = o.fs + '%';
             $('#fg').value = o.fg || '#000000'; $('#bg').value = o.bg || '#ffffff';
             applyColors(); lastKey = ''; render();
         }
@@ -226,7 +235,11 @@
         $('#cdMin').onchange = () => change(() => { o.cdMin = $('#cdMin').value; }, true);
         $('#cdAt').onchange = () => change(() => { o.cdAt = $('#cdAt').value; }, true);
         $('#cdRestart').onclick = restartCd;
-        $('#speed').oninput = () => change(() => { o.speed = $('#speed').value; });
+        $('#speed').oninput = () => change(() => { o.cps = $('#speed').value; });
+        $('#spdDn').onclick = () => change(() => { o.cps = Math.round((Number(o.cps) - 0.1) * 10) / 10; });
+        $('#spdUp').onclick = () => change(() => { o.cps = Math.round((Number(o.cps) + 0.1) * 10) / 10; });
+        $('#fscale').oninput = () => change(() => { o.fs = $('#fscale').value; });
+        $('#spdPresets').replaceChildren(...[['極慢', 0.3], ['慢', 0.6], ['普通', 1], ['快', 2], ['很快', 4]].map(([n, v]) => { const b = document.createElement('button'); b.className = 'sm'; b.textContent = n + ' ' + v; b.onclick = () => change(() => { o.cps = v; }); return b; }));
         $('#fg').oninput = $('#bg').oninput = () => change(() => { o.fg = $('#fg').value; o.bg = $('#bg').value; });
         $('#presets').replaceChildren(...PRESETS.map(p => { const b = document.createElement('button'); b.className = 'sm'; b.textContent = p[0]; b.onclick = () => change(() => { o.bg = p[1]; o.fg = p[2]; }); return b; }));
         $('#reset').onclick = () => {

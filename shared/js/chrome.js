@@ -388,6 +388,13 @@
         }
         if (metaKeys()) { const d = el('button', { type: 'button', class: 'st-databtn', 'aria-label': '資料備份與還原', title: '資料備份與還原' }); d.innerHTML = ICON.save + '<span class="st-lb">備份</span>'; d.onclick = () => openData(); bar.append(d); }
         if (!root.lang) root.lang = 'zh-TW';
+        // 圖示：頁面沒宣告就補上（全站同一組），不然瀏覽器分頁會是空白地球
+        if (CHROME_SRC) {
+            const has = (rel) => !!document.querySelector(`link[rel~="${rel}"]`), hasIcon = has('icon'), hasTouch = has('apple-touch-icon');    // 進來時各判斷一次（注入第一個之後不能再算「已經有」）
+            const ic = (rel, file, extra) => { const l = document.createElement('link'); l.rel = rel; l.href = new URL('../../' + file, CHROME_SRC).href; Object.assign(l, extra || {}); document.head.append(l); };
+            if (!hasIcon) { ic('icon', 'assets/icons/favicon.svg', { type: 'image/svg+xml' }); ic('icon', 'assets/icons/favicon-32.png', { type: 'image/png' }); }
+            if (!hasTouch) ic('apple-touch-icon', 'assets/icons/apple-touch-icon.png');
+        }
         // 免責聲明：頁面加 <meta name="st-disclaimer" content="health|food|pet|finance|travel|craft">，頁尾統一顯示「僅供參考、本站不負責」（health|food|pet|finance|travel|craft|general）
         const dm = document.querySelector('meta[name=st-disclaimer]'), dt = dm && DISCLAIMERS[dm.content.trim()];
         if (dt) document.querySelector('.wrap, main, body').append(el('p', { class: 'note st-disc', text: dt }));
